@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import struct
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -17,6 +18,8 @@ type QuestionAdmissionItem = dict[str, object]
 
 _COMMAND_SCHEMA_VERSION = "question-submission-command.v1"
 _FINGERPRINT_DOMAIN = b"stoa.question.submission.v1"
+_RECONCILIATION_DIGEST_DOMAIN = "stoa.question.reconciliation.v1"
+_REVERSAL_ID_DOMAIN = b"stoa.question.reversal.v1"
 _MAX_ADMISSION_ATTEMPTS = 4
 
 
@@ -42,6 +45,42 @@ class QuestionAdmissionResult:
     question: QuestionAdmissionItem | None = None
     counter_value: int | None = None
     operations: tuple[QuestionAdmissionItem, ...] = ()
+
+
+class QuestionReconciliationDisposition(StrEnum):
+    """Closed outcomes for one bounded question-submission coordinate."""
+
+    COMMITTED = "committed"
+    RECOVERABLE_PROCESSING = "recoverable_processing"
+    LEGACY_PARTIAL = "legacy_counter_ledger_without_question"
+    TERMINAL_FAILURE = "proven_terminal_failure"
+    CONFLICTING = "conflicting_evidence"
+    CHANGED = "changed_after_preview"
+    RETRYABLE = "retryable_dependency"
+
+
+@dataclass(frozen=True, slots=True)
+class QuestionReconciliationPreview:
+    """Coordinate-free, version-bound reconciliation proposal."""
+
+    disposition: QuestionReconciliationDisposition
+    command_id: str
+    question_id: str | None
+    observed_command_version: int | None
+    observed_question_version: int | None
+    observed_digest: str
+    proposed_action: str
+    mutation_count: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class QuestionReconciliationCoordinate:
+    """One explicit bounded lookup; no table-wide discovery is permitted."""
+
+    student_id: str
+    idempotency_key: str
+    question_id: str | None = None
+    quota_period: str | None = None
 
 
 def _required_text(value: object, field: str) -> str:
@@ -355,6 +394,579 @@ def _safe_reread(
         student_id=student_id,
         idempotency_key=idempotency_key,
         fingerprint=fingerprint,
+    )
+
+
+def _optional_positive_version(value: object) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        return None
+    return value
+
+
+def _read_item(target: object, key: QuestionAdmissionItem) -> QuestionAdmissionItem | None:
+    if not isinstance(target, _GetTable):
+        raise ValueError("question reconciliation dependency unavailable")
+    response = _string_mapping(target.get_item(Key=key, ConsistentRead=True))
+    item = response.get("Item")
+    return None if item is None else _string_mapping(item)
+
+
+def _usage_event_key(
+    student_id: str, quota_period: str, idempotency_key: str
+) -> QuestionAdmissionItem:
+    return {
+        "PK": f"USAGE_LEDGER#{student_id}",
+        "SK": f"EVENT#question_submission#{quota_period}#{idempotency_key}",
+    }
+
+
+def _reconciliation_digest(facts: Mapping[str, object]) -> str:
+    body = json.dumps(
+        {"domain": _RECONCILIATION_DIGEST_DOMAIN, **facts},
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hashlib.sha256(body).hexdigest()
+
+
+def _row_digest(item: Mapping[str, object] | None) -> str | None:
+    if item is None:
+        return None
+    encoded = json.dumps(
+        item,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        default=str,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _reversal_identity(command_id: str, fingerprint: str) -> str:
+    return hashlib.sha256(
+        _REVERSAL_ID_DOMAIN + _frame(command_id) + _frame(fingerprint)
+    ).hexdigest()
+
+
+def _question_has_durable_result(question: Mapping[str, object]) -> bool:
+    status = str(question.get("status") or "")
+    return status not in {"", "pending", "submission_failed"} or isinstance(
+        question.get("ai_response"), Mapping
+    )
+
+
+def _preview_result(
+    *,
+    disposition: QuestionReconciliationDisposition,
+    command_id: str,
+    question_id: str | None,
+    command_version: int | None,
+    question_version: int | None,
+    proposed_action: str,
+    facts: Mapping[str, object],
+) -> QuestionReconciliationPreview:
+    return QuestionReconciliationPreview(
+        disposition=disposition,
+        command_id=command_id,
+        question_id=question_id,
+        observed_command_version=command_version,
+        observed_question_version=question_version,
+        observed_digest=_reconciliation_digest(facts),
+        proposed_action=proposed_action,
+    )
+
+
+def preview_question_submission_reconciliation(
+    *,
+    student_id: str,
+    idempotency_key: str,
+    question_id: str | None = None,
+    quota_period: str | None = None,
+    table: object | None = None,
+) -> QuestionReconciliationPreview:
+    """Strongly inspect exactly one command/ledger coordinate without writes."""
+    target = table or get_table()
+    student_id = _required_text(student_id, "student_id")
+    idempotency_key = _required_text(idempotency_key, "idempotency_key")
+    command_id = f"{student_id}:{idempotency_key}"
+    try:
+        command = _read_item(
+            target, question_submission_command_key(student_id, idempotency_key)
+        )
+        effective_question_id = (
+            str(command.get("question_id") or "") if command else str(question_id or "")
+        )
+        effective_period = (
+            str(command.get("quota_period") or "") if command else str(quota_period or "")
+        )
+        question = (
+            _read_item(
+                target, {"PK": f"QUESTION#{effective_question_id}", "SK": "META"}
+            )
+            if effective_question_id
+            else None
+        )
+        ledger = (
+            _read_item(
+                target,
+                _usage_event_key(student_id, effective_period, idempotency_key),
+            )
+            if effective_period
+            else None
+        )
+        counter = (
+            _read_item(target, question_counter_key(student_id, effective_period))
+            if effective_period
+            else None
+        )
+    except Exception:
+        return _preview_result(
+            disposition=QuestionReconciliationDisposition.RETRYABLE,
+            command_id=command_id,
+            question_id=question_id,
+            command_version=None,
+            question_version=None,
+            proposed_action="retry_same_coordinate",
+            facts={"dependency": "unavailable"},
+        )
+
+    command_version = _optional_positive_version(
+        command.get("version") if command else None
+    )
+    question_version = _optional_positive_version(
+        question.get("version") if question else None
+    )
+    facts: dict[str, object] = {
+        "command_present": command is not None,
+        "command_status": command.get("status") if command else None,
+        "command_version": command_version,
+        "fingerprint": command.get("fingerprint") if command else None,
+        "question_id": effective_question_id or None,
+        "question_present": question is not None,
+        "question_status": question.get("status") if question else None,
+        "question_version": question_version,
+        "durable_result": bool(question and _question_has_durable_result(question)),
+        "quota_period": effective_period or None,
+        "ledger_present": ledger is not None,
+        "ledger_status": ledger.get("status") if ledger else None,
+        "ledger_identity": ledger.get("event_id") if ledger else None,
+        "counter_present": counter is not None,
+        "counter_count": counter.get("count") if counter else None,
+        "command_row_digest": _row_digest(command),
+        "question_row_digest": _row_digest(question),
+        "ledger_row_digest": _row_digest(ledger),
+        "counter_row_digest": _row_digest(counter),
+    }
+
+    if command is None:
+        disposition = (
+            QuestionReconciliationDisposition.LEGACY_PARTIAL
+            if ledger is not None and counter is not None and question is None
+            else QuestionReconciliationDisposition.CONFLICTING
+        )
+        return _preview_result(
+            disposition=disposition,
+            command_id=command_id,
+            question_id=effective_question_id or None,
+            command_version=None,
+            question_version=question_version,
+            proposed_action="report_only",
+            facts=facts,
+        )
+
+    expected_ledger_identity = command.get("ledger_identity")
+    conflicting = (
+        command.get("entity_type") != "question_submission_command"
+        or command.get("schema_version") != _COMMAND_SCHEMA_VERSION
+        or command.get("student_id") != student_id
+        or command.get("idempotency_key") != idempotency_key
+        or command.get("command_id") != command_id
+        or command_version is None
+        or not effective_question_id
+        or not effective_period
+        or question is None
+        or question.get("student_id") != student_id
+        or question.get("question_id") != effective_question_id
+        or ledger is None
+        or ledger.get("student_id") != student_id
+        or ledger.get("question_id") != effective_question_id
+        or ledger.get("event_id") != expected_ledger_identity
+        or counter is None
+        or isinstance(counter.get("count"), bool)
+        or not isinstance(counter.get("count"), int)
+    )
+    if conflicting:
+        return _preview_result(
+            disposition=QuestionReconciliationDisposition.CONFLICTING,
+            command_id=command_id,
+            question_id=effective_question_id or None,
+            command_version=command_version,
+            question_version=question_version,
+            proposed_action="report_only",
+            facts=facts,
+        )
+
+    assert question is not None
+    assert ledger is not None
+    assert counter is not None
+    counter_count = counter.get("count")
+    assert isinstance(counter_count, int) and not isinstance(counter_count, bool)
+    command_status = str(command.get("status") or "")
+    ledger_status = str(ledger.get("status") or "active")
+    if command_status == "completed":
+        disposition = QuestionReconciliationDisposition.COMMITTED
+        action = "none"
+    elif command_status == "processing":
+        disposition = QuestionReconciliationDisposition.RECOVERABLE_PROCESSING
+        action = (
+            "mark_command_completed"
+            if _question_has_durable_result(question)
+            else "resume_processing"
+        )
+    elif (
+        command_status == "terminal_failed"
+        and isinstance(command.get("terminal_failure_code"), str)
+        and bool(command.get("terminal_failure_code"))
+        and isinstance(command.get("terminal_failure_proven_at"), str)
+        and bool(command.get("terminal_failure_proven_at"))
+        and ledger_status != "reversed"
+        and counter_count > 0
+    ):
+        disposition = QuestionReconciliationDisposition.TERMINAL_FAILURE
+        action = "reverse_question_admission"
+    elif (
+        command_status == "terminal_failed"
+        and ledger_status == "reversed"
+        and isinstance(command.get("reversal_id"), str)
+        and bool(command.get("reversal_id"))
+        and question.get("status") == "submission_failed"
+    ):
+        disposition = QuestionReconciliationDisposition.COMMITTED
+        action = "none"
+    else:
+        disposition = QuestionReconciliationDisposition.CONFLICTING
+        action = "report_only"
+    return _preview_result(
+        disposition=disposition,
+        command_id=command_id,
+        question_id=effective_question_id,
+        command_version=command_version,
+        question_version=question_version,
+        proposed_action=action,
+        facts=facts,
+    )
+
+
+def _condition_for_version(
+    observed: int | None,
+) -> tuple[str, dict[str, object]]:
+    if observed is None:
+        return "attribute_not_exists(#version)", {}
+    return "#version=:question_version", {":question_version": observed}
+
+
+def reverse_terminal_question_admission(
+    preview: QuestionReconciliationPreview,
+    *,
+    student_id: str,
+    idempotency_key: str,
+    reversed_at: str,
+    table: object | None = None,
+) -> QuestionReconciliationPreview:
+    """Atomically reverse one proven terminal admission, excluding attachments."""
+    target = table or get_table()
+    current = preview_question_submission_reconciliation(
+        student_id=student_id,
+        idempotency_key=idempotency_key,
+        table=target,
+    )
+    if current.observed_digest != preview.observed_digest:
+        return QuestionReconciliationPreview(
+            disposition=QuestionReconciliationDisposition.CHANGED,
+            command_id=current.command_id,
+            question_id=current.question_id,
+            observed_command_version=current.observed_command_version,
+            observed_question_version=current.observed_question_version,
+            observed_digest=current.observed_digest,
+            proposed_action="report_changed",
+        )
+    if (
+        current.disposition is not QuestionReconciliationDisposition.TERMINAL_FAILURE
+        or current.question_id is None
+        or current.observed_command_version is None
+    ):
+        return current
+    command = _read_item(
+        target, question_submission_command_key(student_id, idempotency_key)
+    )
+    if command is None:
+        return current
+    quota_period = _required_text(command.get("quota_period"), "quota_period")
+    fingerprint = _required_text(command.get("fingerprint"), "fingerprint")
+    ledger_identity = _required_text(command.get("ledger_identity"), "ledger_identity")
+    counter = _read_item(target, question_counter_key(student_id, quota_period))
+    if counter is None:
+        return current
+    expected_count = _positive_integer(counter.get("count"), "counter count", minimum=1)
+    reversal_id = _reversal_identity(current.command_id, fingerprint)
+    version_condition, question_version_values = _condition_for_version(
+        current.observed_question_version
+    )
+    operations: list[QuestionAdmissionItem] = [
+        {
+            "Update": {
+                "Key": question_submission_command_key(student_id, idempotency_key),
+                "UpdateExpression": (
+                    "SET reversal_id=:reversal, reversed_at=:reversed_at, "
+                    "updated_at=:reversed_at, #version=:next_version"
+                ),
+                "ConditionExpression": (
+                    "#status=:terminal AND #version=:version AND fingerprint=:fingerprint "
+                    "AND terminal_failure_proven_at=:proven_at "
+                    "AND attribute_not_exists(reversal_id)"
+                ),
+                "ExpressionAttributeNames": {
+                    "#status": "status",
+                    "#version": "version",
+                },
+                "ExpressionAttributeValues": {
+                    ":terminal": "terminal_failed",
+                    ":version": current.observed_command_version,
+                    ":next_version": current.observed_command_version + 1,
+                    ":fingerprint": fingerprint,
+                    ":proven_at": command["terminal_failure_proven_at"],
+                    ":reversal": reversal_id,
+                    ":reversed_at": _required_text(reversed_at, "reversed_at"),
+                },
+            }
+        },
+        {
+            "Update": {
+                "Key": {"PK": f"QUESTION#{current.question_id}", "SK": "META"},
+                "UpdateExpression": (
+                    "SET #status=:failed, failure_code=:failure_code, "
+                    "failed_at=:reversed_at, #version=if_not_exists(#version,:zero)+:one"
+                ),
+                "ConditionExpression": (
+                    "student_id=:student AND question_id=:question AND "
+                    "#status<>:failed AND " + version_condition
+                ),
+                "ExpressionAttributeNames": {
+                    "#status": "status",
+                    "#version": "version",
+                },
+                "ExpressionAttributeValues": {
+                    ":student": student_id,
+                    ":question": current.question_id,
+                    ":failed": "submission_failed",
+                    ":failure_code": command["terminal_failure_code"],
+                    ":reversed_at": reversed_at,
+                    ":zero": 0,
+                    ":one": 1,
+                    **question_version_values,
+                },
+            }
+        },
+        {
+            "Update": {
+                "Key": question_counter_key(student_id, quota_period),
+                "UpdateExpression": "SET #count=#count-:one",
+                "ConditionExpression": "#count=:expected AND #count>=:one",
+                "ExpressionAttributeNames": {"#count": "count"},
+                "ExpressionAttributeValues": {
+                    ":expected": expected_count,
+                    ":one": 1,
+                },
+            }
+        },
+        {
+            "Update": {
+                "Key": _usage_event_key(student_id, quota_period, idempotency_key),
+                "UpdateExpression": (
+                    "SET #status=:reversed, reversal_id=:reversal, "
+                    "reversed_at=:reversed_at, updated_at=:reversed_at"
+                ),
+                "ConditionExpression": (
+                    "event_id=:ledger AND question_id=:question "
+                    "AND (attribute_not_exists(#status) OR #status=:active) "
+                    "AND attribute_not_exists(reversal_id)"
+                ),
+                "ExpressionAttributeNames": {"#status": "status"},
+                "ExpressionAttributeValues": {
+                    ":ledger": ledger_identity,
+                    ":question": current.question_id,
+                    ":active": "active",
+                    ":reversed": "reversed",
+                    ":reversal": reversal_id,
+                    ":reversed_at": reversed_at,
+                },
+            }
+        },
+    ]
+    try:
+        attachment_repo.transact(operations, table=target)
+    except Exception:
+        refreshed = preview_question_submission_reconciliation(
+            student_id=student_id,
+            idempotency_key=idempotency_key,
+            table=target,
+        )
+        if refreshed.disposition is QuestionReconciliationDisposition.COMMITTED:
+            return refreshed
+        return QuestionReconciliationPreview(
+            disposition=QuestionReconciliationDisposition.CHANGED,
+            command_id=refreshed.command_id,
+            question_id=refreshed.question_id,
+            observed_command_version=refreshed.observed_command_version,
+            observed_question_version=refreshed.observed_question_version,
+            observed_digest=refreshed.observed_digest,
+            proposed_action="report_changed",
+        )
+    refreshed = preview_question_submission_reconciliation(
+        student_id=student_id,
+        idempotency_key=idempotency_key,
+        table=target,
+    )
+    return QuestionReconciliationPreview(
+        disposition=refreshed.disposition,
+        command_id=refreshed.command_id,
+        question_id=refreshed.question_id,
+        observed_command_version=refreshed.observed_command_version,
+        observed_question_version=refreshed.observed_question_version,
+        observed_digest=refreshed.observed_digest,
+        proposed_action=refreshed.proposed_action,
+        mutation_count=len(operations),
+    )
+
+
+def apply_question_submission_reconciliation(
+    preview: QuestionReconciliationPreview,
+    *,
+    student_id: str,
+    idempotency_key: str,
+    applied_at: str,
+    table: object | None = None,
+) -> QuestionReconciliationPreview:
+    """Apply only the still-current proposal represented by ``preview``."""
+    target = table or get_table()
+    current = preview_question_submission_reconciliation(
+        student_id=student_id,
+        idempotency_key=idempotency_key,
+        table=target,
+    )
+    if current.observed_digest != preview.observed_digest:
+        return QuestionReconciliationPreview(
+            disposition=QuestionReconciliationDisposition.CHANGED,
+            command_id=current.command_id,
+            question_id=current.question_id,
+            observed_command_version=current.observed_command_version,
+            observed_question_version=current.observed_question_version,
+            observed_digest=current.observed_digest,
+            proposed_action="report_changed",
+        )
+    if current.disposition is QuestionReconciliationDisposition.TERMINAL_FAILURE:
+        return reverse_terminal_question_admission(
+            current,
+            student_id=student_id,
+            idempotency_key=idempotency_key,
+            reversed_at=applied_at,
+            table=target,
+        )
+    if current.proposed_action != "mark_command_completed":
+        return current
+    if current.observed_command_version is None or current.question_id is None:
+        return current
+    question = _read_item(
+        target, {"PK": f"QUESTION#{current.question_id}", "SK": "META"}
+    )
+    if question is None:
+        return current
+    version_condition, question_version_values = _condition_for_version(
+        current.observed_question_version
+    )
+    result_condition = "attribute_exists(ai_response)" if isinstance(
+        question.get("ai_response"), Mapping
+    ) else "#question_status=:question_status"
+    question_values: QuestionAdmissionItem = {
+        ":student": student_id,
+        ":question": current.question_id,
+        **question_version_values,
+    }
+    if result_condition.startswith("#question_status"):
+        question_values[":question_status"] = question.get("status")
+    question_names = {"#version": "version"}
+    if result_condition.startswith("#question_status"):
+        question_names["#question_status"] = "status"
+    operation: QuestionAdmissionItem = {
+        "Update": {
+            "Key": question_submission_command_key(student_id, idempotency_key),
+            "UpdateExpression": (
+                "SET #status=:completed, completed_at=:applied_at, "
+                "updated_at=:applied_at, #version=:next_version"
+            ),
+            "ConditionExpression": (
+                "#status=:processing AND #version=:version "
+                "AND question_id=:question"
+            ),
+            "ExpressionAttributeNames": {
+                "#status": "status",
+                "#version": "version",
+            },
+            "ExpressionAttributeValues": {
+                ":processing": "processing",
+                ":completed": "completed",
+                ":version": current.observed_command_version,
+                ":next_version": current.observed_command_version + 1,
+                ":question": current.question_id,
+                ":applied_at": _required_text(applied_at, "applied_at"),
+            },
+        }
+    }
+    result_check: QuestionAdmissionItem = {
+        "ConditionCheck": {
+            "Key": {"PK": f"QUESTION#{current.question_id}", "SK": "META"},
+            "ConditionExpression": (
+                "student_id=:student AND question_id=:question AND "
+                + result_condition
+                + " AND "
+                + version_condition
+            ),
+            "ExpressionAttributeNames": question_names,
+            "ExpressionAttributeValues": question_values,
+        }
+    }
+    try:
+        attachment_repo.transact([result_check, operation], table=target)
+    except Exception:
+        changed = preview_question_submission_reconciliation(
+            student_id=student_id,
+            idempotency_key=idempotency_key,
+            table=target,
+        )
+        return QuestionReconciliationPreview(
+            disposition=QuestionReconciliationDisposition.CHANGED,
+            command_id=changed.command_id,
+            question_id=changed.question_id,
+            observed_command_version=changed.observed_command_version,
+            observed_question_version=changed.observed_question_version,
+            observed_digest=changed.observed_digest,
+            proposed_action="report_changed",
+        )
+    refreshed = preview_question_submission_reconciliation(
+        student_id=student_id,
+        idempotency_key=idempotency_key,
+        table=target,
+    )
+    return QuestionReconciliationPreview(
+        disposition=refreshed.disposition,
+        command_id=refreshed.command_id,
+        question_id=refreshed.question_id,
+        observed_command_version=refreshed.observed_command_version,
+        observed_question_version=refreshed.observed_question_version,
+        observed_digest=refreshed.observed_digest,
+        proposed_action=refreshed.proposed_action,
+        mutation_count=1,
     )
 
 

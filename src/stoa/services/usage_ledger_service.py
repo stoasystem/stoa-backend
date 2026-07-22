@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from stoa.config import Settings
-from stoa.db.repositories import usage_ledger_repo, user_repo
+from stoa.db.repositories import question_submission_repo, usage_ledger_repo, user_repo
 from stoa.services import entitlement_service
 
 
@@ -384,6 +384,7 @@ def build_question_usage_event(
         "student_id": student_id,
         "parent_id": parent_id,
         "action": QUESTION_SUBMISSION_ACTION,
+        "status": "active",
         "quantity": quantity,
         "quota_period": quota_period,
         "counter_key": counter_key,
@@ -547,7 +548,7 @@ def reconcile_question_usage(
         quota_period=day,
     )
     counter_count = int(counter.get("count") or 0)
-    ledger_count = sum(int(event.get("quantity") or 0) for event in events)
+    ledger_count = sum(_active_question_usage_quantity(event) for event in events)
     stale = _counter_is_stale(counter)
     status = _reconciliation_status(counter_count, ledger_count, limit=limit, stale=stale)
     repaired = False
@@ -586,6 +587,24 @@ def reconcile_question_usage(
         "repaired": repaired,
         "partial": not _reconciliation_is_ok(status),
     }
+
+
+def reverse_terminal_question_admission(
+    preview: question_submission_repo.QuestionReconciliationPreview,
+    *,
+    student_id: str,
+    idempotency_key: str,
+    reversed_at: str,
+    table: object | None = None,
+) -> question_submission_repo.QuestionReconciliationPreview:
+    """Apply the exact terminal question allowance/ledger compensation."""
+    return question_submission_repo.reverse_terminal_question_admission(
+        preview,
+        student_id=student_id,
+        idempotency_key=idempotency_key,
+        reversed_at=reversed_at,
+        table=table,
+    )
 
 
 def reconcile_usage_action(
@@ -800,6 +819,13 @@ def _reconciliation_status(
     if counter_count == 0 and ledger_count > 0:
         return "counter-missing"
     return "count-mismatch"
+
+
+def _active_question_usage_quantity(event: dict[str, Any]) -> int:
+    """Exclude durably reversed admissions while retaining their audit quantity."""
+    if event.get("status") == "reversed":
+        return 0
+    return int(event.get("quantity") or 0)
 
 
 def _counter_is_stale(counter: dict[str, Any]) -> bool:
