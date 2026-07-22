@@ -16,3 +16,14 @@
   one unrelated locale response narrowing error in `auth.py`, and 43 unrelated admin
   projection/table capability errors in `admin.py`. The new parent relationship code
   adds no mypy errors; these existing errors are outside the atomic binding boundary.
+
+## 475-10
+
+- Targeted mypy over `practice_repo.py` retains 16 pre-existing DynamoDB table
+  capability errors in unchanged repository reads/writes. The changed practice model
+  and projection service pass mypy independently.
+- The optional expanded learning regression retains one stale question-submission
+  fixture (`test_submit_question_accepts_foundation_subject_and_stores_topic_seeds`)
+  that mocks the pre-475-02 non-atomic route and now receives the expected safe 503.
+  The other 68 practice authorization, privacy-deletion, curriculum analytics, and
+  learning-expansion nodes passed; the stale question fixture is outside Plan 475-10.
