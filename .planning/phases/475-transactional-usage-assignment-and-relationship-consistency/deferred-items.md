@@ -27,3 +27,11 @@
   that mocks the pre-475-02 non-atomic route and now receives the expected safe 503.
   The other 68 practice authorization, privacy-deletion, curriculum analytics, and
   learning-expansion nodes passed; the stale question fixture is outside Plan 475-10.
+
+## 475-28
+
+- Expanded Ruff over the inherited notification-deletion regression reports a
+  pre-existing unused `account_deletion_repo` import in
+  `tests/test_phase473_notification_deletion.py:10`. The inherited behavior suite
+  passes all nodes, and the planned repository and proof files pass Ruff; this
+  unchanged lint issue is outside Plan 475-28 and was not modified.
