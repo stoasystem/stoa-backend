@@ -391,10 +391,12 @@ def build_parent_binding_transaction(
     actor: str = "system",
     created_at: str,
     version: int = 1,
-    expected_generation: int,
-    expected_profile_version: int | None = None,
+    expected_parent_generation: int,
+    expected_student_generation: int,
+    expected_parent_profile_version: int,
+    expected_student_profile_version: int,
 ) -> list[TransactionOperation]:
-    """Compose both formal rows and the profile projection behind one fence."""
+    """Compose both formal rows and the profile projection behind both accounts."""
     parent_id = _required_text(parent_id, "parent_id")
     student_id = _required_text(student_id, "student_id")
     relationship = _required_text(relationship, "relationship")
@@ -404,6 +406,18 @@ def build_parent_binding_transaction(
     created_at = _required_text(created_at, "created_at")
     if isinstance(version, bool) or not isinstance(version, int) or version < 1:
         raise ValueError("version must be a positive integer")
+    expected_parent_generation = _required_positive_integer(
+        expected_parent_generation
+    )
+    expected_student_generation = _required_positive_integer(
+        expected_student_generation
+    )
+    expected_parent_profile_version = _required_profile_version(
+        expected_parent_profile_version
+    )
+    expected_student_profile_version = _required_profile_version(
+        expected_student_profile_version
+    )
 
     binding = {
         "entity_type": "parent_student_binding",
@@ -458,7 +472,17 @@ def build_parent_binding_transaction(
         }
 
     return [
-        account_deletion_repo.active_fence_condition(student_id, expected_generation),
+        account_deletion_repo.active_fence_condition(
+            parent_id, expected_parent_generation
+        ),
+        account_deletion_repo.active_fence_condition(
+            student_id, expected_student_generation
+        ),
+        _active_profile_observation_condition(
+            parent_id,
+            role="parent",
+            profile_version=expected_parent_profile_version,
+        ),
         binding_update(f"USER#{parent_id}", f"CHILD#{student_id}"),
         binding_update(f"USER#{student_id}", f"PARENT#{parent_id}"),
         profile_update_operation(
@@ -473,17 +497,20 @@ def build_parent_binding_transaction(
                 "#parent_binding_status": "parent_binding_status",
                 "#user_id": "user_id",
                 "#role": "role",
+                "#account_status": "account_status",
             },
             expression_attribute_values={
                 ":parent_id": parent_id,
                 ":student_id": student_id,
                 ":student_role": "student",
+                ":active": "active",
                 ":relationship": relationship,
                 ":status": status,
             },
-            expected_version=expected_profile_version,
+            expected_version=expected_student_profile_version,
             additional_condition_expression=(
                 "#user_id = :student_id AND #role = :student_role AND "
+                "#account_status = :active AND "
                 "(attribute_not_exists(#parent_id) OR #parent_id = :parent_id) AND "
                 "(attribute_not_exists(#relationship) OR "
                 "#relationship = :relationship)"
@@ -506,6 +533,28 @@ def put_parent_student_relationship(
     """Commit or replay the exact relationship without choosing a conflict winner."""
     table = get_table()
     snapshot = _parent_binding_snapshot(parent_id, student_id)
+    if _parent_relationship_conflicts(
+        snapshot,
+        parent_id=parent_id,
+        student_id=student_id,
+        relationship=relationship,
+        version=version,
+    ):
+        return ParentBindingResult(ParentBindingDisposition.CONFLICT)
+    observations = _parent_binding_authorization_observations(
+        snapshot,
+        parent_id=parent_id,
+        student_id=student_id,
+        table=table,
+    )
+    if observations is None:
+        return ParentBindingResult(ParentBindingDisposition.RETRYABLE)
+    (
+        expected_parent_generation,
+        expected_student_generation,
+        expected_parent_profile_version,
+        expected_student_profile_version,
+    ) = observations
     replay = _matching_parent_relationship(
         snapshot,
         parent_id=parent_id,
@@ -520,17 +569,7 @@ def put_parent_student_relationship(
             binding=replay,
             profile=snapshot.profile,
         )
-    if _parent_relationship_conflicts(
-        snapshot,
-        parent_id=parent_id,
-        student_id=student_id,
-        relationship=relationship,
-        version=version,
-    ):
-        return ParentBindingResult(ParentBindingDisposition.CONFLICT)
-
     try:
-        fence = account_deletion_repo.require_active_account_fence(student_id, table=table)
         account_deletion_repo.transact(
             build_parent_binding_transaction(
                 parent_id=parent_id,
@@ -541,10 +580,10 @@ def put_parent_student_relationship(
                 actor=actor,
                 created_at=created_at,
                 version=version,
-                expected_generation=_required_positive_integer(fence.get("generation")),
-                expected_profile_version=_optional_profile_version(
-                    snapshot.profile.get("version") if snapshot.profile else None
-                ),
+                expected_parent_generation=expected_parent_generation,
+                expected_student_generation=expected_student_generation,
+                expected_parent_profile_version=expected_parent_profile_version,
+                expected_student_profile_version=expected_student_profile_version,
             ),
             table=table,
         )
@@ -978,10 +1017,16 @@ def _matching_parent_relationship(
     ):
         return None
     profile = snapshot.profile
+    parent_profile = snapshot.parent_profile
     if (
-        profile is None
+        parent_profile is None
+        or parent_profile.get("user_id") != parent_id
+        or parent_profile.get("role") != "parent"
+        or parent_profile.get("account_status") != "active"
+        or profile is None
         or profile.get("user_id") != student_id
         or profile.get("role") != "student"
+        or profile.get("account_status") != "active"
         or profile.get("parent_id") != parent_id
         or profile.get("relationship") != relationship
         or profile.get("parent_binding_status") != status
@@ -999,10 +1044,16 @@ def _parent_relationship_conflicts(
     version: int,
 ) -> bool:
     profile = snapshot.profile
+    parent_profile = snapshot.parent_profile
     if (
-        profile is None
+        parent_profile is None
+        or parent_profile.get("user_id") != parent_id
+        or parent_profile.get("role") != "parent"
+        or parent_profile.get("account_status") != "active"
+        or profile is None
         or profile.get("user_id") != student_id
         or profile.get("role") != "student"
+        or profile.get("account_status") != "active"
     ):
         return True
     profile_parent = profile.get("parent_id")
@@ -1171,3 +1222,76 @@ def _required_text(value: object, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field} is required")
     return value
+
+
+def _active_profile_observation_condition(
+    user_id: str,
+    *,
+    role: str,
+    profile_version: int,
+) -> TransactionOperation:
+    """Bind one canonical active profile observation into a transaction."""
+    return {
+        "ConditionCheck": {
+            "Key": {"PK": f"USER#{user_id}", "SK": "PROFILE"},
+            "ConditionExpression": (
+                "attribute_exists(PK) AND attribute_exists(SK) AND "
+                "#user_id=:user_id AND #role=:role AND "
+                "#account_status=:active AND #version=:profile_version"
+            ),
+            "ExpressionAttributeNames": {
+                "#user_id": "user_id",
+                "#role": "role",
+                "#account_status": "account_status",
+                "#version": "version",
+            },
+            "ExpressionAttributeValues": {
+                ":user_id": user_id,
+                ":role": role,
+                ":active": "active",
+                ":profile_version": profile_version,
+            },
+        }
+    }
+
+
+def _parent_binding_authorization_observations(
+    snapshot: _ParentBindingSnapshot,
+    *,
+    parent_id: str,
+    student_id: str,
+    table: object,
+) -> tuple[int, int, int, int] | None:
+    """Load exact dual-account observations without a legacy-role fallback."""
+    parent = snapshot.parent_profile
+    student = snapshot.profile
+    if (
+        parent is None
+        or parent.get("user_id") != parent_id
+        or parent.get("role") != "parent"
+        or parent.get("account_status") != "active"
+        or student is None
+        or student.get("user_id") != student_id
+        or student.get("role") != "student"
+        or student.get("account_status") != "active"
+    ):
+        return None
+    try:
+        parent_profile_version = _required_profile_version(parent.get("version"))
+        student_profile_version = _required_profile_version(student.get("version"))
+        parent_fence = account_deletion_repo.require_active_account_fence(
+            parent_id, table=table
+        )
+        student_fence = account_deletion_repo.require_active_account_fence(
+            student_id, table=table
+        )
+        parent_generation = _required_positive_integer(parent_fence.get("generation"))
+        student_generation = _required_positive_integer(student_fence.get("generation"))
+    except (ValueError, account_deletion_repo.AccountDeletionConflict):
+        return None
+    return (
+        parent_generation,
+        student_generation,
+        parent_profile_version,
+        student_profile_version,
+    )
