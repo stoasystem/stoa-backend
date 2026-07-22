@@ -100,7 +100,11 @@ def test_submit_question_accepts_foundation_subject_and_stores_topic_seeds(monke
 
     response = _question_client().post(
         "/questions",
-        json={"content": "A 2 kg object accelerates at 3 m/s^2.", "subject": "physics"},
+        json={
+            "content": "A 2 kg object accelerates at 3 m/s^2.",
+            "subject": "physics",
+            "idempotencyKey": "learning-expansion-physics-question",
+        },
     )
 
     assert response.status_code == 201
@@ -115,7 +119,11 @@ def test_submit_question_accepts_foundation_subject_and_stores_topic_seeds(monke
 def test_submit_question_rejects_uncontracted_subject():
     response = _question_client().post(
         "/questions",
-        json={"content": "Explain this sentence please.", "subject": "french"},
+        json={
+            "content": "Explain this sentence please.",
+            "subject": "french",
+            "idempotencyKey": "learning-expansion-unsupported-subject",
+        },
     )
 
     assert response.status_code == 422
