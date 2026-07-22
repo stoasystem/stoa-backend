@@ -480,8 +480,12 @@ def test_job_defaults_to_preview_and_apply_uses_only_bounded_coordinates() -> No
     assert applied.mode == "apply"
     assert applied.inspected == 1
     assert applied.mutated == 1
-    assert "private-question-canary" not in str(preview.public_dict())
-    assert "private-answer-canary" not in str(preview.public_dict())
+    public_output = str(preview.public_dict())
+    assert "request-opaque-1" not in public_output
+    assert "private-question-canary" not in public_output
+    assert "private-answer-canary" not in public_output
+    assert "private/object/key" not in public_output
+    assert "private-version-id" not in public_output
 
 
 class _PreviewRepositorySpy:
