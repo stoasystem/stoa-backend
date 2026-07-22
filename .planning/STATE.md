@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-28-PLAN.md
-last_updated: "2026-07-22T09:40:02.465Z"
+stopped_at: Completed 475-41-PLAN.md
+last_updated: "2026-07-22T09:47:27.797Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 117
-  percent: 58
+  completed_plans: 118
+  percent: 59
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 11 of 45
+Plan: 12 of 45
 Status: Ready to execute
 Last activity: 2026-07-22 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-22T09:39:39.060Z
-**Stopped At:** Completed 475-28-PLAN.md
+**Last Date:** 2026-07-22T09:47:27.750Z
+**Stopped At:** Completed 475-41-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -224,6 +224,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P15 | 15 min | 1 tasks | 8 files |
 | Phase 475 P23 | 10 min | 1 tasks | 6 files |
 | Phase 475 P28 | 4 min | 1 tasks | 2 files |
+| Phase 475 P41 | 3 min | 1 tasks | 1 files |
 
 ## Decisions
 
@@ -459,3 +460,4 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: Owner notification matches retain full tombstones, while foreign actor/metadata matches use a separate fenced narrow scrub. — Recipient-owned delivery and effect evidence must survive deletion of a referenced actor.
 - [Phase 475]: Notification reference cleanup binds exact row identity, schema, event version, status, direct actor when present, and the complete metadata snapshot. — A stale scrub must retry without overwriting concurrent metadata or delivery state.
 - [Phase 475]: Any notification identity match, CAS loss, or late row resets progress before two later strong clean epochs can complete deletion. — Quiescence begins only after the last matching reference is gone.
+- [Phase 475]: Narrow the stored locale timestamp to non-empty text before auth response construction. — Preserves valid bytes and the existing request-time fallback while removing the exact-file mypy diagnostic without ignores or casts.
