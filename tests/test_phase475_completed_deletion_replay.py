@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime
 from hashlib import sha256
 from typing import Any, Callable
 
@@ -226,7 +227,7 @@ def _client(
     return TestClient(app)
 
 
-def test_real_endpoint_replays_stored_terminal_receipt_with_zero_new_effects(
+def test_completed_deletion_replays_stored_receipt_without_new_effects(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     table = _DeletionTable()
@@ -249,17 +250,122 @@ def test_real_endpoint_replays_stored_terminal_receipt_with_zero_new_effects(
     command_id = lost_response.json()["commandId"]
     del lost_response
 
-    before_replay = deepcopy(table.effects)
-    replay = client.delete("/auth/me", headers={"Authorization": "Bearer token"})
-
-    assert replay.status_code == 202
-    assert replay.json() == {
-        "commandId": command_id,
-        "status": "deleted",
-        "acceptedAt": ACCEPTED_AT,
-        "completedAt": COMPLETED_AT,
+    assert table.command is not None
+    stored_command = deepcopy(table.command)
+    stored_receipt = deepcopy(stored_command["receipt"])
+    stored_public_receipt = {
+        "commandId": stored_receipt["command_id"],
+        "status": stored_receipt["status"],
+        "acceptedAt": stored_command["accepted_at"],
+        "completedAt": stored_receipt["completed_at"],
     }
+    before_replay = deepcopy(table.effects)
+
+    def fail_if_called(boundary: str) -> Callable[..., Any]:
+        def fail(*_args: Any, **_kwargs: Any) -> Any:
+            pytest.fail(f"terminal replay crossed {boundary} boundary")
+
+        return fail
+
+    # Identity recovery performs its one required read-only command lookup. Once the
+    # compact terminal command is found, no destructive discovery, branch/provider
+    # work, scheduling, or persistence boundary may reopen.
+    monkeypatch.setattr(
+        account_deletion_repo,
+        "scan_owned_private_rows",
+        fail_if_called("private-row discovery"),
+    )
+    monkeypatch.setattr(
+        account_deletion_repo, "transact", fail_if_called("repository transaction")
+    )
+    monkeypatch.setattr(
+        account_deletion_service.boto3,
+        "client",
+        fail_if_called("provider client"),
+    )
+    for branch_id in account_deletion_service.ACCOUNT_DELETION_BRANCH_IDS:
+        monkeypatch.setitem(
+            account_deletion_service.BRANCH_HANDLERS,
+            branch_id,
+            fail_if_called(f"{branch_id} cleanup"),
+        )
+    monkeypatch.setattr(
+        auth, "continue_deletion_command", fail_if_called("continuation scheduler")
+    )
+    monkeypatch.setattr(
+        BackgroundTasks, "add_task", fail_if_called("background scheduler")
+    )
+    monkeypatch.setattr(
+        table, "begin_account_deletion", fail_if_called("deletion write")
+    )
+    for method in ("put_item", "update_item", "delete_item", "transact_write_items"):
+        monkeypatch.setattr(table, method, fail_if_called(method), raising=False)
+
+    class ChangedReplayClock:
+        values = iter(
+            (
+                "2037-01-01T01:00:00+00:00",
+                "2041-06-15T12:30:00+00:00",
+                "2099-12-31T23:59:59+00:00",
+            )
+        )
+        calls = 0
+
+        @classmethod
+        def now(cls, _timezone: object) -> datetime:
+            cls.calls += 1
+            return datetime.fromisoformat(next(cls.values))
+
+    monkeypatch.setattr(deps, "datetime", ChangedReplayClock)
+
+    replays = [
+        client.delete("/auth/me", headers={"Authorization": "Bearer token"})
+        for _ in range(3)
+    ]
+    replay_bodies = [response.json() for response in replays]
+
+    assert all(response.status_code == 202 for response in replays)
+    assert replay_bodies == [stored_public_receipt] * 3
+    assert [response.content for response in replays] == [replays[0].content] * 3
+    assert stored_receipt == {
+        "command_id": command_id,
+        "status": "deleted",
+        "completed_at": COMPLETED_AT,
+    }
+    assert {body["commandId"] for body in replay_bodies} == {command_id}
+    assert {body["status"] for body in replay_bodies} == {"deleted"}
+    assert {body["completedAt"] for body in replay_bodies} == {COMPLETED_AT}
+    assert ChangedReplayClock.calls == len(replays)
+    assert table.command == stored_command
     assert table.effects == before_replay
+
+    public_keys = {"commandId", "status", "acceptedAt", "completedAt"}
+    forbidden_fragments = (
+        "PK",
+        "SK",
+        "USER#",
+        "DELETE_COMMAND#",
+        "provider",
+        "token",
+        "inventory",
+        "fingerprint",
+        "issuer",
+        "subject",
+        "diagnostic",
+        "exception",
+        "traceback",
+    )
+    for body in replay_bodies:
+        assert set(body) == public_keys
+        rendered = repr(body).lower()
+        assert not any(fragment.lower() in rendered for fragment in forbidden_fragments)
+
+
+def test_real_endpoint_replays_stored_terminal_receipt_with_zero_new_effects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep the Phase 475 checked-evidence selector bound to the stronger proof."""
+    test_completed_deletion_replays_stored_receipt_without_new_effects(monkeypatch)
 
 
 @pytest.mark.parametrize(
