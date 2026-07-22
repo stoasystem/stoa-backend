@@ -7,8 +7,8 @@ import re
 import threading
 from typing import Any
 
-from botocore.exceptions import ClientError
 import pytest
+from botocore.exceptions import ClientError
 
 from stoa.db.repositories import attachment_repo, question_submission_repo
 from stoa.services import usage_ledger_service
@@ -22,6 +22,14 @@ def _fingerprint(
         original_content=content,
         corrected_content=None,
         attachment_identities=attachments,
+    )
+
+
+def _command_digest(
+    *, student_id: str = "student-1", caller_key: str = "request-123"
+) -> str:
+    return question_submission_repo.question_submission_command_digest(
+        student_id, caller_key
     )
 
 
@@ -46,7 +54,7 @@ def _usage(*, counter_value: int = 1) -> dict[str, Any]:
         student_id="student-1",
         question_id="question-1",
         quota_period="2026-07-21",
-        idempotency_key="request-123",
+        idempotency_digest=_command_digest(),
         counter_key="USAGE#student-1/QUESTION#2026-07-21",
         counter_value=counter_value,
         quantity=1,
@@ -190,7 +198,7 @@ def _admit(
 ) -> question_submission_repo.QuestionAdmissionResult:
     return question_submission_repo.admit_question_submission(
         student_id="student-1",
-        idempotency_key="request-123",
+        idempotency_digest=_command_digest(),
         fingerprint=fingerprint or _fingerprint(),
         question=question or _question(),
         usage_event=_usage(),
@@ -296,10 +304,16 @@ def test_arbitrary_caller_key_is_absent_from_every_admission_item() -> None:
     )
     assert ledger["idempotency_digest"] == digest
     assert "idempotency_key" not in ledger
+    assert {
+        command["command_id"],
+        ledger["event_id"],
+        ledger["idempotency_digest"],
+    } == {digest}
 
 
 def test_repository_rejects_raw_or_legacy_command_identity_without_echo() -> None:
     caller_key = "student.private@example.test / Wie loese ich diese Aufgabe?"
+    digest = _command_digest(caller_key=caller_key)
 
     with pytest.raises(ValueError) as error:
         question_submission_repo.question_submission_command_key(
@@ -307,6 +321,25 @@ def test_repository_rejects_raw_or_legacy_command_identity_without_echo() -> Non
         )
 
     assert caller_key not in str(error.value)
+    legacy = question_submission_repo.classify_question_submission_command(
+        {
+            "entity_type": "question_submission_command",
+            "schema_version": "question-submission-command.v1",
+            "command_id": f"student-1:{caller_key}",
+            "student_id": "student-1",
+            "idempotency_key": caller_key,
+            "fingerprint": _fingerprint(),
+            "question_id": "question-legacy",
+            "status": "processing",
+        },
+        student_id="student-1",
+        idempotency_digest=digest,
+        fingerprint=_fingerprint(),
+    )
+    assert legacy is not None
+    assert legacy.disposition is question_submission_repo.QuestionAdmissionDisposition.RETRYABLE
+    assert legacy.command is None
+    assert caller_key not in repr(legacy)
 
 
 def test_transaction_has_one_counter_update_and_no_duplicate_targets() -> None:
@@ -335,8 +368,10 @@ def test_transaction_has_one_counter_update_and_no_duplicate_targets() -> None:
         },
     )
     command = {
-        "idempotency_key": "request-123",
+        "idempotency_digest": _command_digest(),
         "entity_type": "question_submission_command",
+        "schema_version": "question-submission-command.v2",
+        "command_id": _command_digest(),
     }
 
     operations = question_submission_repo.build_question_admission_transaction(

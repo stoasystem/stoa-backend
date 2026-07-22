@@ -6,7 +6,13 @@ from stoa.config import Settings
 from stoa.routers import admin, parents
 from stoa.services import usage_ledger_service
 from actor_helpers import install_actor_overrides
-from stoa.db.repositories import usage_ledger_repo
+from stoa.db.repositories import question_submission_repo, usage_ledger_repo
+
+
+def _question_digest(caller_key: str) -> str:
+    return question_submission_repo.question_submission_command_digest(
+        "student-1", caller_key
+    )
 
 
 class FakeTable:
@@ -105,7 +111,7 @@ def test_question_usage_event_is_privacy_safe_and_idempotent(monkeypatch):
         student_id="student-1",
         question_id="question-1",
         quota_period="2026-07-03",
-        idempotency_key="request-1",
+        idempotency_digest=_question_digest("request-1"),
         counter_key="USAGE#student-1/QUESTION#2026-07-03",
         counter_value=1,
         quantity=1,
@@ -116,7 +122,7 @@ def test_question_usage_event_is_privacy_safe_and_idempotent(monkeypatch):
         student_id="student-1",
         question_id="question-1",
         quota_period="2026-07-03",
-        idempotency_key="request-1",
+        idempotency_digest=_question_digest("request-1"),
         counter_key="USAGE#student-1/QUESTION#2026-07-03",
         counter_value=1,
         quantity=1,
@@ -257,7 +263,7 @@ def test_reconciliation_reports_and_repairs_counter_mismatch(monkeypatch):
             student_id="student-1",
             question_id=f"question-{index}",
             quota_period="2026-07-03",
-            idempotency_key=f"request-{index}",
+            idempotency_digest=_question_digest(f"request-{index}"),
             counter_key="USAGE#student-1/QUESTION#2026-07-03",
             counter_value=index + 1,
             quantity=1,
@@ -338,7 +344,7 @@ def test_reconciliation_explains_over_limit_counter(monkeypatch):
             student_id="student-1",
             question_id=f"question-{index}",
             quota_period="2026-07-05",
-            idempotency_key=f"request-{index}",
+            idempotency_digest=_question_digest(f"request-{index}"),
             counter_key="USAGE#student-1/QUESTION#2026-07-05",
             counter_value=index + 1,
             quantity=1,
@@ -444,7 +450,7 @@ def test_student_usage_summary_includes_multi_action_groups(monkeypatch):
         student_id="student-1",
         question_id="question-1",
         quota_period="2026-07-04",
-        idempotency_key="question-1",
+        idempotency_digest=_question_digest("question-1"),
         counter_key="USAGE#student-1/QUESTION#2026-07-04",
         counter_value=1,
         quantity=1,

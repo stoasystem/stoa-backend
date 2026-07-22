@@ -46,6 +46,24 @@ def _client_error(code: str) -> ClientError:
     return ClientError({"Error": {"Code": code, "Message": code}}, "UpdateItem")
 
 
+def _question_command(
+    *, caller_key: str, fingerprint: str, question_id: str = "question-existing"
+) -> dict[str, object]:
+    digest = question_submission_repo.question_submission_command_digest(
+        "student-1", caller_key
+    )
+    return {
+        "entity_type": "question_submission_command",
+        "schema_version": "question-submission-command.v2",
+        "command_id": digest,
+        "student_id": "student-1",
+        "idempotency_digest": digest,
+        "question_id": question_id,
+        "fingerprint": fingerprint,
+        "status": "processing",
+    }
+
+
 def _prepared_question_attachment() -> dict:
     return {
         "kind": "upload",
@@ -484,7 +502,12 @@ def test_submit_question_records_privacy_safe_usage_ledger_event(monkeypatch):
     assert ledger_calls[0]["student_id"] == "student-1"
     assert ledger_calls[0]["question_id"] == stored["question_id"]
     assert ledger_calls[0]["counter_value_after"] == 1
-    assert ledger_calls[0]["idempotency_key"] == "question-submit-1"
+    assert ledger_calls[0]["idempotency_digest"] == (
+        question_submission_repo.question_submission_command_digest(
+            "student-1", "question-submit-1"
+        )
+    )
+    assert "idempotency_key" not in ledger_calls[0]
     assert ledger_calls[0]["effective_plan"] == "premium"
     assert ledger_calls[0]["entitlement_snapshot"]["effectivePlan"] == "premium"
 
@@ -519,11 +542,9 @@ def test_submit_question_idempotent_retry_without_question_does_not_increment_co
     monkeypatch.setattr(
         questions.question_submission_repo,
         "get_question_submission_command",
-        lambda *_args, **_kwargs: {
-            "question_id": "question-existing",
-            "fingerprint": fingerprint,
-            "status": "processing",
-        },
+        lambda *_args, **_kwargs: _question_command(
+            caller_key="question-submit-1", fingerprint=fingerprint
+        ),
     )
     monkeypatch.setattr(questions.question_repo, "get_question", lambda question_id: None)
     monkeypatch.setattr(
@@ -578,11 +599,9 @@ def test_submit_question_rejects_mismatched_idempotent_retry_without_counter(mon
     monkeypatch.setattr(
         questions.question_submission_repo,
         "get_question_submission_command",
-        lambda *_args, **_kwargs: {
-            "question_id": "question-existing",
-            "fingerprint": original_fingerprint,
-            "status": "processing",
-        },
+        lambda *_args, **_kwargs: _question_command(
+            caller_key="question-submit-1", fingerprint=original_fingerprint
+        ),
     )
     monkeypatch.setattr(
         questions.question_repo,
@@ -833,11 +852,10 @@ def test_idempotency_key_cannot_be_rebound_to_another_attachment(monkeypatch):
     monkeypatch.setattr(
         questions.question_submission_repo,
         "get_question_submission_command",
-        lambda *_args, **_kwargs: {
-            "question_id": "question-existing",
-            "fingerprint": original_fingerprint,
-            "status": "processing",
-        },
+        lambda *_args, **_kwargs: _question_command(
+            caller_key="question-submit-attachment",
+            fingerprint=original_fingerprint,
+        ),
     )
     monkeypatch.setattr(
         questions.question_repo,

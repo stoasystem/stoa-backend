@@ -325,8 +325,12 @@ async def submit_question(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Submit a question; run OCR if an image is provided, then call AI."""
-    idempotency_key = body.idempotency_key
     student_id = actor.user_id
+    idempotency_digest = (
+        question_submission_repo.question_submission_command_digest(
+            student_id, body.idempotency_key
+        )
+    )
     student_profile = user_repo.get_user(student_id) or {}
     subscription_tier = str(student_profile.get("subscription_tier") or "free")
     entitlement = entitlement_service.resolve_student_entitlement(
@@ -355,7 +359,7 @@ async def submit_question(
     # admit_question_submission remains the authority for concurrent first calls.
     try:
         existing_command = question_submission_repo.get_question_submission_command(
-            student_id, idempotency_key
+            student_id, idempotency_digest
         )
     except Exception:
         _raise_question_submission_error(
@@ -363,16 +367,15 @@ async def submit_question(
             correlation_id=correlation_id,
         )
     if existing_command is not None:
-        disposition = (
-            question_submission_repo.QuestionAdmissionDisposition.RESUME
-            if existing_command.get("fingerprint") == fingerprint
-            else question_submission_repo.QuestionAdmissionDisposition.PAYLOAD_MISMATCH
+        classified = question_submission_repo.classify_question_submission_command(
+            existing_command,
+            student_id=student_id,
+            idempotency_digest=idempotency_digest,
+            fingerprint=fingerprint,
         )
+        assert classified is not None
         replay = _project_question_admission(
-            question_submission_repo.QuestionAdmissionResult(
-                disposition,
-                command=existing_command,
-            ),
+            classified,
             correlation_id=correlation_id,
             limit=limit,
         )
@@ -389,21 +392,22 @@ async def submit_question(
         except AttachmentDecisionError as error:
             try:
                 command = question_submission_repo.get_question_submission_command(
-                    student_id, idempotency_key
+                    student_id, idempotency_digest
                 )
             except Exception:
                 command = None
             if command is not None:
-                disposition = (
-                    question_submission_repo.QuestionAdmissionDisposition.RESUME
-                    if command.get("fingerprint") == fingerprint
-                    else question_submission_repo.QuestionAdmissionDisposition.PAYLOAD_MISMATCH
+                classified = (
+                    question_submission_repo.classify_question_submission_command(
+                        command,
+                        student_id=student_id,
+                        idempotency_digest=idempotency_digest,
+                        fingerprint=fingerprint,
+                    )
                 )
+                assert classified is not None
                 replay = _project_question_admission(
-                    question_submission_repo.QuestionAdmissionResult(
-                        disposition,
-                        command=command,
-                    ),
+                    classified,
                     correlation_id=correlation_id,
                     limit=limit,
                 )
@@ -450,7 +454,7 @@ async def submit_question(
         student_id=student_id,
         question_id=question_id,
         quota_period=quota_period,
-        idempotency_key=idempotency_key,
+        idempotency_digest=idempotency_digest,
         counter_key=f"USAGE#{student_id}/QUESTION#{quota_period}",
         counter_value=1,
         quantity=1,
@@ -460,7 +464,7 @@ async def submit_question(
     try:
         result = question_submission_repo.admit_question_submission(
             student_id=student_id,
-            idempotency_key=idempotency_key,
+            idempotency_digest=idempotency_digest,
             fingerprint=fingerprint,
             question=item,
             usage_event=usage_event,

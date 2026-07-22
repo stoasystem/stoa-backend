@@ -343,14 +343,17 @@ def get_question_usage_event(
     *,
     student_id: str,
     quota_period: str,
-    idempotency_key: str,
+    idempotency_digest: str,
 ) -> dict[str, Any] | None:
     """Read an existing question usage ledger event for retry handling."""
+    digest = question_submission_repo.validate_question_submission_command_digest(
+        idempotency_digest
+    )
     return usage_ledger_repo.get_usage_event(
         student_id=student_id,
         action=QUESTION_SUBMISSION_ACTION,
         quota_period=quota_period,
-        idempotency_key=idempotency_key,
+        idempotency_key=digest,
     )
 
 
@@ -359,7 +362,7 @@ def build_question_usage_event(
     student_id: str,
     question_id: str,
     quota_period: str,
-    idempotency_key: str,
+    idempotency_digest: str,
     counter_key: str,
     counter_value: int,
     quantity: int,
@@ -368,17 +371,17 @@ def build_question_usage_event(
     write_order: str = "question_admission_transaction",
 ) -> dict[str, Any]:
     """Build one privacy-safe question usage item without persisting it."""
+    digest = question_submission_repo.validate_question_submission_command_digest(
+        idempotency_digest
+    )
     effective_plan = str(entitlement.get("effectivePlan") or "free")
     parent_id = entitlement.get("parentId")
     return {
         "PK": f"USAGE_LEDGER#{student_id}",
-        "SK": f"EVENT#{QUESTION_SUBMISSION_ACTION}#{quota_period}#{idempotency_key}",
+        "SK": f"EVENT#{QUESTION_SUBMISSION_ACTION}#{quota_period}#{digest}",
         "entity_type": "usage_ledger_event",
         "schema_version": LEDGER_SCHEMA_VERSION,
-        "event_id": (
-            f"{student_id}:{QUESTION_SUBMISSION_ACTION}:"
-            f"{quota_period}:{idempotency_key}"
-        ),
+        "event_id": digest,
         "actor_id": student_id,
         "actor_role": "student",
         "student_id": student_id,
@@ -389,7 +392,7 @@ def build_question_usage_event(
         "quota_period": quota_period,
         "counter_key": counter_key,
         "counter_value_after": counter_value,
-        "idempotency_key": idempotency_key,
+        "idempotency_digest": digest,
         "request_correlation_id": question_id,
         "question_id": question_id,
         "effective_plan": effective_plan,
@@ -411,7 +414,7 @@ def record_question_usage_event(
     student_id: str,
     question_id: str,
     quota_period: str,
-    idempotency_key: str,
+    idempotency_digest: str,
     counter_key: str,
     counter_value: int,
     quantity: int,
@@ -428,7 +431,7 @@ def record_question_usage_event(
         student_id=student_id,
         question_id=question_id,
         quota_period=quota_period,
-        idempotency_key=idempotency_key,
+        idempotency_digest=idempotency_digest,
         counter_key=counter_key,
         counter_value=counter_value,
         quantity=quantity,
@@ -974,7 +977,7 @@ def _usage_groups(action_summaries: list[dict[str, Any]]) -> list[dict[str, Any]
 
 
 def _event_response(event: dict[str, Any]) -> dict[str, Any]:
-    return {
+    response = {
         "eventId": event.get("event_id"),
         "studentId": event.get("student_id"),
         "parentId": event.get("parent_id"),
@@ -983,7 +986,6 @@ def _event_response(event: dict[str, Any]) -> dict[str, Any]:
         "quotaPeriod": event.get("quota_period"),
         "counterKey": event.get("counter_key"),
         "counterValueAfter": event.get("counter_value_after"),
-        "idempotencyKey": event.get("idempotency_key"),
         "questionId": event.get("question_id"),
         "effectivePlan": event.get("effective_plan"),
         "entitlementSource": event.get("entitlement_source"),
@@ -992,3 +994,8 @@ def _event_response(event: dict[str, Any]) -> dict[str, Any]:
         "metadata": safe_usage_metadata(event.get("metadata") or {}),
         "createdAt": event.get("created_at"),
     }
+    if event.get("action") == QUESTION_SUBMISSION_ACTION:
+        response["idempotencyDigest"] = event.get("idempotency_digest")
+    else:
+        response["idempotencyKey"] = event.get("idempotency_key")
+    return response

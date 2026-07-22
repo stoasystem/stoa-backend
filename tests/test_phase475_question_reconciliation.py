@@ -14,7 +14,9 @@ from stoa.services import usage_ledger_service
 
 
 STUDENT_ID = "student-opaque-1"
-REQUEST_ID = "request-opaque-1"
+REQUEST_ID = question_submission_repo.question_submission_command_digest(
+    STUDENT_ID, "request-opaque-1"
+)
 QUESTION_ID = "question-opaque-1"
 PERIOD = "2026-07-22"
 COMMAND_KEY = (f"USER#{STUDENT_ID}", f"QUESTION_SUBMISSION#{REQUEST_ID}")
@@ -47,15 +49,15 @@ def _seed(*, terminal: bool = False) -> dict[tuple[str, str], dict[str, object]]
         "PK": COMMAND_KEY[0],
         "SK": COMMAND_KEY[1],
         "entity_type": "question_submission_command",
-        "schema_version": "question-submission-command.v1",
-        "command_id": f"{STUDENT_ID}:{REQUEST_ID}",
+        "schema_version": "question-submission-command.v2",
+        "command_id": REQUEST_ID,
         "student_id": STUDENT_ID,
-        "idempotency_key": REQUEST_ID,
+        "idempotency_digest": REQUEST_ID,
         "fingerprint": "f" * 64,
         "question_id": QUESTION_ID,
         "quota_period": PERIOD,
         "counter_value": 1,
-        "ledger_identity": f"{STUDENT_ID}:question_submission:{PERIOD}:{REQUEST_ID}",
+        "ledger_identity": REQUEST_ID,
         "attachment_identities": ["attachment:opaque"],
         "status": status,
         "version": 1,
@@ -87,7 +89,7 @@ def _seed(*, terminal: bool = False) -> dict[tuple[str, str], dict[str, object]]
         "action": "question_submission",
         "quantity": 1,
         "quota_period": PERIOD,
-        "idempotency_key": REQUEST_ID,
+        "idempotency_digest": REQUEST_ID,
         "status": "active",
     }
     return {

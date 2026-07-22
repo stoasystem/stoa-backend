@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import inspect
 import json
 import re
 
@@ -69,10 +70,11 @@ def _profile_and_entitlement(monkeypatch) -> None:
 def _question_command(kwargs: dict[str, object]) -> dict[str, object]:
     return {
         "entity_type": "question_submission_command",
-        "schema_version": "question-submission-command.v1",
+        "schema_version": "question-submission-command.v2",
         "status": "processing",
         "student_id": kwargs["student_id"],
-        "idempotency_key": kwargs["idempotency_key"],
+        "idempotency_digest": kwargs["idempotency_digest"],
+        "command_id": kwargs["idempotency_digest"],
         "fingerprint": kwargs["fingerprint"],
         "question_id": kwargs["question"]["question_id"],  # type: ignore[index]
     }
@@ -195,6 +197,11 @@ def test_valid_idempotency_key_reaches_replay_boundary_as_opaque_digest(monkeypa
     def command_read(_student_id: str, idempotency_key: str):
         observed_keys.append(idempotency_key)
         return {
+            "entity_type": "question_submission_command",
+            "schema_version": "question-submission-command.v2",
+            "student_id": "student-1",
+            "idempotency_digest": expected_digest,
+            "command_id": expected_digest,
             "question_id": "question-original",
             "fingerprint": question_submission_repo.question_submission_fingerprint(
                 subject="math",
@@ -240,6 +247,73 @@ def test_valid_idempotency_key_reaches_replay_boundary_as_opaque_digest(monkeypa
     assert response.status_code == 201
     assert observed_keys == [expected_digest]
     assert caller_key not in json.dumps(response.json(), sort_keys=True)
+
+
+def test_raw_caller_key_is_absent_from_route_body_and_diagnostics(
+    monkeypatch, caplog
+) -> None:
+    _profile_and_entitlement(monkeypatch)
+    caller_key = "student.private@example.test / this is not a storage coordinate"
+    expected_digest = question_submission_repo.question_submission_command_digest(
+        "student-1", caller_key
+    )
+    captured: dict[str, object] = {}
+    diagnostics: list[object] = []
+
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "get_question_submission_command",
+        lambda *_args, **_kwargs: None,
+    )
+
+    def admit(**kwargs):
+        captured.update(kwargs)
+        command = _question_command(kwargs)
+        question = dict(kwargs["question"])
+        return question_submission_repo.QuestionAdmissionResult(
+            question_submission_repo.QuestionAdmissionDisposition.ADMITTED,
+            command=command,
+            question=question,
+        )
+
+    monkeypatch.setattr(
+        questions.question_submission_repo, "admit_question_submission", admit
+    )
+    monkeypatch.setattr(
+        questions.ai_service,
+        "get_ai_answer",
+        lambda **_kwargs: (_ for _ in ()).throw(TimeoutError("provider unavailable")),
+    )
+    monkeypatch.setattr(
+        questions,
+        "emit_private_event",
+        lambda *args, **kwargs: diagnostics.append((args, kwargs)),
+    )
+
+    response = _client().post(
+        "/questions",
+        json={
+            "content": "Please solve 2x + 4 = 10",
+            "subject": "math",
+            "idempotencyKey": caller_key,
+        },
+    )
+
+    encoded = json.dumps(
+        {
+            "captured": captured,
+            "response": response.json(),
+            "diagnostics": diagnostics,
+            "logs": caplog.text,
+        },
+        sort_keys=True,
+        default=str,
+    )
+    assert response.status_code == 201
+    assert captured["idempotency_digest"] == expected_digest
+    assert caller_key not in encoded
+    source = inspect.getsource(questions.submit_question)
+    assert source.count("body.idempotency_key") == 1
 
 
 def test_lost_response_retry_returns_original_without_repeating_effects(monkeypatch) -> None:
@@ -316,10 +390,18 @@ def test_changed_payload_returns_structured_new_submission_action(monkeypatch) -
         original_content="Please solve 2x + 4 = 10",
         corrected_content=None,
     )
+    digest = question_submission_repo.question_submission_command_digest(
+        "student-1", "question-submit-replay"
+    )
     monkeypatch.setattr(
         questions.question_submission_repo,
         "get_question_submission_command",
         lambda *_args, **_kwargs: {
+            "entity_type": "question_submission_command",
+            "schema_version": "question-submission-command.v2",
+            "student_id": "student-1",
+            "idempotency_digest": digest,
+            "command_id": digest,
             "question_id": "question-original",
             "fingerprint": original_fingerprint,
             "status": "processing",

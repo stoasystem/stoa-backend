@@ -16,8 +16,9 @@ from stoa.db.repositories import account_deletion_repo, attachment_repo, questio
 
 type QuestionAdmissionItem = dict[str, object]
 
-_COMMAND_SCHEMA_VERSION = "question-submission-command.v1"
+_COMMAND_SCHEMA_VERSION = "question-submission-command.v2"
 _FINGERPRINT_DOMAIN = b"stoa.question.submission.v1"
+_COMMAND_IDENTITY_DOMAIN = b"stoa.question.submission.command.v1"
 _RECONCILIATION_DIGEST_DOMAIN = "stoa.question.reconciliation.v1"
 _REVERSAL_ID_DOMAIN = b"stoa.question.reversal.v1"
 _MAX_ADMISSION_ATTEMPTS = 4
@@ -143,12 +144,38 @@ def question_submission_fingerprint(
     return hashlib.sha256(bytes(framed)).hexdigest()
 
 
+def validate_question_submission_command_digest(value: object) -> str:
+    """Return one opaque command digest or fail without echoing its input."""
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise ValueError("question command identity is invalid")
+    return value
+
+
+def question_submission_command_digest(
+    student_id: str, caller_idempotency_key: str
+) -> str:
+    """Derive the sole durable identity from canonical owner and caller key."""
+    framed = bytearray(_COMMAND_IDENTITY_DOMAIN)
+    framed.extend(_frame(_required_text(student_id, "student_id")))
+    framed.extend(
+        _frame(_required_text(caller_idempotency_key, "caller_idempotency_key"))
+    )
+    return hashlib.sha256(bytes(framed)).hexdigest()
+
+
 def question_submission_command_key(
-    student_id: str, idempotency_key: str
+    student_id: str, idempotency_digest: str
 ) -> QuestionAdmissionItem:
     return {
         "PK": f"USER#{_required_text(student_id, 'student_id')}",
-        "SK": f"QUESTION_SUBMISSION#{_required_text(idempotency_key, 'idempotency_key')}",
+        "SK": (
+            "QUESTION_SUBMISSION#"
+            f"{validate_question_submission_command_digest(idempotency_digest)}"
+        ),
     }
 
 
@@ -161,7 +188,7 @@ def question_counter_key(student_id: str, quota_period: str) -> QuestionAdmissio
 
 def get_question_submission_command(
     student_id: str,
-    idempotency_key: str,
+    idempotency_digest: str,
     *,
     table: object | None = None,
 ) -> QuestionAdmissionItem | None:
@@ -171,7 +198,7 @@ def get_question_submission_command(
         raise ValueError("question admission dependency unavailable")
     response = _string_mapping(
         target.get_item(
-            Key=question_submission_command_key(student_id, idempotency_key),
+            Key=question_submission_command_key(student_id, idempotency_digest),
             ConsistentRead=True,
         )
     )
@@ -183,29 +210,27 @@ def _classify_command(
     command: QuestionAdmissionItem | None,
     *,
     student_id: str,
-    idempotency_key: str,
+    idempotency_digest: str,
     fingerprint: str,
 ) -> QuestionAdmissionResult | None:
     if command is None:
         return None
-    if command.get("student_id") != student_id:
-        return QuestionAdmissionResult(QuestionAdmissionDisposition.RETRYABLE)
-    if command.get("idempotency_key") != idempotency_key:
-        return QuestionAdmissionResult(QuestionAdmissionDisposition.RETRYABLE)
-    if command.get("fingerprint") != fingerprint:
-        return QuestionAdmissionResult(
-            QuestionAdmissionDisposition.PAYLOAD_MISMATCH,
-            command=dict(command),
-        )
     if (
         command.get("entity_type") != "question_submission_command"
         or command.get("schema_version") != _COMMAND_SCHEMA_VERSION
+        or command.get("student_id") != student_id
+        or command.get("idempotency_digest") != idempotency_digest
+        or command.get("command_id") != idempotency_digest
         or command.get("status") not in {"processing", "completed", "terminal_failed"}
         or not isinstance(command.get("question_id"), str)
         or not command["question_id"]
     ):
         return QuestionAdmissionResult(
             QuestionAdmissionDisposition.RETRYABLE,
+        )
+    if command.get("fingerprint") != fingerprint:
+        return QuestionAdmissionResult(
+            QuestionAdmissionDisposition.PAYLOAD_MISMATCH,
             command=dict(command),
         )
     counter_value = command.get("counter_value")
@@ -217,6 +242,24 @@ def _classify_command(
             if isinstance(counter_value, int) and not isinstance(counter_value, bool)
             else None
         ),
+    )
+
+
+def classify_question_submission_command(
+    command: QuestionAdmissionItem | None,
+    *,
+    student_id: str,
+    idempotency_digest: str,
+    fingerprint: str,
+) -> QuestionAdmissionResult | None:
+    """Strictly classify an opaque command without projecting malformed rows."""
+    return _classify_command(
+        command,
+        student_id=_required_text(student_id, "student_id"),
+        idempotency_digest=validate_question_submission_command_digest(
+            idempotency_digest
+        ),
+        fingerprint=_required_text(fingerprint, "fingerprint"),
     )
 
 
@@ -268,8 +311,30 @@ def build_question_admission_transaction(
     question_id = _required_text(question.get("question_id"), "question_id")
     if question.get("student_id") != student_id:
         raise ValueError("question owner mismatch")
+    idempotency_digest = validate_question_submission_command_digest(
+        command.get("idempotency_digest")
+    )
+    if (
+        command.get("entity_type") != "question_submission_command"
+        or command.get("schema_version") != _COMMAND_SCHEMA_VERSION
+        or command.get("command_id") != idempotency_digest
+    ):
+        raise ValueError("question command schema is invalid")
+    usage_digest = validate_question_submission_command_digest(
+        usage_event.get("idempotency_digest")
+    )
+    expected_usage_key = _usage_event_key(
+        student_id, quota_period, idempotency_digest
+    )
+    if (
+        usage_digest != idempotency_digest
+        or usage_event.get("event_id") != idempotency_digest
+        or usage_event.get("PK") != expected_usage_key["PK"]
+        or usage_event.get("SK") != expected_usage_key["SK"]
+    ):
+        raise ValueError("question usage identity is invalid")
     command_item = {
-        **question_submission_command_key(student_id, str(command["idempotency_key"])),
+        **question_submission_command_key(student_id, idempotency_digest),
         **command,
         "student_id": student_id,
         "account_fence_generation": generation,
@@ -379,20 +444,20 @@ def _counter_value(
 def _safe_reread(
     *,
     student_id: str,
-    idempotency_key: str,
+    idempotency_digest: str,
     fingerprint: str,
     table: object,
 ) -> QuestionAdmissionResult | None:
     try:
         command = get_question_submission_command(
-            student_id, idempotency_key, table=table
+            student_id, idempotency_digest, table=table
         )
     except Exception:
         return QuestionAdmissionResult(QuestionAdmissionDisposition.RETRYABLE)
     return _classify_command(
         command,
         student_id=student_id,
-        idempotency_key=idempotency_key,
+        idempotency_digest=idempotency_digest,
         fingerprint=fingerprint,
     )
 
@@ -412,11 +477,12 @@ def _read_item(target: object, key: QuestionAdmissionItem) -> QuestionAdmissionI
 
 
 def _usage_event_key(
-    student_id: str, quota_period: str, idempotency_key: str
+    student_id: str, quota_period: str, idempotency_digest: str
 ) -> QuestionAdmissionItem:
+    digest = validate_question_submission_command_digest(idempotency_digest)
     return {
         "PK": f"USAGE_LEDGER#{student_id}",
-        "SK": f"EVENT#question_submission#{quota_period}#{idempotency_key}",
+        "SK": f"EVENT#question_submission#{quota_period}#{digest}",
     }
 
 
@@ -488,11 +554,11 @@ def preview_question_submission_reconciliation(
     """Strongly inspect exactly one command/ledger coordinate without writes."""
     target = table or get_table()
     student_id = _required_text(student_id, "student_id")
-    idempotency_key = _required_text(idempotency_key, "idempotency_key")
-    command_id = f"{student_id}:{idempotency_key}"
+    idempotency_digest = validate_question_submission_command_digest(idempotency_key)
+    command_id = idempotency_digest
     try:
         command = _read_item(
-            target, question_submission_command_key(student_id, idempotency_key)
+            target, question_submission_command_key(student_id, idempotency_digest)
         )
         effective_question_id = (
             str(command.get("question_id") or "") if command else str(question_id or "")
@@ -510,7 +576,7 @@ def preview_question_submission_reconciliation(
         ledger = (
             _read_item(
                 target,
-                _usage_event_key(student_id, effective_period, idempotency_key),
+                _usage_event_key(student_id, effective_period, idempotency_digest),
             )
             if effective_period
             else None
@@ -580,7 +646,7 @@ def preview_question_submission_reconciliation(
         command.get("entity_type") != "question_submission_command"
         or command.get("schema_version") != _COMMAND_SCHEMA_VERSION
         or command.get("student_id") != student_id
-        or command.get("idempotency_key") != idempotency_key
+        or command.get("idempotency_digest") != idempotency_digest
         or command.get("command_id") != command_id
         or command_version is None
         or not effective_question_id
@@ -973,7 +1039,7 @@ def apply_question_submission_reconciliation(
 def admit_question_submission(
     *,
     student_id: str,
-    idempotency_key: str,
+    idempotency_digest: str,
     fingerprint: str,
     question: QuestionAdmissionItem,
     usage_event: QuestionAdmissionItem,
@@ -988,7 +1054,9 @@ def admit_question_submission(
     """Admit one exact submission or replay the durable original command."""
     target = table or get_table()
     student_id = _required_text(student_id, "student_id")
-    idempotency_key = _required_text(idempotency_key, "idempotency_key")
+    idempotency_digest = validate_question_submission_command_digest(
+        idempotency_digest
+    )
     fingerprint = _required_text(fingerprint, "fingerprint")
     quota_period = _required_text(quota_period, "quota_period")
     created_at = _required_text(created_at, "created_at")
@@ -996,7 +1064,7 @@ def admit_question_submission(
     question_id = _required_text(question.get("question_id"), "question_id")
     initial = _safe_reread(
         student_id=student_id,
-        idempotency_key=idempotency_key,
+        idempotency_digest=idempotency_digest,
         fingerprint=fingerprint,
         table=target,
     )
@@ -1022,7 +1090,7 @@ def admit_question_submission(
         if expected_counter >= limit:
             replay = _safe_reread(
                 student_id=student_id,
-                idempotency_key=idempotency_key,
+                idempotency_digest=idempotency_digest,
                 fingerprint=fingerprint,
                 table=target,
             )
@@ -1036,9 +1104,9 @@ def admit_question_submission(
         command: QuestionAdmissionItem = {
             "entity_type": "question_submission_command",
             "schema_version": _COMMAND_SCHEMA_VERSION,
-            "command_id": f"{student_id}:{idempotency_key}",
+            "command_id": idempotency_digest,
             "student_id": student_id,
-            "idempotency_key": idempotency_key,
+            "idempotency_digest": idempotency_digest,
             "fingerprint": fingerprint,
             "question_id": question_id,
             "quota_period": quota_period,
@@ -1067,7 +1135,7 @@ def admit_question_submission(
         except Exception:
             replay = _safe_reread(
                 student_id=student_id,
-                idempotency_key=idempotency_key,
+                idempotency_digest=idempotency_digest,
                 fingerprint=fingerprint,
                 table=target,
             )
@@ -1075,7 +1143,7 @@ def admit_question_submission(
                 return replay
             continue
         persisted_command = {
-            **question_submission_command_key(student_id, idempotency_key),
+            **question_submission_command_key(student_id, idempotency_digest),
             **command,
             "student_id": student_id,
             "account_fence_generation": generation,
