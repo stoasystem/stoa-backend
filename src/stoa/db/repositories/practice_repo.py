@@ -1,10 +1,12 @@
 """DynamoDB access patterns for practice content and student progress."""
+
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Mapping
+from typing import Any, Protocol, runtime_checkable
 import uuid
 
 from boto3.dynamodb.conditions import Key
@@ -34,9 +36,7 @@ _POINTER_FIELDS = {
 }
 _MAX_CHALLENGE_PAGES = 1000
 
-PRACTICE_PRIVATE_ROW_REGISTRY = frozenset(
-    {"progress", "attempt", "legacy_mistake", "usage"}
-)
+PRACTICE_PRIVATE_ROW_REGISTRY = frozenset({"progress", "attempt", "legacy_mistake", "usage"})
 PRACTICE_WRITER_REGISTRY = frozenset(
     {"mark_lesson_completed", "put_attempt", "record_attempt", "usage_counter"}
 )
@@ -90,6 +90,76 @@ PRACTICE_TOMBSTONE_ALLOWLIST = frozenset(
 )
 
 
+type PracticeItem = dict[str, object]
+
+
+@runtime_checkable
+class _GetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _PutTable(Protocol):
+    def put_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _QueryTable(Protocol):
+    def query(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> object: ...
+
+
+def _dependency_mapping(value: object) -> PracticeItem:
+    if not isinstance(value, Mapping):
+        raise ValueError("malformed practice dependency response")
+    result: PracticeItem = {}
+    for key, member in value.items():
+        if not isinstance(key, str):
+            raise ValueError("malformed practice dependency response")
+        result[key] = member
+    return result
+
+
+def _optional_item(value: object) -> PracticeItem | None:
+    if value is None:
+        return None
+    return _dependency_mapping(value)
+
+
+def _response_items(value: object) -> list[PracticeItem]:
+    if not isinstance(value, list):
+        raise ValueError("malformed practice dependency response")
+    return [_dependency_mapping(item) for item in value]
+
+
+def _get_item(table: object, **kwargs: object) -> PracticeItem:
+    if not isinstance(table, _GetTable):
+        raise ValueError("practice dependency unavailable")
+    return _dependency_mapping(table.get_item(**kwargs))
+
+
+def _put_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _PutTable):
+        raise ValueError("practice dependency unavailable")
+    return table.put_item(**kwargs)
+
+
+def _query(table: object, **kwargs: object) -> PracticeItem:
+    if not isinstance(table, _QueryTable):
+        raise ValueError("practice dependency unavailable")
+    return _dependency_mapping(table.query(**kwargs))
+
+
+def _scan(table: object, **kwargs: object) -> PracticeItem:
+    if not isinstance(table, _ScanTable):
+        raise account_deletion_repo.AccountDeletionConflict("practice dependency unavailable")
+    return _dependency_mapping(table.scan(**kwargs))
+
+
 @dataclass(frozen=True, slots=True)
 class PracticePrivatePage:
     items: tuple[dict[str, Any], ...]
@@ -98,19 +168,14 @@ class PracticePrivatePage:
 
 def _atomic_table(table: Any) -> bool:
     return callable(getattr(table, "transact_account_deletion", None)) or bool(
-        getattr(getattr(table, "meta", None), "client", None)
-        and getattr(table, "name", None)
+        getattr(getattr(table, "meta", None), "client", None) and getattr(table, "name", None)
     )
 
 
-def _write_generation(
-    owner_id: str, generation: int | None, table: Any
-) -> int:
+def _write_generation(owner_id: str, generation: int | None, table: Any) -> int:
     if generation is not None:
         if type(generation) is not int or generation <= 0:
-            raise account_deletion_repo.AccountDeletionConflict(
-                "invalid account fence generation"
-            )
+            raise account_deletion_repo.AccountDeletionConflict("invalid account fence generation")
         return generation
     if _atomic_table(table):
         fence = account_deletion_repo.require_active_account_fence(owner_id, table=table)
@@ -155,8 +220,7 @@ def build_practice_write_transaction(
         {
             "Update": {
                 "Key": {"PK": stored["PK"], "SK": stored["SK"]},
-                "UpdateExpression": "SET "
-                + ", ".join(f"#{key}=:{key}" for key in updates),
+                "UpdateExpression": "SET " + ", ".join(f"#{key}=:{key}" for key in updates),
                 "ConditionExpression": (
                     "attribute_exists(PK) AND attribute_exists(SK) AND owner_id=:owner"
                 ),
@@ -193,9 +257,7 @@ def canonical_challenge_content_hash(challenge: dict | Any) -> str:
     if not isinstance(challenge, dict):
         challenge = dict(challenge)
     content = {
-        key: value
-        for key, value in challenge.items()
-        if key not in _CHALLENGE_METADATA_FIELDS
+        key: value for key, value in challenge.items() if key not in _CHALLENGE_METADATA_FIELDS
     }
     encoded = json.dumps(
         _canonical_json_value(content),
@@ -244,19 +306,18 @@ def _valid_versioned_challenge(challenge: Any) -> bool:
     return canonical_challenge_content_hash(challenge) == content_hash
 
 
-def _query_all_challenge_pages(table: Any, **query: Any) -> list[dict]:
+def _query_all_challenge_pages(table: object, **query: object) -> list[dict]:
     items: list[dict] = []
-    previous_marker: dict[str, Any] | None = None
+    previous_marker: PracticeItem | None = None
     for _page in range(_MAX_CHALLENGE_PAGES):
-        response = table.query(**query)
-        page_items = response.get("Items", [])
-        if not isinstance(page_items, list):
-            raise ValueError("malformed challenge pagination response")
+        response = _query(table, **query)
+        page_items = _response_items(response.get("Items", []))
         items.extend(page_items)
         marker = response.get("LastEvaluatedKey")
         if marker is None:
             break
-        if not isinstance(marker, dict) or not marker or marker == previous_marker:
+        marker = _dependency_mapping(marker)
+        if not marker or marker == previous_marker:
             raise ValueError("challenge pagination did not make progress")
         previous_marker = marker
         query["ExclusiveStartKey"] = marker
@@ -282,24 +343,21 @@ def _validate_unique_challenges(items: list[dict]) -> list[dict]:
 
 # ── Content read ──────────────────────────────────────────────────────────
 
+
 def get_subjects() -> list[dict]:
     table = get_table()
-    resp = table.query(
-        KeyConditionExpression=(
-            Key("PK").eq("PRACTICE") & Key("SK").begins_with("SUBJECT#")
-        )
+    resp = _query(
+        table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("SUBJECT#"))
     )
-    return resp.get("Items", [])
+    return _response_items(resp.get("Items", []))
 
 
 def get_topics(subject_id: str | None = None) -> list[dict]:
     table = get_table()
-    resp = table.query(
-        KeyConditionExpression=(
-            Key("PK").eq("PRACTICE") & Key("SK").begins_with("TOPIC#")
-        )
+    resp = _query(
+        table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("TOPIC#"))
     )
-    items = resp.get("Items", [])
+    items = _response_items(resp.get("Items", []))
     if subject_id:
         items = [i for i in items if i.get("subject_id") == subject_id]
     return items
@@ -307,18 +365,16 @@ def get_topics(subject_id: str | None = None) -> list[dict]:
 
 def get_topic(topic_id: str) -> dict | None:
     table = get_table()
-    resp = table.get_item(Key={"PK": "PRACTICE", "SK": f"TOPIC#{topic_id}"})
-    return resp.get("Item")
+    resp = _get_item(table, Key={"PK": "PRACTICE", "SK": f"TOPIC#{topic_id}"})
+    return _optional_item(resp.get("Item"))
 
 
 def get_lessons(topic_id: str | None = None, unit_id: str | None = None) -> list[dict]:
     table = get_table()
-    resp = table.query(
-        KeyConditionExpression=(
-            Key("PK").eq("PRACTICE") & Key("SK").begins_with("LESSON#")
-        )
+    resp = _query(
+        table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("LESSON#"))
     )
-    items = resp.get("Items", [])
+    items = _response_items(resp.get("Items", []))
     if topic_id:
         items = [i for i in items if i.get("topic_id") == topic_id]
     if unit_id:
@@ -328,8 +384,8 @@ def get_lessons(topic_id: str | None = None, unit_id: str | None = None) -> list
 
 def get_lesson(lesson_id: str) -> dict | None:
     table = get_table()
-    resp = table.get_item(Key={"PK": "PRACTICE", "SK": f"LESSON#{lesson_id}"})
-    return resp.get("Item")
+    resp = _get_item(table, Key={"PK": "PRACTICE", "SK": f"LESSON#{lesson_id}"})
+    return _optional_item(resp.get("Item"))
 
 
 def get_challenges(lesson_id: str) -> list[dict]:
@@ -338,7 +394,7 @@ def get_challenges(lesson_id: str) -> list[dict]:
         table,
         KeyConditionExpression=(
             Key("PK").eq("PRACTICE") & Key("SK").begins_with(f"CHALLENGE#{lesson_id}#")
-        )
+        ),
     )
     return sorted(_validate_unique_challenges(items), key=lambda x: x.get("order", 0))
 
@@ -351,10 +407,7 @@ def get_all_challenges(
     table = get_table()
     prefix = f"CHALLENGE#{lesson_id}#" if lesson_id else "CHALLENGE#"
     items = _query_all_challenge_pages(
-        table,
-        KeyConditionExpression=(
-            Key("PK").eq("PRACTICE") & Key("SK").begins_with(prefix)
-        )
+        table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with(prefix))
     )
     items = _validate_unique_challenges(items)
     if subject_id:
@@ -369,33 +422,39 @@ def get_challenge(challenge_id: str) -> dict | None:
     if not isinstance(challenge_id, str) or not challenge_id.strip():
         return None
     table = get_table()
-    pointer = table.get_item(
-        Key={"PK": CHALLENGE_POINTER_PK, "SK": f"CHALLENGE#{challenge_id}"}
-    ).get("Item")
-    if not isinstance(pointer, dict) or set(pointer) != _POINTER_FIELDS:
+    pointer = _optional_item(
+        _get_item(
+            table,
+            Key={"PK": CHALLENGE_POINTER_PK, "SK": f"CHALLENGE#{challenge_id}"},
+        ).get("Item")
+    )
+    if pointer is None or set(pointer) != _POINTER_FIELDS:
         return None
+    target_sk = pointer.get("target_sk")
     if (
         pointer.get("PK") != CHALLENGE_POINTER_PK
         or pointer.get("SK") != f"CHALLENGE#{challenge_id}"
         or pointer.get("entity_type") != CHALLENGE_POINTER_ENTITY
         or pointer.get("challenge_id") != challenge_id
         or pointer.get("target_pk") != "PRACTICE"
-        or not isinstance(pointer.get("target_sk"), str)
-        or not pointer["target_sk"].startswith("CHALLENGE#")
+        or not isinstance(target_sk, str)
+        or not target_sk.startswith("CHALLENGE#")
     ):
         return None
-    challenge = table.get_item(
-        Key={"PK": pointer["target_pk"], "SK": pointer["target_sk"]}
-    ).get("Item")
-    if not _valid_versioned_challenge(challenge):
+    challenge = _optional_item(
+        _get_item(
+            table,
+            Key={"PK": pointer["target_pk"], "SK": target_sk},
+        ).get("Item")
+    )
+    if challenge is None or not _valid_versioned_challenge(challenge):
         return None
     if (
         challenge.get("PK") != pointer["target_pk"]
         or challenge.get("SK") != pointer["target_sk"]
         or challenge.get("challenge_id") != challenge_id
         or challenge.get("challenge_version") != pointer.get("challenge_version")
-        or challenge.get("challenge_content_hash")
-        != pointer.get("challenge_content_hash")
+        or challenge.get("challenge_content_hash") != pointer.get("challenge_content_hash")
     ):
         return None
     return challenge
@@ -403,25 +462,25 @@ def get_challenge(challenge_id: str) -> dict | None:
 
 def get_units(topic_id: str) -> list[dict]:
     table = get_table()
-    resp = table.query(
-        KeyConditionExpression=(
-            Key("PK").eq("PRACTICE") & Key("SK").begins_with("UNIT#")
-        )
+    resp = _query(
+        table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("UNIT#"))
     )
-    items = resp.get("Items", [])
+    items = _response_items(resp.get("Items", []))
     return [i for i in items if i.get("topic_id") == topic_id]
 
 
 # ── Progress read / write ─────────────────────────────────────────────────
 
+
 def get_progress(user_id: str, subject_id: str | None = None) -> list[dict]:
     table = get_table()
-    resp = table.query(
+    resp = _query(
+        table,
         KeyConditionExpression=(
             Key("PK").eq(f"PROGRESS#{user_id}") & Key("SK").begins_with("LESSON#")
-        )
+        ),
     )
-    items = resp.get("Items", [])
+    items = _response_items(resp.get("Items", []))
     if subject_id:
         items = [i for i in items if i.get("subject_id") == subject_id]
     return items
@@ -434,6 +493,7 @@ def mark_lesson_completed(
     account_fence_generation: int | None = None,
 ) -> dict[str, Any]:
     from datetime import datetime, timezone
+
     table = get_table()
     generation = _write_generation(user_id, account_fence_generation, table)
     item = {
@@ -450,8 +510,8 @@ def mark_lesson_completed(
     }
     existing = None
     if _atomic_table(table):
-        existing = table.get_item(
-            Key={"PK": item["PK"], "SK": item["SK"]}, ConsistentRead=True
+        existing = _get_item(
+            table, Key={"PK": item["PK"], "SK": item["SK"]}, ConsistentRead=True
         ).get("Item")
     operations = build_practice_write_transaction(
         item=item,
@@ -465,7 +525,7 @@ def mark_lesson_completed(
     if _atomic_table(table):
         account_deletion_repo.transact(operations, table=table)
     else:
-        table.put_item(Item=operations[1]["Put"]["Item"])
+        _put_item(table, Item=operations[1]["Put"]["Item"])
     item.update(
         owner_id=user_id,
         account_fence_generation=generation,
@@ -546,7 +606,8 @@ def put_attempt(
     if _atomic_table(table):
         account_deletion_repo.transact(operations, table=table)
     else:
-        table.put_item(
+        _put_item(
+            table,
             Item=operations[1]["Put"]["Item"],
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
@@ -557,20 +618,19 @@ def put_attempt(
 def get_attempt(student_id: str, attempt_id: str) -> dict | None:
     """Load one attempt through its owner-scoped primary key."""
     table = get_table()
-    response = table.get_item(
-        Key={"PK": f"ATTEMPTS#{student_id}", "SK": f"ATTEMPT#{attempt_id}"}
-    )
-    return response.get("Item")
+    response = _get_item(table, Key={"PK": f"ATTEMPTS#{student_id}", "SK": f"ATTEMPT#{attempt_id}"})
+    return _optional_item(response.get("Item"))
 
 
 def list_student_attempts(student_id: str, *, correct: bool | None = None) -> list[dict]:
     table = get_table()
-    response = table.query(
+    response = _query(
+        table,
         KeyConditionExpression=(
             Key("PK").eq(f"ATTEMPTS#{student_id}") & Key("SK").begins_with("ATTEMPT#")
-        )
+        ),
     )
-    items = response.get("Items", [])
+    items = _response_items(response.get("Items", []))
     if correct is not None:
         items = [item for item in items if bool(item.get("correct")) is correct]
     return items
@@ -602,11 +662,13 @@ def record_attempt(
 def get_mistakes(user_id: str) -> list[dict]:
     attempts = list_student_attempts(user_id, correct=False)
     table = get_table()
-    legacy = table.query(
+    legacy_response = _query(
+        table,
         KeyConditionExpression=(
             Key("PK").eq(f"MISTAKES#{user_id}") & Key("SK").begins_with("ATTEMPT#")
-        )
-    ).get("Items", [])
+        ),
+    )
+    legacy = _response_items(legacy_response.get("Items", []))
     known_attempt_ids = {item.get("attempt_id") for item in attempts}
     attempts.extend(
         item
@@ -634,12 +696,10 @@ def scan_practice_private_rows(
         kwargs: dict[str, Any] = {"ConsistentRead": True}
         if marker is not None:
             kwargs["ExclusiveStartKey"] = marker
-        response = target.scan(**kwargs)
+        response = _scan(target, **kwargs)
         items = response.get("Items", [])
         if not isinstance(items, list):
-            raise account_deletion_repo.AccountDeletionConflict(
-                "malformed practice deletion page"
-            )
+            raise account_deletion_repo.AccountDeletionConflict("malformed practice deletion page")
         found.extend(
             dict(item)
             for item in items
@@ -648,6 +708,8 @@ def scan_practice_private_rows(
         raw_next = response.get("LastEvaluatedKey")
         if raw_next is None:
             return PracticePrivatePage(tuple(found))
+        if not isinstance(raw_next, Mapping):
+            raise account_deletion_repo.AccountDeletionConflict("invalid practice deletion cursor")
         next_marker = _practice_cursor(raw_next)
         if next_marker == marker:
             raise account_deletion_repo.AccountDeletionConflict(
@@ -672,7 +734,9 @@ def scrub_practice_private_row(
     retained: dict[str, Any] = {
         "PK": item["PK"],
         "SK": item["SK"],
-        "entity_type": "practice_accounting_tombstone" if is_usage else "practice_deletion_tombstone",
+        "entity_type": "practice_accounting_tombstone"
+        if is_usage
+        else "practice_deletion_tombstone",
         "schema_version": "practice-deletion-tombstone.v1",
         "status": "deleted",
         "owner_deletion_generation": generation,
@@ -705,9 +769,7 @@ def scrub_practice_private_row(
                 {
                     "Put": {
                         "Item": tombstone,
-                        "ConditionExpression": (
-                            "attribute_exists(PK) AND attribute_exists(SK)"
-                        ),
+                        "ConditionExpression": ("attribute_exists(PK) AND attribute_exists(SK)"),
                     }
                 },
             ],
@@ -722,15 +784,17 @@ def _practice_cursor(value: Mapping[str, Any] | None) -> dict[str, str]:
         or set(value) != {"PK", "SK"}
         or any(not isinstance(value.get(key), str) or not value.get(key) for key in ("PK", "SK"))
     ):
-        raise account_deletion_repo.AccountDeletionConflict(
-            "invalid practice deletion cursor"
-        )
+        raise account_deletion_repo.AccountDeletionConflict("invalid practice deletion cursor")
     return {"PK": str(value["PK"]), "SK": str(value["SK"])}
 
 
 def _practice_owned(item: Mapping[str, Any], owner_id: str) -> bool:
     pk = str(item.get("PK") or "")
-    return owner_id in {item.get("student_id"), item.get("user_id"), item.get("owner_id")} or pk in {
+    return owner_id in {
+        item.get("student_id"),
+        item.get("user_id"),
+        item.get("owner_id"),
+    } or pk in {
         f"PROGRESS#{owner_id}",
         f"ATTEMPTS#{owner_id}",
         f"MISTAKES#{owner_id}",
