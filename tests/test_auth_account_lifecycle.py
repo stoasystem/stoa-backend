@@ -1325,46 +1325,149 @@ def test_reset_password_invalid_proof_is_account_state_indistinguishable(
 
 
 def test_admin_can_inspect_and_repair_parent_binding(monkeypatch):
-    bindings = []
+    profiles = {
+        "parent-1": {
+            "PK": "USER#parent-1",
+            "SK": "PROFILE",
+            "user_id": "parent-1",
+            "role": "parent",
+            "account_status": "active",
+            "version": 2,
+        },
+        "student-1": {
+            "PK": "USER#student-1",
+            "SK": "PROFILE",
+            "user_id": "student-1",
+            "role": "student",
+            "account_status": "active",
+            "version": 5,
+            "parent_id": "parent-1",
+            "relationship": "child",
+            "parent_binding_status": "active",
+        },
+    }
+    forward = {
+        "PK": "USER#parent-1",
+        "SK": "CHILD#student-1",
+        "entity_type": "parent_student_binding",
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "relationship": "child",
+        "status": "active",
+        "source": "legacy",
+        "actor": "system",
+        "version": 4,
+        "created_at": "2026-07-01T00:00:00+00:00",
+        "updated_at": "2026-07-01T00:00:00+00:00",
+    }
+    reverse = None
+    writes = []
     monkeypatch.setattr(
         admin.user_repo,
         "get_user",
-        lambda user_id: {"user_id": user_id, "role": "parent" if user_id == "parent-1" else "student"},
+        lambda user_id: profiles.get(user_id),
     )
-    monkeypatch.setattr(admin.user_repo, "list_parent_student_bindings", lambda parent_id: bindings)
+    monkeypatch.setattr(
+        admin.user_repo,
+        "get_parent_student_binding",
+        lambda parent_id, student_id: forward,
+    )
+    monkeypatch.setattr(
+        admin.user_repo,
+        "get_student_parent_binding",
+        lambda student_id, parent_id: reverse,
+    )
+    monkeypatch.setattr(
+        admin.user_repo,
+        "list_student_parent_bindings",
+        lambda student_id: [reverse] if reverse is not None else [],
+    )
+    monkeypatch.setattr(
+        admin.user_repo,
+        "list_parent_student_bindings",
+        lambda parent_id: [forward],
+    )
+
     def put_binding(**kwargs):
-        bindings.append(
-            {
-                "parent_id": kwargs["parent_id"],
-                "student_id": kwargs["student_id"],
-                "relationship": kwargs["relationship"],
-                "status": kwargs["status"],
-                "source": kwargs["source"],
-                "updated_at": kwargs["created_at"],
-            }
+        nonlocal reverse
+        writes.append(dict(kwargs))
+        forward.update(
+            source=kwargs["source"],
+            actor=kwargs["actor"],
+            updated_at=kwargs["created_at"],
         )
+        reverse = {
+            **forward,
+            "PK": "USER#student-1",
+            "SK": "PARENT#parent-1",
+        }
         return admin.user_repo.ParentBindingResult(
             admin.user_repo.ParentBindingDisposition.CREATED,
-            binding=bindings[-1],
+            binding=forward,
+            profile=profiles["student-1"],
         )
 
     monkeypatch.setattr(
         admin.user_repo, "put_parent_student_relationship", put_binding
     )
+    client = _admin_client()
+    payload = {
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "relationship": "child",
+        "reason": "repair signup link",
+    }
 
-    repair = _admin_client().post(
+    missing_evidence = client.post("/admin/parent-bindings/repair", json=payload)
+    assert missing_evidence.status_code == 422
+    assert writes == []
+    assert reverse is None
+
+    preview = client.post("/admin/parent-bindings/repair/preview", json=payload)
+    assert preview.status_code == 200
+    preview_body = preview.json()
+    assert preview_body["classification"] == "repairable_missing_reverse"
+    assert len(preview_body["pair_id"]) == len(preview_body["preview_id"]) == 64
+    assert {item["coordinate"] for item in preview_body["observations"]} >= {
+        "parent_profile",
+        "student_profile",
+        "forward",
+        "reverse_target",
+    }
+    observed_versions = {
+        item["coordinate"]: item["version"] for item in preview_body["observations"]
+    }
+    assert observed_versions == {
+        "parent_profile": 2,
+        "student_profile": 5,
+        "forward": 4,
+        "reverse_target": None,
+    }
+    assert "parent-1" not in preview_body["pair_id"]
+    assert "student-1" not in preview_body["preview_id"]
+    assert writes == []
+    assert reverse is None
+
+    repair = client.post(
         "/admin/parent-bindings/repair",
-        json={
-            "parent_id": "parent-1",
-            "student_id": "student-1",
-            "relationship": "child",
-            "reason": "repair signup link",
-        },
+        json={**payload, "preview_id": preview_body["preview_id"]},
     )
 
     assert repair.status_code == 200
-    assert repair.json()["source"] == "admin_repair"
+    repair_body = repair.json()
+    assert len(repair_body["preview_id"]) == 64
+    assert repair_body["preview_id"] != preview_body["preview_id"]
+    assert repair_body == {
+        "disposition": "repaired",
+        "pair_id": preview_body["pair_id"],
+        "preview_id": repair_body["preview_id"],
+        "classification": "consistent",
+        "mutated": True,
+    }
+    assert len(writes) == 1
+    assert writes[0]["source"] == "admin_reconciliation"
 
-    listed = _admin_client().get("/admin/parent-bindings", params={"parent_id": "parent-1"})
+    listed = client.get("/admin/parent-bindings", params={"parent_id": "parent-1"})
     assert listed.status_code == 200
     assert listed.json()["count"] == 1
+    assert listed.json()["items"][0]["source"] == "admin_reconciliation"
