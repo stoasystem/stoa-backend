@@ -83,8 +83,20 @@ def test_submit_question_accepts_foundation_subject_and_stores_topic_seeds(monke
     )
     monkeypatch.setattr(
         questions.question_repo,
-        "update_status",
-        lambda *args, **kwargs: update_calls.append((args, kwargs)),
+        "mutate_question",
+        lambda question, *, status, extra_attrs, **_kwargs: update_calls.append(
+            (question, status, extra_attrs)
+        )
+        or questions.question_repo.QuestionMutationResult(
+            questions.question_repo.QuestionMutationDisposition.APPLIED,
+            str(question["question_id"]),
+            {
+                **question,
+                "status": status,
+                "version": int(question["version"]) + 1,
+                **extra_attrs,
+            },
+        ),
     )
     monkeypatch.setattr(
         questions.ai_service,
@@ -113,7 +125,8 @@ def test_submit_question_accepts_foundation_subject_and_stores_topic_seeds(monke
     assert body["subject"] == "physics"
     assert body["knowledge_points"] == ["Newton's second law"]
     assert body["topic_seeds"][0]["topic_id"] == "newton-s-second-law"
-    assert update_calls[0][1]["topic_seeds"][0]["subject"] == "physics"
+    assert update_calls[0][2]["topic_seeds"][0]["subject"] == "physics"
+    assert update_calls[0][0]["version"] == 1
 
 
 def test_submit_question_rejects_uncontracted_subject():
