@@ -283,6 +283,40 @@ def test_one_sided_apply_is_atomic_and_replay_is_zero_write(monkeypatch) -> None
     assert table.items == after_first
 
 
+@pytest.mark.parametrize("terminal_status", ["revoked", "inactive"])
+def test_non_active_history_is_not_reconciled_or_rewritten(
+    monkeypatch, terminal_status
+) -> None:
+    table = _RepairTable()
+    _install_forward(table)
+    _install_reverse(table)
+    _install_projection(table)
+    for key in (
+        ("USER#parent-1", "CHILD#student-1"),
+        ("USER#student-1", "PARENT#parent-1"),
+    ):
+        table.items[key]["status"] = terminal_status
+    table.items[("USER#student-1", "PROFILE")]["parent_binding_status"] = terminal_status
+    before = deepcopy(table.items)
+    monkeypatch.setattr(user_repo, "get_table", lambda: table)
+
+    preview = _preview(table)
+    result = user_repo.apply_parent_binding_repair(
+        parent_id="parent-1",
+        student_id="student-1",
+        relationship="child",
+        preview_id=preview.preview_id,
+        actor="admin-1",
+        created_at="2026-07-22T03:00:00+00:00",
+    )
+
+    assert preview.classification is user_repo.ParentBindingRepairClassification.SKIPPED_INVALID
+    assert result.disposition is user_repo.ParentBindingRepairApplyDisposition.SKIPPED_INVALID
+    assert result.mutated is False
+    assert table.transaction_attempts == 0
+    assert table.items == before
+
+
 def test_changed_after_preview_is_skipped_and_new_data_is_preserved(monkeypatch) -> None:
     table = _RepairTable()
     _install_forward(table)

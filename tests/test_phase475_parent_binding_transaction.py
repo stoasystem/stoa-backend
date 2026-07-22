@@ -107,9 +107,31 @@ class _AtomicRelationshipTable:
             key = (update["Key"]["PK"], update["Key"]["SK"])
             values = update["ExpressionAttributeValues"]
             existing = staged.get(key)
+            if ":expected_status" in values:
+                if (
+                    existing is None
+                    or existing.get("parent_id") != values[":parent_id"]
+                    or existing.get("student_id") != values[":student_id"]
+                    or existing.get("relationship") != values[":relationship"]
+                    or existing.get("status") != values[":expected_status"]
+                    or existing.get("version") != values[":expected_version"]
+                ):
+                    raise account_deletion_repo.AccountDeletionConflict("binding status")
+                existing.update(
+                    {
+                        "status": values[":next_status"],
+                        "version": values[":next_version"],
+                        "source": values[":source"],
+                        "actor": values[":actor"],
+                        "updated_at": values[":updated_at"],
+                    }
+                )
+                continue
+            compared_fields = ["parent_id", "student_id", "relationship", "version"]
+            if "#status = :status" in update["ConditionExpression"]:
+                compared_fields.append("status")
             if existing is not None and any(
-                existing.get(field) != values[f":{field}"]
-                for field in ("parent_id", "student_id", "relationship", "version")
+                existing.get(field) != values[f":{field}"] for field in compared_fields
             ):
                 raise account_deletion_repo.AccountDeletionConflict("binding")
             row = dict(existing or {"PK": key[0], "SK": key[1]})
@@ -137,6 +159,26 @@ class _AtomicRelationshipTable:
         )
         profile = staged.get(profile_key)
         profile_values = profile_update["ExpressionAttributeValues"]
+        if ":expected_binding_status" in profile_values:
+            if (
+                profile is None
+                or profile.get("user_id") != profile_values[":student_id"]
+                or profile.get("parent_id") != profile_values[":parent_id"]
+                or profile.get("relationship") != profile_values[":relationship"]
+                or profile.get("parent_binding_status")
+                != profile_values[":expected_binding_status"]
+                or profile.get("version")
+                != profile_values[":expected_profile_version"]
+            ):
+                raise account_deletion_repo.AccountDeletionConflict("profile status")
+            profile.update(
+                {
+                    "version": profile_values[":next_profile_version"],
+                    "parent_binding_status": profile_values[":next_status"],
+                }
+            )
+            self.items = staged
+            return
         if (
             profile is None
             or profile.get("user_id") != profile_values[":student_id"]
@@ -291,6 +333,95 @@ def test_identical_replay_returns_original_without_another_transaction(monkeypat
     assert replayed.binding["version"] == 4
     assert replayed.binding["created_at"] == "2026-07-21T20:00:00+00:00"
     assert len(table.transactions) == 1
+
+
+@pytest.mark.parametrize("terminal_status", ["revoked", "inactive"])
+def test_non_active_relationship_retry_is_conflict_and_never_revives(
+    monkeypatch, terminal_status
+) -> None:
+    table = _AtomicRelationshipTable()
+    monkeypatch.setattr(user_repo, "get_table", lambda: table)
+    assert _write_relationship().disposition is user_repo.ParentBindingDisposition.CREATED
+    for key in (
+        ("USER#parent-1", "CHILD#student-1"),
+        ("USER#student-1", "PARENT#parent-1"),
+    ):
+        table.items[key]["status"] = terminal_status
+    table.items[("USER#student-1", "PROFILE")]["parent_binding_status"] = terminal_status
+    before = deepcopy(table.items)
+
+    result = _write_relationship(created_at="2026-07-22T02:00:00+00:00")
+
+    assert result.disposition is user_repo.ParentBindingDisposition.CONFLICT
+    assert result.binding is None
+    assert table.items == before
+    assert len(table.transactions) == 1
+
+
+def test_relationship_create_condition_includes_status_and_never_assigns_it_to_history() -> None:
+    operations = user_repo.build_parent_binding_transaction(
+        parent_id="parent-1",
+        student_id="student-1",
+        relationship="child",
+        status="active",
+        source="admin_repair",
+        actor="admin-1",
+        created_at="2026-07-21T20:00:00+00:00",
+        version=4,
+        expected_parent_generation=7,
+        expected_student_generation=3,
+        expected_parent_profile_version=2,
+        expected_student_profile_version=5,
+    )
+
+    for operation in operations[3:5]:
+        update = operation["Update"]
+        assert "#status = :status" in update["ConditionExpression"]
+        assert "#status = if_not_exists(#status, :status)" in update["UpdateExpression"]
+        assert "#status = :status" not in update["UpdateExpression"]
+
+
+def test_admin_status_transition_is_expected_status_and_version_cas(monkeypatch) -> None:
+    table = _AtomicRelationshipTable()
+    monkeypatch.setattr(user_repo, "get_table", lambda: table)
+    assert _write_relationship().disposition is user_repo.ParentBindingDisposition.CREATED
+
+    transitioned = user_repo.transition_parent_student_relationship_status(
+        parent_id="parent-1",
+        student_id="student-1",
+        relationship="child",
+        expected_status="active",
+        expected_version=4,
+        status="revoked",
+        source="admin_lifecycle",
+        actor="admin-1",
+        updated_at="2026-07-22T03:00:00+00:00",
+    )
+    after_first = deepcopy(table.items)
+    stale = user_repo.transition_parent_student_relationship_status(
+        parent_id="parent-1",
+        student_id="student-1",
+        relationship="child",
+        expected_status="active",
+        expected_version=4,
+        status="inactive",
+        source="admin_lifecycle",
+        actor="admin-1",
+        updated_at="2026-07-22T03:01:00+00:00",
+    )
+
+    assert transitioned.disposition is user_repo.ParentBindingStatusDisposition.TRANSITIONED
+    assert transitioned.status == "revoked"
+    assert transitioned.version == 5
+    assert stale.disposition is user_repo.ParentBindingStatusDisposition.CONFLICT
+    assert stale.status is None
+    assert stale.version is None
+    assert table.items == after_first
+    assert {
+        table.items[("USER#parent-1", "CHILD#student-1")]["status"],
+        table.items[("USER#student-1", "PARENT#parent-1")]["status"],
+        table.items[("USER#student-1", "PROFILE")]["parent_binding_status"],
+    } == {"revoked"}
 
 
 def test_conflicting_parent_is_preserved_and_authorization_remains_denied(monkeypatch) -> None:

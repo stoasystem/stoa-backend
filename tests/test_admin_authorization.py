@@ -91,12 +91,64 @@ def test_identity_user_usage_subscription_binding_and_curriculum_capabilities_ar
         ("POST", "/admin/subscriptions/billing/{parent_id}/refunds"): "billing_refund_executor",
         ("POST", "/admin/parent-bindings/repair/preview"): "parent_binding_repairer",
         ("POST", "/admin/parent-bindings/repair"): "parent_binding_repairer",
+        ("POST", "/admin/parent-bindings/status"): "parent_binding_repairer",
         ("POST", "/admin/curriculum/lessons/{public_lesson_id}/publish"): "curriculum_publisher",
     }
     assert {
         key: classify_admin_route(*key).capability
         for key in expected
     } == expected
+
+
+def test_parent_binding_status_transition_requires_canonical_admin_and_redacts_conflict(
+    monkeypatch,
+):
+    calls = []
+    monkeypatch.setattr(
+        admin.user_repo,
+        "transition_parent_student_relationship_status",
+        lambda **values: calls.append(values)
+        or admin.user_repo.ParentBindingStatusResult(
+            admin.user_repo.ParentBindingStatusDisposition.CONFLICT
+        ),
+        raising=False,
+    )
+    app = FastAPI()
+    app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
+    payload = {
+        "parent_id": "parent-private-canary",
+        "student_id": "student-private-canary",
+        "relationship": "child",
+        "expected_status": "active",
+        "expected_version": 4,
+        "status": "revoked",
+        "reason": "approved lifecycle command private-canary",
+    }
+
+    app.dependency_overrides[get_actor] = lambda: Actor(
+        "parent-1",
+        "https://identity.test",
+        "parent-subject",
+        CanonicalRole.PARENT,
+        AccountStatus.ACTIVE,
+        "parent",
+        (CapabilityGrant("parent_binding_repairer", "global", 1),),
+    )
+    denied = TestClient(app).post("/admin/parent-bindings/status", json=payload)
+    assert denied.status_code == 403
+    assert calls == []
+
+    app.dependency_overrides[get_actor] = lambda: _actor("parent_binding_repairer")
+    conflict = TestClient(app).post("/admin/parent-bindings/status", json=payload)
+    assert conflict.status_code == 409
+    body = conflict.json()
+    assert set(body) == {"code", "message", "correlationId"}
+    assert body["code"] == "relationship_status_conflict"
+    assert "parent-private-canary" not in conflict.text
+    assert "student-private-canary" not in conflict.text
+    assert "private-canary" not in conflict.text
+    assert len(calls) == 1
 
 
 def test_support_lookup_projection_is_d15_only():
