@@ -18,7 +18,7 @@ from stoa.db.repositories import account_deletion_repo
 
 
 _RATE_KINDS = frozenset({"chat", "hint"})
-_OPERATION_SCHEMA_VERSION = "rate-admission-operation.v1"
+_OPERATION_SCHEMA_VERSION = "rate-admission-operation.v2"
 _OPERATION_TTL_SECONDS = 172800
 
 
@@ -45,6 +45,7 @@ class RateAdmissionResult:
     counter_value: int
     limit: int
     expires_at: int
+    decision: str
 
     def counter_receipt(self) -> dict[str, Any]:
         return {
@@ -54,7 +55,7 @@ class RateAdmissionResult:
             "limit": self.limit,
             "expiresAt": self.expires_at,
             "operationId": self.operation_id,
-            "admissionStatus": self.disposition.value,
+            "admissionStatus": self.decision,
         }
 
 
@@ -151,13 +152,17 @@ def _get_item(table: object, key: dict[str, str]) -> dict[str, Any] | None:
     return dict(item)
 
 
-def _counter_state(table: object, key: dict[str, str]) -> tuple[int, int]:
+def _counter_state(
+    table: object, key: dict[str, str]
+) -> tuple[int, int, bool, bool]:
     item = _get_item(table, key) or {}
+    count_exists = "count" in item
+    expiry_exists = "expires_at" in item
     count = _stored_nonnegative_int(item.get("count", 0))
     expires_at = _stored_nonnegative_int(item.get("expires_at", 0))
     if count is None or expires_at is None:
         raise _RateDependencyFailure
-    return count, expires_at
+    return count, expires_at, count_exists, expiry_exists
 
 
 def _stored_nonnegative_int(value: object) -> int | None:
@@ -182,6 +187,7 @@ def _result(
     counter_value: int,
     limit: int,
     expires_at: int,
+    decision: str | None = None,
 ) -> RateAdmissionResult:
     return RateAdmissionResult(
         disposition=disposition,
@@ -193,6 +199,7 @@ def _result(
         counter_value=counter_value,
         limit=limit,
         expires_at=expires_at,
+        decision=decision or disposition.value,
     )
 
 
@@ -205,11 +212,12 @@ def _classify_operation(
     quota_period: str,
     payload_digest: str,
     counter_key: dict[str, str],
-    counter_value: int,
-    limit: int,
-    expires_at: int,
+    requested_limit: int,
 ) -> RateAdmissionResult:
-    if (
+    stored_counter_value = _stored_nonnegative_int(item.get("counter_value_after"))
+    stored_limit = _stored_nonnegative_int(item.get("limit"))
+    stored_expiry = _stored_nonnegative_int(item.get("receipt_expires_at"))
+    receipt_is_invalid = (
         item.get("entity_type") != "rate_admission_operation"
         or item.get("schema_version") != _OPERATION_SCHEMA_VERSION
         or item.get("owner_id") != owner_id
@@ -218,7 +226,14 @@ def _classify_operation(
         or item.get("quota_period") != quota_period
         or item.get("status") != "admitted"
         or not isinstance(item.get("payload_digest"), str)
-    ):
+        or item.get("decision") != RateAdmissionDisposition.ADMITTED.value
+        or stored_counter_value is None
+        or stored_counter_value <= 0
+        or stored_limit is None
+        or stored_limit <= 0
+        or stored_expiry is None
+    )
+    if receipt_is_invalid:
         disposition = RateAdmissionDisposition.RETRYABLE
     elif item["payload_digest"] != payload_digest:
         disposition = RateAdmissionDisposition.IDEMPOTENCY_CONFLICT
@@ -231,9 +246,14 @@ def _classify_operation(
         operation_id=operation_id,
         quota_period=quota_period,
         counter_key=counter_key,
-        counter_value=counter_value,
-        limit=limit,
-        expires_at=expires_at,
+        counter_value=stored_counter_value or 0,
+        limit=stored_limit or requested_limit,
+        expires_at=stored_expiry or 0,
+        decision=(
+            str(item["decision"])
+            if not receipt_is_invalid
+            else RateAdmissionDisposition.RETRYABLE.value
+        ),
     )
 
 
@@ -270,7 +290,6 @@ def check_and_record_operation(
 
     try:
         existing = _get_item(target, operation_key)
-        counter_value, stored_expiry = _counter_state(target, counter_key)
     except _RateDependencyFailure:
         return _result(
             RateAdmissionDisposition.RETRYABLE,
@@ -292,9 +311,22 @@ def check_and_record_operation(
             quota_period=period,
             payload_digest=digest,
             counter_key=counter_key,
-            counter_value=counter_value,
+            requested_limit=limit,
+        )
+
+    try:
+        counter_value, stored_expiry, _, _ = _counter_state(target, counter_key)
+    except _RateDependencyFailure:
+        return _result(
+            RateAdmissionDisposition.RETRYABLE,
+            owner_id=owner,
+            kind=normalized_kind,
+            operation_id=opaque_operation_id,
+            quota_period=period,
+            counter_key=counter_key,
+            counter_value=0,
             limit=limit,
-            expires_at=stored_expiry,
+            expires_at=0,
         )
 
     try:
@@ -322,77 +354,107 @@ def check_and_record_operation(
             expires_at=stored_expiry,
         )
 
-    if counter_value >= limit:
-        return _result(
-            RateAdmissionDisposition.LIMIT_EXCEEDED,
-            owner_id=owner,
-            kind=normalized_kind,
-            operation_id=opaque_operation_id,
-            quota_period=period,
-            counter_key=counter_key,
-            counter_value=counter_value,
-            limit=limit,
-            expires_at=stored_expiry,
-        )
-
-    operation = {
-        **operation_key,
-        "entity_type": "rate_admission_operation",
-        "schema_version": _OPERATION_SCHEMA_VERSION,
-        "operation_id": opaque_operation_id,
-        "owner_id": owner,
-        "kind": normalized_kind,
-        "quota_period": period,
-        "payload_digest": digest,
-        "status": "admitted",
-        "account_fence_generation": generation,
-        "created_at": observed_now.astimezone(timezone.utc).isoformat(),
-        "expires_at": expires_at_value,
-    }
-    operations = [
-        account_deletion_repo.active_fence_condition(owner, generation),
-        {
-            "Put": {
-                "Item": operation,
-                "ConditionExpression": (
-                    "attribute_not_exists(PK) AND attribute_not_exists(SK)"
-                ),
-            }
-        },
-        {
-            "Update": {
-                "Key": counter_key,
-                "UpdateExpression": (
-                    "ADD #count :one SET #ttl=if_not_exists(#ttl,:expires), "
-                    "entity_type=if_not_exists(entity_type,:counter_type), "
-                    "owner_id=if_not_exists(owner_id,:owner), "
-                    "quota_period=if_not_exists(quota_period,:period), "
-                    "account_fence_generation=:generation"
-                ),
-                "ConditionExpression": (
-                    "attribute_not_exists(#count) OR #count < :limit"
-                ),
-                "ExpressionAttributeNames": {"#count": "count", "#ttl": "expires_at"},
-                "ExpressionAttributeValues": {
-                    ":one": 1,
-                    ":limit": limit,
-                    ":expires": expires_at_value,
-                    ":counter_type": "rate_counter",
-                    ":owner": owner,
-                    ":period": period,
-                    ":generation": generation,
-                },
-            }
-        },
-    ]
-
     for _ in range(3):
+        try:
+            existing = _get_item(target, operation_key)
+            if existing is not None:
+                return _classify_operation(
+                    existing,
+                    owner_id=owner,
+                    kind=normalized_kind,
+                    operation_id=opaque_operation_id,
+                    quota_period=period,
+                    payload_digest=digest,
+                    counter_key=counter_key,
+                    requested_limit=limit,
+                )
+            (
+                counter_value,
+                stored_expiry,
+                count_exists,
+                expiry_exists,
+            ) = _counter_state(target, counter_key)
+        except _RateDependencyFailure:
+            break
+        if counter_value >= limit:
+            return _result(
+                RateAdmissionDisposition.LIMIT_EXCEEDED,
+                owner_id=owner,
+                kind=normalized_kind,
+                operation_id=opaque_operation_id,
+                quota_period=period,
+                counter_key=counter_key,
+                counter_value=counter_value,
+                limit=limit,
+                expires_at=stored_expiry,
+            )
+
+        next_counter_value = counter_value + 1
+        receipt_expiry = stored_expiry if expiry_exists else expires_at_value
+        operation = {
+            **operation_key,
+            "entity_type": "rate_admission_operation",
+            "schema_version": _OPERATION_SCHEMA_VERSION,
+            "operation_id": opaque_operation_id,
+            "owner_id": owner,
+            "kind": normalized_kind,
+            "quota_period": period,
+            "payload_digest": digest,
+            "status": "admitted",
+            "decision": RateAdmissionDisposition.ADMITTED.value,
+            "counter_value_after": next_counter_value,
+            "limit": limit,
+            "receipt_expires_at": receipt_expiry,
+            "account_fence_generation": generation,
+            "created_at": observed_now.astimezone(timezone.utc).isoformat(),
+            "expires_at": expires_at_value,
+        }
+        counter_condition = (
+            "#count = :expected" if count_exists else "attribute_not_exists(#count)"
+        )
+        operations = [
+            account_deletion_repo.active_fence_condition(owner, generation),
+            {
+                "Put": {
+                    "Item": operation,
+                    "ConditionExpression": (
+                        "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                    ),
+                }
+            },
+            {
+                "Update": {
+                    "Key": counter_key,
+                    "UpdateExpression": (
+                        "SET #count=:next, #ttl=if_not_exists(#ttl,:expires), "
+                        "entity_type=if_not_exists(entity_type,:counter_type), "
+                        "owner_id=if_not_exists(owner_id,:owner), "
+                        "quota_period=if_not_exists(quota_period,:period), "
+                        "account_fence_generation=:generation"
+                    ),
+                    "ConditionExpression": counter_condition,
+                    "ExpressionAttributeNames": {
+                        "#count": "count",
+                        "#ttl": "expires_at",
+                    },
+                    "ExpressionAttributeValues": {
+                        ":expected": counter_value,
+                        ":next": next_counter_value,
+                        ":limit": limit,
+                        ":expires": expires_at_value,
+                        ":counter_type": "rate_counter",
+                        ":owner": owner,
+                        ":period": period,
+                        ":generation": generation,
+                    },
+                }
+            },
+        ]
         try:
             account_deletion_repo.transact(operations, table=target)
         except Exception:
             try:
                 raced_operation = _get_item(target, operation_key)
-                raced_count, raced_expiry = _counter_state(target, counter_key)
             except _RateDependencyFailure:
                 break
             if raced_operation is not None:
@@ -404,27 +466,9 @@ def check_and_record_operation(
                     quota_period=period,
                     payload_digest=digest,
                     counter_key=counter_key,
-                    counter_value=raced_count,
-                    limit=limit,
-                    expires_at=raced_expiry,
-                )
-            if raced_count >= limit:
-                return _result(
-                    RateAdmissionDisposition.LIMIT_EXCEEDED,
-                    owner_id=owner,
-                    kind=normalized_kind,
-                    operation_id=opaque_operation_id,
-                    quota_period=period,
-                    counter_key=counter_key,
-                    counter_value=raced_count,
-                    limit=limit,
-                    expires_at=raced_expiry,
+                    requested_limit=limit,
                 )
             continue
-        try:
-            admitted_count, admitted_expiry = _counter_state(target, counter_key)
-        except _RateDependencyFailure:
-            admitted_count, admitted_expiry = counter_value + 1, expires_at_value
         return _result(
             RateAdmissionDisposition.ADMITTED,
             owner_id=owner,
@@ -432,9 +476,10 @@ def check_and_record_operation(
             operation_id=opaque_operation_id,
             quota_period=period,
             counter_key=counter_key,
-            counter_value=admitted_count,
+            counter_value=next_counter_value,
             limit=limit,
-            expires_at=admitted_expiry,
+            expires_at=receipt_expiry,
+            decision=RateAdmissionDisposition.ADMITTED.value,
         )
 
     return _result(

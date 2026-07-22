@@ -348,6 +348,33 @@ def test_hint_adapter_projects_changed_payload_as_structured_conflict(monkeypatc
     assert len(table.transactions) == 1
 
 
+def test_dependency_error_never_exposes_storage_coordinates_or_expressions(
+    monkeypatch,
+) -> None:
+    class _UnavailableTable:
+        def get_item(self, **_kwargs):
+            raise RuntimeError(
+                "USAGE#private HINT#private ConditionExpression #count = :expected"
+            )
+
+    monkeypatch.setattr(rate_limit, "get_table", _UnavailableTable)
+    monkeypatch.setattr(rate_limit, "_today_utc", lambda: PERIOD)
+
+    try:
+        rate_limit.check_and_record_hint(
+            "student-1", "challenge-1", "dependency-failure", limit=2
+        )
+    except HTTPException as error:
+        assert error.status_code == 503
+        assert error.detail == {
+            "code": "rate_limit_unavailable",
+            "message": "Usage admission is temporarily unavailable. Please try again.",
+        }
+        assert error.headers == {"Retry-After": "30"}
+    else:  # pragma: no cover - failure branch
+        raise AssertionError("dependency failure must fail closed")
+
+
 def test_utc_day_change_uses_new_counter_and_operation_namespace() -> None:
     table = _RateTable()
 
