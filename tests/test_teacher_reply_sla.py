@@ -25,6 +25,20 @@ class FakeTeacherTable:
         self.update_calls.append(kwargs)
 
 
+def _applied_mutation(question, status, attrs):
+    updated = {
+        **question,
+        "status": status,
+        "version": int(question["version"]) + 1,
+        **attrs,
+    }
+    return questions.question_repo.QuestionMutationResult(
+        questions.question_repo.QuestionMutationDisposition.APPLIED,
+        str(question["question_id"]),
+        updated,
+    )
+
+
 def test_request_teacher_records_request_and_queue_timestamps(monkeypatch):
     updates = []
     monkeypatch.setattr(
@@ -35,12 +49,16 @@ def test_request_teacher_records_request_and_queue_timestamps(monkeypatch):
             "student_id": "student-1",
             "subject": "math",
             "status": "ai_answered",
+            "version": 1,
         },
     )
     monkeypatch.setattr(
         questions.question_repo,
-        "update_status",
-        lambda question_id, status, **attrs: updates.append((question_id, status, attrs)),
+        "mutate_question",
+        lambda question, *, status, extra_attrs, **_kwargs: updates.append(
+            (question["question_id"], status, extra_attrs)
+        )
+        or _applied_mutation(question, status, extra_attrs),
     )
     monkeypatch.setattr(questions.notify_service, "enqueue_teacher_request", lambda **kwargs: None)
     monkeypatch.setattr(questions.usage_ledger_service, "record_usage_event", lambda **kwargs: None)
@@ -70,12 +88,16 @@ def test_teacher_reply_accepts_formula_payload_and_records_sla(monkeypatch):
             "teacher_id": "teacher-1",
             "teacher_requested_at": "2026-06-08T08:00:00+00:00",
             "teacher_taken_over_at": "2026-06-08T08:10:00+00:00",
+            "version": 1,
         },
     )
     monkeypatch.setattr(
         teachers.question_repo,
-        "update_status",
-        lambda question_id, status, **attrs: updates.append((question_id, status, attrs)),
+        "mutate_question",
+        lambda question, *, status, extra_attrs, **_kwargs: updates.append(
+            (question["question_id"], status, extra_attrs)
+        )
+        or _applied_mutation(question, status, extra_attrs),
     )
 
     client = _app(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"})
@@ -115,12 +137,16 @@ def test_teacher_reply_refuses_private_markers_and_raw_html(monkeypatch):
             "student_id": "student-1",
             "status": "teacher_active",
             "teacher_id": "teacher-1",
+            "version": 1,
         },
     )
     monkeypatch.setattr(
         teachers.question_repo,
-        "update_status",
-        lambda question_id, status, **attrs: updates.append((question_id, status, attrs)),
+        "mutate_question",
+        lambda question, *, status, extra_attrs, **_kwargs: updates.append(
+            (question["question_id"], status, extra_attrs)
+        )
+        or _applied_mutation(question, status, extra_attrs),
     )
 
     client = _app(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"})
@@ -168,7 +194,7 @@ def test_teacher_reply_authorization_outage_returns_503_before_mutation(monkeypa
     )
     monkeypatch.setattr(
         teachers.question_repo,
-        "update_status",
+        "mutate_question",
         lambda *args, **kwargs: updates.append((args, kwargs)),
     )
 

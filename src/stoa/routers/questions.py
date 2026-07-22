@@ -1,7 +1,7 @@
 """Question routes — submit, retrieve, teacher escalation, feedback."""
 import logging
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime, timezone
 from typing import Any, NoReturn
 
@@ -53,6 +53,15 @@ from stoa.services import (
 )
 
 router = APIRouter()
+
+_OCR_SOURCE_STATES = frozenset({QuestionStatus.PENDING.value})
+_AI_SOURCE_STATES = frozenset({QuestionStatus.PENDING.value})
+_ESCALATION_SOURCE_STATES = frozenset(
+    {QuestionStatus.PENDING.value, QuestionStatus.AI_ANSWERED.value}
+)
+_FEEDBACK_SOURCE_STATES = frozenset(
+    {QuestionStatus.AI_ANSWERED.value, QuestionStatus.RESOLVED.value}
+)
 
 
 class _QuestionSubmissionRoute(APIRoute):
@@ -150,6 +159,41 @@ def _question_response(item: dict[str, Any]) -> QuestionResponse:
         "failure_class": None,
     }
     return QuestionResponse(**public_item)
+
+
+def _require_applied_question_mutation(
+    result: question_repo.QuestionMutationResult,
+) -> dict[str, Any]:
+    if (
+        result.disposition is question_repo.QuestionMutationDisposition.APPLIED
+        and result.question is not None
+    ):
+        return dict(result.question)
+    if result.disposition is question_repo.QuestionMutationDisposition.RETRYABLE:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Question changed temporarily; retry with a fresh question state",
+        )
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="Question state changed; refresh before retrying",
+    )
+
+
+def _initialize_legacy_question_for_mutation(
+    question: Mapping[str, object],
+    *,
+    allowed_source_statuses: frozenset[str],
+) -> dict[str, Any]:
+    version = question.get("version")
+    if isinstance(version, int) and not isinstance(version, bool) and version > 0:
+        return dict(question)
+    return _require_applied_question_mutation(
+        question_repo.initialize_legacy_question_version(
+            question,
+            allowed_source_statuses=allowed_source_statuses,
+        )
+    )
 
 
 def _build_question_content(
@@ -449,6 +493,7 @@ async def submit_question(
         "student_feedback": None,
         "created_at": now,
         "resolved_at": None,
+        "version": 1,
     }
     usage_event = usage_ledger_service.build_question_usage_event(
         student_id=student_id,
@@ -513,12 +558,16 @@ async def submit_question(
         item["ocr_text"] = ocr_text
         item["ocr_metadata"] = ocr_metadata
         if prepared_attachment is not None:
-            question_repo.update_status(
-                question_id,
-                QuestionStatus.PENDING.value,
-                ocr_text=ocr_text,
-                ocr_metadata=ocr_metadata,
+            ocr_result = question_repo.mutate_question(
+                item,
+                status=QuestionStatus.PENDING.value,
+                allowed_source_statuses=_OCR_SOURCE_STATES,
+                extra_attrs={
+                    "ocr_text": ocr_text,
+                    "ocr_metadata": ocr_metadata,
+                },
             )
+            item = _require_applied_question_mutation(ocr_result)
     except Exception as error:
         emit_private_event(
             "question_ocr_failed",
@@ -544,17 +593,17 @@ async def submit_question(
             question_id=question_id,
             timestamp=now,
         )
-        question_repo.update_status(
-            question_id,
-            QuestionStatus.AI_ANSWERED.value,
-            ai_response=ai_resp,
-            knowledge_points=ai_resp.get("knowledge_points", []),
-            topic_seeds=topic_seeds,
+        ai_result = question_repo.mutate_question(
+            item,
+            status=QuestionStatus.AI_ANSWERED.value,
+            allowed_source_statuses=_AI_SOURCE_STATES,
+            extra_attrs={
+                "ai_response": ai_resp,
+                "knowledge_points": ai_resp.get("knowledge_points", []),
+                "topic_seeds": topic_seeds,
+            },
         )
-        item["status"] = QuestionStatus.AI_ANSWERED.value
-        item["ai_response"] = ai_resp
-        item["knowledge_points"] = ai_resp.get("knowledge_points", [])
-        item["topic_seeds"] = topic_seeds
+        item = _require_applied_question_mutation(ai_result)
     except Exception as exc:
         emit_private_event(
             "question_ai_failed",
@@ -604,17 +653,30 @@ async def request_teacher(
     """Escalate a question to a human teacher via SQS FIFO queue."""
     question_id = authorized.ref.resource_id
     student_id = authorized.ref.student_id
-    item = authorized.value
-    if item.get("status") == QuestionStatus.TEACHER_ACTIVE.value:
+    observed_item = authorized.value
+    if observed_item.get("status") == QuestionStatus.TEACHER_ACTIVE.value:
         raise HTTPException(status_code=409, detail="Teacher already active on this question")
+    if observed_item.get("status") not in _ESCALATION_SOURCE_STATES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Question cannot be escalated from its current state",
+        )
+    item = _initialize_legacy_question_for_mutation(
+        observed_item,
+        allowed_source_statuses=_ESCALATION_SOURCE_STATES,
+    )
 
     now = datetime.now(timezone.utc).isoformat()
-    question_repo.update_status(
-        question_id,
-        QuestionStatus.ESCALATED.value,
-        teacher_requested_at=item.get("teacher_requested_at") or now,
-        queue_visible_at=item.get("queue_visible_at") or now,
+    mutation = question_repo.mutate_question(
+        item,
+        status=QuestionStatus.ESCALATED.value,
+        allowed_source_statuses=_ESCALATION_SOURCE_STATES,
+        extra_attrs={
+            "teacher_requested_at": item.get("teacher_requested_at") or now,
+            "queue_visible_at": item.get("queue_visible_at") or now,
+        },
     )
+    dispatch_question = _require_applied_question_mutation(mutation)
     operation_id = str(uuid.uuid4())
     notify_service.enqueue_teacher_request(
         question_id=question_id,
@@ -627,12 +689,6 @@ async def request_teacher(
         student_id=student_id,
         subject=item["subject"],
     )
-    dispatch_question = {
-        **item,
-        "status": QuestionStatus.ESCALATED.value,
-        "teacher_requested_at": item.get("teacher_requested_at") or now,
-        "queue_visible_at": item.get("queue_visible_at") or now,
-    }
     try:
         dispatch = teacher_dispatch_service.dispatch_question(question_id, question=dispatch_question, now=now)
     except Exception as exc:  # noqa: BLE001
@@ -671,8 +727,24 @@ async def submit_feedback(
 ):
     """Rate a resolved question (1–5 stars)."""
     question_id = authorized.ref.resource_id
-    item = authorized.value
-    question_repo.update_status(question_id, item["status"], student_feedback=body.rating)
+    observed_item = authorized.value
+    if observed_item.get("status") not in _FEEDBACK_SOURCE_STATES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Feedback is not available for the current question state",
+        )
+    item = _initialize_legacy_question_for_mutation(
+        observed_item,
+        allowed_source_statuses=_FEEDBACK_SOURCE_STATES,
+    )
+    _require_applied_question_mutation(
+        question_repo.mutate_question(
+            item,
+            status=str(item["status"]),
+            allowed_source_statuses=_FEEDBACK_SOURCE_STATES,
+            extra_attrs={"student_feedback": body.rating},
+        )
+    )
     return {"question_id": question_id, "rating": body.rating}
 
 

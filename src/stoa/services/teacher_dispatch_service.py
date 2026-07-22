@@ -16,6 +16,25 @@ DISPATCH_SLA_RISK_SECONDS = teacher_reply_service.TAKEOVER_TARGET_SECONDS
 ELIGIBLE_ROLES = {"teacher", "admin"}
 AVAILABLE_STATES = {"available", "active", "online", "ready"}
 PAUSED_STATES = {"paused", "offline", "busy", "disabled", "inactive"}
+_DISPATCH_SOURCE_STATES = frozenset({QuestionStatus.ESCALATED.value})
+
+
+def _versioned_dispatch_question(
+    question: dict[str, Any],
+) -> dict[str, Any] | None:
+    version = question.get("version")
+    if isinstance(version, int) and not isinstance(version, bool) and version > 0:
+        return question
+    result = question_repo.initialize_legacy_question_version(
+        question,
+        allowed_source_statuses=_DISPATCH_SOURCE_STATES,
+    )
+    if (
+        result.disposition is question_repo.QuestionMutationDisposition.APPLIED
+        and result.question is not None
+    ):
+        return dict(result.question)
+    return None
 
 
 def list_teacher_profiles(limit: int = 200) -> list[dict[str, Any]]:
@@ -110,6 +129,9 @@ def dispatch_question(
         return {"questionId": question_id, "status": "not_found", "reason": "question_not_found"}
     if question.get("status") != QuestionStatus.ESCALATED.value:
         return {"questionId": question_id, "status": "not_dispatchable", "reason": "not_escalated"}
+    question = _versioned_dispatch_question(question)
+    if question is None:
+        return {"questionId": question_id, "status": "claim_conflict", "reason": "question_changed"}
     if _has_current_dispatch(question, timestamp):
         return {
             "questionId": question_id,
@@ -120,13 +142,25 @@ def dispatch_question(
 
     plan = plan_dispatch(question, now=timestamp)
     if not plan["selected"]:
-        question_repo.update_status(
-            question_id,
-            QuestionStatus.ESCALATED.value,
-            dispatch_status="unassigned",
-            dispatch_no_candidate_reason=plan["summary"]["noCandidateReason"] or "no_eligible_teacher",
-            dispatch_updated_at=timestamp,
+        mutation = question_repo.mutate_question(
+            question,
+            status=QuestionStatus.ESCALATED.value,
+            allowed_source_statuses=_DISPATCH_SOURCE_STATES,
+            extra_attrs={
+                "dispatch_status": "unassigned",
+                "dispatch_no_candidate_reason": (
+                    plan["summary"]["noCandidateReason"] or "no_eligible_teacher"
+                ),
+                "dispatch_updated_at": timestamp,
+            },
         )
+        if mutation.disposition is not question_repo.QuestionMutationDisposition.APPLIED:
+            return {
+                "questionId": question_id,
+                "status": "claim_conflict",
+                "reason": "question_changed",
+                "plan": plan,
+            }
         return {"questionId": question_id, "status": "no_candidate", "plan": plan}
 
     candidate = plan["selected"][0]
@@ -137,30 +171,23 @@ def dispatch_question(
     dispatch_id = str(uuid.uuid4())
     deadline = _deadline(timestamp)
     attempt_count = int(question.get("dispatch_attempt_count") or 0) + 1
-    claimed = question_repo.update_status_conditionally(
-        question_id,
-        QuestionStatus.ESCALATED.value,
-        condition_expression=(
-            "#s = :expected_status AND "
-            "(attribute_not_exists(dispatch_status) OR dispatch_status <> :current_dispatch OR "
-            "dispatch_deadline_at <= :now)"
-        ),
-        condition_values={
-            ":expected_status": QuestionStatus.ESCALATED.value,
-            ":current_dispatch": "dispatched",
-            ":now": timestamp,
+    mutation = question_repo.mutate_question(
+        question,
+        status=QuestionStatus.ESCALATED.value,
+        allowed_source_statuses=_DISPATCH_SOURCE_STATES,
+        extra_attrs={
+            "dispatch_id": dispatch_id,
+            "dispatch_status": "dispatched",
+            "dispatched_teacher_id": candidate["teacherId"],
+            "dispatch_reason": candidate["reason"],
+            "dispatch_deadline_at": deadline,
+            "dispatch_updated_at": timestamp,
+            "dispatch_attempt_count": attempt_count,
+            "previous_dispatch_teacher_ids": previous,
+            "dispatch_no_candidate_reason": None,
         },
-        dispatch_id=dispatch_id,
-        dispatch_status="dispatched",
-        dispatched_teacher_id=candidate["teacherId"],
-        dispatch_reason=candidate["reason"],
-        dispatch_deadline_at=deadline,
-        dispatch_updated_at=timestamp,
-        dispatch_attempt_count=attempt_count,
-        previous_dispatch_teacher_ids=previous,
-        dispatch_no_candidate_reason=None,
     )
-    if not claimed:
+    if mutation.disposition is not question_repo.QuestionMutationDisposition.APPLIED:
         return {"questionId": question_id, "status": "claim_conflict", "plan": plan}
 
     return {
@@ -196,14 +223,40 @@ def reassign_timed_out_dispatches(
         current_teacher = str(item.get("dispatched_teacher_id") or "")
         if current_teacher and current_teacher not in previous:
             previous.append(current_teacher)
-        question_repo.update_status(
-            question_id,
-            QuestionStatus.ESCALATED.value,
-            dispatch_status="timed_out",
-            dispatch_updated_at=timestamp,
-            previous_dispatch_teacher_ids=previous,
+        versioned = _versioned_dispatch_question(item)
+        if versioned is None:
+            results.append(
+                {
+                    "questionId": question_id,
+                    "previousTeacherId": current_teacher,
+                    "status": "claim_conflict",
+                }
+            )
+            continue
+        timeout_mutation = question_repo.mutate_question(
+            versioned,
+            status=QuestionStatus.ESCALATED.value,
+            allowed_source_statuses=_DISPATCH_SOURCE_STATES,
+            extra_attrs={
+                "dispatch_status": "timed_out",
+                "dispatch_updated_at": timestamp,
+                "previous_dispatch_teacher_ids": previous,
+            },
         )
-        refreshed = {**item, "dispatch_status": "timed_out", "previous_dispatch_teacher_ids": previous}
+        if (
+            timeout_mutation.disposition
+            is not question_repo.QuestionMutationDisposition.APPLIED
+            or timeout_mutation.question is None
+        ):
+            results.append(
+                {
+                    "questionId": question_id,
+                    "previousTeacherId": current_teacher,
+                    "status": "claim_conflict",
+                }
+            )
+            continue
+        refreshed = dict(timeout_mutation.question)
         result = dispatch_question(question_id, question=refreshed, now=timestamp)
         results.append({"questionId": question_id, "previousTeacherId": current_teacher, **result})
         if result["status"] == "not_found":

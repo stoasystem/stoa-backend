@@ -20,7 +20,22 @@ QUESTION = {
     "status": "escalated",
     "teacher_requested_at": "2026-06-15T10:00:00+00:00",
     "queue_visible_at": "2026-06-15T10:00:00+00:00",
+    "version": 1,
 }
+
+
+def _applied_mutation(question, status, attrs):
+    updated = {
+        **question,
+        "status": status,
+        "version": int(question["version"]) + 1,
+        **attrs,
+    }
+    return teacher_dispatch_service.question_repo.QuestionMutationResult(
+        teacher_dispatch_service.question_repo.QuestionMutationDisposition.APPLIED,
+        str(question["question_id"]),
+        updated,
+    )
 
 
 TEACHERS = [
@@ -80,8 +95,11 @@ def test_dispatch_question_conditionally_claims_best_teacher(monkeypatch):
     monkeypatch.setattr(teacher_dispatch_service.question_repo, "get_question", lambda question_id: dict(QUESTION))
     monkeypatch.setattr(
         teacher_dispatch_service.question_repo,
-        "update_status_conditionally",
-        lambda question_id, status, **attrs: updates.append((question_id, status, attrs)) or True,
+        "mutate_question",
+        lambda question, *, status, extra_attrs, **_kwargs: updates.append(
+            (question["question_id"], status, extra_attrs)
+        )
+        or _applied_mutation(question, status, extra_attrs),
     )
 
     result = teacher_dispatch_service.dispatch_question(
@@ -106,8 +124,11 @@ def test_dispatch_question_uses_fresh_escalation_snapshot(monkeypatch):
     )
     monkeypatch.setattr(
         teacher_dispatch_service.question_repo,
-        "update_status_conditionally",
-        lambda question_id, status, **attrs: updates.append((question_id, status, attrs)) or True,
+        "mutate_question",
+        lambda question, *, status, extra_attrs, **_kwargs: updates.append(
+            (question["question_id"], status, extra_attrs)
+        )
+        or _applied_mutation(question, status, extra_attrs),
     )
 
     result = teacher_dispatch_service.dispatch_question(
@@ -125,8 +146,11 @@ def test_dispatch_question_reports_claim_conflict(monkeypatch):
     monkeypatch.setattr(teacher_dispatch_service.question_repo, "get_question", lambda question_id: dict(QUESTION))
     monkeypatch.setattr(
         teacher_dispatch_service.question_repo,
-        "update_status_conditionally",
-        lambda question_id, status, **attrs: False,
+        "mutate_question",
+        lambda question, **_kwargs: teacher_dispatch_service.question_repo.QuestionMutationResult(
+            teacher_dispatch_service.question_repo.QuestionMutationDisposition.STALE,
+            str(question["question_id"]),
+        ),
     )
 
     result = teacher_dispatch_service.dispatch_question(
@@ -153,17 +177,20 @@ def test_reassign_timed_out_dispatch_excludes_previous_teacher(monkeypatch):
     def get_question(question_id):
         return questions[question_id]
 
-    def update_status(question_id, status, **attrs):
+    def mutate_question(question, *, status, extra_attrs, **_kwargs):
+        question_id = str(question["question_id"])
+        attrs = dict(extra_attrs)
         updates.append((question_id, status, attrs))
-        questions[question_id] = {**questions[question_id], "status": status, **attrs}
+        result = _applied_mutation(question, status, attrs)
+        questions[question_id] = dict(result.question or {})
+        return result
 
     monkeypatch.setattr(teacher_dispatch_service, "list_teacher_profiles", lambda: TEACHERS[:2])
     monkeypatch.setattr(teacher_dispatch_service.question_repo, "get_question", get_question)
-    monkeypatch.setattr(teacher_dispatch_service.question_repo, "update_status", update_status)
     monkeypatch.setattr(
         teacher_dispatch_service.question_repo,
-        "update_status_conditionally",
-        lambda question_id, status, **attrs: update_status(question_id, status, **attrs) or True,
+        "mutate_question",
+        mutate_question,
     )
 
     result = teacher_dispatch_service.reassign_timed_out_dispatches(

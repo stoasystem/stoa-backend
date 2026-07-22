@@ -155,6 +155,24 @@ def test_legacy_version_initialization_is_explicit_and_state_constrained():
     assert "student_id=:owner" in update["ConditionExpression"]
 
 
+def test_disallowed_observed_source_returns_invalid_transition_without_write():
+    observed = _question(status="resolved")
+    table = QuestionCasTable(observed)
+
+    result = question_repo.mutate_question(
+        observed,
+        status="escalated",
+        allowed_source_statuses=frozenset({"pending", "ai_answered"}),
+        table=table,
+    )
+
+    assert (
+        result.disposition
+        is question_repo.QuestionMutationDisposition.INVALID_TRANSITION
+    )
+    assert table.transactions == []
+
+
 def test_takeover_first_makes_barriered_stale_ai_completion_lose():
     stale_ai_snapshot = _question()
     escalated = _question(status="escalated", version=2)
@@ -225,6 +243,47 @@ def test_ai_first_allows_refreshed_escalation_then_takeover():
     assert table.question["ai_response"] == {"answer": "fresh"}
 
 
+def test_stale_same_state_metadata_writers_cannot_replay_after_later_states():
+    cases = (
+        (
+            _question(status="ai_answered", version=2),
+            _question(
+                status="teacher_active",
+                version=3,
+                teacher_id="teacher-1",
+                session_id="session-1",
+            ),
+            "ai_answered",
+            frozenset({"ai_answered", "resolved"}),
+            {"student_feedback": 5},
+        ),
+        (
+            _question(
+                status="teacher_active",
+                version=3,
+                teacher_id="teacher-1",
+                session_id="session-1",
+            ),
+            _question(status="resolved", version=4, resolved_at=NOW),
+            "teacher_active",
+            frozenset({"teacher_active"}),
+            {"teacher_response": "stale"},
+        ),
+    )
+    for observed, current, target_status, allowed, attrs in cases:
+        table = QuestionCasTable(current)
+        result = question_repo.mutate_question(
+            observed,
+            status=target_status,
+            allowed_source_statuses=allowed,
+            extra_attrs=attrs,
+            table=table,
+        )
+
+        assert result.disposition is question_repo.QuestionMutationDisposition.STALE
+        assert all(table.question.get(key) != value for key, value in attrs.items())
+
+
 def _question_repo_calls(path: str) -> list[tuple[str, str]]:
     tree = ast.parse((ROOT / path).read_text())
     calls: list[tuple[str, str]] = []
@@ -245,6 +304,46 @@ def _question_repo_calls(path: str) -> list[tuple[str, str]]:
             ):
                 calls.append((node.name, func.attr))
     return calls
+
+
+def _dict_value(node: ast.Dict, key: str) -> ast.expr | None:
+    for candidate, value in zip(node.keys, node.values, strict=True):
+        if isinstance(candidate, ast.Constant) and candidate.value == key:
+            return value
+    return None
+
+
+def _is_question_partition_key(node: ast.expr | None) -> bool:
+    if isinstance(node, ast.Constant):
+        return isinstance(node.value, str) and node.value.startswith("QUESTION#")
+    if isinstance(node, ast.JoinedStr):
+        return any(
+            isinstance(value, ast.Constant)
+            and isinstance(value.value, str)
+            and value.value.startswith("QUESTION#")
+            for value in node.values
+        )
+    return False
+
+
+def _direct_question_updates(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text())
+    updates: set[str] = set()
+    for function in ast.walk(tree):
+        if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for node in ast.walk(function):
+            if not isinstance(node, ast.Dict):
+                continue
+            update = _dict_value(node, "Update")
+            if not isinstance(update, ast.Dict):
+                continue
+            key = _dict_value(update, "Key")
+            if not isinstance(key, ast.Dict):
+                continue
+            if _is_question_partition_key(_dict_value(key, "PK")):
+                updates.add(function.name)
+    return updates
 
 
 def test_production_question_writer_registry_is_closed_over_cas_calls():
@@ -270,3 +369,19 @@ def test_production_question_writer_registry_is_closed_over_cas_calls():
         }
         assert {call for call in calls if call[1] == "mutate_question"} == expected
 
+    direct_registry = {
+        "src/stoa/db/repositories/question_repo.py": {
+            "claim_teacher_takeover",
+            "build_question_update_transaction",
+            "_question_mutation_operation",
+        },
+        "src/stoa/db/repositories/question_submission_repo.py": {
+            "reverse_terminal_question_admission",
+        },
+    }
+    discovered: dict[str, set[str]] = {}
+    for path in (ROOT / "src/stoa").rglob("*.py"):
+        functions = _direct_question_updates(path)
+        if functions:
+            discovered[str(path.relative_to(ROOT))] = functions
+    assert discovered == direct_registry

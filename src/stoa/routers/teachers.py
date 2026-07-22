@@ -44,6 +44,44 @@ from stoa.services import (
 
 router = APIRouter()
 
+_TEACHER_REPLY_SOURCE_STATES = frozenset({QuestionStatus.TEACHER_ACTIVE.value})
+_TEACHER_RESOLVE_SOURCE_STATES = frozenset({QuestionStatus.TEACHER_ACTIVE.value})
+
+
+def _require_applied_question_mutation(
+    result: question_repo.QuestionMutationResult,
+) -> dict[str, Any]:
+    if (
+        result.disposition is question_repo.QuestionMutationDisposition.APPLIED
+        and result.question is not None
+    ):
+        return dict(result.question)
+    if result.disposition is question_repo.QuestionMutationDisposition.RETRYABLE:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Question changed temporarily; retry with a fresh question state",
+        )
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="Question state changed; refresh before retrying",
+    )
+
+
+def _initialize_legacy_question_for_mutation(
+    question: dict[str, Any],
+    *,
+    allowed_source_statuses: frozenset[str],
+) -> dict[str, Any]:
+    version = question.get("version")
+    if isinstance(version, int) and not isinstance(version, bool) and version > 0:
+        return question
+    return _require_applied_question_mutation(
+        question_repo.initialize_legacy_question_version(
+            question,
+            allowed_source_statuses=allowed_source_statuses,
+        )
+    )
+
 
 class TakeoverResponse(BaseModel):
     question_id: str
@@ -265,12 +303,11 @@ async def reply(
     ),
 ):
     """Post the teacher's reply to a question they have taken over."""
-    item = dict(authorized.value)
-    if item.get("status") == QuestionStatus.RESOLVED.value:
+    observed_item = dict(authorized.value)
+    if observed_item.get("status") == QuestionStatus.RESOLVED.value:
         raise HTTPException(status_code=409, detail="Question is already resolved")
-    if item.get("status") != QuestionStatus.TEACHER_ACTIVE.value:
+    if observed_item.get("status") != QuestionStatus.TEACHER_ACTIVE.value:
         raise HTTPException(status_code=409, detail="Question is not active with a teacher")
-
     try:
         reply_fields = teacher_reply_service.normalize_teacher_reply(
             body.content,
@@ -279,18 +316,28 @@ async def reply(
     except teacher_reply_service.TeacherReplyValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    item = _initialize_legacy_question_for_mutation(
+        observed_item,
+        allowed_source_statuses=_TEACHER_REPLY_SOURCE_STATES,
+    )
+
     now = _now()
     if not item.get("teacher_first_replied_at"):
         reply_fields["teacher_first_replied_at"] = now
         reply_fields.update(teacher_reply_service.compute_sla_fields(item, now))
 
-    question_repo.update_status(
-        question_id,
-        QuestionStatus.TEACHER_ACTIVE.value,
-        **reply_fields,
+    updated_question = _require_applied_question_mutation(
+        question_repo.mutate_question(
+            item,
+            status=QuestionStatus.TEACHER_ACTIVE.value,
+            allowed_source_statuses=_TEACHER_REPLY_SOURCE_STATES,
+            extra_attrs=reply_fields,
+        )
     )
     teacher_id = str((authorized.facts.teacher.teacher_account or {})["user_id"])
-    notification_service.emit_teacher_reply(question=item, teacher_id=teacher_id)
+    notification_service.emit_teacher_reply(
+        question=updated_question, teacher_id=teacher_id
+    )
     return ReplyResponse(
         question_id=question_id,
         teacher_response=reply_fields["teacher_response"],
@@ -316,16 +363,27 @@ async def resolve(
     ),
 ):
     """Mark a question as resolved and close the teacher session."""
-    item = dict(authorized.value)
-    if item.get("status") == QuestionStatus.RESOLVED.value:
+    observed_item = dict(authorized.value)
+    if observed_item.get("status") == QuestionStatus.RESOLVED.value:
         raise HTTPException(status_code=409, detail="Question is already resolved")
+    if observed_item.get("status") != QuestionStatus.TEACHER_ACTIVE.value:
+        raise HTTPException(status_code=409, detail="Question is not active with a teacher")
+    item = _initialize_legacy_question_for_mutation(
+        observed_item,
+        allowed_source_statuses=_TEACHER_RESOLVE_SOURCE_STATES,
+    )
 
     now = _now()
-    question_repo.update_status(
-        question_id,
-        QuestionStatus.RESOLVED.value,
-        resolved_at=now,
-        **teacher_reply_service.compute_resolved_sla_fields(item, now),
+    _require_applied_question_mutation(
+        question_repo.mutate_question(
+            item,
+            status=QuestionStatus.RESOLVED.value,
+            allowed_source_statuses=_TEACHER_RESOLVE_SOURCE_STATES,
+            extra_attrs={
+                "resolved_at": now,
+                **teacher_reply_service.compute_resolved_sla_fields(item, now),
+            },
+        )
     )
 
     # Update session record

@@ -913,9 +913,25 @@ def test_request_teacher_records_support_visible_usage_event(monkeypatch):
             "student_id": "student-1",
             "subject": "math",
             "status": "ai_answered",
+            "version": 1,
         },
     )
-    monkeypatch.setattr(questions.question_repo, "update_status", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        questions.question_repo,
+        "mutate_question",
+        lambda question, *, status, extra_attrs, **_kwargs: (
+            questions.question_repo.QuestionMutationResult(
+                questions.question_repo.QuestionMutationDisposition.APPLIED,
+                str(question["question_id"]),
+                {
+                    **question,
+                    "status": status,
+                    "version": int(question["version"]) + 1,
+                    **extra_attrs,
+                },
+            )
+        ),
+    )
     monkeypatch.setattr(questions.notify_service, "enqueue_teacher_request", lambda **kwargs: None)
     monkeypatch.setattr(
         questions.notification_service, "emit_teacher_requested", lambda **kwargs: None

@@ -40,6 +40,22 @@ class TeacherTakeoverResult:
     session: QuestionItem | None = None
 
 
+class QuestionMutationDisposition(StrEnum):
+    """Identity-safe outcomes from the question state/version CAS boundary."""
+
+    APPLIED = "applied"
+    STALE = "stale"
+    INVALID_TRANSITION = "invalid_transition"
+    RETRYABLE = "retryable"
+
+
+@dataclass(frozen=True, slots=True)
+class QuestionMutationResult:
+    disposition: QuestionMutationDisposition
+    question_id: str
+    question: QuestionItem | None = None
+
+
 @runtime_checkable
 class _GetTable(Protocol):
     def get_item(self, **kwargs: object) -> object: ...
@@ -595,16 +611,28 @@ def build_question_update_transaction(
     condition_values: QuestionItem | None = None,
     extra_attrs: Mapping[str, object] | None = None,
 ) -> list[QuestionItem]:
+    """Build the legacy-compatible shape through the state/version CAS contract."""
     question_id = str(question.get("question_id") or "")
     student_id = str(question.get("student_id") or "")
-    update_expr = "SET #s = :s"
-    attr_names = {"#s": "status"}
+    source_status = str(question.get("status") or status)
+    expected_version = _question_version(question.get("version")) or 1
+    update_expr = "SET #s = :s, #version=:next_version"
+    attr_names = {"#s": "status", "#version": "version"}
     attr_names.update(condition_names or {})
-    attr_values = {":s": status, **(condition_values or {})}
+    attr_values = {
+        ":s": status,
+        ":source_status": source_status,
+        ":expected_version": expected_version,
+        ":next_version": expected_version + 1,
+        **(condition_values or {}),
+    }
     for k, v in (extra_attrs or {}).items():
         update_expr += f", {k} = :{k}"
         attr_values[f":{k}"] = v
-    row_condition = "attribute_exists(PK) AND attribute_exists(SK) AND student_id=:owner"
+    row_condition = (
+        "attribute_exists(PK) AND attribute_exists(SK) AND student_id=:owner "
+        "AND #s=:source_status AND #version=:expected_version"
+    )
     attr_values[":owner"] = student_id
     if condition_expression:
         row_condition += f" AND ({condition_expression})"
@@ -622,22 +650,268 @@ def build_question_update_transaction(
     ]
 
 
+_PROTECTED_QUESTION_FIELDS = frozenset(
+    {"PK", "SK", "question_id", "student_id", "status", "version"}
+)
+
+
+def _mutation_identity(
+    question: Mapping[str, object], allowed_source_statuses: frozenset[str]
+) -> tuple[str, str, str]:
+    question_id = _required_text(question.get("question_id"), "question_id")
+    student_id = _required_text(question.get("student_id"), "student_id")
+    source_status = _required_text(question.get("status"), "status")
+    if not allowed_source_statuses or any(
+        not isinstance(value, str) or not value for value in allowed_source_statuses
+    ):
+        raise ValueError("allowed_source_statuses must be a closed non-empty set")
+    if question.get("PK", f"QUESTION#{question_id}") != f"QUESTION#{question_id}":
+        raise ValueError("question identity does not match its partition key")
+    if question.get("SK", "META") != "META":
+        raise ValueError("question identity does not match its sort key")
+    return question_id, student_id, source_status
+
+
+def _mutation_fields(extra_attrs: Mapping[str, object] | None) -> QuestionItem:
+    fields = dict(extra_attrs or {})
+    protected = _PROTECTED_QUESTION_FIELDS.intersection(fields)
+    if protected:
+        raise ValueError("question mutation cannot replace identity, owner, state, or version")
+    if any(not isinstance(key, str) or not key.isidentifier() for key in fields):
+        raise ValueError("question mutation field names must be identifiers")
+    return fields
+
+
+def _question_mutation_operation(
+    *,
+    question_id: str,
+    student_id: str,
+    source_status: str,
+    expected_version: int | None,
+    status: str,
+    extra_attrs: Mapping[str, object],
+) -> QuestionItem:
+    names: dict[str, str] = {"#status": "status", "#version": "version"}
+    values: QuestionItem = {
+        ":owner": student_id,
+        ":expected_status": source_status,
+        ":next_status": _required_text(status, "status"),
+        ":next_version": 1 if expected_version is None else expected_version + 1,
+    }
+    updates = ["#status=:next_status", "#version=:next_version"]
+    condition = (
+        "attribute_exists(PK) AND attribute_exists(SK) AND student_id=:owner "
+        "AND #status=:expected_status AND "
+    )
+    if expected_version is None:
+        condition += "attribute_not_exists(#version)"
+    else:
+        condition += "#version=:expected_version"
+        values[":expected_version"] = expected_version
+    for index, (field, value) in enumerate(extra_attrs.items()):
+        name_token = f"#field_{index}"
+        value_token = f":field_{field}"
+        names[name_token] = field
+        values[value_token] = value
+        updates.append(f"{name_token}={value_token}")
+    return {
+        "Update": {
+            "Key": {"PK": f"QUESTION#{question_id}", "SK": "META"},
+            "UpdateExpression": "SET " + ", ".join(updates),
+            "ConditionExpression": condition,
+            "ExpressionAttributeNames": names,
+            "ExpressionAttributeValues": values,
+        }
+    }
+
+
+def _matching_applied_mutation(
+    question: Mapping[str, object],
+    *,
+    question_id: str,
+    student_id: str,
+    expected_version: int | None,
+    status: str,
+    extra_attrs: Mapping[str, object],
+) -> bool:
+    next_version = 1 if expected_version is None else expected_version + 1
+    return (
+        question.get("question_id") == question_id
+        and question.get("student_id") == student_id
+        and _question_version(question.get("version")) == next_version
+        and question.get("status") == status
+        and all(question.get(key) == value for key, value in extra_attrs.items())
+    )
+
+
+def _classify_question_mutation_loss(
+    *,
+    question_id: str,
+    student_id: str,
+    source_status: str,
+    expected_version: int | None,
+    status: str,
+    extra_attrs: Mapping[str, object],
+    table: object,
+) -> QuestionMutationResult:
+    try:
+        refreshed = get_question(question_id, table=table)
+    except Exception:
+        refreshed = None
+    if not refreshed or (
+        refreshed.get("question_id") != question_id
+        or refreshed.get("student_id") != student_id
+    ):
+        return QuestionMutationResult(QuestionMutationDisposition.RETRYABLE, question_id)
+    if _matching_applied_mutation(
+        refreshed,
+        question_id=question_id,
+        student_id=student_id,
+        expected_version=expected_version,
+        status=status,
+        extra_attrs=extra_attrs,
+    ):
+        return QuestionMutationResult(
+            QuestionMutationDisposition.APPLIED, question_id, dict(refreshed)
+        )
+    refreshed_version = _question_version(refreshed.get("version"))
+    if refreshed_version != expected_version:
+        return QuestionMutationResult(QuestionMutationDisposition.STALE, question_id)
+    if refreshed.get("status") != source_status:
+        return QuestionMutationResult(
+            QuestionMutationDisposition.INVALID_TRANSITION, question_id
+        )
+    return QuestionMutationResult(QuestionMutationDisposition.RETRYABLE, question_id)
+
+
+def mutate_question(
+    question: Mapping[str, object],
+    *,
+    status: str,
+    allowed_source_statuses: frozenset[str],
+    extra_attrs: Mapping[str, object] | None = None,
+    table: object | None = None,
+) -> QuestionMutationResult:
+    """Apply one owner/state/version CAS from a caller-observed snapshot."""
+    question_id, student_id, source_status = _mutation_identity(
+        question, allowed_source_statuses
+    )
+    if source_status not in allowed_source_statuses:
+        return QuestionMutationResult(
+            QuestionMutationDisposition.INVALID_TRANSITION, question_id
+        )
+    expected_version = _question_version(question.get("version"))
+    if expected_version is None:
+        raise ValueError("legacy questions require explicit version initialization")
+    fields = _mutation_fields(extra_attrs)
+    target = _table(table)
+    try:
+        fence = account_deletion_repo.require_active_account_fence(
+            student_id, table=target
+        )
+        account_deletion_repo.transact(
+            [
+                account_deletion_repo.active_fence_condition(
+                    student_id, int(fence["generation"])
+                ),
+                _question_mutation_operation(
+                    question_id=question_id,
+                    student_id=student_id,
+                    source_status=source_status,
+                    expected_version=expected_version,
+                    status=status,
+                    extra_attrs=fields,
+                ),
+            ],
+            table=target,
+        )
+    except Exception:
+        return _classify_question_mutation_loss(
+            question_id=question_id,
+            student_id=student_id,
+            source_status=source_status,
+            expected_version=expected_version,
+            status=status,
+            extra_attrs=fields,
+            table=target,
+        )
+    applied: QuestionItem = {
+        **question,
+        "status": status,
+        "version": expected_version + 1,
+        **fields,
+    }
+    return QuestionMutationResult(
+        QuestionMutationDisposition.APPLIED, question_id, applied
+    )
+
+
+def initialize_legacy_question_version(
+    question: Mapping[str, object],
+    *,
+    allowed_source_statuses: frozenset[str],
+    table: object | None = None,
+) -> QuestionMutationResult:
+    """Initialize an unversioned legacy row without performing its next mutation."""
+    question_id, student_id, source_status = _mutation_identity(
+        question, allowed_source_statuses
+    )
+    if source_status not in allowed_source_statuses:
+        return QuestionMutationResult(
+            QuestionMutationDisposition.INVALID_TRANSITION, question_id
+        )
+    if _question_version(question.get("version")) is not None:
+        raise ValueError("question already has a positive version")
+    target = _table(table)
+    try:
+        fence = account_deletion_repo.require_active_account_fence(
+            student_id, table=target
+        )
+        account_deletion_repo.transact(
+            [
+                account_deletion_repo.active_fence_condition(
+                    student_id, int(fence["generation"])
+                ),
+                _question_mutation_operation(
+                    question_id=question_id,
+                    student_id=student_id,
+                    source_status=source_status,
+                    expected_version=None,
+                    status=source_status,
+                    extra_attrs={},
+                ),
+            ],
+            table=target,
+        )
+    except Exception:
+        return _classify_question_mutation_loss(
+            question_id=question_id,
+            student_id=student_id,
+            source_status=source_status,
+            expected_version=None,
+            status=source_status,
+            extra_attrs={},
+            table=target,
+        )
+    initialized = {**question, "version": 1}
+    return QuestionMutationResult(
+        QuestionMutationDisposition.APPLIED, question_id, initialized
+    )
+
+
 def update_status(question_id: str, status: str, **extra_attrs: object) -> None:
-    table = _table()
+    """Compatibility adapter for non-production callers; use ``mutate_question``."""
     question = get_question(question_id)
     if not question:
         raise account_deletion_repo.AccountDeletionConflict("question does not exist")
-    student_id = str(question.get("student_id") or "")
-    fence = account_deletion_repo.require_active_account_fence(student_id, table=table)
-    account_deletion_repo.transact(
-        build_question_update_transaction(
-            question,
-            status=status,
-            expected_generation=int(fence["generation"]),
-            extra_attrs=extra_attrs,
-        ),
-        table=table,
+    result = mutate_question(
+        question,
+        status=status,
+        allowed_source_statuses=frozenset({str(question.get("status") or "")}),
+        extra_attrs=extra_attrs,
     )
+    if result.disposition is not QuestionMutationDisposition.APPLIED:
+        raise account_deletion_repo.AccountDeletionConflict("question mutation lost")
 
 
 def update_status_conditionally(
@@ -649,31 +923,18 @@ def update_status_conditionally(
     condition_values: QuestionItem | None = None,
     **extra_attrs: object,
 ) -> bool:
-    """Update a question row when a DynamoDB condition still holds."""
-    table = _table()
+    """Compatibility adapter retained for historical test and API imports."""
     question = get_question(question_id)
     if not question:
         return False
-    student_id = str(question.get("student_id") or "")
-    try:
-        fence = account_deletion_repo.require_active_account_fence(
-            student_id, table=table
-        )
-        account_deletion_repo.transact(
-            build_question_update_transaction(
-                question,
-                status=status,
-                expected_generation=int(fence["generation"]),
-                condition_expression=condition_expression,
-                condition_names=condition_names,
-                condition_values=condition_values,
-                extra_attrs=extra_attrs,
-            ),
-            table=table,
-        )
-    except (ClientError, account_deletion_repo.AccountDeletionConflict):
-        return False
-    return True
+    del condition_expression, condition_names, condition_values
+    result = mutate_question(
+        question,
+        status=status,
+        allowed_source_statuses=frozenset({str(question.get("status") or "")}),
+        extra_attrs=extra_attrs,
+    )
+    return result.disposition is QuestionMutationDisposition.APPLIED
 
 
 def create_teacher_session(item: QuestionItem, *, table: object | None = None) -> None:
