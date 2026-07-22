@@ -4,13 +4,13 @@ milestone: v9.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 475-12-PLAN.md
-last_updated: "2026-07-22T00:57:56.442Z"
+last_updated: "2026-07-22T01:11:19.511Z"
 last_activity: 2026-07-21 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 169
-  completed_plans: 104
+  completed_plans: 105
   percent: 20
 ---
 
@@ -107,7 +107,7 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-22T00:22:00.754Z
+**Last Date:** 2026-07-22T01:10:49.688Z
 **Stopped At:** Completed 475-12-PLAN.md
 **Resume File:** None
 
@@ -211,6 +211,7 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 | Phase 475 P10 | 7 min | 1 tasks | 5 files |
 | Phase 475 P12 | 5 min | 1 tasks | 4 files |
 | Phase 475 P03 | 26 min | 1 tasks | 4 files |
+| Phase 475 P05 | 9 min | 1 tasks | 3 files |
 
 ## Decisions
 
@@ -416,3 +417,5 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 - [Phase 475]: Complete deletion replay projects only the validated nested terminal receipt. — Terminal compaction intentionally removes active branch registry fields, while issuer, subject, fingerprint, request, generation, and inventory bindings remain mandatory.
 - [Phase 475]: DeletionReceipt.is_terminal is the route continuation gate. — Pending requests schedule one continuation per accepted request; deleted replay schedules no cleanup or background work.
 - [Phase 475]: Question reconciliation is explicit-coordinate and preview-bound; terminal reversal preserves audit quantity while excluding reversed events from active usage and never touches attachment/storage rows. — Historical privacy-safe ledger evidence cannot reconstruct missing question content, and exact four-row compensation must be independently retry-safe.
+- [Phase 475]: Teacher takeover notification effects use one deterministic identity derived from the persisted claim and session — Dependency failure never rolls back the confirmed winner or creates a second session.
+- [Phase 475]: An exact strongly read takeover event resolves a lost notification-write response — Typed delivery dependency outcomes remain retryable while proven account deletion stays terminal.
