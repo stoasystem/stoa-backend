@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-04-PLAN.md
-last_updated: "2026-07-21T23:41:27.963Z"
+stopped_at: Completed 475-08-PLAN.md
+last_updated: "2026-07-21T23:59:22.104Z"
 last_activity: 2026-07-21 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 169
-  completed_plans: 100
-  percent: 20
+  completed_plans: 101
+  percent: 60
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 7 of 13
+Plan: 8 of 13
 Status: Ready to execute
 Last activity: 2026-07-21 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-21T23:41:27.958Z
-**Stopped At:** Completed 475-04-PLAN.md
+**Last Date:** 2026-07-21T23:59:22.098Z
+**Stopped At:** Completed 475-08-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -207,6 +207,7 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 | Phase 475 P11 | 7 min | 1 tasks | 5 files |
 | Phase 475 P02 | 10 min | 1 tasks | 4 files |
 | Phase 475 P04 | 9 min | 1 tasks | 6 files |
+| Phase 475 P08 | 14 min | 1 tasks | 7 files |
 
 ## Decisions
 
@@ -404,3 +405,5 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 - [Phase 475]: Teacher takeover identities are deterministic and domain-separated. — One claim per question and teacher derives one stable session across lost-response retry.
 - [Phase 475]: Teacher ownership and session creation share one fenced transaction. — Exact question version plus dispatch owner and deadline conditions ensure only one winner and zero loser side effects.
 - [Phase 475]: Only the exact active owner may authorize takeover replay. — Winner retry returns the original session while other teachers remain concealed and concurrent losers receive a generic conflict.
+- [Phase 475]: Unrelated profile CAS loss retries from a strong read up to three times; scrub-owned linkage is never replayed after CAS loss. — This preserves concurrent locale and preference bytes while preventing stale sensitive linkage restoration.
+- [Phase 475]: All ordinary profile writes compose one account-fenced version CAS; direct profile mutations are closed by a source-backed registry. — A new bypass now fails the registry instead of silently escaping the concurrency contract.
