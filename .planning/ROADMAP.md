@@ -541,7 +541,7 @@ Plans:
 
 **Audit findings:** DATA-001, BUG-002, DATA-003, BUG-006, BUG-004.
 
-**Plans:** 13/13 plans complete
+**Plans:** 13/35 plans complete; 22 gap-closure plans pending
 
 Plans:
 
@@ -570,7 +570,59 @@ Plans:
 
 - [ ] `475-13` — Integrated source-bound Phase 475 evidence gate.
 
-**Cross-cutting constraints:** Every plan contains exactly one implementation task; application-owned commands provide durable idempotency; strict bidirectional authorization remains unchanged; public errors stay structured and redacted; evidence exercises lower-boundary failure and concurrency; no native/mobile scope is introduced.
+**Gap Closure Wave 1**
+
+- [ ] `475-14` — Required caller-owned question idempotency key.
+- [ ] `475-22` — Dual parent/student lifecycle and profile-version fence.
+- [ ] `475-24` — Immutable per-operation rate-limit receipt.
+- [ ] `475-25` — Closed account-deletion ownership/reference discovery.
+- [ ] `475-26` — Deterministic completed-deletion receipt replay proof.
+- [ ] `475-29` — Subscription/quota service mypy cleanup.
+
+**Gap Closure Wave 2**
+
+- [ ] `475-15` — Opaque question command, ledger, and receipt coordinates.
+- [ ] `475-23` — Non-revivable relationship status lifecycle.
+
+**Gap Closure Wave 3**
+
+- [ ] `475-16` — Opaque reconciliation job command coordinates.
+- [ ] `475-17` — State/version CAS for every question writer.
+- [ ] `475-27` — Repository-layer mypy cleanup.
+- [ ] `475-28` — Effect-service mypy cleanup.
+- [ ] `475-31` — Admin-router mypy cleanup.
+
+**Gap Closure Wave 4**
+
+- [ ] `475-18` — Durable OCR/AI effect receipt and recovery.
+- [ ] `475-21` — Active canonical-teacher takeover fence.
+
+**Gap Closure Wave 5**
+
+- [ ] `475-19` — Strict question replay integrity and ownership validation.
+- [ ] `475-30` — Teacher-router mypy cleanup.
+
+**Gap Closure Wave 6**
+
+- [ ] `475-20` — Production-reachable terminal proof and exact-once compensation.
+
+**Gap Closure Wave 7**
+
+- [ ] `475-32` — Question, practice, and auth router mypy cleanup.
+
+**Gap Closure Wave 8**
+
+- [ ] `475-33` — Fail-closed unfiltered mypy evidence gate.
+
+**Gap Closure Wave 9**
+
+- [ ] `475-34` — Exhaustive source snapshot and complete gap coverage registry.
+
+**Gap Closure Wave 10**
+
+- [ ] `475-35` — Final immutable source-bound evidence publication.
+
+**Cross-cutting constraints:** Every plan contains exactly one implementation task; application-owned commands provide durable idempotency; strict bidirectional authorization remains unchanged; canonical roles are exactly `student|parent|teacher|admin` and teacher is spelled only `teacher`; public errors stay structured and redacted; evidence exercises lower-boundary failure and concurrency; no native/mobile scope is introduced. Live AWS, provider-effect, deployment, and production-smoke execution remain exact later-phase `NOT RUN` obligations owned by Phases 479/480.
 
 **Success criteria:**
 
@@ -584,7 +636,7 @@ Plans:
 
 **Known follow-up defects closed:** `profile-version-cas`, `delivery-begin-dependency-classification`, and `completed-deletion-replay` from Phase 473.
 
-**Exit gate:** Usage and relationship state are trustworthy enough for paid access and the real Web journeys.
+**Exit gate:** Usage and relationship state pass every functional gap regression, unfiltered mypy exits zero, the exhaustive source-bound evidence package closes all D/V9DATA/CR/WR mappings, and later-phase live AWS/provider/deployment obligations remain exact `NOT RUN`.
 
 ### Phase 476: Billing Idempotency And Paid Access Recovery
 
