@@ -5,6 +5,7 @@ All content is pre-seeded in DynamoDB (PK=PRACTICE, SK=SUBJECT#…/TOPIC#…/LES
 Student progress is stored under PK=PROGRESS#{user_id}.
 """
 import logging
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -275,6 +276,23 @@ def _as_int(val: Any, default: int = 0) -> int:
     return int(val)
 
 
+def _string_field(item: Mapping[str, object], field: str, default: str = "") -> str:
+    value = item.get(field)
+    return value if isinstance(value, str) else default
+
+
+def _optional_string_field(
+    item: Mapping[str, object], field: str
+) -> str | None:
+    value = item.get(field)
+    return value if isinstance(value, str) else None
+
+
+def _list_field(item: Mapping[str, object], field: str) -> list[Any] | None:
+    value = item.get(field)
+    return value if isinstance(value, list) else None
+
+
 def _hint_limit_for_student(student_id: str) -> int:
     entitlement = entitlement_service.resolve_student_entitlement(student_id, settings=settings)
     limits = entitlement.get("limits") or {}
@@ -426,8 +444,10 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
     if not recommended_raw:
         raise HTTPException(status_code=404, detail="No lessons available")
 
-    challenges = [practice_projection_service.build_challenge_preview(c)
-                  for c in practice_repo.get_challenges(recommended_raw["lesson_id"])]
+    challenges: list[Mapping[str, Any]] = [
+        practice_projection_service.build_challenge_preview(c)
+        for c in practice_repo.get_challenges(recommended_raw["lesson_id"])
+    ]
     recommended = practice_projection_service.build_lesson_preview(recommended_raw, challenges,
                                 _lesson_status(recommended_raw["lesson_id"], completed_ids,
                                                topic_progress.get(recommended_raw.get("topic_id", ""), {}).get("current_lesson_id")))
@@ -639,9 +659,10 @@ async def get_path(
     actor: Actor = Depends(_practice_read),
 ):
     """Return the practice path (units + lessons) for a subject/topic."""
+    topics: list[dict]
     if topic_id:
-        topics = [practice_repo.get_topic(topic_id)]
-        topics = [t for t in topics if t]
+        topic = practice_repo.get_topic(topic_id)
+        topics = [topic] if topic is not None else []
     else:
         topics = practice_repo.get_topics(subject_id)
 
@@ -652,8 +673,9 @@ async def get_path(
     progress = practice_repo.get_progress(user_id, subject_id)
     completed_ids = {p["lesson_id"] for p in progress if p.get("status") == "completed"}
 
+    selected_topic_id = _string_field(topics[0], "topic_id")
     all_lessons = sorted(
-        practice_repo.get_lessons(topic_id=topics[0]["topic_id"] if topic_id else None),
+        practice_repo.get_lessons(topic_id=selected_topic_id if topic_id else None),
         key=lambda x: (x.get("topic_id", ""), x.get("unit_id", ""), x.get("order", 0)),
     )
     current_lesson_id = next(
@@ -662,7 +684,7 @@ async def get_path(
     )
 
     units_raw = sorted(
-        practice_repo.get_units(topics[0]["topic_id"]) if topic_id
+        practice_repo.get_units(selected_topic_id) if topic_id
         else [], key=lambda x: x.get("order", 0)
     )
 
@@ -671,8 +693,10 @@ async def get_path(
         unit_lessons_raw = [lesson for lesson in all_lessons if lesson.get("unit_id") == unit_raw["unit_id"]]
         unit_lessons = []
         for lesson in unit_lessons_raw:
-            challenges = [practice_projection_service.build_challenge_preview(c)
-                          for c in practice_repo.get_challenges(lesson["lesson_id"])]
+            challenges: list[Mapping[str, Any]] = [
+                practice_projection_service.build_challenge_preview(c)
+                for c in practice_repo.get_challenges(lesson["lesson_id"])
+            ]
             st = _lesson_status(lesson["lesson_id"], completed_ids, current_lesson_id)
             unit_lessons.append(
                 practice_projection_service.build_lesson_preview(lesson, challenges, st)
@@ -699,8 +723,9 @@ async def get_lesson(
     user_id = actor.user_id
     progress = practice_repo.get_progress(user_id)
     completed_ids = {p["lesson_id"] for p in progress if p.get("status") == "completed"}
+    lesson_topic_id = _optional_string_field(lesson, "topic_id")
     all_lessons = sorted(
-        practice_repo.get_lessons(topic_id=lesson.get("topic_id")),
+        practice_repo.get_lessons(topic_id=lesson_topic_id),
         key=lambda x: x.get("order", 0),
     )
     current_id = next(
@@ -708,7 +733,7 @@ async def get_lesson(
         None,
     )
     st = _lesson_status(lesson_id, completed_ids, current_id)
-    challenges = [
+    challenges: list[Mapping[str, Any]] = [
         practice_projection_service.build_challenge_preview(c)
         for c in practice_repo.get_challenges(lesson_id)
     ]
@@ -737,8 +762,9 @@ async def complete_lesson(
             else None
         ),
     )
+    lesson_topic_id = _optional_string_field(lesson, "topic_id")
     all_lessons = sorted(
-        practice_repo.get_lessons(topic_id=lesson.get("topic_id")),
+        practice_repo.get_lessons(topic_id=lesson_topic_id),
         key=lambda x: x.get("order", 0),
     )
     completed_ids = {p["lesson_id"] for p in practice_repo.get_progress(actor.user_id)
@@ -822,10 +848,10 @@ async def submit_answer(
             challenge_id,
             student_answer,
             correct,
-            subject_id=challenge.get("subject_id", ""),
-            topic_id=challenge.get("topic_id", ""),
+            subject_id=_string_field(challenge, "subject_id"),
+            topic_id=_string_field(challenge, "topic_id"),
             lesson_id=lesson_id,
-            unit_id=challenge.get("unit_id", ""),
+            unit_id=_string_field(challenge, "unit_id"),
             challenge_version=versioned_challenge["challenge_version"],
             challenge_content_hash=versioned_challenge["challenge_content_hash"],
             standard_answer=str(
@@ -837,11 +863,13 @@ async def submit_answer(
             feedback=feedback,
             next_challenge_id=next_challenge_id,
             prompt=str(challenge.get("prompt") or ""),
-            options=challenge.get("options"),
+            options=_list_field(challenge, "options"),
             challenge_type=str(challenge.get("type") or ""),
             created_at=created_at,
         )
-        result = practice_projection_service.build_attempt_result(recorded_attempt)
+        result: PracticeAttemptResult = (
+            practice_projection_service.build_attempt_result(recorded_attempt)
+        )
     except Exception as error:  # noqa: BLE001
         logger.warning("Practice attempt persistence failed")
         raise HTTPException(
