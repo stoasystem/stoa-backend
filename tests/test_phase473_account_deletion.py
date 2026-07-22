@@ -255,7 +255,14 @@ def test_exact_verified_subject_command_replays_without_actor_authority() -> Non
         command_id="ignored-on-replay",
     )
     assert replay == first
-    assert set(asdict(replay)) == {"command_id", "status", "accepted_at"}
+    assert set(asdict(replay)) == {
+        "command_id",
+        "status",
+        "accepted_at",
+        "completed_at",
+    }
+    assert replay.completed_at is None
+    assert replay.is_terminal is False
     assert "actor" not in asdict(replay)
     assert table.command is not None
     assert table.command["inventory_sha256"]

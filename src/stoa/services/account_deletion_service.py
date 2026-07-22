@@ -65,6 +65,63 @@ class DeletionReceipt:
     command_id: str
     status: str
     accepted_at: str
+    completed_at: str | None = None
+
+    @property
+    def is_terminal(self) -> bool:
+        return self.status == "deleted" and self.completed_at is not None
+
+
+def terminal_deletion_receipt(command: Mapping[str, Any]) -> DeletionReceipt:
+    """Project only the exact nested receipt persisted by terminalization."""
+    if command.get("status") != "complete":
+        raise account_deletion_repo.AccountDeletionConflict(
+            "deletion command is not terminal"
+        )
+    receipt = command.get("receipt")
+    if not isinstance(receipt, Mapping):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "terminal deletion receipt is unavailable"
+        )
+    command_id = receipt.get("command_id")
+    completed_at = receipt.get("completed_at")
+    if (
+        not isinstance(command_id, str)
+        or not command_id
+        or command_id != command.get("command_id")
+        or receipt.get("status") != "deleted"
+        or not isinstance(completed_at, str)
+        or not completed_at
+    ):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "invalid terminal deletion receipt"
+        )
+    try:
+        parsed_completed_at = datetime.fromisoformat(completed_at)
+    except ValueError as exc:
+        raise account_deletion_repo.AccountDeletionConflict(
+            "invalid terminal deletion receipt"
+        ) from exc
+    offset = (
+        parsed_completed_at.utcoffset()
+        if parsed_completed_at.tzinfo is not None
+        else None
+    )
+    if offset is None or offset.total_seconds() != 0:
+        raise account_deletion_repo.AccountDeletionConflict(
+            "invalid terminal deletion receipt"
+        )
+    accepted_at = command.get("accepted_at")
+    if not isinstance(accepted_at, str):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "invalid terminal deletion receipt"
+        )
+    return DeletionReceipt(
+        command_id=command_id,
+        status="deleted",
+        accepted_at=accepted_at,
+        completed_at=completed_at,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -338,14 +395,20 @@ def begin_or_replay_deletion(
         "path": path.strip(),
         "request_body_sha256": command["request_body_sha256"],
         "inventory_sha256": seal["inventory_sha256"],
-        "branch_ids": list(ACCOUNT_DELETION_BRANCH_IDS),
-        "branch_contracts": seal["branch_contracts"],
     }
     if any(persisted.get(key) != value for key, value in immutable.items()):
         raise account_deletion_repo.AccountDeletionConflict("deletion replay conflict")
+    if persisted.get("status") == "complete":
+        return terminal_deletion_receipt(persisted)
+    active_immutables = {
+        "branch_ids": list(ACCOUNT_DELETION_BRANCH_IDS),
+        "branch_contracts": seal["branch_contracts"],
+    }
+    if any(persisted.get(key) != value for key, value in active_immutables.items()):
+        raise account_deletion_repo.AccountDeletionConflict("deletion replay conflict")
     return DeletionReceipt(
         command_id=str(persisted["command_id"]),
-        status=("deleted" if persisted.get("status") == "complete" else "deletion_pending"),
+        status="deletion_pending",
         accepted_at=str(persisted["accepted_at"]),
     )
 

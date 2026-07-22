@@ -154,6 +154,7 @@ class AccountDeletionReceiptResponse(BaseModel):
     commandId: str
     status: str
     acceptedAt: str
+    completedAt: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -935,7 +936,12 @@ async def me(
     return _build_user_out(profile)
 
 
-@router.delete("/me", response_model=AccountDeletionReceiptResponse, status_code=202)
+@router.delete(
+    "/me",
+    response_model=AccountDeletionReceiptResponse,
+    response_model_exclude_none=True,
+    status_code=202,
+)
 @explicit_route_classification(
     "authenticated-global", "verified-subject account deletion command"
 )
@@ -944,11 +950,13 @@ async def delete_me(
     receipt: DeletionReceipt = Depends(get_deletion_command),
 ):
     """Fence first, return an opaque receipt, then continue outside the request."""
-    background_tasks.add_task(continue_deletion_command, receipt.command_id)
+    if not receipt.is_terminal:
+        background_tasks.add_task(continue_deletion_command, receipt.command_id)
     return AccountDeletionReceiptResponse(
         commandId=receipt.command_id,
         status=receipt.status,
         acceptedAt=receipt.accepted_at,
+        completedAt=receipt.completed_at,
     )
 
 
