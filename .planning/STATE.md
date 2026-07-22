@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-17-PLAN.md
-last_updated: "2026-07-22T10:24:07.253Z"
+stopped_at: Completed 475-26-PLAN.md
+last_updated: "2026-07-22T10:39:16.921Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 120
+  completed_plans: 121
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 14 of 45
+Plan: 15 of 45
 Status: Ready to execute
 Last activity: 2026-07-22 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-22T10:24:07.247Z
-**Stopped At:** Completed 475-17-PLAN.md
+**Last Date:** 2026-07-22T10:39:16.915Z
+**Stopped At:** Completed 475-26-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -227,6 +227,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P41 | 3 min | 1 tasks | 1 files |
 | Phase 475 P16 | 6 min | 1 tasks | 2 files |
 | Phase 475 P17 | 18 min | 1 tasks | 8 files |
+| Phase 475 P26 | 10 min | 1 tasks | 3 files |
 
 ## Decisions
 
@@ -468,3 +469,6 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: Plan 475-17: Every ordinary question writer now uses an exact observed owner/status/version CAS and increments version once.
 - [Phase 475]: Plan 475-17: Legacy questions initialize version explicitly before ordinary mutation; new questions start at version 1.
 - [Phase 475]: Plan 475-17: Strong reread reports APPLIED only for the exact N+1 requested state and otherwise returns stale, invalid-transition, or retryable without winner coordinates.
+- [Phase 475]: Delete both formal relationship directions and scrub the exact matching student profile projection in one deletion-generation-fenced transaction.
+- [Phase 475]: Treat row or profile condition loss as retryable dirty debt; only later strong discovery may supply replacement status/version coordinates.
+- [Phase 475]: Deduplicate both discovered directions per branch page so one successful pair transaction is not followed by a stale second mutation.
