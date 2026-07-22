@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-21-PLAN.md
-last_updated: "2026-07-22T14:41:56.959Z"
+stopped_at: Completed 475-32-PLAN.md
+last_updated: "2026-07-22T14:47:29.058Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 125
+  completed_plans: 126
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 19 of 45
+Plan: 20 of 45
 Status: Ready to execute
 Last activity: 2026-07-22 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-22T14:41:56.953Z
-**Stopped At:** Completed 475-21-PLAN.md
+**Last Date:** 2026-07-22T14:47:29.052Z
+**Stopped At:** Completed 475-32-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -232,6 +232,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P38 | 6 min | 1 tasks | 1 files |
 | Phase 475 P18 | 21 min | 1 tasks | 6 files |
 | Phase 475 P21 | 8 min | 1 tasks | 4 files |
+| Phase 475 P32 | 2 min | 1 tasks | 1 files |
 
 ## Decisions
 
@@ -485,3 +486,5 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: OCR completion advances command and question versions while processing continues; AI completion advances both and completes the command. — Each effect owns one exact conditional transition while the final AI effect owns command completion.
 - [Phase 475]: Takeover binds the authenticated teacher's exact PROFILE key and observed positive version while independently fencing the active account generation. — The same transaction must lose to profile edits or account deletion after authorization and before ownership commit.
 - [Phase 475]: Only canonical teacher plus active lifecycle satisfies the takeover profile condition; every conditional loss keeps the existing redacted retry response. — Aliases, other roles, lifecycle states, versions, and storage coordinates must neither authorize nor leak through the API.
+- [Phase 475]: DynamoDB user/profile and relationship reads remain object-valued until operation-specific runtime Protocol checks and explicit string-keyed Mapping narrowing establish safe use. — This preserves least-capability provider boundaries without trusting unvalidated provider values.
+- [Phase 475]: Plan 475-32 type closure changes only provider boundary typing; relationship fences, keys, conditions, lifecycle transitions, reconciliation classifications, and deletion scrub behavior remain unchanged. — The plan is a type-gate closure, not a relationship behavior change.
