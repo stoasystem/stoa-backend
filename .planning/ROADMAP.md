@@ -35,7 +35,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
 | 473 | Student Content Privacy And Practice Integrity | Complete — 40/40 plans, independently verified 2026-07-18 | Phase 472 |
 | 474 | 24/87 | In Progress|  |
-| 475 | 19/45 | In Progress|  |
+| 475 | 20/45 | In Progress|  |
 | 476 | Billing Idempotency And Paid Access Recovery | One checkout/entitlement outcome under failures and retries | Phase 474; can overlap 475 |
 | 477 | Web Foundation And Contract Convergence | Authoritative Web auth/API/config behavior without hidden demo truth | Phases 472, 473, and 474 |
 | 478 | Complete Web Role Journeys And Route Closure | Functional student, parent, teacher, admin/operator, organization, and public browser routes | Phases 475, 476, and 477 |
@@ -541,7 +541,7 @@ Plans:
 
 **Audit findings:** DATA-001, BUG-002, DATA-003, BUG-006, BUG-004.
 
-**Plans:** 19/45 plans executed
+**Plans:** 20/45 plans executed
 
 Plans:
 
