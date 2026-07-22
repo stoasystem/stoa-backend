@@ -3,22 +3,30 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import json
 from typing import Any
 
 from stoa.models.practice import (
     CurriculumLessonPreview,
     DirectionalHintTemplateId,
     HintNonDerivabilityDecision,
+    LegacyAnswerState,
     PracticeAttemptResult,
     PracticeChallengePreview,
     PracticeExercisePreview,
     PracticeLessonPreview,
+    PracticeMistake,
     PrivilegedPracticeAnswer,
 )
 from stoa.db.repositories import practice_repo
 
 
 DIRECTIONAL_HINT_POLICY_VERSION = "practice-directional-hints-v1"
+PRACTICE_SUBMITTED_ANSWER_SCHEMA_VERSION = 1
+PRACTICE_SUBMITTED_ANSWER_MAX_BYTES = 4096
+PRACTICE_SUBMITTED_ANSWER_MAX_DEPTH = 1
+PRACTICE_SUBMITTED_ANSWER_MAX_ITEMS = 50
+LEGACY_ANSWER_UNKNOWN_MESSAGE = "当时提交的答案未保存"
 DIRECTIONAL_HINT_TEMPLATES: dict[str, str] = {
     DirectionalHintTemplateId.REVIEW_PROBLEM_STRUCTURE.value: (
         "Identify what the problem gives you and which operation it asks for."
@@ -30,6 +38,69 @@ DIRECTIONAL_HINT_TEMPLATES: dict[str, str] = {
         "Represent the given relationships before you calculate."
     ),
 }
+
+
+def normalize_submitted_answer(value: object) -> str | list[str]:
+    """Return a bounded JSON-safe answer without changing its visible bytes."""
+    if isinstance(value, str):
+        normalized: str | list[str] = value
+        item_count = 1
+    elif isinstance(value, list):
+        if PRACTICE_SUBMITTED_ANSWER_MAX_DEPTH < 1 or any(
+            isinstance(child, list) for child in value
+        ):
+            raise ValueError("submitted answer exceeds the depth bound")
+        if any(not isinstance(child, str) for child in value):
+            raise ValueError("submitted answer uses an unsupported value type")
+        normalized = list(value)
+        item_count = len(normalized)
+    else:
+        raise ValueError("submitted answer uses an unsupported value type")
+    if item_count > PRACTICE_SUBMITTED_ANSWER_MAX_ITEMS:
+        raise ValueError("submitted answer exceeds the item bound")
+    encoded = json.dumps(
+        normalized,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    if len(encoded) > PRACTICE_SUBMITTED_ANSWER_MAX_BYTES:
+        raise ValueError("submitted answer exceeds the serialized byte bound")
+    return normalized
+
+
+def build_mistake_projection(attempt: Mapping[str, Any]) -> PracticeMistake:
+    """Project a recorded wrong answer or an explicit legacy unknown."""
+    challenge_id = attempt.get("challenge_id")
+    if not isinstance(challenge_id, str) or not challenge_id.strip():
+        raise ValueError("mistake row has no challenge identity")
+    raw_id = attempt.get("SK") or attempt.get("attempt_id") or challenge_id
+    if not isinstance(raw_id, str) or not raw_id.strip():
+        raise ValueError("mistake row has no stable identity")
+
+    answer_key = next(
+        (key for key in ("submitted_answer", "student_answer") if key in attempt),
+        None,
+    )
+    if answer_key is None:
+        answer = None
+        answer_state = LegacyAnswerState.UNKNOWN_LEGACY
+        message = LEGACY_ANSWER_UNKNOWN_MESSAGE
+    else:
+        answer = normalize_submitted_answer(attempt[answer_key])
+        answer_state = LegacyAnswerState.RECORDED
+        message = None
+
+    return PracticeMistake(
+        id=raw_id,
+        challengeId=challenge_id,
+        subjectId=str(attempt.get("subject_id") or ""),
+        topic=str(attempt.get("topic_id") or ""),
+        prompt=str(attempt.get("prompt") or ""),
+        yourAnswer=answer,
+        answerState=answer_state,
+        message=message,
+        createdAt=str(attempt.get("created_at") or ""),
+    )
 
 
 def _dump(model: Any) -> dict[str, Any]:

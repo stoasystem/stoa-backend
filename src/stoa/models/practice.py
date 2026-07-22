@@ -102,7 +102,11 @@ class CurriculumExerciseListPreview(_PracticeContract):
 
 
 class PracticeAnswerSubmission(_PracticeContract):
-    answer: str | list[str]
+    # The route treats this as untrusted input and narrows it through the bounded
+    # submitted-answer normalizer before comparison or persistence.  Keeping the
+    # input object-valued also lets the route return one redacted error contract
+    # instead of echoing unsupported values through validation diagnostics.
+    answer: object
 
 
 class PracticeHintResponse(_PracticeContract):
@@ -161,6 +165,31 @@ class PracticeAttemptResult(_PracticeContract):
         if not attempt_id:
             raise ValueError("a recorded attempt receipt is required before revealing answers")
         return cls(attemptId=attempt_id, **result_fields)
+
+
+class LegacyAnswerState(str, Enum):
+    """Whether mistake review can faithfully reproduce the submitted answer."""
+
+    RECORDED = "recorded"
+    UNKNOWN_LEGACY = "unknown_legacy"
+
+
+class PracticeMistake(_PracticeContract):
+    """One wrong-attempt projection with explicit historical-answer state."""
+
+    id: NonEmptyText
+    challenge_id: NonEmptyText = Field(alias="challengeId")
+    subject_id: str = Field(default="", alias="subjectId")
+    topic: str = ""
+    prompt: str = ""
+    your_answer: str | list[str] | None = Field(alias="yourAnswer")
+    answer_state: LegacyAnswerState = Field(alias="answerState")
+    message: str | None = None
+    created_at: str = Field(default="", alias="createdAt")
+
+
+class PracticeMistakesResponse(_PracticeContract):
+    items: list[PracticeMistake]
 
 
 class PrivilegedPracticeAnswer(_PracticeContract):

@@ -31,6 +31,7 @@ from stoa.security.identity import Actor
 from stoa.models.practice import (
     PracticeAnswerSubmission,
     PracticeAttemptResult,
+    PracticeMistakesResponse,
     PracticeHintResponse,
     PrivilegedPracticeAnswer,
 )
@@ -779,7 +780,19 @@ async def submit_answer(
 ):
     challenge = dict(authorized_challenge.value)
 
-    student_answer = body.answer
+    try:
+        student_answer = practice_projection_service.normalize_submitted_answer(
+            body.answer
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "practice_answer_invalid",
+                "message": "Your answer is not supported or is too large.",
+                "correlationId": correlation_id,
+            },
+        ) from error
     correct_answer = challenge.get("correct_answer", "")
 
     # Normalise for comparison
@@ -877,26 +890,19 @@ async def get_attempt_result(
         raise HTTPException(status_code=404, detail="Practice attempt not found")
 
 
-@router.get("/mistakes")
+@router.get("/mistakes", response_model=PracticeMistakesResponse)
 async def get_mistakes(actor: Actor = Depends(_practice_read)):
     user_id = actor.user_id
     attempts = practice_repo.get_mistakes(user_id)
     mistakes = []
     for attempt in attempts[-20:]:  # last 20 wrong answers
         try:
-            practice_projection_service.build_attempt_result(attempt)
+            mistakes.append(
+                practice_projection_service.build_mistake_projection(attempt)
+            )
         except (KeyError, TypeError, ValueError):
             continue
-        mistakes.append({
-            "id": attempt.get("SK", attempt["challenge_id"]),
-            "challengeId": attempt["challenge_id"],
-            "subjectId": attempt.get("subject_id", ""),
-            "topic": attempt.get("topic_id", ""),
-            "prompt": attempt.get("prompt", ""),
-            "yourAnswer": attempt.get("student_answer", ""),
-            "createdAt": attempt.get("created_at", ""),
-        })
-    return {"items": mistakes}
+    return PracticeMistakesResponse(items=mistakes)
 
 
 @router.post("/hints", response_model=PracticeHintResponse)

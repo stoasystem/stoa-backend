@@ -499,6 +499,12 @@ def put_attempt(
     account_fence_generation: int | None = None,
 ) -> dict:
     """Immutably record every answer and return its durable owner receipt."""
+    from stoa.services.practice_projection_service import (
+        PRACTICE_SUBMITTED_ANSWER_SCHEMA_VERSION,
+        normalize_submitted_answer,
+    )
+
+    normalized_answer = normalize_submitted_answer(submitted_answer)
     table = get_table()
     generation = _write_generation(student_id, account_fence_generation, table)
     attempt_key = attempt_id or str(uuid.uuid4())
@@ -513,8 +519,9 @@ def put_attempt(
         "topic_id": topic_id,
         "lesson_id": lesson_id,
         "unit_id": unit_id,
-        "student_answer": submitted_answer,
-        "submitted_answer": submitted_answer,
+        "student_answer": normalized_answer,
+        "submitted_answer": normalized_answer,
+        "submitted_answer_schema_version": PRACTICE_SUBMITTED_ANSWER_SCHEMA_VERSION,
         "correct": bool(correct),
         "created_at": created_at or datetime.now(timezone.utc).isoformat(),
     }
