@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
+import hashlib
+import json
 import re
 from typing import Any
 
@@ -71,8 +73,55 @@ class ParentBindingResult:
     profile: UserItem | None = None
 
 
+class ParentBindingRepairClassification(StrEnum):
+    """Closed preview classifications for historical relationship repair."""
+
+    CONSISTENT = "consistent"
+    REPAIRABLE_MISSING_FORWARD = "repairable_missing_forward"
+    REPAIRABLE_MISSING_REVERSE = "repairable_missing_reverse"
+    REPAIRABLE_PROFILE_PROJECTION = "repairable_profile_projection"
+    CONFLICT = "conflict"
+    SKIPPED_INVALID = "skipped_invalid"
+
+
+class ParentBindingRepairApplyDisposition(StrEnum):
+    """Closed outcomes for one preview-bound repair attempt."""
+
+    REPAIRED = "repaired"
+    ALREADY_CONSISTENT = "already_consistent"
+    SKIPPED_CHANGED = "skipped_changed"
+    CONFLICT = "conflict"
+    SKIPPED_INVALID = "skipped_invalid"
+    RETRYABLE = "retryable"
+
+
+@dataclass(frozen=True, slots=True)
+class ParentBindingRepairObservation:
+    coordinate: str
+    version: int | None
+    digest: str
+
+
+@dataclass(frozen=True, slots=True)
+class ParentBindingRepairPreview:
+    pair_id: str
+    preview_id: str
+    classification: ParentBindingRepairClassification
+    proposed_action: str | None
+    relationship_version: int | None
+    observations: tuple[ParentBindingRepairObservation, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ParentBindingRepairApplyResult:
+    disposition: ParentBindingRepairApplyDisposition
+    preview: ParentBindingRepairPreview
+    mutated: bool = False
+
+
 @dataclass(frozen=True, slots=True)
 class _ParentBindingSnapshot:
+    parent_profile: UserItem | None
     profile: UserItem | None
     forward: UserItem | None
     reverse: UserItem | None
@@ -580,15 +629,330 @@ def put_parent_student_binding(
     return result.binding
 
 
+def preview_parent_binding_repair(
+    *,
+    parent_id: str,
+    student_id: str,
+    relationship: str = "child",
+) -> ParentBindingRepairPreview:
+    """Strongly inspect one explicit pair without mutating relationship state."""
+    parent_id = _required_text(parent_id, "parent_id")
+    student_id = _required_text(student_id, "student_id")
+    relationship = _required_text(relationship, "relationship")
+    snapshot = _parent_binding_snapshot(parent_id, student_id)
+    classification, proposed_action, relationship_version = (
+        _classify_parent_binding_repair(
+            snapshot,
+            parent_id=parent_id,
+            student_id=student_id,
+            relationship=relationship,
+        )
+    )
+    observations = _parent_binding_repair_observations(snapshot)
+    pair_id = _parent_binding_repair_digest(
+        "pair", parent_id, student_id, relationship
+    )
+    preview_id = _parent_binding_repair_digest(
+        "preview",
+        parent_id,
+        student_id,
+        relationship,
+        classification.value,
+        proposed_action or "",
+        str(relationship_version or ""),
+        *(f"{item.coordinate}:{item.version}:{item.digest}" for item in observations),
+    )
+    return ParentBindingRepairPreview(
+        pair_id=pair_id,
+        preview_id=preview_id,
+        classification=classification,
+        proposed_action=proposed_action,
+        relationship_version=relationship_version,
+        observations=observations,
+    )
+
+
+def apply_parent_binding_repair(
+    *,
+    parent_id: str,
+    student_id: str,
+    relationship: str,
+    preview_id: str,
+    actor: str,
+    created_at: str,
+) -> ParentBindingRepairApplyResult:
+    """Apply one unchanged, unambiguous preview through the atomic writer."""
+    preview_id = _required_text(preview_id, "preview_id")
+    current = preview_parent_binding_repair(
+        parent_id=parent_id,
+        student_id=student_id,
+        relationship=relationship,
+    )
+    if current.classification is ParentBindingRepairClassification.CONFLICT:
+        return ParentBindingRepairApplyResult(
+            ParentBindingRepairApplyDisposition.CONFLICT, current
+        )
+    if current.classification is ParentBindingRepairClassification.CONSISTENT:
+        return ParentBindingRepairApplyResult(
+            ParentBindingRepairApplyDisposition.ALREADY_CONSISTENT, current
+        )
+    if current.classification is ParentBindingRepairClassification.SKIPPED_INVALID:
+        return ParentBindingRepairApplyResult(
+            ParentBindingRepairApplyDisposition.SKIPPED_INVALID, current
+        )
+    if current.preview_id != preview_id:
+        return ParentBindingRepairApplyResult(
+            ParentBindingRepairApplyDisposition.SKIPPED_CHANGED, current
+        )
+    if current.relationship_version is None:
+        return ParentBindingRepairApplyResult(
+            ParentBindingRepairApplyDisposition.SKIPPED_INVALID, current
+        )
+
+    result = put_parent_student_relationship(
+        parent_id=parent_id,
+        student_id=student_id,
+        relationship=relationship,
+        status="active",
+        source="admin_reconciliation",
+        actor=_required_text(actor, "actor"),
+        created_at=_required_text(created_at, "created_at"),
+        version=current.relationship_version,
+    )
+    refreshed = preview_parent_binding_repair(
+        parent_id=parent_id,
+        student_id=student_id,
+        relationship=relationship,
+    )
+    if refreshed.classification is ParentBindingRepairClassification.CONSISTENT:
+        disposition = (
+            ParentBindingRepairApplyDisposition.REPAIRED
+            if result.disposition is ParentBindingDisposition.CREATED
+            else ParentBindingRepairApplyDisposition.ALREADY_CONSISTENT
+        )
+        return ParentBindingRepairApplyResult(
+            disposition,
+            refreshed,
+            mutated=result.disposition is ParentBindingDisposition.CREATED,
+        )
+    if refreshed.classification is ParentBindingRepairClassification.CONFLICT:
+        return ParentBindingRepairApplyResult(
+            ParentBindingRepairApplyDisposition.CONFLICT, refreshed
+        )
+    if refreshed.preview_id != current.preview_id:
+        return ParentBindingRepairApplyResult(
+            ParentBindingRepairApplyDisposition.SKIPPED_CHANGED, refreshed
+        )
+    return ParentBindingRepairApplyResult(
+        ParentBindingRepairApplyDisposition.RETRYABLE, refreshed
+    )
+
+
 def _parent_binding_snapshot(
     parent_id: str, student_id: str
 ) -> _ParentBindingSnapshot:
     return _ParentBindingSnapshot(
+        parent_profile=get_user(parent_id),
         profile=get_user(student_id),
         forward=get_parent_student_binding(parent_id, student_id),
         reverse=get_student_parent_binding(student_id, parent_id),
         reverse_rows=tuple(list_student_parent_bindings(student_id)),
     )
+
+
+def _classify_parent_binding_repair(
+    snapshot: _ParentBindingSnapshot,
+    *,
+    parent_id: str,
+    student_id: str,
+    relationship: str,
+) -> tuple[ParentBindingRepairClassification, str | None, int | None]:
+    parent = snapshot.parent_profile
+    student = snapshot.profile
+    if (
+        parent is None
+        or parent.get("user_id") != parent_id
+        or parent.get("role") != "parent"
+        or parent.get("account_status") != "active"
+        or student is None
+        or student.get("user_id") != student_id
+        or student.get("role") != "student"
+        or student.get("account_status") != "active"
+    ):
+        return ParentBindingRepairClassification.SKIPPED_INVALID, None, None
+
+    profile_parent = student.get("parent_id")
+    profile_relationship = student.get("relationship")
+    if profile_parent not in (None, "", parent_id):
+        return ParentBindingRepairClassification.CONFLICT, None, None
+    if profile_relationship not in (None, "", relationship):
+        return ParentBindingRepairClassification.CONFLICT, None, None
+
+    rows = tuple(
+        row
+        for row in (snapshot.forward, snapshot.reverse, *snapshot.reverse_rows)
+        if row is not None
+    )
+    for row in rows:
+        if row.get("parent_id") != parent_id or row.get("student_id") != student_id:
+            return ParentBindingRepairClassification.CONFLICT, None, None
+        if row.get("relationship") != relationship:
+            return ParentBindingRepairClassification.CONFLICT, None, None
+        if row.get("status") != "active":
+            return ParentBindingRepairClassification.SKIPPED_INVALID, None, None
+        try:
+            _required_profile_version(row.get("version"))
+        except ValueError:
+            return ParentBindingRepairClassification.SKIPPED_INVALID, None, None
+
+    # The point read and the bounded reverse query are independent strong reads.
+    # If the same exact row changed between them, do not derive an apply action.
+    queried_exact = next(
+        (
+            row
+            for row in snapshot.reverse_rows
+            if row.get("PK") == f"USER#{student_id}"
+            and row.get("SK") == f"PARENT#{parent_id}"
+        ),
+        None,
+    )
+    if snapshot.reverse is not None and (
+        queried_exact is None
+        or _parent_binding_row_digest(queried_exact)
+        != _parent_binding_row_digest(snapshot.reverse)
+    ):
+        return ParentBindingRepairClassification.SKIPPED_INVALID, None, None
+    if snapshot.reverse is None and queried_exact is not None:
+        return ParentBindingRepairClassification.SKIPPED_INVALID, None, None
+
+    forward_version = (
+        _required_profile_version(snapshot.forward.get("version"))
+        if snapshot.forward is not None
+        else None
+    )
+    reverse_version = (
+        _required_profile_version(snapshot.reverse.get("version"))
+        if snapshot.reverse is not None
+        else None
+    )
+    if (
+        forward_version is not None
+        and reverse_version is not None
+        and forward_version != reverse_version
+    ):
+        return ParentBindingRepairClassification.CONFLICT, None, None
+    relationship_version = forward_version or reverse_version
+    profile_matches = (
+        profile_parent == parent_id
+        and profile_relationship == relationship
+        and student.get("parent_binding_status") == "active"
+    )
+    if snapshot.forward is not None and snapshot.reverse is not None:
+        if profile_matches:
+            return (
+                ParentBindingRepairClassification.CONSISTENT,
+                None,
+                relationship_version,
+            )
+        if (
+            profile_parent in (None, "", parent_id)
+            and profile_relationship in (None, "", relationship)
+            and student.get("parent_binding_status") in (None, "", "active")
+        ):
+            return (
+                ParentBindingRepairClassification.REPAIRABLE_PROFILE_PROJECTION,
+                "repair_profile_projection",
+                relationship_version,
+            )
+        return ParentBindingRepairClassification.SKIPPED_INVALID, None, relationship_version
+    if snapshot.forward is None and snapshot.reverse is not None and profile_matches:
+        return (
+            ParentBindingRepairClassification.REPAIRABLE_MISSING_FORWARD,
+            "create_missing_forward",
+            relationship_version,
+        )
+    if snapshot.forward is not None and snapshot.reverse is None and profile_matches:
+        return (
+            ParentBindingRepairClassification.REPAIRABLE_MISSING_REVERSE,
+            "create_missing_reverse",
+            relationship_version,
+        )
+    return ParentBindingRepairClassification.SKIPPED_INVALID, None, relationship_version
+
+
+def _parent_binding_repair_observations(
+    snapshot: _ParentBindingSnapshot,
+) -> tuple[ParentBindingRepairObservation, ...]:
+    rows = [
+        ("parent_profile", snapshot.parent_profile),
+        ("student_profile", snapshot.profile),
+        ("forward", snapshot.forward),
+        ("reverse_target", snapshot.reverse),
+    ]
+    for index, row in enumerate(
+        sorted(
+            snapshot.reverse_rows,
+            key=lambda item: (str(item.get("PK") or ""), str(item.get("SK") or "")),
+        )
+    ):
+        rows.append((f"reverse_query_{index}", row))
+    return tuple(
+        ParentBindingRepairObservation(
+            coordinate=coordinate,
+            version=_repair_observed_version(row),
+            digest=_parent_binding_row_digest(row),
+        )
+        for coordinate, row in rows
+    )
+
+
+def _repair_observed_version(row: Mapping[str, object] | None) -> int | None:
+    if row is None or row.get("version") is None:
+        return None
+    try:
+        return _required_profile_version(row.get("version"))
+    except ValueError:
+        return None
+
+
+def _parent_binding_row_digest(row: Mapping[str, object] | None) -> str:
+    canonical = json.dumps(
+        _parent_binding_digest_value(row),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(
+        b"stoa-parent-binding-repair-row-v1\x00" + canonical.encode("utf-8")
+    ).hexdigest()
+
+
+def _parent_binding_digest_value(value: object) -> object:
+    if value is None or isinstance(value, (str, int, bool)):
+        return value
+    if isinstance(value, Decimal):
+        return int(value) if value == value.to_integral_value() else str(value)
+    if isinstance(value, Mapping):
+        return {
+            str(key): _parent_binding_digest_value(member)
+            for key, member in sorted(value.items(), key=lambda item: str(item[0]))
+        }
+    if isinstance(value, (list, tuple)):
+        return [_parent_binding_digest_value(member) for member in value]
+    if isinstance(value, (set, frozenset)):
+        members = [_parent_binding_digest_value(member) for member in value]
+        return sorted(members, key=lambda member: json.dumps(member, sort_keys=True))
+    if isinstance(value, bytes):
+        return {"bytes_sha256": hashlib.sha256(value).hexdigest()}
+    return {"unsupported_type": type(value).__name__}
+
+
+def _parent_binding_repair_digest(kind: str, *parts: str) -> str:
+    material = b"stoa-parent-binding-repair-v1\x00" + kind.encode("utf-8") + b"\x00"
+    for part in parts:
+        encoded = part.encode("utf-8")
+        material += len(encoded).to_bytes(8, "big") + encoded
+    return hashlib.sha256(material).hexdigest()
 
 
 def _matching_parent_relationship(

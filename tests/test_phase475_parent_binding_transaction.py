@@ -252,6 +252,6 @@ def test_registration_and_admin_repair_have_one_logical_relationship_writer() ->
     assert "put_parent_student_relationship" in auth_source
     assert "put_parent_student_binding(" not in auth_source
     assert "update_student_parent_link(" not in auth_source
-    assert "put_parent_student_relationship" in admin_source
+    assert "apply_parent_binding_repair" in admin_source
     assert "put_parent_student_binding(" not in admin_source
     assert "update_student_parent_link(" not in admin_source

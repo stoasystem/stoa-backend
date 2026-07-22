@@ -72,7 +72,7 @@ CURRICULUM_VERSION_TARGET = AdminTargetProvider(
 )
 PARENT_BINDING_TARGET = AdminTargetProvider(
     "scalar", "body", ("parent_id", "student_id"), ("parent_id", "student_id"),
-    reference_only=("relationship", "reason"),
+    reference_only=("relationship", "reason", "preview_id"),
 )
 BULK_REPORT_TARGETS = AdminTargetProvider(
     "collection", "request",
@@ -550,11 +550,37 @@ class ParentStudentBindingListResponse(BaseModel):
     count: int
 
 
-class ParentStudentBindingRepairRequest(BaseModel):
+class ParentBindingRepairPreviewRequest(BaseModel):
     parent_id: str = Field(..., min_length=1, max_length=200)
     student_id: str = Field(..., min_length=1, max_length=200)
     relationship: str = Field(default="child", min_length=1, max_length=50)
     reason: str = Field(..., min_length=1, max_length=500)
+
+
+class ParentStudentBindingRepairRequest(ParentBindingRepairPreviewRequest):
+    preview_id: str = Field(..., min_length=64, max_length=64)
+
+
+class ParentBindingRepairObservation(BaseModel):
+    coordinate: str
+    version: int | None = None
+    digest: str
+
+
+class ParentBindingRepairPreview(BaseModel):
+    pair_id: str
+    preview_id: str
+    classification: user_repo.ParentBindingRepairClassification
+    proposed_action: str | None = None
+    observations: list[ParentBindingRepairObservation]
+
+
+class ParentBindingRepairApplyResponse(BaseModel):
+    disposition: user_repo.ParentBindingRepairApplyDisposition
+    pair_id: str
+    preview_id: str
+    classification: user_repo.ParentBindingRepairClassification
+    mutated: bool
 
 
 class AccountVerificationSupportResponse(BaseModel):
@@ -2085,6 +2111,37 @@ def _binding_response(item: dict[str, Any]) -> ParentStudentBindingResponse:
     )
 
 
+def _binding_repair_preview_response(
+    preview: user_repo.ParentBindingRepairPreview,
+) -> ParentBindingRepairPreview:
+    return ParentBindingRepairPreview(
+        pair_id=preview.pair_id,
+        preview_id=preview.preview_id,
+        classification=preview.classification,
+        proposed_action=preview.proposed_action,
+        observations=[
+            ParentBindingRepairObservation(
+                coordinate=item.coordinate,
+                version=item.version,
+                digest=item.digest,
+            )
+            for item in preview.observations
+        ],
+    )
+
+
+def _binding_repair_apply_response(
+    result: user_repo.ParentBindingRepairApplyResult,
+) -> ParentBindingRepairApplyResponse:
+    return ParentBindingRepairApplyResponse(
+        disposition=result.disposition,
+        pair_id=result.preview.pair_id,
+        preview_id=result.preview.preview_id,
+        classification=result.preview.classification,
+        mutated=result.mutated,
+    )
+
+
 @router.get("/parent-bindings", response_model=ParentStudentBindingListResponse)
 async def list_parent_bindings(
     parent_id: str = Query(..., min_length=1),
@@ -2098,51 +2155,53 @@ async def list_parent_bindings(
     return ParentStudentBindingListResponse(items=items, count=len(items))
 
 
-@router.post("/parent-bindings/repair", response_model=ParentStudentBindingResponse)
+@router.post(
+    "/parent-bindings/repair/preview", response_model=ParentBindingRepairPreview
+)
+@admin_target_provider(PARENT_BINDING_TARGET)
+async def preview_parent_binding_repair(
+    body: ParentBindingRepairPreviewRequest,
+    user: dict = Depends(require_role("admin")),
+):
+    """Classify one explicit historical relationship pair without mutation."""
+    del user  # authorization and durable target audit complete before this body
+    preview = user_repo.preview_parent_binding_repair(
+        parent_id=body.parent_id,
+        student_id=body.student_id,
+        relationship=body.relationship,
+    )
+    return _binding_repair_preview_response(preview)
+
+
+@router.post("/parent-bindings/repair", response_model=ParentBindingRepairApplyResponse)
 @admin_target_provider(PARENT_BINDING_TARGET)
 async def repair_parent_binding(
     body: ParentStudentBindingRepairRequest,
     user: dict = Depends(require_role("admin")),
 ):
-    """Repair a parent/student binding and mirror the legacy student parent_id."""
-    parent = user_repo.get_user(body.parent_id)
-    if not parent or parent.get("role") != "parent":
-        raise HTTPException(status_code=404, detail="Parent profile not found")
-    student = user_repo.get_user(body.student_id)
-    if not student or student.get("role") != "student":
-        raise HTTPException(status_code=404, detail="Student profile not found")
+    """Apply one unchanged repair preview through the atomic relationship writer."""
     now = report_audit_retention_service.now_iso()
-    result = user_repo.put_parent_student_relationship(
+    result = user_repo.apply_parent_binding_repair(
         parent_id=body.parent_id,
         student_id=body.student_id,
         relationship=body.relationship,
-        status="active",
-        source="admin_repair",
+        preview_id=body.preview_id,
         actor=str(user.get("sub") or user.get("username") or "admin"),
         created_at=now,
     )
-    if result.disposition is user_repo.ParentBindingDisposition.CONFLICT:
+    response = _binding_repair_apply_response(result)
+    status_code = {
+        user_repo.ParentBindingRepairApplyDisposition.SKIPPED_CHANGED: 409,
+        user_repo.ParentBindingRepairApplyDisposition.CONFLICT: 409,
+        user_repo.ParentBindingRepairApplyDisposition.SKIPPED_INVALID: 422,
+        user_repo.ParentBindingRepairApplyDisposition.RETRYABLE: 503,
+    }.get(result.disposition)
+    if status_code is not None:
         return JSONResponse(
-            status_code=409,
-            content={
-                "code": "parent_binding_conflict",
-                "message": (
-                    "The relationship conflicts with current records and requires "
-                    "administrator review. No relationship was changed."
-                ),
-            },
+            status_code=status_code,
+            content=response.model_dump(mode="json"),
         )
-    if result.disposition is user_repo.ParentBindingDisposition.RETRYABLE:
-        return JSONResponse(
-            status_code=503,
-            content={
-                "code": "parent_binding_temporarily_unavailable",
-                "message": "The relationship was not changed. Try again later.",
-            },
-        )
-    if result.binding is None:
-        raise RuntimeError("parent relationship result omitted binding")
-    return _binding_response(result.binding)
+    return response
 
 
 @router.get("/reports/ops", response_model=ReportOperationListResponse)

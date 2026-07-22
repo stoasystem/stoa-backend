@@ -77,7 +77,7 @@ def test_registered_admin_router_has_exact_executable_policy_and_controls(method
 
 def test_registered_admin_router_table_is_complete_across_main_registrations():
     keys = [(method, path) for method, path, _route in REGISTERED_ADMIN_ROUTES]
-    assert len(keys) == len(set(keys)) == 109
+    assert len(keys) == len(set(keys)) == 110
     assert ("GET", "/admin/notifications") in keys
     assert ("GET", "/admin/notifications/delivery-status") in keys
     assert all(classify_admin_route(method, path) for method, path in keys)
@@ -89,6 +89,7 @@ def test_identity_user_usage_subscription_binding_and_curriculum_capabilities_ar
         ("GET", "/admin/users"): "student_support_lookup",
         ("GET", "/admin/usage/students/{student_id}/events"): "usage_event_inspector",
         ("POST", "/admin/subscriptions/billing/{parent_id}/refunds"): "billing_refund_executor",
+        ("POST", "/admin/parent-bindings/repair/preview"): "parent_binding_repairer",
         ("POST", "/admin/parent-bindings/repair"): "parent_binding_repairer",
         ("POST", "/admin/curriculum/lessons/{public_lesson_id}/publish"): "curriculum_publisher",
     }
@@ -144,16 +145,22 @@ def test_report_target_scope_denies_before_lookup_or_mutation(monkeypatch):
 
 def test_parent_binding_body_target_exact_scope_allows_before_mutation(monkeypatch):
     calls = []
-    monkeypatch.setattr(user_repo := admin.user_repo, "get_user", lambda value: {
-        "user_id": value, "role": "parent" if value.startswith("parent") else "student"
-    })
+    user_repo = admin.user_repo
     monkeypatch.setattr(
         user_repo,
-        "put_parent_student_relationship",
+        "apply_parent_binding_repair",
         lambda **values: calls.append(("relationship", values))
-        or user_repo.ParentBindingResult(
-            user_repo.ParentBindingDisposition.CREATED,
-            binding=values,
+        or user_repo.ParentBindingRepairApplyResult(
+            user_repo.ParentBindingRepairApplyDisposition.REPAIRED,
+            user_repo.ParentBindingRepairPreview(
+                pair_id="a" * 64,
+                preview_id="b" * 64,
+                classification=user_repo.ParentBindingRepairClassification.CONSISTENT,
+                proposed_action=None,
+                relationship_version=1,
+                observations=(),
+            ),
+            mutated=True,
         ),
     )
     app = FastAPI()
@@ -161,7 +168,8 @@ def test_parent_binding_body_target_exact_scope_allows_before_mutation(monkeypat
     app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
     app.dependency_overrides[get_actor] = lambda: _actor("parent_binding_repairer", scope="student:student-1")
     response = TestClient(app).post("/admin/parent-bindings/repair", json={
-        "parent_id": "parent-1", "student_id": "student-1", "relationship": "child", "reason": "repair"
+        "parent_id": "parent-1", "student_id": "student-1", "relationship": "child",
+        "reason": "repair", "preview_id": "c" * 64,
     })
     assert response.status_code == 200
     assert [kind for kind, _ in calls] == ["relationship"]
@@ -169,19 +177,22 @@ def test_parent_binding_body_target_exact_scope_allows_before_mutation(monkeypat
 
 def test_parent_binding_conflict_is_structured_and_does_not_retry_mutation(monkeypatch):
     calls = []
-    monkeypatch.setattr(
-        user_repo := admin.user_repo,
-        "get_user",
-        lambda value: {
-            "user_id": value,
-            "role": "parent" if value.startswith("parent") else "student",
-        },
-    )
+    user_repo = admin.user_repo
     monkeypatch.setattr(
         user_repo,
-        "put_parent_student_relationship",
+        "apply_parent_binding_repair",
         lambda **values: calls.append(values)
-        or user_repo.ParentBindingResult(user_repo.ParentBindingDisposition.CONFLICT),
+        or user_repo.ParentBindingRepairApplyResult(
+            user_repo.ParentBindingRepairApplyDisposition.CONFLICT,
+            user_repo.ParentBindingRepairPreview(
+                pair_id="a" * 64,
+                preview_id="b" * 64,
+                classification=user_repo.ParentBindingRepairClassification.CONFLICT,
+                proposed_action=None,
+                relationship_version=None,
+                observations=(),
+            ),
+        ),
     )
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
@@ -197,18 +208,103 @@ def test_parent_binding_conflict_is_structured_and_does_not_retry_mutation(monke
             "student_id": "student-1",
             "relationship": "child",
             "reason": "repair",
+            "preview_id": "c" * 64,
         },
     )
 
     assert response.status_code == 409
     assert response.json() == {
-        "code": "parent_binding_conflict",
-        "message": (
-            "The relationship conflicts with current records and requires "
-            "administrator review. No relationship was changed."
-        ),
+        "disposition": "conflict",
+        "pair_id": "a" * 64,
+        "preview_id": "b" * 64,
+        "classification": "conflict",
+        "mutated": False,
     }
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize("path", ["/admin/parent-bindings/repair/preview", "/admin/parent-bindings/repair"])
+def test_parent_binding_wrong_capability_denies_before_any_relationship_read_or_write(
+    monkeypatch, path
+):
+    calls = []
+    monkeypatch.setattr(
+        admin.user_repo,
+        "preview_parent_binding_repair",
+        lambda **values: calls.append(("preview", values)),
+    )
+    monkeypatch.setattr(
+        admin.user_repo,
+        "apply_parent_binding_repair",
+        lambda **values: calls.append(("apply", values)),
+    )
+    sink = MemoryAuthorizationAuditSink()
+    app = FastAPI()
+    app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_authorization_audit_sink] = lambda: sink
+    app.dependency_overrides[get_actor] = lambda: _actor("student_support_lookup")
+    payload = {
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "relationship": "child",
+        "reason": "repair",
+    }
+    if not path.endswith("preview"):
+        payload["preview_id"] = "c" * 64
+
+    response = TestClient(app).post(path, json=payload)
+
+    assert response.status_code == 403
+    assert calls == []
+    assert len(sink.events) == 1
+
+
+def test_parent_binding_preview_and_apply_persist_target_audit_before_effect(monkeypatch):
+    effects = []
+    preview = admin.user_repo.ParentBindingRepairPreview(
+        pair_id="a" * 64,
+        preview_id="b" * 64,
+        classification=admin.user_repo.ParentBindingRepairClassification.REPAIRABLE_MISSING_REVERSE,
+        proposed_action="create_missing_reverse",
+        relationship_version=1,
+        observations=(),
+    )
+    monkeypatch.setattr(
+        admin.user_repo,
+        "preview_parent_binding_repair",
+        lambda **values: effects.append(("preview", values)) or preview,
+    )
+    monkeypatch.setattr(
+        admin.user_repo,
+        "apply_parent_binding_repair",
+        lambda **values: effects.append(("apply", values))
+        or admin.user_repo.ParentBindingRepairApplyResult(
+            admin.user_repo.ParentBindingRepairApplyDisposition.REPAIRED,
+            preview,
+            mutated=True,
+        ),
+    )
+    sink = MemoryAuthorizationAuditSink()
+    app = FastAPI()
+    app.include_router(admin.router, prefix="/admin")
+    app.dependency_overrides[get_authorization_audit_sink] = lambda: sink
+    app.dependency_overrides[get_actor] = lambda: _actor(
+        "parent_binding_repairer", scope="student:student-1"
+    )
+    client = TestClient(app)
+    payload = {
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "relationship": "child",
+        "reason": "repair",
+    }
+
+    assert client.post("/admin/parent-bindings/repair/preview", json=payload).status_code == 200
+    assert len(sink.events) == 1
+    payload["preview_id"] = preview.preview_id
+    assert client.post("/admin/parent-bindings/repair", json=payload).status_code == 200
+    assert len(sink.events) == 2
+    assert [kind for kind, _ in effects] == ["preview", "apply"]
 
 
 def test_bulk_body_targets_are_all_of_and_duplicate_safe(monkeypatch):
