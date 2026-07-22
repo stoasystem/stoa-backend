@@ -78,6 +78,7 @@ PHASE472_REGRESSION = (
 FINAL_GAP_GATE_MODULES = {
     "P473-DELETION-CLAIM-FENCING": (
         "tests/test_phase473_account_deletion_claim_fencing.py",
+        "tests/test_phase475_profile_version_cas.py",
     ),
     "P473-DELIVERY-INTENT-RECOVERY": (
         "tests/test_phase473_delivery_intent_recovery.py",
@@ -92,6 +93,7 @@ FINAL_GAP_GATE_MODULES = {
         "tests/test_phase473_delivery_intent_recovery.py",
         "tests/test_phase473_notification_deletion.py",
         "tests/test_phase473_private_delivery_fencing.py",
+        "tests/test_phase475_profile_version_cas.py",
         "tests/test_notifications.py",
         "tests/test_websocket_notifications.py",
     ),
@@ -134,9 +136,9 @@ CLAIM_FENCE_CONTRACTS = (
         "the production constructor emits a nonblank timezone-aware UTC timestamp",
     ),
     (
-        "tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences",
+        "tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
         "account_deletion_repo.scrub_parent_profile_child:table.transact",
-        "parent row-version conflict preserves concurrent preferences",
+        "real locale writer and narrow scrub share row-version CAS while exact concurrent preference bytes survive",
     ),
     (
         "tests/test_phase473_account_deletion_claim_fencing.py::test_fresh_parent_rescan_removes_only_child_and_advances_row_version",

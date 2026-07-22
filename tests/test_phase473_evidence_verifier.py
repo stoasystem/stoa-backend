@@ -27,6 +27,7 @@ EXTERNAL = {
 FINAL_GAP_GATES = {
     "P473-DELETION-CLAIM-FENCING": (
         "tests/test_phase473_account_deletion_claim_fencing.py",
+        "tests/test_phase475_profile_version_cas.py",
     ),
     "P473-DELIVERY-INTENT-RECOVERY": (
         "tests/test_phase473_delivery_intent_recovery.py",
@@ -41,6 +42,7 @@ FINAL_GAP_GATES = {
         "tests/test_phase473_delivery_intent_recovery.py",
         "tests/test_phase473_notification_deletion.py",
         "tests/test_phase473_private_delivery_fencing.py",
+        "tests/test_phase475_profile_version_cas.py",
         "tests/test_notifications.py",
         "tests/test_websocket_notifications.py",
     ),
@@ -54,7 +56,7 @@ FINAL_GAP_NODE_GROUPS = {
         "tests/test_phase473_account_deletion_claim_fencing.py::test_forged_in_memory_complete_map_cannot_terminalize_durable_incomplete_set",
         "tests/test_phase473_account_deletion_claim_fencing.py::test_repository_rejects_invalid_lifecycle_timestamps",
         "tests/test_phase473_account_deletion_claim_fencing.py::test_production_service_clock_is_nonblank_timezone_aware_utc",
-        "tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences",
+        "tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
         "tests/test_phase473_account_deletion_claim_fencing.py::test_fresh_parent_rescan_removes_only_child_and_advances_row_version",
         "tests/test_phase473_account_deletion_claim_fencing.py::test_account_profile_row_conflict_stays_retryable_debt",
     },

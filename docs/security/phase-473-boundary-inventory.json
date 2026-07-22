@@ -21,8 +21,8 @@
     {
       "finding_id": "WR-02",
       "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.transact",
-      "observed_assertion": "row-version CAS preserves concurrent parent preferences",
-      "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences"
+      "observed_assertion": "real locale writer and narrow scrub share row-version CAS while exact concurrent preference bytes survive",
+      "runtime_selector": "tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes"
     },
     {
       "finding_id": "WR-03",
@@ -58,7 +58,7 @@
       "WR-02",
       "WR-03"
     ],
-    "inventory_sha256": "30d6788378d16c7f0a3a1f50bde0398be76b884214bc44f6366cb69a84c84e06",
+    "inventory_sha256": "8b4087165afbd6bff9a5e9efe59369ae6ed446a20765cca473227c87cc1480e4",
     "row_count": 232,
     "schema_version": "phase-473-private-store-inventory.v1",
     "source_digests": [
@@ -2215,7 +2215,7 @@
       ],
       "expected_type": "positive_int",
       "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.transact",
-      "malformed_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences",
+      "malformed_selector": "tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
       "named_parser": "_positive_int",
       "requirement_ids": [
         "V9PRIV-01",

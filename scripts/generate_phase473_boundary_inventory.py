@@ -321,7 +321,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
         call="dynamodb strong parent profile",
         fields=(("version", "positive_int", "_positive_int", "type_is_int_not_bool_positive"),),
         fake="src/stoa/db/repositories/account_deletion_repo.py:table.transact",
-        selector="tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences",
+        selector="tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
         decisions=("D-10", "D-16", "D-17"),
     )
     + _flows(
@@ -397,8 +397,8 @@ FINDING_REGISTRY = (
     {
         "finding_id": "WR-02",
         "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.transact",
-        "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences",
-        "observed_assertion": "row-version CAS preserves concurrent parent preferences",
+        "runtime_selector": "tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
+        "observed_assertion": "real locale writer and narrow scrub share row-version CAS while exact concurrent preference bytes survive",
     },
     {
         "finding_id": "WR-03",

@@ -365,7 +365,7 @@
         "narrow legacy normalization",
         "parent row-version CAS"
       ],
-      "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences",
+      "runtime_selector": "tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
       "source_symbols": [
         "account_deletion_repo.scrub_parent_profile_child"
       ]

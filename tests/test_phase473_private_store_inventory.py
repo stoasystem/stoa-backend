@@ -62,7 +62,7 @@ FINDING_SELECTORS = {
     ),
     "WR-02": (
         "src/stoa/db/repositories/account_deletion_repo.py:table.transact",
-        "tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences",
+        "tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
     ),
     "WR-03": (
         "src/stoa/db/repositories/notification_repo.py:table.update_item",
@@ -100,6 +100,8 @@ def _historical_candidate_root(tmp_path: Path) -> Path:
         input=archive.stdout,
         check=True,
     )
+    shutil.copy2(INVENTORY, candidate_root / INVENTORY.relative_to(ROOT))
+    shutil.copy2(EVIDENCE, candidate_root / EVIDENCE.relative_to(ROOT))
     return candidate_root
 
 
@@ -244,8 +246,8 @@ def test_all_five_findings_have_exact_lower_source_seals_and_selectors():
         ),
         (
             "src/stoa/db/repositories/account_deletion_repo.py",
-            "user_id=:parent AND #version=:expected_version",
-            "user_id=:parent",
+            'condition = "#version=:expected_version"',
+            'condition = "attribute_exists(#version)"',
         ),
         (
             "src/stoa/db/repositories/notification_repo.py",

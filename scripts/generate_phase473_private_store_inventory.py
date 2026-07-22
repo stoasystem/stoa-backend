@@ -140,7 +140,7 @@ FINDING_REGISTRY = (
         "source_symbols": ["account_deletion_repo.scrub_parent_profile_child"],
         "required_semantics": ["narrow legacy normalization", "parent row-version CAS"],
         "lower_fake_target": "src/stoa/db/repositories/account_deletion_repo.py:table.transact",
-        "runtime_selector": "tests/test_phase473_account_deletion_claim_fencing.py::test_parent_scrub_is_version_cas_and_never_replaces_concurrent_preferences",
+        "runtime_selector": "tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
     },
     {
         "finding_id": "WR-03",
@@ -185,10 +185,6 @@ SEMANTIC_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
             "claim.branch_results_digest",
             "lease_owner",
             "command_version",
-        ),
-        "scrub_parent_profile_child": (
-            "attribute_not_exists(#version)",
-            "user_id=:parent AND #version=:expected_version",
         ),
     },
     "src/stoa/db/repositories/notification_repo.py": {
@@ -449,6 +445,36 @@ def validate_private_store_semantics(root: Path | str) -> None:
             raise ValueError(
                 "reviewed private-store semantic missing: lifecycle timestamp validation"
             )
+        if relative.endswith("account_deletion_repo.py"):
+            scrub = functions.get("scrub_parent_profile_child", "")
+            helper = functions.get("_parent_profile_scrub_operation", "")
+            legacy_scrub = all(
+                token in scrub
+                for token in (
+                    "attribute_not_exists(#version)",
+                    "user_id=:parent AND #version=:expected_version",
+                )
+            )
+            shared_cas_scrub = all(
+                token in scrub
+                for token in (
+                    "_parent_profile_scrub_operation(",
+                    "expected_version=expected_version",
+                    "for attempt in range(1, 4)",
+                )
+            ) and all(
+                token in helper
+                for token in (
+                    "attribute_not_exists(#version)",
+                    "user_id=:parent AND ",
+                    "#version=:expected_version",
+                )
+            )
+            if not (legacy_scrub or shared_cas_scrub):
+                raise ValueError(
+                    "reviewed private-store semantic missing: "
+                    f"{relative}:scrub_parent_profile_child"
+                )
         for symbol, required in symbol_requirements.items():
             body = functions.get(symbol)
             if body is None or any(token not in body for token in required):
