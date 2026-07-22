@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-16-PLAN.md
-last_updated: "2026-07-22T10:00:40.170Z"
+stopped_at: Completed 475-17-PLAN.md
+last_updated: "2026-07-22T10:24:07.253Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 119
-  percent: 59
+  completed_plans: 120
+  percent: 20
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 13 of 45
+Plan: 14 of 45
 Status: Ready to execute
 Last activity: 2026-07-22 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-22T10:00:19.168Z
-**Stopped At:** Completed 475-16-PLAN.md
+**Last Date:** 2026-07-22T10:24:07.247Z
+**Stopped At:** Completed 475-17-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -226,6 +226,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P28 | 4 min | 1 tasks | 2 files |
 | Phase 475 P41 | 3 min | 1 tasks | 1 files |
 | Phase 475 P16 | 6 min | 1 tasks | 2 files |
+| Phase 475 P17 | 18 min | 1 tasks | 8 files |
 
 ## Decisions
 
@@ -464,3 +465,6 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: Narrow the stored locale timestamp to non-empty text before auth response construction. — Preserves valid bytes and the existing request-time fallback while removing the exact-file mypy diagnostic without ignores or casts.
 - [Phase 475]: Reconciliation operations expose only bounded student identity plus an opaque command digest. — The repository receives only a validated lowercase 64-hex value, never raw caller text.
 - [Phase 475]: CLI and Lambda parsing fails closed before repository access. — Static coordinate-free errors and closed field sets prevent raw or unknown operational input from entering diagnostics or partial execution.
+- [Phase 475]: Plan 475-17: Every ordinary question writer now uses an exact observed owner/status/version CAS and increments version once.
+- [Phase 475]: Plan 475-17: Legacy questions initialize version explicitly before ordinary mutation; new questions start at version 1.
+- [Phase 475]: Plan 475-17: Strong reread reports APPLIED only for the exact N+1 requested state and otherwise returns stale, invalid-transition, or retryable without winner coordinates.
