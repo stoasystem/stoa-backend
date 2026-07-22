@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-15-PLAN.md
-last_updated: "2026-07-22T09:09:51.922Z"
+stopped_at: Completed 475-23-PLAN.md
+last_updated: "2026-07-22T09:26:57.845Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 115
-  percent: 20
+  completed_plans: 116
+  percent: 58
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 9 of 45
+Plan: 10 of 45
 Status: Ready to execute
 Last activity: 2026-07-22 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-22T09:09:51.916Z
-**Stopped At:** Completed 475-15-PLAN.md
+**Last Date:** 2026-07-22T09:26:57.839Z
+**Stopped At:** Completed 475-23-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -222,6 +222,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P31 | 4 min | 1 tasks | 1 files |
 | Phase 475 P40 | 25 min | 1 tasks | 1 files |
 | Phase 475 P15 | 15 min | 1 tasks | 8 files |
+| Phase 475 P23 | 10 min | 1 tasks | 6 files |
 
 ## Decisions
 
@@ -451,3 +452,6 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: Question command identity is a lowercase SHA-256 over a domain tag plus length-prefixed canonical student ID and exact validated caller key bytes.
 - [Phase 475]: The one student-bound digest is the command ID, command SK suffix, ledger event ID/SK suffix, and persisted idempotency digest; raw caller text has no durable compatibility path.
 - [Phase 475]: Question command schema v2 rejects v1/raw or malformed rows before payload comparison and never returns their stored coordinates.
+- [Phase 475]: Create may initialize a relationship status, but only an exact active tuple is replayable; persisted non-active history conflicts before mutation.
+- [Phase 475]: Relationship status changes atomically update both formal rows and the student profile behind expected relationship status/version and profile version.
+- [Phase 475]: The canonical-admin lifecycle route accepts a closed status vocabulary and returns correlation-only static conflict/dependency errors.
