@@ -979,11 +979,16 @@ async def update_my_locale_preference(
     updated_at = _utc_now_iso()
     updated = user_repo.update_locale_preference(profile["user_id"], locale, updated_at)
     effective_locale = locale_service.effective_locale(updated or {**profile, "preferred_locale": locale})
+    stored_updated_at = updated.get("locale_updated_at")
     return LocalePreferenceResponse(
         preferredLocale=locale,
         effectiveLocale=effective_locale,
         supportedLocales=sorted(locale_service.SUPPORTED_LOCALES),
-        updatedAt=updated.get("locale_updated_at") or updated_at,
+        updatedAt=(
+            stored_updated_at
+            if isinstance(stored_updated_at, str) and stored_updated_at
+            else updated_at
+        ),
     )
 
 
