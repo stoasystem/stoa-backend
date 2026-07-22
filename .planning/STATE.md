@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 475-07-PLAN.md
-last_updated: "2026-07-22T01:26:43.088Z"
+status: verifying
+stopped_at: Completed 475-13-PLAN.md
+last_updated: "2026-07-22T01:55:40.998Z"
 last_activity: 2026-07-21 -- Phase 475 execution started
 progress:
   total_phases: 10
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 169
-  completed_plans: 106
-  percent: 20
+  completed_plans: 107
+  percent: 30
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
 Plan: 13 of 13
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-21 -- Phase 475 execution started
 
 ## Accumulated Context
@@ -107,8 +107,8 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-22T01:26:43.082Z
-**Stopped At:** Completed 475-07-PLAN.md
+**Last Date:** 2026-07-22T01:55:40.992Z
+**Stopped At:** Completed 475-13-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -213,6 +213,7 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 | Phase 475 P03 | 26 min | 1 tasks | 4 files |
 | Phase 475 P05 | 9 min | 1 tasks | 3 files |
 | Phase 475 P07 | 11 min | 1 tasks | 5 files |
+| Phase 475 P13 | 15 min | 1 tasks | 6 files |
 
 ## Decisions
 
@@ -423,3 +424,7 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 - [Phase 475]: Parent-binding reconciliation binds a pure strong-read preview to opaque pair and whole-row evidence digests before apply. — Every relationship coordinate is rechecked without exposing raw storage coordinates.
 - [Phase 475]: Only unchanged unambiguous same-parent classifications invoke the existing atomic relationship writer. — Conflicts never select a winner, changed rows are skipped, and replay is zero-write.
 - [Phase 475]: Preview and apply share parent_binding_repairer target authorization with durable audit before repository access. — Unauthorized administrators cannot inspect or mutate relationship state.
+- [Phase 475]: Evidence is bound to candidate cc709c17a9ff4cbec4c3aabf51660f52e571b5dc and direct-child publication 370562a; later metadata may not change evidence blobs.
+- [Phase 475]: Reuse Phase 474 strict full-backend accounting without relabeling local evidence as the sealed Linux/cross-repository formal receipt.
+- [Phase 475]: Use deterministic opaque parametrized node identities so answers and identities are not published.
+- [Phase 475]: Block Phase 475 changed-line mypy diagnostics across all 21 runtime files while disclosing 178 inherited diagnostics.

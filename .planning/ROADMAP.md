@@ -35,7 +35,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
 | 473 | Student Content Privacy And Practice Integrity | Complete — 40/40 plans, independently verified 2026-07-18 | Phase 472 |
 | 474 | 24/87 | In Progress|  |
-| 475 | 12/13 | In Progress|  |
+| 475 | 13/13 | Complete   | 2026-07-22 |
 | 476 | Billing Idempotency And Paid Access Recovery | One checkout/entitlement outcome under failures and retries | Phase 474; can overlap 475 |
 | 477 | Web Foundation And Contract Convergence | Authoritative Web auth/API/config behavior without hidden demo truth | Phases 472, 473, and 474 |
 | 478 | Complete Web Role Journeys And Route Closure | Functional student, parent, teacher, admin/operator, organization, and public browser routes | Phases 475, 476, and 477 |
@@ -48,7 +48,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 - [x] **Phase 472: Privileged Identity And Student Resource Authorization** (completed 2026-07-15) - Privileged identity and student-resource access fail closed.
 - [x] **Phase 473: Student Content Privacy And Practice Integrity** (completed 2026-07-18 — 40/40 plans, independently verified) - Uploads, private content, and practice answers respect the completed safety boundary.
 - [ ] **Phase 474: Deterministic Verification And Gated Delivery** - One formal backend/Web gate and its minimum CDK release topology control one immutable staged release set.
-- [ ] **Phase 475: Transactional Usage Assignment And Relationship Consistency** - Core learning and relationship state converges under failure and concurrency.
+- [x] **Phase 475: Transactional Usage Assignment And Relationship Consistency** - Core learning and relationship state converges under failure and concurrency. (completed 2026-07-22)
 - [ ] **Phase 476: Billing Idempotency And Paid Access Recovery** - One Web checkout produces one recoverable provider and entitlement outcome.
 - [ ] **Phase 477: Web Foundation And Contract Convergence** - Web identity, API, and release configuration match authoritative backend contracts.
 - [ ] **Phase 478: Complete Web Role Journeys And Route Closure** - Every retained route works for real student, parent, teacher, and admin/operator accounts or is intentionally disabled.
@@ -541,7 +541,7 @@ Plans:
 
 **Audit findings:** DATA-001, BUG-002, DATA-003, BUG-006, BUG-004.
 
-**Plans:** 12/13 plans executed
+**Plans:** 13/13 plans complete
 
 Plans:
 
