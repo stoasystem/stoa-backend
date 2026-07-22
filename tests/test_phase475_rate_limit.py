@@ -80,25 +80,35 @@ class _RateTable:
             operation_key = (operation_item["PK"], operation_item["SK"])
             counter_key = (update["Key"]["PK"], update["Key"]["SK"])
             current = dict(self.items.get(counter_key, {}))
-            limit = int(update["ExpressionAttributeValues"][":limit"])
-            if operation_key in self.items or int(current.get("count", 0)) >= limit:
+            values = update["ExpressionAttributeValues"]
+            current_count = int(current.get("count", 0))
+            condition = update["ConditionExpression"]
+            if condition == "attribute_not_exists(#count)":
+                counter_condition_matches = "count" not in current
+            elif condition == "#count = :expected":
+                counter_condition_matches = (
+                    "count" in current
+                    and current_count == int(values[":expected"])
+                )
+            else:
+                counter_condition_matches = current_count < int(values[":limit"])
+            if operation_key in self.items or not counter_condition_matches:
                 raise account_deletion_repo.AccountDeletionConflict(
                     "conditional rate admission conflict"
                 )
+            next_count = int(values.get(":next", current_count + 1))
             self.items[operation_key] = operation_item
             self.items[counter_key] = {
                 **current,
                 **update["Key"],
                 "entity_type": "rate_counter",
-                "owner_id": update["ExpressionAttributeValues"][":owner"],
-                "quota_period": update["ExpressionAttributeValues"][":period"],
-                "account_fence_generation": update["ExpressionAttributeValues"][
-                    ":generation"
-                ],
-                "count": int(current.get("count", 0)) + 1,
+                "owner_id": values[":owner"],
+                "quota_period": values[":period"],
+                "account_fence_generation": values[":generation"],
+                "count": next_count,
                 "expires_at": int(
                     current.get("expires_at")
-                    or update["ExpressionAttributeValues"][":expires"]
+                    or values[":expires"]
                 ),
             }
 
@@ -154,9 +164,12 @@ def test_transaction_puts_payload_bound_operation_and_capped_counter_update() ->
     assert put["Item"]["quota_period"] == PERIOD
     assert put["Item"]["payload_digest"] == _digest("challenge-1")
     assert put["Item"]["status"] == "admitted"
-    assert update["ConditionExpression"] == (
-        "attribute_not_exists(#count) OR #count < :limit"
-    )
+    assert put["Item"]["decision"] == "admitted"
+    assert put["Item"]["counter_value_after"] == 1
+    assert put["Item"]["limit"] == 2
+    assert put["Item"]["receipt_expires_at"] == int(NOW.timestamp()) + 172800
+    assert update["ConditionExpression"] == "attribute_not_exists(#count)"
+    assert update["ExpressionAttributeValues"][":next"] == 1
     assert update["ExpressionAttributeValues"][":limit"] == 2
 
 
@@ -222,6 +235,82 @@ def test_provider_failure_retry_replays_one_count_and_distinct_operation_is_eval
     assert len(table.operation_rows()) == 1
 
 
+def test_replay_returns_original_receipt_after_intervening_accepted_and_rejected_traffic() -> None:
+    table = _RateTable()
+
+    first = _admit(table, caller_id="operation-a", limit=2)
+    original_receipt = first.counter_receipt()
+    second = _admit(table, caller_id="operation-b", limit=2)
+    rejected = _admit(table, caller_id="operation-c", limit=2)
+    replay = _admit(table, caller_id="operation-a", limit=99)
+
+    assert first.counter_value == 1
+    assert second.counter_value == 2
+    assert rejected.disposition is rate_limit.RateAdmissionDisposition.LIMIT_EXCEEDED
+    assert replay.disposition is rate_limit.RateAdmissionDisposition.REPLAYED
+    assert replay.counter_receipt() == original_receipt
+    assert table.count() == 2
+    assert len(table.operation_rows()) == 2
+
+
+def test_concurrent_distinct_operations_commit_exact_unique_receipts() -> None:
+    table = _RateTable(initial_counter_barrier=threading.Barrier(2))
+    results: list[rate_limit.RateAdmissionResult] = []
+    failures: list[Exception] = []
+
+    def run(caller_id: str) -> None:
+        try:
+            results.append(_admit(table, caller_id=caller_id, limit=2))
+        except Exception as error:  # pragma: no cover - assertion reports details
+            failures.append(error)
+
+    threads = [
+        threading.Thread(target=run, args=(f"distinct-{index}",))
+        for index in range(2)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=3)
+
+    assert failures == []
+    assert not any(thread.is_alive() for thread in threads)
+    assert {result.disposition for result in results} == {
+        rate_limit.RateAdmissionDisposition.ADMITTED
+    }
+    assert sorted(result.counter_value for result in results) == [1, 2]
+    assert sorted(row["counter_value_after"] for row in table.operation_rows()) == [1, 2]
+    assert table.count() == 2
+
+
+def test_concurrent_exact_duplicate_returns_one_byte_stable_receipt() -> None:
+    table = _RateTable(initial_counter_barrier=threading.Barrier(2))
+    results: list[rate_limit.RateAdmissionResult] = []
+    failures: list[Exception] = []
+
+    def run() -> None:
+        try:
+            results.append(_admit(table, caller_id="exact-duplicate", limit=2))
+        except Exception as error:  # pragma: no cover - assertion reports details
+            failures.append(error)
+
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=3)
+
+    assert failures == []
+    assert not any(thread.is_alive() for thread in threads)
+    assert sorted(result.disposition.value for result in results) == [
+        "admitted",
+        "replayed",
+    ]
+    assert results[0].counter_receipt() == results[1].counter_receipt()
+    assert table.count() == 1
+    assert len(table.operation_rows()) == 1
+
+
 def test_same_operation_changed_digest_conflicts_without_mutation() -> None:
     table = _RateTable()
 
@@ -271,6 +360,8 @@ def test_utc_day_change_uses_new_counter_and_operation_namespace() -> None:
     assert table.count(period="2026-07-22") == 1
     assert len(table.operation_rows()) == 2
     assert table.operation_rows()[0] == prior_row
+    replay = _admit(table, caller_id="daily-key", period="2026-07-21", limit=99)
+    assert replay.counter_receipt() == first.counter_receipt()
     assert {row["quota_period"] for row in table.operation_rows()} == {
         "2026-07-21",
         "2026-07-22",
