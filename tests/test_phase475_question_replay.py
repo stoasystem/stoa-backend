@@ -184,9 +184,12 @@ def test_invalid_idempotency_input_is_redacted_and_effect_free(
     assert effects == []
 
 
-def test_valid_idempotency_key_reaches_replay_boundary_byte_identically(monkeypatch) -> None:
+def test_valid_idempotency_key_reaches_replay_boundary_as_opaque_digest(monkeypatch) -> None:
     _profile_and_entitlement(monkeypatch)
-    caller_key = "  question-submit-exact  "
+    caller_key = "  student.private@example.test / solve this exactly  "
+    expected_digest = question_submission_repo.question_submission_command_digest(
+        "student-1", caller_key
+    )
     observed_keys: list[str] = []
 
     def command_read(_student_id: str, idempotency_key: str):
@@ -235,7 +238,8 @@ def test_valid_idempotency_key_reaches_replay_boundary_byte_identically(monkeypa
     )
 
     assert response.status_code == 201
-    assert observed_keys == [caller_key]
+    assert observed_keys == [expected_digest]
+    assert caller_key not in json.dumps(response.json(), sort_keys=True)
 
 
 def test_lost_response_retry_returns_original_without_repeating_effects(monkeypatch) -> None:

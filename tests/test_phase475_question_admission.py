@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 from typing import Any
 
 from botocore.exceptions import ClientError
+import pytest
 
 from stoa.db.repositories import attachment_repo, question_submission_repo
 from stoa.services import usage_ledger_service
@@ -214,6 +216,97 @@ def test_fingerprint_normalizes_subject_but_binds_exact_bytes_and_order() -> Non
     assert canonical != _fingerprint(
         attachments=("attachment:two", "upload:one")
     )
+
+
+def test_question_command_digest_is_stable_opaque_and_student_bound() -> None:
+    caller_key = "student.private@example.test / Wie loese ich diese Aufgabe?"
+
+    first = question_submission_repo.question_submission_command_digest(
+        "student-1", caller_key
+    )
+    replay = question_submission_repo.question_submission_command_digest(
+        "student-1", caller_key
+    )
+    other_student = question_submission_repo.question_submission_command_digest(
+        "student-2", caller_key
+    )
+    other_key = question_submission_repo.question_submission_command_digest(
+        "student-1", caller_key + " edited"
+    )
+
+    assert re.fullmatch(r"[0-9a-f]{64}", first)
+    assert first == replay
+    assert first != other_student
+    assert first != other_key
+
+
+def test_arbitrary_caller_key_is_absent_from_every_admission_item() -> None:
+    caller_key = "student.private@example.test / Wie loese ich diese Aufgabe?"
+    digest = question_submission_repo.question_submission_command_digest(
+        "student-1", caller_key
+    )
+    table = _AdmissionTable()
+    usage_event = usage_ledger_service.build_question_usage_event(
+        student_id="student-1",
+        question_id="question-1",
+        quota_period="2026-07-21",
+        idempotency_digest=digest,
+        counter_key="USAGE#student-1/QUESTION#2026-07-21",
+        counter_value=1,
+        quantity=1,
+        entitlement={
+            "effectivePlan": "free",
+            "source": "local",
+            "limits": {"dailyAiQuestionLimit": 2},
+        },
+        created_at="2026-07-21T20:00:00+00:00",
+    )
+
+    result = question_submission_repo.admit_question_submission(
+        student_id="student-1",
+        idempotency_digest=digest,
+        fingerprint=_fingerprint(),
+        question=_question(),
+        usage_event=usage_event,
+        quota_period="2026-07-21",
+        limit=2,
+        expires_at=1784844000,
+        created_at="2026-07-21T20:00:00+00:00",
+        table=table,
+    )
+
+    encoded = json.dumps(
+        {
+            "transactions": table.transactions,
+            "items": list(table.items.values()),
+            "command": result.command,
+            "question": result.question,
+        },
+        sort_keys=True,
+    )
+    assert caller_key not in encoded
+    assert digest in encoded
+    command = table.items[("USER#student-1", f"QUESTION_SUBMISSION#{digest}")]
+    assert command["idempotency_digest"] == digest
+    assert "idempotency_key" not in command
+    ledger = next(
+        item
+        for item in table.items.values()
+        if item.get("entity_type") == "usage_ledger_event"
+    )
+    assert ledger["idempotency_digest"] == digest
+    assert "idempotency_key" not in ledger
+
+
+def test_repository_rejects_raw_or_legacy_command_identity_without_echo() -> None:
+    caller_key = "student.private@example.test / Wie loese ich diese Aufgabe?"
+
+    with pytest.raises(ValueError) as error:
+        question_submission_repo.question_submission_command_key(
+            "student-1", caller_key
+        )
+
+    assert caller_key not in str(error.value)
 
 
 def test_transaction_has_one_counter_update_and_no_duplicate_targets() -> None:
