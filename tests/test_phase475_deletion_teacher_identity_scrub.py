@@ -282,6 +282,7 @@ def test_teacher_identity_scrub_preserves_student_question_and_requires_two_clea
     history = table.rows[("QUESTION#history", "META")]
     assert history["status"] == "ai_answered"
     assert history["version"] == 4
+    assert history["previous_dispatch_teacher_ids"] == [OTHER_TEACHER_ID]
     assert _retained_question_snapshot(history) == retained[("QUESTION#history", "META")]
 
     late = table.rows[("QUESTION#late", "META")]
@@ -296,7 +297,8 @@ def test_teacher_identity_scrub_preserves_student_question_and_requires_two_clea
             "claim-direct",
             "claim-late",
         }
-        assert item.get("session_id") not in {"session-direct", "session-late"}
+        if item.get("entity_type") == "question":
+            assert item.get("session_id") not in {"session-direct", "session-late"}
 
     session = table.rows[("SESSION#session-direct", "META")]
     assert set(session) <= account_deletion_repo.SESSION_TOMBSTONE_ALLOWLIST

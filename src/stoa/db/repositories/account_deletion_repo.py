@@ -175,13 +175,22 @@ SESSION_TOMBSTONE_ALLOWLIST = frozenset(
 # reviewed relationship, teacher, and notification coordinates may make an
 # otherwise foreign-owned row part of an account-deletion scan.
 CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY: Mapping[
-    str, tuple[frozenset[str], frozenset[str]]
+    str, tuple[frozenset[str], frozenset[str], frozenset[str]]
 ] = {
-    "parent_student_binding": (frozenset({"parent_id"}), frozenset()),
-    "question": (frozenset({"teacher_id"}), frozenset()),
-    "teacher_session": (frozenset({"teacher_id"}), frozenset()),
+    "parent_student_binding": (
+        frozenset({"parent_id"}),
+        frozenset(),
+        frozenset(),
+    ),
+    "question": (
+        frozenset({"teacher_id", "dispatched_teacher_id"}),
+        frozenset({"previous_dispatch_teacher_ids"}),
+        frozenset(),
+    ),
+    "teacher_session": (frozenset({"teacher_id"}), frozenset(), frozenset()),
     "notification_event": (
         frozenset({"actor_id"}),
+        frozenset(),
         frozenset({"owner_id", "student_id", "teacher_id"}),
     ),
 }
@@ -641,6 +650,224 @@ def replace_with_deletion_tombstone(
         ],
         table=target,
     )
+
+
+_TEACHER_QUESTION_LINK_FIELDS = (
+    "teacher_id",
+    "teacher_takeover_claim_id",
+    "session_id",
+    "teacher_started_at",
+    "teacher_taken_over_at",
+    "teacher_first_replied_at",
+    "teacher_first_reply_seconds",
+    "teacher_first_reply_sla_bucket",
+)
+_TEACHER_DISPATCH_LINK_FIELDS = (
+    "dispatched_teacher_id",
+    "dispatch_accepted_at",
+    "dispatch_deadline_at",
+)
+
+
+def scrub_teacher_question_reference(
+    item: Mapping[str, Any],
+    *,
+    teacher_user_id: str,
+    generation: int,
+    table: Any | None = None,
+) -> None:
+    """CAS-remove one deleting teacher without deleting student question data."""
+    teacher_id = _teacher_reference_coordinate(teacher_user_id, "teacher user_id")
+    pk = _teacher_reference_coordinate(item.get("PK"), "question PK")
+    sk = _teacher_reference_coordinate(item.get("SK"), "question SK")
+    question_id = _teacher_reference_coordinate(
+        item.get("question_id"), "question_id"
+    )
+    student_id = _teacher_reference_coordinate(item.get("student_id"), "student_id")
+    status = _teacher_reference_coordinate(item.get("status"), "question status")
+    if (
+        pk != f"QUESTION#{question_id}"
+        or sk != "META"
+        or item.get("entity_type") != "question"
+        or item.get("schema_version") != "question.v1"
+        or student_id == teacher_id
+    ):
+        raise AccountDeletionRowConflict("teacher question identity changed")
+    version = _teacher_reference_version(item.get("version"), "question version")
+    history_value = item.get("previous_dispatch_teacher_ids", [])
+    if not isinstance(history_value, (list, tuple)) or any(
+        not isinstance(value, str) or not value for value in history_value
+    ):
+        raise AccountDeletionRowConflict("invalid teacher dispatch history")
+    history = list(history_value)
+    owns_question = item.get("teacher_id") == teacher_id
+    owns_dispatch = item.get("dispatched_teacher_id") == teacher_id
+    in_history = teacher_id in history
+    if not (owns_question or owns_dispatch or in_history):
+        raise AccountDeletionRowConflict("teacher question reference changed")
+
+    names: dict[str, str] = {"#status": "status", "#version": "version"}
+    values: dict[str, Any] = {
+        ":pk": pk,
+        ":sk": sk,
+        ":entity": "question",
+        ":schema": "question.v1",
+        ":student": student_id,
+        ":teacher": teacher_id,
+        ":status": status,
+        ":version": version,
+        ":next_version": version + 1,
+    }
+    set_parts = ["#version=:next_version"]
+    remove_fields: list[str] = []
+    if owns_question:
+        remove_fields.extend(_TEACHER_QUESTION_LINK_FIELDS)
+    if owns_dispatch or owns_question:
+        remove_fields.extend(_TEACHER_DISPATCH_LINK_FIELDS)
+        if "dispatch_status" in item:
+            names["#dispatch_status"] = "dispatch_status"
+            values[":closed_dispatch"] = "revoked"
+            set_parts.append("#dispatch_status=:closed_dispatch")
+    if owns_question or owns_dispatch:
+        values[":next_status"] = "resolved"
+        set_parts.append("#status=:next_status")
+
+    next_history = [value for value in history if value != teacher_id]
+    if next_history != history:
+        if next_history:
+            names["#previous_dispatch_teacher_ids"] = "previous_dispatch_teacher_ids"
+            values[":next_history"] = next_history
+            set_parts.append("#previous_dispatch_teacher_ids=:next_history")
+        else:
+            remove_fields.append("previous_dispatch_teacher_ids")
+    for field in dict.fromkeys(remove_fields):
+        names[f"#{field}"] = field
+    expression = "SET " + ", ".join(set_parts)
+    if remove_fields:
+        expression += " REMOVE " + ", ".join(
+            f"#{field}" for field in dict.fromkeys(remove_fields)
+        )
+    try:
+        transact(
+            [
+                deletion_fence_condition(teacher_id, generation),
+                {
+                    "Update": {
+                        "Key": {"PK": pk, "SK": sk},
+                        "UpdateExpression": expression,
+                        "ConditionExpression": (
+                            "attribute_exists(PK) AND attribute_exists(SK) AND "
+                            "PK=:pk AND SK=:sk AND entity_type=:entity AND "
+                            "schema_version=:schema AND student_id=:student AND "
+                            "#status=:status AND #version=:version AND "
+                            "(teacher_id=:teacher OR dispatched_teacher_id=:teacher OR "
+                            "contains(previous_dispatch_teacher_ids,:teacher))"
+                        ),
+                        "ExpressionAttributeNames": names,
+                        "ExpressionAttributeValues": values,
+                    }
+                },
+            ],
+            table=table or get_table(),
+        )
+    except AccountDeletionConflict as exc:
+        raise AccountDeletionRowConflict(
+            "teacher question changed during cleanup"
+        ) from exc
+
+
+def replace_teacher_session_with_tombstone(
+    item: Mapping[str, Any],
+    *,
+    teacher_user_id: str,
+    generation: int,
+    now_iso: str,
+    table: Any | None = None,
+) -> None:
+    """CAS-minimize one foreign-owned session that names a deleting teacher."""
+    teacher_id = _teacher_reference_coordinate(teacher_user_id, "teacher user_id")
+    pk = _teacher_reference_coordinate(item.get("PK"), "session PK")
+    sk = _teacher_reference_coordinate(item.get("SK"), "session SK")
+    session_id = _teacher_reference_coordinate(item.get("session_id"), "session_id")
+    question_id = _teacher_reference_coordinate(
+        item.get("question_id"), "question_id"
+    )
+    student_id = _teacher_reference_coordinate(item.get("student_id"), "student_id")
+    claim_id = _teacher_reference_coordinate(
+        item.get("teacher_takeover_claim_id"), "teacher takeover claim"
+    )
+    if (
+        pk != f"SESSION#{session_id}"
+        or sk != "META"
+        or item.get("entity_type") != "teacher_session"
+        or item.get("teacher_id") != teacher_id
+        or student_id == teacher_id
+    ):
+        raise AccountDeletionRowConflict("teacher session identity changed")
+    question_version = _teacher_reference_version(
+        item.get("question_version"), "session question version"
+    )
+    tombstone = {
+        "PK": pk,
+        "SK": sk,
+        "entity_type": "teacher_session_deletion_tombstone",
+        "schema_version": "account-deletion-tombstone.v1",
+        "session_id": session_id,
+        "question_id": question_id,
+        "status": "deleted",
+        "owner_deletion_generation": generation,
+        "deleted_at": now_iso,
+    }
+    if not set(tombstone) <= SESSION_TOMBSTONE_ALLOWLIST:
+        raise AccountDeletionConflict("session tombstone allowlist violation")
+    values = {
+        ":pk": pk,
+        ":sk": sk,
+        ":entity": "teacher_session",
+        ":session_id": session_id,
+        ":question_id": question_id,
+        ":student": student_id,
+        ":teacher": teacher_id,
+        ":claim": claim_id,
+        ":question_version": question_version,
+    }
+    try:
+        transact(
+            [
+                deletion_fence_condition(teacher_id, generation),
+                {
+                    "Put": {
+                        "Item": tombstone,
+                        "ConditionExpression": (
+                            "attribute_exists(PK) AND attribute_exists(SK) AND "
+                            "PK=:pk AND SK=:sk AND entity_type=:entity AND "
+                            "session_id=:session_id AND question_id=:question_id AND "
+                            "student_id=:student AND teacher_id=:teacher AND "
+                            "teacher_takeover_claim_id=:claim AND "
+                            "question_version=:question_version"
+                        ),
+                        "ExpressionAttributeValues": values,
+                    }
+                },
+            ],
+            table=table or get_table(),
+        )
+    except AccountDeletionConflict as exc:
+        raise AccountDeletionRowConflict(
+            "teacher session changed during cleanup"
+        ) from exc
+
+
+def _teacher_reference_version(value: object, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise AccountDeletionRowConflict(f"invalid {field}")
+    return value
+
+
+def _teacher_reference_coordinate(value: object, field: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise AccountDeletionRowConflict(f"invalid {field}")
+    return value
 
 
 def deletion_fence_condition(user_id: str, generation: int) -> dict[str, Any]:
@@ -1793,11 +2020,19 @@ def _targets_user(item: Mapping[str, Any], user_id: str) -> bool:
     sk = str(item.get("SK") or "")
     if sk in {f"CHILD#{user_id}", f"PARENT#{user_id}"}:
         return True
-    scalar_fields, metadata_fields = CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY.get(
-        str(item.get("entity_type") or ""),
-        (frozenset(), frozenset()),
+    scalar_fields, collection_fields, metadata_fields = (
+        CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY.get(
+            str(item.get("entity_type") or ""),
+            (frozenset(), frozenset(), frozenset()),
+        )
     )
     if any(item.get(field) == user_id for field in scalar_fields):
+        return True
+    if any(
+        isinstance(item.get(field), (list, tuple, set, frozenset))
+        and user_id in item[field]
+        for field in collection_fields
+    ):
         return True
     metadata = item.get("metadata")
     if isinstance(metadata, Mapping) and any(

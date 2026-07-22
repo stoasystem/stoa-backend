@@ -628,12 +628,34 @@ def _question_ocr_session_branch(
     now = datetime.now(UTC).isoformat()
 
     def mutate(item: dict[str, Any]) -> None:
-        account_deletion_repo.replace_with_deletion_tombstone(
-            item,
-            user_id=str(command["user_id"]),
-            generation=int(command["generation"]),
-            now_iso=now,
-        )
+        deleting_user_id = str(command["user_id"])
+        generation = int(command["generation"])
+        if (
+            item.get("entity_type") == "question"
+            and item.get("student_id") != deleting_user_id
+        ):
+            account_deletion_repo.scrub_teacher_question_reference(
+                item,
+                teacher_user_id=deleting_user_id,
+                generation=generation,
+            )
+        elif (
+            item.get("entity_type") == "teacher_session"
+            and item.get("student_id") != deleting_user_id
+        ):
+            account_deletion_repo.replace_teacher_session_with_tombstone(
+                item,
+                teacher_user_id=deleting_user_id,
+                generation=generation,
+                now_iso=now,
+            )
+        else:
+            account_deletion_repo.replace_with_deletion_tombstone(
+                item,
+                user_id=deleting_user_id,
+                generation=generation,
+                now_iso=now,
+            )
 
     return _run_base_branch(
         command=command,
