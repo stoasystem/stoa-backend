@@ -1,10 +1,11 @@
 """Teacher routes — work queue, takeover, reply, resolve."""
 import uuid
 
-import boto3
+from collections.abc import Mapping
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
+from boto3.dynamodb.conditions import Attr, Key
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
@@ -44,8 +45,97 @@ from stoa.services import (
 
 router = APIRouter()
 
+type TeacherItem = dict[str, object]
+
 _TEACHER_REPLY_SOURCE_STATES = frozenset({QuestionStatus.TEACHER_ACTIVE.value})
 _TEACHER_RESOLVE_SOURCE_STATES = frozenset({QuestionStatus.TEACHER_ACTIVE.value})
+
+
+@runtime_checkable
+class _GetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _PutTable(Protocol):
+    def put_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _QueryTable(Protocol):
+    def query(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _UpdateTable(Protocol):
+    def update_item(self, **kwargs: object) -> object: ...
+
+
+def _teacher_mapping(value: object) -> TeacherItem:
+    if not isinstance(value, Mapping):
+        raise RuntimeError("teacher data dependency unavailable")
+    result: TeacherItem = {}
+    for key, member in value.items():
+        if not isinstance(key, str):
+            raise RuntimeError("teacher data dependency unavailable")
+        result[key] = member
+    return result
+
+
+def _teacher_get(table: object, **kwargs: object) -> TeacherItem:
+    if not isinstance(table, _GetTable):
+        raise RuntimeError("teacher data dependency unavailable")
+    return _teacher_mapping(table.get_item(**kwargs))
+
+
+def _teacher_query(table: object, **kwargs: object) -> TeacherItem:
+    if not isinstance(table, _QueryTable):
+        raise RuntimeError("teacher data dependency unavailable")
+    return _teacher_mapping(table.query(**kwargs))
+
+
+def _teacher_scan(table: object, **kwargs: object) -> TeacherItem:
+    if not isinstance(table, _ScanTable):
+        raise RuntimeError("teacher data dependency unavailable")
+    return _teacher_mapping(table.scan(**kwargs))
+
+
+def _teacher_update(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _UpdateTable):
+        raise RuntimeError("teacher data dependency unavailable")
+    return table.update_item(**kwargs)
+
+
+def _teacher_put(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _PutTable):
+        raise RuntimeError("teacher data dependency unavailable")
+    return table.put_item(**kwargs)
+
+
+def _teacher_items(response: Mapping[str, object]) -> list[TeacherItem]:
+    items = response.get("Items", [])
+    if not isinstance(items, list):
+        raise RuntimeError("teacher data dependency unavailable")
+    return [_teacher_mapping(item) for item in items]
+
+
+def _text(value: object, *, default: str = "") -> str:
+    return value if isinstance(value, str) else default
+
+
+def _required_text(value: object) -> str:
+    if not isinstance(value, str) or not value:
+        raise RuntimeError("teacher data dependency unavailable")
+    return value
+
+
+def _optional_text(value: object) -> str | None:
+    return value if isinstance(value, str) else None
 
 
 def _require_applied_question_mutation(
@@ -114,19 +204,21 @@ class DispatchRunRequest(BaseModel):
     question_id: str = Field(..., min_length=1)
 
 
-def _list_escalated_questions(limit: int = 50) -> list[dict]:
+def _list_escalated_questions(limit: int = 50) -> list[TeacherItem]:
     """Scan for ESCALATED questions (small scale; replace with GSI for production)."""
-    table = get_table()
-    result = table.scan(
+    result = _teacher_scan(
+        get_table(),
         FilterExpression="#s = :s",
         ExpressionAttributeNames={"#s": "status"},
         ExpressionAttributeValues={":s": QuestionStatus.ESCALATED.value},
         Limit=limit,
     )
-    return result.get("Items", [])
+    return _teacher_items(result)
 
 
-def _is_dispatch_restricted_to_other_teacher(item: dict[str, Any], teacher_id: str, now: str) -> bool:
+def _is_dispatch_restricted_to_other_teacher(
+    item: Mapping[str, object], teacher_id: str, now: str
+) -> bool:
     return (
         item.get("dispatch_status") == "dispatched"
         and item.get("dispatched_teacher_id") not in (None, "", teacher_id)
@@ -223,8 +315,7 @@ async def takeover(
     item = dict(authorized.value)
     teacher_facts = authorized.facts.teacher
     teacher_account = teacher_facts.teacher_account if teacher_facts else None
-    teacher_id = str(teacher_account.get("user_id") or "") if teacher_account else ""
-    if not teacher_id:
+    if teacher_account is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
@@ -233,6 +324,17 @@ async def takeover(
                 "action": "retry_teacher_takeover",
             },
         )
+    teacher_id_value = teacher_account.get("user_id")
+    if not isinstance(teacher_id_value, str) or not teacher_id_value:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "teacher_takeover_temporarily_unavailable",
+                "message": "Teacher takeover is temporarily unavailable. Try again.",
+                "action": "retry_teacher_takeover",
+            },
+        )
+    teacher_id = teacher_id_value
     now = _now()
     sla_fields = teacher_reply_service.compute_takeover_sla_fields(item, now)
     result = question_repo.claim_teacher_takeover(
@@ -339,7 +441,15 @@ async def reply(
             extra_attrs=reply_fields,
         )
     )
-    teacher_id = str((authorized.facts.teacher.teacher_account or {})["user_id"])
+    teacher_facts = authorized.facts.teacher
+    teacher_account = teacher_facts.teacher_account if teacher_facts else None
+    teacher_id_value = teacher_account.get("user_id") if teacher_account else None
+    if not isinstance(teacher_id_value, str) or not teacher_id_value:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Teacher identity is temporarily unavailable; retry",
+        )
+    teacher_id = teacher_id_value
     notification_service.emit_teacher_reply(
         question=updated_question, teacher_id=teacher_id
     )
@@ -403,45 +513,42 @@ async def resolve(
 
 
 # Canonical teacher portal, availability, help-request, and AI-tool routes.
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
 def _conv_pk(conv_id: str) -> str:
     return f"CONV#{conv_id}"
 
 
-def _get_conversation(conv_id: str) -> dict | None:
-    table = get_table()
-    resp = table.get_item(Key={"PK": _conv_pk(conv_id), "SK": "CONV"})
-    return resp.get("Item")
+def _get_conversation(conv_id: str) -> TeacherItem | None:
+    resp = _teacher_get(
+        get_table(), Key={"PK": _conv_pk(conv_id), "SK": "CONV"}
+    )
+    item = resp.get("Item")
+    return _teacher_mapping(item) if item is not None else None
 
 
-def _get_messages(conv_id: str) -> list[dict]:
-    table = get_table()
-    resp = table.query(
+def _get_messages(conv_id: str) -> list[TeacherItem]:
+    resp = _teacher_query(
+        get_table(),
         KeyConditionExpression=(
-            boto3.dynamodb.conditions.Key("PK").eq(_conv_pk(conv_id)) &
-            boto3.dynamodb.conditions.Key("SK").begins_with("MSG#")
+            Key("PK").eq(_conv_pk(conv_id)) & Key("SK").begins_with("MSG#")
         ),
         ScanIndexForward=True,
     )
-    return resp.get("Items", [])
+    return _teacher_items(resp)
 
 
-def _get_escalated_conversations() -> list[dict]:
+def _get_escalated_conversations() -> list[TeacherItem]:
     """Scan conversations that have been escalated to a teacher."""
-    table = get_table()
-    resp = table.scan(
+    resp = _teacher_scan(
+        get_table(),
         FilterExpression=(
-            boto3.dynamodb.conditions.Attr("entity_type").eq("conversation") &
-            boto3.dynamodb.conditions.Attr("escalated").eq(True)
+            Attr("entity_type").eq("conversation")
+            & Attr("escalated").eq(True)
         ),
     )
-    return resp.get("Items", [])
+    return _teacher_items(resp)
 
 
-def _resolve_help_request(request_id: str) -> dict | None:
+def _resolve_help_request(request_id: str) -> TeacherItem | None:
     """Resolve an external request ID to one canonical conversation/task owner."""
     conv = _get_conversation(request_id)
     if not conv or not conv.get("escalated"):
@@ -458,7 +565,7 @@ def _resolve_help_request(request_id: str) -> dict | None:
     return _normalize_help_request(conv)
 
 
-def _normalize_help_request(conv: dict) -> dict:
+def _normalize_help_request(conv: Mapping[str, object]) -> TeacherItem:
     normalized = dict(conv)
     if not normalized.get("status"):
         normalized["status"] = (
@@ -478,8 +585,8 @@ async def _current_help_requests(
     facts: CurrentAuthorizationFactRepository,
     correlation_id: str,
     audit_sink: AuthorizationAuditSink,
-) -> list[dict]:
-    current: list[dict] = []
+) -> list[TeacherItem]:
+    current: list[TeacherItem] = []
     for raw in _get_escalated_conversations():
         conv = _normalize_help_request(raw)
         try:
@@ -505,11 +612,12 @@ async def _current_help_requests(
 def _get_student_name(student_id: str) -> str:
     profile = user_repo.get_user(student_id)
     if profile:
-        return profile.get("name") or profile.get("email", "Student")
+        name = profile.get("name") or profile.get("email")
+        return name if isinstance(name, str) and name else "Student"
     return "Student"
 
 
-def _sla_snapshot(conv: dict) -> dict[str, int | str | None]:
+def _sla_snapshot(conv: Mapping[str, object]) -> dict[str, int | str | None]:
     requested_at = _parse_time(conv.get("escalated_at") or conv.get("created_at"))
     first_action_at = _parse_time(conv.get("first_teacher_action_at"))
     seconds = None
@@ -522,7 +630,7 @@ def _sla_snapshot(conv: dict) -> dict[str, int | str | None]:
     }
 
 
-def _parse_time(value: Any) -> datetime | None:
+def _parse_time(value: object) -> datetime | None:
     if not value:
         return None
     if isinstance(value, datetime):
@@ -539,7 +647,7 @@ def _parse_time(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def _list_value(value: Any) -> list[Any]:
+def _list_value(value: object) -> list[object]:
     if value is None:
         return []
     if isinstance(value, list):
@@ -733,12 +841,13 @@ async def _ai_question_context_dependency(
             status_code=error.status_code, detail=error.public_body()
         ) from error
     except Exception as exc:
-        error = SecurityDecisionError(
+        dependency_error = SecurityDecisionError(
             SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
             internal_detail=type(exc).__name__,
         )
         raise HTTPException(
-            status_code=error.status_code, detail=error.public_body()
+            status_code=dependency_error.status_code,
+            detail=dependency_error.public_body(),
         ) from exc
 
 
@@ -792,12 +901,13 @@ async def _exercise_context_dependency(
             status_code=error.status_code, detail=error.public_body()
         ) from error
     except Exception as exc:
-        error = SecurityDecisionError(
+        dependency_error = SecurityDecisionError(
             SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
             internal_detail=type(exc).__name__,
         )
         raise HTTPException(
-            status_code=error.status_code, detail=error.public_body()
+            status_code=dependency_error.status_code,
+            detail=dependency_error.public_body(),
         ) from exc
 
 
@@ -873,11 +983,11 @@ def _availability_response(profile: dict[str, Any] | None) -> TeacherAvailabilit
     ]
     weekly_availability = profile.get("weekly_availability") or profile.get("weeklyAvailability") or []
     slots = [
-        {
-            "dayOfWeek": str(slot["dayOfWeek"]),
-            "startTime": str(slot["startTime"]),
-            "endTime": str(slot["endTime"]),
-        }
+        TeacherAvailabilitySlot(
+            dayOfWeek=str(slot["dayOfWeek"]),
+            startTime=str(slot["startTime"]),
+            endTime=str(slot["endTime"]),
+        )
         for slot in weekly_availability
         if isinstance(slot, dict)
         and slot.get("dayOfWeek")
@@ -935,7 +1045,8 @@ async def get_stats(
     resolved_today_count = sum(
         1 for c in escalated
         if c.get("escalation_status") == "resolved"
-        and c.get("escalation_resolved_at", "")[:10] == datetime.now(timezone.utc).date().isoformat()
+        and _text(c.get("escalation_resolved_at"))[:10]
+        == datetime.now(timezone.utc).date().isoformat()
     )
     return TeacherStats(
         pendingRequests=pending,
@@ -1019,7 +1130,7 @@ async def list_ai_teacher_drafts(
         raise HTTPException(
             status_code=error.status_code, detail=error.public_body()
         ) from exc
-    items = []
+    items: list[AiTeacherDraftResponse] = []
     for candidate in candidates:
         try:
             authorized = await authorize_teacher_loaded_resource(
@@ -1038,7 +1149,11 @@ async def list_ai_teacher_drafts(
                     status_code=error.status_code, detail=error.public_body()
                 ) from error
             continue
-        items.append(ai_teacher_tools_service.get_draft(authorized))
+        items.append(
+            AiTeacherDraftResponse.model_validate(
+                ai_teacher_tools_service.get_draft(authorized)
+            )
+        )
     return AiTeacherDraftListResponse(items=items, count=len(items))
 
 
@@ -1146,20 +1261,27 @@ async def list_help_requests(
     """Return only help requests currently assigned to this Actor."""
     escalated = await _current_help_requests(actor, facts, correlation_id, audit_sink)
     items = []
-    for conv in sorted(escalated, key=lambda c: c.get("escalated_at", ""), reverse=True):
-        conv_id = conv.get("conversation_id", "")
-        student_name = _get_student_name(conv.get("student_id", ""))
-        esc_status = conv.get("escalation_status", "pending")
+    for conv in sorted(
+        escalated,
+        key=lambda candidate: _text(candidate.get("escalated_at")),
+        reverse=True,
+    ):
+        conv_id = _text(conv.get("conversation_id"))
+        student_name = _get_student_name(_text(conv.get("student_id")))
+        esc_status = _text(conv.get("escalation_status"), default="pending")
         items.append(TeacherHelpRequestSummary(
-            requestId=conv.get("escalation_request_id", conv_id),
+            requestId=_text(conv.get("escalation_request_id"), default=conv_id),
             conversationId=conv_id,
             studentName=student_name,
-            subject=conv.get("subject", "General"),
-            grade=conv.get("grade", ""),
+            subject=_text(conv.get("subject"), default="General"),
+            grade=_text(conv.get("grade")),
             status=esc_status,
-            requestMessage=conv.get("escalation_message"),
-            createdAt=conv.get("escalated_at", conv.get("updated_at", _now())),
-            firstTeacherActionAt=conv.get("first_teacher_action_at"),
+            requestMessage=_optional_text(conv.get("escalation_message")),
+            createdAt=_text(
+                conv.get("escalated_at"),
+                default=_text(conv.get("updated_at"), default=_now()),
+            ),
+            firstTeacherActionAt=_optional_text(conv.get("first_teacher_action_at")),
             sla=_sla_snapshot(conv),
         ).model_dump())
     return {"items": items}
@@ -1181,41 +1303,52 @@ async def get_help_request(
 
     conv = dict(authorized.value)
 
-    conv_id = conv.get("conversation_id", "")
-    student_id = conv.get("student_id", "")
+    conv_id = _required_text(conv.get("conversation_id"))
+    student_id = _required_text(conv.get("student_id"))
     student_profile = user_repo.get_user(student_id)
-    student_name = (student_profile or {}).get("name", "Student")
+    student_name = _text(
+        (student_profile or {}).get("name"), default="Student"
+    )
 
     raw_messages = _get_messages(conv_id)
     messages = [
         MessageOut(
-            id=m["message_id"],
+            id=_required_text(m.get("message_id")),
             conversationId=conv_id,
-            role=m["role"],
-            content=m["content"],
-            createdAt=m["created_at"],
+            role=_required_text(m.get("role")),
+            content=_required_text(m.get("content")),
+            createdAt=_required_text(m.get("created_at")),
         )
         for m in raw_messages
     ]
 
     # Load notes stored as NOTE# items in the conversation
-    notes_resp = table.query(
+    notes_resp = _teacher_query(
+        table,
         KeyConditionExpression=(
-            boto3.dynamodb.conditions.Key("PK").eq(_conv_pk(conv_id)) &
-            boto3.dynamodb.conditions.Key("SK").begins_with("NOTE#")
+            Key("PK").eq(_conv_pk(conv_id)) & Key("SK").begins_with("NOTE#")
         ),
         ScanIndexForward=True,
     )
     notes = [
         TeacherNoteOut(
-            id=n["note_id"],
-            note=n["content"],
-            createdAt=n["created_at"],
-            teacher={"id": n.get("teacher_id", ""), "name": n.get("teacher_name", "Teacher")},
-            richContent=n.get("teacher_response_rich"),
-            responseFormat=n.get("teacher_response_format"),
+            id=_required_text(n.get("note_id")),
+            note=_required_text(n.get("content")),
+            createdAt=_required_text(n.get("created_at")),
+            teacher={
+                "id": _text(n.get("teacher_id")),
+                "name": _text(n.get("teacher_name"), default="Teacher"),
+            },
+            richContent=(
+                dict(rich_content)
+                if isinstance(
+                    rich_content := n.get("teacher_response_rich"), Mapping
+                )
+                else None
+            ),
+            responseFormat=_optional_text(n.get("teacher_response_format")),
         )
-        for n in notes_resp.get("Items", [])
+        for n in _teacher_items(notes_resp)
     ]
 
     # Mark first teacher access time
@@ -1223,7 +1356,8 @@ async def get_help_request(
     if not first_teacher_action_at:
         first_teacher_action_at = _now()
         try:
-            table.update_item(
+            _teacher_update(
+                table,
                 Key={"PK": _conv_pk(conv_id), "SK": "CONV"},
                 UpdateExpression="SET first_teacher_action_at = :t",
                 ConditionExpression="attribute_not_exists(first_teacher_action_at)",
@@ -1234,19 +1368,19 @@ async def get_help_request(
         conv = {**conv, "first_teacher_action_at": first_teacher_action_at}
 
     return TeacherHelpRequestDetail(
-        requestId=conv.get("escalation_request_id", conv_id),
+        requestId=_text(conv.get("escalation_request_id"), default=conv_id),
         conversationId=conv_id,
         student={
             "id": student_id,
             "name": student_name,
-            "grade": conv.get("grade", ""),
+            "grade": _text(conv.get("grade")),
         },
-        subject=conv.get("subject", "General"),
-        status=conv.get("escalation_status", "pending"),
-        requestMessage=conv.get("escalation_message"),
+        subject=_text(conv.get("subject"), default="General"),
+        status=_text(conv.get("escalation_status"), default="pending"),
+        requestMessage=_optional_text(conv.get("escalation_message")),
         messages=messages,
         notes=notes,
-        firstTeacherActionAt=first_teacher_action_at,
+        firstTeacherActionAt=_optional_text(first_teacher_action_at),
         sla=_sla_snapshot(conv),
     )
 
@@ -1267,7 +1401,7 @@ async def update_help_request(
     table = get_table()
     conv = dict(authorized.value)
 
-    conv_id = conv.get("conversation_id", "")
+    conv_id = _required_text(conv.get("conversation_id"))
     now = _now()
     update_parts = ["escalation_status = :s", "updated_at = :u"]
     expr_values: dict = {":s": body.status, ":u": now}
@@ -1279,23 +1413,24 @@ async def update_help_request(
         update_parts.append("resolution_note = :r")
         expr_values[":r"] = body.resolutionNote
 
-    table.update_item(
+    _teacher_update(
+        table,
         Key={"PK": _conv_pk(conv_id), "SK": "CONV"},
         UpdateExpression="SET " + ", ".join(update_parts),
         ExpressionAttributeValues=expr_values,
     )
 
-    student_name = _get_student_name(conv.get("student_id", ""))
+    student_name = _get_student_name(_text(conv.get("student_id")))
     return TeacherHelpRequestSummary(
-        requestId=conv.get("escalation_request_id", conv_id),
+        requestId=_text(conv.get("escalation_request_id"), default=conv_id),
         conversationId=conv_id,
         studentName=student_name,
-        subject=conv.get("subject", "General"),
-        grade=conv.get("grade", ""),
+        subject=_text(conv.get("subject"), default="General"),
+        grade=_text(conv.get("grade")),
         status=body.status,
-        requestMessage=conv.get("escalation_message"),
-        createdAt=conv.get("escalated_at", now),
-        firstTeacherActionAt=conv.get("first_teacher_action_at") or now,
+        requestMessage=_optional_text(conv.get("escalation_message")),
+        createdAt=_text(conv.get("escalated_at"), default=now),
+        firstTeacherActionAt=_optional_text(conv.get("first_teacher_action_at")) or now,
         sla=_sla_snapshot({**conv, "first_teacher_action_at": conv.get("first_teacher_action_at") or now}),
     )
 
@@ -1317,10 +1452,12 @@ async def add_note(
     table = get_table()
     conv = dict(authorized.value)
 
-    conv_id = conv.get("conversation_id", "")
+    conv_id = _required_text(conv.get("conversation_id"))
     teacher_id = actor.user_id
     teacher_profile = user_repo.get_user(teacher_id)
-    teacher_name = (teacher_profile or {}).get("name", "Teacher")
+    teacher_name = _text(
+        (teacher_profile or {}).get("name"), default="Teacher"
+    )
     note_id = str(uuid.uuid4())
     now = _now()
     try:
@@ -1328,7 +1465,7 @@ async def add_note(
     except teacher_reply_service.TeacherReplyValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    table.put_item(Item={
+    _teacher_put(table, Item={
         "PK": _conv_pk(conv_id),
         "SK": f"NOTE#{note_id}",
         "note_id": note_id,
@@ -1343,12 +1480,12 @@ async def add_note(
 
     # Also add the teacher's reply as a message in the conversation
     msg_id = str(uuid.uuid4())
-    table.put_item(Item={
+    _teacher_put(table, Item={
         "PK": _conv_pk(conv_id),
         "SK": f"MSG#{msg_id}",
         "message_id": msg_id,
         "conversation_id": conv_id,
-        "student_id": conv.get("student_id", ""),
+        "student_id": _text(conv.get("student_id")),
         "role": "teacher",
         "content": reply_fields["teacher_response"],
         "teacher_response_rich": reply_fields["teacher_response_rich"],
