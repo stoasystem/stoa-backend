@@ -1,4 +1,5 @@
 """DynamoDB access patterns for the User entity."""
+
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -7,7 +8,7 @@ from enum import StrEnum
 import hashlib
 import json
 import re
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
 from stoa.db.repositories import account_deletion_repo
@@ -16,6 +17,46 @@ from stoa.db.dynamodb import get_table
 
 type UserItem = dict[str, object]
 type TransactionOperation = dict[str, Any]
+
+
+@runtime_checkable
+class _GetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _QueryTable(Protocol):
+    def query(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> object: ...
+
+
+def _dependency_mapping(value: object) -> UserItem:
+    item = _optional_item(value)
+    if item is None:
+        raise ValueError("malformed user repository response")
+    return item
+
+
+def _get_item(table: object, **kwargs: object) -> UserItem:
+    if not isinstance(table, _GetTable):
+        raise ValueError("user repository dependency unavailable")
+    return _dependency_mapping(table.get_item(**kwargs))
+
+
+def _query(table: object, **kwargs: object) -> UserItem:
+    if not isinstance(table, _QueryTable):
+        raise ValueError("user repository dependency unavailable")
+    return _dependency_mapping(table.query(**kwargs))
+
+
+def _scan(table: object, **kwargs: object) -> UserItem:
+    if not isinstance(table, _ScanTable):
+        raise ValueError("user repository dependency unavailable")
+    return _dependency_mapping(table.scan(**kwargs))
 
 
 PROFILE_WRITE_MAX_ATTEMPTS = 3
@@ -158,7 +199,8 @@ def put_user(item: Mapping[str, object]) -> None:
 
 def get_user(user_id: str) -> UserItem | None:
     table = get_table()
-    resp = table.get_item(
+    resp = _get_item(
+        table,
         Key={"PK": f"USER#{user_id}", "SK": "PROFILE"},
         ConsistentRead=True,
     )
@@ -167,7 +209,8 @@ def get_user(user_id: str) -> UserItem | None:
 
 def get_user_by_email(email: str) -> UserItem | None:
     table = get_table()
-    resp = table.query(
+    resp = _query(
+        table,
         IndexName="GSI-Email",
         KeyConditionExpression=Key("email").eq(email),
         Limit=1,
@@ -179,12 +222,12 @@ def get_user_by_email(email: str) -> UserItem | None:
 def list_children_by_parent_scan(parent_id: str) -> list[UserItem]:
     """Return student profiles that still use the legacy parent_id profile link."""
     table = get_table()
-    scan_kwargs = {
+    scan_kwargs: dict[str, object] = {
         "FilterExpression": Attr("parent_id").eq(parent_id) & Attr("role").eq("student"),
     }
     children: list[UserItem] = []
     while True:
-        resp = table.scan(**scan_kwargs)
+        resp = _scan(table, **scan_kwargs)
         children.extend(_items(resp.get("Items", [])))
         last_key = resp.get("LastEvaluatedKey")
         if not last_key:
@@ -231,9 +274,7 @@ def update_teacher_availability(
     )
 
 
-def update_email_verification_state(
-    user_id: str, fields: Mapping[str, object]
-) -> UserItem:
+def update_email_verification_state(user_id: str, fields: Mapping[str, object]) -> UserItem:
     """Update bounded email verification metadata on a user profile."""
     if not fields:
         return get_user(user_id) or {}
@@ -304,14 +345,10 @@ def profile_update_operation(
     values[":next_profile_version"] = next_version
 
     if expression.upper().startswith("SET "):
-        expression = (
-            "SET version=:next_profile_version, " + expression[4:].lstrip()
-        )
+        expression = "SET version=:next_profile_version, " + expression[4:].lstrip()
     else:
         expression = "SET version=:next_profile_version " + expression
-    condition_expression = (
-        "attribute_exists(PK) AND attribute_exists(SK) AND " + condition
-    )
+    condition_expression = "attribute_exists(PK) AND attribute_exists(SK) AND " + condition
     if additional_condition_expression:
         condition_expression += f" AND ({additional_condition_expression})"
     return {
@@ -337,9 +374,7 @@ def update_profile_fields_versioned(
     """Strong-read and apply one bounded, narrow profile CAS operation."""
     if isinstance(max_attempts, bool) or not isinstance(max_attempts, int) or max_attempts < 1:
         raise ValueError("max_attempts must be a positive integer")
-    fields = owned_fields or _profile_update_fields(
-        update_expression, expression_attribute_names
-    )
+    fields = owned_fields or _profile_update_fields(update_expression, expression_attribute_names)
     # A stale ordinary mutation of scrub-owned data is never replayed after a
     # scrub wins.  Unrelated writers retain bounded retry and convergence.
     attempt_limit = 1 if fields & PROFILE_SCRUB_OWNED_FIELDS else max_attempts
@@ -421,18 +456,10 @@ def build_parent_binding_transaction(
     created_at = _required_text(created_at, "created_at")
     if isinstance(version, bool) or not isinstance(version, int) or version < 1:
         raise ValueError("version must be a positive integer")
-    expected_parent_generation = _required_positive_integer(
-        expected_parent_generation
-    )
-    expected_student_generation = _required_positive_integer(
-        expected_student_generation
-    )
-    expected_parent_profile_version = _required_profile_version(
-        expected_parent_profile_version
-    )
-    expected_student_profile_version = _required_profile_version(
-        expected_student_profile_version
-    )
+    expected_parent_generation = _required_positive_integer(expected_parent_generation)
+    expected_student_generation = _required_positive_integer(expected_student_generation)
+    expected_parent_profile_version = _required_profile_version(expected_parent_profile_version)
+    expected_student_profile_version = _required_profile_version(expected_student_profile_version)
 
     binding = {
         "entity_type": "parent_student_binding",
@@ -489,12 +516,8 @@ def build_parent_binding_transaction(
         }
 
     return [
-        account_deletion_repo.active_fence_condition(
-            parent_id, expected_parent_generation
-        ),
-        account_deletion_repo.active_fence_condition(
-            student_id, expected_student_generation
-        ),
+        account_deletion_repo.active_fence_condition(parent_id, expected_parent_generation),
+        account_deletion_repo.active_fence_condition(student_id, expected_student_generation),
         _active_profile_observation_condition(
             parent_id,
             role="parent",
@@ -717,9 +740,7 @@ def build_parent_binding_status_transition_transaction(
     source = _required_text(source, "source")
     actor = _required_text(actor, "actor")
     updated_at = _required_text(updated_at, "updated_at")
-    expected_student_profile_version = _required_profile_version(
-        expected_student_profile_version
-    )
+    expected_student_profile_version = _required_profile_version(expected_student_profile_version)
     next_version = expected_version + 1
     names = {
         "#parent_id": "parent_id",
@@ -886,18 +907,14 @@ def preview_parent_binding_repair(
     student_id = _required_text(student_id, "student_id")
     relationship = _required_text(relationship, "relationship")
     snapshot = _parent_binding_snapshot(parent_id, student_id)
-    classification, proposed_action, relationship_version = (
-        _classify_parent_binding_repair(
-            snapshot,
-            parent_id=parent_id,
-            student_id=student_id,
-            relationship=relationship,
-        )
+    classification, proposed_action, relationship_version = _classify_parent_binding_repair(
+        snapshot,
+        parent_id=parent_id,
+        student_id=student_id,
+        relationship=relationship,
     )
     observations = _parent_binding_repair_observations(snapshot)
-    pair_id = _parent_binding_repair_digest(
-        "pair", parent_id, student_id, relationship
-    )
+    pair_id = _parent_binding_repair_digest("pair", parent_id, student_id, relationship)
     preview_id = _parent_binding_repair_digest(
         "preview",
         parent_id,
@@ -935,9 +952,7 @@ def apply_parent_binding_repair(
         relationship=relationship,
     )
     if current.classification is ParentBindingRepairClassification.CONFLICT:
-        return ParentBindingRepairApplyResult(
-            ParentBindingRepairApplyDisposition.CONFLICT, current
-        )
+        return ParentBindingRepairApplyResult(ParentBindingRepairApplyDisposition.CONFLICT, current)
     if current.classification is ParentBindingRepairClassification.CONSISTENT:
         return ParentBindingRepairApplyResult(
             ParentBindingRepairApplyDisposition.ALREADY_CONSISTENT, current
@@ -989,14 +1004,10 @@ def apply_parent_binding_repair(
         return ParentBindingRepairApplyResult(
             ParentBindingRepairApplyDisposition.SKIPPED_CHANGED, refreshed
         )
-    return ParentBindingRepairApplyResult(
-        ParentBindingRepairApplyDisposition.RETRYABLE, refreshed
-    )
+    return ParentBindingRepairApplyResult(ParentBindingRepairApplyDisposition.RETRYABLE, refreshed)
 
 
-def _parent_binding_snapshot(
-    parent_id: str, student_id: str
-) -> _ParentBindingSnapshot:
+def _parent_binding_snapshot(parent_id: str, student_id: str) -> _ParentBindingSnapshot:
     return _ParentBindingSnapshot(
         parent_profile=get_user(parent_id),
         profile=get_user(student_id),
@@ -1057,15 +1068,13 @@ def _classify_parent_binding_repair(
         (
             row
             for row in snapshot.reverse_rows
-            if row.get("PK") == f"USER#{student_id}"
-            and row.get("SK") == f"PARENT#{parent_id}"
+            if row.get("PK") == f"USER#{student_id}" and row.get("SK") == f"PARENT#{parent_id}"
         ),
         None,
     )
     if snapshot.reverse is not None and (
         queried_exact is None
-        or _parent_binding_row_digest(queried_exact)
-        != _parent_binding_row_digest(snapshot.reverse)
+        or _parent_binding_row_digest(queried_exact) != _parent_binding_row_digest(snapshot.reverse)
     ):
         return ParentBindingRepairClassification.SKIPPED_INVALID, None, None
     if snapshot.reverse is None and queried_exact is not None:
@@ -1341,7 +1350,8 @@ def _binding_row_matches(
 
 def get_parent_student_binding(parent_id: str, student_id: str) -> UserItem | None:
     table = get_table()
-    resp = table.get_item(
+    resp = _get_item(
+        table,
         Key={"PK": f"USER#{parent_id}", "SK": f"CHILD#{student_id}"},
         ConsistentRead=True,
     )
@@ -1351,7 +1361,8 @@ def get_parent_student_binding(parent_id: str, student_id: str) -> UserItem | No
 def get_student_parent_binding(student_id: str, parent_id: str) -> UserItem | None:
     """Read the exact reverse formal row; profile fields never substitute for it."""
     table = get_table()
-    resp = table.get_item(
+    resp = _get_item(
+        table,
         Key={"PK": f"USER#{student_id}", "SK": f"PARENT#{parent_id}"},
         ConsistentRead=True,
     )
@@ -1360,7 +1371,8 @@ def get_student_parent_binding(student_id: str, parent_id: str) -> UserItem | No
 
 def list_parent_student_bindings(parent_id: str) -> list[UserItem]:
     table = get_table()
-    resp = table.query(
+    resp = _query(
+        table,
         KeyConditionExpression=Key("PK").eq(f"USER#{parent_id}") & Key("SK").begins_with("CHILD#"),
         ConsistentRead=True,
     )
@@ -1369,14 +1381,18 @@ def list_parent_student_bindings(parent_id: str) -> list[UserItem]:
 
 def list_student_parent_bindings(student_id: str) -> list[UserItem]:
     table = get_table()
-    resp = table.query(
-        KeyConditionExpression=Key("PK").eq(f"USER#{student_id}") & Key("SK").begins_with("PARENT#"),
+    resp = _query(
+        table,
+        KeyConditionExpression=Key("PK").eq(f"USER#{student_id}")
+        & Key("SK").begins_with("PARENT#"),
         ConsistentRead=True,
     )
     return _items(resp.get("Items", []))
 
 
-def update_student_parent_link(student_id: str, parent_id: str, relationship: str = "child") -> None:
+def update_student_parent_link(
+    student_id: str, parent_id: str, relationship: str = "child"
+) -> None:
     update_profile_fields(
         student_id,
         update_expression=(
@@ -1526,12 +1542,8 @@ def _parent_binding_authorization_observations(
     try:
         parent_profile_version = _required_profile_version(parent.get("version"))
         student_profile_version = _required_profile_version(student.get("version"))
-        parent_fence = account_deletion_repo.require_active_account_fence(
-            parent_id, table=table
-        )
-        student_fence = account_deletion_repo.require_active_account_fence(
-            student_id, table=table
-        )
+        parent_fence = account_deletion_repo.require_active_account_fence(parent_id, table=table)
+        student_fence = account_deletion_repo.require_active_account_fence(student_id, table=table)
         parent_generation = _required_positive_integer(parent_fence.get("generation"))
         student_generation = _required_positive_integer(student_fence.get("generation"))
     except (ValueError, account_deletion_repo.AccountDeletionConflict):
