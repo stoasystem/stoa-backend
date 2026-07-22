@@ -4,13 +4,13 @@ milestone: v9.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 475-12-PLAN.md
-last_updated: "2026-07-22T00:22:27.607Z"
+last_updated: "2026-07-22T00:57:56.442Z"
 last_activity: 2026-07-21 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 169
-  completed_plans: 103
+  completed_plans: 104
   percent: 20
 ---
 
@@ -210,6 +210,7 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 | Phase 475 P08 | 14 min | 1 tasks | 7 files |
 | Phase 475 P10 | 7 min | 1 tasks | 5 files |
 | Phase 475 P12 | 5 min | 1 tasks | 4 files |
+| Phase 475 P03 | 26 min | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -414,3 +415,4 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 - [Phase 475]: Mistake review uses recorded or unknown_legacy state and never substitutes standard_answer. — Historical absence is represented by null plus the fixed client message instead of guessed or empty known input.
 - [Phase 475]: Complete deletion replay projects only the validated nested terminal receipt. — Terminal compaction intentionally removes active branch registry fields, while issuer, subject, fingerprint, request, generation, and inventory bindings remain mandatory.
 - [Phase 475]: DeletionReceipt.is_terminal is the route continuation gate. — Pending requests schedule one continuation per accepted request; deleted replay schedules no cleanup or background work.
+- [Phase 475]: Question reconciliation is explicit-coordinate and preview-bound; terminal reversal preserves audit quantity while excluding reversed events from active usage and never touches attachment/storage rows. — Historical privacy-safe ledger evidence cannot reconstruct missing question content, and exact four-row compensation must be independently retry-safe.
