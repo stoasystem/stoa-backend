@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stoa.config import Settings, get_settings
+from stoa.db.repositories import question_submission_repo
 from stoa.deps import get_actor, get_current_user
 from stoa.routers import parents, questions, students
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
@@ -62,12 +63,23 @@ def test_submit_question_accepts_foundation_subject_and_stores_topic_seeds(monke
         "get_user",
         lambda user_id: {"user_id": user_id, "subscription_tier": "free", "grade": "Grade 8", "language": "en"},
     )
-    monkeypatch.setattr(questions.question_repo, "record_daily_question_usage", lambda *args: 1)
-    monkeypatch.setattr(questions.question_repo, "put_question", lambda item: stored.update(item))
     monkeypatch.setattr(
-        questions.usage_ledger_service,
-        "record_question_usage_event",
-        lambda **_kwargs: {"idempotency_status": "created"},
+        questions.question_submission_repo,
+        "get_question_submission_command",
+        lambda *_args, **_kwargs: None,
+    )
+
+    def admit_question(**kwargs):
+        stored.update(kwargs["question"])
+        return question_submission_repo.QuestionAdmissionResult(
+            question_submission_repo.QuestionAdmissionDisposition.ADMITTED,
+            question=dict(kwargs["question"]),
+        )
+
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "admit_question_submission",
+        admit_question,
     )
     monkeypatch.setattr(
         questions.question_repo,
