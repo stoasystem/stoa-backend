@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 475 gap closure planned (475-14 through 475-45)
-last_updated: "2026-07-22T07:07:03.063Z"
-last_activity: 2026-07-22 -- Phase 475 gap closure plans verified
+stopped_at: Completed 475-14-PLAN.md
+last_updated: "2026-07-22T07:27:31.043Z"
+last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
-  completed_phases: 3
-  total_plans: 169
-  completed_plans: 107
-  percent: 30
+  completed_phases: 2
+  total_plans: 201
+  completed_plans: 108
+  percent: 20
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 13 of 45
-Status: Ready to execute 32 verified gap-closure plans
-Last activity: 2026-07-22 -- Phase 475 gap closure plans verified
+Plan: 2 of 45
+Status: Ready to execute
+Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Accumulated Context
 
@@ -107,9 +107,9 @@ Last activity: 2026-07-22 -- Phase 475 gap closure plans verified
 
 ## Session
 
-**Last Date:** 2026-07-22T01:55:40.992Z
-**Stopped At:** Phase 475 gap closure planned (475-14 through 475-45)
-**Resume File:** .planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-14-PLAN.md
+**Last Date:** 2026-07-22T07:27:31.037Z
+**Stopped At:** Completed 475-14-PLAN.md
+**Resume File:** None
 
 ## Performance Metrics
 
@@ -214,6 +214,7 @@ Last activity: 2026-07-22 -- Phase 475 gap closure plans verified
 | Phase 475 P05 | 9 min | 1 tasks | 3 files |
 | Phase 475 P07 | 11 min | 1 tasks | 5 files |
 | Phase 475 P13 | 15 min | 1 tasks | 6 files |
+| Phase 475 P14 | 9 min | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -428,3 +429,5 @@ Last activity: 2026-07-22 -- Phase 475 gap closure plans verified
 - [Phase 475]: Reuse Phase 474 strict full-backend accounting without relabeling local evidence as the sealed Linux/cross-repository formal receipt.
 - [Phase 475]: Use deterministic opaque parametrized node identities so answers and identities are not published.
 - [Phase 475]: Block Phase 475 changed-line mypy diagnostics across all 21 runtime files while disclosing 178 inherited diagnostics.
+- [Phase 475]: Question submission requires one bounded nonblank caller-owned idempotencyKey and preserves valid key bytes exactly. — Lost-response replay must remain reproducible and cannot fall back to a fresh question UUID.
+- [Phase 475]: POST /questions validation failures use one route-local redacted code, message, and correlation ID. — Malformed client input must stop before effects without echoing request values or changing unrelated question routes.
