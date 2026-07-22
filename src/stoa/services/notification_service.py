@@ -1487,7 +1487,7 @@ def register_push_token(
             error = SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND)
             raise HTTPException(error.status_code, detail=error.public_body()) from error
     now = now_iso()
-    item = {
+    item: dict[str, object] = {
         "entity_type": notification_repo.PUSH_TOKEN_ENTITY,
         "user_id": user_id,
         "role": _user_role(user),
@@ -1836,8 +1836,12 @@ def _record_event_attempts(event_ids: list[str], metadata_key: str, attempt: dic
             continue
         if item.get("owner_classification") == "global_nonprivate":
             continue
-        metadata = dict(item.get("metadata") or {})
-        attempts = list(metadata.get(metadata_key) or [])
+        raw_metadata = item.get("metadata")
+        metadata: dict[str, object] = (
+            dict(raw_metadata) if isinstance(raw_metadata, Mapping) else {}
+        )
+        raw_attempts = metadata.get(metadata_key)
+        attempts = list(raw_attempts) if isinstance(raw_attempts, list) else []
         attempts.append(attempt)
         metadata[metadata_key] = attempts[-5:]
         notification_repo.update_event(event_id, {"metadata": metadata})
