@@ -2627,7 +2627,8 @@
       "maximum": null,
       "referenceOnly": [
         "relationship",
-        "reason"
+        "reason",
+        "preview_id"
       ],
       "required": true,
       "resolver": null,
@@ -2656,6 +2657,46 @@
     ],
     "method": "POST",
     "path": "/admin/parent-bindings/repair",
+    "sensitive": true
+  },
+  {
+    "adminTarget": {
+      "bodyParameter": "body",
+      "cardinality": "scalar",
+      "collectionPath": null,
+      "maximum": null,
+      "referenceOnly": [
+        "relationship",
+        "reason",
+        "preview_id"
+      ],
+      "required": true,
+      "resolver": null,
+      "targetPaths": [
+        "parent_id",
+        "student_id"
+      ],
+      "tupleFields": [
+        "parent_id",
+        "student_id"
+      ]
+    },
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "parent_binding_repairer",
+        "purpose": "account_operations",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/admin/parent-bindings/repair/preview",
     "sensitive": true
   },
   {
