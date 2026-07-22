@@ -170,6 +170,22 @@ SESSION_TOMBSTONE_ALLOWLIST = frozenset(
     }
 )
 
+# Cross-account identities are deliberately enumerated by persisted entity and
+# field.  Do not replace this registry with recursive payload inspection: only
+# reviewed relationship, teacher, and notification coordinates may make an
+# otherwise foreign-owned row part of an account-deletion scan.
+CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY: Mapping[
+    str, tuple[frozenset[str], frozenset[str]]
+] = {
+    "parent_student_binding": (frozenset({"parent_id"}), frozenset()),
+    "question": (frozenset({"teacher_id"}), frozenset()),
+    "teacher_session": (frozenset({"teacher_id"}), frozenset()),
+    "notification_event": (
+        frozenset({"actor_id"}),
+        frozenset({"owner_id", "student_id", "teacher_id"}),
+    ),
+}
+
 
 def account_fence_key(user_id: str) -> dict[str, str]:
     value = _required(user_id, "user_id")
@@ -1622,6 +1638,7 @@ def _required(value: Any, name: str) -> str:
 
 
 def _targets_user(item: Mapping[str, Any], user_id: str) -> bool:
+    user_id = _required(user_id, "user_id")
     if user_id in {
         item.get("owner_id"),
         item.get("student_id"),
@@ -1633,6 +1650,17 @@ def _targets_user(item: Mapping[str, Any], user_id: str) -> bool:
         return True
     sk = str(item.get("SK") or "")
     if sk in {f"CHILD#{user_id}", f"PARENT#{user_id}"}:
+        return True
+    scalar_fields, metadata_fields = CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY.get(
+        str(item.get("entity_type") or ""),
+        (frozenset(), frozenset()),
+    )
+    if any(item.get(field) == user_id for field in scalar_fields):
+        return True
+    metadata = item.get("metadata")
+    if isinstance(metadata, Mapping) and any(
+        metadata.get(field) == user_id for field in metadata_fields
+    ):
         return True
     for field in ("children", "child_summaries", "student_summaries"):
         value = item.get(field)
