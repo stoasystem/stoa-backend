@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-22-PLAN.md
-last_updated: "2026-07-22T07:39:45.936Z"
+stopped_at: Completed 475-24-PLAN.md
+last_updated: "2026-07-22T07:50:57.508Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 109
+  completed_plans: 110
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 3 of 45
+Plan: 4 of 45
 Status: Ready to execute
 Last activity: 2026-07-22 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-22T07:39:45.930Z
-**Stopped At:** Completed 475-22-PLAN.md
+**Last Date:** 2026-07-22T07:50:57.501Z
+**Stopped At:** Completed 475-24-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -216,6 +216,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P13 | 15 min | 1 tasks | 6 files |
 | Phase 475 P14 | 9 min | 1 tasks | 4 files |
 | Phase 475 P22 | 8 min | 1 tasks | 3 files |
+| Phase 475 P24 | 7 min | 1 tasks | 2 files |
 
 ## Decisions
 
@@ -433,3 +434,5 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: Question submission requires one bounded nonblank caller-owned idempotencyKey and preserves valid key bytes exactly. — Lost-response replay must remain reproducible and cannot fall back to a fresh question UUID.
 - [Phase 475]: POST /questions validation failures use one route-local redacted code, message, and correlation ID. — Malformed client input must stop before effects without echoing request values or changing unrelated question routes.
 - [Phase 475]: Relationship writes bind both participants' fence generations and profile versions in one transaction. — Either account lifecycle, canonical role, or observed profile version changing before commit must cancel every relationship projection.
+- [Phase 475]: Rate operation schema v2 persists one immutable decision/count/limit/expiry receipt with the exact counter CAS. — Replay must remain byte-stable after unrelated traffic and cannot consult the mutable aggregate counter.
+- [Phase 475]: Rate replay keeps an internal replayed disposition while projecting the stored admitted decision. — Control flow can identify duplicates without changing the original public receipt bytes.

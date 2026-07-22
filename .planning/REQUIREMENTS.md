@@ -59,7 +59,7 @@ Convert STOA from broad local contracts into a trustworthy Web product that can 
 - [ ] **V9DATA-01:** Question quota, idempotency, usage ledger, upload consumption, and initial question persistence commit atomically or converge through an explicitly tested recovery state.
 - [ ] **V9DATA-02:** Concurrent teacher takeover has exactly one winner, one session, and one notification through a conditional/transactional claim.
 - [ ] **V9DATA-03:** Parent/student forward and reverse bindings and required profile changes commit transactionally, and a reconciliation tool repairs historical asymmetry idempotently.
-- [ ] **V9DATA-04:** Chat, hint, and related rate-limit counters do not increase after rejection; provider failures and retries follow documented consumption/idempotency semantics.
+- [x] **V9DATA-04:** Chat, hint, and related rate-limit counters do not increase after rejection; provider failures and retries follow documented consumption/idempotency semantics.
 - [x] **V9DATA-05:** Incorrect practice attempts persist a bounded, display-safe student answer and return it accurately in mistake review while handling legacy rows as unknown.
 - [x] **V9DATA-06:** Every shared parent-profile writer participates in one version/CAS-and-increment contract, or deletion uses a genuinely narrow non-overwriting update, so a stale child scrub cannot lose a concurrent locale, availability, verification, parent-link, or other unrelated profile change.
 - [ ] **V9DATA-07:** Notification delivery-begin distinguishes typed conditional/fence loss from transient DynamoDB/provider dependency failure; only proven account-deletion loss may terminalize as `canceled_account_deletion`, while transient failure remains recoverable and a healthy retry can deliver once.
