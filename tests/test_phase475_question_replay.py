@@ -273,9 +273,11 @@ def test_valid_idempotency_key_reaches_replay_boundary_as_opaque_digest(monkeypa
     )
     observed_keys: list[str] = []
 
-    def command_read(_student_id: str, idempotency_key: str):
+    def command_read(_student_id: str, idempotency_key: str, **_kwargs):
         observed_keys.append(idempotency_key)
         return {
+            "PK": "USER#student-1",
+            "SK": f"QUESTION_SUBMISSION#{expected_digest}",
             "entity_type": "question_submission_command",
             "schema_version": "question-submission-command.v2",
             "student_id": "student-1",
@@ -288,6 +290,8 @@ def test_valid_idempotency_key_reaches_replay_boundary_as_opaque_digest(monkeypa
                 corrected_content=None,
             ),
             "status": "processing",
+            "account_fence_generation": 1,
+            "version": 1,
         }
 
     monkeypatch.setattr(
@@ -296,11 +300,22 @@ def test_valid_idempotency_key_reaches_replay_boundary_as_opaque_digest(monkeypa
         command_read,
     )
     monkeypatch.setattr(
+        questions.question_submission_repo.account_deletion_repo,
+        "require_active_account_fence",
+        lambda *_args, **_kwargs: {"status": "active", "generation": 1},
+    )
+    monkeypatch.setattr(
         questions.question_repo,
         "get_question",
-        lambda _question_id: {
+        lambda _question_id, **_kwargs: {
+            "PK": "QUESTION#question-original",
+            "SK": "META",
+            "entity_type": "question",
+            "schema_version": "question.v1",
             "question_id": "question-original",
             "student_id": "student-1",
+            "account_fence_generation": 1,
+            "version": 1,
             "subject": "math",
             "content": "Please solve 2x + 4 = 10",
             "status": "pending",
@@ -308,6 +323,7 @@ def test_valid_idempotency_key_reaches_replay_boundary_as_opaque_digest(monkeypa
             "teacher_id": None,
             "teacher_response": None,
             "knowledge_points": [],
+            "topic_seeds": [],
             "student_feedback": None,
             "created_at": "2026-07-22T00:00:00+00:00",
             "resolved_at": None,
@@ -324,7 +340,7 @@ def test_valid_idempotency_key_reaches_replay_boundary_as_opaque_digest(monkeypa
     )
 
     assert response.status_code == 201
-    assert observed_keys == [expected_digest]
+    assert observed_keys and set(observed_keys) == {expected_digest}
     assert caller_key not in json.dumps(response.json(), sort_keys=True)
 
 
@@ -410,6 +426,8 @@ def test_changed_payload_returns_structured_new_submission_action(monkeypatch) -
         questions.question_submission_repo,
         "get_question_submission_command",
         lambda *_args, **_kwargs: {
+            "PK": "USER#student-1",
+            "SK": f"QUESTION_SUBMISSION#{digest}",
             "entity_type": "question_submission_command",
             "schema_version": "question-submission-command.v2",
             "student_id": "student-1",
@@ -418,7 +436,14 @@ def test_changed_payload_returns_structured_new_submission_action(monkeypatch) -
             "question_id": "question-original",
             "fingerprint": original_fingerprint,
             "status": "processing",
+            "account_fence_generation": 1,
+            "version": 1,
         },
+    )
+    monkeypatch.setattr(
+        questions.question_submission_repo.account_deletion_repo,
+        "require_active_account_fence",
+        lambda *_args, **_kwargs: {"status": "active", "generation": 1},
     )
     monkeypatch.setattr(
         questions.question_submission_repo,
@@ -586,9 +611,12 @@ def test_strict_replay_rejects_corrupt_foreign_or_stale_rows(
     target: str, field: str, value: object
 ) -> None:
     student_id, digest, fingerprint, command, fence, question = _strict_replay_rows()
-    row = command if target == "command" else question
-    row[field] = value
     table = _ReplayTable(command, fence, question)
+    row_key = (str(command["PK"]), str(command["SK"])) if target == "command" else (
+        str(question["PK"]),
+        str(question["SK"]),
+    )
+    table.items[row_key][field] = value
 
     result = question_submission_repo.classify_question_submission_replay(
         student_id=student_id,
@@ -671,6 +699,11 @@ def test_route_foreign_question_replay_is_redacted_and_effect_free(monkeypatch) 
         questions.question_submission_repo,
         "get_question_submission_command",
         lambda *_args, **_kwargs: command,
+    )
+    monkeypatch.setattr(
+        questions.question_submission_repo.account_deletion_repo,
+        "require_active_account_fence",
+        lambda *_args, **_kwargs: {"status": "active", "generation": 7},
     )
     monkeypatch.setattr(
         questions.question_repo,

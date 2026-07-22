@@ -245,11 +245,8 @@ def _project_question_admission(
     if disposition is question_submission_repo.QuestionAdmissionDisposition.ADMITTED:
         return dict(result.question or {})
     if disposition is question_submission_repo.QuestionAdmissionDisposition.RESUME:
-        command = result.command or {}
-        question_id = command.get("question_id")
-        question = question_repo.get_question(str(question_id)) if question_id else None
-        if question is not None:
-            return dict(question)
+        if result.command is not None and result.question is not None:
+            return dict(result.question)
         _raise_question_submission_error(
             QuestionSubmissionErrorCode.ADMISSION_UNAVAILABLE,
             correlation_id=correlation_id,
@@ -285,13 +282,28 @@ _EFFECT_RECEIPT_READY = frozenset(
 )
 
 
-def _persisted_question_or_snapshot(question: Mapping[str, object]) -> dict[str, Any]:
-    question_id = str(question.get("question_id") or "")
+def _persisted_question_or_snapshot(
+    question: Mapping[str, object],
+    command: Mapping[str, object] | None = None,
+) -> dict[str, Any]:
+    if command is None:
+        return dict(question)
     try:
-        persisted = question_repo.get_question(question_id) if question_id else None
+        replay = question_submission_repo.classify_question_submission_replay(
+            student_id=str(command["student_id"]),
+            idempotency_digest=str(command["command_id"]),
+            fingerprint=str(command["fingerprint"]),
+        )
     except Exception:
-        persisted = None
-    return dict(persisted) if persisted is not None else dict(question)
+        replay = None
+    if (
+        replay is not None
+        and replay.disposition
+        is question_submission_repo.QuestionAdmissionDisposition.RESUME
+        and replay.question is not None
+    ):
+        return dict(replay.question)
+    return dict(question)
 
 
 def _recover_question_effect_receipts(
@@ -309,39 +321,49 @@ def _recover_question_effect_receipts(
                 current_command, kind
             )
         except Exception:
-            return _persisted_question_or_snapshot(current_question)
+            return _persisted_question_or_snapshot(current_question, current_command)
         if observed is None:
             continue
         if observed.disposition is question_submission_repo.QuestionEffectDisposition.COMPLETED:
-            current_question = _persisted_question_or_snapshot(current_question)
             try:
-                refreshed_command = (
-                    question_submission_repo.get_question_submission_command(
-                        str(current_command["student_id"]),
-                        str(current_command["command_id"]),
+                refreshed = (
+                    question_submission_repo.classify_question_submission_replay(
+                        student_id=str(current_command["student_id"]),
+                        idempotency_digest=str(current_command["command_id"]),
+                        fingerprint=str(current_command["fingerprint"]),
                     )
                 )
             except Exception:
                 return current_question
-            if refreshed_command is not None:
-                current_command = dict(refreshed_command)
+            if (
+                refreshed is None
+                or refreshed.disposition
+                is not question_submission_repo.QuestionAdmissionDisposition.RESUME
+                or refreshed.command is None
+                or refreshed.question is None
+            ):
+                return current_question
+            current_command = dict(refreshed.command)
+            current_question = dict(refreshed.question)
             continue
         if (
             observed.disposition
             is not question_submission_repo.QuestionEffectDisposition.RESULT_READY
             or observed.effect is None
         ):
-            return _persisted_question_or_snapshot(current_question)
+            return _persisted_question_or_snapshot(current_question, current_command)
         completion = question_submission_repo.complete_question_effect(
             observed.effect,
             completed_at=datetime.now(timezone.utc).isoformat(),
         )
         if completion.disposition not in _EFFECT_COMPLETION_SUCCEEDED:
-            return _persisted_question_or_snapshot(current_question)
+            return _persisted_question_or_snapshot(current_question, current_command)
         if completion.question is not None:
             current_question = dict(completion.question)
         else:
-            current_question = _persisted_question_or_snapshot(current_question)
+            current_question = _persisted_question_or_snapshot(
+                current_question, current_command
+            )
         if completion.command is not None:
             current_command = dict(completion.command)
     return current_question
@@ -488,30 +510,19 @@ async def submit_question(
 
     # Avoid re-reserving an upload for a durable replay. A later strong read in
     # admit_question_submission remains the authority for concurrent first calls.
-    try:
-        existing_command = question_submission_repo.get_question_submission_command(
-            student_id, idempotency_digest
-        )
-    except Exception:
-        _raise_question_submission_error(
-            QuestionSubmissionErrorCode.ADMISSION_UNAVAILABLE,
-            correlation_id=correlation_id,
-        )
-    if existing_command is not None:
-        classified = question_submission_repo.classify_question_submission_command(
-            existing_command,
-            student_id=student_id,
-            idempotency_digest=idempotency_digest,
-            fingerprint=fingerprint,
-        )
-        assert classified is not None
+    existing_replay = question_submission_repo.classify_question_submission_replay(
+        student_id=student_id,
+        idempotency_digest=idempotency_digest,
+        fingerprint=fingerprint,
+    )
+    if existing_replay is not None:
         replay = _project_question_admission(
-            classified,
+            existing_replay,
             correlation_id=correlation_id,
             limit=limit,
         )
         recovered = _recover_question_effect_receipts(
-            existing_command, replay or {}
+            existing_replay.command or {}, replay or {}
         )
         return _question_response(recovered)
 
@@ -524,29 +535,21 @@ async def submit_question(
                 effective_plan=str(entitlement.get("effectivePlan") or subscription_tier),
             )
         except AttachmentDecisionError as error:
-            try:
-                command = question_submission_repo.get_question_submission_command(
-                    student_id, idempotency_digest
+            replay_result = (
+                question_submission_repo.classify_question_submission_replay(
+                    student_id=student_id,
+                    idempotency_digest=idempotency_digest,
+                    fingerprint=fingerprint,
                 )
-            except Exception:
-                command = None
-            if command is not None:
-                classified = (
-                    question_submission_repo.classify_question_submission_command(
-                        command,
-                        student_id=student_id,
-                        idempotency_digest=idempotency_digest,
-                        fingerprint=fingerprint,
-                    )
-                )
-                assert classified is not None
+            )
+            if replay_result is not None:
                 replay = _project_question_admission(
-                    classified,
+                    replay_result,
                     correlation_id=correlation_id,
                     limit=limit,
                 )
                 recovered = _recover_question_effect_receipts(
-                    command, replay or {}
+                    replay_result.command or {}, replay or {}
                 )
                 return _question_response(recovered)
             _raise_attachment(error, correlation_id)
@@ -561,6 +564,8 @@ async def submit_question(
         "failure_class": None,
     }
     item: dict[str, Any] = {
+        "entity_type": "question",
+        "schema_version": "question.v1",
         "question_id": question_id,
         "student_id": student_id,
         "subject": subject,
@@ -661,7 +666,7 @@ async def submit_question(
             is not question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER
             or intent.effect is None
         ):
-            return _question_response(_persisted_question_or_snapshot(item))
+            return _question_response(_persisted_question_or_snapshot(item, command))
         try:
             ai_content, ocr_metadata, ocr_text = _build_question_content(
                 body, settings, prepared_attachment
@@ -694,10 +699,10 @@ async def submit_question(
                 correlation_id=correlation_id,
                 level=logging.WARNING,
             )
-            return _question_response(_persisted_question_or_snapshot(item))
+            return _question_response(_persisted_question_or_snapshot(item, command))
         completion = _complete_ready_effect(receipt)
         if completion.disposition not in _EFFECT_COMPLETION_SUCCEEDED:
-            return _question_response(_persisted_question_or_snapshot(item))
+            return _question_response(_persisted_question_or_snapshot(item, command))
         if completion.question is not None:
             item = dict(completion.question)
         if completion.command is not None:
@@ -714,7 +719,7 @@ async def submit_question(
         is not question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER
         or ai_intent.effect is None
     ):
-        return _question_response(_persisted_question_or_snapshot(item))
+        return _question_response(_persisted_question_or_snapshot(item, command))
 
     try:
         ai_resp = ai_service.get_ai_answer(
@@ -766,13 +771,13 @@ async def submit_question(
             correlation_id=correlation_id,
             level=logging.ERROR,
         )
-        return _question_response(_persisted_question_or_snapshot(item))
+        return _question_response(_persisted_question_or_snapshot(item, command))
     ai_completion = _complete_ready_effect(ai_receipt)
     if ai_completion.disposition in _EFFECT_COMPLETION_SUCCEEDED:
         if ai_completion.question is not None:
             item = dict(ai_completion.question)
     else:
-        item = _persisted_question_or_snapshot(item)
+        item = _persisted_question_or_snapshot(item, command)
 
     return _question_response(item)
 

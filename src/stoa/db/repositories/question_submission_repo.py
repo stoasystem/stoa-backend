@@ -17,6 +17,7 @@ from stoa.db.repositories import account_deletion_repo, attachment_repo, questio
 type QuestionAdmissionItem = dict[str, object]
 
 _COMMAND_SCHEMA_VERSION = "question-submission-command.v2"
+_QUESTION_SCHEMA_VERSION = "question.v1"
 _FINGERPRINT_DOMAIN = b"stoa.question.submission.v1"
 _COMMAND_IDENTITY_DOMAIN = b"stoa.question.submission.command.v1"
 _RECONCILIATION_DIGEST_DOMAIN = "stoa.question.reconciliation.v1"
@@ -431,6 +432,122 @@ def classify_question_submission_command(
             idempotency_digest
         ),
         fingerprint=_required_text(fingerprint, "fingerprint"),
+    )
+
+
+def _valid_sha256(value: object) -> bool:
+    return bool(
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def _question_status_matches_command(
+    command_status: object, question_status: object
+) -> bool:
+    allowed = {
+        "processing": frozenset({"pending"}),
+        "completed": frozenset(
+            {"ai_answered", "escalated", "teacher_active", "resolved"}
+        ),
+        "terminal_failed": frozenset({"submission_failed"}),
+    }
+    return isinstance(command_status, str) and question_status in allowed.get(
+        command_status, frozenset()
+    )
+
+
+def classify_question_submission_replay(
+    *,
+    student_id: str,
+    idempotency_digest: str,
+    fingerprint: str,
+    table: object | None = None,
+) -> QuestionAdmissionResult | None:
+    """Strongly validate one command, owner fence, and question before replay."""
+    target = table or get_table()
+    student_id = _required_text(student_id, "student_id")
+    idempotency_digest = validate_question_submission_command_digest(
+        idempotency_digest
+    )
+    fingerprint = _required_text(fingerprint, "fingerprint")
+    expected_key = question_submission_command_key(student_id, idempotency_digest)
+    try:
+        command = get_question_submission_command(
+            student_id, idempotency_digest, table=target
+        )
+    except Exception:
+        return QuestionAdmissionResult(QuestionAdmissionDisposition.RETRYABLE)
+    if command is None:
+        return None
+    generation = command.get("account_fence_generation")
+    version = command.get("version")
+    if (
+        command.get("PK") != expected_key["PK"]
+        or command.get("SK") != expected_key["SK"]
+        or command.get("entity_type") != "question_submission_command"
+        or command.get("schema_version") != _COMMAND_SCHEMA_VERSION
+        or command.get("student_id") != student_id
+        or command.get("idempotency_digest") != idempotency_digest
+        or command.get("command_id") != idempotency_digest
+        or not _valid_sha256(command.get("fingerprint"))
+        or command.get("status")
+        not in {"processing", "completed", "terminal_failed"}
+        or isinstance(generation, bool)
+        or not isinstance(generation, int)
+        or generation < 1
+        or isinstance(version, bool)
+        or not isinstance(version, int)
+        or version < 1
+        or not isinstance(command.get("question_id"), str)
+        or not command["question_id"]
+    ):
+        return QuestionAdmissionResult(QuestionAdmissionDisposition.RETRYABLE)
+    try:
+        account_deletion_repo.require_active_account_fence(
+            student_id, generation, table=target
+        )
+    except Exception:
+        return QuestionAdmissionResult(QuestionAdmissionDisposition.RETRYABLE)
+    if command.get("fingerprint") != fingerprint:
+        return QuestionAdmissionResult(
+            QuestionAdmissionDisposition.PAYLOAD_MISMATCH,
+            command=dict(command),
+        )
+    question_id = str(command["question_id"])
+    try:
+        question = question_repo.get_question(question_id, table=target)
+    except Exception:
+        question = None
+    question_version = question.get("version") if question is not None else None
+    if (
+        question is None
+        or question.get("PK") != f"QUESTION#{question_id}"
+        or question.get("SK") != "META"
+        or question.get("entity_type") != "question"
+        or question.get("schema_version") != _QUESTION_SCHEMA_VERSION
+        or question.get("question_id") != question_id
+        or question.get("student_id") != student_id
+        or question.get("account_fence_generation") != generation
+        or isinstance(question_version, bool)
+        or not isinstance(question_version, int)
+        or question_version < 1
+        or not _question_status_matches_command(
+            command.get("status"), question.get("status")
+        )
+    ):
+        return QuestionAdmissionResult(QuestionAdmissionDisposition.RETRYABLE)
+    counter_value = command.get("counter_value")
+    return QuestionAdmissionResult(
+        QuestionAdmissionDisposition.RESUME,
+        command=dict(command),
+        question=dict(question),
+        counter_value=(
+            counter_value
+            if isinstance(counter_value, int) and not isinstance(counter_value, bool)
+            else None
+        ),
     )
 
 
@@ -1176,6 +1293,9 @@ def build_question_admission_transaction(
         raise ValueError("question quota is already exhausted")
     next_counter = expected_counter + 1
     question_id = _required_text(question.get("question_id"), "question_id")
+    question_version = _positive_integer(
+        question.get("version", 1), "question version", minimum=1
+    )
     if question.get("student_id") != student_id:
         raise ValueError("question owner mismatch")
     idempotency_digest = validate_question_submission_command_digest(
@@ -1211,7 +1331,10 @@ def build_question_admission_transaction(
     question_item = question_repo.question_item(
         {
             **question,
+            "entity_type": "question",
+            "schema_version": _QUESTION_SCHEMA_VERSION,
             "account_fence_generation": generation,
+            "version": question_version,
         }
     )
     usage_item = {
@@ -1315,17 +1438,11 @@ def _safe_reread(
     fingerprint: str,
     table: object,
 ) -> QuestionAdmissionResult | None:
-    try:
-        command = get_question_submission_command(
-            student_id, idempotency_digest, table=table
-        )
-    except Exception:
-        return QuestionAdmissionResult(QuestionAdmissionDisposition.RETRYABLE)
-    return _classify_command(
-        command,
+    return classify_question_submission_replay(
         student_id=student_id,
         idempotency_digest=idempotency_digest,
         fingerprint=fingerprint,
+        table=table,
     )
 
 

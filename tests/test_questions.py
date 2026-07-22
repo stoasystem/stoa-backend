@@ -53,6 +53,8 @@ def _question_command(
         "student-1", caller_key
     )
     return {
+        "PK": "USER#student-1",
+        "SK": f"QUESTION_SUBMISSION#{digest}",
         "entity_type": "question_submission_command",
         "schema_version": "question-submission-command.v2",
         "command_id": digest,
@@ -61,6 +63,8 @@ def _question_command(
         "question_id": question_id,
         "fingerprint": fingerprint,
         "status": "processing",
+        "account_fence_generation": 1,
+        "version": 1,
     }
 
 
@@ -157,6 +161,11 @@ def _prepared_question_attachment() -> dict:
 
 @pytest.fixture(autouse=True)
 def _atomic_question_admission(monkeypatch):
+    monkeypatch.setattr(
+        questions.question_submission_repo.account_deletion_repo,
+        "require_active_account_fence",
+        lambda *_args, **_kwargs: {"status": "active", "generation": 1},
+    )
     monkeypatch.setattr(
         questions.question_submission_repo,
         "get_question_submission_command",
