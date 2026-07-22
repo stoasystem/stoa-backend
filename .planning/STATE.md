@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-27-PLAN.md
-last_updated: "2026-07-22T15:27:06.977Z"
+stopped_at: Completed 475-37-PLAN.md
+last_updated: "2026-07-22T15:36:07.131Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 128
+  completed_plans: 129
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 20 of 45
+Plan: 21 of 45
 Status: Ready to execute
 Last activity: 2026-07-22 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-22T15:27:06.971Z
-**Stopped At:** Completed 475-27-PLAN.md
+**Last Date:** 2026-07-22T15:36:07.125Z
+**Stopped At:** Completed 475-37-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -235,6 +235,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P32 | 2 min | 1 tasks | 1 files |
 | Phase 475 P19 | 13 min | 1 tasks | 4 files |
 | Phase 475 P27 | 13 min | 1 tasks | 3 files |
+| Phase 475 P37 | 5 min | 1 tasks | 1 files |
 
 ## Decisions
 
@@ -495,3 +496,5 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: All question replay and persisted projection paths consume one strong repository classifier. — One entry prevents route-local fingerprint or coordinate shortcuts.
 - [Phase 475]: Teacher deletion closes only questions whose current teacher or dispatch authority names the deleting teacher; history-only cleanup preserves state and unrelated teachers. — This removes deletion-subject authority without erasing retained student learning state or another teacher's linkage.
 - [Phase 475]: Teacher-session tombstones bind positive question_version plus exact session, question, student, teacher, and takeover-claim coordinates. — The existing teacher-session schema has no independent row version, so the linked question version is its reviewed positive CAS coordinate.
+- [Phase 475]: Teacher route DynamoDB values stay object-typed until exact runtime Protocol and Mapping/list/text narrowing. — This closes mypy without Any propagation or broader provider authority.
+- [Phase 475]: Teacher takeover keeps the exact authorized PROFILE key/version observation and existing replay/privacy outcomes. — CR-04 account fencing and D-08 loser concealment remain distinct and unchanged.
