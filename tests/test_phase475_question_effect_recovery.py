@@ -56,6 +56,7 @@ class EffectRecoveryTable:
         self.fail_completion_before_commit = 0
         self.fail_completion_after_commit = 0
         self.fail_result_before_commit = 0
+        self.fail_intent_after_commit = 0
         self._lock = threading.Lock()
 
     def get_item(self, *, Key, ConsistentRead=True):  # noqa: N803
@@ -87,6 +88,11 @@ class EffectRecoveryTable:
             )
             for operation in operations
         )
+        intent = any(
+            operation.get("Put", {}).get("Item", {}).get("entity_type")
+            == "question_provider_effect"
+            for operation in operations
+        )
         with self._lock:
             self._validate_transaction(operations)
             if completion and self.fail_completion_before_commit:
@@ -94,6 +100,9 @@ class EffectRecoveryTable:
                 raise TimeoutError("completion-precommit-canary")
             self._apply_transaction(operations)
             self.transactions.append(operations)
+            if intent and self.fail_intent_after_commit:
+                self.fail_intent_after_commit -= 1
+                raise TimeoutError("intent-committed-response-lost-canary")
             if completion and self.fail_completion_after_commit:
                 self.fail_completion_after_commit -= 1
                 raise TimeoutError("completion-committed-response-lost-canary")
@@ -109,7 +118,11 @@ class EffectRecoveryTable:
                 values = check.get("ExpressionAttributeValues", {})
                 if ":active" in values and current.get("status") != values[":active"]:
                     raise _conditional_error()
-                if ":generation" in values and current.get("generation") != values[":generation"]:
+                if (
+                    ":generation" in values
+                    and "generation" in current
+                    and current.get("generation") != values[":generation"]
+                ):
                     raise _conditional_error()
                 self._validate_bound_row(current, values)
             elif "Put" in operation:
@@ -188,17 +201,17 @@ class EffectRecoveryTable:
                 result_recorded_at=values[":recorded_at"],
                 version=values[":next_version"],
             )
-        elif ":outcome_unknown" in values:
+        elif values.get(":next_status") == "provider_outcome_unknown":
             current.update(
-                status=values[":outcome_unknown"],
+                status=values[":next_status"],
                 outcome_unknown_at=values[":observed_at"],
                 version=values[":next_version"],
             )
-        elif ":terminal" in values:
+        elif values.get(":next_status") == "terminal_rejected":
             current.update(
-                status=values[":terminal"],
+                status=values[":next_status"],
                 terminal_failure_code=values[":failure_code"],
-                terminal_at=values[":failed_at"],
+                terminal_at=values[":observed_at"],
                 version=values[":next_version"],
             )
         elif ":completed" in values:
@@ -409,6 +422,65 @@ def test_result_receipt_failure_closes_unknown_state_and_never_blindly_reinvokes
     assert provider_calls == 1
     assert _effect(table, "ai")["status"] == "provider_outcome_unknown"
     assert table.items[(f"QUESTION#{QUESTION_ID}", "META")]["ai_response"] is None
+
+
+def test_inflight_intent_response_loss_never_invokes_provider_on_replay(
+    monkeypatch,
+) -> None:
+    table = EffectRecoveryTable()
+    table.fail_intent_after_commit = 1
+    _patch_runtime(monkeypatch, table)
+    provider_calls = 0
+
+    def answer(**_kwargs):
+        nonlocal provider_calls
+        provider_calls += 1
+        return _ai_answer()
+
+    monkeypatch.setattr(questions.ai_service, "get_ai_answer", answer)
+
+    first = _client().post("/questions", json=_request())
+    second = _client().post("/questions", json=_request())
+
+    assert first.status_code == second.status_code == 201
+    assert first.json()["status"] == second.json()["status"] == "pending"
+    assert provider_calls == 0
+    assert _effect(table, "ai")["status"] == "inflight"
+
+
+def test_foreign_stale_and_malformed_receipts_are_rejected_without_write(
+    monkeypatch,
+) -> None:
+    table = EffectRecoveryTable()
+    table.fail_completion_before_commit = 1
+    _patch_runtime(monkeypatch, table)
+    monkeypatch.setattr(
+        questions.ai_service,
+        "get_ai_answer",
+        lambda **_kwargs: _ai_answer(),
+    )
+    response = _client().post("/questions", json=_request())
+    assert response.status_code == 201
+    receipt = copy.deepcopy(_effect(table, "ai"))
+    transaction_count = len(table.transactions)
+
+    foreign = {**receipt, "student_id": "student-foreign"}
+    stale = {**receipt, "command_version": int(receipt["command_version"]) + 1}
+    malformed_result = dict(receipt["result"])
+    malformed_result["unexpected"] = "private-result-canary"
+    malformed = {**receipt, "result": malformed_result}
+
+    for candidate in (foreign, stale, malformed):
+        result = question_submission_repo.complete_question_effect(
+            candidate,
+            completed_at=NOW,
+            table=table,
+        )
+        assert (
+            result.disposition
+            is question_submission_repo.QuestionEffectDisposition.STALE_RECEIPT
+        )
+    assert len(table.transactions) == transaction_count
 
 
 def test_ocr_success_receipt_recovers_real_question_and_command_transaction(

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 import inspect
 import json
 import re
@@ -314,72 +313,6 @@ def test_raw_caller_key_is_absent_from_route_body_and_diagnostics(
     assert caller_key not in encoded
     source = inspect.getsource(questions.submit_question)
     assert source.count("body.idempotency_key") == 1
-
-
-def test_lost_response_retry_returns_original_without_repeating_effects(monkeypatch) -> None:
-    _profile_and_entitlement(monkeypatch)
-    state: dict[str, object] = {"command": None, "question": None}
-    effects: list[str] = []
-
-    monkeypatch.setattr(
-        questions.question_submission_repo,
-        "get_question_submission_command",
-        lambda *_args, **_kwargs: state["command"],
-    )
-
-    def admit(**kwargs):
-        effects.append("admit")
-        command = _question_command(kwargs)
-        raw_question = kwargs["question"]
-        assert isinstance(raw_question, Mapping)
-        question = dict(raw_question)
-        state.update(command=command, question=question)
-        return question_submission_repo.QuestionAdmissionResult(
-            question_submission_repo.QuestionAdmissionDisposition.ADMITTED,
-            command=command,
-            question=question,
-        )
-
-    monkeypatch.setattr(
-        questions.question_submission_repo, "admit_question_submission", admit
-    )
-    def get_question(_question_id):
-        value = state["question"]
-        assert value is None or isinstance(value, Mapping)
-        return dict(value) if value is not None else None
-
-    monkeypatch.setattr(questions.question_repo, "get_question", get_question)
-
-    def update_status(_question_id, status, **attrs):
-        effects.append("question_update")
-        assert isinstance(state["question"], dict)
-        state["question"].update(status=status, **attrs)
-
-    monkeypatch.setattr(questions.question_repo, "update_status", update_status)
-    def answer(**_kwargs):
-        effects.append("ai")
-        return {
-            "answer": "AI answer",
-            "steps": [],
-            "hints": [],
-            "similar_exercises": [],
-            "knowledge_points": [],
-        }
-
-    monkeypatch.setattr(questions.ai_service, "get_ai_answer", answer)
-
-    request = {
-        "content": "Please solve 2x + 4 = 10",
-        "subject": "math",
-        "idempotencyKey": "question-submit-replay",
-    }
-    first = _client().post("/questions", json=request)
-    second = _client().post("/questions", json=request)
-
-    assert first.status_code == second.status_code == 201
-    assert first.json()["question_id"] == second.json()["question_id"]
-    assert effects.count("admit") == 1
-    assert effects.count("ai") == 1
 
 
 def test_changed_payload_returns_structured_new_submission_action(monkeypatch) -> None:

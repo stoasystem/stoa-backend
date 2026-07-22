@@ -64,6 +64,69 @@ def _question_command(
     }
 
 
+def _admitted_command(kwargs: dict[str, object]) -> dict[str, object]:
+    question = kwargs["question"]
+    assert isinstance(question, dict)
+    return {
+        "entity_type": "question_submission_command",
+        "schema_version": "question-submission-command.v2",
+        "command_id": kwargs["idempotency_digest"],
+        "student_id": kwargs["student_id"],
+        "idempotency_digest": kwargs["idempotency_digest"],
+        "question_id": question["question_id"],
+        "fingerprint": kwargs["fingerprint"],
+        "account_fence_generation": 1,
+        "status": "processing",
+        "version": 1,
+    }
+
+
+def _begin_effect(command, question, kind, **_kwargs):
+    return question_submission_repo.QuestionEffectResult(
+        question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER,
+        effect={
+            "effect_kind": str(kind),
+            "command": dict(command),
+            "question": dict(question),
+        },
+    )
+
+
+def _record_effect(effect, result, **_kwargs):
+    return question_submission_repo.QuestionEffectResult(
+        question_submission_repo.QuestionEffectDisposition.RESULT_READY,
+        effect={**effect, "result": dict(result)},
+    )
+
+
+def _complete_effect(effect, **_kwargs):
+    command = dict(effect["command"])
+    question = dict(effect["question"])
+    result = effect["result"]
+    if effect["effect_kind"] == "ocr":
+        question.update(
+            ocr_text=result["ocr_text"],
+            ocr_metadata=result["ocr_metadata"],
+        )
+        command["status"] = "processing"
+    else:
+        question.update(
+            status="ai_answered",
+            ai_response=result["ai_response"],
+            knowledge_points=result["knowledge_points"],
+            topic_seeds=result["topic_seeds"],
+        )
+        command["status"] = "completed"
+    question["version"] = int(question["version"]) + 1
+    command["version"] = int(command["version"]) + 1
+    return question_submission_repo.QuestionEffectResult(
+        question_submission_repo.QuestionEffectDisposition.COMPLETED,
+        effect=dict(effect),
+        question=question,
+        command=command,
+    )
+
+
 def _prepared_question_attachment() -> dict:
     return {
         "kind": "upload",
@@ -104,7 +167,39 @@ def _atomic_question_admission(monkeypatch):
         "admit_question_submission",
         lambda **kwargs: question_submission_repo.QuestionAdmissionResult(
             question_submission_repo.QuestionAdmissionDisposition.ADMITTED,
+            command=_admitted_command(kwargs),
             question=dict(kwargs["question"]),
+        ),
+    )
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "begin_question_effect",
+        _begin_effect,
+    )
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "record_question_effect_result",
+        _record_effect,
+    )
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "complete_question_effect",
+        _complete_effect,
+    )
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "mark_question_effect_outcome_unknown",
+        lambda effect, **_kwargs: question_submission_repo.QuestionEffectResult(
+            question_submission_repo.QuestionEffectDisposition.PROVIDER_OUTCOME_UNKNOWN,
+            effect=dict(effect),
+        ),
+    )
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "mark_question_effect_terminal",
+        lambda effect, **_kwargs: question_submission_repo.QuestionEffectResult(
+            question_submission_repo.QuestionEffectDisposition.TERMINAL_PROVIDER_REJECTION,
+            effect=dict(effect),
         ),
     )
     monkeypatch.setattr(
@@ -211,6 +306,7 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
         lambda **kwargs: stored.update(kwargs["question"])
         or question_submission_repo.QuestionAdmissionResult(
             question_submission_repo.QuestionAdmissionDisposition.ADMITTED,
+            command=_admitted_command(kwargs),
             question=dict(kwargs["question"]),
         ),
     )

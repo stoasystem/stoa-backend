@@ -349,7 +349,6 @@ def _direct_question_updates(path: Path) -> set[str]:
 def test_production_question_writer_registry_is_closed_over_cas_calls():
     registry = {
         "src/stoa/routers/questions.py": {
-            ("submit_question", "mutate_question"),
             ("request_teacher", "mutate_question"),
             ("submit_feedback", "mutate_question"),
         },
@@ -376,6 +375,7 @@ def test_production_question_writer_registry_is_closed_over_cas_calls():
             "_question_mutation_operation",
         },
         "src/stoa/db/repositories/question_submission_repo.py": {
+            "complete_question_effect",
             "reverse_terminal_question_admission",
         },
     }

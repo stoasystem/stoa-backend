@@ -271,6 +271,93 @@ def _project_question_admission(
     )
 
 
+_EFFECT_COMPLETION_SUCCEEDED = frozenset(
+    {
+        question_submission_repo.QuestionEffectDisposition.COMPLETED,
+        question_submission_repo.QuestionEffectDisposition.COMPLETION_COMMITTED_RESPONSE_LOST,
+    }
+)
+_EFFECT_RECEIPT_READY = frozenset(
+    {
+        question_submission_repo.QuestionEffectDisposition.RESULT_READY,
+        question_submission_repo.QuestionEffectDisposition.RESULT_RECEIPT_AMBIGUOUS,
+    }
+)
+
+
+def _persisted_question_or_snapshot(question: Mapping[str, object]) -> dict[str, Any]:
+    question_id = str(question.get("question_id") or "")
+    try:
+        persisted = question_repo.get_question(question_id) if question_id else None
+    except Exception:
+        persisted = None
+    return dict(persisted) if persisted is not None else dict(question)
+
+
+def _recover_question_effect_receipts(
+    command: Mapping[str, object], question: Mapping[str, object]
+) -> dict[str, Any]:
+    """Complete only durable receipts; inflight/unknown effects never reinvoke."""
+    current_command = dict(command)
+    current_question = dict(question)
+    for kind in (
+        question_submission_repo.QuestionEffectKind.OCR,
+        question_submission_repo.QuestionEffectKind.AI,
+    ):
+        try:
+            observed = question_submission_repo.get_question_effect(
+                current_command, kind
+            )
+        except Exception:
+            return _persisted_question_or_snapshot(current_question)
+        if observed is None:
+            continue
+        if observed.disposition is question_submission_repo.QuestionEffectDisposition.COMPLETED:
+            current_question = _persisted_question_or_snapshot(current_question)
+            try:
+                refreshed_command = (
+                    question_submission_repo.get_question_submission_command(
+                        str(current_command["student_id"]),
+                        str(current_command["command_id"]),
+                    )
+                )
+            except Exception:
+                return current_question
+            if refreshed_command is not None:
+                current_command = dict(refreshed_command)
+            continue
+        if (
+            observed.disposition
+            is not question_submission_repo.QuestionEffectDisposition.RESULT_READY
+            or observed.effect is None
+        ):
+            return _persisted_question_or_snapshot(current_question)
+        completion = question_submission_repo.complete_question_effect(
+            observed.effect,
+            completed_at=datetime.now(timezone.utc).isoformat(),
+        )
+        if completion.disposition not in _EFFECT_COMPLETION_SUCCEEDED:
+            return _persisted_question_or_snapshot(current_question)
+        if completion.question is not None:
+            current_question = dict(completion.question)
+        else:
+            current_question = _persisted_question_or_snapshot(current_question)
+        if completion.command is not None:
+            current_command = dict(completion.command)
+    return current_question
+
+
+def _complete_ready_effect(
+    receipt: question_submission_repo.QuestionEffectResult,
+) -> question_submission_repo.QuestionEffectResult:
+    if receipt.disposition not in _EFFECT_RECEIPT_READY or receipt.effect is None:
+        return receipt
+    return question_submission_repo.complete_question_effect(
+        receipt.effect,
+        completed_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
 def _question_attachment_operations(
     *,
     question: dict[str, Any],
@@ -423,7 +510,10 @@ async def submit_question(
             correlation_id=correlation_id,
             limit=limit,
         )
-        return _question_response(replay or {})
+        recovered = _recover_question_effect_receipts(
+            existing_command, replay or {}
+        )
+        return _question_response(recovered)
 
     prepared_attachment: dict[str, Any] | None = None
     if body.attachment is not None:
@@ -455,7 +545,10 @@ async def submit_question(
                     correlation_id=correlation_id,
                     limit=limit,
                 )
-                return _question_response(replay or {})
+                recovered = _recover_question_effect_receipts(
+                    command, replay or {}
+                )
+                return _question_response(recovered)
             _raise_attachment(error, correlation_id)
 
     now = datetime.now(timezone.utc).isoformat()
@@ -551,34 +644,78 @@ async def submit_question(
 
     item["attachment"] = _prepared_attachment_summary(prepared_attachment)
 
-    try:
-        ai_content, ocr_metadata, ocr_text = _build_question_content(
-            body, settings, prepared_attachment
+    command = dict(result.command or {})
+    if not command:
+        return _question_response(_persisted_question_or_snapshot(item))
+    ai_content = body.corrected_text.strip() if body.corrected_text else body.content
+
+    if prepared_attachment is not None:
+        intent = question_submission_repo.begin_question_effect(
+            command,
+            item,
+            question_submission_repo.QuestionEffectKind.OCR,
+            started_at=datetime.now(timezone.utc).isoformat(),
         )
-        item["ocr_text"] = ocr_text
-        item["ocr_metadata"] = ocr_metadata
-        if prepared_attachment is not None:
-            ocr_result = question_repo.mutate_question(
-                item,
-                status=QuestionStatus.PENDING.value,
-                allowed_source_statuses=_OCR_SOURCE_STATES,
-                extra_attrs={
+        if (
+            intent.disposition
+            is not question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER
+            or intent.effect is None
+        ):
+            return _question_response(_persisted_question_or_snapshot(item))
+        try:
+            ai_content, ocr_metadata, ocr_text = _build_question_content(
+                body, settings, prepared_attachment
+            )
+            receipt = question_submission_repo.record_question_effect_result(
+                intent.effect,
+                {
+                    "ai_content": ai_content,
                     "ocr_text": ocr_text,
                     "ocr_metadata": ocr_metadata,
                 },
+                recorded_at=datetime.now(timezone.utc).isoformat(),
             )
-            item = _require_applied_question_mutation(ocr_result)
-    except Exception as error:
-        emit_private_event(
-            "question_ocr_failed",
-            exception=error,
-            attachment_count=1,
-            correlation_id=correlation_id,
-            level=logging.WARNING,
-        )
-        return _question_response(item)
+        except Exception as error:
+            if isinstance(error, ocr_service.OcrAttachmentFailure) and error.terminal:
+                question_submission_repo.mark_question_effect_terminal(
+                    intent.effect,
+                    failure_code="provider_rejected",
+                    failed_at=datetime.now(timezone.utc).isoformat(),
+                )
+            else:
+                question_submission_repo.mark_question_effect_outcome_unknown(
+                    intent.effect,
+                    observed_at=datetime.now(timezone.utc).isoformat(),
+                )
+            emit_private_event(
+                "question_ocr_failed",
+                exception=error,
+                attachment_count=1,
+                correlation_id=correlation_id,
+                level=logging.WARNING,
+            )
+            return _question_response(_persisted_question_or_snapshot(item))
+        completion = _complete_ready_effect(receipt)
+        if completion.disposition not in _EFFECT_COMPLETION_SUCCEEDED:
+            return _question_response(_persisted_question_or_snapshot(item))
+        if completion.question is not None:
+            item = dict(completion.question)
+        if completion.command is not None:
+            command = dict(completion.command)
 
-    # Call AI synchronously (Lambda function has up to 30s; Haiku is fast)
+    ai_intent = question_submission_repo.begin_question_effect(
+        command,
+        item,
+        question_submission_repo.QuestionEffectKind.AI,
+        started_at=datetime.now(timezone.utc).isoformat(),
+    )
+    if (
+        ai_intent.disposition
+        is not question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER
+        or ai_intent.effect is None
+    ):
+        return _question_response(_persisted_question_or_snapshot(item))
+
     try:
         ai_resp = ai_service.get_ai_answer(
             content=ai_content,
@@ -587,24 +724,40 @@ async def submit_question(
             language=language,
             correlation_id=correlation_id,
         )
-        topic_seeds = learning_profile_service.topic_seeds_from_ai_response(
-            subject=subject,
-            response=ai_resp,
-            question_id=question_id,
-            timestamp=now,
-        )
-        ai_result = question_repo.mutate_question(
-            item,
-            status=QuestionStatus.AI_ANSWERED.value,
-            allowed_source_statuses=_AI_SOURCE_STATES,
-            extra_attrs={
+        try:
+            topic_seeds = learning_profile_service.topic_seeds_from_ai_response(
+                subject=subject,
+                response=ai_resp,
+                question_id=question_id,
+                timestamp=now,
+            )
+        except Exception:
+            topic_seeds = []
+        ai_receipt = question_submission_repo.record_question_effect_result(
+            ai_intent.effect,
+            {
                 "ai_response": ai_resp,
                 "knowledge_points": ai_resp.get("knowledge_points", []),
                 "topic_seeds": topic_seeds,
             },
+            recorded_at=datetime.now(timezone.utc).isoformat(),
         )
-        item = _require_applied_question_mutation(ai_result)
     except Exception as exc:
+        terminal = isinstance(exc, ai_service.AIInvocationFailure) and exc.category in {
+            "malformed_response",
+            "response_cleanup_failed",
+        }
+        if terminal:
+            question_submission_repo.mark_question_effect_terminal(
+                ai_intent.effect,
+                failure_code="provider_rejected",
+                failed_at=datetime.now(timezone.utc).isoformat(),
+            )
+        else:
+            question_submission_repo.mark_question_effect_outcome_unknown(
+                ai_intent.effect,
+                observed_at=datetime.now(timezone.utc).isoformat(),
+            )
         emit_private_event(
             "question_ai_failed",
             exception=exc,
@@ -613,8 +766,13 @@ async def submit_question(
             correlation_id=correlation_id,
             level=logging.ERROR,
         )
-        # AI call failed — leave as PENDING; client can poll
-        pass
+        return _question_response(_persisted_question_or_snapshot(item))
+    ai_completion = _complete_ready_effect(ai_receipt)
+    if ai_completion.disposition in _EFFECT_COMPLETION_SUCCEEDED:
+        if ai_completion.question is not None:
+            item = dict(ai_completion.question)
+    else:
+        item = _persisted_question_or_snapshot(item)
 
     return _question_response(item)
 
