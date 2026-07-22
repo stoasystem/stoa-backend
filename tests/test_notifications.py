@@ -734,12 +734,25 @@ def test_request_teacher_emits_teacher_and_admin_events(monkeypatch):
             "student_id": "student-1",
             "subject": "math",
             "status": "ai_answered",
+            "version": 1,
         },
     )
     monkeypatch.setattr(
         questions.question_repo,
-        "update_status",
-        lambda question_id, status, **attrs: updates.append((question_id, status, attrs)),
+        "mutate_question",
+        lambda question, *, status, extra_attrs, **_kwargs: updates.append(
+            (question["question_id"], status, extra_attrs)
+        )
+        or questions.question_repo.QuestionMutationResult(
+            questions.question_repo.QuestionMutationDisposition.APPLIED,
+            str(question["question_id"]),
+            {
+                **question,
+                "status": status,
+                "version": int(question["version"]) + 1,
+                **extra_attrs,
+            },
+        ),
     )
     monkeypatch.setattr(questions.notify_service, "enqueue_teacher_request", lambda **kwargs: None)
     monkeypatch.setattr(questions.usage_ledger_service, "record_usage_event", lambda **kwargs: None)
