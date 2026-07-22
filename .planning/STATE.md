@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-12-PLAN.md
-last_updated: "2026-07-22T01:11:19.511Z"
+stopped_at: Completed 475-07-PLAN.md
+last_updated: "2026-07-22T01:26:43.088Z"
 last_activity: 2026-07-21 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 169
-  completed_plans: 105
+  completed_plans: 106
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 12 of 13
+Plan: 13 of 13
 Status: Ready to execute
 Last activity: 2026-07-21 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-22T01:10:49.688Z
-**Stopped At:** Completed 475-12-PLAN.md
+**Last Date:** 2026-07-22T01:26:43.082Z
+**Stopped At:** Completed 475-07-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -212,6 +212,7 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 | Phase 475 P12 | 5 min | 1 tasks | 4 files |
 | Phase 475 P03 | 26 min | 1 tasks | 4 files |
 | Phase 475 P05 | 9 min | 1 tasks | 3 files |
+| Phase 475 P07 | 11 min | 1 tasks | 5 files |
 
 ## Decisions
 
@@ -419,3 +420,6 @@ Last activity: 2026-07-21 -- Phase 475 execution started
 - [Phase 475]: Question reconciliation is explicit-coordinate and preview-bound; terminal reversal preserves audit quantity while excluding reversed events from active usage and never touches attachment/storage rows. — Historical privacy-safe ledger evidence cannot reconstruct missing question content, and exact four-row compensation must be independently retry-safe.
 - [Phase 475]: Teacher takeover notification effects use one deterministic identity derived from the persisted claim and session — Dependency failure never rolls back the confirmed winner or creates a second session.
 - [Phase 475]: An exact strongly read takeover event resolves a lost notification-write response — Typed delivery dependency outcomes remain retryable while proven account deletion stays terminal.
+- [Phase 475]: Parent-binding reconciliation binds a pure strong-read preview to opaque pair and whole-row evidence digests before apply. — Every relationship coordinate is rechecked without exposing raw storage coordinates.
+- [Phase 475]: Only unchanged unambiguous same-parent classifications invoke the existing atomic relationship writer. — Conflicts never select a winner, changed rows are skipped, and replay is zero-write.
+- [Phase 475]: Preview and apply share parent_binding_repairer target authorization with durable audit before repository access. — Unauthorized administrators cannot inspect or mutate relationship state.
