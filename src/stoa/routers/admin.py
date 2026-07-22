@@ -1,6 +1,7 @@
 """Admin routes — user management, report operations, and platform statistics."""
+from collections.abc import Mapping
 from functools import lru_cache
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, Protocol, runtime_checkable
 
 import boto3
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
@@ -55,6 +56,51 @@ from stoa.services import (
 )
 
 router = APIRouter()
+
+
+type AdminItem = dict[str, object]
+
+
+@runtime_checkable
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> object: ...
+
+
+def _admin_mapping(value: object) -> AdminItem:
+    if not isinstance(value, Mapping):
+        raise RuntimeError("admin data dependency unavailable")
+    result: AdminItem = {}
+    for key, member in value.items():
+        if not isinstance(key, str):
+            raise RuntimeError("admin data dependency unavailable")
+        result[key] = member
+    return result
+
+
+def _admin_scan(table: object, **kwargs: object) -> AdminItem:
+    if not isinstance(table, _ScanTable):
+        raise RuntimeError("admin data dependency unavailable")
+    return _admin_mapping(table.scan(**kwargs))
+
+
+def _admin_items(response: Mapping[str, object]) -> list[AdminItem]:
+    raw_items = response.get("Items", [])
+    if not isinstance(raw_items, list):
+        raise RuntimeError("admin data dependency unavailable")
+    return [_admin_mapping(item) for item in raw_items]
+
+
+def _admin_cursor(response: Mapping[str, object]) -> AdminItem | None:
+    raw_cursor = response.get("LastEvaluatedKey")
+    if raw_cursor is None:
+        return None
+    return _admin_mapping(raw_cursor)
+
+
+def _admin_required_text(value: object) -> str:
+    if not isinstance(value, str) or not value:
+        raise RuntimeError("admin data dependency unavailable")
+    return value
 
 # All historical role dependencies below resolve through the exact registered
 # method/path capability table.  The name remains local only to keep the route
@@ -894,7 +940,8 @@ async def list_moderation_cases(
         date_from=date_from,
         date_to=date_to,
     )
-    return ModerationCaseListResponse(items=items, count=len(items))
+    responses = [ModerationCaseResponse.model_validate(item) for item in items]
+    return ModerationCaseListResponse(items=responses, count=len(responses))
 
 
 @router.get("/moderation/cases/{case_id}", response_model=ModerationCaseResponse)
@@ -1661,13 +1708,14 @@ async def list_users(
         attr_names["#role"] = "role"
         attr_values[":role"] = role
 
-    result = table.scan(
+    result = _admin_scan(
+        table,
         FilterExpression=filter_expr,
         ExpressionAttributeNames=attr_names,
         ExpressionAttributeValues=attr_values,
         Limit=limit,
     )
-    users = result.get("Items", [])
+    users = _admin_items(result)
     # Strip PK/SK from response
     for u in users:
         u.pop("PK", None)
@@ -1735,7 +1783,8 @@ async def list_subscription_requests(
         date_from=date_from,
         date_to=date_to,
     )
-    return SubscriptionRequestListResponse(items=items, count=len(items))
+    responses = [SubscriptionRequestResponse.model_validate(item) for item in items]
+    return SubscriptionRequestListResponse(items=responses, count=len(responses))
 
 
 @router.get("/subscriptions/requests/{request_id}", response_model=SubscriptionRequestResponse)
@@ -1764,7 +1813,8 @@ async def list_subscription_billing(
         billing_provider=billing_provider,
         settings=settings,
     )
-    return SubscriptionBillingListResponse(items=items, count=len(items))
+    responses = [SubscriptionBillingResponse.model_validate(item) for item in items]
+    return SubscriptionBillingListResponse(items=responses, count=len(responses))
 
 
 @router.get("/subscriptions/billing/accounting-export", response_model=SubscriptionAccountingExportResponse)
@@ -2062,13 +2112,14 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
     table = get_table()
 
     # Count user profiles
-    user_scan = table.scan(
+    user_scan = _admin_scan(
+        table,
         FilterExpression="SK = :profile",
         ExpressionAttributeValues={":profile": "PROFILE"},
         ProjectionExpression="#role",
         ExpressionAttributeNames={"#role": "role"},
     )
-    users = user_scan.get("Items", [])
+    users = _admin_items(user_scan)
 
     counts = {"student": 0, "parent": 0, "teacher": 0}
     for u in users:
@@ -2077,7 +2128,8 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
             counts[r] += 1
 
     # Count questions by status
-    q_scan = table.scan(
+    q_scan = _admin_scan(
+        table,
         FilterExpression="SK = :meta",
         ExpressionAttributeValues={":meta": "META"},
         ProjectionExpression=", ".join(
@@ -2097,9 +2149,12 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
         ),
         ExpressionAttributeNames={"#s": "status"},
     )
+    question_statuses = {status.value for status in QuestionStatus}
     questions = [
-        q for q in q_scan.get("Items", [])
-        if q.get("status") in (s.value for s in QuestionStatus)
+        question
+        for question in _admin_items(q_scan)
+        if isinstance(question_status := question.get("status"), str)
+        and question_status in question_statuses
     ]
 
     ai_resolved = sum(1 for q in questions if q.get("status") == QuestionStatus.AI_ANSWERED.value)
@@ -2330,11 +2385,11 @@ async def list_report_operations(
         limit=limit,
         last_key=last_key,
     )
-    items = [_report_operation_response(report) for report in result.get("Items", [])]
+    items = [_report_operation_response(report) for report in _admin_items(result)]
     return ReportOperationListResponse(
         items=items,
         count=len(items),
-        next_token=report_repo.encode_admin_page_token(result.get("LastEvaluatedKey")),
+        next_token=report_repo.encode_admin_page_token(_admin_cursor(result)),
         access_pattern="parent_gsi" if parent_id else "bounded_scan",
     )
 
@@ -2863,12 +2918,14 @@ async def list_support_handoff_deliveries(
     )
     items = [
         support_destination_service.support_handoff_delivery_response(item)
-        for item in result.get("Items", [])
+        for item in _admin_items(result)
     ]
     return {
         "items": items,
         "count": len(items),
-        "next_token": report_repo.encode_support_handoff_delivery_page_token(result.get("LastEvaluatedKey")),
+        "next_token": report_repo.encode_support_handoff_delivery_page_token(
+            _admin_cursor(result)
+        ),
         "filters": {
             "status": status,
             "destination_mode": destination_mode,
@@ -2918,14 +2975,14 @@ async def get_support_handoff_delivery_detail(
     )
     audit_events = [
         support_destination_service.support_handoff_delivery_audit_response(event)
-        for event in audit_result.get("Items", [])
+        for event in _admin_items(audit_result)
     ]
     return {
         "delivery": support_destination_service.support_handoff_delivery_response(record),
         "audit_events": audit_events,
         "audit_count": len(audit_events),
         "audit_next_token": report_repo.encode_support_handoff_delivery_page_token(
-            audit_result.get("LastEvaluatedKey")
+            _admin_cursor(audit_result)
         ),
     }
 
@@ -3210,8 +3267,9 @@ async def get_release_fixture_status(
             resolved_week_start,
         )
         if report:
-            audit_result = report_repo.list_report_audit_events(report["report_id"], limit=10)
-            audit_events = audit_result.get("Items", [])
+            report_id = _admin_required_text(report.get("report_id"))
+            audit_result = report_repo.list_report_audit_events(report_id, limit=10)
+            audit_events = _admin_items(audit_result)
 
     return release_evidence_service.build_fixture_inventory_response(
         fixture_name=fixture_name,
@@ -3233,11 +3291,11 @@ async def list_recovery_jobs(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
     result = report_repo.list_recovery_jobs(limit=limit, last_key=last_key)
-    items = [_recovery_job_response(item) for item in result.get("Items", [])]
+    items = [_recovery_job_response(item) for item in _admin_items(result)]
     return RecoveryJobListResponse(
         items=items,
         count=len(items),
-        next_token=report_repo.encode_recovery_job_page_token(result.get("LastEvaluatedKey")),
+        next_token=report_repo.encode_recovery_job_page_token(_admin_cursor(result)),
     )
 
 
@@ -3268,11 +3326,11 @@ async def list_recovery_job_results(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
     result = report_repo.list_recovery_job_targets(job_id, limit=limit, last_key=last_key)
-    items = [_recovery_job_target_response(item) for item in result.get("Items", [])]
+    items = [_recovery_job_target_response(item) for item in _admin_items(result)]
     return RecoveryJobTargetsResponse(
         items=items,
         count=len(items),
-        next_token=report_repo.encode_recovery_job_page_token(result.get("LastEvaluatedKey")),
+        next_token=report_repo.encode_recovery_job_page_token(_admin_cursor(result)),
     )
 
 
@@ -3312,7 +3370,7 @@ async def resend_report_email(
     return ReportResendResponse(
         report_id=result.report_id,
         status=result.status,
-        email_status=result.email_status,
+        email_status=_admin_required_text(result.email_status),
         operation=result.operation,
         operation_result=result.operation_result,
         updated_at=result.updated_at,
@@ -3630,12 +3688,13 @@ async def list_report_audit_events(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
 
-    result = report_repo.list_report_audit_events(report["report_id"], limit=limit, last_key=last_key)
-    items = [_report_audit_event_response(item) for item in result.get("Items", [])]
+    report_id = _admin_required_text(report.get("report_id"))
+    result = report_repo.list_report_audit_events(report_id, limit=limit, last_key=last_key)
+    items = [_report_audit_event_response(item) for item in _admin_items(result)]
     return ReportAuditListResponse(
         items=items,
         count=len(items),
-        next_token=report_repo.encode_audit_page_token(result.get("LastEvaluatedKey")),
+        next_token=report_repo.encode_audit_page_token(_admin_cursor(result)),
         scope="report",
     )
 
@@ -3657,11 +3716,11 @@ async def list_recovery_job_audit_events(
         raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
 
     result = report_repo.list_recovery_job_audit_events(job_id, limit=limit, last_key=last_key)
-    items = [_report_audit_event_response(item) for item in result.get("Items", [])]
+    items = [_report_audit_event_response(item) for item in _admin_items(result)]
     return ReportAuditListResponse(
         items=items,
         count=len(items),
-        next_token=report_repo.encode_audit_page_token(result.get("LastEvaluatedKey")),
+        next_token=report_repo.encode_audit_page_token(_admin_cursor(result)),
         scope="recovery_job",
     )
 
@@ -3697,8 +3756,10 @@ def _export_recovery_job_evidence(
             limit=target_limit,
             last_key=target_last_key,
         )
-        targets = target_result.get("Items", [])
-        target_next_token = report_repo.encode_recovery_job_page_token(target_result.get("LastEvaluatedKey"))
+        targets = _admin_items(target_result)
+        target_next_token = report_repo.encode_recovery_job_page_token(
+            _admin_cursor(target_result)
+        )
 
     job_audit: list[dict] = []
     audit_next_token = None
@@ -3709,8 +3770,10 @@ def _export_recovery_job_evidence(
             limit=audit_limit,
             last_key=audit_last_key,
         )
-        job_audit = audit_result.get("Items", [])
-        audit_next_token = report_repo.encode_audit_page_token(audit_result.get("LastEvaluatedKey"))
+        job_audit = _admin_items(audit_result)
+        audit_next_token = report_repo.encode_audit_page_token(
+            _admin_cursor(audit_result)
+        )
 
     return report_recovery_evidence_service.build_export_response(
         scope="recovery_job",
@@ -3762,8 +3825,10 @@ def _export_recovery_job_support_package(
             limit=target_limit,
             last_key=target_last_key,
         )
-        targets = target_result.get("Items", [])
-        target_next_token = report_repo.encode_recovery_job_page_token(target_result.get("LastEvaluatedKey"))
+        targets = _admin_items(target_result)
+        target_next_token = report_repo.encode_recovery_job_page_token(
+            _admin_cursor(target_result)
+        )
 
     job_audit: list[dict] = []
     audit_next_token = None
@@ -3774,8 +3839,10 @@ def _export_recovery_job_support_package(
             limit=audit_limit,
             last_key=audit_last_key,
         )
-        job_audit = audit_result.get("Items", [])
-        audit_next_token = report_repo.encode_audit_page_token(audit_result.get("LastEvaluatedKey"))
+        job_audit = _admin_items(audit_result)
+        audit_next_token = report_repo.encode_audit_page_token(
+            _admin_cursor(audit_result)
+        )
 
     report_audit: list[dict] = []
     if include_report_audit:
@@ -3787,7 +3854,7 @@ def _export_recovery_job_support_package(
             if not report_id:
                 continue
             audit_result = report_repo.list_report_audit_events(str(report_id), limit=remaining)
-            events = audit_result.get("Items", [])
+            events = _admin_items(audit_result)
             report_audit.extend(events)
             remaining -= len(events)
 
@@ -3851,8 +3918,9 @@ def _support_handoff_fixture_response(fixture: SupportHandoffFixtureReference) -
             resolved_week_start,
         )
         if report:
-            audit_result = report_repo.list_report_audit_events(report["report_id"], limit=10)
-            audit_events = audit_result.get("Items", [])
+            report_id = _admin_required_text(report.get("report_id"))
+            audit_result = report_repo.list_report_audit_events(report_id, limit=10)
+            audit_events = _admin_items(audit_result)
     return release_evidence_service.build_fixture_inventory_response(
         fixture_name=fixture.fixture_name,
         report=report,
@@ -3870,7 +3938,7 @@ def _export_recent_recovery_jobs(
 ) -> dict[str, Any]:
     last_key = report_repo.decode_recovery_job_page_token(next_token)
     result = report_repo.list_recovery_jobs(limit=limit, last_key=last_key)
-    jobs = result.get("Items", [])
+    jobs = _admin_items(result)
     if status:
         jobs = [job for job in jobs if job.get("status") == status]
     return report_recovery_evidence_service.build_export_response(
@@ -3882,7 +3950,7 @@ def _export_recent_recovery_jobs(
         },
         jobs=jobs,
         next_tokens={
-            "jobs": report_repo.encode_recovery_job_page_token(result.get("LastEvaluatedKey")),
+            "jobs": report_repo.encode_recovery_job_page_token(_admin_cursor(result)),
         },
     )
 
