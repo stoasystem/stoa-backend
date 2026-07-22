@@ -67,16 +67,96 @@ def _profile_and_entitlement(monkeypatch) -> None:
 
 
 def _question_command(kwargs: dict[str, object]) -> dict[str, object]:
+    digest = str(kwargs["idempotency_digest"])
     return {
+        "PK": f"USER#{kwargs['student_id']}",
+        "SK": f"QUESTION_SUBMISSION#{digest}",
         "entity_type": "question_submission_command",
         "schema_version": "question-submission-command.v2",
         "status": "processing",
         "student_id": kwargs["student_id"],
-        "idempotency_digest": kwargs["idempotency_digest"],
-        "command_id": kwargs["idempotency_digest"],
+        "idempotency_digest": digest,
+        "command_id": digest,
         "fingerprint": kwargs["fingerprint"],
         "question_id": kwargs["question"]["question_id"],  # type: ignore[index]
+        "account_fence_generation": 1,
+        "version": 1,
     }
+
+
+class _ReplayTable:
+    def __init__(self, *items: dict[str, object]) -> None:
+        self.items = {(str(item["PK"]), str(item["SK"])): dict(item) for item in items}
+        self.reads: list[tuple[str, str, bool]] = []
+
+    def get_item(self, *, Key: dict[str, object], ConsistentRead: bool) -> dict[str, object]:
+        key = (str(Key["PK"]), str(Key["SK"]))
+        self.reads.append((*key, ConsistentRead))
+        item = self.items.get(key)
+        return {} if item is None else {"Item": dict(item)}
+
+
+def _strict_replay_rows(
+    *,
+    command_status: str = "processing",
+    question_status: str = "pending",
+) -> tuple[str, str, str, dict[str, object], dict[str, object], dict[str, object]]:
+    student_id = "student-1"
+    caller_key = "question-submit-strict-replay"
+    digest = question_submission_repo.question_submission_command_digest(
+        student_id, caller_key
+    )
+    fingerprint = question_submission_repo.question_submission_fingerprint(
+        subject="math",
+        original_content="Please solve 2x + 4 = 10",
+        corrected_content=None,
+    )
+    command = {
+        "PK": f"USER#{student_id}",
+        "SK": f"QUESTION_SUBMISSION#{digest}",
+        "entity_type": "question_submission_command",
+        "schema_version": "question-submission-command.v2",
+        "student_id": student_id,
+        "idempotency_digest": digest,
+        "command_id": digest,
+        "fingerprint": fingerprint,
+        "question_id": "question-original",
+        "account_fence_generation": 7,
+        "status": command_status,
+        "version": 3,
+    }
+    fence = {
+        "PK": f"USER#{student_id}",
+        "SK": "ACCOUNT_FENCE",
+        "entity_type": "account_fence",
+        "schema_version": "account-fence.v1",
+        "user_id": student_id,
+        "status": "active",
+        "generation": 7,
+        "version": 2,
+    }
+    question = {
+        "PK": "QUESTION#question-original",
+        "SK": "META",
+        "entity_type": "question",
+        "schema_version": "question.v1",
+        "question_id": "question-original",
+        "student_id": student_id,
+        "account_fence_generation": 7,
+        "version": 4,
+        "subject": "math",
+        "content": "private-original-question",
+        "status": question_status,
+        "ai_response": None,
+        "teacher_id": None,
+        "teacher_response": None,
+        "knowledge_points": [],
+        "topic_seeds": [],
+        "student_feedback": None,
+        "created_at": "2026-07-22T00:00:00+00:00",
+        "resolved_at": None,
+    }
+    return student_id, digest, fingerprint, command, fence, question
 
 
 @pytest.mark.parametrize(
@@ -485,3 +565,142 @@ def test_ai_failure_returns_queryable_durable_pending_question(monkeypatch) -> N
     assert response.json()["status"] == "pending"
     assert persisted["status"] == "pending"
     assert persisted["question_id"] == response.json()["question_id"]
+
+
+@pytest.mark.parametrize(
+    ("target", "field", "value"),
+    (
+        pytest.param("command", "PK", "USER#student-2", id="wrong-command-owner-key"),
+        pytest.param("command", "schema_version", "question-submission-command.v1", id="legacy-command-schema"),
+        pytest.param("command", "status", "unknown", id="invalid-command-status"),
+        pytest.param("command", "version", 0, id="invalid-command-version"),
+        pytest.param("command", "account_fence_generation", 8, id="stale-command-generation"),
+        pytest.param("question", "student_id", "student-2", id="foreign-question-owner"),
+        pytest.param("question", "question_id", "question-foreign", id="wrong-question-identity"),
+        pytest.param("question", "account_fence_generation", 8, id="wrong-question-generation"),
+        pytest.param("question", "schema_version", "question.v0", id="legacy-question-schema"),
+        pytest.param("question", "status", "resolved", id="processing-question-status-mismatch"),
+    ),
+)
+def test_strict_replay_rejects_corrupt_foreign_or_stale_rows(
+    target: str, field: str, value: object
+) -> None:
+    student_id, digest, fingerprint, command, fence, question = _strict_replay_rows()
+    row = command if target == "command" else question
+    row[field] = value
+    table = _ReplayTable(command, fence, question)
+
+    result = question_submission_repo.classify_question_submission_replay(
+        student_id=student_id,
+        idempotency_digest=digest,
+        fingerprint=fingerprint,
+        table=table,
+    )
+
+    assert result is not None
+    assert result.disposition is question_submission_repo.QuestionAdmissionDisposition.RETRYABLE
+    assert result.command is None
+    assert result.question is None
+    assert "private-original-question" not in repr(result)
+    assert all(consistent for *_key, consistent in table.reads)
+
+
+@pytest.mark.parametrize(
+    ("command_status", "question_status"),
+    (
+        pytest.param("processing", "pending", id="processing-replay"),
+        pytest.param("completed", "ai_answered", id="completed-replay"),
+        pytest.param("completed", "resolved", id="completed-later-resolution-replay"),
+    ),
+)
+def test_strict_replay_returns_only_exact_owner_bound_question(
+    command_status: str, question_status: str
+) -> None:
+    student_id, digest, fingerprint, command, fence, question = _strict_replay_rows(
+        command_status=command_status,
+        question_status=question_status,
+    )
+    table = _ReplayTable(command, fence, question)
+
+    result = question_submission_repo.classify_question_submission_replay(
+        student_id=student_id,
+        idempotency_digest=digest,
+        fingerprint=fingerprint,
+        table=table,
+    )
+
+    assert result is not None
+    assert result.disposition is question_submission_repo.QuestionAdmissionDisposition.RESUME
+    assert result.command == command
+    assert result.question == question
+    assert table.reads == [
+        (command["PK"], command["SK"], True),
+        (fence["PK"], fence["SK"], True),
+        (question["PK"], question["SK"], True),
+    ]
+
+
+def test_strict_replay_keeps_mismatch_only_for_authoritative_command() -> None:
+    student_id, digest, _fingerprint, command, fence, question = _strict_replay_rows()
+    table = _ReplayTable(command, fence, question)
+
+    result = question_submission_repo.classify_question_submission_replay(
+        student_id=student_id,
+        idempotency_digest=digest,
+        fingerprint="f" * 64,
+        table=table,
+    )
+
+    assert result is not None
+    assert result.disposition is question_submission_repo.QuestionAdmissionDisposition.PAYLOAD_MISMATCH
+    assert result.command == command
+    assert result.question is None
+    assert table.reads == [
+        (command["PK"], command["SK"], True),
+        (fence["PK"], fence["SK"], True),
+    ]
+
+
+def test_route_foreign_question_replay_is_redacted_and_effect_free(monkeypatch) -> None:
+    _profile_and_entitlement(monkeypatch)
+    student_id, digest, fingerprint, command, _fence, question = _strict_replay_rows()
+    effects: list[str] = []
+    private_content = "private-foreign-student-question"
+    question.update(student_id="student-2", content=private_content)
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "get_question_submission_command",
+        lambda *_args, **_kwargs: command,
+    )
+    monkeypatch.setattr(
+        questions.question_repo,
+        "get_question",
+        lambda _question_id, **_kwargs: question,
+    )
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "admit_question_submission",
+        lambda **_kwargs: effects.append("admit"),
+    )
+    monkeypatch.setattr(
+        questions.ai_service,
+        "get_ai_answer",
+        lambda **_kwargs: effects.append("ai"),
+    )
+
+    response = _client().post(
+        "/questions",
+        json={
+            "content": "Please solve 2x + 4 = 10",
+            "subject": "math",
+            "idempotencyKey": "question-submit-strict-replay",
+        },
+    )
+
+    assert student_id == "student-1"
+    assert digest == command["command_id"]
+    assert fingerprint == command["fingerprint"]
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "question_submission_temporarily_unavailable"
+    assert private_content not in json.dumps(response.json(), sort_keys=True)
+    assert effects == []
