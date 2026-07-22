@@ -644,7 +644,7 @@ def test_terminal_provider_rejection_proves_and_compensates_once_before_actionab
         nonlocal provider_calls
         provider_calls += 1
         raise questions.ocr_service.OcrAttachmentFailure(
-            "invalid_provider_response", terminal=True
+            "invalid_object", terminal=True
         )
 
     monkeypatch.setattr(
