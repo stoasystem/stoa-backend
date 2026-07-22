@@ -161,7 +161,7 @@ Convert STOA from broad local contracts into a trustworthy Web product that can 
 | V9DATA-02 | Phase 475 | Complete |
 | V9DATA-03 | Phase 475 | Complete |
 | V9DATA-04 | Phase 475 | Complete |
-| V9DATA-05 | Phase 475 | Pending |
+| V9DATA-05 | Phase 475 | Complete |
 | V9DATA-06 | Phase 475 | Complete |
 | V9DATA-07 | Phase 475 | Complete |
 | V9DATA-08 | Phase 475 | Pending |
