@@ -15,6 +15,20 @@ from stoa.security.authorization import ParentAuthorizationFacts
 class _AtomicRelationshipTable:
     def __init__(self, *, fail_at: int | None = None) -> None:
         self.items: dict[tuple[str, str], dict[str, object]] = {
+            ("USER#parent-1", "PROFILE"): {
+                "PK": "USER#parent-1",
+                "SK": "PROFILE",
+                "user_id": "parent-1",
+                "role": "parent",
+                "account_status": "active",
+                "version": 2,
+            },
+            ("USER#parent-1", "ACCOUNT_FENCE"): {
+                "PK": "USER#parent-1",
+                "SK": "ACCOUNT_FENCE",
+                "status": "active",
+                "generation": 7,
+            },
             ("USER#student-1", "PROFILE"): {
                 "PK": "USER#student-1",
                 "SK": "PROFILE",
@@ -22,6 +36,7 @@ class _AtomicRelationshipTable:
                 "role": "student",
                 "account_status": "active",
                 "preferred_locale": "de",
+                "version": 5,
             },
             ("USER#student-1", "ACCOUNT_FENCE"): {
                 "PK": "USER#student-1",
@@ -61,17 +76,33 @@ class _AtomicRelationshipTable:
             raise account_deletion_repo.AccountDeletionConflict("injected")
 
         staged = deepcopy(self.items)
-        fence = copied[0]["ConditionCheck"]
-        fence_item = staged.get((fence["Key"]["PK"], fence["Key"]["SK"]))
-        if (
-            fence_item is None
-            or fence_item.get("status") != "active"
-            or fence_item.get("generation")
-            != fence["ExpressionAttributeValues"][":generation"]
-        ):
-            raise account_deletion_repo.AccountDeletionConflict("fence")
+        for operation in copied:
+            condition_check = operation.get("ConditionCheck")
+            if condition_check is None:
+                continue
+            key = (condition_check["Key"]["PK"], condition_check["Key"]["SK"])
+            item = staged.get(key)
+            values = condition_check["ExpressionAttributeValues"]
+            if key[1] == "ACCOUNT_FENCE":
+                if (
+                    item is None
+                    or item.get("status") != "active"
+                    or item.get("generation") != values[":generation"]
+                ):
+                    raise account_deletion_repo.AccountDeletionConflict("fence")
+                continue
+            if (
+                item is None
+                or item.get("user_id") != values[":user_id"]
+                or item.get("role") != values[":role"]
+                or item.get("account_status") != values[":active"]
+                or item.get("version") != values[":profile_version"]
+            ):
+                raise account_deletion_repo.AccountDeletionConflict("profile observation")
 
-        for operation in copied[1:3]:
+        for operation in copied:
+            if "Update" not in operation or operation["Update"]["Key"]["SK"] == "PROFILE":
+                continue
             update = operation["Update"]
             key = (update["Key"]["PK"], update["Key"]["SK"])
             values = update["ExpressionAttributeValues"]
@@ -95,7 +126,11 @@ class _AtomicRelationshipTable:
                 row[field] = values[f":{field}"]
             staged[key] = row
 
-        profile_update = copied[3]["Update"]
+        profile_update = next(
+            operation["Update"]
+            for operation in copied
+            if "Update" in operation and operation["Update"]["Key"]["SK"] == "PROFILE"
+        )
         profile_key = (
             profile_update["Key"]["PK"],
             profile_update["Key"]["SK"],
@@ -106,6 +141,8 @@ class _AtomicRelationshipTable:
             profile is None
             or profile.get("user_id") != profile_values[":student_id"]
             or profile.get("role") != "student"
+            or profile.get("account_status") != "active"
+            or profile.get("version") != profile_values[":expected_profile_version"]
             or profile.get("parent_id") not in (None, "", profile_values[":parent_id"])
             or profile.get("relationship")
             not in (None, "", profile_values[":relationship"])
@@ -113,6 +150,7 @@ class _AtomicRelationshipTable:
             raise account_deletion_repo.AccountDeletionConflict("profile")
         profile.update(
             {
+                "version": profile_values[":next_profile_version"],
                 "parent_id": profile_values[":parent_id"],
                 "relationship": profile_values[":relationship"],
                 "parent_binding_status": profile_values[":status"],
@@ -136,7 +174,7 @@ def _write_relationship(**overrides):
     return user_repo.put_parent_student_relationship(**values)
 
 
-def test_transaction_shape_contains_fence_two_rows_and_narrow_profile_update() -> None:
+def test_transaction_shape_contains_dual_fences_dual_profiles_and_relationship_writes() -> None:
     operations = user_repo.build_parent_binding_transaction(
         parent_id="parent-1",
         student_id="student-1",
@@ -146,24 +184,39 @@ def test_transaction_shape_contains_fence_two_rows_and_narrow_profile_update() -
         actor="admin-1",
         created_at="2026-07-21T20:00:00+00:00",
         version=4,
-        expected_generation=3,
+        expected_parent_generation=7,
+        expected_student_generation=3,
+        expected_parent_profile_version=2,
+        expected_student_profile_version=5,
     )
 
-    assert len(operations) == 4
+    assert len(operations) == 6
     assert operations[0]["ConditionCheck"]["Key"] == {
+        "PK": "USER#parent-1",
+        "SK": "ACCOUNT_FENCE",
+    }
+    assert operations[1]["ConditionCheck"]["Key"] == {
         "PK": "USER#student-1",
         "SK": "ACCOUNT_FENCE",
     }
-    assert [operation["Update"]["Key"] for operation in operations[1:3]] == [
+    parent_profile = operations[2]["ConditionCheck"]
+    assert parent_profile["Key"] == {"PK": "USER#parent-1", "SK": "PROFILE"}
+    assert parent_profile["ExpressionAttributeValues"] == {
+        ":user_id": "parent-1",
+        ":role": "parent",
+        ":active": "active",
+        ":profile_version": 2,
+    }
+    assert [operation["Update"]["Key"] for operation in operations[3:5]] == [
         {"PK": "USER#parent-1", "SK": "CHILD#student-1"},
         {"PK": "USER#student-1", "SK": "PARENT#parent-1"},
     ]
-    for operation in operations[1:3]:
+    for operation in operations[3:5]:
         condition = operation["Update"]["ConditionExpression"]
         assert "attribute_not_exists(PK)" in condition
         assert "#version = :version" in condition
         assert "#relationship = :relationship" in condition
-    profile = operations[3]["Update"]
+    profile = operations[5]["Update"]
     assert profile["Key"] == {"PK": "USER#student-1", "SK": "PROFILE"}
     assert set(profile["ExpressionAttributeNames"].values()) == {
         "parent_id",
@@ -171,10 +224,13 @@ def test_transaction_shape_contains_fence_two_rows_and_narrow_profile_update() -
         "parent_binding_status",
         "user_id",
         "role",
+        "account_status",
     }
+    assert profile["ExpressionAttributeValues"][":student_role"] == "student"
+    assert profile["ExpressionAttributeValues"][":active"] == "active"
 
 
-@pytest.mark.parametrize("fail_at", range(4))
+@pytest.mark.parametrize("fail_at", range(6))
 def test_failure_at_every_operation_leaves_all_relationship_projections_unchanged(
     monkeypatch, fail_at
 ) -> None:
@@ -186,6 +242,39 @@ def test_failure_at_every_operation_leaves_all_relationship_projections_unchange
 
     assert result.disposition is user_repo.ParentBindingDisposition.RETRYABLE
     assert table.items == before
+
+
+@pytest.mark.parametrize(
+    ("participant", "coordinate", "field", "value"),
+    [
+        ("parent", "PROFILE", "account_status", "suspended"),
+        ("parent", "ACCOUNT_FENCE", "status", "deletion_pending"),
+        ("parent", "PROFILE", "role", "guardian"),
+        ("parent", "PROFILE", "version", 3),
+        ("student", "PROFILE", "account_status", "suspended"),
+        ("student", "ACCOUNT_FENCE", "status", "deletion_pending"),
+        ("student", "PROFILE", "role", "child"),
+        ("student", "PROFILE", "version", 6),
+    ],
+)
+def test_participant_lifecycle_or_version_race_rolls_back_every_binding_write(
+    monkeypatch, participant, coordinate, field, value
+) -> None:
+    table = _AtomicRelationshipTable()
+    monkeypatch.setattr(user_repo, "get_table", lambda: table)
+
+    def race_authorization_observation() -> None:
+        table.items[(f"USER#{participant}-1", coordinate)][field] = value
+
+    table.before_transaction = race_authorization_observation
+    result = _write_relationship()
+
+    assert result.disposition is not user_repo.ParentBindingDisposition.CREATED
+    assert ("USER#parent-1", "CHILD#student-1") not in table.items
+    assert ("USER#student-1", "PARENT#parent-1") not in table.items
+    student = table.items[("USER#student-1", "PROFILE")]
+    assert "parent_id" not in student
+    assert "parent_binding_status" not in student
 
 
 def test_identical_replay_returns_original_without_another_transaction(monkeypatch) -> None:

@@ -21,6 +21,12 @@ class _RepairTable:
                 "account_status": "active",
                 "version": 2,
             },
+            ("USER#parent-1", "ACCOUNT_FENCE"): {
+                "PK": "USER#parent-1",
+                "SK": "ACCOUNT_FENCE",
+                "status": "active",
+                "generation": 7,
+            },
             ("USER#student-1", "PROFILE"): {
                 "PK": "USER#student-1",
                 "SK": "PROFILE",
@@ -64,17 +70,33 @@ class _RepairTable:
             self.before_transaction = None
             callback()
         staged = deepcopy(self.items)
-        fence = copied[0]["ConditionCheck"]
-        fence_item = staged.get((fence["Key"]["PK"], fence["Key"]["SK"]))
-        if (
-            fence_item is None
-            or fence_item.get("status") != "active"
-            or fence_item.get("generation")
-            != fence["ExpressionAttributeValues"][":generation"]
-        ):
-            raise account_deletion_repo.AccountDeletionConflict("fence")
+        for operation in copied:
+            condition_check = operation.get("ConditionCheck")
+            if condition_check is None:
+                continue
+            key = (condition_check["Key"]["PK"], condition_check["Key"]["SK"])
+            item = staged.get(key)
+            values = condition_check["ExpressionAttributeValues"]
+            if key[1] == "ACCOUNT_FENCE":
+                if (
+                    item is None
+                    or item.get("status") != "active"
+                    or item.get("generation") != values[":generation"]
+                ):
+                    raise account_deletion_repo.AccountDeletionConflict("fence")
+                continue
+            if (
+                item is None
+                or item.get("user_id") != values[":user_id"]
+                or item.get("role") != values[":role"]
+                or item.get("account_status") != values[":active"]
+                or item.get("version") != values[":profile_version"]
+            ):
+                raise account_deletion_repo.AccountDeletionConflict("profile observation")
 
-        for operation in copied[1:3]:
+        for operation in copied:
+            if "Update" not in operation or operation["Update"]["Key"]["SK"] == "PROFILE":
+                continue
             update = operation["Update"]
             key = (update["Key"]["PK"], update["Key"]["SK"])
             values = update["ExpressionAttributeValues"]
@@ -98,7 +120,11 @@ class _RepairTable:
                 row[field] = values[f":{field}"]
             staged[key] = row
 
-        update = copied[3]["Update"]
+        update = next(
+            operation["Update"]
+            for operation in copied
+            if "Update" in operation and operation["Update"]["Key"]["SK"] == "PROFILE"
+        )
         key = (update["Key"]["PK"], update["Key"]["SK"])
         values = update["ExpressionAttributeValues"]
         profile = staged.get(key)
@@ -107,6 +133,7 @@ class _RepairTable:
             profile is None
             or profile.get("user_id") != values[":student_id"]
             or profile.get("role") != "student"
+            or profile.get("account_status") != "active"
             or profile.get("version") != expected
             or profile.get("parent_id") not in (None, "", values[":parent_id"])
             or profile.get("relationship") not in (None, "", values[":relationship"])
@@ -307,6 +334,46 @@ def test_change_racing_the_atomic_apply_is_not_overwritten(monkeypatch) -> None:
     assert table.transactions == []
     assert table.items[("USER#student-1", "PROFILE")]["preferred_locale"] == "it"
     assert ("USER#student-1", "PARENT#parent-1") not in table.items
+
+
+@pytest.mark.parametrize(
+    ("coordinate", "field", "value"),
+    [
+        ("PROFILE", "account_status", "suspended"),
+        ("PROFILE", "role", "guardian"),
+        ("PROFILE", "version", 3),
+        ("ACCOUNT_FENCE", "status", "deletion_pending"),
+    ],
+)
+def test_parent_authorization_race_cannot_bypass_reconciliation_fence(
+    monkeypatch, coordinate, field, value
+) -> None:
+    table = _RepairTable()
+    _install_forward(table)
+    _install_projection(table)
+    monkeypatch.setattr(user_repo, "get_table", lambda: table)
+    preview = _preview(table)
+
+    def race_parent_authorization() -> None:
+        table.items[("USER#parent-1", coordinate)][field] = value
+
+    table.before_transaction = race_parent_authorization
+    result = user_repo.apply_parent_binding_repair(
+        parent_id="parent-1",
+        student_id="student-1",
+        relationship="child",
+        preview_id=preview.preview_id,
+        actor="admin-1",
+        created_at="2026-07-22T01:00:00+00:00",
+    )
+
+    assert result.disposition not in {
+        user_repo.ParentBindingRepairApplyDisposition.REPAIRED,
+        user_repo.ParentBindingRepairApplyDisposition.ALREADY_CONSISTENT,
+    }
+    assert table.transactions == []
+    assert ("USER#student-1", "PARENT#parent-1") not in table.items
+    assert table.items[("USER#student-1", "PROFILE")]["parent_id"] == "parent-1"
 
 
 def test_different_parent_conflict_is_report_only_and_remains_unauthorized(monkeypatch) -> None:
