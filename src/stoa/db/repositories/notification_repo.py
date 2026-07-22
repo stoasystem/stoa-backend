@@ -42,6 +42,12 @@ NOTIFICATION_PRIVATE_ROW_REGISTRY = frozenset(
         DELIVERY_INTENT_ENTITY,
     }
 )
+NOTIFICATION_IDENTITY_REFERENCE_REGISTRY = {
+    NOTIFICATION_ENTITY: {
+        "scalar_fields": frozenset({"actor_id"}),
+        "metadata_fields": frozenset({"actor_id", "teacher_id", "parent_id"}),
+    }
+}
 NOTIFICATION_WRITER_REGISTRY = frozenset(
     {
         "put_event",
@@ -1463,7 +1469,10 @@ def scan_notification_private_rows(
             dict(item)
             for item in items
             if item.get("entity_type") in NOTIFICATION_PRIVATE_ROW_REGISTRY
-            and _targets_owner(item, owner_id)
+            and (
+                _targets_owner(item, owner_id)
+                or _targets_identity_reference(item, owner_id)
+            )
             and not _already_scrubbed(item)
         )
         raw = response.get("LastEvaluatedKey")
@@ -1484,6 +1493,34 @@ def scrub_notification_private_row(
     generation: int,
     now_iso: str,
     table: object | None = None,
+) -> None:
+    if _targets_owner(item, owner_id):
+        _replace_notification_owner_tombstone(
+            item,
+            owner_id=owner_id,
+            generation=generation,
+            now_iso=now_iso,
+            table=table,
+        )
+        return
+    if _targets_identity_reference(item, owner_id):
+        scrub_notification_identity_references(
+            item,
+            owner_id=owner_id,
+            generation=generation,
+            table=table,
+        )
+        return
+    raise account_deletion_repo.AccountDeletionConflict("notification owner changed")
+
+
+def _replace_notification_owner_tombstone(
+    item: Mapping[str, object],
+    *,
+    owner_id: str,
+    generation: int,
+    now_iso: str,
+    table: object | None,
 ) -> None:
     if not _targets_owner(item, owner_id):
         raise account_deletion_repo.AccountDeletionConflict("notification owner changed")
@@ -1522,6 +1559,123 @@ def scrub_notification_private_row(
     )
 
 
+def scrub_notification_identity_references(
+    item: Mapping[str, object],
+    *,
+    owner_id: str,
+    generation: int,
+    table: object | None = None,
+) -> None:
+    """Remove one foreign identity without mutating recipient-owned evidence."""
+    if _targets_owner(item, owner_id):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "notification owner requires tombstone"
+        )
+    if not _targets_identity_reference(item, owner_id):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "notification identity changed"
+        )
+
+    pk = _required_identity_coordinate(item.get("PK"), "PK")
+    sk = _required_identity_coordinate(item.get("SK"), "SK")
+    entity = _required_identity_coordinate(item.get("entity_type"), "entity type")
+    schema = _required_identity_coordinate(item.get("schema_version"), "schema version")
+    status = _required_identity_coordinate(item.get("status"), "status")
+    version = item.get("event_version")
+    if type(version) is not int or version <= 0:
+        raise account_deletion_repo.AccountDeletionConflict(
+            "notification version is malformed"
+        )
+
+    metadata = item.get("metadata")
+    if not isinstance(metadata, Mapping):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "notification metadata is malformed"
+        )
+    metadata_snapshot = _dependency_mapping(metadata)
+    metadata_digest = _notification_metadata_digest(metadata_snapshot)
+    reference_fields = NOTIFICATION_IDENTITY_REFERENCE_REGISTRY[NOTIFICATION_ENTITY]
+    metadata_fields = reference_fields["metadata_fields"]
+    clean_metadata = {
+        key: value
+        for key, value in metadata_snapshot.items()
+        if not (key in metadata_fields and value == owner_id)
+    }
+    direct_match = item.get("actor_id") == owner_id
+
+    target = table or get_table()
+    hook = getattr(target, "scrub_notification_identity_references", None)
+    if callable(hook):
+        hook(
+            dict(item),
+            clean_metadata,
+            owner_id,
+            generation,
+            metadata_digest,
+        )
+        return
+
+    condition = (
+        "PK=:pk AND SK=:sk AND entity_type=:entity AND schema_version=:schema "
+        "AND event_version=:version AND #status=:status AND metadata=:metadata"
+    )
+    values: dict[str, object] = {
+        ":pk": pk,
+        ":sk": sk,
+        ":entity": entity,
+        ":schema": schema,
+        ":version": version,
+        ":next_version": version + 1,
+        ":status": status,
+        ":metadata": metadata_snapshot,
+        ":clean_metadata": clean_metadata,
+    }
+    update = "SET metadata=:clean_metadata, event_version=:next_version"
+    if direct_match:
+        condition += " AND actor_id=:identity"
+        values[":identity"] = owner_id
+        update += " REMOVE actor_id"
+
+    account_deletion_repo.transact(
+        [
+            account_deletion_repo.deletion_fence_condition(owner_id, generation),
+            {
+                "Update": {
+                    "Key": {"PK": pk, "SK": sk},
+                    "UpdateExpression": update,
+                    "ConditionExpression": condition,
+                    "ExpressionAttributeNames": {"#status": "status"},
+                    "ExpressionAttributeValues": values,
+                }
+            },
+        ],
+        table=target,
+    )
+
+
+def _required_identity_coordinate(value: object, name: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise account_deletion_repo.AccountDeletionConflict(
+            f"notification {name} is malformed"
+        )
+    return value
+
+
+def _notification_metadata_digest(metadata: Mapping[str, object]) -> str:
+    try:
+        encoded = json.dumps(
+            dict(metadata),
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise account_deletion_repo.AccountDeletionConflict(
+            "notification metadata is malformed"
+        ) from exc
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def _targets_owner(item: Mapping[str, object], owner_id: str) -> bool:
     if owner_id in {item.get("owner_id"), item.get("student_id"), item.get("user_id")}:
         return True
@@ -1529,6 +1683,22 @@ def _targets_owner(item: Mapping[str, object], owner_id: str) -> bool:
     return isinstance(metadata, Mapping) and owner_id in {
         metadata.get("owner_id"), metadata.get("student_id")
     }
+
+
+def _targets_identity_reference(
+    item: Mapping[str, object], owner_id: str
+) -> bool:
+    fields = NOTIFICATION_IDENTITY_REFERENCE_REGISTRY.get(
+        str(item.get("entity_type") or "")
+    )
+    if fields is None:
+        return False
+    if any(item.get(field) == owner_id for field in fields["scalar_fields"]):
+        return True
+    metadata = item.get("metadata")
+    return isinstance(metadata, Mapping) and any(
+        metadata.get(field) == owner_id for field in fields["metadata_fields"]
+    )
 
 
 def _already_scrubbed(item: Mapping[str, object]) -> bool:

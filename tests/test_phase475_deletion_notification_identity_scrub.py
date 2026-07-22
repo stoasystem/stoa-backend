@@ -101,8 +101,12 @@ class _NotificationTable:
 
         if row_key == ("NOTIFICATION#direct", "META") and not self.cas_raced:
             self.cas_raced = True
-            current["event_version"] = int(current["event_version"]) + 1
-            metadata = dict(current["metadata"])
+            event_version = current["event_version"]
+            metadata_value = current["metadata"]
+            assert isinstance(event_version, int)
+            assert isinstance(metadata_value, dict)
+            current["event_version"] = event_version + 1
+            metadata = dict(metadata_value)
             metadata["concurrent_note"] = "preserve this write"
             current["metadata"] = metadata
             raise account_deletion_repo.AccountDeletionConflict(
