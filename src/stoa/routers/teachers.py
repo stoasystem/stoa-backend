@@ -49,6 +49,7 @@ class TakeoverResponse(BaseModel):
     question_id: str
     session_id: str
     status: str
+    notification_effect_status: str
 
 
 class ReplyRequest(BaseModel):
@@ -232,10 +233,23 @@ async def takeover(
             },
         )
 
+    effect_status = "retryable_dependency"
+    if result.question is not None:
+        try:
+            effect = notification_service.ensure_teacher_takeover_notification(
+                question=result.question,
+                teacher_id=teacher_id,
+                session_id=result.session_id,
+            )
+            effect_status = str(effect.get("status") or "retryable_dependency")
+        except Exception:
+            effect_status = "retryable_dependency"
+
     return TakeoverResponse(
         question_id=question_id,
         session_id=result.session_id,
         status=QuestionStatus.TEACHER_ACTIVE.value,
+        notification_effect_status=effect_status,
     )
 
 

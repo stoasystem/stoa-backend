@@ -601,6 +601,7 @@ def create_event(
     actor_role: str | None = None,
     status: str = "created",
     created_at: str | None = None,
+    event_id: str | None = None,
     owner_id: str | None = None,
     account_fence_generation: int | None = None,
     global_nonprivate: bool = False,
@@ -673,7 +674,7 @@ def create_event(
         "entity_type": notification_repo.NOTIFICATION_ENTITY,
         "schema_version": "notification-event.v3",
         "event_version": 1,
-        "event_id": f"notif-{uuid4().hex}",
+        "event_id": event_id or f"notif-{uuid4().hex}",
         "recipient_id": recipient_id,
         "recipient_role": recipient_role,
         "event_type": event_type,
@@ -742,6 +743,222 @@ def emit_teacher_requested(
             owner_id=student_id,
             account_fence_generation=account_fence_generation,
         )
+
+
+def teacher_takeover_effect_id(claim_id: str, session_id: str) -> str:
+    """Derive the one notification effect owned by a persisted takeover claim."""
+    claim = str(claim_id).strip()
+    session = str(session_id).strip()
+    if not claim or not session:
+        raise ValueError("takeover claim and session identities are required")
+    digest = _canonical_payload_digest(
+        {
+            "domain": "stoa.teacher-takeover-notification.v1",
+            "claim_id": claim,
+            "session_id": session,
+        }
+    )
+    return f"teacher-takeover-{digest}"
+
+
+def _matching_teacher_takeover_event(
+    event: Mapping[str, Any] | None,
+    *,
+    event_id: str,
+    question_id: str,
+    student_id: str,
+    teacher_id: str,
+    claim_id: str,
+    session_id: str,
+    generation: int,
+) -> bool:
+    if event is None:
+        return False
+    metadata = event.get("metadata")
+    return bool(
+        event.get("event_id") == event_id
+        and event.get("entity_type") == notification_repo.NOTIFICATION_ENTITY
+        and event.get("event_type") == "teacher_takeover"
+        and event.get("target_type") == "question"
+        and event.get("target_id") == question_id
+        and event.get("recipient_id") == student_id
+        and event.get("recipient_role") == "student"
+        and event.get("actor_id") == teacher_id
+        and event.get("actor_role") == "teacher"
+        and event.get("owner_id") == student_id
+        and event.get("account_fence_generation") == generation
+        and isinstance(metadata, Mapping)
+        and metadata.get("teacher_id") == teacher_id
+        and metadata.get("teacher_takeover_claim_id") == claim_id
+        and metadata.get("session_id") == session_id
+    )
+
+
+def ensure_teacher_takeover_notification(
+    *,
+    question: Mapping[str, Any],
+    teacher_id: str,
+    session_id: str,
+) -> dict[str, str]:
+    """Converge the deterministic notification owned by a confirmed takeover."""
+    question_id = str(question.get("question_id") or "").strip()
+    student_id = str(question.get("student_id") or "").strip()
+    persisted_teacher = str(question.get("teacher_id") or "").strip()
+    claim_id = str(question.get("teacher_takeover_claim_id") or "").strip()
+    persisted_session = str(question.get("session_id") or "").strip()
+    generation = question.get("account_fence_generation")
+    claimed_at = str(
+        question.get("teacher_taken_over_at")
+        or question.get("teacher_started_at")
+        or ""
+    ).strip()
+    if (
+        question.get("status") != "teacher_active"
+        or not question_id
+        or not student_id
+        or not teacher_id
+        or persisted_teacher != teacher_id
+        or not claim_id
+        or not session_id
+        or persisted_session != session_id
+        or type(generation) is not int
+        or generation <= 0
+        or not claimed_at
+    ):
+        return {"effect_id": "", "status": "retryable_dependency"}
+
+    effect_id = teacher_takeover_effect_id(claim_id, session_id)
+    event_id = f"notif-{effect_id}"
+    scope = notification_repo.DeliveryIntentScope.private_owner(
+        owner_id=student_id,
+        generation=generation,
+    )
+    metadata = {
+        "subject": question.get("subject"),
+        "teacher_id": teacher_id,
+        "teacher_takeover_claim_id": claim_id,
+        "session_id": session_id,
+    }
+    payload = {
+        "schema": "teacher-takeover-notification.v1",
+        "effect_id": effect_id,
+        "event_id": event_id,
+        "question_id": question_id,
+        "student_id": student_id,
+        "teacher_id": teacher_id,
+        "claim_id": claim_id,
+        "session_id": session_id,
+        "account_fence_generation": generation,
+    }
+    payload_digest = _canonical_payload_digest(payload)
+
+    def load_event() -> Mapping[str, Any] | None:
+        return notification_repo.load_delivery_event_strong(event_id)
+
+    def event_matches(event: Mapping[str, Any] | None) -> bool:
+        return _matching_teacher_takeover_event(
+            event,
+            event_id=event_id,
+            question_id=question_id,
+            student_id=student_id,
+            teacher_id=teacher_id,
+            claim_id=claim_id,
+            session_id=session_id,
+            generation=generation,
+        )
+
+    try:
+        existing_event = load_event()
+    except Exception:
+        existing_event = None
+    if event_matches(existing_event):
+        return {"effect_id": effect_id, "status": "accepted"}
+    if existing_event is not None:
+        return {"effect_id": effect_id, "status": "retryable_claim_conflict"}
+
+    try:
+        intent = notification_repo.register_delivery_intent(
+            scope=scope,
+            operation_id=effect_id,
+            channel="in_app",
+            event_ids=[event_id],
+            payload_digest=payload_digest,
+            now_iso=now_iso(),
+        )
+    except Exception:
+        return {"effect_id": effect_id, "status": "retryable_dependency"}
+
+    prior_status = str(intent.get("outcome_status") or intent.get("status") or "")
+
+    def create_once() -> None:
+        try:
+            current = load_event()
+        except Exception:
+            current = None
+        if event_matches(current):
+            return
+        if current is not None:
+            raise account_deletion_repo.AccountDeletionConflict(
+                "takeover notification identity changed"
+            )
+        try:
+            create_event(
+                recipient_id=student_id,
+                recipient_role="student",
+                event_type="teacher_takeover",
+                target_type="question",
+                target_id=question_id,
+                title="Teacher joined your question",
+                summary="A teacher has started working on your question.",
+                metadata=metadata,
+                actor_id=teacher_id,
+                actor_role="teacher",
+                created_at=claimed_at,
+                event_id=event_id,
+                owner_id=student_id,
+                account_fence_generation=generation,
+            )
+        except Exception:
+            try:
+                current = load_event()
+            except Exception:
+                current = None
+            if not event_matches(current):
+                raise
+
+    if prior_status == "provider_acceptance_unknown":
+        try:
+            create_once()
+        except Exception:
+            return {"effect_id": effect_id, "status": "retryable_dependency"}
+        return {"effect_id": effect_id, "status": "accepted"}
+    if prior_status == "accepted":
+        return {"effect_id": effect_id, "status": "retryable_dependency"}
+    if prior_status == "canceled_account_deletion":
+        return {"effect_id": effect_id, "status": prior_status}
+
+    try:
+        result = run_delivery_intent(
+            scope=scope,
+            operation_id=effect_id,
+            channel="in_app",
+            event_ids=[event_id],
+            payload=payload,
+            provider_call=create_once,
+        )
+    except Exception:
+        return {"effect_id": effect_id, "status": "retryable_dependency"}
+    delivery_status = str(result.get("status") or "retryable_dependency")
+    if delivery_status == "provider_acceptance_unknown":
+        try:
+            current = load_event()
+        except Exception:
+            current = None
+        if event_matches(current):
+            delivery_status = "accepted"
+        else:
+            delivery_status = "retryable_dependency"
+    return {"effect_id": effect_id, "status": delivery_status}
 
 
 def emit_teacher_takeover(*, question: dict[str, Any], teacher_id: str) -> None:
