@@ -30,6 +30,14 @@ def _question(**extra: object) -> dict[str, object]:
 class QuestionCasTable:
     def __init__(self, question: Mapping[str, object]):
         self.question = dict(question)
+        self.teacher_profile = {
+            "PK": "USER#teacher-1",
+            "SK": "PROFILE",
+            "user_id": "teacher-1",
+            "role": "teacher",
+            "account_status": "active",
+            "version": 7,
+        }
         self.sessions: dict[str, dict[str, object]] = {}
         self.transactions: list[list[dict[str, object]]] = []
         self.before_ai_commit: threading.Barrier | None = None
@@ -48,6 +56,17 @@ class QuestionCasTable:
                         "generation": 1,
                     }
                 }
+            if Key == {"PK": "USER#teacher-1", "SK": "ACCOUNT_FENCE"}:
+                return {
+                    "Item": {
+                        **Key,
+                        "entity_type": "account_fence",
+                        "status": "active",
+                        "generation": 3,
+                    }
+                }
+            if Key == {"PK": "USER#teacher-1", "SK": "PROFILE"}:
+                return {"Item": dict(self.teacher_profile)}
             if Key == {"PK": "QUESTION#question-1", "SK": "META"}:
                 return {"Item": dict(self.question)}
             session_id = str(Key.get("PK") or "").removeprefix("SESSION#")
@@ -56,7 +75,11 @@ class QuestionCasTable:
 
     def transact_account_deletion(self, operations):
         copied = [dict(operation) for operation in operations]
-        update = operations[1]["Update"]
+        update = next(
+            operation["Update"]
+            for operation in operations
+            if "Update" in operation
+        )
         values = update["ExpressionAttributeValues"]
         if values.get(":next_status") == "ai_answered":
             if self.before_ai_commit is not None:
@@ -65,7 +88,7 @@ class QuestionCasTable:
                 assert self.release_ai_commit.wait(timeout=5)
         with self._lock:
             self.transactions.append(copied)
-            if len(operations) == 3:
+            if any("Put" in operation for operation in operations):
                 self._apply_takeover(operations)
                 return
             self._apply_cas(update)
@@ -93,14 +116,34 @@ class QuestionCasTable:
                 self.question[token.removeprefix(":field_")] = value
 
     def _apply_takeover(self, operations):
-        update = operations[1]["Update"]
+        update = next(
+            operation["Update"]
+            for operation in operations
+            if "Update" in operation
+        )
         values = update["ExpressionAttributeValues"]
+        profile_condition = next(
+            operation["ConditionCheck"]
+            for operation in operations
+            if operation.get("ConditionCheck", {}).get("Key", {}).get("SK")
+            == "PROFILE"
+        )
+        profile_values = profile_condition["ExpressionAttributeValues"]
         if (
-            self.question.get("status") != "escalated"
+            self.teacher_profile.get("user_id") != profile_values[":teacher_id"]
+            or self.teacher_profile.get("role") != profile_values[":teacher_role"]
+            or self.teacher_profile.get("account_status") != profile_values[":active"]
+            or self.teacher_profile.get("version")
+            != profile_values[":teacher_profile_version"]
+            or self.question.get("status") != "escalated"
             or self.question.get("version") != values.get(":expected_version")
         ):
             raise account_deletion_repo.AccountDeletionConflict("takeover CAS lost")
-        session = operations[2]["Put"]["Item"]
+        session = next(
+            operation["Put"]["Item"]
+            for operation in operations
+            if "Put" in operation
+        )
         self.question.update(
             status="teacher_active",
             version=values[":next_version"],
@@ -195,6 +238,8 @@ def test_takeover_first_makes_barriered_stale_ai_completion_lose():
             "teacher-1",
             claimed_at=NOW,
             question=escalated,
+            teacher_profile_key={"PK": "USER#teacher-1", "SK": "PROFILE"},
+            teacher_profile_version=7,
             table=table,
         )
         table.release_ai_commit.set()
@@ -232,6 +277,8 @@ def test_ai_first_allows_refreshed_escalation_then_takeover():
         "teacher-1",
         claimed_at=NOW,
         question=escalation.question,
+        teacher_profile_key={"PK": "USER#teacher-1", "SK": "PROFILE"},
+        teacher_profile_version=7,
         table=table,
     )
 

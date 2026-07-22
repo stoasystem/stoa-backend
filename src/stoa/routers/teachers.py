@@ -240,6 +240,11 @@ async def takeover(
         teacher_id=teacher_id,
         claimed_at=now,
         question=item,
+        teacher_profile_key={
+            "PK": teacher_account.get("PK"),
+            "SK": teacher_account.get("SK"),
+        },
+        teacher_profile_version=teacher_account.get("version"),
         sla_fields=sla_fields,
         table=get_table(),
     )

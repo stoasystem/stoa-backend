@@ -205,6 +205,45 @@ def _question_version(value: object) -> int | None:
     return None
 
 
+def _teacher_profile_observation_condition(
+    teacher_id: str,
+    profile_key: Mapping[str, object],
+    profile_version: object,
+) -> QuestionItem | None:
+    """Bind the exact active canonical-teacher profile authorized by the route."""
+    expected_key = {"PK": f"USER#{teacher_id}", "SK": "PROFILE"}
+    if (
+        profile_key.get("PK") != expected_key["PK"]
+        or profile_key.get("SK") != expected_key["SK"]
+    ):
+        return None
+    version = _question_version(profile_version)
+    if version is None:
+        return None
+    return {
+        "ConditionCheck": {
+            "Key": expected_key,
+            "ConditionExpression": (
+                "attribute_exists(PK) AND attribute_exists(SK) AND "
+                "#user_id=:teacher_id AND #role=:teacher_role AND "
+                "#account_status=:active AND #version=:teacher_profile_version"
+            ),
+            "ExpressionAttributeNames": {
+                "#user_id": "user_id",
+                "#role": "role",
+                "#account_status": "account_status",
+                "#version": "version",
+            },
+            "ExpressionAttributeValues": {
+                ":teacher_id": teacher_id,
+                ":teacher_role": "teacher",
+                ":active": "active",
+                ":teacher_profile_version": version,
+            },
+        }
+    }
+
+
 def _dispatch_allows_takeover(
     question: Mapping[str, object], teacher_id: str, claimed_at: str
 ) -> bool:
@@ -305,6 +344,8 @@ def claim_teacher_takeover(
     *,
     claimed_at: str,
     question: Mapping[str, object] | None = None,
+    teacher_profile_key: Mapping[str, object],
+    teacher_profile_version: object,
     sla_fields: Mapping[str, object] | None = None,
     table: object | None = None,
 ) -> TeacherTakeoverResult:
@@ -315,6 +356,16 @@ def claim_teacher_takeover(
     target = _table(table)
     claim_id = teacher_takeover_claim_id(question_id, teacher_id)
     session_id = teacher_session_id_for_claim(claim_id)
+    teacher_profile_condition = _teacher_profile_observation_condition(
+        teacher_id,
+        teacher_profile_key,
+        teacher_profile_version,
+    )
+    if teacher_profile_condition is None:
+        return TeacherTakeoverResult(
+            TeacherTakeoverDisposition.RETRYABLE,
+            question_id,
+        )
     try:
         current = dict(question) if question is not None else get_question(
             question_id, table=target
@@ -413,6 +464,10 @@ def claim_teacher_takeover(
             student_id, table=target
         )
         generation = int(fence["generation"])
+        teacher_fence = account_deletion_repo.require_active_account_fence(
+            teacher_id, table=target
+        )
+        teacher_fence_generation = int(teacher_fence["generation"])
         persisted_question: QuestionItem = {
             **current,
             "status": "teacher_active",
@@ -447,6 +502,10 @@ def claim_teacher_takeover(
                 account_deletion_repo.active_fence_condition(
                     student_id, generation
                 ),
+                account_deletion_repo.active_fence_condition(
+                    teacher_id, teacher_fence_generation
+                ),
+                teacher_profile_condition,
                 {
                     "Update": {
                         "Key": {

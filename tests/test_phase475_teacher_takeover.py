@@ -371,6 +371,7 @@ def test_wrong_or_stale_dispatch_owner_cannot_claim_and_creates_no_session():
     [
         ({"account_status": "suspended"}, "active"),
         ({"account_status": "deleted"}, "active"),
+        ({"account_status": "inactive"}, "active"),
         ({"role": "student"}, "active"),
         ({"role": "tutor"}, "active"),
         ({"role": "instructor"}, "active"),
