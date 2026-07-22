@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-18-PLAN.md
-last_updated: "2026-07-22T14:28:04.691Z"
+stopped_at: Completed 475-21-PLAN.md
+last_updated: "2026-07-22T14:41:56.959Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 124
+  completed_plans: 125
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 18 of 45
+Plan: 19 of 45
 Status: Ready to execute
 Last activity: 2026-07-22 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-22T14:28:04.685Z
-**Stopped At:** Completed 475-18-PLAN.md
+**Last Date:** 2026-07-22T14:41:56.953Z
+**Stopped At:** Completed 475-21-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -231,6 +231,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P34 | 4min | 1 tasks | 1 files |
 | Phase 475 P38 | 6 min | 1 tasks | 1 files |
 | Phase 475 P18 | 21 min | 1 tasks | 6 files |
+| Phase 475 P21 | 8 min | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -482,3 +483,5 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: Effect identity binds the opaque command digest, fingerprint, question, student, account-fence generation, and closed OCR/AI kind. — A receipt must not be reusable across owners, payloads, generations, questions, or provider boundaries.
 - [Phase 475]: Only a durable result_ready receipt may be projected automatically; provider_inflight and provider_outcome_unknown never authorize another provider invocation. — Ambiguous external outcomes must not create duplicate OCR or AI effects.
 - [Phase 475]: OCR completion advances command and question versions while processing continues; AI completion advances both and completes the command. — Each effect owns one exact conditional transition while the final AI effect owns command completion.
+- [Phase 475]: Takeover binds the authenticated teacher's exact PROFILE key and observed positive version while independently fencing the active account generation. — The same transaction must lose to profile edits or account deletion after authorization and before ownership commit.
+- [Phase 475]: Only canonical teacher plus active lifecycle satisfies the takeover profile condition; every conditional loss keeps the existing redacted retry response. — Aliases, other roles, lifecycle states, versions, and storage coordinates must neither authorize nor leak through the API.
