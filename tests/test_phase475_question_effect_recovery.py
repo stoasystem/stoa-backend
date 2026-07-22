@@ -57,6 +57,7 @@ class EffectRecoveryTable:
         self.fail_completion_after_commit = 0
         self.fail_result_before_commit = 0
         self.fail_intent_after_commit = 0
+        self.fail_reversal_after_commit = 0
         self._lock = threading.Lock()
 
     def get_item(self, *, Key, ConsistentRead=True):  # noqa: N803
@@ -93,6 +94,12 @@ class EffectRecoveryTable:
             == "question_provider_effect"
             for operation in operations
         )
+        reversal = any(
+            ":reversal" in operation.get("Update", {}).get(
+                "ExpressionAttributeValues", {}
+            )
+            for operation in operations
+        )
         with self._lock:
             self._validate_transaction(operations)
             if completion and self.fail_completion_before_commit:
@@ -106,6 +113,9 @@ class EffectRecoveryTable:
             if completion and self.fail_completion_after_commit:
                 self.fail_completion_after_commit -= 1
                 raise TimeoutError("completion-committed-response-lost-canary")
+            if reversal and self.fail_reversal_after_commit:
+                self.fail_reversal_after_commit -= 1
+                raise TimeoutError("reversal-committed-response-lost-canary")
         return {}
 
     def _validate_transaction(self, operations: list[dict[str, object]]) -> None:
@@ -567,3 +577,114 @@ def test_effect_proof_executes_repository_boundaries_instead_of_monkeypatching_t
         "setattr(questions.question_repo, " + '"get_question"'
         not in source
     )
+
+
+def test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay(
+    monkeypatch,
+) -> None:
+    table = EffectRecoveryTable()
+    table.fail_reversal_after_commit = 1
+    reusable_rows = {
+        ("ATTACHMENT#attachment-1", "META"): {
+            "PK": "ATTACHMENT#attachment-1",
+            "SK": "META",
+            "attachment_id": "attachment-1",
+            "owner_id": STUDENT_ID,
+            "status": "active",
+            "content_length": 123,
+            "immutable_object_key": "private-key-canary",
+            "immutable_version_id": "private-version-canary",
+        },
+        ("ATTACHMENT#attachment-1", f"QUESTION#{QUESTION_ID}"): {
+            "PK": "ATTACHMENT#attachment-1",
+            "SK": f"QUESTION#{QUESTION_ID}",
+            "owner_id": STUDENT_ID,
+            "resource_type": "question",
+            "resource_id": QUESTION_ID,
+        },
+        (f"USER#{STUDENT_ID}", "ATTACHMENT_STORAGE"): {
+            "PK": f"USER#{STUDENT_ID}",
+            "SK": "ATTACHMENT_STORAGE",
+            "used_bytes": 123,
+            "limit_bytes": 10000,
+        },
+        (f"USER#{STUDENT_ID}", "ATTACHMENT_OBJECT#attachment-1"): {
+            "PK": f"USER#{STUDENT_ID}",
+            "SK": "ATTACHMENT_OBJECT#attachment-1",
+            "attachment_id": "attachment-1",
+            "object_key": "private-key-canary",
+            "version_id": "private-version-canary",
+        },
+    }
+    table.items.update(copy.deepcopy(reusable_rows))
+    _patch_runtime(monkeypatch, table)
+    prepared = {
+        "attachment": {
+            "attachment_id": "attachment-1",
+            "original_filename": "exercise.png",
+            "detected_type": "image/png",
+            "content_length": 123,
+            "created_at": NOW,
+            "status": "active",
+            "immutable_object_key": "private-key-canary",
+            "immutable_version_id": "private-version-canary",
+            "immutable_etag": "private-etag-canary",
+            "content_sha256": "a" * 64,
+        }
+    }
+    monkeypatch.setattr(
+        questions.attachment_service,
+        "reserve_question_attachment",
+        lambda *_args, **_kwargs: copy.deepcopy(prepared),
+    )
+    monkeypatch.setattr(questions, "_question_attachment_operations", lambda **_kwargs: ())
+    provider_calls = 0
+
+    def reject_terminally(*_args, **_kwargs):
+        nonlocal provider_calls
+        provider_calls += 1
+        raise questions.ocr_service.OcrAttachmentFailure(
+            "invalid_provider_response", terminal=True
+        )
+
+    monkeypatch.setattr(
+        questions.ocr_service, "extract_text_from_attachment", reject_terminally
+    )
+
+    first = _client().post("/questions", json=_request(attachment=True))
+    first_body = first.json()
+    second = _client().post("/questions", json=_request(attachment=True))
+
+    assert first.status_code == second.status_code == 409
+    assert first_body == second.json()
+    assert first_body["detail"] == {
+        "code": "question_submission_terminal_failed",
+        "message": "This question could not be completed. Create a new submission to try again.",
+        "action": "create_new_submission",
+    }
+    assert provider_calls == 1
+    command = next(
+        item
+        for item in table.items.values()
+        if item.get("entity_type") == "question_submission_command"
+    )
+    question = table.items[(f"QUESTION#{QUESTION_ID}", "META")]
+    effect = _effect(table, "ocr")
+    counter = table.items[(f"USAGE#{STUDENT_ID}", "QUESTION#2026-07-22")]
+    ledger = next(
+        item
+        for item in table.items.values()
+        if item.get("entity_type") == "usage_ledger_event"
+    )
+
+    assert command["status"] == "terminal_failed"
+    assert command["terminal_failure_code"] == "provider_rejected"
+    assert command["reversal_id"] == ledger["reversal_id"]
+    assert question["status"] == "submission_failed"
+    assert effect["status"] == "terminal_proven"
+    assert counter["count"] == 0
+    assert ledger["quantity"] == 1
+    assert ledger["status"] == "reversed"
+    assert {
+        key: table.items[key] for key in reusable_rows
+    } == reusable_rows
