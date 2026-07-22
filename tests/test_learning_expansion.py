@@ -56,7 +56,7 @@ def _parents_client(user: dict) -> TestClient:
 
 def test_submit_question_accepts_foundation_subject_and_stores_topic_seeds(monkeypatch):
     stored = {}
-    update_calls = []
+    completion_calls = []
 
     monkeypatch.setattr(
         questions.user_repo,
@@ -71,8 +71,21 @@ def test_submit_question_accepts_foundation_subject_and_stores_topic_seeds(monke
 
     def admit_question(**kwargs):
         stored.update(kwargs["question"])
+        command = {
+            "entity_type": "question_submission_command",
+            "schema_version": "question-submission-command.v2",
+            "command_id": kwargs["idempotency_digest"],
+            "student_id": kwargs["student_id"],
+            "idempotency_digest": kwargs["idempotency_digest"],
+            "question_id": kwargs["question"]["question_id"],
+            "fingerprint": kwargs["fingerprint"],
+            "account_fence_generation": 1,
+            "status": "processing",
+            "version": 1,
+        }
         return question_submission_repo.QuestionAdmissionResult(
             question_submission_repo.QuestionAdmissionDisposition.ADMITTED,
+            command=command,
             question=dict(kwargs["question"]),
         )
 
@@ -81,22 +94,59 @@ def test_submit_question_accepts_foundation_subject_and_stores_topic_seeds(monke
         "admit_question_submission",
         admit_question,
     )
-    monkeypatch.setattr(
-        questions.question_repo,
-        "mutate_question",
-        lambda question, *, status, extra_attrs, **_kwargs: update_calls.append(
-            (question, status, extra_attrs)
-        )
-        or questions.question_repo.QuestionMutationResult(
-            questions.question_repo.QuestionMutationDisposition.APPLIED,
-            str(question["question_id"]),
-            {
-                **question,
-                "status": status,
-                "version": int(question["version"]) + 1,
-                **extra_attrs,
+    def begin_effect(command, question, kind, **_kwargs):
+        return question_submission_repo.QuestionEffectResult(
+            question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER,
+            effect={
+                "effect_kind": str(kind),
+                "command": dict(command),
+                "question": dict(question),
             },
-        ),
+        )
+
+    def record_effect(effect, result, **_kwargs):
+        return question_submission_repo.QuestionEffectResult(
+            question_submission_repo.QuestionEffectDisposition.RESULT_READY,
+            effect={**effect, "result": dict(result)},
+        )
+
+    def complete_effect(effect, **_kwargs):
+        completion_calls.append(effect)
+        result = effect["result"]
+        question = {
+            **effect["question"],
+            "status": "ai_answered",
+            "version": int(effect["question"]["version"]) + 1,
+            "ai_response": result["ai_response"],
+            "knowledge_points": result["knowledge_points"],
+            "topic_seeds": result["topic_seeds"],
+        }
+        command = {
+            **effect["command"],
+            "status": "completed",
+            "version": int(effect["command"]["version"]) + 1,
+        }
+        return question_submission_repo.QuestionEffectResult(
+            question_submission_repo.QuestionEffectDisposition.COMPLETED,
+            effect=dict(effect),
+            question=question,
+            command=command,
+        )
+
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "begin_question_effect",
+        begin_effect,
+    )
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "record_question_effect_result",
+        record_effect,
+    )
+    monkeypatch.setattr(
+        questions.question_submission_repo,
+        "complete_question_effect",
+        complete_effect,
     )
     monkeypatch.setattr(
         questions.ai_service,
@@ -125,8 +175,9 @@ def test_submit_question_accepts_foundation_subject_and_stores_topic_seeds(monke
     assert body["subject"] == "physics"
     assert body["knowledge_points"] == ["Newton's second law"]
     assert body["topic_seeds"][0]["topic_id"] == "newton-s-second-law"
-    assert update_calls[0][2]["topic_seeds"][0]["subject"] == "physics"
-    assert update_calls[0][0]["version"] == 1
+    assert completion_calls[0]["result"]["topic_seeds"][0]["subject"] == "physics"
+    assert completion_calls[0]["question"]["version"] == 1
+    assert completion_calls[0]["command"]["account_fence_generation"] == 1
 
 
 def test_submit_question_rejects_uncontracted_subject():
