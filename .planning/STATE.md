@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-24-PLAN.md
-last_updated: "2026-07-22T07:50:57.508Z"
+stopped_at: Completed 475-25-PLAN.md
+last_updated: "2026-07-22T08:02:23.499Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 110
+  completed_plans: 111
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 4 of 45
+Plan: 5 of 45
 Status: Ready to execute
 Last activity: 2026-07-22 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-22T07:50:57.501Z
-**Stopped At:** Completed 475-24-PLAN.md
+**Last Date:** 2026-07-22T08:01:34.633Z
+**Stopped At:** Completed 475-25-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -217,6 +217,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P14 | 9 min | 1 tasks | 4 files |
 | Phase 475 P22 | 8 min | 1 tasks | 3 files |
 | Phase 475 P24 | 7 min | 1 tasks | 2 files |
+| Phase 475 P25 | 7 min | 1 tasks | 2 files |
 
 ## Decisions
 
@@ -436,3 +437,6 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: Relationship writes bind both participants' fence generations and profile versions in one transaction. — Either account lifecycle, canonical role, or observed profile version changing before commit must cancel every relationship projection.
 - [Phase 475]: Rate operation schema v2 persists one immutable decision/count/limit/expiry receipt with the exact counter CAS. — Replay must remain byte-stable after unrelated traffic and cannot consult the mutable aggregate counter.
 - [Phase 475]: Rate replay keeps an internal replayed disposition while projecting the stored admitted decision. — Control flow can identify duplicates without changing the original public receipt bytes.
+- [Phase 475]: Cross-account deletion discovery uses an explicit entity-to-scalar/metadata field registry. — Arbitrary nested payloads and substring matching remain excluded.
+- [Phase 475]: Deletion subject identity is normalized once and persisted references must match exactly. — This accepts canonical caller formatting without broadening stored-value equality.
+- [Phase 475]: Strong base-table pagination and two later clean epochs remain the discovery completeness boundary. — A late matching cross-account row resets progress before terminal quiescence.
