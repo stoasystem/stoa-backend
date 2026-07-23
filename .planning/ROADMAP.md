@@ -35,7 +35,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
 | 473 | Student Content Privacy And Practice Integrity | Complete — 40/40 plans, independently verified 2026-07-18 | Phase 472 |
 | 474 | 24/87 | In Progress|  |
-| 475 | 45/45 | Complete   | 2026-07-23 |
+| 475 | 45/45 | Complete    | 2026-07-23 |
 | 476 | Billing Idempotency And Paid Access Recovery | One checkout/entitlement outcome under failures and retries | Phase 474; can overlap 475 |
 | 477 | Web Foundation And Contract Convergence | Authoritative Web auth/API/config behavior without hidden demo truth | Phases 472, 473, and 474 |
 | 478 | Complete Web Role Journeys And Route Closure | Functional student, parent, teacher, admin/operator, organization, and public browser routes | Phases 475, 476, and 477 |
@@ -48,7 +48,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 - [x] **Phase 472: Privileged Identity And Student Resource Authorization** (completed 2026-07-15) - Privileged identity and student-resource access fail closed.
 - [x] **Phase 473: Student Content Privacy And Practice Integrity** (completed 2026-07-18 — 40/40 plans, independently verified) - Uploads, private content, and practice answers respect the completed safety boundary.
 - [ ] **Phase 474: Deterministic Verification And Gated Delivery** - One formal backend/Web gate and its minimum CDK release topology control one immutable staged release set.
-- [x] **Phase 475: Transactional Usage Assignment And Relationship Consistency** - Core learning and relationship state converges under failure and concurrency. (completed 2026-07-22)
+- [x] **Phase 475: Transactional Usage Assignment And Relationship Consistency** - Core learning and relationship state converges under failure and concurrency. (completed 2026-07-23)
 - [ ] **Phase 476: Billing Idempotency And Paid Access Recovery** - One Web checkout produces one recoverable provider and entitlement outcome.
 - [ ] **Phase 477: Web Foundation And Contract Convergence** - Web identity, API, and release configuration match authoritative backend contracts.
 - [ ] **Phase 478: Complete Web Role Journeys And Route Closure** - Every retained route works for real student, parent, teacher, and admin/operator accounts or is intentionally disabled.
@@ -547,24 +547,24 @@ Plans:
 
 **Wave 1**
 
-- [ ] `475-01` — Atomic question-admission primitive.
-- [ ] `475-06` — Atomic parent binding and profile projection.
-- [ ] `475-09` — Capped, idempotent rate admission.
-- [ ] `475-11` — Typed delivery-begin outcomes.
+- [x] `475-01` — Atomic question-admission primitive.
+- [x] `475-06` — Atomic parent binding and profile projection.
+- [x] `475-09` — Capped, idempotent rate admission.
+- [x] `475-11` — Typed delivery-begin outcomes.
 
 **Wave 2**
 
-- [ ] `475-02` — Question route processing and replay projection.
-- [ ] `475-04` — Atomic teacher claim and deterministic session.
-- [ ] `475-08` — Shared profile-version/CAS discipline and real scrub race.
-- [ ] `475-10` — Bounded mistake-answer storage and legacy-unknown projection.
-- [ ] `475-12` — Completed account-deletion receipt replay.
+- [x] `475-02` — Question route processing and replay projection.
+- [x] `475-04` — Atomic teacher claim and deterministic session.
+- [x] `475-08` — Shared profile-version/CAS discipline and real scrub race.
+- [x] `475-10` — Bounded mistake-answer storage and legacy-unknown projection.
+- [x] `475-12` — Completed account-deletion receipt replay.
 
 **Wave 3**
 
-- [ ] `475-03` — Question reconciliation and exact terminal reversal.
-- [ ] `475-05` — Recoverable exactly-once teacher notification effect.
-- [ ] `475-07` — Preview/apply parent-binding reconciliation.
+- [x] `475-03` — Question reconciliation and exact terminal reversal.
+- [x] `475-05` — Recoverable exactly-once teacher notification effect.
+- [x] `475-07` — Preview/apply parent-binding reconciliation.
 
 **Wave 4**
 
@@ -572,68 +572,68 @@ Plans:
 
 **Gap Closure Wave 1**
 
-- [ ] `475-14` — Required caller-owned question idempotency key.
-- [ ] `475-22` — Dual parent/student lifecycle and profile-version fence.
-- [ ] `475-24` — Immutable per-operation rate-limit receipt.
-- [ ] `475-25` — Closed cross-account deletion-reference discovery.
-- [ ] `475-29` — Deterministic completed-deletion receipt replay proof.
-- [ ] `475-31` — Practice-repository mypy cleanup.
-- [ ] `475-40` — Practice-router mypy cleanup.
+- [x] `475-14` — Required caller-owned question idempotency key.
+- [x] `475-22` — Dual parent/student lifecycle and profile-version fence.
+- [x] `475-24` — Immutable per-operation rate-limit receipt.
+- [x] `475-25` — Closed cross-account deletion-reference discovery.
+- [x] `475-29` — Deterministic completed-deletion receipt replay proof.
+- [x] `475-31` — Practice-repository mypy cleanup.
+- [x] `475-40` — Practice-router mypy cleanup.
 
 **Gap Closure Wave 2**
 
-- [ ] `475-15` — Opaque question command, ledger, and receipt coordinates.
-- [ ] `475-23` — Non-revivable relationship status lifecycle.
-- [ ] `475-28` — Notification actor/metadata discovery-to-CAS-cleanup closure.
-- [ ] `475-41` — Auth-router mypy cleanup.
+- [x] `475-15` — Opaque question command, ledger, and receipt coordinates.
+- [x] `475-23` — Non-revivable relationship status lifecycle.
+- [x] `475-28` — Notification actor/metadata discovery-to-CAS-cleanup closure.
+- [x] `475-41` — Auth-router mypy cleanup.
 
 **Gap Closure Wave 3**
 
-- [ ] `475-16` — Opaque reconciliation job command coordinates.
-- [ ] `475-17` — State/version CAS for every question writer.
-- [ ] `475-26` — Parent relationship discovery-to-CAS-cleanup closure.
-- [ ] `475-34` — Notification-service mypy cleanup.
-- [ ] `475-38` — Admin-router mypy cleanup.
+- [x] `475-16` — Opaque reconciliation job command coordinates.
+- [x] `475-17` — State/version CAS for every question writer.
+- [x] `475-26` — Parent relationship discovery-to-CAS-cleanup closure.
+- [x] `475-34` — Notification-service mypy cleanup.
+- [x] `475-38` — Admin-router mypy cleanup.
 
 **Gap Closure Wave 4**
 
-- [ ] `475-18` — Durable OCR/AI effect receipt and recovery.
-- [ ] `475-21` — Active canonical-teacher takeover fence.
-- [ ] `475-32` — User-repository mypy cleanup.
+- [x] `475-18` — Durable OCR/AI effect receipt and recovery.
+- [x] `475-21` — Active canonical-teacher takeover fence.
+- [x] `475-32` — User-repository mypy cleanup.
 
 **Gap Closure Wave 5**
 
-- [ ] `475-19` — Strict question replay integrity and ownership validation.
-- [ ] `475-27` — Teacher question/session discovery-to-CAS-cleanup closure.
-- [ ] `475-37` — Teacher-router mypy cleanup.
+- [x] `475-19` — Strict question replay integrity and ownership validation.
+- [x] `475-27` — Teacher question/session discovery-to-CAS-cleanup closure.
+- [x] `475-37` — Teacher-router mypy cleanup.
 
 **Gap Closure Wave 6**
 
-- [ ] `475-20` — Production-reachable terminal proof and exact-once compensation.
-- [ ] `475-30` — Account-deletion-repository mypy cleanup.
-- [ ] `475-33` — Account-deletion-service mypy cleanup.
+- [x] `475-20` — Production-reachable terminal proof and exact-once compensation.
+- [x] `475-30` — Account-deletion-repository mypy cleanup.
+- [x] `475-33` — Account-deletion-service mypy cleanup.
 
 **Gap Closure Wave 7**
 
-- [ ] `475-35` — Usage-ledger-service mypy cleanup.
-- [ ] `475-36` — Subscription/quota-service mypy cleanup.
-- [ ] `475-39` — Question-router mypy cleanup.
+- [x] `475-35` — Usage-ledger-service mypy cleanup.
+- [x] `475-36` — Subscription/quota-service mypy cleanup.
+- [x] `475-39` — Question-router mypy cleanup.
 
 **Gap Closure Wave 8**
 
-- [ ] `475-42` — Fail-closed unfiltered mypy evidence gate after all functional and type plans.
+- [x] `475-42` — Fail-closed unfiltered mypy evidence gate after all functional and type plans.
 
 **Gap Closure Wave 9**
 
-- [ ] `475-43` — Exhaustive fail-closed source snapshot.
+- [x] `475-43` — Exhaustive fail-closed source snapshot.
 
 **Gap Closure Wave 10**
 
-- [ ] `475-44` — Complete truthful D/V9DATA/CR/WR coverage registry.
+- [x] `475-44` — Complete truthful D/V9DATA/CR/WR coverage registry.
 
 **Gap Closure Wave 11**
 
-- [ ] `475-45` — Final immutable source-bound evidence publication.
+- [x] `475-45` — Final immutable source-bound evidence publication.
 
 **Cross-cutting constraints:** Every plan contains exactly one implementation task; application-owned commands provide durable idempotency; strict bidirectional authorization remains unchanged; canonical roles are exactly `student|parent|teacher|admin` and teacher is spelled only `teacher`; public errors stay structured and redacted; evidence exercises lower-boundary failure and concurrency; no native/mobile scope is introduced. Live AWS, provider-effect, deployment, and production-smoke execution remain exact later-phase `NOT RUN` obligations owned by Phases 479/480.
 
@@ -914,7 +914,7 @@ Phase 473 remains complete; its four nonblocking verification findings have one 
 | 472. Privileged Identity And Student Resource Authorization | 22/22 | Complete | 2026-07-15 |
 | 473. Student Content Privacy And Practice Integrity | 40/40 | Complete | 2026-07-18 |
 | 474. Deterministic Verification And Gated Delivery | 0/80 | Planning revision | - |
-| 475. Transactional Usage Assignment And Relationship Consistency | 0/TBD | Not started | - |
+| 475. Transactional Usage Assignment And Relationship Consistency | 45/45 | Complete | 2026-07-23 |
 | 476. Billing Idempotency And Paid Access Recovery | 0/TBD | Not started | - |
 | 477. Web Foundation And Contract Convergence | 0/TBD | Not started | - |
 | 478. Complete Web Role Journeys And Route Closure | 0/TBD | Not started | - |

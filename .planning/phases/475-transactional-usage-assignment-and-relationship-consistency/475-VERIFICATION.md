@@ -1,282 +1,266 @@
 ---
 phase: 475-transactional-usage-assignment-and-relationship-consistency
-verified: 2026-07-22T02:15:29Z
-verified_head: 9e5cb58ba08a84bc5dc77960b80ee33a2b1c63d8
-status: gaps_found
-score: 8/15 must-haves verified
-requirements_score: 4/8 requirements verified
+verified: 2026-07-23T11:54:24Z
+verified_head: 37f4ac0baac44633e938c356bde7c556c3d4bcb1
+verified_candidate: d63af86a9543fd678017d4c8a6ce1f641208ed35
+status: passed
+score: 15/15 must-haves verified
+requirements_score: 8/8 requirements satisfied
 overrides_applied: 0
-gaps:
-  - truth: "Question submission converges to the original durable result after provider success/local persistence failure, and every replay is ownership- and schema-safe."
-    status: failed
-    reason: "OCR/AI success is not durably receipted before an unversioned question update; later replay returns the pending row and bypasses strict command and question-owner validation. No production path creates the terminal_failed proof required by compensation."
-    artifacts:
-      - path: "src/stoa/routers/questions.py"
-        issue: "Provider calls and persistence share broad exception blocks; replay trusts fingerprint/question_id and returns the loaded question without owner validation."
-      - path: "src/stoa/db/repositories/question_repo.py"
-        issue: "Ordinary question updates neither compare nor increment version and do not constrain the prior state."
-      - path: "src/stoa/db/repositories/question_submission_repo.py"
-        issue: "Terminal reversal consumes terminal_failed proof, but current production code never writes that state/proof."
-      - path: "tests/test_phase475_question_replay.py"
-        issue: "The principal replay test monkeypatches both admission and persistence, omitting the required failure window."
-    missing:
-      - "A durable provider-effect intent/result receipt and conditional question+command completion transaction."
-      - "One strict replay entry that validates command schema, owner, key, generation, fingerprint, question identity, and loaded question owner."
-      - "A production terminal-failure transition and end-to-end compensation test starting from a real route/service failure."
-      - "Versioned/state-constrained question updates that cannot overwrite teacher takeover."
-  - truth: "Teacher takeover accepts exactly one still-active teacher and cannot be overwritten by concurrent question processing."
-    status: failed
-    reason: "The takeover transaction checks only the student account fence; teacher deactivation/deletion can race authorization. Ordinary question updates have no version/state CAS and can overwrite teacher_active after the winning claim."
-    artifacts:
-      - path: "src/stoa/db/repositories/question_repo.py"
-        issue: "claim_teacher_takeover has no teacher fence/profile condition; build_question_update_transaction ignores question version."
-      - path: "src/stoa/routers/teachers.py"
-        issue: "The observed teacher account is not bound into the repository claim."
-    missing:
-      - "Teacher active-fence plus active teacher PROFILE role/status/version conditions in the same claim transaction."
-      - "Expected-state/version CAS for AI, escalation, feedback, reply, resolve, and other question writers."
-      - "Barrier tests for teacher deletion/deactivation and AI-completion versus takeover."
-  - truth: "Parent/student relationship creation and repair are fenced for both accounts and cannot revive an inactive or revoked relationship."
-    status: failed
-    reason: "The relationship transaction contains only the student fence. Its existing-row condition ignores status and the update unconditionally sets status=active, so a same-version revoked/inactive pair is treated as non-conflicting and may be reactivated. Repair inherits the same primitive."
-    artifacts:
-      - path: "src/stoa/db/repositories/user_repo.py"
-        issue: "build_parent_binding_transaction has one student ConditionCheck; the relationship condition omits status and the update overwrites it."
-      - path: "src/stoa/routers/admin.py"
-        issue: "Preview/apply is wired but applies through the incompletely fenced relationship primitive."
-    missing:
-      - "Parent and student account fences plus active role/status/profile version observations in the same transaction."
-      - "Create/replay conditions requiring identical active status; separate authorized, version-incrementing status transitions."
-      - "Parent deletion and revoked/inactive replay race tests."
-  - truth: "A rate operation replay returns the immutable receipt created when that operation was admitted."
-    status: failed
-    reason: "The operation row omits counter_value_after/limit/expiry receipt fields. Replay reads the current shared counter, so operation A changes from counterValue=1 to 2 after operation B is admitted."
-    artifacts:
-      - path: "src/stoa/services/rate_limit.py"
-        issue: "_classify_operation projects current counter state rather than an operation-owned stored receipt."
-      - path: "tests/test_phase475_rate_limit.py"
-        issue: "No A-then-B-then-replay-A stability assertion exists."
-    missing:
-      - "Persist counter_value_after, limit, and expiry snapshot on the operation row in the admission transaction."
-      - "Replay only the operation-owned receipt and add the missing interleaving regression."
-  - truth: "Deletion discovery finds and scrubs cross-account parent, teacher, and actor identities introduced by core relationship and learning writes."
-    status: failed
-    reason: "_targets_user does not inspect parent_id, teacher_id, or actor_id, so rows owned by another account can be absent from the deletion branch input even though later scrub logic knows some of these fields."
-    artifacts:
-      - path: "src/stoa/db/repositories/account_deletion_repo.py"
-        issue: "Generic discovery omits parent_id/teacher_id/actor_id and has no explicit reverse-index inventory for these identities."
-    missing:
-      - "Explicit reverse indexes or a closed discovery inventory for cross-account identities."
-      - "Deletion tests covering formal relationship rows, teacher sessions/questions, and notification actor metadata through two clean epochs."
-  - truth: "Phase 475 evidence fails closed on tool/source-snapshot failure and proves the actual persistence boundaries claimed by its coverage map."
-    status: partial
-    reason: "Publication ancestry/blob binding and NOT RUN labels are valid, but targeted mypy reports PASS with tool_exit_code=1, source snapshot silently skips unreadable/deleted paths, and key route replay evidence mocks away admission and persistence."
-    artifacts:
-      - path: "scripts/verify_phase475.py"
-        issue: "targeted_mypy ignores nonzero tool completion when no changed-line diagnostic parses; _source_snapshot silently continues on git-show failure."
-      - path: "docs/security/phase-475-evidence-results.json"
-        issue: "The checked receipt records mypy status PASS while tool_exit_code is 1."
-      - path: "tests/test_phase475_question_replay.py"
-        issue: "Coverage-mapped replay node replaces both repository transaction and question persistence."
-    missing:
-      - "Fail-closed mypy exit/summary parsing and exhaustive diff-to-source-snapshot equality."
-      - "Lower-boundary provider-success/persistence-failure and replay-integrity nodes in the closed coverage registry."
+re_verification:
+  previous_result: "8/15 with six grouped gaps"
+  previous_score: 8/15
+  gaps_closed:
+    - "Durable question effects, strict replay, production terminal proof, exact compensation, and question state/version CAS"
+    - "Active-teacher lifecycle/profile fencing in the atomic takeover claim"
+    - "Dual parent/student fencing, status-aware relationship idempotency, and non-revivable revoked relationships"
+    - "Immutable per-operation rate-limit replay receipts"
+    - "Closed cross-account deletion discovery and conditional cleanup"
+    - "Fail-closed unfiltered mypy, exhaustive source snapshots, and lower-boundary evidence"
+  gaps_remaining: []
+  regressions: []
 deferred:
   - truth: "Live AWS DynamoDB behavior"
     addressed_in: "Phase 479"
-    evidence: "Phase 475 checked evidence labels LIVE-AWS-DYNAMODB as exact NOT RUN with owner phase 479."
-  - truth: "Live provider effects and deployment/production smoke"
+    evidence: "Published Phase 475 evidence records LIVE-AWS-DYNAMODB as exact NOT RUN with owner_phase 479."
+  - truth: "Live provider-effect behavior"
     addressed_in: "Phase 480"
-    evidence: "Phase 475 checked evidence labels LIVE-PROVIDER-EFFECTS and DEPLOYMENT-AND-PRODUCTION-SMOKE as exact NOT RUN with owner phase 480."
+    evidence: "Published Phase 475 evidence records LIVE-PROVIDER-EFFECTS as exact NOT RUN with owner_phase 480."
+  - truth: "Deployment and production smoke"
+    addressed_in: "Phase 480"
+    evidence: "Published Phase 475 evidence records DEPLOYMENT-AND-PRODUCTION-SMOKE as exact NOT RUN with owner_phase 480."
 ---
 
-# Phase 475：事务用量、分配与关系一致性验证报告
+# Phase 475: Transactional Usage, Assignment, and Relationship Consistency Verification
 
 **Phase Goal:** Make the core learning and relationship writes converge under partial failure, retry, and concurrency.
-**Verified:** 2026-07-22T02:15:29Z
-**Status:** gaps_found
-**Re-verification:** 否——首次独立验证
+**Verified:** 2026-07-23T11:54:24Z
+**Status:** passed
+**Re-verification:** Yes — after closure of the prior 8/15 verification and the final review-fix cycle
 
-## 结论
+## Verdict
 
-Phase 475 的低层事务原语有实质实现，89 个 Phase 475 定向测试和 25 个证据验证器测试在当前源码上均通过；证据 publication 的祖先与 Git blob 绑定也有效。但阶段目标仍未达成。当前生产调用链中存在可观察的不可收敛窗口、跨账户 TOCTOU、失效关系复活、跨学生回放、回放收据漂移和删除发现遗漏。
+Phase 475 achieves its local codebase goal. The six grouped gaps from the prior
+verification are closed in the actual repository implementation, not merely in
+the summaries. All 15 observable truths and all 8 V9DATA requirements are
+supported by substantive, wired code and lower-boundary tests.
 
-`475-REVIEW.md` 的 10 个 blocker 与 4 个 warning 经独立检查全部得到确认，没有一项被当前源码反驳。SUMMARY 的完成声明及已发布 PASS 覆盖图因此不能作为阶段通过证据。
+The final governed candidate is
+`d63af86a9543fd678017d4c8a6ce1f641208ed35`. The immutable publication commit
+`c30dfc9d9ffead55199525f37ac59f50a9449481` is its direct child and changes only
+the two Phase 475 evidence files. Current HEAD contains no committed
+`src/`, `tests/`, or `scripts/` difference from that candidate, and the evidence
+blob IDs still match the publication.
+
+Live AWS/DynamoDB, live provider effects, deployment, and production smoke were
+not run. They are explicit Phase 479/480 obligations and are neither counted as
+Phase 475 passes nor treated as Phase 475 local-goal gaps.
 
 ## Goal Achievement
 
-### 合并后的 Observable Truths
+### Observable Truths
 
-ROADMAP 的 5 条 success criteria 与 13 份 PLAN frontmatter 合并、去重后得到以下 15 条可观察真值。
+The ROADMAP success criteria, prior verification truths, CONTEXT decisions
+D-01..D-16, and PLAN frontmatter were merged without reducing scope.
 
-| # | Truth | Status | 代码证据 |
-| ---: | --- | --- | --- |
-| 1 | 问题准入原语把命令、配额、ledger、初始问题与附件操作放入一个有上限的事务，同键同 payload 至多准入一次。 | ✓ VERIFIED | `question_submission_repo.py:245-330, 980-1080`；并发/commit-timeout 下界测试通过。 |
-| 2 | provider 成功但本地写失败后，同键重试可恢复原始结果；回放严格校验命令完整性、账户 generation、所有权与问题身份。 | ✗ FAILED | `questions.py:324-349, 475-534` 绕过 `_classify_command()`，provider 结果无 durable receipt。直接 spot-check 可返回 `student-B` 的问题给当前回放路径。 |
-| 3 | 真实终态失败可从生产状态机到达，并精确一次恢复问题额度/反转 ledger。 | ✗ FAILED | `question_submission_repo.py:627-637` 只消费 `terminal_failed`；全仓只有测试 fixture 写入该状态与 proof。 |
-| 4 | 已完成上传的附件在问题额度反转后保持可复用，storage quota 不退款。 | ✓ VERIFIED | 补偿事务明确排除附件；`test_terminal_reversal_is_exact_once_and_attachment_storage_are_unchanged` 通过。 |
-| 5 | 教师接管在并发及账户状态变化下只有一个仍活跃的赢家、一个 session，loser 无副作用且不泄露赢家身份。 | ✗ FAILED | 并发唯一赢家/隐私测试通过，但 `question_repo.py:395-459` 只检查学生 fence，教师删除/停用可在授权后竞态成功。 |
-| 6 | 赢家的 takeover notification 使用一个确定性 effect identity，失败后可恢复且不重开竞争。 | ✓ VERIFIED | `notification_service.py:748-870` 与 `teachers.py:236-246` 已接线；effect recovery 测试通过。 |
-| 7 | 父子正反关系、profile 投影以及父/子账户状态在一个事务中一致提交，且普通 replay 不会复活 revoked/inactive 关系。 | ✗ FAILED | `user_repo.py:433-492` 只有学生 fence；condition 不含 status，update 无条件写 status。 |
-| 8 | 历史关系 repair 为纯 preview、版本绑定、冲突不选边、重复 apply 零写，并在双方账户变化时失败关闭。 | ✗ FAILED | preview/apply 分类本身存在且测试通过，但 apply 使用 Truth 7 的单边 fence 原语，父账户删除竞态未封闭。 |
-| 9 | 所有共享 profile writer 与隐私 scrub 使用相同 version/CAS，保留不相关字段且 scrub 对敏感字段获胜。 | ✓ VERIFIED | `user_repo.py:264-360`、`account_deletion_repo.py:683-850`；真实 locale-writer/scrub barrier 测试通过。 |
-| 10 | chat/hint 只对一次已准入逻辑操作计数一次，拒绝不增量，且 replay 返回稳定原始准入收据。 | ✗ FAILED | cap/不重复计数成立；但 operation row 不存收据。spot-check：A 首次 `counter_value=1`，B 后 replay A 返回 `2`。 |
-| 11 | 错误练习答案在明确边界内精确 round-trip，legacy 缺失明确为 unknown，绝不代入正确答案。 | ✓ VERIFIED | `practice_projection_service.py:43-104`、`practice_repo.py:500-526`；相关 9 个节点通过。 |
-| 12 | delivery begin 仅在积极证明账户删除时终态取消；claim loss 与依赖失败保持可恢复。 | ✓ VERIFIED | `notification_repo.py:298-550, 1109+`、`notification_service.py:530-565`；失败后健康重试测试通过。 |
-| 13 | 相同已完成删除请求回放存储的 deleted receipt，且不重新调度清理。 | ✓ VERIFIED | `account_deletion_service.py:75-124, 342-413`、`auth.py:939-960`、`deps.py:169-200`；真实 endpoint fake 的零 effect 计数通过。 |
-| 14 | 证据 coverage 节点真实覆盖声称的事务/持久化边界，并在工具或 source snapshot 异常时失败关闭。 | ✗ FAILED | replay 节点 monkeypatch 仓储；mypy receipt 为 `PASS` 但 `tool_exit_code=1`；snapshot 对 `git show` 失败静默跳过。 |
-| 15 | 证据绑定一个干净 source candidate，后续 HEAD 未改变 publication blobs，live AWS/provider/deployment 未被伪称为运行。 | ✓ VERIFIED | candidate `cc709c1`；publication `370562a` 是直接子提交；当前 HEAD `9e5cb58` 为后代且 runtime diff 为空；两个 evidence blob OID 未变；三项外部义务明确 `NOT RUN`。 |
+| # | Truth | Status | Code and behavioral evidence |
+|---:|---|---|---|
+| 1 | Question admission atomically binds the caller command, question quota, ledger, initial question, and attachment associations; same command/payload admits once. | ✓ VERIFIED | `question_submission_repo.py:2683` assembles the bounded DynamoDB transaction with command, counter, ledger, question, attachment, and account-fence conditions. Admission concurrency, commit-timeout, privacy, and mismatch nodes are in the 69-test question gate. |
+| 2 | Receipted OCR/AI success survives local completion failure, and replay is strict for schema, command, digest, owner, generation, fence, question identity, state, and version. | ✓ VERIFIED | `begin_question_effect()` at line 677, `record_question_effect_result()` at 1468, and `complete_question_effect()` at 1615 form the durable effect/completion state machine. `classify_question_submission_replay()` at 490 performs the closed validation and strongly validates the loaded question. `questions.py:740` uses that classifier on preflight and replay paths. |
+| 3 | A production-reachable proven terminal question failure reverses allowance/ledger exactly once, without treating retryable dependency failure as terminal. | ✓ VERIFIED | Expired exact invocation ownership is conditionally terminalized at `question_submission_repo.py:908`; `prove_terminal_question_failure()` at 1192 accepts only the closed proof set. `questions.py:355` promotes the proof and invokes explicit reconciliation. The crash-after-provider-before-receipt node proves at-most-once provider invocation, terminal convergence, exact-once reversal, stable replay, and fresh-key resubmission. |
+| 4 | Terminal question compensation retains completed attachments and does not refund storage quota. | ✓ VERIFIED | The reversal transaction deliberately excludes attachment, association, object, and storage-quota rows. The lower-boundary terminal reversal test snapshots those rows across transition, compensation, response loss, and replay. |
+| 5 | Concurrent teacher takeover produces one still-active winner, one owner/session, deterministic 409 loser, and no loser side effects. | ✓ VERIFIED | `question_repo.py:341` conditions the student fence, teacher fence, canonical active teacher PROFILE role/status/version, and expected question state/version in the same claim transaction. `teachers.py:340` passes the observed teacher lifecycle/version authority. Barrier tests cover two claimants, teacher deactivation/deletion, and AI/takeover interleaving. |
+| 6 | The winning takeover has one deterministic notification effect that can recover without reopening ownership competition. | ✓ VERIFIED | The winner-only path calls `ensure_teacher_takeover_notification()` at `teachers.py:384`. Stable effect identity, lost-response recovery, and loser-zero-effect behavior are covered by the takeover/effect gates. |
+| 7 | Parent/student forward and reverse bindings plus profile projection commit in one transaction, fenced by both accounts and both canonical profile versions; ordinary replay cannot revive revoked/inactive relationships. | ✓ VERIFIED | `user_repo.py:434` builds both account-fence/profile conditions, two status-aware relationship rows, and the narrow child profile CAS. `put_parent_student_relationship()` at 562 rejects non-active or conflicting replays. Authorized status changes use expected status/version and both lifecycle/profile fences. |
+| 8 | Historical relationship repair is dry-run capable, version-bound, conflict-preserving, idempotent, and fails closed if either account/profile changes. | ✓ VERIFIED | `preview_parent_binding_repair()` at line 944 and `apply_parent_binding_repair()` at 983 validate preview identity/version, refuse conflicts, and reuse the atomic binding primitive. Repeated apply is zero-write; lifecycle/profile races fail conditionally. |
+| 9 | Shared parent-profile writers and privacy scrub obey one version/CAS contract while preserving unrelated locale/preference bytes. | ✓ VERIFIED | `update_profile_fields_versioned()` at `user_repo.py:365` performs a strong read and narrow expected-version update. Account-deletion scrub uses narrow, conditional owned-field changes. Real writer-versus-scrub barriers pass in both orders. |
+| 10 | Chat/hint rate admission increments at most once, rejected operations do not increment, and replay returns the original immutable receipt. | ✓ VERIFIED | `rate_limit.py:206` classifies an operation from stored `counter_value_after`, `limit`, and `receipt_expires_at`; admission writes that receipt beside the expected-value counter CAS in one transaction. A→B→replay-A tests preserve A's original receipt and 429 tests preserve the cap. |
+| 11 | A wrong practice answer round-trips within bounds; historical missing answers are explicit unknowns and never substituted with the correct answer. | ✓ VERIFIED | `practice_projection_service.py:43` enforces bounded string/flat-list normalization; projection at line 72 distinguishes recorded from legacy unknown. `practice_repo.py:564` persists both schema fields before projection. Nine focused nodes pass. |
+| 12 | Delivery begin distinguishes claim loss, proven account deletion, and transient dependency failure; only positively proven deletion terminalizes. | ✓ VERIFIED | `notification_repo.py:308-310` defines the closed dispositions. Failure classification at lines 498-556 uses ordered cancellation evidence plus strong deletion-fence proof; malformed/transient dependencies remain retryable. Service wiring performs one healthy retry and one completion. |
+| 13 | An identical completed account-deletion request returns the stored terminal receipt through the endpoint and schedules no new cleanup. | ✓ VERIFIED | `terminal_deletion_receipt()` at `account_deletion_service.py:75` validates the nested stored receipt; `begin_or_replay_deletion()` at 342 returns it. `deps.py:169` has identity-hash discovery after active binding removal, and the auth route schedules work only for nonterminal receipts. |
+| 14 | Phase evidence exercises the real persistence boundaries and fails closed for tool error, ambiguous mypy output, source-inventory drift, missing blobs, node drift, or non-pass outcomes. | ✓ VERIFIED | `scripts/verify_phase475.py` requires mypy exit 0, zero diagnostics, and an exact 22-source completion. `_source_snapshot()` at 1089 materializes every A/M/D/R/C path and validates exact status/cardinality. The evidence verifier's 47 adversarial tests pass. |
+| 15 | Evidence binds a clean candidate and immutable two-file publication, has complete D/V9DATA/CR/WR coverage, contains no denylisted private data, and labels later live work honestly. | ✓ VERIFIED | Candidate/publication ancestry and exact changed paths were independently checked. JSON records 16 decisions, 8 requirements, 10 original review findings, 4 original warnings, 156 source-snapshot entries, 0 raw/published privacy matches, and three exact `NOT RUN` rows. Current HEAD evidence blobs equal the publication blobs. |
 
-**Score:** 8/15 must-haves verified
+**Score:** 15/15 truths verified
 
 ### ROADMAP Success Criteria
 
-| # | Roadmap criterion | Status | 判定 |
-| ---: | --- | --- | --- |
-| 1 | 相同问题重试在任意已测失败点后只有一个问题、一个额度、一个 ledger。 | ✗ FAILED | admission 原子性成立，但 provider 成功/本地提交失败与无键重试未收敛。 |
-| 2 | 两个并发 teacher takeover 只有一个 owner/session/notification 与确定性 loser。 | ✗ FAILED | 常规 barrier race 通过；教师账户 TOCTOU 与普通问题写覆盖可破坏最终状态。 |
-| 3 | 关系不单边、repair 幂等、真实 profile writer/scrub race 保留数据。 | ✗ FAILED | profile CAS 通过；父账户 fence 缺失与 revoked revival 使整体 criterion 失败。 |
-| 4 | 429 不增量；delivery transient failure 可恢复且不误判 deletion。 | ✗ FAILED | delivery 部分通过；rate replay 收据不稳定，未达到完整幂等结果合同。 |
-| 5 | 错误答案安全 round-trip；完成删除回放存储 receipt 且零新清理。 | ✓ VERIFIED | 两条行为均由当前实现和定向节点支持。 |
+| # | Roadmap criterion | Status | Evidence |
+|---:|---|---|---|
+| 1 | Identical question retries converge to one question/admission accounting result after each tested timeout/failure point. | ✓ VERIFIED | The real repository failure matrix covers pre-commit failure, timeout-after-commit, receipted provider success followed by completion failure, conditional loss, and expired unreceipted invocation. Outcomes converge through stored success or proven terminal compensation without duplicate provider invocation. |
+| 2 | Two concurrent takeovers produce one owner, session, notification, and deterministic 409 loser. | ✓ VERIFIED | Atomic question/session transaction, both account fences, teacher profile authority, deterministic notification effect, and barrier tests all pass. |
+| 3 | Parent bindings cannot become one-sided; repair is dry-run/idempotent; profile writer/scrub races preserve unrelated bytes. | ✓ VERIFIED | Dual-fenced binding transaction, version-bound repair, status-aware non-revival, and both writer/scrub orderings pass. |
+| 4 | 429 does not increase counters; delivery dependency failure stays recoverable and healthy retry completes once without false deletion. | ✓ VERIFIED | Immutable operation receipts/counter CAS and the four-outcome delivery state machine are wired and covered. |
+| 5 | Mistake answers/legacy unknown and completed-deletion terminal replay behave safely. | ✓ VERIFIED | Bounded answer storage/projection and real endpoint terminal replay with zero new cleanup both pass. |
 
 ## Requirements Coverage
 
-| Requirement | Source plans | 完整描述 | Status | 实际证据 |
-| --- | --- | --- | --- | --- |
-| V9DATA-01 | 475-01..03, 13 | Question quota, idempotency, usage ledger, upload consumption, and initial question persistence commit atomically or converge through an explicitly tested recovery state. | ✗ BLOCKED | 准入事务通过；provider 结果持久化失败、回放完整性、终态 proof 生产路径与可选 key 仍失败。 |
-| V9DATA-02 | 475-04..05, 13 | Concurrent teacher takeover has exactly one winner, one session, and one notification through a conditional/transactional claim. | ✗ BLOCKED | 常规一赢家通过；教师 fence 缺失，且无版本普通问题更新可覆盖 takeover。 |
-| V9DATA-03 | 475-06..07, 13 | Parent/student forward and reverse bindings and required profile changes commit transactionally, and a reconciliation tool repairs historical asymmetry idempotently. | ✗ BLOCKED | 三投影事务/preview 存在；父 fence 与 inactive/revoked 状态条件缺失。 |
-| V9DATA-04 | 475-09, 13 | Chat, hint, and related rate-limit counters do not increase after rejection; provider failures and retries follow documented consumption/idempotency semantics. | ✗ BLOCKED | 计数 cap 与 same-op 不增量通过；同一操作的公开准入 receipt 随其他请求漂移。 |
-| V9DATA-05 | 475-10, 13 | Incorrect practice attempts persist a bounded, display-safe student answer and return it accurately in mistake review while handling legacy rows as unknown. | ✓ SATISFIED | normalization、dual-field schema、unknown legacy 与 redacted pre-write rejection 均已接线和测试。 |
-| V9DATA-06 | 475-08, 13 | Every shared parent-profile writer participates in one version/CAS-and-increment contract, or deletion uses a genuinely narrow non-overwriting update. | ✓ SATISFIED | source registry、窄更新、version increment、真实 writer/scrub 两种顺序均通过。 |
-| V9DATA-07 | 475-11, 13 | Delivery-begin distinguishes typed conditional/fence loss from transient dependency failure; only proven deletion terminalizes. | ✓ SATISFIED | ordered cancellation reason + strong fence/intent rere读；healthy retry exactly once。 |
-| V9DATA-08 | 475-12, 13 | Identical completed deletion retry returns the stored deleted receipt through the real endpoint without reopening cleanup. | ✓ SATISFIED | nested receipt 严格校验，terminal suppresses background scheduling，identity fallback 可达。 |
+| Requirement | Source plans | Status | Implementation evidence |
+|---|---|---|---|
+| V9DATA-01 | 475-01..03, 14..20, 35, 36, 39, 42..45 | ✓ SATISFIED | Atomic admission, required opaque idempotency, durable effects, strict replay, expected-state/version question mutation, proven terminal compensation, and fail-closed evidence. |
+| V9DATA-02 | 475-04, 05, 17, 21, 27, 34, 39, 44, 45 | ✓ SATISFIED | One transactional owner/session winner, teacher lifecycle/profile fence, winner-only deterministic effect, and question-writer CAS. |
+| V9DATA-03 | 475-06, 07, 22, 23, 25, 26, 30, 32, 44, 45 | ✓ SATISFIED | Bidirectional atomic rows, dual account/profile fences, status-aware replay, privileged transition, version-bound repair, and relationship deletion cleanup. |
+| V9DATA-04 | 475-09, 24, 44, 45 | ✓ SATISFIED | Expected-counter transaction plus immutable operation-owned receipt; rejection and replay are zero-increment. |
+| V9DATA-05 | 475-10, 31, 37, 40, 44, 45 | ✓ SATISFIED | Bounded display-safe answer persistence and explicit legacy unknown projection. |
+| V9DATA-06 | 475-08, 30, 32, 44, 45 | ✓ SATISFIED | Narrow version/CAS writers and deletion scrub preserving unrelated fields. |
+| V9DATA-07 | 475-11, 25, 28, 34, 44, 45 | ✓ SATISFIED | Typed delivery dispositions, strong deletion proof, retryable dependency path, and notification identity cleanup. |
+| V9DATA-08 | 475-12, 29, 33, 41, 44, 45 | ✓ SATISFIED | Strict stored terminal receipt, post-deletion command discovery, and no terminal rescheduling. |
 
-没有 Phase 475 orphaned requirement：V9DATA-01..08 都出现在计划 frontmatter；但 `.planning/REQUIREMENTS.md` 顶部 checkbox 与其 traceability 表的 Complete 状态目前互相矛盾，且独立验证不支持 01..04 完成。
+No Phase 475 requirement is orphaned. V9DATA-01..08 occur in the 45 PLAN
+frontmatters and all have implementation/evidence coverage.
+
+## Atomic Plan Delivery
+
+| Check | Result | Status |
+|---|---:|---|
+| Numbered PLAN files | 45 | ✓ |
+| Numbered SUMMARY files | 45 | ✓ |
+| `<task type="auto">` rows | 45 — exactly one per PLAN | ✓ |
+| Requirements represented across PLANs | V9DATA-01..08 | ✓ |
+| SUMMARY commit references resolved | 74/74 | ✓ |
+| Final code review | 60 files, 0 critical, 0 warning, 0 info | ✓ |
+
+Plans 475-14..45 close the prior verification gaps in dependency order: caller
+idempotency/privacy, question CAS/effects/replay/terminal compensation, takeover
+and relationship fences, immutable rate receipts, deletion discovery/cleanup,
+exact-file typing, fail-closed evidence, complete coverage, and immutable
+publication. Every plan remains atomic at one implementation task.
+
+The ROADMAP's individual plan checkbox rows are stale for some completed plans,
+but its Phase 475 header says 45/45 and the actual 45 PLAN/SUMMARY pairs,
+single-task cardinality, commit references, candidate tree, and tests establish
+delivery. This metadata inconsistency does not affect goal behavior.
 
 ## Required Artifacts
 
-| Artifact | L1/L2 | L3/L4 | Status | Details |
-| --- | --- | --- | --- | --- |
-| `question_submission_repo.py` | 存在且 substantive（1092 行） | admission 已接 Dynamo transaction；terminal producer 缺失 | ⚠ PARTIAL | 原子准入有效，终态 compensation 只完成后半段。 |
-| `routers/questions.py` | 存在且 substantive（655 行） | route 已调用 admission/provider；恢复/所有权链断裂 | ✗ HOLLOW RECOVERY | provider 结果未先 durable，replay 绕过严格分类。 |
-| `reconcile_question_submissions.py` | 存在且 substantive（152 行） | preview/apply 已接 repo；只接受显式坐标 | ⚠ PARTIAL | 可处理人工播种 terminal proof，但生产无生成/调度路径。 |
-| `question_repo.py` | 存在且 substantive（759 行） | takeover transaction 已接；teacher fence/question CAS 缺失 | ⚠ PARTIAL | session 确定性成立，跨 writer 一致性不成立。 |
-| `notification_service.py` | 存在且 substantive（1987 行） | takeover effect 与 typed delivery 均已接 | ✓ VERIFIED | effect ID、replay、dependency retry 可达。 |
-| `user_repo.py` | 存在且 substantive（1173 行） | binding/profile/repair 已接；单边 fence/status overwrite | ⚠ PARTIAL | profile CAS 部分通过，relationship authority 失败。 |
-| `routers/admin.py` | 存在且 substantive | preview/apply route 已接 capability gate | ⚠ PARTIAL | 底层 apply 原语未封闭父账户竞态。 |
-| `rate_limit.py` | 存在且 substantive（521 行） | hint 生产路径已接；chat 保留 message-command authority | ⚠ PARTIAL | cap/opaque operation ID 成立，stable receipt 不成立。 |
-| `practice_projection_service.py` / `practice_repo.py` | 存在且 substantive | request → normalize → persist → mistake projection 数据流完整 | ✓ VERIFIED | 真实 answer 数据不是 static fallback。 |
-| `notification_repo.py` | 存在且 substantive（1543 行） | service 对四种 disposition 有明确分支 | ✓ VERIFIED | dependency 与 deletion 不再混淆。 |
-| `account_deletion_service.py` / `deps.py` / `auth.py` | 存在且 substantive | identity fallback → stored receipt → terminal no-schedule 完整 | ✓ VERIFIED | receipt replay 本身稳定。 |
-| `verify_phase475.py` | 存在且 substantive（1018 行） | capture/publication 已接 | ⚠ WARNING | mypy 与 snapshot 失败关闭不完整。 |
-| Phase 475 tests | 13 个模块，均 substantive | 89/89 当前通过 | ⚠ PARTIAL | 多个核心节点依赖高层 monkeypatch/fake，不能证明缺失的生产边界。 |
+| Artifact | Expected | Exists/Substantive | Wiring/Data | Status |
+|---|---|---|---|---|
+| `src/stoa/db/repositories/question_submission_repo.py` | Atomic admission and closed effect/replay/terminal state machine | 2,800+ lines; real transaction builders | Used by question route and reconciliation; strong reads and exact conditional writes | ✓ VERIFIED |
+| `src/stoa/routers/questions.py` | Required-key request path and convergence orchestration | Substantive route/service logic | Strict replay, effect receipt, completion, terminal proof, and explicit reconciliation all connected | ✓ VERIFIED |
+| `src/stoa/db/repositories/question_repo.py` | Versioned question mutation and atomic takeover | Substantive conditional repository | Used by question, teacher, and dispatch writers; all governed writers pass expected state/version | ✓ VERIFIED |
+| `src/stoa/db/repositories/user_repo.py` | Dual-fenced relationship/profile transaction and repair | Substantive transaction/repair logic | Parent/student routes and admin preview/apply use the same status-aware primitive | ✓ VERIFIED |
+| `src/stoa/services/rate_limit.py` | Capped idempotent counter with stable receipt | Substantive operation/counter transaction | Hint route passes caller operation identity; replay reads operation-owned receipt | ✓ VERIFIED |
+| Practice service/repository/router | Bounded answer write and real mistake projection | Substantive validation/persistence | Request → normalize → persist → projection uses real stored data | ✓ VERIFIED |
+| Notification repository/service | Typed delivery begin and recoverable execution | Substantive disposition/effect logic | Repository proof maps explicitly to service retry/cancel/reserve branches | ✓ VERIFIED |
+| Account deletion repository/service/dependency/route | Cross-account discovery, conditional cleanup, terminal replay | Substantive closed registries and branch writers | Discovery → two clean epochs → final stored receipt → endpoint replay is complete | ✓ VERIFIED |
+| `scripts/verify_phase475.py` | Fail-closed capture and publication verification | Substantive 1,300+ line verifier | Exact gate registry, source snapshot, privacy, mypy, and Git publication checks connected | ✓ VERIFIED |
+| Phase 475 test/evidence surfaces | Lower-boundary proof rather than stubs | 34 reviewed test files plus generated evidence | 657 reviewed tests and 2,619 formal tests pass | ✓ VERIFIED |
 
 ## Key Link Verification
 
 | From | To | Via | Status | Details |
-| --- | --- | --- | --- | --- |
-| Question route | admission transaction | `admit_question_submission()` | ✓ WIRED | 初始 command/counter/ledger/question/attachment 同事务。 |
-| Provider success | durable result/command completion | `update_status()` | ✗ NOT_WIRED | 没有 durable provider receipt 或 command completion transaction。 |
-| Replay | strict command + owner validation | preflight `_classify_command()` | ✗ NOT_WIRED | route 自行只比 fingerprint。 |
-| Ordinary question writer | takeover version/state | expected version + allowed transition | ✗ NOT_WIRED | condition 仅 row exists + student owner。 |
-| Takeover | teacher account lifecycle | teacher fence/profile condition | ✗ NOT_WIRED | 事务只有 student fence。 |
-| Takeover winner | notification effect | `ensure_teacher_takeover_notification()` | ✓ WIRED | loser 不进入 effect 分支。 |
-| Parent binding | both account lifecycles | parent + student fences | ⚠ PARTIAL | 只有 student fence。 |
-| Repair apply | atomic relationship writer | `apply_parent_binding_repair()` | ✓ WIRED | 接线存在，但继承底层缺口。 |
-| Rate operation | immutable replay receipt | operation row fields | ✗ NOT_WIRED | operation row无 admission counter snapshot。 |
-| Delivery intent | typed begin outcome | repository result → service routing | ✓ WIRED | terminal cancellation 仅 proven deletion。 |
-| Deletion endpoint | stored terminal receipt | dependency fallback + `is_terminal` | ✓ WIRED | terminal replay不调度 background task。 |
-| Deletion discovery | cross-account identities | `_targets_user()` / reverse inventory | ✗ NOT_WIRED | parent_id/teacher_id/actor_id 均返回 false。 |
+|---|---|---|---|---|
+| Question route | Admission transaction | `admit_question_submission()` | ✓ WIRED | One bounded transaction creates all initial durable state. |
+| Provider boundary | Durable effect/result | begin → invoke → result receipt | ✓ WIRED | Result receipt precedes completion; expired unreceipted invocation cannot be reclaimed for a duplicate call. |
+| Effect result | Question + command completion | `complete_question_effect()` | ✓ WIRED | Exact command/question/effect versions and allowed states are conditioned together. |
+| Replay | Command/question authority | `classify_question_submission_replay()` | ✓ WIRED | No shortcut bypass remains. |
+| Every governed question writer | Takeover state/version | `mutate_question()` registry | ✓ WIRED | AI, escalation, feedback, reply, resolve, and dispatch interleavings are conditional. |
+| Takeover route | Teacher/student lifecycle | account fences + teacher PROFILE condition | ✓ WIRED | Authority observation participates in the claim transaction. |
+| Takeover winner | Notification effect | deterministic effect identity | ✓ WIRED | Loser cannot enter the effect branch. |
+| Parent binding/repair | Both account and profile versions | shared atomic relationship primitive | ✓ WIRED | Apply cannot revive inactive rows or cross a lifecycle change. |
+| Rate operation | Immutable replay result | stored receipt fields | ✓ WIRED | Replaying A after B returns A's original counter/limit/expiry. |
+| Delivery intent | Typed service routing | `DeliveryBeginDisposition` | ✓ WIRED | Only strong proven deletion cancels; dependency failure retries. |
+| Deletion discovery | Cross-account cleanup branches | closed entity/field registry | ✓ WIRED | Parent, teacher, actor, and reviewed metadata identities are included. |
+| Deletion endpoint | Stored terminal receipt | dependency identity fallback + terminal scheduling gate | ✓ WIRED | Completed replay is effect-free. |
 
 ## Data-Flow Trace (Level 4)
 
 | Artifact | Data | Source | Produces real/stable data | Status |
-| --- | --- | --- | --- | --- |
-| Question replay response | question content/result | command.question_id → `get_question()` | 数据真实，但 owner/schema 未验证；provider success 可丢失 | ✗ UNSAFE FLOW |
-| Question terminal compensation | terminal proof | command fields | 没有 production writer | ✗ DISCONNECTED |
-| Rate replay receipt | counterValue/expiry | 当前全局 counter read | 真实但不是该 operation 的稳定值 | ✗ UNSTABLE |
-| Mistake review | `yourAnswer`/`answerState` | persisted attempt fields | 真实 bounded data；legacy 明确 unknown | ✓ FLOWING |
-| Delivery begin | disposition | transaction reasons + strong reads | 真实 repository evidence | ✓ FLOWING |
-| Deletion replay | `deleted` receipt | persisted nested receipt | 真实且 replay 保持原值 | ✓ FLOWING |
+|---|---|---|---|---|
+| Question replay | Original processing/final/terminal result | Strong command, effect, and question reads | Exact receipt or exact proven terminal state; no static fallback | ✓ FLOWING |
+| Terminal compensation | Counter/ledger reversal | Persisted command/effect/question proof | One conditional reversal identity; attachments excluded | ✓ FLOWING |
+| Takeover result | Owner/session/notification | Atomic question claim and deterministic IDs | One winner, one durable session/effect | ✓ FLOWING |
+| Relationship projection | Forward/reverse/profile rows | One dual-fenced transaction | Real rows with exact active status/version | ✓ FLOWING |
+| Rate replay receipt | Counter value/limit/expiry | Immutable operation row | Stable after other operations | ✓ FLOWING |
+| Mistake review | `yourAnswer` / `answerState` | Stored attempt fields | Bounded real answer or explicit legacy unknown | ✓ FLOWING |
+| Delivery disposition | Claim/fence/dependency evidence | DynamoDB cancellation reasons plus strong reads | Closed, typed, non-static decision | ✓ FLOWING |
+| Deletion replay | `deleted` terminal receipt | Stored nested command receipt | Byte-stable and zero-reschedule | ✓ FLOWING |
 
 ## Behavioral Spot-Checks
 
-| Behavior | Command/Probe | Result | Status |
-| --- | --- | --- | --- |
-| Phase 475 focused code | 12 个 `test_phase475_*` runtime modules | 89 passed in 1.69s | ✓ PASS |
-| Evidence verifier | `pytest -q tests/test_phase475_evidence_verifier.py` | 25 passed | ✓ PASS |
-| Publication binding | `python scripts/verify_phase475.py verify-publication` | exit 0 | ✓ PASS |
-| Current lint | Ruff over 21 runtime files | All checks passed | ✓ PASS |
-| Replay owner fence | 调用 `_project_question_admission()`，command 指向 `student-B` 问题 | 返回了该 foreign question dict | ✗ FAIL |
-| Question update CAS | 构造 version=7 的 `build_question_update_transaction()` | condition 仅 `attribute_exists...student_id=:owner`，无 version；update 不增 version | ✗ FAIL |
-| Relationship fences/status | 构造 `build_parent_binding_transaction()` | 仅一个 ConditionCheck；row condition 无 status，update 强制 status | ✗ FAIL |
-| Revoked relationship replay | `_parent_relationship_conflicts()` 输入同版本 revoked rows | 返回 `False` | ✗ FAIL |
-| Rate stable replay | A admitted → B admitted → replay A | counter value `1 → 2` | ✗ FAIL |
-| Idempotency privacy | client key `parent@example.com private question` | 原文出现在 command SK | ✗ FAIL |
-| Cross-account deletion discovery | `_targets_user()` 分别输入 parent_id/teacher_id/actor_id | 三项均为 `False` | ✗ FAIL |
+| Behavior | Command / environment | Result | Status |
+|---|---|---|---|
+| Final reviewed Phase 475 and inherited regression scope | 34 test files listed in final `475-REVIEW.md`, current workspace | 657 passed, 2 warnings | ✓ PASS |
+| Evidence verifier adversarial coverage | `pytest -q tests/test_phase475_evidence_verifier.py` | 47 passed | ✓ PASS |
+| Exact runtime type gate | Mypy over the evidence JSON's ordered 22-file runtime inventory | 22 source files, 0 diagnostics, exit 0 | ✓ PASS |
+| Governed lint gate | Ruff over 22 runtime files, verifier, and verifier test | All checks passed | ✓ PASS |
+| Formal release extension | Exact candidate in isolated clean backend checkout with canonical frontend/infra siblings | 2,619 passed, 2 warnings, 0 non-pass outcomes | ✓ PASS |
+| Immutable publication | `verify-publication` in isolated clean checkout | Exit 0 | ✓ PASS |
+| Candidate/publication topology | Git ancestry, changed paths, blob IDs | Direct child; exactly two evidence paths; HEAD blobs identical | ✓ PASS |
+| Post-candidate committed runtime drift | `git diff --name-only candidate HEAD -- src tests scripts` | 0 paths | ✓ PASS |
+| Patch hygiene | `git diff --check` | Exit 0 | ✓ PASS |
+
+The independently repeated formal suite matches the checked evidence's
+2,619/2,619 receipt. The checked JSON additionally records focused gate counts:
+question 69, takeover 19, relationship 70, rate 11, mistake 9, delivery 25,
+deletion 64, and inherited auth/privacy 329; all exit 0.
 
 ### Probe Execution
 
-没有 PLAN/SUMMARY 声明 `probe-*.sh`，仓库也没有 Phase 475 conventional shell probe；本项按合同标记为 **SKIPPED (no declared probe)**。`scripts/verify_phase475.py` 的独立 publication 校验已作为 behavioral spot-check 实际执行。
+No PLAN or SUMMARY declares a `probe-*.sh`, and there is no conventional Phase
+475 shell probe. The phase-specific executable verifier is
+`scripts/verify_phase475.py`; its publication mode was run independently and
+passed.
 
-## 475-REVIEW 独立复核
+## Prior Gap and Review Closure
 
-| Finding | 复核 | 当前源码证据 |
-| --- | --- | --- |
-| CR-01 provider success/local write failure | 🛑 CONFIRMED | `questions.py:475-534`；成功结果未 durable，异常与 provider failure 合并，retry 快路径不重做 effect。 |
-| CR-02 replay ownership/integrity bypass | 🛑 CONFIRMED | `questions.py:324-349, 160-178`；直接 spot-check 返回 foreign student row。 |
-| CR-03 question update lacks version CAS | 🛑 CONFIRMED | `question_repo.py:588-640`；shape probe 无 version condition/increment。 |
-| CR-04 takeover lacks teacher fence | 🛑 CONFIRMED | `question_repo.py:395-459` 只有 student active fence；route observed teacher profile 未传入 claim token。 |
-| CR-05 relationship lacks parent fence | 🛑 CONFIRMED | `user_repo.py:460-492` 唯一 ConditionCheck 指向 student。 |
-| CR-06 revoked/inactive relationship revival | 🛑 CONFIRMED | row condition 不比 status，update 无条件 SET active；conflict helper 对 revoked 返回 false。 |
-| CR-07 terminal compensation unreachable | 🛑 CONFIRMED | `terminal_failed` proof writer只出现在 test fixture，生产 rg 无结果。 |
-| CR-08 raw question idempotency key persistence | 🛑 CONFIRMED | raw key进入 command SK/id、ledger SK/event/idempotency field及 job `commandId`。 |
-| CR-09 unstable rate replay receipt | 🛑 CONFIRMED | operation row无 receipt；A/B/replay A probe 得到 1→2。 |
-| CR-10 cross-account identity discovery omissions | 🛑 CONFIRMED | `_targets_user()` 对 parent_id/teacher_id/actor_id 均为 false。 |
-| WR-01 optional question idempotency key | ⚠ CONFIRMED | model 字段 optional；缺省 key 基于本次随机 UUID，lost response 无法重建。 |
-| WR-02 mypy false PASS | ⚠ CONFIRMED | checked JSON 同时记录 `status=PASS` 与 `tool_exit_code=1`；代码只看 changed-line parse。 |
-| WR-03 incomplete source snapshot | ⚠ CONFIRMED | `_source_snapshot()` 在 `git show` 非零时直接 `continue`。 |
-| WR-04 replay test mocks persistence | ⚠ CONFIRMED | `test_phase475_question_replay.py:82-116` monkeypatch command read/admission/question write。 |
+| Prior concern | Closure evidence | Status |
+|---|---|---|
+| CR-01 provider success/local persistence gap | Durable intent/result receipt and conditional completion; the additional expired-invocation ambiguity is exact-owner/version terminalized and compensated without a second provider call | ✓ CLOSED |
+| CR-02 replay integrity | One strict classifier validates all command/question authority and every route replay branch uses it | ✓ CLOSED |
+| CR-03 question CAS | Governed writers use expected state/version and increment version | ✓ CLOSED |
+| CR-04 teacher fence | Active teacher account fence and canonical PROFILE role/status/version are in the claim transaction | ✓ CLOSED |
+| CR-05 parent fence | Both parent and student fences/profile versions participate in binding and status transitions | ✓ CLOSED |
+| CR-06 revoked revival | Ordinary replay requires identical active status; only the privileged transition can change status/version | ✓ CLOSED |
+| CR-07 terminal producer | Closed production producer plus explicit exact-once reconciliation is reachable from the route/service state machine | ✓ CLOSED |
+| CR-08 raw idempotency | Caller key is required and represented durably only through opaque digest/coordinates | ✓ CLOSED |
+| CR-09 rate receipt | Operation row owns immutable counter/limit/expiry receipt | ✓ CLOSED |
+| CR-10 deletion discovery | Closed entity/field registry and dedicated relationship/teacher/notification cleanup branches cover cross-account references | ✓ CLOSED |
+| Original WR-01..04 evidence/tooling warnings | Required key, fail-closed mypy, exhaustive source snapshots, and real lower-boundary persistence tests are in the exact registry | ✓ CLOSED |
+| Final review-fix CR-01 / WR-01 / WR-04 / WR-05 | Expired invocation, evidence registry/publication, dispatch pagination eligibility, and exact mypy typing were fixed; iteration 3 reports zero findings | ✓ CLOSED |
 
-## Anti-Patterns Found
+## Anti-Patterns and Quality Notes
 
-Phase 475 runtime inventory未发现未引用的 `TBD`、`FIXME` 或 `XXX` debt marker。`return {}`/空列表命中均是安全默认或测试 fake，不是用户可见 stub。真正的阻塞模式是事务/状态机接线缺口，而不是占位文件。
+No unreferenced `TBD`, `FIXME`, or `XXX` marker exists in the governed Phase 475
+runtime/verifier inventory. No empty implementation or hardcoded user-visible
+data path was found. The phrase “placeholder login codes” in `auth.py` describes
+an intentional fail-closed rejection for V9AUTH-06 and is not a stub.
 
-| File | Pattern | Severity | Impact |
-| --- | --- | --- | --- |
-| `routers/questions.py` | 外部效果与状态持久化宽泛 try/except；replay 自行降级分类 | 🛑 Blocker | durable provider result 丢失、跨 owner 数据投影。 |
-| `question_repo.py` | 普通状态写无 version/state CAS；takeover 无 teacher fence | 🛑 Blocker | 覆盖 winner 或授予已停用教师。 |
-| `user_repo.py` | 单边 fence、status 不在条件、无条件 status update | 🛑 Blocker | 已删除父账户残留、inactive relationship revival。 |
-| `question_submission_repo.py` / reconciliation job | raw client key 进入 durable coordinates/output；terminal proof 无 producer | 🛑 Blocker | 隐私泄漏与永不补偿。 |
-| `rate_limit.py` | replay 使用共享 current counter | 🛑 Blocker | 幂等 response 不稳定。 |
-| `account_deletion_repo.py` | generic discovery 漏跨账户 identity fields | 🛑 Blocker | 删除后关系/教师身份残留。 |
-| `verify_phase475.py` | 工具退出/source snapshot 不 fail closed | ⚠ Warning | 证据可能在工具失败或路径缺失时继续 PASS。 |
-| `test_phase475_question_replay.py` | mock 掉事务与持久化边界 | ⚠ Warning | coverage map 高估真实 recovery 证明。 |
+An extra Ruff run over all 34 review test files, beyond the governed lint
+inventory, reports one unused import in
+`tests/test_phase473_notification_deletion.py:10`. The import predates Phase 475
+and the test module executes successfully in both the 657-test and formal
+suites. This is a non-runtime hygiene note, not a Phase 475 goal gap.
 
-## Deferred Items
+The working tree also contains unrelated user edits in `README.md`, two
+provisioning/seed scripts, and new AWS operator-identity files. They were not
+modified or used as candidate evidence. Candidate verification occurred in an
+isolated clean checkout.
 
-以下不是 Phase 475 的可执行 gap，因为 ROADMAP/checked evidence 明确把它们分配给后续阶段：
+## Deferred External Obligations
 
-| Item | Addressed In | Evidence |
-| --- | --- | --- |
-| Live AWS DynamoDB behavior | Phase 479 | exact `NOT RUN` obligation `LIVE-AWS-DYNAMODB`。 |
-| Live provider effects | Phase 480 | exact `NOT RUN` obligation `LIVE-PROVIDER-EFFECTS`。 |
-| Deployment/production smoke | Phase 480 | exact `NOT RUN` obligation `DEPLOYMENT-AND-PRODUCTION-SMOKE`。 |
-
-这些 NOT RUN 边界被诚实标注，但不能用于反驳当前本地源码已经可观察的 blocker。
+| Obligation | Status | Owner | Phase 475 treatment |
+|---|---|---|---|
+| `LIVE-AWS-DYNAMODB` | NOT RUN | Phase 479 | Deferred exactly; not claimed as passed and not a local Phase 475 blocker |
+| `LIVE-PROVIDER-EFFECTS` | NOT RUN | Phase 480 | Deferred exactly; not claimed as passed and not a local Phase 475 blocker |
+| `DEPLOYMENT-AND-PRODUCTION-SMOKE` | NOT RUN | Phase 480 | Deferred exactly; not claimed as passed and not a local Phase 475 blocker |
 
 ## Human Verification Required
 
-无。此次失败均可由源码、事务 shape、纯函数 probe 或本地测试确定；不需要用主观 UI/人工步骤把 FAILED 降级为 UNCERTAIN。
+None for the Phase 475 local backend goal. Concurrency, failure recovery,
+replay, redaction, and persistence behavior are programmatically covered.
+External live-system work is explicitly deferred above rather than silently
+converted into human verification.
 
 ## Gaps Summary
 
-阶段不能进入下一阶段依赖链。核心问题不是“测试没跑”，而是测试没有覆盖生产上最关键的组合边界：provider effect 与 durable result、question writer 与 takeover、teacher/parent 生命周期与 claim/binding、operation identity 与稳定 receipt、删除分支与跨账户 identity discovery。
-
-建议 gap plan 先按 frontmatter 的六个根因拆分。尤其应先统一问题 command/effect 状态机与 question version CAS，再补 teacher/parent 双边账户 fence；否则继续增加 route-level replay 测试只会重复模拟已知不完整行为。
+No actionable Phase 475 gap remains. The previous six grouped gaps are closed,
+the final review has zero findings, all 45 atomic plans have corresponding
+summaries and code/test evidence, all local gates pass, and the immutable
+evidence publication is source-bound. Phase 475 is complete and may proceed to
+later phases, with the three named external obligations retained for 479/480.
 
 ---
 
-_Verified: 2026-07-22T02:15:29Z_
+_Verified: 2026-07-23T11:54:24Z_
 _Verifier: the agent (gsd-verifier)_
