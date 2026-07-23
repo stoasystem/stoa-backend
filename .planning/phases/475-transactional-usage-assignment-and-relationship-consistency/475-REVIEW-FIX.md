@@ -1,114 +1,74 @@
 ---
 phase: 475
-fixed_at: "2026-07-23T10:41:47Z"
+fixed_at: "2026-07-23T11:30:27Z"
 review_path: ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-REVIEW.md"
-iteration: 1
-findings_in_scope: 8
-fixed: 8
+iteration: 2
+findings_in_scope: 4
+fixed: 4
 skipped: 0
 status: all_fixed
 ---
 
 # Phase 475: Code Review Fix Report
 
-**Fixed at:** 2026-07-23T10:41:47Z
+**Fixed at:** 2026-07-23T11:30:27Z
 **Source review:** `.planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-REVIEW.md`
-**Iteration:** 1
+**Iteration:** 2
 
 **Summary:**
 
-- Findings in scope: 8
-- Fixed: 8
+- Findings in scope: 4
+- Fixed: 4
 - Skipped: 0
-- Unresolved: none
 
 ## Fixed Issues
 
-### CR-01: Ambiguous provider-effect states are terminally stuck instead of converging
+### CR-01: Expired invocation leases can call the provider twice
 
-**Files modified:** `src/stoa/db/repositories/question_submission_repo.py`, `src/stoa/routers/questions.py`, `tests/test_phase475_question_effect_recovery.py`
-**Commit:** `2e74069`
+**Files modified:** `src/stoa/db/repositories/question_submission_repo.py`, `src/stoa/routers/questions.py`, `tests/test_phase475_question_admission.py`, `tests/test_phase475_question_effect_recovery.py`
+**Commit:** `ea70f59`
 **Status:** fixed: requires human verification
-**Applied fix:** Added explicit `intent_ready` and leased `invoking` phases, unique invocation ownership, same-owner lost-response recovery, expired-lease reclaim support, missing-intent replay recovery, and bounded retry of the already validated provider result. `provider_outcome_unknown` is no longer used for result-receipt persistence failures.
-**Verification:** The three failure-window convergence tests passed; the complete effect recovery file passed 10 tests; the question submission broad regression passed 131 tests.
+**Applied fix:** An expired `invoking` lease is no longer transferred to a new provider caller. The repository atomically proves the exact expired owner/lease and terminalizes the ambiguous effect; replay then uses the existing terminal-proof reconciliation path to fail the command, mark the question failed, and reverse admission exactly once. Stable replay performs no provider or transaction work, while a new idempotency key can submit a new question. This deliberately provides terminal convergence, provider invocation at-most-once, and exact-once compensation; it cannot recover an external answer that succeeded before the worker crashed and may therefore discard that answer.
+**Verification:** The crash-after-provider-before-receipt test first reproduced the ambiguity and now passes with one provider call, terminal proof, exact-once reversal, stable replay, and successful fresh resubmission. The related question suites passed 109 tests; Ruff, `git diff --check`, and the exact 22-file mypy command passed.
 
-### CR-02: Every below-limit rate admission is rejected by DynamoDB validation
+### WR-01: Evidence still reports provider convergence without the ambiguous-invocation proof
 
-**Files modified:** `src/stoa/services/rate_limit.py`, `tests/test_phase475_rate_limit.py`, `tests/dynamodb_expression_assertions.py`
-**Commit:** `e44feda`
-**Status:** fixed
-**Applied fix:** Removed the unused `:limit` value and conditionally supplies `:expected` only when the update condition references it.
-**Verification:** Rate-limit and reconciliation expression tests passed as part of 24 focused tests.
+**Files modified:** `scripts/verify_phase475.py`, `tests/test_phase475_evidence_verifier.py`, `docs/security/phase-475-evidence-results.json`, `docs/security/phase-475-evidence.md`
+**Commits:** `6491370`, `c30dfc9`
+**Applied fix:** Added the crash-after-provider-before-receipt selector to both D-01 and CR-01 and required it in the registry-closure test. Captured all governed gates from clean candidate `d63af86a9543fd678017d4c8a6ce1f641208ed35` in one default restricted-sandbox run, then published the generated evidence as its direct-child commit changing exactly the two evidence paths.
+**Verification:** Independent `verify-capture` and `verify-publication` passed. The formal manifest records 2,619/2,619 passing nodes with zero non-pass outcomes, including both direct/subprocess network denial and process-group termination. The evidence verifier passed 47 tests. The publication records exact mypy coverage of 22 runtime files with zero diagnostics. Live AWS/DynamoDB, provider effects, deployment, and production smoke remain explicitly `NOT RUN`.
 
-### CR-03: Terminal submission compensation cannot execute on DynamoDB
+### WR-04: Pagination still stops before business eligibility filtering
 
-**Files modified:** `src/stoa/db/repositories/question_submission_repo.py`, `tests/test_phase475_question_reconciliation.py`, `tests/dynamodb_expression_assertions.py`
-**Commit:** `e44feda`
-**Status:** fixed
-**Applied fix:** Added the missing `:one` binding to the usage-ledger reversal operation and validated exact expression closure.
-**Verification:** Rate-limit and reconciliation expression tests passed as part of 24 focused tests.
+**Files modified:** `src/stoa/services/teacher_dispatch_service.py`, `tests/test_teacher_dispatch.py`, `tests/test_teacher_availability.py`
+**Commits:** `a5746b8`, `d63af86`
+**Applied fix:** `_scan_filtered_items()` now accepts a final business-eligibility callback and continues across `LastEvaluatedKey` pages until that callback has accepted `limit` rows or the scan is exhausted. Teacher profiles are accepted only after role, active lifecycle, positive version, and active fence enrichment; questions are accepted only after their dispatch markers/status qualify. The availability fixture was aligned with those durable eligibility requirements when the full formal gate exposed its stale unfenced profile.
+**Verification:** Non-empty rejected-first-page tests prove the second eligible profile/question page is read. Teacher availability and dispatch suites passed 23 tests; the final formal suite passed all 2,619 nodes.
 
-### CR-04: Relationship status transitions can reactivate permissions during account deletion
+### WR-05: Dispatch conditions regress the phase's exact mypy gate
 
-**Files modified:** `src/stoa/db/repositories/user_repo.py`, `tests/test_phase475_parent_binding_transaction.py`
-**Commit:** `47fe136`
-**Status:** fixed: requires human verification
-**Applied fix:** Bound both observed account-fence generations, the active parent profile, and the active/versioned student profile into the status-transition transaction. Lifecycle loss maps to a non-transitioning conflict or retryable outcome.
-**Verification:** All 48 parent-binding transaction tests passed, including both participants across all 12 distinct allowed status transitions.
-
-### WR-01: The evidence registry marks the broken provider convergence contract as PASS
-
-**Files modified:** `scripts/verify_phase475.py`, `tests/test_phase475_evidence_verifier.py`, `tests/test_phase475_question_effect_recovery.py`
-**Commit:** `2e74069`
-**Status:** fixed
-**Applied fix:** Registered result-receipt failure, committed-intent response loss, and missing-intent recovery nodes under both D-01 and legacy CR-01.
-**Verification:** Evidence verifier and effect recovery suites passed 57 tests together.
-
-### WR-02: Transaction test doubles do not validate DynamoDB expressions
-
-**Files modified:** `tests/dynamodb_expression_assertions.py`, `tests/test_phase475_rate_limit.py`, `tests/test_phase475_question_reconciliation.py`
-**Commit:** `e44feda`
-**Status:** fixed
-**Applied fix:** Added and integrated a shared exact-closure assertion for DynamoDB expression-name and expression-value placeholders.
-**Verification:** The new assertion first exposed both malformed operations, then all 24 focused tests passed after the source fixes.
-
-### WR-03: Dispatch treats inactive teacher accounts as available candidates
-
-**Files modified:** `src/stoa/services/teacher_dispatch_service.py`, `src/stoa/db/repositories/question_repo.py`, `tests/test_teacher_dispatch.py`
-**Commit:** `a9a362d`
-**Status:** fixed: requires human verification
-**Applied fix:** Preserved and required active account lifecycle state, defaulted missing availability to unavailable, required positive profile/fence observations, and atomically included the selected teacher fence and profile conditions in question assignment.
-**Verification:** Teacher dispatch and question CAS suites passed 21 tests.
-
-### WR-04: Single-page filtered scans silently omit dispatch candidates and questions
-
-**Files modified:** `src/stoa/services/teacher_dispatch_service.py`, `tests/test_teacher_dispatch.py`
-**Commit:** `a9a362d`
-**Status:** fixed
-**Applied fix:** Added bounded `LastEvaluatedKey` pagination until the requested number of filtered matches is collected or the scan is exhausted.
-**Verification:** Sparse-page teacher and question scan tests passed; teacher dispatch and question CAS suites passed 21 tests.
-
-## Final Verification
-
-- Focused DynamoDB expression tests: 24 passed.
-- Parent-binding transaction tests: 48 passed.
-- Teacher dispatch and question CAS tests: 21 passed.
-- Provider-effect recovery tests: 10 passed.
-- Evidence verifier plus provider-effect tests: 57 passed.
-- Question submission broad regression: 131 passed.
-- Final combined regression covering all findings: 211 passed.
-- Ruff and `git diff --check`: passed for every modified group.
-- Existing warning only: Starlette `httpx` deprecation warning.
-- Real provider calls: NOT RUN.
-- AWS/DynamoDB live or DynamoDB Local contract tests: NOT RUN.
-- Deployment checks: NOT RUN.
+**Files modified:** `src/stoa/db/repositories/question_repo.py`
+**Commit:** `c81fd93`
+**Applied fix:** Typed `additional_conditions` as the repository's concrete `QuestionItem` transaction-operation type and declared the assembled operations as `list[QuestionItem]`.
+**Verification:** The exact ordered Phase 475 inventory completed with 22 source files, zero diagnostics, and exit code 0. Related behavior tests and Ruff also passed.
 
 ## Skipped Issues
 
 None.
 
+## Final Verification
+
+- Governed clean candidate: `d63af86a9543fd678017d4c8a6ce1f641208ed35`.
+- Immutable evidence publication: `c30dfc9d9ffead55199525f37ac59f50a9449481`.
+- Default-sandbox formal extension: 2,619 passed; 0 failed, error, skipped, xfail, or xpass.
+- Direct/subprocess network-denial node: passed in the default restricted sandbox.
+- Process-group termination node: passed in the same formal manifest.
+- Exact mypy gate: 22 files, 0 diagnostics.
+- Evidence verifier: 47 passed.
+- External AWS/DynamoDB, live provider, deployment, and production operations: `NOT RUN`.
+
 ---
 
-_Fixed: 2026-07-23T10:41:47Z_
+_Fixed: 2026-07-23T11:30:27Z_
 _Fixer: the agent (gsd-code-fixer)_
-_Iteration: 1_
+_Iteration: 2_
