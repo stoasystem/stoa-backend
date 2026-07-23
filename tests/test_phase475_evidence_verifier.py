@@ -141,8 +141,8 @@ def _all_coverage_nodes(verifier: Any) -> set[str]:
     contracts = (
         verifier.REQUIREMENT_CONTRACTS,
         verifier.DECISION_CONTRACTS,
-        verifier.FINDING_CONTRACTS,
-        verifier.FOLLOW_UP_CONTRACTS,
+        verifier.REVIEW_FINDING_CONTRACTS,
+        verifier.REVIEW_WARNING_CONTRACTS,
     )
     return {
         selector
@@ -152,30 +152,137 @@ def _all_coverage_nodes(verifier: Any) -> set[str]:
     }
 
 
-def test_closed_coverage_maps_all_requirements_decisions_findings_and_followups() -> None:
+def test_coverage_registry_requires_all_truthful_gap_nodes() -> None:
     verifier = _load_verifier()
+    expected_modules = (
+        "tests/test_phase475_question_admission.py",
+        "tests/test_phase475_question_replay.py",
+        "tests/test_phase475_question_reconciliation.py",
+        "tests/test_phase475_question_state_cas.py",
+        "tests/test_phase475_question_effect_recovery.py",
+        "tests/test_phase475_teacher_takeover.py",
+        "tests/test_phase475_teacher_takeover_effect.py",
+        "tests/test_phase475_parent_binding_transaction.py",
+        "tests/test_phase475_parent_binding_reconciliation.py",
+        "tests/test_phase475_profile_version_cas.py",
+        "tests/test_phase475_rate_limit.py",
+        "tests/test_phase475_mistake_answer.py",
+        "tests/test_phase475_delivery_begin.py",
+        "tests/test_phase475_completed_deletion_replay.py",
+        "tests/test_phase475_deletion_discovery.py",
+        "tests/test_phase475_deletion_relationship_scrub.py",
+        "tests/test_phase475_deletion_teacher_identity_scrub.py",
+        "tests/test_phase475_deletion_notification_identity_scrub.py",
+    )
+    assert verifier.PHASE475_MODULES == expected_modules
+
     observed = _all_coverage_nodes(verifier)
     coverage = verifier.derive_coverage(observed)
     verifier.verify_coverage(coverage, observed)
+    assert set(coverage) == {
+        "requirements",
+        "decisions",
+        "review_findings",
+        "review_warnings",
+    }
     assert {row["id"] for row in coverage["requirements"]} == {
         f"V9DATA-{index:02d}" for index in range(1, 9)
     }
     assert {row["id"] for row in coverage["decisions"]} == {
         f"D-{index:02d}" for index in range(1, 17)
     }
-    assert {row["id"] for row in coverage["audit_findings"]} == {
-        "DATA-001",
-        "BUG-002",
-        "DATA-003",
-        "BUG-006",
-        "BUG-004",
+    assert {row["id"] for row in coverage["review_findings"]} == {
+        f"CR-{index:02d}" for index in range(1, 11)
     }
-    assert {row["id"] for row in coverage["phase473_follow_ups"]} == {
-        "profile-version-cas",
-        "delivery-begin-dependency-classification",
-        "completed-deletion-replay",
+    assert {row["id"] for row in coverage["review_warnings"]} == {
+        f"WR-{index:02d}" for index in range(1, 5)
     }
 
+    cr10 = verifier.REVIEW_FINDING_CONTRACTS["CR-10"]
+    assert cr10 == (
+        "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs",
+        "tests/test_phase475_deletion_relationship_scrub.py::test_relationship_identity_scrub_retries_cas_then_requires_two_clean_epochs",
+        "tests/test_phase475_deletion_teacher_identity_scrub.py::test_teacher_identity_scrub_preserves_student_question_and_requires_two_clean_epochs",
+        "tests/test_phase475_deletion_notification_identity_scrub.py::test_notification_identity_scrub_retries_cas_then_requires_two_clean_epochs",
+    )
+    assert set(cr10).isdisjoint(
+        selector
+        for selectors in verifier.DECISION_CONTRACTS.values()
+        for selector in selectors
+    )
+    assert verifier.DECISION_CONTRACTS["D-08"] == (
+        "tests/test_phase475_teacher_takeover.py::test_two_barrier_claimants_produce_one_owner_session_and_private_loser",
+    )
+    assert verifier.REVIEW_FINDING_CONTRACTS["CR-04"] == (
+        "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact",
+    )
+    assert verifier.DECISION_CONTRACTS["D-13"] == (
+        "tests/test_phase475_rate_limit.py::test_replay_returns_original_receipt_after_intervening_accepted_and_rejected_traffic",
+    )
+    assert verifier.REVIEW_FINDING_CONTRACTS["CR-09"] == verifier.DECISION_CONTRACTS[
+        "D-13"
+    ]
+    assert cr10[1] in verifier.REQUIREMENT_CONTRACTS["V9DATA-03"]
+    assert cr10[2] in verifier.REQUIREMENT_CONTRACTS["V9DATA-02"]
+    assert cr10[3] in verifier.REQUIREMENT_CONTRACTS["V9DATA-07"]
+    assert set(cr10).isdisjoint(verifier.REQUIREMENT_CONTRACTS["V9DATA-05"])
+    assert verifier.REVIEW_WARNING_CONTRACTS["WR-04"] == (
+        "tests/test_phase475_question_effect_recovery.py::test_effect_proof_executes_repository_boundaries_instead_of_monkeypatching_them",
+    )
+
+
+def test_phase475_module_registry_rejects_missing_extra_or_duplicate_modules(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    verifier = _load_verifier()
+    modules = verifier.PHASE475_MODULES
+    monkeypatch.setattr(
+        verifier, "_phase_runtime_files", lambda candidate: ["src/stoa/example.py"]
+    )
+    for drifted in (
+        modules[:-1],
+        (*modules, "tests/test_phase475_unreviewed.py"),
+        (*modules, modules[-1]),
+    ):
+        monkeypatch.setattr(verifier, "PHASE475_MODULES", drifted)
+        with pytest.raises(verifier.EvidenceError, match="module registry drift"):
+            verifier.gate_registry(CANDIDATE, tmp_path)
+
+
+def test_coverage_rejects_id_selector_result_and_observed_node_drift() -> None:
+    verifier = _load_verifier()
+    observed = _all_coverage_nodes(verifier)
+    exact = verifier.derive_coverage(observed)
+
+    mutations = []
+    missing_id = deepcopy(exact)
+    missing_id["review_findings"].pop()
+    mutations.append(missing_id)
+    extra_id = deepcopy(exact)
+    extra_id["review_findings"].append(
+        {"id": "CR-11", "result": "PASS", "selectors": []}
+    )
+    mutations.append(extra_id)
+    duplicate_id = deepcopy(exact)
+    duplicate_id["review_findings"][-1] = deepcopy(
+        duplicate_id["review_findings"][0]
+    )
+    mutations.append(duplicate_id)
+    selector_drift = deepcopy(exact)
+    selector_drift["decisions"][0]["selectors"][0]["selector"] += "_drift"
+    mutations.append(selector_drift)
+    non_pass = deepcopy(exact)
+    non_pass["requirements"][0]["result"] = "SKIPPED"
+    mutations.append(non_pass)
+    node_drift = deepcopy(exact)
+    node_drift["review_warnings"][0]["selectors"][0]["observed_nodes"] = [
+        "tests/test_unobserved.py::test_false_claim"
+    ]
+    mutations.append(node_drift)
+
+    for coverage in mutations:
+        with pytest.raises(verifier.EvidenceError, match="coverage|non-pass"):
+            verifier.verify_coverage(coverage, observed)
 
 @pytest.mark.parametrize(
     "selector",
