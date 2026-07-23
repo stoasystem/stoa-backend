@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-39-PLAN.md
-last_updated: "2026-07-23T08:58:00.981Z"
+stopped_at: Completed 475-42-PLAN.md
+last_updated: "2026-07-23T09:21:47.743Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 135
-  percent: 20
+  completed_plans: 136
+  percent: 68
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 27 of 45
+Plan: 43 of 45
 Status: Ready to execute
 Last activity: 2026-07-22 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-23T08:58:00.975Z
-**Stopped At:** Completed 475-39-PLAN.md
+**Last Date:** 2026-07-23T09:21:47.701Z
+**Stopped At:** Completed 475-42-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -242,6 +242,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P35 | 4 min | 1 tasks | 1 files |
 | Phase 475 P36 | 5 min | 1 tasks | 1 files |
 | Phase 475 P39 | 3 min | 1 tasks | 1 files |
+| Phase 475 P42 | 17 min | 1 tasks | 5 files |
 
 ## Decisions
 
@@ -517,3 +518,6 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: Use overloads to distinguish optional pending-request responses from required request responses without changing runtime output.
 - [Phase 475]: Match APIRoute.get_route_handler with Coroutine[Any, Any, Response] instead of the wider Awaitable return. — This closes the exact-file mypy override diagnostic without changing runtime behavior.
 - [Phase 475]: Keep question replay, provider-effect, state-CAS, terminal compensation, and response behavior unchanged during router type closure. — Plan 475-39 remains a single-file annotation-only change.
+- [Phase 475]: MYPY-PHASE475 requires one exact ordered candidate-inventory execution with exit zero, zero diagnostics, and an exact source-count completion summary. — Parser silence or exit status alone cannot authorize PASS.
+- [Phase 475]: Missing, extra, duplicate, or reordered mypy runtime paths are rejected as registry drift. — Caller normalization cannot conceal candidate inventory tampering.
+- [Phase 475]: Raw mypy output remains private while public evidence carries safe counts, byte length, and SHA-256 bindings. — Evidence stays reproducible without publishing diagnostic source lines.
