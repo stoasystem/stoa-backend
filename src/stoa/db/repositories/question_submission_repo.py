@@ -7,6 +7,7 @@ import json
 import struct
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
@@ -151,9 +152,17 @@ def _required_text(value: object, field: str) -> str:
 
 
 def _positive_integer(value: object, field: str, *, minimum: int = 0) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+    if isinstance(value, bool):
         raise ValueError(f"{field} is invalid")
-    return value
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, Decimal) and value == value.to_integral_value():
+        parsed = int(value)
+    else:
+        raise ValueError(f"{field} is invalid")
+    if parsed < minimum:
+        raise ValueError(f"{field} is invalid")
+    return parsed
 
 
 def _string_mapping(value: object) -> QuestionAdmissionItem:
@@ -823,7 +832,10 @@ def _transition_effect(
     values = {
         **_effect_update_values(effect),
         ":next_status": status,
-        ":next_version": int(effect["version"]) + 1,
+        ":next_version": _positive_integer(
+            effect.get("version"), "effect version", minimum=1
+        )
+        + 1,
         ":observed_at": _required_text(at, time_field),
         **dict(extra_values or {}),
     }
@@ -1224,10 +1236,13 @@ def record_question_effect_result(
     """Store one strict bounded private result before any public question update."""
     target = table or get_table()
     try:
-        kind = _effect_kind(effect.get("effect_kind"))
-        if effect.get("status") != "inflight" or not isinstance(
-            effect.get("version"), int
-        ):
+        kind = _effect_kind(
+            _required_text(effect.get("effect_kind"), "effect_kind")
+        )
+        effect_version = _positive_integer(
+            effect.get("version"), "effect version", minimum=1
+        )
+        if effect.get("status") != "inflight":
             raise ValueError("question effect intent is stale")
         validated = _validated_effect_result(kind, result)
         digest = _effect_result_digest(validated)
@@ -1260,7 +1275,7 @@ def record_question_effect_result(
                 ":result": validated,
                 ":result_digest": digest,
                 ":recorded_at": _required_text(recorded_at, "recorded_at"),
-                ":next_version": int(effect["version"]) + 1,
+                ":next_version": effect_version + 1,
             },
         )
     except ValueError:
@@ -1287,7 +1302,7 @@ def record_question_effect_result(
         "result_digest": digest,
         "result_recorded_at": recorded_at,
         "updated_at": recorded_at,
-        "version": int(effect["version"]) + 1,
+        "version": effect_version + 1,
     }
     return QuestionEffectResult(
         QuestionEffectDisposition.RESULT_READY, effect=persisted
@@ -1321,20 +1336,31 @@ def _matching_effect_completion(
 ) -> bool:
     if effect is None or command is None or question is None:
         return False
-    kind = _effect_kind(expected_effect.get("effect_kind"))
+    kind = _effect_kind(
+        _required_text(expected_effect.get("effect_kind"), "effect_kind")
+    )
+    effect_version = _positive_integer(
+        expected_effect.get("version"), "effect version", minimum=1
+    )
+    command_version = _positive_integer(
+        expected_effect.get("command_version"), "command version", minimum=1
+    )
+    question_version = _positive_integer(
+        expected_effect.get("question_version"), "question version", minimum=1
+    )
     expected_command_status = (
         "completed" if kind is QuestionEffectKind.AI else "processing"
     )
     return bool(
         effect.get("status") == "completed"
-        and effect.get("version") == int(expected_effect["version"]) + 1
+        and effect.get("version") == effect_version + 1
         and effect.get("result_digest") == expected_effect.get("result_digest")
         and command.get("status") == expected_command_status
-        and command.get("version") == int(expected_effect["command_version"]) + 1
+        and command.get("version") == command_version + 1
         and command.get("last_effect_id") == expected_effect.get("effect_id")
         and command.get("last_effect_kind") == kind.value
         and question.get("status") == next_question_status
-        and question.get("version") == int(expected_effect["question_version"]) + 1
+        and question.get("version") == question_version + 1
         and all(question.get(field) == value for field, value in fields.items())
     )
 
@@ -1348,7 +1374,9 @@ def complete_question_effect(
     """Atomically project one receipt into the public question and command."""
     target = table or get_table()
     try:
-        kind = _effect_kind(effect.get("effect_kind"))
+        kind = _effect_kind(
+            _required_text(effect.get("effect_kind"), "effect_kind")
+        )
         effect_version = _positive_integer(
             effect.get("version"), "effect version", minimum=1
         )
@@ -1370,16 +1398,17 @@ def complete_question_effect(
             minimum=1,
         )
         effect_id = validate_question_submission_command_digest(effect.get("effect_id"))
+        effect_result = effect.get("result")
         if (
             effect.get("entity_type") != "question_provider_effect"
             or effect.get("schema_version") != _EFFECT_SCHEMA_VERSION
             or effect.get("status") != "result_ready"
             or effect.get("idempotency_digest") != command_id
             or effect.get("question_status") != "pending"
-            or not isinstance(effect.get("result"), Mapping)
+            or not isinstance(effect_result, Mapping)
         ):
             raise ValueError("question effect receipt is stale")
-        result = _validated_effect_result(kind, effect["result"])
+        result = _validated_effect_result(kind, effect_result)
         result_digest = _effect_result_digest(result)
         if result_digest != effect.get("result_digest"):
             raise ValueError("question effect receipt digest is invalid")
