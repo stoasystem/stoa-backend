@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Protocol, cast
 
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import question_repo
@@ -17,6 +17,10 @@ ELIGIBLE_ROLES = {"teacher", "admin"}
 AVAILABLE_STATES = {"available", "active", "online", "ready"}
 PAUSED_STATES = {"paused", "offline", "busy", "disabled", "inactive"}
 _DISPATCH_SOURCE_STATES = frozenset({QuestionStatus.ESCALATED.value})
+
+
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> object: ...
 
 
 def _versioned_dispatch_question(
@@ -39,11 +43,14 @@ def _versioned_dispatch_question(
 
 def list_teacher_profiles(limit: int = 200) -> list[dict[str, Any]]:
     """Return teacher/admin profiles usable by the dispatch planner."""
-    table = get_table()
-    result = table.scan(
-        FilterExpression="SK = :profile",
-        ExpressionAttributeValues={":profile": "PROFILE"},
-        Limit=limit,
+    table = cast(_ScanTable, get_table())
+    result = cast(
+        dict[str, Any],
+        table.scan(
+            FilterExpression="SK = :profile",
+            ExpressionAttributeValues={":profile": "PROFILE"},
+            Limit=limit,
+        ),
     )
     return [
         item
@@ -54,11 +61,14 @@ def list_teacher_profiles(limit: int = 200) -> list[dict[str, Any]]:
 
 def list_teacher_dispatch_questions(limit: int = 200) -> list[dict[str, Any]]:
     """Return questions that participate in dispatch and SLA dashboards."""
-    table = get_table()
-    result = table.scan(
-        FilterExpression="SK = :meta",
-        ExpressionAttributeValues={":meta": "META"},
-        Limit=limit,
+    table = cast(_ScanTable, get_table())
+    result = cast(
+        dict[str, Any],
+        table.scan(
+            FilterExpression="SK = :meta",
+            ExpressionAttributeValues={":meta": "META"},
+            Limit=limit,
+        ),
     )
     return [
         item
@@ -216,7 +226,7 @@ def reassign_timed_out_dispatches(
         and item.get("dispatch_status") == "dispatched"
         and _deadline_expired(item.get("dispatch_deadline_at"), timestamp)
     ]
-    results = []
+    results: list[dict[str, Any]] = []
     for item in stale:
         question_id = str(item.get("question_id") or "")
         previous = _previous_assignees(item)
