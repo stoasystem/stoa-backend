@@ -7,12 +7,61 @@ from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
 import json
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Protocol, runtime_checkable
 
 from boto3.dynamodb.types import TypeSerializer
 from botocore.exceptions import ClientError
 
 from stoa.db.dynamodb import get_table
+
+
+type AccountDeletionItem = dict[str, object]
+
+
+@runtime_checkable
+class _GetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _UpdateTable(Protocol):
+    def update_item(self, **kwargs: object) -> object: ...
+
+
+def _dependency_mapping(value: object) -> AccountDeletionItem:
+    if not isinstance(value, Mapping):
+        raise AccountDeletionConflict("malformed account deletion dependency response")
+    result: AccountDeletionItem = {}
+    for key, member in value.items():
+        if not isinstance(key, str):
+            raise AccountDeletionConflict(
+                "malformed account deletion dependency response"
+            )
+        result[key] = member
+    return result
+
+
+def _get_item(table: object, **kwargs: object) -> AccountDeletionItem:
+    if not isinstance(table, _GetTable):
+        raise AccountDeletionConflict("account deletion dependency unavailable")
+    return _dependency_mapping(table.get_item(**kwargs))
+
+
+def _scan(table: object, **kwargs: object) -> AccountDeletionItem:
+    if not isinstance(table, _ScanTable):
+        raise AccountDeletionConflict("account deletion dependency unavailable")
+    return _dependency_mapping(table.scan(**kwargs))
+
+
+def _update_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _UpdateTable):
+        raise AccountDeletionConflict("account deletion dependency unavailable")
+    return table.update_item(**kwargs)
 
 
 class AccountDeletionConflict(RuntimeError):
@@ -231,10 +280,11 @@ def active_fence_condition(
 def get_account_fence(
     user_id: str, *, table: Any | None = None
 ) -> dict[str, Any] | None:
-    response = (table or get_table()).get_item(
+    response = _get_item(
+        table or get_table(),
         Key=account_fence_key(user_id), ConsistentRead=True
     )
-    item = response.get("Item") if isinstance(response, Mapping) else None
+    item = response.get("Item")
     return dict(item) if isinstance(item, Mapping) else None
 
 
@@ -268,10 +318,11 @@ def ensure_active_account_fence(
     existing = get_account_fence(user_id, table=target)
     if existing:
         return require_active_account_fence(user_id, table=target)
-    profile_response = target.get_item(
+    profile_response = _get_item(
+        target,
         Key={"PK": f"USER#{user_id}", "SK": "PROFILE"}, ConsistentRead=True
     )
-    profile = profile_response.get("Item") if isinstance(profile_response, Mapping) else None
+    profile = profile_response.get("Item")
     if (
         not isinstance(profile, Mapping)
         or profile.get("user_id") != user_id
@@ -374,10 +425,11 @@ def materialize_profile_with_fence(
 def get_deletion_command(
     user_id: str, command_id: str, *, table: Any | None = None
 ) -> dict[str, Any] | None:
-    response = (table or get_table()).get_item(
+    response = _get_item(
+        table or get_table(),
         Key=deletion_command_key(user_id, command_id), ConsistentRead=True
     )
-    item = response.get("Item") if isinstance(response, Mapping) else None
+    item = response.get("Item")
     return dict(item) if isinstance(item, Mapping) else None
 
 
@@ -497,10 +549,11 @@ def scan_owned_private_rows(
         request: dict[str, Any] = {"ConsistentRead": True, "Limit": page_limit}
         if current:
             request["ExclusiveStartKey"] = current
-        response = target.scan(**request)
-        if not isinstance(response, Mapping) or not isinstance(response.get("Items", []), list):
+        response = _scan(target, **request)
+        raw_items = response.get("Items", [])
+        if not isinstance(raw_items, list):
             raise AccountDeletionConflict("malformed private row page")
-        for raw in response.get("Items", []):
+        for raw in raw_items:
             if not isinstance(raw, Mapping):
                 raise AccountDeletionConflict("malformed private row")
             item = dict(raw)
@@ -581,13 +634,12 @@ def _scan_commands(
         }
         if cursor is not None:
             request["ExclusiveStartKey"] = cursor
-        response = target.scan(**request)
-        if not isinstance(response, Mapping) or not isinstance(
-            response.get("Items", []), list
-        ):
+        response = _scan(target, **request)
+        raw_items = response.get("Items", [])
+        if not isinstance(raw_items, list):
             raise AccountDeletionConflict("malformed deletion command page")
         matches.extend(
-            dict(item) for item in response.get("Items", []) if isinstance(item, Mapping)
+            dict(item) for item in raw_items if isinstance(item, Mapping)
         )
         raw_cursor = response.get("LastEvaluatedKey")
         if raw_cursor is None:
@@ -987,11 +1039,12 @@ def scrub_parent_profile_child(
                 raise AccountDeletionRowConflict(
                     "parent profile changed during bounded scrub"
                 ) from exc
-            response = target.get_item(
+            response = _get_item(
+                target,
                 Key={"PK": f"USER#{parent_id}", "SK": "PROFILE"},
                 ConsistentRead=True,
             )
-            refreshed = response.get("Item") if isinstance(response, Mapping) else None
+            refreshed = response.get("Item")
             if not isinstance(refreshed, Mapping):
                 raise AccountDeletionRowConflict("parent profile disappeared") from exc
             current = dict(refreshed)
@@ -1027,11 +1080,12 @@ def scrub_parent_student_relationship(
         raise AccountDeletionRowConflict("parent relationship coordinate changed")
 
     target: Any = table or get_table()
-    response = target.get_item(
+    response = _get_item(
+        target,
         Key={"PK": f"USER#{student_id}", "SK": "PROFILE"},
         ConsistentRead=True,
     )
-    profile = response.get("Item") if isinstance(response, Mapping) else None
+    profile = response.get("Item")
     if not isinstance(profile, Mapping):
         raise AccountDeletionRowConflict("student profile disappeared")
     profile_version = _relationship_version(profile.get("version"))
@@ -1312,10 +1366,11 @@ def create_provider_revoke_debt(
             table=target,
         )
     except AccountDeletionConflict:
-        response = target.get_item(
+        response = _get_item(
+            target,
             Key={"PK": item["PK"], "SK": item["SK"]}, ConsistentRead=True
         )
-        existing = response.get("Item") if isinstance(response, Mapping) else None
+        existing = response.get("Item")
         if not isinstance(existing, Mapping) or any(
             existing.get(field) != item[field]
             for field in ("user_id", "generation", "entity_type", "operations")
@@ -1362,8 +1417,8 @@ def complete_provider_revoke_debt(
             table=target,
         )
     except AccountDeletionConflict:
-        response = target.get_item(Key=key, ConsistentRead=True)
-        existing = response.get("Item") if isinstance(response, Mapping) else None
+        response = _get_item(target, Key=key, ConsistentRead=True)
+        existing = response.get("Item")
         if (
             not isinstance(existing, Mapping)
             or existing.get("user_id") != user_id
@@ -1397,8 +1452,8 @@ def scan_pending_deletion_commands(
     }
     if cursor:
         request["ExclusiveStartKey"] = _validated_cursor(cursor)
-    response = target.scan(**request)
-    items = response.get("Items", []) if isinstance(response, Mapping) else []
+    response = _scan(target, **request)
+    items = response.get("Items", [])
     if not isinstance(items, list):
         raise AccountDeletionConflict("malformed pending command page")
     return OwnedPrivatePage(
@@ -1444,7 +1499,8 @@ def claim_deletion_command(
     )
     empty_digest = branch_results_digest({})
     try:
-        response = target.update_item(
+        response = _update_item(
+            target,
             Key={"PK": command["PK"], "SK": command["SK"]},
             UpdateExpression=(
                 "SET #status=:running, lease_owner=:owner, lease_expires_at=:expiry, "
@@ -1515,7 +1571,8 @@ def renew_deletion_command_claim(
             return _claim_from_command(renewed)
         raise DeletionCommandClaimLost("deletion renewal lost")
     try:
-        target.update_item(
+        _update_item(
+            target,
             Key={"PK": command["PK"], "SK": command["SK"]},
             UpdateExpression=(
                 "SET lease_expires_at=:expiry, updated_at=:now, "
@@ -1649,7 +1706,8 @@ def persist_branch_result(
     if expected_result_version:
         values[":result_version"] = expected_result_version
     try:
-        target.update_item(
+        _update_item(
+            target,
             Key={"PK": command["PK"], "SK": command["SK"]},
             UpdateExpression=(
                 "SET branch_results.#branch=:result, updated_at=:now, "
@@ -2041,6 +2099,7 @@ def _targets_user(item: Mapping[str, Any], user_id: str) -> bool:
         return True
     for field in ("children", "child_summaries", "student_summaries"):
         value = item.get(field)
+        entries: Iterable[object]
         if isinstance(value, Mapping):
             if user_id in value:
                 return True
