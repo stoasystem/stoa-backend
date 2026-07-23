@@ -677,7 +677,39 @@ Plans:
 4. Lookalike, encoded, credential-bearing, wrong-port, and arbitrary HTTPS callback URLs are refused.
 5. A Stripe test-mode browser checkout and signed webhook changes parent/student effective entitlement and quota exactly once and appears in the parent/admin Web views.
 
-**Plans:** TBD
+**Plans:** 29 plans
+
+Plans:
+
+- [ ] 476-01-PLAN.md — Define canonical billing, entitlement, allowance, reminder, and recovery contracts.
+- [ ] 476-02-PLAN.md — Enforce exact configured checkout return origins and paths.
+- [ ] 476-03-PLAN.md — Converge backend plan identities, defaults, and Stripe configuration.
+- [ ] 476-04-PLAN.md — Preview and conditionally apply legacy plan-identity migration.
+- [ ] 476-05-PLAN.md — Persist one durable checkout command per browser idempotency key.
+- [ ] 476-06-PLAN.md — Create or recover one Stripe Checkout Session per command.
+- [ ] 476-07-PLAN.md — Supersede or expire stale payable attempts on confirmed plan changes.
+- [ ] 476-08-PLAN.md — Reconcile provider/local checkout ambiguity without a second charge path.
+- [ ] 476-09-PLAN.md — Expose parent/admin billing status and same-command recheck APIs.
+- [ ] 476-10-PLAN.md — Persist immutable, ordered, idempotent Stripe billing facts.
+- [ ] 476-11-PLAN.md — Converge signed duplicate, delayed, and out-of-order webhook evidence.
+- [ ] 476-12-PLAN.md — Apply exact beneficiary grants and immediate paid upgrades once.
+- [ ] 476-13-PLAN.md — Apply period-end downgrade/cancel, grace, and storage transitions.
+- [ ] 476-14-PLAN.md — Enforce one historical 14-day free trial and post-expiry AI/support limits.
+- [ ] 476-15-PLAN.md — Persist Zurich-week allowance ledgers and exact plan budgets.
+- [ ] 476-16-PLAN.md — Capture actual provider input/output token evidence.
+- [ ] 476-17-PLAN.md — Finalize question token debits across delivery and retry outcomes.
+- [ ] 476-18-PLAN.md — Finalize conversation and hint token debits across terminal outcomes.
+- [ ] 476-19-PLAN.md — Enforce teacher-supported and family support-case allowances.
+- [ ] 476-20-PLAN.md — Deliver idempotent payment-method expiry reminders safely.
+- [ ] 476-21-PLAN.md — Project canonical billing, allowance, reminder, and recovery state.
+- [ ] 476-22-PLAN.md — Converge Web plan types, pricing, and display identities.
+- [ ] 476-23-PLAN.md — Drive Web checkout with durable identity and explicit beneficiaries.
+- [ ] 476-24-PLAN.md — Render confirming, active, incomplete, and support-needed results.
+- [ ] 476-25-PLAN.md — Render parent allowance, trial, payment-method, and reminder state.
+- [ ] 476-26-PLAN.md — Render redacted admin billing recovery and same-command recheck.
+- [ ] 476-27-PLAN.md — Define a mock-disabled, fail-closed Stripe sandbox browser project.
+- [ ] 476-28-PLAN.md — Prove hosted Stripe sandbox checkout through signed webhook and paid access.
+- [ ] 476-29-PLAN.md — Capture source-bound Phase 476 requirement, decision, and security evidence.
 **UI hint:** yes
 
 **Required evidence:** Web request payload and idempotency proof, Stripe sandbox request/event IDs, failure-injection results, local/provider reconciliation rows, parent/admin API and browser results, exact-origin negative matrix, and no live charge.
@@ -915,7 +947,7 @@ Phase 473 remains complete; its four nonblocking verification findings have one 
 | 473. Student Content Privacy And Practice Integrity | 40/40 | Complete | 2026-07-18 |
 | 474. Deterministic Verification And Gated Delivery | 0/80 | Planning revision | - |
 | 475. Transactional Usage Assignment And Relationship Consistency | 45/45 | Complete | 2026-07-23 |
-| 476. Billing Idempotency And Paid Access Recovery | 0/TBD | Not started | - |
+| 476. Billing Idempotency And Paid Access Recovery | 0/29 | Not started | - |
 | 477. Web Foundation And Contract Convergence | 0/TBD | Not started | - |
 | 478. Complete Web Role Journeys And Route Closure | 0/TBD | Not started | - |
 | 479. Broader Versioned Infrastructure And Browser WebSocket Integration | 0/TBD | Not started | - |
