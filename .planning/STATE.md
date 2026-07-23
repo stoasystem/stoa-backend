@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-33-PLAN.md
-last_updated: "2026-07-23T08:32:10.439Z"
+stopped_at: Completed 475-35-PLAN.md
+last_updated: "2026-07-23T08:42:14.941Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 132
-  percent: 66
+  completed_plans: 133
+  percent: 20
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 24 of 45
+Plan: 25 of 45
 Status: Ready to execute
 Last activity: 2026-07-22 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-23T08:32:10.433Z
-**Stopped At:** Completed 475-33-PLAN.md
+**Last Date:** 2026-07-23T08:42:14.935Z
+**Stopped At:** Completed 475-35-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -239,6 +239,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P20 | 16h 37m multi-session | 1 tasks | 6 files |
 | Phase 475 P30 | 3 min | 1 tasks | 1 files |
 | Phase 475 P33 | 2 min | 1 tasks | 1 files |
+| Phase 475 P35 | 4 min | 1 tasks | 1 files |
 
 ## Decisions
 
@@ -507,3 +508,5 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: Provider responses cross a string-keyed Mapping boundary and nested collections are narrowed before use without changing deletion persistence semantics. — Runtime validation removes mypy diagnostics without trusting malformed provider values.
 - [Phase 475]: Accept persisted report body length only when its exact runtime type is int before provider reconciliation. — Malformed dependency state remains retryable debt and cannot certify deletion completion.
 - [Phase 475]: Plan 475-33 changes only account-deletion provider-boundary typing. — Valid report cleanup, ordered branches, CAS retry, two clean epochs, final seal, and terminal replay remain unchanged.
+- [Phase 475]: Persisted usage-ledger integers accept only exact int or finite integral Decimal values. — This removes lossy coercion while preserving valid DynamoDB number values and rejecting bool, fractional, or negative accounting state.
+- [Phase 475]: Reversed usage events retain their original audit quantity while active totals exclude them. — Exact-once compensation remains delegated to the existing four-row transaction and opaque digest identity is unchanged.
