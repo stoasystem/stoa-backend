@@ -230,27 +230,86 @@ def test_registry_uses_phase474_full_argv_and_all_runtime_static_targets(
     ]
     runtime = verifier._phase_runtime_files(candidate)
     assert set(runtime) <= set(registry["RUFF-PHASE475"]["argv"])
-    assert set(runtime) <= set(registry["MYPY-PHASE475-CHANGED-LINES"]["argv"])
+    assert set(runtime) <= set(registry["MYPY-PHASE475"]["argv"])
 
 
-def test_targeted_mypy_rejects_only_diagnostics_on_candidate_changed_lines(
+def test_mypy_gate_fails_closed_for_every_nonzero_or_ambiguous_outcome(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     verifier = _load_verifier()
-    files = ["src/stoa/example.py"]
+    files = ["src/stoa/example.py", "src/stoa/other.py"]
     monkeypatch.setattr(verifier, "_phase_runtime_files", lambda candidate: files)
-    monkeypatch.setattr(verifier, "_changed_lines", lambda base, candidate, path: {10, 11})
 
     class _Completed:
-        returncode = 1
-        stdout = b"src/stoa/example.py:9: error: old\nsrc/stoa/example.py:10: error: new\n"
-        stderr = b""
+        def __init__(
+            self, returncode: int, stdout: bytes = b"", stderr: bytes = b""
+        ) -> None:
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
 
-    monkeypatch.setattr(verifier, "_run", lambda argv: _Completed())
+    calls: list[list[str]] = []
+
+    def run_success(argv: list[str], **kwargs: object) -> _Completed:
+        calls.append(list(argv))
+        return _Completed(0, b"Success: no issues found in 2 source files\n")
+
+    monkeypatch.setattr(verifier, "_run", run_success)
     result = verifier.targeted_mypy("b" * 40, "c" * 40, files)
-    assert result["status"] == "FAIL"
-    assert result["pre_existing_diagnostic_count"] == 1
-    assert result["changed_line_diagnostic_count"] == 1
+    assert result == {
+        "status": "PASS",
+        "base_sha": "b" * 40,
+        "candidate_sha": "c" * 40,
+        "checked_files": files,
+        "tool_exit_code": 0,
+        "diagnostic_count": 0,
+        "completion_source_count": 2,
+        "raw_output_bytes": 43,
+        "raw_output_sha256": sha256(
+            b"Success: no issues found in 2 source files\n"
+        ).hexdigest(),
+        "mypy_argv_sha256": sha256(
+            verifier._canonical_bytes([str(ROOT / ".venv/bin/mypy"), *files])
+        ).hexdigest(),
+    }
+    assert calls == [[str(ROOT / ".venv/bin/mypy"), *files]]
+
+    failures = (
+        _Completed(1, b"src/stoa/example.py:10: error: ordinary diagnostic\n"),
+        _Completed(1),
+        _Completed(0),
+        _Completed(0, b"Found 0 errors in 2 files\n"),
+        _Completed(0, b"Success: no issues found in 1 source file\n"),
+        _Completed(0, b"src/stoa/example.py:10: error: contradictory\n"),
+        _Completed(0, b"\xffSuccess: no issues found in 2 source files\n"),
+        _Completed(
+            0,
+            b"Success: no issues found in 2 source files\n",
+            b"unexpected stderr\n",
+        ),
+    )
+    for completed in failures:
+        monkeypatch.setattr(verifier, "_run", lambda argv, **kwargs: completed)
+        assert verifier.targeted_mypy("b" * 40, "c" * 40, files)["status"] == "FAIL"
+
+    for error in (
+        OSError("not executable"),
+        subprocess.TimeoutExpired(["mypy"], timeout=1),
+    ):
+        def raise_execution_error(argv: list[str], **kwargs: object) -> _Completed:
+            raise error
+
+        monkeypatch.setattr(verifier, "_run", raise_execution_error)
+        assert verifier.targeted_mypy("b" * 40, "c" * 40, files)["status"] == "FAIL"
+
+    for drifted in (
+        files[:-1],
+        [*files, "src/stoa/extra.py"],
+        [files[0], files[0], files[1]],
+        list(reversed(files)),
+    ):
+        with pytest.raises(verifier.EvidenceError, match="registry drift"):
+            verifier.targeted_mypy("b" * 40, "c" * 40, drifted)
 
 
 def _publication_repo(tmp_path: Path) -> tuple[Path, str, str]:
