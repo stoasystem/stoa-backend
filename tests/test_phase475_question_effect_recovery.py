@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from botocore.exceptions import ClientError
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.config import Settings, get_settings
@@ -182,6 +183,10 @@ class EffectRecoveryTable:
             ":effect_kind": "effect_kind",
             ":schema": "schema_version",
             ":generation": "account_fence_generation",
+            ":expected_invocation_owner": "invocation_owner",
+            ":expected_lease_expires_at": "invocation_lease_expires_at",
+            ":terminal_proof_kind": "terminal_proof_kind",
+            ":terminal_expired_lease": "terminal_invocation_lease_expires_at",
         }
         for token, field in comparisons.items():
             if token in values and field in current and current.get(field) != values[token]:
@@ -200,7 +205,11 @@ class EffectRecoveryTable:
             raise _conditional_error()
         if ":processing" in values and current.get("status") != values[":processing"]:
             raise _conditional_error()
-        if ":terminal_rejected" in values and current.get("status") != values[":terminal_rejected"]:
+        if (
+            ":terminal_rejected" in values
+            and ":expected_status" not in values
+            and current.get("status") != values[":terminal_rejected"]
+        ):
             raise _conditional_error()
         if ":terminal" in values and current.get("status") != values[":terminal"]:
             raise _conditional_error()
@@ -220,6 +229,13 @@ class EffectRecoveryTable:
             in update["ConditionExpression"]
             and str(current.get("invocation_lease_expires_at") or "")
             > str(values[":claimed_at"])
+        ):
+            raise _conditional_error()
+        if (
+            "invocation_lease_expires_at<=:terminal_at"
+            in update["ConditionExpression"]
+            and str(current.get("invocation_lease_expires_at") or "")
+            > str(values[":terminal_at"])
         ):
             raise _conditional_error()
 
@@ -261,6 +277,18 @@ class EffectRecoveryTable:
                 terminal_failure_proven_at=values[":proven_at"],
                 updated_at=values[":proven_at"],
                 version=values[":next_effect_version"],
+            )
+        elif values.get(":terminal_rejected") == "terminal_rejected":
+            current.update(
+                status=values[":terminal_rejected"],
+                terminal_failure_code=values[":failure_code"],
+                terminal_proof_kind=values[":proof_kind"],
+                terminal_invocation_lease_expires_at=values[
+                    ":expected_lease_expires_at"
+                ],
+                terminal_at=values[":terminal_at"],
+                updated_at=values[":terminal_at"],
+                version=values[":next_version"],
             )
         elif ":completed" in values:
             current.update(
@@ -567,6 +595,106 @@ def test_missing_intent_dependency_recovers_on_replay_and_invokes_once(
     assert second.json()["ai_response"] == third.json()["ai_response"] == _ai_answer()
     assert provider_calls == 1
     assert _effect(table, "ai")["status"] == "completed"
+
+
+def test_crash_after_provider_before_receipt_expires_to_exact_once_compensation(
+    monkeypatch,
+) -> None:
+    class WorkerCrash(BaseException):
+        pass
+
+    table = EffectRecoveryTable()
+    _patch_runtime(monkeypatch, table)
+    owners = iter(
+        ("owner-before-crash", "owner-after-expiry", "owner-new-submission")
+    )
+    monkeypatch.setattr(questions.secrets, "token_urlsafe", lambda _size: next(owners))
+    provider_calls = 0
+
+    def answer(**_kwargs):
+        nonlocal provider_calls
+        provider_calls += 1
+        return _ai_answer()
+
+    monkeypatch.setattr(questions.ai_service, "get_ai_answer", answer)
+    real_record = question_submission_repo.record_question_effect_result
+    crashed = False
+
+    def crash_before_receipt(*args, **kwargs):
+        nonlocal crashed
+        if not crashed:
+            crashed = True
+            raise WorkerCrash
+        return real_record(*args, **kwargs)
+
+    monkeypatch.setattr(
+        question_submission_repo,
+        "record_question_effect_result",
+        crash_before_receipt,
+    )
+
+    with pytest.raises(WorkerCrash):
+        _client().post("/questions", json=_request())
+
+    ambiguous = _effect(table, "ai")
+    assert ambiguous["status"] == "invoking"
+    assert ambiguous["invocation_owner"] == "owner-before-crash"
+    ambiguous["invocation_lease_expires_at"] = "2000-01-01T00:00:00+00:00"
+
+    recovered = _client().post("/questions", json=_request())
+
+    assert _effect(table, "ai")["status"] == "terminal_proven", copy.deepcopy(
+        _effect(table, "ai")
+    )
+    assert recovered.status_code == 409, (
+        recovered.json(),
+        provider_calls,
+        copy.deepcopy(_effect(table, "ai")),
+    )
+    assert recovered.json()["detail"]["code"] == "question_submission_terminal_failed"
+    assert recovered.json()["detail"]["action"] == "create_new_submission"
+    assert provider_calls == 1
+    effect = _effect(table, "ai")
+    assert effect["status"] == "terminal_proven"
+    assert effect["terminal_failure_code"] == "provider_outcome_ambiguous"
+    assert effect["terminal_proof_kind"] == "expired_invocation_lease"
+    command = next(
+        item
+        for item in table.items.values()
+        if item.get("entity_type") == "question_submission_command"
+    )
+    question = table.items[(f"QUESTION#{QUESTION_ID}", "META")]
+    counter = next(
+        item
+        for (pk, sk), item in table.items.items()
+        if pk == f"USAGE#{STUDENT_ID}" and sk.startswith("QUESTION#")
+    )
+    ledger = next(
+        item
+        for item in table.items.values()
+        if item.get("entity_type") == "usage_ledger_event"
+    )
+    assert command["status"] == "terminal_failed"
+    assert command["terminal_failure_code"] == "provider_outcome_ambiguous"
+    assert question["status"] == "submission_failed"
+    assert counter["count"] == 0
+    assert ledger["status"] == "reversed"
+
+    transaction_count = len(table.transactions)
+    replay = _client().post("/questions", json=_request())
+    assert replay.status_code == 409
+    assert replay.json() == recovered.json()
+    assert provider_calls == 1
+    assert len(table.transactions) == transaction_count
+
+    monkeypatch.setattr(questions.uuid, "uuid4", lambda: "question-effect-2")
+    new_request = _request()
+    new_request["idempotencyKey"] = "question-effect-recovery-new"
+    resubmitted = _client().post("/questions", json=new_request)
+    assert resubmitted.status_code == 201, resubmitted.json()
+    assert resubmitted.json()["status"] == "ai_answered"
+    assert provider_calls == 2
+    assert counter["count"] == 1
 
 
 def test_malformed_dependency_response_remains_recoverable_without_refund(

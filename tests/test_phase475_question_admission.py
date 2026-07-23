@@ -394,7 +394,10 @@ def test_transaction_has_one_counter_update_and_no_duplicate_targets() -> None:
     assert len(targets) == len(set(targets))
     assert sum("Update" in operation for operation in operations) == 1
     counter = next(operation["Update"] for operation in operations if "Update" in operation)
-    assert counter["ConditionExpression"] == "attribute_not_exists(#count) AND :next<=:limit"
+    assert counter["ConditionExpression"] == (
+        "(attribute_not_exists(#count) OR #count=:expected) AND :next<=:limit"
+    )
+    assert counter["ExpressionAttributeValues"][":expected"] == 0
     assert ("ATTACHMENT#attachment-1", "REF#QUESTION#question-1") in targets
 
 

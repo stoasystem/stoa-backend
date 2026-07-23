@@ -432,6 +432,14 @@ def _recover_question_effect_receipts(
                 current_question = dict(recovered.question)
             if recovered.command is not None:
                 current_command = dict(recovered.command)
+            if (
+                recovered.disposition
+                is question_submission_repo.QuestionEffectDisposition.TERMINAL_PROVIDER_REJECTION
+            ):
+                _promote_terminal_effect(
+                    recovered,
+                    correlation_id=correlation_id,
+                )
             if recovered.disposition not in _EFFECT_COMPLETION_SUCCEEDED:
                 return _persisted_question_or_snapshot(
                     current_question, current_command

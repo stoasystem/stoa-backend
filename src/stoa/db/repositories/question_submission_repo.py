@@ -816,7 +816,7 @@ def _claim_question_effect_invocation(
     lease_expires_at: str,
     table: object,
 ) -> QuestionEffectResult:
-    """Acquire an unstarted or expired provider invocation for one explicit owner."""
+    """Acquire an unstarted invocation or terminalize an expired ambiguous one."""
     owner = _required_text(invocation_owner, "invocation_owner")
     claimed = _required_text(claimed_at, "claimed_at")
     lease_expiry = _required_text(lease_expires_at, "lease_expires_at")
@@ -830,6 +830,12 @@ def _claim_question_effect_invocation(
         return QuestionEffectResult(_effect_disposition(effect), effect=dict(effect))
     if not isinstance(table, _UpdateTable):
         return QuestionEffectResult(QuestionEffectDisposition.PRE_PROVIDER_DEPENDENCY_FAILURE)
+    if status in {"invoking", "inflight"}:
+        return _terminalize_expired_question_effect(
+            effect,
+            observed_at=claimed,
+            table=table,
+        )
 
     effect_version = _positive_integer(
         effect.get("version"), "effect version", minimum=1
@@ -842,8 +848,6 @@ def _claim_question_effect_invocation(
         "AND effect_kind=:effect_kind AND #status=:expected_status "
         "AND #version=:effect_version"
     )
-    if status in {"invoking", "inflight"}:
-        condition += " AND invocation_lease_expires_at<=:claimed_at"
     values = {
         **_effect_update_values(effect),
         ":entity": "question_provider_effect",
@@ -896,6 +900,100 @@ def _claim_question_effect_invocation(
             "invocation_claimed_at": claimed,
             "invocation_lease_expires_at": lease_expiry,
             "updated_at": claimed,
+            "version": effect_version + 1,
+        },
+    )
+
+
+def _terminalize_expired_question_effect(
+    effect: Mapping[str, object],
+    *,
+    observed_at: str,
+    table: _UpdateTable,
+) -> QuestionEffectResult:
+    """Close an expired admitted invocation without a second provider call."""
+    owner = _required_text(effect.get("invocation_owner"), "invocation_owner")
+    lease_expires_at = _required_text(
+        effect.get("invocation_lease_expires_at"),
+        "invocation_lease_expires_at",
+    )
+    observed = _required_text(observed_at, "observed_at")
+    effect_version = _positive_integer(
+        effect.get("version"), "effect version", minimum=1
+    )
+    failure_code = "provider_outcome_ambiguous"
+    proof_kind = "expired_invocation_lease"
+    values: QuestionAdmissionItem = {
+        **_effect_update_values(effect),
+        ":entity": "question_provider_effect",
+        ":terminal_rejected": "terminal_rejected",
+        ":failure_code": failure_code,
+        ":proof_kind": proof_kind,
+        ":terminal_at": observed,
+        ":expected_invocation_owner": owner,
+        ":expected_lease_expires_at": lease_expires_at,
+        ":next_version": effect_version + 1,
+    }
+    try:
+        table.update_item(
+            Key=question_effect_key(
+                str(effect["student_id"]), str(effect["effect_id"])
+            ),
+            UpdateExpression=(
+                "SET #status=:terminal_rejected, "
+                "terminal_failure_code=:failure_code, "
+                "terminal_proof_kind=:proof_kind, "
+                "terminal_invocation_lease_expires_at=:expected_lease_expires_at, "
+                "terminal_at=:terminal_at, updated_at=:terminal_at, "
+                "#version=:next_version"
+            ),
+            ConditionExpression=(
+                "entity_type=:entity AND schema_version=:schema "
+                "AND student_id=:student AND command_id=:command_id "
+                "AND fingerprint=:fingerprint AND question_id=:question "
+                "AND account_fence_generation=:generation AND effect_id=:effect_id "
+                "AND effect_kind=:effect_kind AND #status=:expected_status "
+                "AND #version=:effect_version "
+                "AND invocation_owner=:expected_invocation_owner "
+                "AND invocation_lease_expires_at=:expected_lease_expires_at "
+                "AND invocation_lease_expires_at<=:terminal_at"
+            ),
+            ExpressionAttributeNames={
+                "#status": "status",
+                "#version": "version",
+            },
+            ExpressionAttributeValues=values,
+        )
+    except Exception:
+        refreshed = _reread_effect(effect, table=table)
+        if (
+            refreshed
+            and refreshed.get("status") == "terminal_rejected"
+            and refreshed.get("terminal_failure_code") == failure_code
+            and refreshed.get("terminal_proof_kind") == proof_kind
+        ):
+            return QuestionEffectResult(
+                QuestionEffectDisposition.TERMINAL_PROVIDER_REJECTION,
+                effect=refreshed,
+            )
+        if refreshed is not None:
+            return QuestionEffectResult(
+                _effect_disposition(refreshed),
+                effect=refreshed,
+            )
+        return QuestionEffectResult(
+            QuestionEffectDisposition.PRE_PROVIDER_DEPENDENCY_FAILURE
+        )
+    return QuestionEffectResult(
+        QuestionEffectDisposition.TERMINAL_PROVIDER_REJECTION,
+        effect={
+            **effect,
+            "status": "terminal_rejected",
+            "terminal_failure_code": failure_code,
+            "terminal_proof_kind": proof_kind,
+            "terminal_invocation_lease_expires_at": lease_expires_at,
+            "terminal_at": observed,
+            "updated_at": observed,
             "version": effect_version + 1,
         },
     )
@@ -1068,6 +1166,14 @@ def _matching_terminal_failure_proof(
         and effect.get("version") == expected_effect_version + 1
         and effect.get("terminal_failure_code") == failure_code
         and effect.get("terminal_failure_proven_at") == proven_at
+        and (
+            failure_code != "provider_outcome_ambiguous"
+            or (
+                effect.get("terminal_proof_kind") == "expired_invocation_lease"
+                and effect.get("terminal_invocation_lease_expires_at")
+                == expected_effect.get("terminal_invocation_lease_expires_at")
+            )
+        )
         and command.get("status") == "terminal_failed"
         and command.get("version") == expected_command_version + 1
         and command.get("terminal_failure_code") == failure_code
@@ -1122,13 +1228,34 @@ def prove_terminal_question_failure(
             effect.get("terminal_failure_code"), "terminal_failure_code"
         )
         terminal_at = _required_text(effect.get("terminal_at"), "terminal_at")
+        terminal_proof_condition = ""
+        terminal_proof_values: QuestionAdmissionItem = {}
+        if failure_code == "provider_outcome_ambiguous":
+            proof_kind = _required_text(
+                effect.get("terminal_proof_kind"), "terminal_proof_kind"
+            )
+            expired_lease = _required_text(
+                effect.get("terminal_invocation_lease_expires_at"),
+                "terminal_invocation_lease_expires_at",
+            )
+            if proof_kind != "expired_invocation_lease":
+                raise ValueError("question terminal effect proof is stale")
+            terminal_proof_condition = (
+                " AND terminal_proof_kind=:terminal_proof_kind "
+                "AND terminal_invocation_lease_expires_at=:terminal_expired_lease"
+            )
+            terminal_proof_values = {
+                ":terminal_proof_kind": proof_kind,
+                ":terminal_expired_lease": expired_lease,
+            }
         proven_at = _required_text(proven_at, "proven_at")
         if (
             effect.get("entity_type") != "question_provider_effect"
             or effect.get("schema_version") != _EFFECT_SCHEMA_VERSION
             or effect.get("idempotency_digest") != command_id
             or effect.get("status") != "terminal_rejected"
-            or failure_code != "provider_rejected"
+            or failure_code
+            not in {"provider_rejected", "provider_outcome_ambiguous"}
         ):
             raise ValueError("question terminal effect proof is stale")
         command = _read_item(
@@ -1196,6 +1323,7 @@ def prove_terminal_question_failure(
                     "AND effect_kind=:effect_kind AND #status=:terminal_rejected "
                     "AND terminal_failure_code=:failure_code AND terminal_at=:terminal_at "
                     "AND #version=:effect_version"
+                    + terminal_proof_condition
                 ),
                 "ExpressionAttributeNames": {"#status": "status", "#version": "version"},
                 "ExpressionAttributeValues": {
@@ -1207,6 +1335,7 @@ def prove_terminal_question_failure(
                     ":terminal_at": terminal_at,
                     ":effect_version": effect_version,
                     ":next_effect_version": effect_version + 1,
+                    **terminal_proof_values,
                 },
             }
         },
@@ -1835,16 +1964,18 @@ def build_question_admission_transaction(
     counter_condition = (
         "#count=:expected AND #count<:limit"
         if expected_exists
-        else "attribute_not_exists(#count) AND :next<=:limit"
+        else (
+            "(attribute_not_exists(#count) OR #count=:expected) "
+            "AND :next<=:limit"
+        )
     )
     counter_values: QuestionAdmissionItem = {
+        ":expected": expected_counter,
         ":next": next_counter,
         ":limit": limit,
         ":expires": expires_at,
         ":usage_type": "daily_question_submission",
     }
-    if expected_exists:
-        counter_values[":expected"] = expected_counter
     operations: list[QuestionAdmissionItem] = [
         account_deletion_repo.active_fence_condition(student_id, generation),
         {
