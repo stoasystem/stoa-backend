@@ -348,13 +348,14 @@ def test_source_snapshot_is_exhaustive_for_all_git_statuses(
         calls.append(call)
         if call[:3] == ("git", "diff", "--name-status"):
             return _Completed(0, name_status)
+        if call[:2] == ("git", "ls-tree"):
+            assert call[-1] in {
+                ":(literal)deleted.py",
+                ":(literal)old-name.py",
+            }
+            return _Completed(0)
         assert call[:2] == ("git", "show")
         spec = call[2]
-        if spec in {
-            f"{candidate}:deleted.py",
-            f"{candidate}:old-name.py",
-        }:
-            return _Completed(128)
         if spec in blobs:
             return _Completed(0, blobs[spec])
         raise AssertionError(f"unexpected Git read: {spec}")
@@ -489,6 +490,15 @@ def test_source_snapshot_fails_closed_on_required_blob_or_absence_drift(
         call = tuple(argv)
         if call[:3] == ("git", "diff", "--name-status"):
             return _Completed(0, name_status)
+        if call[:2] == ("git", "ls-tree"):
+            path = call[-1].removeprefix(":(literal)")
+            spec = f"candidate:{path}"
+            value = responses.get(spec)
+            return (
+                _Completed(0)
+                if value is None
+                else _Completed(0, path.encode("utf-8") + b"\0")
+            )
         spec = call[2].replace(base, "base").replace(candidate, "candidate")
         value = responses.get(spec)
         return _Completed(128) if value is None else _Completed(0, value)
@@ -497,6 +507,27 @@ def test_source_snapshot_fails_closed_on_required_blob_or_absence_drift(
     monkeypatch.setattr(verifier, "_run", run)
     with pytest.raises(verifier.EvidenceError, match="source snapshot"):
         verifier._source_snapshot(candidate)
+
+
+def test_source_snapshot_fails_when_absence_probe_git_command_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verifier = _load_verifier()
+
+    class _Completed:
+        def __init__(self, returncode: int, stdout: bytes = b"") -> None:
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = b""
+
+    def run(argv: tuple[str, ...], **kwargs: object) -> _Completed:
+        if tuple(argv)[:3] == ("git", "diff", "--name-status"):
+            return _Completed(0, b"D\0deleted.py\0")
+        return _Completed(128)
+
+    monkeypatch.setattr(verifier, "_run", run)
+    with pytest.raises(verifier.EvidenceError, match="absence check failed"):
+        verifier._source_snapshot("c" * 40)
 
 
 @pytest.mark.parametrize(

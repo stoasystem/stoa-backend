@@ -10,7 +10,7 @@ from hashlib import sha256
 import argparse
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import subprocess
 import sys
@@ -821,14 +821,198 @@ def verify_coverage(coverage: Mapping[str, object], observed: set[str]) -> None:
                     raise EvidenceError("coverage observed-node drift")
 
 
-def _source_snapshot(candidate: str) -> list[dict[str, object]]:
-    paths = _git(ROOT, "diff", "--name-only", PHASE_BASE_SHA, candidate).splitlines()
-    rows: list[dict[str, object]] = []
-    for path in sorted(paths):
-        completed = _run(("git", "show", f"{candidate}:{path}"))
-        if completed.returncode:
+_SOURCE_STATUS_NAMES = {
+    "A": "added",
+    "M": "modified",
+    "D": "deleted",
+    "R": "renamed",
+    "C": "copied",
+}
+_SOURCE_PAIR_STATUS_RE = re.compile(r"^([RC])([0-9]{1,3})$")
+
+
+def _source_path(value: str) -> str:
+    path = PurePosixPath(value)
+    if (
+        not value
+        or value.startswith("/")
+        or str(path) != value
+        or any(part in {"", ".", ".."} for part in path.parts)
+    ):
+        raise EvidenceError("source snapshot contains a malformed path")
+    return value
+
+
+def _source_inventory(candidate: str) -> list[dict[str, object]]:
+    completed = _run(
+        (
+            "git",
+            "diff",
+            "--name-status",
+            "-z",
+            "--find-renames",
+            "--find-copies",
+            PHASE_BASE_SHA,
+            candidate,
+        )
+    )
+    if completed.returncode or completed.stderr:
+        raise EvidenceError("source snapshot inventory command failed")
+    try:
+        payload = completed.stdout.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise EvidenceError("source snapshot inventory is not UTF-8") from exc
+    if not payload:
+        return []
+    if not payload.endswith("\0"):
+        raise EvidenceError("source snapshot inventory is truncated")
+
+    fields = payload[:-1].split("\0")
+    inventory: list[dict[str, object]] = []
+    index = 0
+    while index < len(fields):
+        status = fields[index]
+        index += 1
+        if status in {"A", "M", "D"}:
+            if index >= len(fields):
+                raise EvidenceError("source snapshot inventory is malformed")
+            inventory.append({"status": status, "path": _source_path(fields[index])})
+            index += 1
             continue
-        rows.append({"path": path, "bytes": len(completed.stdout), "sha256": sha256(completed.stdout).hexdigest()})
+        match = _SOURCE_PAIR_STATUS_RE.fullmatch(status)
+        if match is None or index + 1 >= len(fields):
+            raise EvidenceError("source snapshot inventory has an unsupported status")
+        kind, similarity_text = match.groups()
+        similarity = int(similarity_text)
+        source_path = _source_path(fields[index])
+        path = _source_path(fields[index + 1])
+        index += 2
+        if similarity > 100 or source_path == path:
+            raise EvidenceError("source snapshot inventory has an ambiguous pair")
+        inventory.append(
+            {
+                "status": kind,
+                "similarity": similarity,
+                "source_path": source_path,
+                "path": path,
+            }
+        )
+
+    targets = [str(row["path"]) for row in inventory]
+    if len(targets) != len(set(targets)):
+        raise EvidenceError("source snapshot inventory has duplicate paths")
+    return sorted(
+        inventory,
+        key=lambda row: (
+            str(row["path"]),
+            str(row["status"]),
+            str(row.get("source_path", "")),
+        ),
+    )
+
+
+def _source_blob(ref: str, path: str) -> dict[str, object]:
+    completed = _run(("git", "show", f"{ref}:{path}"))
+    if completed.returncode or completed.stderr:
+        raise EvidenceError("source snapshot required blob is unreadable")
+    return {
+        "bytes": len(completed.stdout),
+        "sha256": sha256(completed.stdout).hexdigest(),
+    }
+
+
+def _source_blob_must_be_absent(ref: str, path: str) -> None:
+    completed = _run(
+        (
+            "git",
+            "ls-tree",
+            "-z",
+            "--name-only",
+            ref,
+            "--",
+            f":(literal){path}",
+        )
+    )
+    if completed.returncode or completed.stderr:
+        raise EvidenceError("source snapshot absence check failed")
+    if completed.stdout == path.encode("utf-8") + b"\0":
+        raise EvidenceError("source snapshot expected blob absence")
+    if completed.stdout:
+        raise EvidenceError("source snapshot absence check is ambiguous")
+
+
+def _source_row_identity(row: Mapping[str, object]) -> tuple[str, str, str]:
+    status = row.get("status")
+    path = row.get("path")
+    source_path = row.get("source_path", "")
+    if (
+        not isinstance(status, str)
+        or not isinstance(path, str)
+        or not isinstance(source_path, str)
+    ):
+        raise EvidenceError("source snapshot row is malformed")
+    normalized_status = _SOURCE_STATUS_NAMES.get(status, status)
+    if normalized_status not in _SOURCE_STATUS_NAMES.values():
+        raise EvidenceError("source snapshot row has an unsupported status")
+    return normalized_status, source_path, path
+
+
+def _validate_source_snapshot(
+    inventory: Sequence[Mapping[str, object]],
+    rows: Sequence[Mapping[str, object]],
+) -> None:
+    expected = [_source_row_identity(row) for row in inventory]
+    observed = [_source_row_identity(row) for row in rows]
+    if (
+        len(observed) != len(expected)
+        or len(observed) != len(set(observed))
+        or observed != sorted(observed, key=lambda row: (row[2], row[0], row[1]))
+        or observed != expected
+    ):
+        raise EvidenceError("source snapshot path/status/cardinality drift")
+
+
+def _source_snapshot(candidate: str) -> list[dict[str, object]]:
+    inventory = _source_inventory(candidate)
+    rows: list[dict[str, object]] = []
+    for change in inventory:
+        status = str(change["status"])
+        path = str(change["path"])
+        if status in {"A", "M"}:
+            rows.append(
+                {
+                    "status": _SOURCE_STATUS_NAMES[status],
+                    "path": path,
+                    "candidate_blob": _source_blob(candidate, path),
+                }
+            )
+        elif status == "D":
+            _source_blob_must_be_absent(candidate, path)
+            rows.append(
+                {
+                    "status": "deleted",
+                    "path": path,
+                    "candidate_absent": True,
+                    "base_blob": _source_blob(PHASE_BASE_SHA, path),
+                }
+            )
+        elif status in {"R", "C"}:
+            source_path = str(change["source_path"])
+            row: dict[str, object] = {
+                "status": _SOURCE_STATUS_NAMES[status],
+                "similarity": int(change["similarity"]),
+                "source_path": source_path,
+                "path": path,
+            }
+            if status == "R":
+                _source_blob_must_be_absent(candidate, source_path)
+                row["source_candidate_absent"] = True
+            row["base_blob"] = _source_blob(PHASE_BASE_SHA, source_path)
+            row["candidate_blob"] = _source_blob(candidate, path)
+            rows.append(row)
+        else:
+            raise EvidenceError("source snapshot inventory has an unsupported status")
+    _validate_source_snapshot(inventory, rows)
     return rows
 
 
