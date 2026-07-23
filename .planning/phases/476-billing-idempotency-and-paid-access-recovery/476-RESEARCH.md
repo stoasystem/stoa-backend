@@ -639,37 +639,39 @@ The transaction must repeat ownership, price, environment, and conditional comma
 |---|-------|---------|---------------|
 | — | No implementation recommendation relies on an unverified factual claim. Exact staging origin, Stripe sandbox Price IDs/API version, legacy live-row mapping, and email-deliverability source are deliberately left as open questions rather than assumed. | Entire document | Planner must create discovery/checkpoint tasks for these external-state values. |
 
-## Open Questions
+## Open Questions (RESOLVED FOR PLANNING)
 
-1. **What exact staging Web origin and local origin/port list are approved?**
-   - What we know: production defaults include `https://app.stoaedu.ch`, and current local Web commonly uses port 5173. [VERIFIED: codebase grep]
-   - What's unclear: no locked exact staging origin or complete local allowlist is present. [VERIFIED: codebase grep]
-   - Recommendation: Wave 0 should obtain explicit environment values and fail startup when missing; do not infer them from requests.
+No external value is invented here. Each former question is resolved by an executable fail-closed plan boundary, named evidence, and explicit downstream blocking rule.
 
-2. **How are legacy `standard` subscriptions divided between `student` and `family`?**
-   - What we know: current Web maps both plans to `standard`, so the stored tier alone is insufficient. [VERIFIED: codebase grep]
-   - What's unclear: Stripe sandbox/live Price/product history and existing beneficiary intent were not queried. [VERIFIED: environment probe]
-   - Recommendation: produce a migration preview using provider Price/subscription evidence and require operator resolution for ambiguous rows before apply.
+1. **RESOLVED — exact staging Web origin and local origin/port list**
+   - **Executable resolution:** Plan 02 implements structural exact-origin configuration validation and refuses startup when the current environment has no explicit origin list. Plan 27's sandbox preflight verifies the approved non-production Web/API origins without inferring `Origin`, `Host`, forwarded headers, request URLs, or common local ports.
+   - **Required evidence:** the Plan 02 exact-origin negative matrix plus Plan 27's redacted preflight receipt containing environment and origin digests only.
+   - **Blocked until proof:** Plan 06 cannot create a provider Session with missing/invalid origin configuration; Plan 28 cannot start the hosted sandbox journey until Plan 27 reports an approved exact origin.
 
-3. **What is the authoritative “deliverable email” signal?**
-   - What we know: profile verification state exists, but no bounce/suppression/deliverability repository was found. [VERIFIED: codebase grep]
-   - What's unclear: whether deployed SES/provider suppression state is available outside git. [VERIFIED: environment probe]
-   - Recommendation: define a conservative resolver; unknown/bounced/suppressed means in-app-only, never “best effort” email.
+2. **RESOLVED — legacy `standard` division between `student` and `family`**
+   - **Executable resolution:** Plan 04 produces a read-only preview from exact row version, Stripe Price/subscription evidence, and explicit beneficiary-grant evidence. Ambiguous `standard` rows remain `migration_review_required`; apply is prohibited until an operator supplies an evidence-bound disposition.
+   - **Required evidence:** a redacted migration-preview receipt listing canonical, unambiguous, ambiguous, malformed, changed-evidence, and review-required counts plus digests, never customer identifiers or secrets.
+   - **Blocked until proof:** Plan 04 apply blocks on every unresolved/changed row, Plan 14 never initializes historical trial time from request time, and Plan 29 cannot report migration closure while a required row lacks a reviewed evidence-bound disposition.
 
-4. **Does the deployed identity/configuration permit token counting for the configured EU Sonnet 4.6 path?**
-   - What we know: the configured model is an EU cross-Region inference profile; AWS documents `bedrock-mantle` token counting for CRIS-only Claude and says the SDK does not expose that endpoint directly. [VERIFIED: codebase grep] [CITED: https://docs.aws.amazon.com/bedrock/latest/userguide/count-tokens.html]
-   - What's unclear: endpoint availability, IAM `bedrock-mantle:CountTokens`, project resource, and exact model name in the target AWS account were not exercised. [VERIFIED: environment probe]
-   - Recommendation: Wave 0 must run a no-content-leak probe against the exact request model; if unavailable, block hard quota admission rather than silently use character estimates.
+3. **RESOLVED — authoritative deliverable-email signal**
+   - **Executable resolution:** Plan 20 defines a closed conservative resolver: email is eligible only when verification and a positive deliverability source both agree; unknown, bounced, suppressed, malformed, unavailable, or contradictory state is in-app-only. Missing provider state never becomes best-effort email.
+   - **Required evidence:** the Plan 20 eligibility/fan-out matrix records the source class and per-recipient/channel disposition without addresses.
+   - **Blocked until proof:** email intent creation is blocked for every non-positive disposition, while in-app and persistent Web reminder delivery continue independently; Plans 21/25 consume only the resulting safe projection.
 
-5. **How should historical students without a recorded first activation timestamp be migrated?**
-   - What we know: the locked rule is 14 days from first student activation, and current data did not store that invariant. [VERIFIED: 476-CONTEXT.md] [VERIFIED: codebase grep]
-   - What's unclear: whether a trustworthy historical activation event exists in live data. [VERIFIED: environment probe]
-   - Recommendation: preview available evidence and require a documented migration policy; never default to “now” per request.
+4. **RESOLVED — deployed Bedrock token-count capability**
+   - **Executable resolution:** Plan 16 creates and runs the no-content-leak exact-model/profile probe and emits a source/config/IAM-bound receipt. Missing endpoint, missing `bedrock-mantle:CountTokens` authority, model/profile mismatch, malformed count response, or unavailable target yields nonzero `provider_token_count_unavailable`.
+   - **Required evidence:** `docs/security/phase-476-bedrock-token-count-preflight.json` with candidate source SHA, environment/model/profile digests, action name, response-shape status, exact synthetic counts, and zero private content/credentials.
+   - **Blocked until proof:** Plans 17 and 18 depend on Plan 16 and cannot enable governed AI admission without a passing receipt; Plan 29 rejects a missing, stale, mock, or non-passing receipt.
 
-6. **Which Stripe event-destination API version and payment methods are enabled in the sandbox?**
-   - What we know: event shape depends on destination version, and Checkout `complete` can precede final processing. [CITED: https://docs.stripe.com/webhooks] [CITED: https://docs.stripe.com/api/checkout/sessions]
-   - What's unclear: deployed sandbox destination configuration was not accessible from repository state. [VERIFIED: environment probe]
-   - Recommendation: record/pin it in acceptance evidence and test the exact enabled methods; do not generalize card-only timing to asynchronous methods.
+5. **RESOLVED — historical students without first-activation evidence**
+   - **Executable resolution:** Plan 04 inventories trustworthy historical activation evidence and classifies absent/contradictory evidence as `migration_review_required`. Plan 14 implements the locked runtime rule: missing historical proof denies new free usage and never defaults to now. Any operator policy must be explicit, evidence-bound, and applied through Plan 04's digest/version conditions.
+   - **Required evidence:** migration-preview activation-evidence class/count/digest plus Plan 14 missing-evidence and no-default-now tests.
+   - **Blocked until proof:** Plan 14 depends on Plan 04; unresolved historical rows cannot receive new free admission, and Plan 29 cannot claim historical migration completion without an evidence-bound operator disposition.
+
+6. **RESOLVED — Stripe sandbox event-destination version and payment methods**
+   - **Executable resolution:** Plan 27 fails closed unless the sandbox destination, pinned API version, enabled payment methods, three test Prices, test key mode, signed endpoint, and `livemode=false` object/event checks are present. Plan 28 exercises exactly that recorded configuration and does not generalize card timing to unproved asynchronous methods.
+   - **Required evidence:** Plan 27's redacted sandbox-preflight receipt and Plan 28's signed hosted-Checkout receipt, bound to the same source SHAs/configuration digest and containing no secrets/full provider IDs.
+   - **Blocked until proof:** Plan 28 depends on Plan 27 and cannot fall back to mocks, interception, unsigned HTTP, live mode, or an unrecorded destination/payment-method set; Plan 29 rejects absent or mismatched receipts.
 
 ## Environment Availability
 

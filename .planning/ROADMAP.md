@@ -709,7 +709,7 @@ Plans:
 - [ ] 476-26-PLAN.md — Render redacted admin billing recovery and same-command recheck.
 - [ ] 476-27-PLAN.md — Define a mock-disabled, fail-closed Stripe sandbox browser project.
 - [ ] 476-28-PLAN.md — Prove hosted Stripe sandbox checkout through signed webhook and paid access.
-- [ ] 476-29-PLAN.md — Capture source-bound Phase 476 requirement, decision, and security evidence.
+- [ ] 476-29-PLAN.md — Enforce zero open ASVS L1 High threats and capture source-bound Phase 476 requirement, decision, and security evidence.
 **UI hint:** yes
 
 **Required evidence:** Web request payload and idempotency proof, Stripe sandbox request/event IDs, failure-injection results, local/provider reconciliation rows, parent/admin API and browser results, exact-origin negative matrix, and no live charge.
