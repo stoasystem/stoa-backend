@@ -7,9 +7,11 @@ import hmac
 import importlib
 import json
 import time
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any
+from importlib.util import find_spec
+from typing import Any, Protocol, overload, runtime_checkable
 from uuid import uuid4
 
 from boto3.dynamodb.types import TypeSerializer
@@ -22,6 +24,97 @@ from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo, user_repo
 from stoa.models.user import SubscriptionTier
 from stoa.services import entitlement_service, notification_service
+
+
+type SubscriptionItem = dict[str, object]
+
+
+@runtime_checkable
+class _GetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _PutTable(Protocol):
+    def put_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _QueryTable(Protocol):
+    def query(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _HighLevelTransactionTable(Protocol):
+    def transact_write_items(self, **kwargs: object) -> object: ...
+
+
+class _DynamoClient(Protocol):
+    def transact_write_items(self, **kwargs: object) -> object: ...
+
+
+class _DynamoMeta(Protocol):
+    client: _DynamoClient
+
+
+@runtime_checkable
+class _DynamoTable(Protocol):
+    meta: _DynamoMeta
+
+
+def _subscription_mapping(value: object) -> SubscriptionItem:
+    if not isinstance(value, Mapping):
+        raise RuntimeError("subscription data dependency unavailable")
+    result: SubscriptionItem = {}
+    for key, member in value.items():
+        if not isinstance(key, str):
+            raise RuntimeError("subscription data dependency unavailable")
+        result[key] = member
+    return result
+
+
+def _subscription_optional_item(value: object) -> SubscriptionItem | None:
+    return None if value is None else _subscription_mapping(value)
+
+
+def _subscription_get(table: object, **kwargs: object) -> SubscriptionItem:
+    if not isinstance(table, _GetTable):
+        raise RuntimeError("subscription data dependency unavailable")
+    return _subscription_mapping(table.get_item(**kwargs))
+
+
+def _subscription_put(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _PutTable):
+        raise RuntimeError("subscription data dependency unavailable")
+    return table.put_item(**kwargs)
+
+
+def _subscription_query(table: object, **kwargs: object) -> SubscriptionItem:
+    if not isinstance(table, _QueryTable):
+        raise RuntimeError("subscription data dependency unavailable")
+    return _subscription_mapping(table.query(**kwargs))
+
+
+def _subscription_scan(table: object, **kwargs: object) -> SubscriptionItem:
+    if not isinstance(table, _ScanTable):
+        raise RuntimeError("subscription data dependency unavailable")
+    return _subscription_mapping(table.scan(**kwargs))
+
+
+def _subscription_items(response: Mapping[str, object]) -> list[SubscriptionItem]:
+    items = response.get("Items", [])
+    if not isinstance(items, list):
+        raise RuntimeError("subscription data dependency unavailable")
+    return [_subscription_mapping(item) for item in items]
+
+
+def _optional_text(value: object) -> str | None:
+    return value if isinstance(value, str) else None
 
 
 REQUEST_ENTITY = "subscription_request"
@@ -200,7 +293,7 @@ def create_checkout_session(
         "created_at": existing.get("created_at") or now,
         "updated_at": now,
     }
-    get_table().put_item(Item=item)
+    _subscription_put(get_table(), Item=item)
     _put_provider_lookup_rows(
         parent_id=parent_id,
         provider_mode=provider_mode,
@@ -269,10 +362,10 @@ def list_admin_billing(
     )
     items: list[dict[str, Any]] = []
     while True:
-        response = get_table().scan(**scan_kwargs)
+        response = _subscription_scan(get_table(), **scan_kwargs)
         items.extend(
             item
-            for item in response.get("Items", [])
+            for item in _subscription_items(response)
             if item.get("SK") == "SUMMARY"
             and item.get("entity_type") == BILLING_ENTITY
             and _matches(item, "parent_id", parent_id)
@@ -677,7 +770,7 @@ def update_payment_rollout_controls(
         "updated_by": _actor_id(user),
         "updated_at": now,
     }
-    get_table().put_item(Item=item)
+    _subscription_put(get_table(), Item=item)
     return get_payment_rollout_controls(settings)
 
 
@@ -703,7 +796,7 @@ def create_parent_request(
 
     created_at = now_iso()
     request_id = f"subreq-{uuid4().hex}"
-    item = {
+    item: dict[str, Any] = {
         "PK": _request_pk(request_id),
         "SK": "SUMMARY",
         "entity_type": REQUEST_ENTITY,
@@ -935,8 +1028,10 @@ def _require_parent(parent_id: str) -> dict[str, Any]:
 
 
 def _get_request_item(request_id: str) -> dict[str, Any]:
-    response = get_table().get_item(Key={"PK": _request_pk(request_id), "SK": "SUMMARY"})
-    item = response.get("Item")
+    response = _subscription_get(
+        get_table(), Key={"PK": _request_pk(request_id), "SK": "SUMMARY"}
+    )
+    item = _subscription_optional_item(response.get("Item"))
     if not item:
         raise HTTPException(status_code=404, detail="Subscription request not found")
     return item
@@ -957,26 +1052,30 @@ def _list_requests(
     )
     items: list[dict[str, Any]] = []
     while True:
-        response = get_table().scan(**scan_kwargs)
+        response = _subscription_scan(get_table(), **scan_kwargs)
         items.extend(
             item
-            for item in response.get("Items", [])
+            for item in _subscription_items(response)
             if item.get("SK") == "SUMMARY"
             and _matches(item, "status", status)
             and _matches(item, "requested_tier", requested_tier)
             and _matches(item, "parent_id", parent_id)
-            and _within_dates(item.get("created_at"), date_from, date_to)
+            and _within_dates(_optional_text(item.get("created_at")), date_from, date_to)
         )
         last_key = response.get("LastEvaluatedKey")
         if not last_key:
             break
         scan_kwargs["ExclusiveStartKey"] = last_key
-    return sorted(items, key=lambda item: item.get("created_at", ""), reverse=True)[:limit]
+    return sorted(
+        items,
+        key=lambda item: _optional_text(item.get("created_at")) or "",
+        reverse=True,
+    )[:limit]
 
 
 def _latest_open_request(parent_id: str) -> dict[str, Any] | None:
-    response = get_table().get_item(Key=_open_guard_key(parent_id))
-    guard = response.get("Item")
+    response = _subscription_get(get_table(), Key=_open_guard_key(parent_id))
+    guard = _subscription_optional_item(response.get("Item"))
     if not guard or not guard.get("request_id"):
         return None
     item = _get_request_item(str(guard["request_id"]))
@@ -986,10 +1085,14 @@ def _latest_open_request(parent_id: str) -> dict[str, Any] | None:
 
 
 def _list_events(request_id: str) -> list[dict[str, Any]]:
-    response = get_table().query(
+    response = _subscription_query(
+        get_table(),
         KeyConditionExpression=Key("PK").eq(_request_pk(request_id)) & Key("SK").begins_with("EVENT#"),
     )
-    return sorted(response.get("Items", []), key=lambda item: item.get("event_at", ""))
+    return sorted(
+        _subscription_items(response),
+        key=lambda item: _optional_text(item.get("event_at")) or "",
+    )
 
 
 def _update_request_item(
@@ -1086,6 +1189,14 @@ def _apply_request_item(
     return updated
 
 
+@overload
+def _request_response(item: None) -> None: ...
+
+
+@overload
+def _request_response(item: dict[str, Any]) -> dict[str, Any]: ...
+
+
 def _request_response(item: dict[str, Any] | None) -> dict[str, Any] | None:
     if item is None:
         return None
@@ -1153,16 +1264,21 @@ def _refund_idempotency_key(parent_id: str, idempotency_key: str) -> dict[str, s
 
 
 def _get_billing_item(parent_id: str) -> dict[str, Any] | None:
-    response = get_table().get_item(Key=_billing_key(parent_id))
-    item = response.get("Item")
+    response = _subscription_get(get_table(), Key=_billing_key(parent_id))
+    item = _subscription_optional_item(response.get("Item"))
     return dict(item) if item else None
 
 
 def _list_billing_events(parent_id: str, limit: int = 25) -> list[dict[str, Any]]:
-    response = get_table().query(
+    response = _subscription_query(
+        get_table(),
         KeyConditionExpression=Key("PK").eq(_billing_key(parent_id)["PK"]) & Key("SK").begins_with("EVENT#"),
     )
-    events = sorted(response.get("Items", []), key=lambda item: item.get("event_at", ""), reverse=True)
+    events = sorted(
+        _subscription_items(response),
+        key=lambda item: _optional_text(item.get("event_at")) or "",
+        reverse=True,
+    )
     return events[:limit]
 
 
@@ -1437,7 +1553,7 @@ def _require_checkout_allowed(readiness: dict[str, Any], settings: Settings) -> 
 
 
 def _stripe_sdk_available() -> bool:
-    return importlib.util.find_spec("stripe") is not None
+    return find_spec("stripe") is not None
 
 
 def _load_stripe_sdk() -> Any:
@@ -1634,18 +1750,23 @@ def _webhook_readiness(settings: Settings) -> dict[str, Any]:
 
 
 def _last_observed_provider_event() -> dict[str, Any]:
-    response = get_table().scan(
+    response = _subscription_scan(
+        get_table(),
         FilterExpression="entity_type = :entity",
         ExpressionAttributeValues={":entity": BILLING_EVENT_ENTITY},
     )
     events = [
         item
-        for item in response.get("Items", [])
+        for item in _subscription_items(response)
         if item.get("provider") == "stripe" and item.get("event_type") in PROVIDER_EVENT_TYPES
     ]
     if not events:
         return {"eventAt": None, "eventType": None}
-    latest = sorted(events, key=lambda item: item.get("event_at", ""), reverse=True)[0]
+    latest = sorted(
+        events,
+        key=lambda item: _optional_text(item.get("event_at")) or "",
+        reverse=True,
+    )[0]
     return {
         "eventAt": latest.get("event_at"),
         "eventType": latest.get("event_type"),
@@ -1674,7 +1795,8 @@ def _provider_refund_capability_readiness(
 
 def _get_payment_rollout_item() -> dict[str, Any]:
     try:
-        item = get_table().get_item(Key=_payment_rollout_key()).get("Item")
+        response = _subscription_get(get_table(), Key=_payment_rollout_key())
+        item = _subscription_optional_item(response.get("Item"))
     except Exception:
         return {}
     return dict(item) if item else {}
@@ -1834,7 +1956,7 @@ def _put_billing_event(parent_id: str, event: dict[str, Any]) -> None:
         "entity_type": BILLING_EVENT_ENTITY,
         "parent_id": parent_id,
     }
-    get_table().put_item(Item=item)
+    _subscription_put(get_table(), Item=item)
 
 
 def _put_provider_lookup_rows(
@@ -1864,7 +1986,7 @@ def _put_provider_lookup_rows(
             }
         )
     for row in rows:
-        get_table().put_item(Item=row)
+        _subscription_put(get_table(), Item=row)
     return rows
 
 
@@ -1893,7 +2015,8 @@ def _provider_lookup_rows_for_event(
 
 
 def _provider_event_seen(event_id: str) -> bool:
-    return bool(get_table().get_item(Key=_provider_event_key(event_id)).get("Item"))
+    response = _subscription_get(get_table(), Key=_provider_event_key(event_id))
+    return _subscription_optional_item(response.get("Item")) is not None
 
 
 def _parse_provider_event(
@@ -1964,7 +2087,11 @@ def _parent_id_from_provider_object(event_object: dict[str, Any]) -> str | None:
 def _find_parent_id_for_provider_object(event_object: dict[str, Any]) -> str | None:
     ids = _provider_object_ids(event_object)
     for object_type, object_id in ids.items():
-        lookup = get_table().get_item(Key=_provider_lookup_key("stripe", object_type, object_id)).get("Item")
+        response = _subscription_get(
+            get_table(),
+            Key=_provider_lookup_key("stripe", object_type, object_id),
+        )
+        lookup = _subscription_optional_item(response.get("Item"))
         if lookup and lookup.get("parent_id"):
             return str(lookup["parent_id"])
     customer_id = ids.get("customer")
@@ -1975,8 +2102,8 @@ def _find_parent_id_for_provider_object(event_object: dict[str, Any]) -> str | N
         "ExpressionAttributeValues": {":entity": BILLING_ENTITY},
     }
     while True:
-        response = get_table().scan(**scan_kwargs)
-        for item in response.get("Items", []):
+        response = _subscription_scan(get_table(), **scan_kwargs)
+        for item in _subscription_items(response):
             if item.get("SK") != "SUMMARY":
                 continue
             if customer_id and item.get("provider_customer_id") == customer_id:
@@ -2029,7 +2156,10 @@ def _billing_transition(
     event_object: dict[str, Any],
     existing: dict[str, Any],
 ) -> dict[str, Any]:
-    metadata = event_object.get("metadata") if isinstance(event_object.get("metadata"), dict) else {}
+    metadata_value = event_object.get("metadata")
+    metadata: Mapping[str, object] = (
+        metadata_value if isinstance(metadata_value, Mapping) else {}
+    )
     requested_tier = _normalize_tier(metadata.get("requested_tier") or existing.get("requested_tier"))
     status = existing.get("billing_status") or "none"
     subscription_tier = None
@@ -2299,7 +2429,10 @@ def _parse_iso_datetime(value: Any) -> datetime | None:
 
 
 def _get_refund_idempotency(parent_id: str, idempotency_key: str) -> dict[str, Any] | None:
-    item = get_table().get_item(Key=_refund_idempotency_key(parent_id, idempotency_key)).get("Item")
+    response = _subscription_get(
+        get_table(), Key=_refund_idempotency_key(parent_id, idempotency_key)
+    )
+    item = _subscription_optional_item(response.get("Item"))
     return dict(item) if item else None
 
 
@@ -2339,7 +2472,8 @@ def _record_refund_idempotency_failure(
     actor: str,
     at: str,
 ) -> None:
-    get_table().put_item(
+    _subscription_put(
+        get_table(),
         Item=_refund_idempotency_item(
             parent_id=parent_id,
             idempotency_key=idempotency_key,
@@ -2363,7 +2497,8 @@ def _record_refund_idempotency_success(
     at: str,
     provider_refund_id: str | None,
 ) -> None:
-    get_table().put_item(
+    _subscription_put(
+        get_table(),
         Item=_refund_idempotency_item(
             parent_id=parent_id,
             idempotency_key=idempotency_key,
@@ -2939,7 +3074,7 @@ def _record_manual_override(
         "created_at": existing.get("created_at") or at,
         "updated_at": at,
     }
-    get_table().put_item(Item=item)
+    _subscription_put(get_table(), Item=item)
     _put_billing_event(
         parent_id,
         {
@@ -3041,7 +3176,7 @@ def _within_dates(value: str | None, date_from: str | None, date_to: str | None)
 
 def _transact_write(operations: list[dict[str, Any]]) -> None:
     table = get_table()
-    if hasattr(table, "transact_write_items"):
+    if isinstance(table, _HighLevelTransactionTable):
         table.transact_write_items(TransactItems=operations)
         return
 
@@ -3102,6 +3237,8 @@ def _transact_write(operations: list[dict[str, Any]]) -> None:
         else:
             raise ValueError(f"Unsupported transaction operation: {operation}")
 
+    if not isinstance(table, _DynamoTable):
+        raise RuntimeError("DynamoDB transaction client is unavailable")
     table.meta.client.transact_write_items(TransactItems=client_ops)
 
 
