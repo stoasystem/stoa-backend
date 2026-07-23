@@ -1,8 +1,8 @@
 ---
 phase: 475-transactional-usage-assignment-and-relationship-consistency
-reviewed: 2026-07-23T10:16:51Z
+reviewed: 2026-07-23T10:53:26Z
 depth: standard
-files_reviewed: 59
+files_reviewed: 60
 files_reviewed_list:
   - docs/security/phase-475-evidence-results.json
   - docs/security/phase-475-evidence.md
@@ -63,139 +63,108 @@ files_reviewed_list:
   - tests/test_teacher_dispatch.py
   - tests/test_teacher_reply_sla.py
   - tests/test_usage_ledger.py
+  - tests/dynamodb_expression_assertions.py
 findings:
-  critical: 4
-  warning: 4
+  critical: 1
+  warning: 3
   info: 0
-  total: 8
+  total: 4
 status: issues_found
 ---
 
 # Phase 475: Code Review Report
 
-**Reviewed:** 2026-07-23T10:16:51Z
+**Reviewed:** 2026-07-23T10:53:26Z
 **Depth:** standard
-**Files Reviewed:** 59
+**Files Reviewed:** 60
 **Status:** issues_found
 
 ## Summary
 
-The submitted implementation still has four release-blocking correctness or security defects. Two DynamoDB transactions are invalid against the real service, successful or not-yet-invoked question provider effects can become permanently non-convergent, and relationship status transitions can reactivate authorization projections without atomically proving that both accounts remain active. The evidence gate and its in-memory transaction doubles conceal several of these failures.
+Iteration 2 confirms CR-02, CR-03, CR-04, WR-02, and WR-03 are closed: DynamoDB expression placeholders now have exact closure, terminal compensation binds `:one`, relationship lifecycle transitions carry both account/profile observations, and every selected dispatch assignment is fenced by the teacher's current lifecycle state.
+
+CR-01 remains release-blocking because an expired `invoking` lease can repeat a provider call after the first call succeeded but the process died before storing its result. WR-01 therefore still overstates provider convergence, and its published evidence remains bound to the pre-fix candidate. WR-04's pagination fix still stops before the Python eligibility filter. The dispatch fix also introduces one new exact-file mypy failure (WR-05).
+
+The 33 reviewed test modules pass (`655 passed`), and the focused seven-module fix regression passes (`150 passed`). Those suites do not exercise the two residual failure shapes below.
 
 ## Narrative Findings (AI reviewer)
 
 ## Critical Issues
 
-### CR-01 [BLOCKER]: Ambiguous provider-effect states are terminally stuck instead of converging
+### CR-01 [BLOCKER]: Expired invocation leases can call the provider twice
 
-**File:** `src/stoa/db/repositories/question_submission_repo.py:674`
-**Related:** `src/stoa/db/repositories/question_submission_repo.py:1229`, `src/stoa/routers/questions.py:388`, `tests/test_phase475_question_effect_recovery.py:475`
+**File:** `src/stoa/db/repositories/question_submission_repo.py:845`
+**Related:** `src/stoa/routers/questions.py:518`, `src/stoa/routers/questions.py:580`, `src/stoa/db/repositories/question_submission_repo.py:1364`
 
-**Issue:** `begin_question_effect()` durably writes `status="inflight"` before provider invocation. If the transaction commits but its response is lost, the reread returns that inflight receipt, the route refuses to invoke the provider, and replay returns the same pending question forever. If the intent write fails before commit, replay observes no receipt and `_recover_question_effect_receipts()` simply skips the missing effect, so that path is also permanently pending. Separately, after a provider succeeds, any pre-commit failure in `record_question_effect_result()` discards the already validated result by changing the receipt to `provider_outcome_unknown`; no worker can ever complete it. The tests at lines 475-521 explicitly assert these non-convergent outcomes (`provider_calls == 0` for a committed intent and `ai_response is None` after a successful provider call), contrary to D-01's backend-convergence contract.
+**Issue:** The durable state changes to `invoking` before the provider call, but that state does not prove whether invocation has started or completed. Every request generates a new random owner. Once `invocation_lease_expires_at` passes, `_claim_question_effect_invocation()` allows that new owner to replace the old owner and returns `INVOKE_PROVIDER`; `_recover_missing_question_effect()` then calls the provider again. A process death after the provider accepted/completed the first invocation but before `record_question_effect_result()` durably stored the result therefore duplicates the provider effect.
 
-**Fix:** Give each effect a retryable invocation lease/owner and explicit invocation phases. A replay or reconciler must be able to:
+The existing harness reproduces this deterministically: terminate the first request immediately after `get_ai_answer()` is entered, expire the stored lease, and replay the same submission. The effect moves `invoking -> completed`, but `provider_calls` moves from 1 to 2. The same outcome follows when all three immediate result-persistence attempts fail: only the in-memory validated result exists, so later lease reclaim cannot recover it without reinvoking.
 
-1. retry creation of a missing pre-provider intent;
-2. acquire or recover an expired intent whose provider invocation has not started;
-3. retry persistence of the in-memory validated provider result until it is durably `result_ready`; and
-4. reserve `provider_outcome_unknown` only for an actually ambiguous provider invocation, with an operator/reconciliation path to a terminal outcome.
-
-Replace the two permanent-pending tests with bounded eventual-convergence assertions while retaining the no-duplicate-provider invariant.
-
-### CR-02 [BLOCKER]: Every below-limit rate admission is rejected by DynamoDB validation
-
-**File:** `src/stoa/services/rate_limit.py:412`
-
-**Issue:** The counter update supplies `":limit"` in `ExpressionAttributeValues` at line 443, but neither its update nor condition expression references that token. DynamoDB rejects unused expression attribute values with `ValidationException`, so a real below-limit admission transaction cannot commit. The in-memory test double accepts the malformed request and even asserts that the unused token exists, masking the production failure.
-
-**Fix:**
+**Fix:** Make provider replay idempotent at the provider boundary. Pass the deterministic `effect_id` as the provider idempotency key (or persist a provider request ID and use a provider status/result lookup), so reclaim always retrieves the original invocation result:
 
 ```python
-"ExpressionAttributeValues": {
-    ":expected": counter_value,
-    ":next": next_counter_value,
-    ":expires": expires_at_value,
-    ":counter_type": "rate_counter",
-    ":owner": owner,
-    ":period": period,
-    ":generation": generation,
-}
+provider_result = provider.invoke_or_replay(
+    idempotency_key=str(effect["effect_id"]),
+    request=provider_request,
+)
 ```
 
-Alternatively, reference `:limit` in a genuine atomic cap condition. Add a test that rejects any unused or missing DynamoDB expression placeholder.
-
-### CR-03 [BLOCKER]: Terminal submission compensation cannot execute on DynamoDB
-
-**File:** `src/stoa/db/repositories/question_submission_repo.py:2240`
-
-**Issue:** The usage-ledger condition contains `quantity=:one` at line 2249, but that update's `ExpressionAttributeValues` omits `":one"`. The `:one` supplied to the preceding counter operation is scoped to that operation and is not available here. Real DynamoDB therefore rejects the entire transaction, preventing the promised exact-once allowance and ledger reversal after proven terminal provider failure.
-
-**Fix:**
-
-```python
-"ExpressionAttributeValues": {
-    ":ledger": ledger_identity,
-    ":student": student_id,
-    ":command_id": current.command_id,
-    ":question": current.question_id,
-    ":one": 1,
-    ":active": "active",
-    ":reversed": "reversed",
-    ":reversal": reversal_id,
-    ":reversed_at": reversed_at,
-}
-```
-
-Exercise this transaction with DynamoDB-compatible expression validation before treating D-03 as satisfied.
-
-### CR-04 [BLOCKER]: Relationship status transitions can reactivate permissions during account deletion
-
-**File:** `src/stoa/db/repositories/user_repo.py:718`
-**Related:** `src/stoa/routers/admin.py:2305`
-
-**Issue:** Initial parent binding creation atomically includes parent/student active-account fences and active profile observations, but the status-transition transaction contains only the two relationship updates and the student's profile update. The admin endpoint accepts transitions back to `active`. A parent or student can therefore become inactive or enter deletion after the pre-read at line 837 while the transaction still commits an active forward edge, reverse edge, and student projection. Exact relationship status/version CAS does not protect the independently changing account lifecycle, so authorization data and cross-account identity can be revived during deletion.
-
-**Fix:** Pass both observed fence generations and both observed active profile versions into `build_parent_binding_status_transition_transaction()`. In the same transaction, add both `active_fence_condition()` checks and active parent/student profile observation checks, including `account_status="active"`, before any relationship update. Map lifecycle loss to a conflict/retryable result and add races for both participants and every allowed status transition.
+Keep `intent_ready` reclaimable before provider admission, but never blindly reinvoke an ambiguous `invoking` row when the provider cannot deduplicate or query it. Add a crash-after-provider-before-receipt test that expires the lease, converges to the original result, and asserts `provider_calls == 1`.
 
 ## Warnings
 
-### WR-01 [WARNING]: The evidence registry marks the broken provider convergence contract as PASS
+### WR-01 [WARNING]: Evidence still reports provider convergence without the ambiguous-invocation proof
 
-**File:** `scripts/verify_phase475.py:765`
+**File:** `scripts/verify_phase475.py:766`
+**Related:** `tests/test_phase475_question_effect_recovery.py:495`, `docs/security/phase-475-evidence-results.json:2`, `docs/security/phase-475-evidence-results.json:1191`
 
-**Issue:** D-01 and legacy CR-01 are mapped only to successful receipt recovery and a generic pending-response test. The registry omits the scoped tests at `tests/test_phase475_question_effect_recovery.py:475-521` that deliberately prove permanent `provider_outcome_unknown` and `inflight` states. Consequently the published evidence can report PASS while the decision contract it claims to verify is false.
+**Issue:** The new D-01/CR-01 selectors prove one result-write retry, same-request intent response loss, and missing-intent recovery. None kills the worker after the provider has accepted the call and then replays after a different owner's lease reclaim, which is the CR-01 failure above. The registry can therefore render D-01 and CR-01 as PASS while provider invocation is duplicated.
 
-**Fix:** Register failure-window tests that require eventual completion or proven terminal compensation after intent response loss, missing-intent dependency recovery, and result-receipt failure. A test that merely returns a queryable pending row must not satisfy the convergence node.
+The checked evidence artifact was also not regenerated after the fixes: it is still bound to candidate `677edf994deaee4aa0faef91eb38e2a3a07899ea` and records the removed test `test_result_receipt_failure_closes_unknown_state_and_never_blindly_reinvokes`. It does not attest commits `e44feda`, `47fe136`, `a9a362d`, or `2e74069`.
 
-### WR-02 [WARNING]: Transaction test doubles do not validate DynamoDB expressions
+**Fix:** Add the crash/lease-reclaim/no-duplicate node described in CR-01 to both D-01 and CR-01, require it in the registry-closure test, then capture and publish evidence from a clean candidate containing all review fixes.
 
-**File:** `tests/test_phase475_rate_limit.py:71`
-**Related:** `tests/test_phase475_question_reconciliation.py:181`
+### WR-04 [WARNING]: Pagination still stops before business eligibility filtering
 
-**Issue:** The rate-limit fake manually interprets only selected condition shapes, while the reconciliation fake reads selected values without checking that every placeholder referenced by an expression is defined and every supplied placeholder is used. This makes both CR-02 and CR-03 pass locally and gives the evidence verifier a false production-equivalence signal.
+**File:** `src/stoa/services/teacher_dispatch_service.py:573`
+**Related:** `src/stoa/services/teacher_dispatch_service.py:44`, `src/stoa/services/teacher_dispatch_service.py:74`, `tests/test_teacher_dispatch.py:204`
 
-**Fix:** Add a shared assertion for every fake transaction operation that tokenizes all expressions and requires exact closure over `ExpressionAttributeNames` and `ExpressionAttributeValues`. Keep at least one DynamoDB Local or live-AWS contract test for service-level expression semantics.
+**Issue:** `_scan_filtered_items()` stops when it has collected `limit` rows matching only `SK = PROFILE` or `SK = META`. Teacher role/lifecycle/fence/availability and dispatch-question markers are filtered afterward. If the first evaluated page contains `limit` student/inactive profiles or ordinary question META rows, the helper returns without reading `LastEvaluatedKey`; the caller then filters every collected row out and misses eligible teachers/questions on the next page.
 
-### WR-03 [WARNING]: Dispatch treats inactive teacher accounts as available candidates
+A deterministic `limit=1` probe with one student profile followed by one active teacher returns `teachers=[]` after one scan. The equivalent ordinary-question/dispatch-question probe returns `questions=[]` after one scan. The added sparse-page test uses an empty first `Items` page, so it does not cover this boundary.
 
-**File:** `src/stoa/services/teacher_dispatch_service.py:44`
-**Related:** `src/stoa/services/teacher_dispatch_service.py:414`
+**Fix:** Paginate until the caller's final predicate has produced `limit` accepted rows, not until the coarse DynamoDB filter has produced `limit` rows. Add tests whose first non-empty page contains only rejected profile/META rows and whose second page contains an eligible row.
 
-**Issue:** Candidate loading filters only `role`, normalization drops account lifecycle state, and missing dispatch availability defaults to `"available"`. An inactive/deleting teacher profile with a teacher/admin role can therefore be selected and persisted as the assigned teacher. Later takeover fencing does not undo the dead initial assignment, which can delay the student until timeout.
+### WR-05 [WARNING]: Dispatch conditions regress the phase's exact mypy gate
 
-**Fix:** Require an active account fence and active profile lifecycle state when assigning a teacher, not just when the teacher later takes over. Preserve `account_status` in normalization, default missing availability to unavailable, and add inactive/deleting-profile dispatch tests.
+**File:** `src/stoa/db/repositories/question_repo.py:851`
+**Related:** `src/stoa/db/repositories/question_repo.py:877`
 
-### WR-04 [WARNING]: Single-page filtered scans silently omit dispatch candidates and questions
+**Issue:** `additional_conditions` is typed as `tuple[Mapping[str, object], ...]`, but it is expanded into a transaction list inferred as `list[dict[str, Any]]`. The exact 22-runtime-file command now fails:
 
-**File:** `src/stoa/services/teacher_dispatch_service.py:44`
-**Related:** `src/stoa/services/teacher_dispatch_service.py:62`
+```text
+src/stoa/db/repositories/question_repo.py:877: error:
+List item 1 has incompatible type "tuple[Mapping[str, object], ...]";
+expected "dict[str, Any]"  [list-item]
+```
 
-**Issue:** Both helpers issue one DynamoDB `Scan` with `Limit=limit` and ignore `LastEvaluatedKey`. DynamoDB applies `Limit` to evaluated items before the filter, so a table whose first page contains unrelated rows can return fewer than `limit` matches—or none—despite eligible teachers or dispatch questions existing later. This changes dispatch and SLA behavior, not merely performance.
+This was introduced by `a9a362d` and invalidates the unfiltered zero-diagnostic mypy property claimed by the Phase 475 evidence gate.
 
-**Fix:** Paginate with `ExclusiveStartKey` until the requested number of matching rows is collected or the scan is exhausted. Add sparse-table tests where the first evaluated page has zero matching profiles/questions.
+**Fix:** Use the repository's concrete transaction-operation type for the parameter and list, or validate/copy mappings before expansion:
+
+```python
+additional_conditions: tuple[QuestionItem, ...] = ()
+operations: list[QuestionItem] = [
+    active_fence,
+    *additional_conditions,
+    question_update,
+]
+```
+
+Re-run the exact 22-file mypy gate after the change.
 
 ---
 
-_Reviewed: 2026-07-23T10:16:51Z_
+_Reviewed: 2026-07-23T10:53:26Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
