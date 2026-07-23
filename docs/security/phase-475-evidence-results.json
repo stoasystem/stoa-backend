@@ -1,138 +1,6 @@
 {
-  "candidate_sha": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc",
+  "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
   "coverage": {
-    "audit_findings": [
-      {
-        "id": "DATA-001",
-        "result": "PASS",
-        "selectors": [
-          {
-            "observed_nodes": [
-              "tests/test_phase475_question_admission.py::test_concurrent_identical_keys_commit_one_complete_admission"
-            ],
-            "selector": "tests/test_phase475_question_admission.py::test_concurrent_identical_keys_commit_one_complete_admission"
-          },
-          {
-            "observed_nodes": [
-              "tests/test_phase475_question_admission.py::test_commit_then_timeout_reconciles_to_resume"
-            ],
-            "selector": "tests/test_phase475_question_admission.py::test_commit_then_timeout_reconciles_to_resume"
-          },
-          {
-            "observed_nodes": [
-              "tests/test_phase475_question_reconciliation.py::test_each_terminal_transaction_boundary_fails_without_partial_compensation"
-            ],
-            "selector": "tests/test_phase475_question_reconciliation.py::test_each_terminal_transaction_boundary_fails_without_partial_compensation"
-          },
-          {
-            "observed_nodes": [
-              "tests/test_phase475_question_reconciliation.py::test_terminal_reversal_is_exact_once_and_attachment_storage_are_unchanged"
-            ],
-            "selector": "tests/test_phase475_question_reconciliation.py::test_terminal_reversal_is_exact_once_and_attachment_storage_are_unchanged"
-          }
-        ]
-      },
-      {
-        "id": "BUG-002",
-        "result": "PASS",
-        "selectors": [
-          {
-            "observed_nodes": [
-              "tests/test_phase475_teacher_takeover.py::test_two_barrier_claimants_produce_one_owner_session_and_private_loser"
-            ],
-            "selector": "tests/test_phase475_teacher_takeover.py::test_two_barrier_claimants_produce_one_owner_session_and_private_loser"
-          },
-          {
-            "observed_nodes": [
-              "tests/test_phase475_teacher_takeover_effect.py::test_begin_dependency_failure_then_retry_creates_one_notification"
-            ],
-            "selector": "tests/test_phase475_teacher_takeover_effect.py::test_begin_dependency_failure_then_retry_creates_one_notification"
-          },
-          {
-            "observed_nodes": [
-              "tests/test_phase475_teacher_takeover_effect.py::test_losing_claim_never_reaches_notification_effect"
-            ],
-            "selector": "tests/test_phase475_teacher_takeover_effect.py::test_losing_claim_never_reaches_notification_effect"
-          }
-        ]
-      },
-      {
-        "id": "DATA-003",
-        "result": "PASS",
-        "selectors": [
-          {
-            "observed_nodes": [
-              "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-254d3518b58d10c8]",
-              "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-41d95aaae1c0a2fe]",
-              "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-44a7cb3d9218709c]",
-              "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-fcbf9e9a0326ed2f]"
-            ],
-            "selector": "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged"
-          },
-          {
-            "observed_nodes": [
-              "tests/test_phase475_parent_binding_reconciliation.py::test_changed_after_preview_is_skipped_and_new_data_is_preserved"
-            ],
-            "selector": "tests/test_phase475_parent_binding_reconciliation.py::test_changed_after_preview_is_skipped_and_new_data_is_preserved"
-          },
-          {
-            "observed_nodes": [
-              "tests/test_phase475_parent_binding_reconciliation.py::test_one_sided_apply_is_atomic_and_replay_is_zero_write"
-            ],
-            "selector": "tests/test_phase475_parent_binding_reconciliation.py::test_one_sided_apply_is_atomic_and_replay_is_zero_write"
-          }
-        ]
-      },
-      {
-        "id": "BUG-006",
-        "result": "PASS",
-        "selectors": [
-          {
-            "observed_nodes": [
-              "tests/test_phase475_rate_limit.py::test_repeating_429_requests_leave_counter_exactly_at_limit"
-            ],
-            "selector": "tests/test_phase475_rate_limit.py::test_repeating_429_requests_leave_counter_exactly_at_limit"
-          },
-          {
-            "observed_nodes": [
-              "tests/test_phase475_rate_limit.py::test_two_concurrent_distinct_requests_compete_for_one_final_slot"
-            ],
-            "selector": "tests/test_phase475_rate_limit.py::test_two_concurrent_distinct_requests_compete_for_one_final_slot"
-          },
-          {
-            "observed_nodes": [
-              "tests/test_phase475_rate_limit.py::test_provider_failure_retry_replays_one_count_and_distinct_operation_is_evaluated"
-            ],
-            "selector": "tests/test_phase475_rate_limit.py::test_provider_failure_retry_replays_one_count_and_distinct_operation_is_evaluated"
-          }
-        ]
-      },
-      {
-        "id": "BUG-004",
-        "result": "PASS",
-        "selectors": [
-          {
-            "observed_nodes": [
-              "tests/test_phase475_mistake_answer.py::test_wrong_answer_round_trips_exactly_after_normalization[case-33e3e0865f1a8444]",
-              "tests/test_phase475_mistake_answer.py::test_wrong_answer_round_trips_exactly_after_normalization[case-fc774eb4f32fba3d]"
-            ],
-            "selector": "tests/test_phase475_mistake_answer.py::test_wrong_answer_round_trips_exactly_after_normalization"
-          },
-          {
-            "observed_nodes": [
-              "tests/test_phase475_mistake_answer.py::test_legacy_missing_answer_is_explicit_unknown_and_never_uses_standard_answer"
-            ],
-            "selector": "tests/test_phase475_mistake_answer.py::test_legacy_missing_answer_is_explicit_unknown_and_never_uses_standard_answer"
-          },
-          {
-            "observed_nodes": [
-              "tests/test_phase475_mistake_answer.py::test_route_rejects_unsupported_answer_before_attempt_write_and_redacts_value"
-            ],
-            "selector": "tests/test_phase475_mistake_answer.py::test_route_rejects_unsupported_answer_before_attempt_write_and_redacts_value"
-          }
-        ]
-      }
-    ],
     "decisions": [
       {
         "id": "D-01",
@@ -143,6 +11,12 @@
               "tests/test_phase475_question_replay.py::test_ai_failure_returns_queryable_durable_pending_question"
             ],
             "selector": "tests/test_phase475_question_replay.py::test_ai_failure_returns_queryable_durable_pending_question"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider"
+            ],
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider"
           }
         ]
       },
@@ -152,9 +26,15 @@
         "selectors": [
           {
             "observed_nodes": [
-              "tests/test_phase475_question_replay.py::test_lost_response_retry_returns_original_without_repeating_effects"
+              "tests/test_phase475_question_admission.py::test_concurrent_identical_keys_commit_one_complete_admission"
             ],
-            "selector": "tests/test_phase475_question_replay.py::test_lost_response_retry_returns_original_without_repeating_effects"
+            "selector": "tests/test_phase475_question_admission.py::test_concurrent_identical_keys_commit_one_complete_admission"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_effect_recovery.py::test_committed_completion_response_loss_reconciles_exact_original_result"
+            ],
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_committed_completion_response_loss_reconciles_exact_original_result"
           }
         ]
       },
@@ -162,6 +42,12 @@
         "id": "D-03",
         "result": "PASS",
         "selectors": [
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay"
+            ],
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay"
+          },
           {
             "observed_nodes": [
               "tests/test_phase475_question_reconciliation.py::test_terminal_reversal_is_exact_once_and_attachment_storage_are_unchanged"
@@ -200,6 +86,12 @@
         "selectors": [
           {
             "observed_nodes": [
+              "tests/test_phase475_teacher_takeover.py::test_two_barrier_claimants_produce_one_owner_session_and_private_loser"
+            ],
+            "selector": "tests/test_phase475_teacher_takeover.py::test_two_barrier_claimants_produce_one_owner_session_and_private_loser"
+          },
+          {
+            "observed_nodes": [
               "tests/test_phase475_teacher_takeover_effect.py::test_losing_claim_never_reaches_notification_effect"
             ],
             "selector": "tests/test_phase475_teacher_takeover_effect.py::test_losing_claim_never_reaches_notification_effect"
@@ -236,6 +128,17 @@
         "selectors": [
           {
             "observed_nodes": [
+              "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-254d3518b58d10c8]",
+              "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-41d95aaae1c0a2fe]",
+              "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-44a7cb3d9218709c]",
+              "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-529c668ee236db2a]",
+              "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-54761acc2c65bcec]",
+              "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-fcbf9e9a0326ed2f]"
+            ],
+            "selector": "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged"
+          },
+          {
+            "observed_nodes": [
               "tests/test_phase475_parent_binding_transaction.py::test_conflicting_parent_is_preserved_and_authorization_remains_denied"
             ],
             "selector": "tests/test_phase475_parent_binding_transaction.py::test_conflicting_parent_is_preserved_and_authorization_remains_denied"
@@ -263,6 +166,12 @@
               "tests/test_phase475_parent_binding_reconciliation.py::test_changed_after_preview_is_skipped_and_new_data_is_preserved"
             ],
             "selector": "tests/test_phase475_parent_binding_reconciliation.py::test_changed_after_preview_is_skipped_and_new_data_is_preserved"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_parent_binding_reconciliation.py::test_one_sided_apply_is_atomic_and_replay_is_zero_write"
+            ],
+            "selector": "tests/test_phase475_parent_binding_reconciliation.py::test_one_sided_apply_is_atomic_and_replay_is_zero_write"
           }
         ]
       },
@@ -284,9 +193,9 @@
         "selectors": [
           {
             "observed_nodes": [
-              "tests/test_phase475_rate_limit.py::test_provider_failure_retry_replays_one_count_and_distinct_operation_is_evaluated"
+              "tests/test_phase475_rate_limit.py::test_replay_returns_original_receipt_after_intervening_accepted_and_rejected_traffic"
             ],
-            "selector": "tests/test_phase475_rate_limit.py::test_provider_failure_retry_replays_one_count_and_distinct_operation_is_evaluated"
+            "selector": "tests/test_phase475_rate_limit.py::test_replay_returns_original_receipt_after_intervening_accepted_and_rejected_traffic"
           }
         ]
       },
@@ -294,6 +203,13 @@
         "id": "D-14",
         "result": "PASS",
         "selectors": [
+          {
+            "observed_nodes": [
+              "tests/test_phase475_mistake_answer.py::test_wrong_answer_round_trips_exactly_after_normalization[case-33e3e0865f1a8444]",
+              "tests/test_phase475_mistake_answer.py::test_wrong_answer_round_trips_exactly_after_normalization[case-fc774eb4f32fba3d]"
+            ],
+            "selector": "tests/test_phase475_mistake_answer.py::test_wrong_answer_round_trips_exactly_after_normalization"
+          },
           {
             "observed_nodes": [
               "tests/test_phase475_mistake_answer.py::test_legacy_missing_answer_is_explicit_unknown_and_never_uses_standard_answer"
@@ -308,9 +224,9 @@
         "selectors": [
           {
             "observed_nodes": [
-              "tests/test_phase475_delivery_begin.py::test_dependency_failure_remains_recoverable_then_healthy_retry_delivers_once"
+              "tests/test_phase475_delivery_begin.py::test_ordered_fence_failure_plus_strong_deleted_fence_cancels_without_provider"
             ],
-            "selector": "tests/test_phase475_delivery_begin.py::test_dependency_failure_remains_recoverable_then_healthy_retry_delivers_once"
+            "selector": "tests/test_phase475_delivery_begin.py::test_ordered_fence_failure_plus_strong_deleted_fence_cancels_without_provider"
           }
         ]
       },
@@ -323,76 +239,6 @@
               "tests/test_phase475_completed_deletion_replay.py::test_real_endpoint_replays_stored_terminal_receipt_with_zero_new_effects"
             ],
             "selector": "tests/test_phase475_completed_deletion_replay.py::test_real_endpoint_replays_stored_terminal_receipt_with_zero_new_effects"
-          }
-        ]
-      }
-    ],
-    "phase473_follow_ups": [
-      {
-        "id": "profile-version-cas",
-        "result": "PASS",
-        "selectors": [
-          {
-            "observed_nodes": [
-              "tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes"
-            ],
-            "selector": "tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes"
-          },
-          {
-            "observed_nodes": [
-              "tests/test_phase475_profile_version_cas.py::test_same_sensitive_field_race_always_leaves_scrubbed_linkage_absent[case-8a9d03258664306c]",
-              "tests/test_phase475_profile_version_cas.py::test_same_sensitive_field_race_always_leaves_scrubbed_linkage_absent[case-e919c647738d67f5]"
-            ],
-            "selector": "tests/test_phase475_profile_version_cas.py::test_same_sensitive_field_race_always_leaves_scrubbed_linkage_absent"
-          },
-          {
-            "observed_nodes": [
-              "tests/test_phase475_profile_version_cas.py::test_profile_writer_registry_is_closed_against_direct_source_mutations"
-            ],
-            "selector": "tests/test_phase475_profile_version_cas.py::test_profile_writer_registry_is_closed_against_direct_source_mutations"
-          }
-        ]
-      },
-      {
-        "id": "delivery-begin-dependency-classification",
-        "result": "PASS",
-        "selectors": [
-          {
-            "observed_nodes": [
-              "tests/test_phase475_delivery_begin.py::test_dependency_failure_remains_recoverable_then_healthy_retry_delivers_once"
-            ],
-            "selector": "tests/test_phase475_delivery_begin.py::test_dependency_failure_remains_recoverable_then_healthy_retry_delivers_once"
-          },
-          {
-            "observed_nodes": [
-              "tests/test_phase475_delivery_begin.py::test_ordered_fence_failure_plus_strong_deleted_fence_cancels_without_provider"
-            ],
-            "selector": "tests/test_phase475_delivery_begin.py::test_ordered_fence_failure_plus_strong_deleted_fence_cancels_without_provider"
-          },
-          {
-            "observed_nodes": [
-              "tests/test_phase475_delivery_begin.py::test_ordered_intent_condition_loss_is_retryable_and_never_mislabeled"
-            ],
-            "selector": "tests/test_phase475_delivery_begin.py::test_ordered_intent_condition_loss_is_retryable_and_never_mislabeled"
-          }
-        ]
-      },
-      {
-        "id": "completed-deletion-replay",
-        "result": "PASS",
-        "selectors": [
-          {
-            "observed_nodes": [
-              "tests/test_phase475_completed_deletion_replay.py::test_real_endpoint_replays_stored_terminal_receipt_with_zero_new_effects"
-            ],
-            "selector": "tests/test_phase475_completed_deletion_replay.py::test_real_endpoint_replays_stored_terminal_receipt_with_zero_new_effects"
-          },
-          {
-            "observed_nodes": [
-              "tests/test_phase475_completed_deletion_replay.py::test_terminal_replay_preserves_fingerprint_and_verified_identity_conflicts[case-26fe64099a2c0fad]",
-              "tests/test_phase475_completed_deletion_replay.py::test_terminal_replay_preserves_fingerprint_and_verified_identity_conflicts[case-d6e55e6fd29db54c]"
-            ],
-            "selector": "tests/test_phase475_completed_deletion_replay.py::test_terminal_replay_preserves_fingerprint_and_verified_identity_conflicts"
           }
         ]
       }
@@ -416,9 +262,23 @@
           },
           {
             "observed_nodes": [
-              "tests/test_phase475_question_reconciliation.py::test_each_terminal_transaction_boundary_fails_without_partial_compensation"
+              "tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question[completed-later-resolution-replay]",
+              "tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question[completed-replay]",
+              "tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question[processing-replay]"
             ],
-            "selector": "tests/test_phase475_question_reconciliation.py::test_each_terminal_transaction_boundary_fails_without_partial_compensation"
+            "selector": "tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider"
+            ],
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay"
+            ],
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay"
           },
           {
             "observed_nodes": [
@@ -440,15 +300,30 @@
           },
           {
             "observed_nodes": [
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-123dee096bdb6bd3-case-81c4f78aecb54176]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-76c3b52e799a41ba-case-81c4f78aecb54176]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-8a61742159aa94b1-case-81c4f78aecb54176]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-b4bb79aedcc07171-case-81c4f78aecb54176]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-b98396c80fcb5b8d-case-81c4f78aecb54176]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-bea3dc78ed8c9813-case-359bd6cd0304369a]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-bea3dc78ed8c9813-case-ca1a10389ab339c7]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-ca178542d3fceda8-case-81c4f78aecb54176]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-d4eadc3995043874-case-81c4f78aecb54176]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-ff3cfa9330f2309a-case-81c4f78aecb54176]"
+            ],
+            "selector": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact"
+          },
+          {
+            "observed_nodes": [
               "tests/test_phase475_teacher_takeover_effect.py::test_begin_dependency_failure_then_retry_creates_one_notification"
             ],
             "selector": "tests/test_phase475_teacher_takeover_effect.py::test_begin_dependency_failure_then_retry_creates_one_notification"
           },
           {
             "observed_nodes": [
-              "tests/test_phase475_teacher_takeover_effect.py::test_losing_claim_never_reaches_notification_effect"
+              "tests/test_phase475_deletion_teacher_identity_scrub.py::test_teacher_identity_scrub_preserves_student_question_and_requires_two_clean_epochs"
             ],
-            "selector": "tests/test_phase475_teacher_takeover_effect.py::test_losing_claim_never_reaches_notification_effect"
+            "selector": "tests/test_phase475_deletion_teacher_identity_scrub.py::test_teacher_identity_scrub_preserves_student_question_and_requires_two_clean_epochs"
           }
         ]
       },
@@ -458,12 +333,16 @@
         "selectors": [
           {
             "observed_nodes": [
-              "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-254d3518b58d10c8]",
-              "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-41d95aaae1c0a2fe]",
-              "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-44a7cb3d9218709c]",
-              "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-fcbf9e9a0326ed2f]"
+              "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-04626eecb0aaf440-case-0d0ca5fbec4aa1f2-case-f1c2d2cae7022b23-case-05e843bef8e856da]",
+              "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-04626eecb0aaf440-case-8cf8d7b0a17a3496-case-56b9c6ae9374e313-case-9cce4748070d3fa2]",
+              "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-04626eecb0aaf440-case-8cf8d7b0a17a3496-case-e1a2e1e3e0c40a83-case-68069759cca0fa20]",
+              "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-04626eecb0aaf440-case-8cf8d7b0a17a3496-case-fadfc0a6a64c06b5-case-81793c72c1b66023]",
+              "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-94c80b4dfd2ff624-case-0d0ca5fbec4aa1f2-case-f1c2d2cae7022b23-case-05e843bef8e856da]",
+              "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-94c80b4dfd2ff624-case-8cf8d7b0a17a3496-case-56b9c6ae9374e313-case-3b284a04802084b7]",
+              "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-94c80b4dfd2ff624-case-8cf8d7b0a17a3496-case-e1a2e1e3e0c40a83-case-68069759cca0fa20]",
+              "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-94c80b4dfd2ff624-case-8cf8d7b0a17a3496-case-fadfc0a6a64c06b5-case-af150ea6ec128060]"
             ],
-            "selector": "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged"
+            "selector": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write"
           },
           {
             "observed_nodes": [
@@ -473,9 +352,15 @@
           },
           {
             "observed_nodes": [
-              "tests/test_phase475_parent_binding_reconciliation.py::test_one_sided_apply_is_atomic_and_replay_is_zero_write"
+              "tests/test_phase475_parent_binding_reconciliation.py::test_different_parent_conflict_is_report_only_and_remains_unauthorized"
             ],
-            "selector": "tests/test_phase475_parent_binding_reconciliation.py::test_one_sided_apply_is_atomic_and_replay_is_zero_write"
+            "selector": "tests/test_phase475_parent_binding_reconciliation.py::test_different_parent_conflict_is_report_only_and_remains_unauthorized"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_deletion_relationship_scrub.py::test_relationship_identity_scrub_retries_cas_then_requires_two_clean_epochs"
+            ],
+            "selector": "tests/test_phase475_deletion_relationship_scrub.py::test_relationship_identity_scrub_retries_cas_then_requires_two_clean_epochs"
           }
         ]
       },
@@ -497,9 +382,9 @@
           },
           {
             "observed_nodes": [
-              "tests/test_phase475_rate_limit.py::test_provider_failure_retry_replays_one_count_and_distinct_operation_is_evaluated"
+              "tests/test_phase475_rate_limit.py::test_replay_returns_original_receipt_after_intervening_accepted_and_rejected_traffic"
             ],
-            "selector": "tests/test_phase475_rate_limit.py::test_provider_failure_retry_replays_one_count_and_distinct_operation_is_evaluated"
+            "selector": "tests/test_phase475_rate_limit.py::test_replay_returns_original_receipt_after_intervening_accepted_and_rejected_traffic"
           }
         ]
       },
@@ -574,6 +459,12 @@
               "tests/test_phase475_delivery_begin.py::test_ordered_intent_condition_loss_is_retryable_and_never_mislabeled"
             ],
             "selector": "tests/test_phase475_delivery_begin.py::test_ordered_intent_condition_loss_is_retryable_and_never_mislabeled"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_deletion_notification_identity_scrub.py::test_notification_identity_scrub_retries_cas_then_requires_two_clean_epochs"
+            ],
+            "selector": "tests/test_phase475_deletion_notification_identity_scrub.py::test_notification_identity_scrub_retries_cas_then_requires_two_clean_epochs"
           }
         ]
       },
@@ -596,13 +487,277 @@
           }
         ]
       }
+    ],
+    "review_findings": [
+      {
+        "id": "CR-01",
+        "result": "PASS",
+        "selectors": [
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider"
+            ],
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_effect_recovery.py::test_ocr_success_receipt_recovers_real_question_and_command_transaction"
+            ],
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_ocr_success_receipt_recovers_real_question_and_command_transaction"
+          }
+        ]
+      },
+      {
+        "id": "CR-02",
+        "result": "PASS",
+        "selectors": [
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[foreign-question-owner]",
+              "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[invalid-command-status]",
+              "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[invalid-command-version]",
+              "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[legacy-command-schema]",
+              "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[legacy-question-schema]",
+              "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[processing-question-status-mismatch]",
+              "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[stale-command-generation]",
+              "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[wrong-command-owner-key]",
+              "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[wrong-question-generation]",
+              "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[wrong-question-identity]"
+            ],
+            "selector": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question[completed-later-resolution-replay]",
+              "tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question[completed-replay]",
+              "tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question[processing-replay]"
+            ],
+            "selector": "tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question"
+          }
+        ]
+      },
+      {
+        "id": "CR-03",
+        "result": "PASS",
+        "selectors": [
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_state_cas.py::test_question_mutation_has_owner_state_version_and_one_increment"
+            ],
+            "selector": "tests/test_phase475_question_state_cas.py::test_question_mutation_has_owner_state_version_and_one_increment"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_state_cas.py::test_takeover_first_makes_barriered_stale_ai_completion_lose"
+            ],
+            "selector": "tests/test_phase475_question_state_cas.py::test_takeover_first_makes_barriered_stale_ai_completion_lose"
+          }
+        ]
+      },
+      {
+        "id": "CR-04",
+        "result": "PASS",
+        "selectors": [
+          {
+            "observed_nodes": [
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-123dee096bdb6bd3-case-81c4f78aecb54176]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-76c3b52e799a41ba-case-81c4f78aecb54176]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-8a61742159aa94b1-case-81c4f78aecb54176]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-b4bb79aedcc07171-case-81c4f78aecb54176]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-b98396c80fcb5b8d-case-81c4f78aecb54176]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-bea3dc78ed8c9813-case-359bd6cd0304369a]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-bea3dc78ed8c9813-case-ca1a10389ab339c7]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-ca178542d3fceda8-case-81c4f78aecb54176]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-d4eadc3995043874-case-81c4f78aecb54176]",
+              "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-ff3cfa9330f2309a-case-81c4f78aecb54176]"
+            ],
+            "selector": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact"
+          }
+        ]
+      },
+      {
+        "id": "CR-05",
+        "result": "PASS",
+        "selectors": [
+          {
+            "observed_nodes": [
+              "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-04626eecb0aaf440-case-0d0ca5fbec4aa1f2-case-f1c2d2cae7022b23-case-05e843bef8e856da]",
+              "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-04626eecb0aaf440-case-8cf8d7b0a17a3496-case-56b9c6ae9374e313-case-9cce4748070d3fa2]",
+              "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-04626eecb0aaf440-case-8cf8d7b0a17a3496-case-e1a2e1e3e0c40a83-case-68069759cca0fa20]",
+              "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-04626eecb0aaf440-case-8cf8d7b0a17a3496-case-fadfc0a6a64c06b5-case-81793c72c1b66023]",
+              "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-94c80b4dfd2ff624-case-0d0ca5fbec4aa1f2-case-f1c2d2cae7022b23-case-05e843bef8e856da]",
+              "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-94c80b4dfd2ff624-case-8cf8d7b0a17a3496-case-56b9c6ae9374e313-case-3b284a04802084b7]",
+              "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-94c80b4dfd2ff624-case-8cf8d7b0a17a3496-case-e1a2e1e3e0c40a83-case-68069759cca0fa20]",
+              "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-94c80b4dfd2ff624-case-8cf8d7b0a17a3496-case-fadfc0a6a64c06b5-case-af150ea6ec128060]"
+            ],
+            "selector": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write"
+          }
+        ]
+      },
+      {
+        "id": "CR-06",
+        "result": "PASS",
+        "selectors": [
+          {
+            "observed_nodes": [
+              "tests/test_phase475_parent_binding_transaction.py::test_non_active_relationship_retry_is_conflict_and_never_revives[case-45fa233cb58d1d10]",
+              "tests/test_phase475_parent_binding_transaction.py::test_non_active_relationship_retry_is_conflict_and_never_revives[case-a993286dc70d9cbf]"
+            ],
+            "selector": "tests/test_phase475_parent_binding_transaction.py::test_non_active_relationship_retry_is_conflict_and_never_revives"
+          }
+        ]
+      },
+      {
+        "id": "CR-07",
+        "result": "PASS",
+        "selectors": [
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay"
+            ],
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay"
+          }
+        ]
+      },
+      {
+        "id": "CR-08",
+        "result": "PASS",
+        "selectors": [
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_admission.py::test_arbitrary_caller_key_is_absent_from_every_admission_item"
+            ],
+            "selector": "tests/test_phase475_question_admission.py::test_arbitrary_caller_key_is_absent_from_every_admission_item"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_replay.py::test_raw_caller_key_is_absent_from_route_body_and_diagnostics"
+            ],
+            "selector": "tests/test_phase475_question_replay.py::test_raw_caller_key_is_absent_from_route_body_and_diagnostics"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_reconciliation.py::test_cli_uses_command_digest_and_redacts_invalid_input"
+            ],
+            "selector": "tests/test_phase475_question_reconciliation.py::test_cli_uses_command_digest_and_redacts_invalid_input"
+          }
+        ]
+      },
+      {
+        "id": "CR-09",
+        "result": "PASS",
+        "selectors": [
+          {
+            "observed_nodes": [
+              "tests/test_phase475_rate_limit.py::test_replay_returns_original_receipt_after_intervening_accepted_and_rejected_traffic"
+            ],
+            "selector": "tests/test_phase475_rate_limit.py::test_replay_returns_original_receipt_after_intervening_accepted_and_rejected_traffic"
+          }
+        ]
+      },
+      {
+        "id": "CR-10",
+        "result": "PASS",
+        "selectors": [
+          {
+            "observed_nodes": [
+              "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[field-on-unregistered-entity]",
+              "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[formal-parent-binding-parent-id]",
+              "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[notification-actor-id]",
+              "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[notification-metadata-owner-id]",
+              "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[notification-metadata-student-id]",
+              "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[notification-metadata-teacher-id]",
+              "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[scalar-substring]",
+              "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[teacher-question-teacher-id]",
+              "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[teacher-session-teacher-id]",
+              "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[unregistered-notification-metadata]",
+              "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[unregistered-question-payload]",
+              "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[unrelated-free-text]"
+            ],
+            "selector": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_deletion_relationship_scrub.py::test_relationship_identity_scrub_retries_cas_then_requires_two_clean_epochs"
+            ],
+            "selector": "tests/test_phase475_deletion_relationship_scrub.py::test_relationship_identity_scrub_retries_cas_then_requires_two_clean_epochs"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_deletion_teacher_identity_scrub.py::test_teacher_identity_scrub_preserves_student_question_and_requires_two_clean_epochs"
+            ],
+            "selector": "tests/test_phase475_deletion_teacher_identity_scrub.py::test_teacher_identity_scrub_preserves_student_question_and_requires_two_clean_epochs"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_deletion_notification_identity_scrub.py::test_notification_identity_scrub_retries_cas_then_requires_two_clean_epochs"
+            ],
+            "selector": "tests/test_phase475_deletion_notification_identity_scrub.py::test_notification_identity_scrub_retries_cas_then_requires_two_clean_epochs"
+          }
+        ]
+      }
+    ],
+    "review_warnings": [
+      {
+        "id": "WR-01",
+        "result": "PASS",
+        "selectors": [
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[blank]",
+              "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[missing]",
+              "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[null]",
+              "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[too-long]",
+              "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[too-short]",
+              "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[unexpected-field]"
+            ],
+            "selector": "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free"
+          }
+        ]
+      },
+      {
+        "id": "WR-02",
+        "result": "PASS",
+        "selectors": [
+          {
+            "observed_nodes": [
+              "tests/test_phase475_evidence_verifier.py::test_mypy_gate_fails_closed_for_every_nonzero_or_ambiguous_outcome"
+            ],
+            "selector": "tests/test_phase475_evidence_verifier.py::test_mypy_gate_fails_closed_for_every_nonzero_or_ambiguous_outcome"
+          }
+        ]
+      },
+      {
+        "id": "WR-03",
+        "result": "PASS",
+        "selectors": [
+          {
+            "observed_nodes": [
+              "tests/test_phase475_evidence_verifier.py::test_source_snapshot_is_exhaustive_for_all_git_statuses"
+            ],
+            "selector": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_is_exhaustive_for_all_git_statuses"
+          }
+        ]
+      },
+      {
+        "id": "WR-04",
+        "result": "PASS",
+        "selectors": [
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_effect_recovery.py::test_effect_proof_executes_repository_boundaries_instead_of_monkeypatching_them"
+            ],
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_effect_proof_executes_repository_boundaries_instead_of_monkeypatching_them"
+          }
+        ]
+      }
     ]
   },
   "environment_classification": "local deterministic fakes plus Phase 474 strict full-backend extension",
   "evidence_markdown": {
-    "bytes": 12802,
+    "bytes": 23993,
     "path": "docs/security/phase-475-evidence.md",
-    "sha256": "2f4bc77ee511af685a803b9b5c3e211e52defa65dfa4fb19d8a42d6ec5b8f4cf"
+    "sha256": "d3a1d3c3b1314bbf76718fc003cb308708087f359b3b02bafc7b1c07b83b70dc"
   },
   "external_obligations": [
     {
@@ -633,10 +788,12 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-QUESTION.xml",
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-QUESTION.xml",
         "tests/test_phase475_question_admission.py",
         "tests/test_phase475_question_replay.py",
-        "tests/test_phase475_question_reconciliation.py"
+        "tests/test_phase475_question_reconciliation.py",
+        "tests/test_phase475_question_state_cas.py",
+        "tests/test_phase475_question_effect_recovery.py"
       ],
       "id": "P475-QUESTION",
       "kind": "pytest"
@@ -652,7 +809,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-TAKEOVER.xml",
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-TAKEOVER.xml",
         "tests/test_phase475_teacher_takeover.py",
         "tests/test_phase475_teacher_takeover_effect.py"
       ],
@@ -670,7 +827,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-RELATIONSHIP.xml",
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-RELATIONSHIP.xml",
         "tests/test_phase475_parent_binding_transaction.py",
         "tests/test_phase475_parent_binding_reconciliation.py",
         "tests/test_phase475_profile_version_cas.py"
@@ -689,7 +846,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-RATE.xml",
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-RATE.xml",
         "tests/test_phase475_rate_limit.py"
       ],
       "id": "P475-RATE",
@@ -706,7 +863,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-MISTAKE.xml",
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-MISTAKE.xml",
         "tests/test_phase475_mistake_answer.py"
       ],
       "id": "P475-MISTAKE",
@@ -723,8 +880,9 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-DELIVERY.xml",
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-DELIVERY.xml",
         "tests/test_phase475_delivery_begin.py",
+        "tests/test_phase475_deletion_notification_identity_scrub.py",
         "tests/test_phase473_delivery_intent_recovery.py",
         "tests/test_phase473_notification_deletion.py"
       ],
@@ -742,8 +900,11 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-DELETION.xml",
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-DELETION.xml",
         "tests/test_phase475_completed_deletion_replay.py",
+        "tests/test_phase475_deletion_discovery.py",
+        "tests/test_phase475_deletion_relationship_scrub.py",
+        "tests/test_phase475_deletion_teacher_identity_scrub.py",
         "tests/test_phase473_account_deletion.py",
         "tests/test_phase473_account_deletion_seal.py"
       ],
@@ -761,7 +922,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-INHERITED-AUTH-PRIVACY.xml",
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-INHERITED-AUTH-PRIVACY.xml",
         "tests/test_student_authorization_matrix.py",
         "tests/test_admin_authorization.py",
         "tests/test_practice_privacy.py",
@@ -788,7 +949,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-PHASE474-FORMAL-EXTENSION.xml"
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-PHASE474-FORMAL-EXTENSION.xml"
       ],
       "id": "P475-PHASE474-FORMAL-EXTENSION",
       "kind": "pytest"
@@ -817,6 +978,7 @@
         "src/stoa/services/practice_projection_service.py",
         "src/stoa/services/rate_limit.py",
         "src/stoa/services/subscription_service.py",
+        "src/stoa/services/teacher_dispatch_service.py",
         "src/stoa/services/usage_ledger_service.py",
         "scripts/verify_phase475.py",
         "tests/test_phase475_evidence_verifier.py"
@@ -832,7 +994,9 @@
         "--base",
         "901cb26626cb0f06b7f51a72b95e04aa4f7f4ebf",
         "--candidate",
-        "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc",
+        "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+        "--raw-output",
+        "/tmp/phase475-evidence.uSjTTF/raw/MYPY-PHASE475.mypy.log",
         "src/stoa/db/repositories/account_deletion_repo.py",
         "src/stoa/db/repositories/notification_repo.py",
         "src/stoa/db/repositories/practice_repo.py",
@@ -853,13 +1017,14 @@
         "src/stoa/services/practice_projection_service.py",
         "src/stoa/services/rate_limit.py",
         "src/stoa/services/subscription_service.py",
+        "src/stoa/services/teacher_dispatch_service.py",
         "src/stoa/services/usage_ledger_service.py"
       ],
-      "id": "MYPY-PHASE475-CHANGED-LINES",
+      "id": "MYPY-PHASE475",
       "kind": "mypy"
     }
   ],
-  "observed_full_suite_count": 2466,
+  "observed_full_suite_count": 2588,
   "phase475_runtime_files": [
     "src/stoa/db/repositories/account_deletion_repo.py",
     "src/stoa/db/repositories/notification_repo.py",
@@ -881,6 +1046,7 @@
     "src/stoa/services/practice_projection_service.py",
     "src/stoa/services/rate_limit.py",
     "src/stoa/services/subscription_service.py",
+    "src/stoa/services/teacher_dispatch_service.py",
     "src/stoa/services/usage_ledger_service.py"
   ],
   "phase_base_sha": "901cb26626cb0f06b7f51a72b95e04aa4f7f4ebf",
@@ -894,7 +1060,7 @@
     {
       "after": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -906,47 +1072,53 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-QUESTION.xml",
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-QUESTION.xml",
         "tests/test_phase475_question_admission.py",
         "tests/test_phase475_question_replay.py",
-        "tests/test_phase475_question_reconciliation.py"
+        "tests/test_phase475_question_reconciliation.py",
+        "tests/test_phase475_question_state_cas.py",
+        "tests/test_phase475_question_effect_recovery.py"
       ],
       "artifacts": {
         "junit": {
-          "bytes": 3529,
+          "bytes": 10533,
           "logical_path": "junit/P475-QUESTION.xml",
-          "sha256": "cd6ca82f3cc4fdbd27247aa31411e9fc1c7943beb10e8e04ffab17f1c6a6bd85"
+          "sha256": "a3ce302fb865cc98f8ffe516c81f679ec838edd4d3002c33c34383ec03a57e6e"
         },
         "log": {
           "bytes": 594,
           "logical_path": "raw/P475-QUESTION.log",
-          "sha256": "c62c4a167a37fad9ad8597108df4e7a78de20c951fd5c483addd24e7f0455533"
+          "sha256": "393db90bbe1d4fa0ced0b0940aef228f909535e8a8be72d2d38e1662454c64c3"
         },
         "node_manifest": {
-          "bytes": 3991,
+          "bytes": 11850,
           "logical_path": "nodes/P475-QUESTION.json",
-          "sha256": "b80e46977c00f263ec5eb109d39888bbf57e6e89bdde9f23dbcacd0a78d1d29e"
+          "sha256": "55549a4353f4a5730b64e08bbf98b44a2a999c641c600aa3c00f98964c5c2e4b"
         }
       },
       "before": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
-      "candidate_sha": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc",
+      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
       "counts": {
         "error": 0,
         "failed": 0,
-        "passed": 22,
+        "passed": 67,
         "skipped": 0,
-        "total": 22,
+        "total": 67,
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-22T01:49:58.591913Z",
+      "ended_at": "2026-07-23T09:59:26.948031Z",
       "exit_code": 0,
       "gate_id": "P475-QUESTION",
       "kind": "pytest",
       "nodes": [
+        {
+          "node_id": "tests/test_phase475_question_admission.py::test_arbitrary_caller_key_is_absent_from_every_admission_item",
+          "outcome": "passed"
+        },
         {
           "node_id": "tests/test_phase475_question_admission.py::test_changed_payload_is_mismatch_before_another_mutation",
           "outcome": "passed"
@@ -972,11 +1144,55 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_question_admission.py::test_question_command_digest_is_stable_opaque_and_student_bound",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_question_admission.py::test_question_usage_builder_contains_no_private_content_or_coordinates",
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_question_admission.py::test_repository_rejects_raw_or_legacy_command_identity_without_echo",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_question_admission.py::test_transaction_has_one_counter_update_and_no_duplicate_targets",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_committed_completion_response_loss_reconciles_exact_original_result",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_effect_proof_executes_repository_boundaries_instead_of_monkeypatching_them",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_foreign_stale_and_malformed_receipts_are_rejected_without_write",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_inflight_intent_response_loss_never_invokes_provider_on_replay",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_malformed_dependency_response_remains_recoverable_without_refund",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_ocr_success_receipt_recovers_real_question_and_command_transaction",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_closes_unknown_state_and_never_blindly_reinvokes",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay",
           "outcome": "passed"
         },
         {
@@ -988,6 +1204,10 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_question_reconciliation.py::test_cli_uses_command_digest_and_redacts_invalid_input",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_question_reconciliation.py::test_each_terminal_transaction_boundary_fails_without_partial_compensation",
           "outcome": "passed"
         },
@@ -996,11 +1216,23 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_question_reconciliation.py::test_lambda_accepts_only_closed_opaque_coordinate_fields",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_question_reconciliation.py::test_lost_apply_response_reconciles_without_second_compensation",
           "outcome": "passed"
         },
         {
           "node_id": "tests/test_phase475_question_reconciliation.py::test_preview_is_write_free_and_classifies_current_and_legacy_states",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_reconciliation.py::test_preview_output_is_closed_and_contains_only_opaque_identities",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_reconciliation.py::test_privacy_rejects_malformed_coordinate_before_repository_access",
           "outcome": "passed"
         },
         {
@@ -1028,11 +1260,127 @@
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_question_replay.py::test_lost_response_retry_returns_original_without_repeating_effects",
+          "node_id": "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[blank]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[missing]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[null]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[too-long]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[too-short]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[unexpected-field]",
           "outcome": "passed"
         },
         {
           "node_id": "tests/test_phase475_question_replay.py::test_quota_and_retryable_admission_are_structured_and_effect_free",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_raw_caller_key_is_absent_from_route_body_and_diagnostics",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_route_foreign_question_replay_is_redacted_and_effect_free",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_keeps_mismatch_only_for_authoritative_command",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[foreign-question-owner]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[invalid-command-status]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[invalid-command-version]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[legacy-command-schema]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[legacy-question-schema]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[processing-question-status-mismatch]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[stale-command-generation]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[wrong-command-owner-key]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[wrong-question-generation]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[wrong-question-identity]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question[completed-later-resolution-replay]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question[completed-replay]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question[processing-replay]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_valid_idempotency_key_reaches_replay_boundary_as_opaque_digest",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_state_cas.py::test_ai_first_allows_refreshed_escalation_then_takeover",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_state_cas.py::test_disallowed_observed_source_returns_invalid_transition_without_write",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_state_cas.py::test_legacy_version_initialization_is_explicit_and_state_constrained",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_state_cas.py::test_production_question_writer_registry_is_closed_over_cas_calls",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_state_cas.py::test_question_mutation_has_owner_state_version_and_one_increment",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_state_cas.py::test_stale_same_state_metadata_writers_cannot_replay_after_later_states",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_state_cas.py::test_takeover_first_makes_barriered_stale_ai_completion_lose",
           "outcome": "passed"
         }
       ],
@@ -1041,12 +1389,12 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-22T01:49:57.925564Z"
+      "started_at": "2026-07-23T09:59:24.876107Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -1058,48 +1406,88 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-TAKEOVER.xml",
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-TAKEOVER.xml",
         "tests/test_phase475_teacher_takeover.py",
         "tests/test_phase475_teacher_takeover_effect.py"
       ],
       "artifacts": {
         "junit": {
-          "bytes": 1602,
+          "bytes": 3573,
           "logical_path": "junit/P475-TAKEOVER.xml",
-          "sha256": "59688146ca18c85b03117fafae8de32486003fabfa17df10305a76b351c87be3"
+          "sha256": "92548853d4855f55a451be52d7950c5d6d0958d531e5793ce1482cdb35b886cc"
         },
         "log": {
-          "bytes": 593,
+          "bytes": 594,
           "logical_path": "raw/P475-TAKEOVER.log",
-          "sha256": "978c40d65a8e88c3244d0209b58aef34c7f918c8207dc013e2dcf786b13c4125"
+          "sha256": "4230e3f4a57137dd478bde443e211c2b0cfbe4972a92d672f363e46618a3e548"
         },
         "node_manifest": {
-          "bytes": 1816,
+          "bytes": 3978,
           "logical_path": "nodes/P475-TAKEOVER.json",
-          "sha256": "7cb300414b43f2a8fd5a2d63b9003eb21fa9c53058dd3c629d21cea21960663d"
+          "sha256": "5dd2e4582ce68cc89f7be43a09865c68cecedae322798a443551cdeeac4605da"
         }
       },
       "before": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
-      "candidate_sha": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc",
+      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
       "counts": {
         "error": 0,
         "failed": 0,
-        "passed": 9,
+        "passed": 19,
         "skipped": 0,
-        "total": 9,
+        "total": 19,
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-22T01:49:59.407595Z",
+      "ended_at": "2026-07-23T09:59:28.177174Z",
       "exit_code": 0,
       "gate_id": "P475-TAKEOVER",
       "kind": "pytest",
       "nodes": [
         {
           "node_id": "tests/test_phase475_teacher_takeover.py::test_same_winner_retry_replays_same_session_without_write",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-123dee096bdb6bd3-case-81c4f78aecb54176]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-76c3b52e799a41ba-case-81c4f78aecb54176]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-8a61742159aa94b1-case-81c4f78aecb54176]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-b4bb79aedcc07171-case-81c4f78aecb54176]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-b98396c80fcb5b8d-case-81c4f78aecb54176]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-bea3dc78ed8c9813-case-359bd6cd0304369a]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-bea3dc78ed8c9813-case-ca1a10389ab339c7]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-ca178542d3fceda8-case-81c4f78aecb54176]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-d4eadc3995043874-case-81c4f78aecb54176]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-ff3cfa9330f2309a-case-81c4f78aecb54176]",
           "outcome": "passed"
         },
         {
@@ -1140,12 +1528,12 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-22T01:49:58.644718Z"
+      "started_at": "2026-07-23T09:59:27.010964Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -1157,43 +1545,43 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-RELATIONSHIP.xml",
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-RELATIONSHIP.xml",
         "tests/test_phase475_parent_binding_transaction.py",
         "tests/test_phase475_parent_binding_reconciliation.py",
         "tests/test_phase475_profile_version_cas.py"
       ],
       "artifacts": {
         "junit": {
-          "bytes": 4597,
+          "bytes": 8961,
           "logical_path": "junit/P475-RELATIONSHIP.xml",
-          "sha256": "dbb8935caa66439676387dd951c8ee87e0de498354173d19ed745f331e5faca3"
+          "sha256": "701a245e0450ac1225225869ff5dd9e91f0e1d52a8ddf67679ef3d92a833a9df"
         },
         "log": {
           "bytes": 99,
           "logical_path": "raw/P475-RELATIONSHIP.log",
-          "sha256": "9b57348fb0bcd1a31078eb72f2265920469e36948d9906a1f27410ea8070755b"
+          "sha256": "666ac7376fb483a2d733d3add7e7f3399094c47314396ad63713ea2f059b0e59"
         },
         "node_manifest": {
-          "bytes": 5116,
+          "bytes": 9860,
           "logical_path": "nodes/P475-RELATIONSHIP.json",
-          "sha256": "906a211895ec275221ac465794d1d284c3a8d3e0481ec654f3d0bdf11f266155"
+          "sha256": "2418141805d84869223499032138e0ee3c73939ecc79e012fe6ee21b383cae09"
         }
       },
       "before": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
-      "candidate_sha": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc",
+      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
       "counts": {
         "error": 0,
         "failed": 0,
-        "passed": 25,
+        "passed": 45,
         "skipped": 0,
-        "total": 25,
+        "total": 45,
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-22T01:50:00.931531Z",
+      "ended_at": "2026-07-23T09:59:29.955744Z",
       "exit_code": 0,
       "gate_id": "P475-RELATIONSHIP",
       "kind": "pytest",
@@ -1211,31 +1599,59 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_non_active_history_is_not_reconciled_or_rewritten[case-45fa233cb58d1d10]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_non_active_history_is_not_reconciled_or_rewritten[case-a993286dc70d9cbf]",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_one_sided_apply_is_atomic_and_replay_is_zero_write",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-3a7de5b2858e9659-case-0073dab209a6c5c0]",
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_parent_authorization_race_cannot_bypass_reconciliation_fence[case-0d0ca5fbec4aa1f2-case-f1c2d2cae7022b23-case-05e843bef8e856da]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-5a41cbe0adb2dadb-case-a65496991d6d09fd]",
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_parent_authorization_race_cannot_bypass_reconciliation_fence[case-8cf8d7b0a17a3496-case-56b9c6ae9374e313-case-9cce4748070d3fa2]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-67a884e2151e6691-case-addd3cdd9c013702]",
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_parent_authorization_race_cannot_bypass_reconciliation_fence[case-8cf8d7b0a17a3496-case-e1a2e1e3e0c40a83-case-68069759cca0fa20]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-6d14c3126155be69-case-42182e09db42ff72]",
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_parent_authorization_race_cannot_bypass_reconciliation_fence[case-8cf8d7b0a17a3496-case-fadfc0a6a64c06b5-case-81793c72c1b66023]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-9fd31aeb8dc2c629-case-57aa359d211a9d49]",
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-0fef288e19ce0c63-case-57aa359d211a9d49]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-dbfec3f80ed57da9-case-14673303894261ac]",
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-272d4bf1f2cab375-case-0073dab209a6c5c0]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-3bb960732f287159-case-42182e09db42ff72]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-4ec4a3f5cc1217cb-case-addd3cdd9c013702]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-c3582180497b983b-case-a65496991d6d09fd]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-e33ecfbacbbfb86f-case-14673303894261ac]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_admin_status_transition_is_expected_status_and_version_cas",
           "outcome": "passed"
         },
         {
@@ -1259,6 +1675,14 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-529c668ee236db2a]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-54761acc2c65bcec]",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-fcbf9e9a0326ed2f]",
           "outcome": "passed"
         },
@@ -1267,11 +1691,55 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_non_active_relationship_retry_is_conflict_and_never_revives[case-45fa233cb58d1d10]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_non_active_relationship_retry_is_conflict_and_never_revives[case-a993286dc70d9cbf]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-04626eecb0aaf440-case-0d0ca5fbec4aa1f2-case-f1c2d2cae7022b23-case-05e843bef8e856da]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-04626eecb0aaf440-case-8cf8d7b0a17a3496-case-56b9c6ae9374e313-case-9cce4748070d3fa2]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-04626eecb0aaf440-case-8cf8d7b0a17a3496-case-e1a2e1e3e0c40a83-case-68069759cca0fa20]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-04626eecb0aaf440-case-8cf8d7b0a17a3496-case-fadfc0a6a64c06b5-case-81793c72c1b66023]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-94c80b4dfd2ff624-case-0d0ca5fbec4aa1f2-case-f1c2d2cae7022b23-case-05e843bef8e856da]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-94c80b4dfd2ff624-case-8cf8d7b0a17a3496-case-56b9c6ae9374e313-case-3b284a04802084b7]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-94c80b4dfd2ff624-case-8cf8d7b0a17a3496-case-e1a2e1e3e0c40a83-case-68069759cca0fa20]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-94c80b4dfd2ff624-case-8cf8d7b0a17a3496-case-fadfc0a6a64c06b5-case-af150ea6ec128060]",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_parent_binding_transaction.py::test_registration_and_admin_repair_have_one_logical_relationship_writer",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_transaction_shape_contains_fence_two_rows_and_narrow_profile_update",
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_relationship_create_condition_includes_status_and_never_assigns_it_to_history",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_transaction_shape_contains_dual_fences_dual_profiles_and_relationship_writes",
           "outcome": "passed"
         },
         {
@@ -1304,12 +1772,12 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-22T01:49:59.460469Z"
+      "started_at": "2026-07-23T09:59:28.237921Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -1321,45 +1789,57 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-RATE.xml",
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-RATE.xml",
         "tests/test_phase475_rate_limit.py"
       ],
       "artifacts": {
         "junit": {
-          "bytes": 1247,
+          "bytes": 1833,
           "logical_path": "junit/P475-RATE.xml",
-          "sha256": "d3477a77bf87c9ae5af1ca7a3304a2fd44b8139082e1f2fbd13cf8599ae4a91c"
+          "sha256": "65f4c30c77303a9fea17cd9bea8677b7384c0a60c85dddee3a1e5440e27cdfa4"
         },
         "log": {
-          "bytes": 98,
+          "bytes": 99,
           "logical_path": "raw/P475-RATE.log",
-          "sha256": "3419659f2e06d42fd949af02f3d7622299d38598341928ba33745227fda33cb6"
+          "sha256": "a8499459c3449501a9554eac8ee286716ab4446a1e6c5d74db262b845e5ce3d8"
         },
         "node_manifest": {
-          "bytes": 1423,
+          "bytes": 2086,
           "logical_path": "nodes/P475-RATE.json",
-          "sha256": "181581fcf9d93384d32d706d51e09588dae9ea72474a9c4c54f2f96570e290f3"
+          "sha256": "34cad063b9a2b3441b731edfc05268a5f1582b86defd02dfc1b5a386c07642b8"
         }
       },
       "before": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
-      "candidate_sha": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc",
+      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
       "counts": {
         "error": 0,
         "failed": 0,
-        "passed": 7,
+        "passed": 11,
         "skipped": 0,
-        "total": 7,
+        "total": 11,
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-22T01:50:01.423667Z",
+      "ended_at": "2026-07-23T09:59:30.530018Z",
       "exit_code": 0,
       "gate_id": "P475-RATE",
       "kind": "pytest",
       "nodes": [
+        {
+          "node_id": "tests/test_phase475_rate_limit.py::test_concurrent_distinct_operations_commit_exact_unique_receipts",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_rate_limit.py::test_concurrent_exact_duplicate_returns_one_byte_stable_receipt",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_rate_limit.py::test_dependency_error_never_exposes_storage_coordinates_or_expressions",
+          "outcome": "passed"
+        },
         {
           "node_id": "tests/test_phase475_rate_limit.py::test_hint_adapter_projects_changed_payload_as_structured_conflict",
           "outcome": "passed"
@@ -1370,6 +1850,10 @@
         },
         {
           "node_id": "tests/test_phase475_rate_limit.py::test_repeating_429_requests_leave_counter_exactly_at_limit",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_rate_limit.py::test_replay_returns_original_receipt_after_intervening_accepted_and_rejected_traffic",
           "outcome": "passed"
         },
         {
@@ -1394,12 +1878,12 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-22T01:50:00.984485Z"
+      "started_at": "2026-07-23T09:59:30.016830Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -1411,19 +1895,19 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-MISTAKE.xml",
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-MISTAKE.xml",
         "tests/test_phase475_mistake_answer.py"
       ],
       "artifacts": {
         "junit": {
           "bytes": 1823,
           "logical_path": "junit/P475-MISTAKE.xml",
-          "sha256": "a0c1ba95895f97f3310f04f7cf76708f0b666bdb9c0f0580eb8909b5d61dadb4"
+          "sha256": "903a29e87ac82e8f87f569c5c9598492a0811b5dc52591e02b4359f4085f9a5a"
         },
         "log": {
           "bytes": 593,
           "logical_path": "raw/P475-MISTAKE.log",
-          "sha256": "91041b145bbf95b4efcc0a7f8ac823349582e05d5305647777206840e8fff480"
+          "sha256": "7acecfc5188123af9ff2ba7fd94eb5fc7285f42745c73957e3f96c69187c249f"
         },
         "node_manifest": {
           "bytes": 2037,
@@ -1433,9 +1917,9 @@
       },
       "before": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
-      "candidate_sha": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc",
+      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -1445,7 +1929,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-22T01:50:02.076341Z",
+      "ended_at": "2026-07-23T09:59:31.273775Z",
       "exit_code": 0,
       "gate_id": "P475-MISTAKE",
       "kind": "pytest",
@@ -1492,12 +1976,12 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-22T01:50:01.477138Z"
+      "started_at": "2026-07-23T09:59:30.586308Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -1509,43 +1993,44 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-DELIVERY.xml",
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-DELIVERY.xml",
         "tests/test_phase475_delivery_begin.py",
+        "tests/test_phase475_deletion_notification_identity_scrub.py",
         "tests/test_phase473_delivery_intent_recovery.py",
         "tests/test_phase473_notification_deletion.py"
       ],
       "artifacts": {
         "junit": {
-          "bytes": 4134,
+          "bytes": 4311,
           "logical_path": "junit/P475-DELIVERY.xml",
-          "sha256": "7cd0193f27e4d72af590d3899cf5c19604993987ee6960df14cf4fcfee4c276f"
+          "sha256": "fd691c86c58c28ce4d86ca3167da5373376409ca7c6ce68fe562f5e877fb00cd"
         },
         "log": {
           "bytes": 99,
           "logical_path": "raw/P475-DELIVERY.log",
-          "sha256": "183ef1418ee4356c0496dd0a4a373ef553ce0a237ea15584a0736fbc837f778c"
+          "sha256": "a15ead4e7e3ad56fe8773c8504b41229914a60731ea6590fe70297c607ca6c20"
         },
         "node_manifest": {
-          "bytes": 4634,
+          "bytes": 4830,
           "logical_path": "nodes/P475-DELIVERY.json",
-          "sha256": "250e41d02882e02a792f8b386f568095893f8b3636e55bdf56613f925dae69ea"
+          "sha256": "68a084f3ee43df766e70daf77aae84889755feadf4fc372e2e336e699e4e4c3a"
         }
       },
       "before": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
-      "candidate_sha": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc",
+      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
       "counts": {
         "error": 0,
         "failed": 0,
-        "passed": 24,
+        "passed": 25,
         "skipped": 0,
-        "total": 24,
+        "total": 25,
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-22T01:50:02.648773Z",
+      "ended_at": "2026-07-23T09:59:31.959432Z",
       "exit_code": 0,
       "gate_id": "P475-DELIVERY",
       "kind": "pytest",
@@ -1619,6 +2104,10 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_deletion_notification_identity_scrub.py::test_notification_identity_scrub_retries_cas_then_requires_two_clean_epochs",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_delivery_begin.py::test_ambiguous_commit_is_reconciled_as_begun_from_exact_strong_intent",
           "outcome": "passed"
         },
@@ -1652,12 +2141,12 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-22T01:50:02.128620Z"
+      "started_at": "2026-07-23T09:59:31.337725Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -1669,43 +2158,46 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-DELETION.xml",
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-DELETION.xml",
         "tests/test_phase475_completed_deletion_replay.py",
+        "tests/test_phase475_deletion_discovery.py",
+        "tests/test_phase475_deletion_relationship_scrub.py",
+        "tests/test_phase475_deletion_teacher_identity_scrub.py",
         "tests/test_phase473_account_deletion.py",
         "tests/test_phase473_account_deletion_seal.py"
       ],
       "artifacts": {
         "junit": {
-          "bytes": 8093,
+          "bytes": 10640,
           "logical_path": "junit/P475-DELETION.xml",
-          "sha256": "ca5d3f533a3756790bea83e09f105a6de3b0c9a51bac5eb8512ca8b21287e6ee"
+          "sha256": "1158f30d6f366a51c5f7cfae4726bcaff29b8489787e5d6cf5d4efdc74a2fbf7"
         },
         "log": {
           "bytes": 594,
           "logical_path": "raw/P475-DELETION.log",
-          "sha256": "ea5ba5516bb4e23ea91ebd964b3fcd26dfc8545add24149a9bdee91ff51a316b"
+          "sha256": "d970c826e049c63d99a238cec20795af3fc60d4f5ebf318b30bcdb7a3b435aec"
         },
         "node_manifest": {
-          "bytes": 9068,
+          "bytes": 11900,
           "logical_path": "nodes/P475-DELETION.json",
-          "sha256": "5fd56ebe87c033cba96b56568db4cdc16d33492691fb66934c1b24e5b4544833"
+          "sha256": "1f83f117ada392a8cbe458355198911ef41bfe3bf725f180004b842818f1a2a5"
         }
       },
       "before": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
-      "candidate_sha": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc",
+      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
       "counts": {
         "error": 0,
         "failed": 0,
-        "passed": 49,
+        "passed": 64,
         "skipped": 0,
-        "total": 49,
+        "total": 64,
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-22T01:50:03.560876Z",
+      "ended_at": "2026-07-23T09:59:33.076428Z",
       "exit_code": 0,
       "gate_id": "P475-DELETION",
       "kind": "pytest",
@@ -1867,27 +2359,31 @@
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-2c8f52a7d8d982ce]",
+          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_completed_deletion_replays_stored_receipt_without_new_effects",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-42013f38dd9fdae2]",
+          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-409bb1972ddbbef0]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-6aa57572382648b9]",
+          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-5c0c65d867ad7e1a]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-91536587e404ea4c]",
+          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-b32ecc07c6f1d4c6]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-de65d7eebe3c2ee0]",
+          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-b466483ff0ed8265]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-e20e45dcf6bc8ae5]",
+          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-bce3f62c6e4a400f]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-e194dd50f53915c6]",
           "outcome": "passed"
         },
         {
@@ -1905,6 +2401,62 @@
         {
           "node_id": "tests/test_phase475_completed_deletion_replay.py::test_terminal_replay_preserves_fingerprint_and_verified_identity_conflicts[case-d6e55e6fd29db54c]",
           "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[field-on-unregistered-entity]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[formal-parent-binding-parent-id]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[notification-actor-id]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[notification-metadata-owner-id]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[notification-metadata-student-id]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[notification-metadata-teacher-id]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[scalar-substring]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[teacher-question-teacher-id]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[teacher-session-teacher-id]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[unregistered-notification-metadata]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[unregistered-question-payload]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[unrelated-free-text]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_relationship_scrub.py::test_relationship_identity_scrub_retries_cas_then_requires_two_clean_epochs",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_teacher_identity_scrub.py::test_teacher_identity_scrub_preserves_student_question_and_requires_two_clean_epochs",
+          "outcome": "passed"
         }
       ],
       "privacy": {
@@ -1912,12 +2464,12 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-22T01:50:02.701714Z"
+      "started_at": "2026-07-23T09:59:32.015893Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -1929,7 +2481,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-INHERITED-AUTH-PRIVACY.xml",
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-INHERITED-AUTH-PRIVACY.xml",
         "tests/test_student_authorization_matrix.py",
         "tests/test_admin_authorization.py",
         "tests/test_practice_privacy.py",
@@ -1942,36 +2494,36 @@
       ],
       "artifacts": {
         "junit": {
-          "bytes": 58389,
+          "bytes": 58760,
           "logical_path": "junit/P475-INHERITED-AUTH-PRIVACY.xml",
-          "sha256": "d51e58bf5d278198271ee00154b809f6cf1fe9f47ed3f4651427e7cb643ecb78"
+          "sha256": "b5a909239dcee545e30416bea07eee685ef46d928c3caeb874b413d9fd1407f4"
         },
         "log": {
           "bytes": 1139,
           "logical_path": "raw/P475-INHERITED-AUTH-PRIVACY.log",
-          "sha256": "e9961f997dc1016379a2cdbf1f724939a5be325317e5f6cc166daf8061fe89f7"
+          "sha256": "87f6f77f9ec0830f6e6c011f0ab636a79af438e51d3199bfa3ff9997ac42bf58"
         },
         "node_manifest": {
-          "bytes": 64647,
+          "bytes": 65056,
           "logical_path": "nodes/P475-INHERITED-AUTH-PRIVACY.json",
-          "sha256": "8f48538a656b0692f755ae1ebd0bcfb8082cb3d6426c543943901e6d16e52c6f"
+          "sha256": "3481f2635df0b06003b3b9daf0ae9d5da327a943f10dd932475129c28c131d75"
         }
       },
       "before": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
-      "candidate_sha": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc",
+      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
       "counts": {
         "error": 0,
         "failed": 0,
-        "passed": 327,
+        "passed": 329,
         "skipped": 0,
-        "total": 327,
+        "total": 329,
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-22T01:50:07.299278Z",
+      "ended_at": "2026-07-23T09:59:37.301523Z",
       "exit_code": 0,
       "gate_id": "P475-INHERITED-AUTH-PRIVACY",
       "kind": "pytest",
@@ -2026,6 +2578,10 @@
         },
         {
           "node_id": "tests/test_admin_authorization.py::test_parent_binding_preview_and_apply_persist_target_audit_before_effect",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_admin_authorization.py::test_parent_binding_status_transition_requires_canonical_admin_and_redacts_conflict",
           "outcome": "passed"
         },
         {
@@ -2130,6 +2686,10 @@
         },
         {
           "node_id": "tests/test_admin_authorization.py::test_registered_admin_router_has_exact_executable_policy_and_controls[case-012c1ee76573c0bb-case-8de399e9b0f82617-case-544e4b233b506963]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_admin_authorization.py::test_registered_admin_router_has_exact_executable_policy_and_controls[case-012c1ee76573c0bb-case-929455db072268de-case-544e4b233b506963]",
           "outcome": "passed"
         },
         {
@@ -3290,12 +3850,12 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-22T01:50:03.612657Z"
+      "started_at": "2026-07-23T09:59:33.136129Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -3309,45 +3869,45 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.EZmZfE/junit/P475-PHASE474-FORMAL-EXTENSION.xml"
+        "/tmp/phase475-evidence.uSjTTF/junit/P475-PHASE474-FORMAL-EXTENSION.xml"
       ],
       "artifacts": {
         "junit": {
-          "bytes": 394919,
+          "bytes": 416464,
           "logical_path": "junit/P475-PHASE474-FORMAL-EXTENSION.xml",
-          "sha256": "a84816bd4e5fb0a9b9e822ecb4cb9eb199c042f117f5207d3a9d06bd35771a27"
+          "sha256": "e7ff4f450ed6b4f62613e4772fc9e917aa099ace01ce6aef36d51acd22ff39ee"
         },
         "log": {
-          "bytes": 4277,
+          "bytes": 4357,
           "logical_path": "raw/P475-PHASE474-FORMAL-EXTENSION.log",
-          "sha256": "4c9474424767e1a974aee23d7e9ed8a5f4d1c4cf90ddaf80eb423946b8905df1"
+          "sha256": "10754ca1244671525572668dd01c6c57ef96692ca5d08668fc4581d65ae49d31"
         },
         "node_manifest": {
-          "bytes": 441830,
+          "bytes": 465693,
           "logical_path": "nodes/P475-PHASE474-FORMAL-EXTENSION.json",
-          "sha256": "db4aa49b2df010617007bf2ca688e90950f157c83cd983aabb325bc45925d920"
+          "sha256": "16abe3ff4b03e1bcb76e7086c1e32be96de31608eb6ec637e8b0ab2ff021963b"
         },
         "phase474_manifest": {
-          "bytes": 1546761,
+          "bytes": 1625280,
           "logical_path": "phase474/P475-PHASE474-FORMAL-EXTENSION.json",
-          "sha256": "d1ed403f4511e555f5abf4839bf88fef80c8d31fe8a7c63e6be9554039416449"
+          "sha256": "03640d421fbaf51b0724417809594dec72a9dfd3e3ae55f99943c13e2efe042c"
         }
       },
       "before": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
-      "candidate_sha": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc",
+      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
       "counts": {
         "error": 0,
         "failed": 0,
-        "passed": 2466,
+        "passed": 2588,
         "skipped": 0,
-        "total": 2466,
+        "total": 2588,
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-22T01:51:55.973888Z",
+      "ended_at": "2026-07-23T10:01:45.867822Z",
       "exit_code": 0,
       "gate_id": "P475-PHASE474-FORMAL-EXTENSION",
       "kind": "pytest",
@@ -3605,6 +4165,10 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_admin_authorization.py::test_parent_binding_status_transition_requires_canonical_admin_and_redacts_conflict",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_admin_authorization.py::test_parent_binding_wrong_capability_denies_before_any_relationship_read_or_write[case-329ae9e6030f45be]",
           "outcome": "passed"
         },
@@ -3706,6 +4270,10 @@
         },
         {
           "node_id": "tests/test_admin_authorization.py::test_registered_admin_router_has_exact_executable_policy_and_controls[case-012c1ee76573c0bb-case-8de399e9b0f82617-case-544e4b233b506963]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_admin_authorization.py::test_registered_admin_router_has_exact_executable_policy_and_controls[case-012c1ee76573c0bb-case-929455db072268de-case-544e4b233b506963]",
           "outcome": "passed"
         },
         {
@@ -9489,11 +10057,23 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase473_private_store_inventory.py::test_reviewed_semantics_reject_weakening_after_candidate_regeneration[case-cd1be8d762e8fea7-case-0e3563711d13df7a-case-50f8dee381eca624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase473_private_store_inventory.py::test_reviewed_semantics_reject_weakening_after_candidate_regeneration[case-cd1be8d762e8fea7-case-3539030badc7da17-case-b60b7911a1a8a6bb]",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase473_private_store_inventory.py::test_reviewed_semantics_reject_weakening_after_candidate_regeneration[case-cd1be8d762e8fea7-case-befd28cc810d4f4c-case-d7df6f7a55a544a2]",
           "outcome": "passed"
         },
         {
           "node_id": "tests/test_phase473_private_store_inventory.py::test_reviewed_semantics_reject_weakening_after_candidate_regeneration[case-cd1be8d762e8fea7-case-c5b82297c291ef1d-case-aaa70bc0c8621dba]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase473_private_store_inventory.py::test_reviewed_semantics_reject_weakening_after_candidate_regeneration[case-cd1be8d762e8fea7-case-c827caf5b0a06ab5-case-9988e2be064f5abc]",
           "outcome": "passed"
         },
         {
@@ -10065,27 +10645,31 @@
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-2c8f52a7d8d982ce]",
+          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_completed_deletion_replays_stored_receipt_without_new_effects",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-42013f38dd9fdae2]",
+          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-409bb1972ddbbef0]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-6aa57572382648b9]",
+          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-5c0c65d867ad7e1a]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-91536587e404ea4c]",
+          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-b32ecc07c6f1d4c6]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-de65d7eebe3c2ee0]",
+          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-b466483ff0ed8265]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-e20e45dcf6bc8ae5]",
+          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-bce3f62c6e4a400f]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_completed_deletion_replay.py::test_malformed_terminal_receipt_fails_closed_without_effects[case-e194dd50f53915c6]",
           "outcome": "passed"
         },
         {
@@ -10102,6 +10686,66 @@
         },
         {
           "node_id": "tests/test_phase475_completed_deletion_replay.py::test_terminal_replay_preserves_fingerprint_and_verified_identity_conflicts[case-d6e55e6fd29db54c]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[field-on-unregistered-entity]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[formal-parent-binding-parent-id]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[notification-actor-id]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[notification-metadata-owner-id]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[notification-metadata-student-id]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[notification-metadata-teacher-id]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[scalar-substring]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[teacher-question-teacher-id]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[teacher-session-teacher-id]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[unregistered-notification-metadata]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[unregistered-question-payload]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs[unrelated-free-text]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_notification_identity_scrub.py::test_notification_identity_scrub_retries_cas_then_requires_two_clean_epochs",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_relationship_scrub.py::test_relationship_identity_scrub_retries_cas_then_requires_two_clean_epochs",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_deletion_teacher_identity_scrub.py::test_teacher_identity_scrub_preserves_student_question_and_requires_two_clean_epochs",
           "outcome": "passed"
         },
         {
@@ -10133,7 +10777,19 @@
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_evidence_verifier.py::test_closed_coverage_maps_all_requirements_decisions_findings_and_followups",
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_coverage_contract_registry_rejects_id_selector_and_module_drift",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_coverage_registry_requires_all_truthful_gap_nodes",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_coverage_rejects_id_selector_result_and_observed_node_drift",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_coverage_rejects_missing_lower_failure_concurrency_or_effect_node[case-38c289b9a1dde9f2]",
           "outcome": "passed"
         },
         {
@@ -10161,11 +10817,15 @@
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_evidence_verifier.py::test_coverage_rejects_missing_lower_failure_concurrency_or_effect_node[case-ce6b9df94f9bfb96]",
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_coverage_rejects_missing_lower_failure_concurrency_or_effect_node[case-fdd6033e917f4889]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_evidence_verifier.py::test_coverage_rejects_missing_lower_failure_concurrency_or_effect_node[case-fdd6033e917f4889]",
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_mypy_gate_fails_closed_for_every_nonzero_or_ambiguous_outcome",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_phase475_module_registry_rejects_missing_extra_or_duplicate_modules",
           "outcome": "passed"
         },
         {
@@ -10225,11 +10885,83 @@
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_string_substitute_cannot_replace_runtime_lower_node",
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_fails_closed_on_required_blob_or_absence_drift[case-b04b964f8d6fe450-case-257ed5a700748435]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_evidence_verifier.py::test_targeted_mypy_rejects_only_diagnostics_on_candidate_changed_lines",
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_fails_closed_on_required_blob_or_absence_drift[case-b04b964f8d6fe450-case-794e76d7eca8447a]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_fails_closed_on_required_blob_or_absence_drift[case-b04b964f8d6fe450-case-8440551ab9e7bdb2_0]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_fails_closed_on_required_blob_or_absence_drift[case-b04b964f8d6fe450-case-8440551ab9e7bdb2_1]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_fails_closed_on_required_blob_or_absence_drift[case-b04b964f8d6fe450-case-8440551ab9e7bdb2_2]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_fails_closed_on_required_blob_or_absence_drift[case-b04b964f8d6fe450-case-8440551ab9e7bdb2_3]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_fails_closed_on_required_blob_or_absence_drift[case-b04b964f8d6fe450-case-8440551ab9e7bdb2_4]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_fails_when_absence_probe_git_command_fails",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_is_exhaustive_for_all_git_statuses",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_rejects_malformed_unsupported_or_duplicate_inventory[case-b04b964f8d6fe450_0]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_rejects_malformed_unsupported_or_duplicate_inventory[case-b04b964f8d6fe450_1]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_rejects_malformed_unsupported_or_duplicate_inventory[case-b04b964f8d6fe450_2]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_rejects_malformed_unsupported_or_duplicate_inventory[case-b04b964f8d6fe450_3]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_rejects_malformed_unsupported_or_duplicate_inventory[case-b04b964f8d6fe450_4]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_rejects_malformed_unsupported_or_duplicate_inventory[case-b04b964f8d6fe450_5]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_rejects_malformed_unsupported_or_duplicate_inventory[case-b04b964f8d6fe450_6]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_rejects_missing_extra_or_duplicate_rows[case-53664c1aa403407e]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_rejects_missing_extra_or_duplicate_rows[case-b9857209b8902b16]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_snapshot_rejects_missing_extra_or_duplicate_rows[case-c34372f2d08a9ae3]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_evidence_verifier.py::test_source_string_substitute_cannot_replace_runtime_lower_node",
           "outcome": "passed"
         },
         {
@@ -10281,31 +11013,59 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_non_active_history_is_not_reconciled_or_rewritten[case-45fa233cb58d1d10]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_non_active_history_is_not_reconciled_or_rewritten[case-a993286dc70d9cbf]",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_one_sided_apply_is_atomic_and_replay_is_zero_write",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-3a7de5b2858e9659-case-0073dab209a6c5c0]",
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_parent_authorization_race_cannot_bypass_reconciliation_fence[case-0d0ca5fbec4aa1f2-case-f1c2d2cae7022b23-case-05e843bef8e856da]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-5a41cbe0adb2dadb-case-a65496991d6d09fd]",
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_parent_authorization_race_cannot_bypass_reconciliation_fence[case-8cf8d7b0a17a3496-case-56b9c6ae9374e313-case-9cce4748070d3fa2]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-67a884e2151e6691-case-addd3cdd9c013702]",
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_parent_authorization_race_cannot_bypass_reconciliation_fence[case-8cf8d7b0a17a3496-case-e1a2e1e3e0c40a83-case-68069759cca0fa20]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-6d14c3126155be69-case-42182e09db42ff72]",
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_parent_authorization_race_cannot_bypass_reconciliation_fence[case-8cf8d7b0a17a3496-case-fadfc0a6a64c06b5-case-81793c72c1b66023]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-9fd31aeb8dc2c629-case-57aa359d211a9d49]",
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-0fef288e19ce0c63-case-57aa359d211a9d49]",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-dbfec3f80ed57da9-case-14673303894261ac]",
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-272d4bf1f2cab375-case-0073dab209a6c5c0]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-3bb960732f287159-case-42182e09db42ff72]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-4ec4a3f5cc1217cb-case-addd3cdd9c013702]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-c3582180497b983b-case-a65496991d6d09fd]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_reconciliation.py::test_preview_classifies_every_fixture_and_writes_nothing[case-e33ecfbacbbfb86f-case-14673303894261ac]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_admin_status_transition_is_expected_status_and_version_cas",
           "outcome": "passed"
         },
         {
@@ -10329,6 +11089,14 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-529c668ee236db2a]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-54761acc2c65bcec]",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged[case-fcbf9e9a0326ed2f]",
           "outcome": "passed"
         },
@@ -10337,11 +11105,55 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_non_active_relationship_retry_is_conflict_and_never_revives[case-45fa233cb58d1d10]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_non_active_relationship_retry_is_conflict_and_never_revives[case-a993286dc70d9cbf]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-04626eecb0aaf440-case-0d0ca5fbec4aa1f2-case-f1c2d2cae7022b23-case-05e843bef8e856da]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-04626eecb0aaf440-case-8cf8d7b0a17a3496-case-56b9c6ae9374e313-case-9cce4748070d3fa2]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-04626eecb0aaf440-case-8cf8d7b0a17a3496-case-e1a2e1e3e0c40a83-case-68069759cca0fa20]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-04626eecb0aaf440-case-8cf8d7b0a17a3496-case-fadfc0a6a64c06b5-case-81793c72c1b66023]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-94c80b4dfd2ff624-case-0d0ca5fbec4aa1f2-case-f1c2d2cae7022b23-case-05e843bef8e856da]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-94c80b4dfd2ff624-case-8cf8d7b0a17a3496-case-56b9c6ae9374e313-case-3b284a04802084b7]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-94c80b4dfd2ff624-case-8cf8d7b0a17a3496-case-e1a2e1e3e0c40a83-case-68069759cca0fa20]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write[case-94c80b4dfd2ff624-case-8cf8d7b0a17a3496-case-fadfc0a6a64c06b5-case-af150ea6ec128060]",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_parent_binding_transaction.py::test_registration_and_admin_repair_have_one_logical_relationship_writer",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_transaction_shape_contains_fence_two_rows_and_narrow_profile_update",
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_relationship_create_condition_includes_status_and_never_assigns_it_to_history",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_transaction_shape_contains_dual_fences_dual_profiles_and_relationship_writes",
           "outcome": "passed"
         },
         {
@@ -10369,6 +11181,10 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_question_admission.py::test_arbitrary_caller_key_is_absent_from_every_admission_item",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_question_admission.py::test_changed_payload_is_mismatch_before_another_mutation",
           "outcome": "passed"
         },
@@ -10393,11 +11209,55 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_question_admission.py::test_question_command_digest_is_stable_opaque_and_student_bound",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_question_admission.py::test_question_usage_builder_contains_no_private_content_or_coordinates",
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_question_admission.py::test_repository_rejects_raw_or_legacy_command_identity_without_echo",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_question_admission.py::test_transaction_has_one_counter_update_and_no_duplicate_targets",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_committed_completion_response_loss_reconciles_exact_original_result",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_effect_proof_executes_repository_boundaries_instead_of_monkeypatching_them",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_foreign_stale_and_malformed_receipts_are_rejected_without_write",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_inflight_intent_response_loss_never_invokes_provider_on_replay",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_malformed_dependency_response_remains_recoverable_without_refund",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_ocr_success_receipt_recovers_real_question_and_command_transaction",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_closes_unknown_state_and_never_blindly_reinvokes",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay",
           "outcome": "passed"
         },
         {
@@ -10409,6 +11269,10 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_question_reconciliation.py::test_cli_uses_command_digest_and_redacts_invalid_input",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_question_reconciliation.py::test_each_terminal_transaction_boundary_fails_without_partial_compensation",
           "outcome": "passed"
         },
@@ -10417,11 +11281,23 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_question_reconciliation.py::test_lambda_accepts_only_closed_opaque_coordinate_fields",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_question_reconciliation.py::test_lost_apply_response_reconciles_without_second_compensation",
           "outcome": "passed"
         },
         {
           "node_id": "tests/test_phase475_question_reconciliation.py::test_preview_is_write_free_and_classifies_current_and_legacy_states",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_reconciliation.py::test_preview_output_is_closed_and_contains_only_opaque_identities",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_reconciliation.py::test_privacy_rejects_malformed_coordinate_before_repository_access",
           "outcome": "passed"
         },
         {
@@ -10449,11 +11325,139 @@
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_question_replay.py::test_lost_response_retry_returns_original_without_repeating_effects",
+          "node_id": "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[blank]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[missing]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[null]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[too-long]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[too-short]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free[unexpected-field]",
           "outcome": "passed"
         },
         {
           "node_id": "tests/test_phase475_question_replay.py::test_quota_and_retryable_admission_are_structured_and_effect_free",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_raw_caller_key_is_absent_from_route_body_and_diagnostics",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_route_foreign_question_replay_is_redacted_and_effect_free",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_keeps_mismatch_only_for_authoritative_command",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[foreign-question-owner]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[invalid-command-status]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[invalid-command-version]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[legacy-command-schema]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[legacy-question-schema]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[processing-question-status-mismatch]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[stale-command-generation]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[wrong-command-owner-key]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[wrong-question-generation]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[wrong-question-identity]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question[completed-later-resolution-replay]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question[completed-replay]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question[processing-replay]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_replay.py::test_valid_idempotency_key_reaches_replay_boundary_as_opaque_digest",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_state_cas.py::test_ai_first_allows_refreshed_escalation_then_takeover",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_state_cas.py::test_disallowed_observed_source_returns_invalid_transition_without_write",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_state_cas.py::test_legacy_version_initialization_is_explicit_and_state_constrained",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_state_cas.py::test_production_question_writer_registry_is_closed_over_cas_calls",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_state_cas.py::test_question_mutation_has_owner_state_version_and_one_increment",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_state_cas.py::test_stale_same_state_metadata_writers_cannot_replay_after_later_states",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_question_state_cas.py::test_takeover_first_makes_barriered_stale_ai_completion_lose",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_rate_limit.py::test_concurrent_distinct_operations_commit_exact_unique_receipts",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_rate_limit.py::test_concurrent_exact_duplicate_returns_one_byte_stable_receipt",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_rate_limit.py::test_dependency_error_never_exposes_storage_coordinates_or_expressions",
           "outcome": "passed"
         },
         {
@@ -10466,6 +11470,10 @@
         },
         {
           "node_id": "tests/test_phase475_rate_limit.py::test_repeating_429_requests_leave_counter_exactly_at_limit",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_rate_limit.py::test_replay_returns_original_receipt_after_intervening_accepted_and_rejected_traffic",
           "outcome": "passed"
         },
         {
@@ -10486,6 +11494,46 @@
         },
         {
           "node_id": "tests/test_phase475_teacher_takeover.py::test_same_winner_retry_replays_same_session_without_write",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-123dee096bdb6bd3-case-81c4f78aecb54176]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-76c3b52e799a41ba-case-81c4f78aecb54176]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-8a61742159aa94b1-case-81c4f78aecb54176]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-b4bb79aedcc07171-case-81c4f78aecb54176]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-b98396c80fcb5b8d-case-81c4f78aecb54176]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-bea3dc78ed8c9813-case-359bd6cd0304369a]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-bea3dc78ed8c9813-case-ca1a10389ab339c7]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-ca178542d3fceda8-case-81c4f78aecb54176]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-d4eadc3995043874-case-81c4f78aecb54176]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-ff3cfa9330f2309a-case-81c4f78aecb54176]",
           "outcome": "passed"
         },
         {
@@ -13219,7 +14267,7 @@
       ],
       "phase474_formal_extension": {
         "clock": "2026-07-01T12:00:00Z",
-        "collection_sha256": "7f68f1e65f464cb641b392fbcf9c03aabdce376427a6dbeacbceb825e1aee252",
+        "collection_sha256": "d245f02bf201ceafc13838b9e17345ad8b17b2598e91e2944ef89a05bd5a9ea8",
         "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
         "runtime": "3.12.13",
         "schema_version": "stoa.phase474.pytest-nodes.v1",
@@ -13230,12 +14278,12 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-22T01:50:07.355819Z"
+      "started_at": "2026-07-23T09:59:37.375329Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/ruff",
@@ -13260,6 +14308,7 @@
         "src/stoa/services/practice_projection_service.py",
         "src/stoa/services/rate_limit.py",
         "src/stoa/services/subscription_service.py",
+        "src/stoa/services/teacher_dispatch_service.py",
         "src/stoa/services/usage_ledger_service.py",
         "scripts/verify_phase475.py",
         "tests/test_phase475_evidence_verifier.py"
@@ -13273,10 +14322,10 @@
       },
       "before": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
-      "candidate_sha": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc",
-      "ended_at": "2026-07-22T01:51:56.137576Z",
+      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+      "ended_at": "2026-07-23T10:01:46.050200Z",
       "exit_code": 0,
       "gate_id": "RUFF-PHASE475",
       "kind": "ruff",
@@ -13285,17 +14334,16 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-22T01:51:56.096251Z"
+      "started_at": "2026-07-23T10:01:46.006249Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
       "analysis": {
         "base_sha": "901cb26626cb0f06b7f51a72b95e04aa4f7f4ebf",
-        "candidate_sha": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc",
-        "changed_line_diagnostic_count": 0,
+        "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
         "checked_files": [
           "src/stoa/db/repositories/account_deletion_repo.py",
           "src/stoa/db/repositories/notification_repo.py",
@@ -13317,13 +14365,16 @@
           "src/stoa/services/practice_projection_service.py",
           "src/stoa/services/rate_limit.py",
           "src/stoa/services/subscription_service.py",
+          "src/stoa/services/teacher_dispatch_service.py",
           "src/stoa/services/usage_ledger_service.py"
         ],
-        "diagnostic_count": 178,
-        "mypy_argv_sha256": "d590c37661a78338dcc7d839a579a7680d1aa7cc107a0328922cb4e784ca9bc5",
-        "pre_existing_diagnostic_count": 178,
+        "completion_source_count": 22,
+        "diagnostic_count": 0,
+        "mypy_argv_sha256": "5bd00489350a964ec4ff7256aa0259b32bae3620ad40ffb39c9e813ec07c79a2",
+        "raw_output_bytes": 44,
+        "raw_output_sha256": "5ca59a2361304496c36048048a43aa6f41eb23e74111d16719b962637888fc08",
         "status": "PASS",
-        "tool_exit_code": 1
+        "tool_exit_code": 0
       },
       "argv": [
         "/Users/zhdeng/stoa-backend/.venv/bin/python",
@@ -13332,7 +14383,9 @@
         "--base",
         "901cb26626cb0f06b7f51a72b95e04aa4f7f4ebf",
         "--candidate",
-        "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc",
+        "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+        "--raw-output",
+        "/tmp/phase475-evidence.uSjTTF/raw/MYPY-PHASE475.mypy.log",
         "src/stoa/db/repositories/account_deletion_repo.py",
         "src/stoa/db/repositories/notification_repo.py",
         "src/stoa/db/repositories/practice_repo.py",
@@ -13353,403 +14406,1255 @@
         "src/stoa/services/practice_projection_service.py",
         "src/stoa/services/rate_limit.py",
         "src/stoa/services/subscription_service.py",
+        "src/stoa/services/teacher_dispatch_service.py",
         "src/stoa/services/usage_ledger_service.py"
       ],
       "artifacts": {
         "log": {
-          "bytes": 1228,
-          "logical_path": "raw/MYPY-PHASE475-CHANGED-LINES.log",
-          "sha256": "7914dfe42faf9c6d9c812fab9f25b856e323c52d35dfd88e07650f72d1532a23"
+          "bytes": 1345,
+          "logical_path": "raw/MYPY-PHASE475.log",
+          "sha256": "031ad2d6a728f5b42ee88908e6e1505d628c53ca65bdda29bbfe61446e5fda68"
+        },
+        "mypy_output": {
+          "bytes": 44,
+          "logical_path": "raw/MYPY-PHASE475.mypy.log",
+          "sha256": "5ca59a2361304496c36048048a43aa6f41eb23e74111d16719b962637888fc08"
         }
       },
       "before": {
         "clean": true,
-        "head": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc"
+        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
       },
-      "candidate_sha": "cc709c17a9ff4cbec4c3aabf51660f52e571b5dc",
-      "ended_at": "2026-07-22T01:51:56.689516Z",
+      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+      "ended_at": "2026-07-23T10:01:46.527134Z",
       "exit_code": 0,
-      "gate_id": "MYPY-PHASE475-CHANGED-LINES",
+      "gate_id": "MYPY-PHASE475",
       "kind": "mypy",
       "privacy": {
         "denylist_sha256": "5953187afb61c9d0819f5940fb23c92c89cd3616b6ad6c89805a84b1190cf693",
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-22T01:51:56.188521Z"
+      "started_at": "2026-07-23T10:01:46.107171Z"
     }
   ],
   "schema_version": "stoa.phase475.evidence-results.v1",
   "source_snapshot": [
     {
-      "bytes": 25843,
+      "candidate_blob": {
+        "bytes": 25843,
+        "sha256": "55eb4febfe81b1f081522f659a734f51007348d1fadf33c5c354307283e497a3"
+      },
       "path": ".planning/REQUIREMENTS.md",
-      "sha256": "22ddfe47c4ef801c1aa836a2abb610bc08fc3aebf96dabe1e413fc00e0b73892"
+      "status": "modified"
     },
     {
-      "bytes": 59326,
+      "candidate_blob": {
+        "bytes": 62090,
+        "sha256": "cb21ca3640a22b9c9bc131abe2687f5495e50eec82e664b7f64b02a480fbaf2c"
+      },
       "path": ".planning/ROADMAP.md",
-      "sha256": "cceced719f24d37ddf0d2c80b823ccb5431ee6d0ffac8e095b0ccb990318d360"
+      "status": "modified"
     },
     {
-      "bytes": 64706,
+      "candidate_blob": {
+        "bytes": 81661,
+        "sha256": "169839e10105d01c58dc7373d640e406b932db412c0821103630d6f4b0feb718"
+      },
       "path": ".planning/STATE.md",
-      "sha256": "e40f4f391b15a0dc4eafcd1bd2740cf4c266df20d8cfd4e4b1d2c658e31f7545"
+      "status": "modified"
     },
     {
-      "bytes": 5853,
+      "candidate_blob": {
+        "bytes": 5853,
+        "sha256": "e115a21555849d349a7ecaeb9930d35be9948ecab96fc128bff6652df344701f"
+      },
       "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-01-SUMMARY.md",
-      "sha256": "e115a21555849d349a7ecaeb9930d35be9948ecab96fc128bff6652df344701f"
+      "status": "added"
     },
     {
-      "bytes": 6184,
+      "candidate_blob": {
+        "bytes": 6184,
+        "sha256": "6df64940359168cc54c252acc3392e27260dcf5e967b8c79dc6572ebdba33b53"
+      },
       "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-02-SUMMARY.md",
-      "sha256": "6df64940359168cc54c252acc3392e27260dcf5e967b8c79dc6572ebdba33b53"
+      "status": "added"
     },
     {
-      "bytes": 6958,
+      "candidate_blob": {
+        "bytes": 6958,
+        "sha256": "36ca24ac381986a61d8327a0c60e5689d0dc5b412817eaae1f1d3b7fc5670897"
+      },
       "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-03-SUMMARY.md",
-      "sha256": "36ca24ac381986a61d8327a0c60e5689d0dc5b412817eaae1f1d3b7fc5670897"
+      "status": "added"
     },
     {
-      "bytes": 7880,
+      "candidate_blob": {
+        "bytes": 7880,
+        "sha256": "65a5ec3d9e08881c61c0d3bf1f798ebe59de7da0fabddd5b92970ce2b1ba74e8"
+      },
       "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-04-SUMMARY.md",
-      "sha256": "65a5ec3d9e08881c61c0d3bf1f798ebe59de7da0fabddd5b92970ce2b1ba74e8"
+      "status": "added"
     },
     {
-      "bytes": 6939,
+      "candidate_blob": {
+        "bytes": 6939,
+        "sha256": "94aea2b4af01d84adc91d415e996ca01e1837d75f7bde57703b0175ed5e67467"
+      },
       "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-05-SUMMARY.md",
-      "sha256": "94aea2b4af01d84adc91d415e996ca01e1837d75f7bde57703b0175ed5e67467"
+      "status": "added"
     },
     {
-      "bytes": 7879,
+      "candidate_blob": {
+        "bytes": 7879,
+        "sha256": "f640315bf69529191bdd42ac7fc406108c3c2d97e0f600029276a86a9d069b89"
+      },
       "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-06-SUMMARY.md",
-      "sha256": "f640315bf69529191bdd42ac7fc406108c3c2d97e0f600029276a86a9d069b89"
+      "status": "added"
     },
     {
-      "bytes": 9138,
+      "candidate_blob": {
+        "bytes": 9138,
+        "sha256": "e542867bedfef4738a1254c12b5ce7cb2da37e64ba2fe17d9daf90d2431d8ba2"
+      },
       "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-07-SUMMARY.md",
-      "sha256": "e542867bedfef4738a1254c12b5ce7cb2da37e64ba2fe17d9daf90d2431d8ba2"
+      "status": "added"
     },
     {
-      "bytes": 9139,
+      "candidate_blob": {
+        "bytes": 9139,
+        "sha256": "84181f4e9d817f7c97585c0158a604eb9471d7e99bb565c8fabacf060a6fc8a2"
+      },
       "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-08-SUMMARY.md",
-      "sha256": "84181f4e9d817f7c97585c0158a604eb9471d7e99bb565c8fabacf060a6fc8a2"
+      "status": "added"
     },
     {
-      "bytes": 7385,
+      "candidate_blob": {
+        "bytes": 7385,
+        "sha256": "099f69f20eb568525b88e9a30e83f4337b7c5288d7939331ffbce15129cb1f28"
+      },
       "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-09-SUMMARY.md",
-      "sha256": "099f69f20eb568525b88e9a30e83f4337b7c5288d7939331ffbce15129cb1f28"
+      "status": "added"
     },
     {
-      "bytes": 6651,
+      "candidate_blob": {
+        "bytes": 6651,
+        "sha256": "a16e4691340374bab0fd5138fb4737ff9e297e7b077934835ab67dedff998023"
+      },
       "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-10-SUMMARY.md",
-      "sha256": "a16e4691340374bab0fd5138fb4737ff9e297e7b077934835ab67dedff998023"
+      "status": "added"
     },
     {
-      "bytes": 7662,
+      "candidate_blob": {
+        "bytes": 7662,
+        "sha256": "e43713c7c8000b6ce8f08b4a95c143c505818f50724772a3639d82052b88a326"
+      },
       "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-11-SUMMARY.md",
-      "sha256": "e43713c7c8000b6ce8f08b4a95c143c505818f50724772a3639d82052b88a326"
+      "status": "added"
     },
     {
-      "bytes": 6990,
+      "candidate_blob": {
+        "bytes": 6990,
+        "sha256": "b8361b7d6698fa5fbb58b34d1b701afbbc14de2534bbae23c5ae5a11d09b6620"
+      },
       "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-12-SUMMARY.md",
-      "sha256": "b8361b7d6698fa5fbb58b34d1b701afbbc14de2534bbae23c5ae5a11d09b6620"
+      "status": "added"
     },
     {
-      "bytes": 1555,
+      "candidate_blob": {
+        "bytes": 10798,
+        "sha256": "03aab406be5f6445cd43f27409b7affc172f584c42209a4d9f28743e8091563e"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-13-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6085,
+        "sha256": "fabca8ff8d111d4123619d208939602aedf42faa1cf202fdd05617aa431e8ed4"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-14-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6735,
+        "sha256": "f29d63a73f26cb37bcca2ab978731d2b820f1728cc098828bfc6276a3c118fac"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-14-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6515,
+        "sha256": "bf2401e8a3b0cb5cae99b595e3fc77214ef5265e46156900140ec0d05b6f4797"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-15-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 8812,
+        "sha256": "0ffe1b5f32ab2bd3fe0d3c9bfff9d772e107a963de56e291e52e917010121daa"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-15-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 5348,
+        "sha256": "065c440b31edd55f84956b7a7e68a25588e36b423f910fde6918dd4d12a59103"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-16-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6595,
+        "sha256": "036deeda348d3c62afa689c03215e3eaf2d0e7387b83e58fa6936ba55406780c"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-16-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6547,
+        "sha256": "cd38acf74e90634403516f920ed2166e29430a81ce2d4e16b35b553d855f0a59"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-17-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 9136,
+        "sha256": "84254bb8706b1871dc637ebbde1bb871ff30329253bc634ce1e2d794e2ec657a"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-17-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6995,
+        "sha256": "08893bb34ccb6032d5fc7de232075baf2e0e873c4e5d9a84565ca1947ee291b6"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-18-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 8757,
+        "sha256": "9b4a0cbd2a9c9d676f217e4fec46dfecd45432dc93d6b66de89df95e1731107c"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-18-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6136,
+        "sha256": "1fd7f26ca2c291dbd7b8b62cef4ddcd3ad777eca94c40cfe7e8c79f1527375c9"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-19-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 7318,
+        "sha256": "78fd46c7412e3bcb2853f7e6f01e0b1854d09f0cf9c498202b1f7b9666d871c1"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-19-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 7437,
+        "sha256": "0bc093bb7eb884fd18d5ab8083f239b4aebf3a0f389108e086d726cee09c9d86"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-20-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 9350,
+        "sha256": "abd79dd539da1a5f9e64ce045a0daf0c81ebb1520e1fe586f6731eb8ffdf1071"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-20-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6092,
+        "sha256": "2a818d138039411f58994087bf219b55802af6735fc4161846b8eb46936bd4e2"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-21-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 7684,
+        "sha256": "acaa96648e4a96c66f7d4a5bb35324cbf110e74143a42ac7dc7d775fa623de08"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-21-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6029,
+        "sha256": "e65e7c35483b8fd67b1c4774e8f2f3be5e6653369b0e6fa695146c1f88b40911"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-22-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 7680,
+        "sha256": "93b0403c918fb66ba8f799ce9408084ec2cfe6625100c9b8a28826728c4146ea"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-22-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6365,
+        "sha256": "b98bb050253ff49ed8878ca89ba25e0bbb4763d9fac7a2a0ef92b6e24abcfac3"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-23-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 8617,
+        "sha256": "dca0f02fc9d24beebabff55536d629fae5589c32308c4b1b8a5255ee5ab249a3"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-23-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 5854,
+        "sha256": "30085fbc07ba22d6d95dad0969cc85d2566b8bb2188b935e4cd0ea3128ab77e5"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-24-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6903,
+        "sha256": "9f7ba15a1619058271ffe8a91e5357e7a518b8e31d43710c527f18c69b6c684a"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-24-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 5979,
+        "sha256": "3fa51663d14bcea5ff9bc1d06cf48e01ac0d02a8eafa6c6d6957470101fc4b1a"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-25-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6273,
+        "sha256": "3e024998b29eb39d6a8dc44a8b07a53cc6c058feb4d6d65c0de253f4b6510627"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-25-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6449,
+        "sha256": "c621a669f461530a0c7e468f9336dd937a2d40d7695851ad5de98a200f9a0e5f"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-26-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 8349,
+        "sha256": "6c6521a4f6652c1f3dd3534853c4c252a7464c6d9343c8eec96bc6c5b0d77017"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-26-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6493,
+        "sha256": "08a1ac6eb06b9e59ea0a2be563c5a156133cdd267c1d1e6955d732d06586c046"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-27-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 7657,
+        "sha256": "088bed8cd88045809af7351cd2bf2b107f2fa893303c76d4597fc571276d1482"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-27-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6051,
+        "sha256": "719b440e851b43111725916f366f3b98a51d8d2d2e9861cb987cfeae62b390a2"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-28-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 7911,
+        "sha256": "6498d8068d9f151768512b843912e3a9c3595940d909e9d2a59733bad47b991b"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-28-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 4939,
+        "sha256": "f3642cd85b83b8728c762908572c039e2b548dc9d405f02cf0db62d2a4ae45ff"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-29-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 5511,
+        "sha256": "96835bac847eb15088a8d27fe9b778480e65bc532998f460cd31dae7a15d7ec0"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-29-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 4491,
+        "sha256": "1d1fdb816cd32b2ef8460a7f12c3d95e9b2c4863f53d3df7a343c57c76891388"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-30-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6606,
+        "sha256": "d1d1059a866bc7002c3bca0ce6d1372695e1cb5fda0afc2f944ec94298128199"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-30-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 3498,
+        "sha256": "6030a512ad0004b194def834ff13103636c03c7fe3048ad252c632b55e0f8b53"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-31-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 4907,
+        "sha256": "b5f7c1400de36dd6450be372b067a2efbe0a78329d6be0858f879aadf03e0f78"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-31-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 3968,
+        "sha256": "d03b7145ebf53d778fc1fd90adfc22c12dc07a4a0b80030bd281a169af108cbf"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-32-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 5427,
+        "sha256": "09d972ea7511fd4d4e7fdf152dccc7b86a9a4eaff67201d4a553d11f816f2f7a"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-32-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 3979,
+        "sha256": "6d5e83c112291f41b69240af33e41f4fe70d7f31519127ff69e17d6675cc4df3"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-33-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 5349,
+        "sha256": "d26d96c329beff5a1f9f4e73fdeb97bd0043472e5714266635cb64f7c64ea432"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-33-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 3934,
+        "sha256": "d692a40703f0ca2f457066b09bbb8911264cb233e10eab6da566653c8e1126dd"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-34-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 4408,
+        "sha256": "269fb1bc6aaa5fa1ee69be038241db1aafd26eb061f92e099e238100ea32c4a6"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-34-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 3853,
+        "sha256": "381a70c9d546c02b585d7f6d53ee5a28669791cf9b0081a22898e4b64ca9f861"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-35-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 5182,
+        "sha256": "574239708bc74d796f05f339389df5f36497902e73b2713ccb5efe61d8536303"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-35-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 3735,
+        "sha256": "7315fd4ef631d9737b50849dca5486380ec8524fa349f7e8c876926d617e7b9b"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-36-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 5588,
+        "sha256": "dfd05e26c62edb102eaa0cc32e8fee193e8e4e4bb173f332bf5aa9c10a2defa2"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-36-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 3688,
+        "sha256": "b4180a15830e1455f4204aeb9f0743a39bb73759233d575641081c208c75bed3"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-37-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 5145,
+        "sha256": "7b8082d01181df83b22e26324f3f163a097efc04927348f795ffd23a9e5b0f60"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-37-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 3655,
+        "sha256": "346bf77ed76d85d1a433c3dde11a45c3741f392a8852ea92ae46d8a9a38d4ea8"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-38-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 5382,
+        "sha256": "f70f9c0492c2aa651fa332a1b2d7bb1950e4390e0aaa88951aeaff55245f9447"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-38-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 3969,
+        "sha256": "44b574b7bf81c97e87efb330fbfe2a0d6e68f732ff8cf8c87608c208294d977b"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-39-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 4767,
+        "sha256": "8649c1c98bed7e144de9e4052be7f21ca7f6bb3cac0f8a6e35b9eecb8f2a42b3"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-39-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 3328,
+        "sha256": "027b047a9e51ddd4ebef8df759f2f7d9b6344d84961025d2375bb0c33b3e90e7"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-40-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 4900,
+        "sha256": "ce59f7e7c32fc57143028d93e76205b17614bbc80a0f327003a7370b0459aaef"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-40-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 3441,
+        "sha256": "8b55a1866e13b1e3087f1f76018f5483e20994ea869b87c66f5598595b611619"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-41-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 5467,
+        "sha256": "db517e511890c881fac03b61063ff05c4e6cade135d3c09e3dcefe572d57605b"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-41-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6239,
+        "sha256": "6bfabea4728aa47180df42d2f354ef5c8cd412a1dfa1129b6923856e34d66bed"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-42-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 8694,
+        "sha256": "af80783623c299e5c174643f75db1f4b5b7457eb35a44eff31caa98e2f0ecaf5"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-42-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 5439,
+        "sha256": "7e4a3dab043a8eeda84a17ac1a52a89c29916978873b6386cd209fdbc8c78808"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-43-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 7587,
+        "sha256": "eb735a71a07a8693651ce421ed459a979da6332224043c7171e07e20096c3c9d"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-43-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6575,
+        "sha256": "3a1a11de282a79c416181a54a5c8fdae772f3174dfa8cbe2a5bfc87f1e8b3788"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-44-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 8654,
+        "sha256": "115c6a0622fa07bccccb56b41fd9d1cb4266c2081ee5bbaac6e2dfcfb14809ac"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-44-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6401,
+        "sha256": "16c3d5f290d57b2c2652bcddf5938e8b647c9c25a731551e44485701b6153244"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-45-PLAN.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 14918,
+        "sha256": "e3427b4294a4e1ca1455b61d10a41ada8487a4539b4992f7a5b42a9e57795c70"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-REVIEW.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 17768,
+        "sha256": "aefd6890ac3c03f30450ad3930dc3fd52c8365dad4ea1f0fc47f20272528e335"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-VALIDATION.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 29036,
+        "sha256": "3f738b1d18e41a6784ef02abca3d95f8fa3dffb54a1a1e0c0ce540206277fb37"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-VERIFICATION.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 1930,
+        "sha256": "b8d2890e88ba67679658be1ce44e887d022b168aa990190482ec48ae940bd032"
+      },
       "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/deferred-items.md",
-      "sha256": "a20b256332aef2e3072ecbf51043219c6f99d9bd30c83cd69dd404ba5a2f717a"
+      "status": "added"
     },
     {
-      "bytes": 109974,
+      "candidate_blob": {
+        "bytes": 109974,
+        "sha256": "84071a1a04e2f46b140c971083db2c7ecf7afcff078691d3b632c671693427db"
+      },
       "path": "docs/security/phase-473-boundary-inventory.json",
-      "sha256": "84071a1a04e2f46b140c971083db2c7ecf7afcff078691d3b632c671693427db"
+      "status": "modified"
     },
     {
-      "bytes": 743830,
+      "candidate_blob": {
+        "bytes": 743830,
+        "sha256": "8b4087165afbd6bff9a5e9efe59369ae6ed446a20765cca473227c87cc1480e4"
+      },
       "path": "docs/security/phase-473-private-store-inventory.json",
-      "sha256": "8b4087165afbd6bff9a5e9efe59369ae6ed446a20765cca473227c87cc1480e4"
+      "status": "modified"
     },
     {
-      "bytes": 109024,
+      "candidate_blob": {
+        "bytes": 653183,
+        "sha256": "0bc4700d4a2bb29110d6837db0eeba1324effe83161833b587360d7c1ad28b40"
+      },
+      "path": "docs/security/phase-475-evidence-results.json",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 12802,
+        "sha256": "2f4bc77ee511af685a803b9b5c3e211e52defa65dfa4fb19d8a42d6ec5b8f4cf"
+      },
+      "path": "docs/security/phase-475-evidence.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 110113,
+        "sha256": "2bee8189c8379e2377faf772d7969a73103217dd8657a64e45fd12a36486f13d"
+      },
       "path": "docs/security/route-authorization-inventory.json",
-      "sha256": "8bfa477ba4b1d9ec67f7140c297bf86d1443ea70c7dfe7a7debaca68390b1cfa"
+      "status": "modified"
     },
     {
-      "bytes": 33882,
+      "candidate_blob": {
+        "bytes": 33882,
+        "sha256": "5edf931ee8d655884fcb65f9b589e990f5a8c449d15a08f8ecf7b6ce49b3d515"
+      },
       "path": "scripts/generate_phase473_boundary_inventory.py",
-      "sha256": "5edf931ee8d655884fcb65f9b589e990f5a8c449d15a08f8ecf7b6ce49b3d515"
+      "status": "modified"
     },
     {
-      "bytes": 44762,
+      "candidate_blob": {
+        "bytes": 46040,
+        "sha256": "8b600be95ed16e259f0ee5eb4d19914795eae0a388bef22df1a2bd954778da16"
+      },
       "path": "scripts/generate_phase473_private_store_inventory.py",
-      "sha256": "a22d0df75ca74bfdc171bf3889a0de9ad0d893b4f95784264af5e898d44f5f66"
+      "status": "modified"
     },
     {
-      "bytes": 66461,
+      "candidate_blob": {
+        "bytes": 66461,
+        "sha256": "3a075caa5889eaaf908b91c5204ae41b73394dcf918a1947cb824aca9815a331"
+      },
       "path": "scripts/verify_phase473_evidence.py",
-      "sha256": "3a075caa5889eaaf908b91c5204ae41b73394dcf918a1947cb824aca9815a331"
+      "status": "modified"
     },
     {
-      "bytes": 45314,
+      "candidate_blob": {
+        "bytes": 59891,
+        "sha256": "c1f4ba5707862855d7416631a540e3422f6eeeea4281897d65c914b25b8b1ee7"
+      },
       "path": "scripts/verify_phase475.py",
-      "sha256": "c39ddfc0401eeb07e0eaf2effc8b82b96357d588ada75bcd660b4e19abc26a66"
+      "status": "added"
     },
     {
-      "bytes": 60835,
+      "candidate_blob": {
+        "bytes": 77873,
+        "sha256": "138478f5122558d7fe38fef5ae62fc9cbfaa73e02d822049f132eba4f8998753"
+      },
       "path": "src/stoa/db/repositories/account_deletion_repo.py",
-      "sha256": "04d11a073031090001b566780e2fdbf201590bf4904aa2931a35d090bc5262c6"
+      "status": "modified"
     },
     {
-      "bytes": 53933,
+      "candidate_blob": {
+        "bytes": 59607,
+        "sha256": "e804a186f675f8322b1f309cff69d09840ab1192077e3110bac5bc2d26466624"
+      },
       "path": "src/stoa/db/repositories/notification_repo.py",
-      "sha256": "434ce2860a590195df71b27801efb01e242764c66bbd9cae645eae32b8e177f4"
+      "status": "modified"
     },
     {
-      "bytes": 24886,
+      "candidate_blob": {
+        "bytes": 27212,
+        "sha256": "943c55e7f07f673c4a405f683c811c39b68f21ab5eff05f17cc79215da35829b"
+      },
       "path": "src/stoa/db/repositories/practice_repo.py",
-      "sha256": "ca7a433694ec96bc061ed5daf9dadfa154d6f4aaa356340ee0effd022ba9fa7a"
+      "status": "modified"
     },
     {
-      "bytes": 26068,
+      "candidate_blob": {
+        "bytes": 37761,
+        "sha256": "37007d2c4b21f17d67f8f586835a6546e3ba0b154260ee02172ad77fd974964b"
+      },
       "path": "src/stoa/db/repositories/question_repo.py",
-      "sha256": "d3a8960ef4fde54d8ad39937af4ac6ae1095abaafdff59c5adec6cac97cba04b"
+      "status": "modified"
     },
     {
-      "bytes": 40759,
+      "candidate_blob": {
+        "bytes": 101019,
+        "sha256": "9aff5568c0f36d123ed7a24f3fa63654c6d147b7685d0b0548356df3a99032e0"
+      },
       "path": "src/stoa/db/repositories/question_submission_repo.py",
-      "sha256": "3bee950cc0549966a2fb483d883d0f3f11c4ff308c020f9ecb2958c025c86e40"
+      "status": "added"
     },
     {
-      "bytes": 40918,
+      "candidate_blob": {
+        "bytes": 55117,
+        "sha256": "3b782d4b11b9602b470c5941d1e921dfcd22241c64cc07f1ee21879d29e900e5"
+      },
       "path": "src/stoa/db/repositories/user_repo.py",
-      "sha256": "3249186b3d471508b7322020be7d719e0deba2da3190a66a43955144cb68d1c4"
+      "status": "modified"
     },
     {
-      "bytes": 5504,
+      "candidate_blob": {
+        "bytes": 7938,
+        "sha256": "e91187092a4cbc80024231b56f22184998b0a7ebcd4441f7279c2219fa1f5a58"
+      },
       "path": "src/stoa/jobs/reconcile_question_submissions.py",
-      "sha256": "db5f71741cd9360bfd1830ddc0c17d71b183f20fbe72c0b15fba3b8d0640d2df"
+      "status": "added"
     },
     {
-      "bytes": 7668,
+      "candidate_blob": {
+        "bytes": 7668,
+        "sha256": "b93fbf71d7e80ec1b2f468e99632c319f30778a8596d10b0c019c203f28e7d81"
+      },
       "path": "src/stoa/models/practice.py",
-      "sha256": "b93fbf71d7e80ec1b2f468e99632c319f30778a8596d10b0c019c203f28e7d81"
+      "status": "modified"
     },
     {
-      "bytes": 2195,
+      "candidate_blob": {
+        "bytes": 2495,
+        "sha256": "8e906af36b3955fe9ea82dcd508782b281581e1b9e28bdeb76377aa2a2132a11"
+      },
       "path": "src/stoa/models/question.py",
-      "sha256": "7ea460a33b0377895b29f06faaa928232404876440a69c328188726779711317"
+      "status": "modified"
     },
     {
-      "bytes": 143782,
+      "candidate_blob": {
+        "bytes": 149638,
+        "sha256": "c22b40e9ff7047de863a876ead055994c931a7e2104d595a0e73776a3de2182d"
+      },
       "path": "src/stoa/routers/admin.py",
-      "sha256": "e33712ed2c7f1c83265fe0f561b5d28f638276c9d833ebece4422670b6d23469"
+      "status": "modified"
     },
     {
-      "bytes": 40061,
+      "candidate_blob": {
+        "bytes": 40213,
+        "sha256": "f32eb8fd69f890fc9b63f3faf0e146b6933796150f82d68f954544c4c3c6eecf"
+      },
       "path": "src/stoa/routers/auth.py",
-      "sha256": "7899241da9fa46e147226c73d372889e3792859794e65e388cfc2021c766c541"
+      "status": "modified"
     },
     {
-      "bytes": 37076,
+      "candidate_blob": {
+        "bytes": 37992,
+        "sha256": "5b9abfb828a880fad6becbaf84f6fdb57bfeefa56a34bc6d316aab7a9e55f7c1"
+      },
       "path": "src/stoa/routers/practice.py",
-      "sha256": "6f61e2ff71fcf75cfcb0ba7872ddc2680360f600ec64758ca99f3ec5b4bb36de"
+      "status": "modified"
     },
     {
-      "bytes": 23841,
+      "candidate_blob": {
+        "bytes": 38494,
+        "sha256": "9eba27722aef3e85c18e8b07255e15d2fe456410b699a420eb4ffc067abc989c"
+      },
       "path": "src/stoa/routers/questions.py",
-      "sha256": "edbcdfee0ed73d9927472d2a94e9f0ec3f5610261cf8d940afe02abc24b1ca12"
+      "status": "modified"
     },
     {
-      "bytes": 45306,
+      "candidate_blob": {
+        "bytes": 52532,
+        "sha256": "e04f27ef4bb1c237ad0f131dec0c64e60dd1f4008b3443e9292bc8f482ceb815"
+      },
       "path": "src/stoa/routers/teachers.py",
-      "sha256": "47c7d9b7330ea1fdbe497d8e201c22cabed9437f7229b1a065d4b6c4cd580b3e"
+      "status": "modified"
     },
     {
-      "bytes": 42452,
+      "candidate_blob": {
+        "bytes": 42452,
+        "sha256": "c34f7f86af43060fd5a8f5972a21406c9c25f777f3c6a5ab8d85d7128a5aa82b"
+      },
       "path": "src/stoa/security/authorization.py",
-      "sha256": "c34f7f86af43060fd5a8f5972a21406c9c25f777f3c6a5ab8d85d7128a5aa82b"
+      "status": "modified"
     },
     {
-      "bytes": 53943,
+      "candidate_blob": {
+        "bytes": 55540,
+        "sha256": "459cf5ef2a08a7f663060050ae9229abccdda156b55d56061b31bb4a2cf5e722"
+      },
       "path": "src/stoa/services/account_deletion_service.py",
-      "sha256": "470a169edeadbb6e107d803e303e90d0c98c062d9e432e338d7498b3f111ee56"
+      "status": "modified"
     },
     {
-      "bytes": 73264,
+      "candidate_blob": {
+        "bytes": 73473,
+        "sha256": "c8fffa97e92429179af090f0a1187725c272dcf6c40ba1d8bafed02dac4cf422"
+      },
       "path": "src/stoa/services/notification_service.py",
-      "sha256": "e18352df9a52164ce339f6ce068a6d2c665fd20f4a11a340ad5b8ee41926903b"
+      "status": "modified"
     },
     {
-      "bytes": 12279,
+      "candidate_blob": {
+        "bytes": 12279,
+        "sha256": "4181af0937072cc78087cb999e3cb651f4ece2b7c0d7b15b65b4b6f237ab7794"
+      },
       "path": "src/stoa/services/practice_projection_service.py",
-      "sha256": "4181af0937072cc78087cb999e3cb651f4ece2b7c0d7b15b65b4b6f237ab7794"
+      "status": "modified"
     },
     {
-      "bytes": 17494,
+      "candidate_blob": {
+        "bytes": 19410,
+        "sha256": "fcc9a53fdfa83323f2ef9d80710cd7553ec3f9e64886d2482a7dc1f2e1314214"
+      },
       "path": "src/stoa/services/rate_limit.py",
-      "sha256": "940226277489a11a87ab503e3a2f2356a14b59d6abdbbacde67d602610c432cc"
+      "status": "modified"
     },
     {
-      "bytes": 120500,
+      "candidate_blob": {
+        "bytes": 124536,
+        "sha256": "ce787dd265f68dc19d972bc8ed3d8f2a6bc12780debf4ba40b1d6bf4b6c59ecb"
+      },
       "path": "src/stoa/services/subscription_service.py",
-      "sha256": "4a25d7b8022bff61178337bd2455fda8bb719cfed79553c44664ca016128f7ce"
+      "status": "modified"
     },
     {
-      "bytes": 36807,
+      "candidate_blob": {
+        "bytes": 24041,
+        "sha256": "829eca0395f3a19f46de0256472cb4a484c39cfad06d2e9fdd8a7976eb995266"
+      },
+      "path": "src/stoa/services/teacher_dispatch_service.py",
+      "status": "modified"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 38239,
+        "sha256": "ba052431fe8256f87bb0fa68ed398f7446b386624c778c6a340b0c79a9ab02cc"
+      },
       "path": "src/stoa/services/usage_ledger_service.py",
-      "sha256": "6fb5d056e3ed17b767d859b72830215fd77262305f23c2da482589ee52a43a06"
+      "status": "modified"
     },
     {
-      "bytes": 24127,
+      "candidate_blob": {
+        "bytes": 26091,
+        "sha256": "fca0a1d703b0e9eacb7dbea50fdf8c578c7a5b200c50f8967ad00bfd85f4308e"
+      },
       "path": "tests/test_admin_authorization.py",
-      "sha256": "1fdce4cf9acf1d01537dd3ada2a3e826e33784cae68c5989232cee482420d2e5"
+      "status": "modified"
     },
     {
-      "bytes": 51165,
+      "candidate_blob": {
+        "bytes": 51165,
+        "sha256": "ade5bf5a51b6f82746881de0e9e200a4872703d08cdf38ccd9f3172e89a3c959"
+      },
       "path": "tests/test_auth_account_lifecycle.py",
-      "sha256": "ade5bf5a51b6f82746881de0e9e200a4872703d08cdf38ccd9f3172e89a3c959"
+      "status": "modified"
     },
     {
-      "bytes": 52572,
+      "candidate_blob": {
+        "bytes": 52572,
+        "sha256": "638a9983ad9ae9470edb98a6911d5eff103652368812b2eaeec38704bfe07f64"
+      },
       "path": "tests/test_conversations.py",
-      "sha256": "638a9983ad9ae9470edb98a6911d5eff103652368812b2eaeec38704bfe07f64"
+      "status": "modified"
     },
     {
-      "bytes": 25185,
+      "candidate_blob": {
+        "bytes": 25185,
+        "sha256": "dffe33d16b50d8d26e9ce35d4960f7f0ca51aa62c207ed14ba27ad9f4a56a68f"
+      },
       "path": "tests/test_curriculum_analytics.py",
-      "sha256": "dffe33d16b50d8d26e9ce35d4960f7f0ca51aa62c207ed14ba27ad9f4a56a68f"
+      "status": "modified"
     },
     {
-      "bytes": 9180,
+      "candidate_blob": {
+        "bytes": 11826,
+        "sha256": "90911cfdbb83f9272adc7eb93a2ea3758396b4159b987e87e28bd75478343417"
+      },
       "path": "tests/test_learning_expansion.py",
-      "sha256": "0d31453985b336af1306f4bd7e6f36f0faaa08ef855439101dd9d4b4e5ebd16f"
+      "status": "modified"
     },
     {
-      "bytes": 24031,
+      "candidate_blob": {
+        "bytes": 31394,
+        "sha256": "7ab9481b4abf61de18bc7929465a475e30ccf9088e8fd0595652cf9c8a77aa26"
+      },
+      "path": "tests/test_notifications.py",
+      "status": "modified"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 24031,
+        "sha256": "a61c9c4c4e3662858f24a32c2ad9f9da0c2c795a6cd2016d31bd125e09f4831a"
+      },
       "path": "tests/test_phase473_account_deletion.py",
-      "sha256": "a61c9c4c4e3662858f24a32c2ad9f9da0c2c795a6cd2016d31bd125e09f4831a"
+      "status": "modified"
     },
     {
-      "bytes": 17786,
+      "candidate_blob": {
+        "bytes": 17786,
+        "sha256": "281f9ae72209e23750dea48341ea4b7a320f6982270eb5f01d51b2d11eaa7c55"
+      },
       "path": "tests/test_phase473_account_deletion_claim_fencing.py",
-      "sha256": "281f9ae72209e23750dea48341ea4b7a320f6982270eb5f01d51b2d11eaa7c55"
+      "status": "modified"
     },
     {
-      "bytes": 16818,
+      "candidate_blob": {
+        "bytes": 16818,
+        "sha256": "156f6a873d58c5f9824b219c41f3f0a3696508fb6aac8572d713472144ea16aa"
+      },
       "path": "tests/test_phase473_boundary_inventory.py",
-      "sha256": "156f6a873d58c5f9824b219c41f3f0a3696508fb6aac8572d713472144ea16aa"
+      "status": "modified"
     },
     {
-      "bytes": 16983,
+      "candidate_blob": {
+        "bytes": 16983,
+        "sha256": "e20b4676c0b69157bf3ae3d09b630b84489ac12b4f58be0ce54f1bb70efb55b6"
+      },
       "path": "tests/test_phase473_delivery_intent_recovery.py",
-      "sha256": "e20b4676c0b69157bf3ae3d09b630b84489ac12b4f58be0ce54f1bb70efb55b6"
+      "status": "modified"
     },
     {
-      "bytes": 29794,
+      "candidate_blob": {
+        "bytes": 29794,
+        "sha256": "fd0ad1e00882909869a5f0f05b0f70a4321987c0303844f7c3410a5c976baa76"
+      },
       "path": "tests/test_phase473_evidence_verifier.py",
-      "sha256": "fd0ad1e00882909869a5f0f05b0f70a4321987c0303844f7c3410a5c976baa76"
+      "status": "modified"
     },
     {
-      "bytes": 14039,
+      "candidate_blob": {
+        "bytes": 14039,
+        "sha256": "d39976e0bc3c8e703d991a4733d4f27f0fd4c854e6d42663550ddf1ce8330e74"
+      },
       "path": "tests/test_phase473_notification_deletion.py",
-      "sha256": "d39976e0bc3c8e703d991a4733d4f27f0fd4c854e6d42663550ddf1ce8330e74"
+      "status": "modified"
     },
     {
-      "bytes": 12543,
+      "candidate_blob": {
+        "bytes": 13191,
+        "sha256": "8a92024657753d2b23e8dde25061a6f7f1a07792d0390a53670360bacd15dbe8"
+      },
       "path": "tests/test_phase473_private_store_inventory.py",
-      "sha256": "25689631353f0af6879e937c51b3b7896c56d39990acb5514c7f80a27787894b"
+      "status": "modified"
     },
     {
-      "bytes": 11761,
+      "candidate_blob": {
+        "bytes": 15613,
+        "sha256": "d55aa0ae898f26d5b785f9be7f06aff8b3ab98fa0e4a65a25fe248c501512704"
+      },
       "path": "tests/test_phase475_completed_deletion_replay.py",
-      "sha256": "c7a8942e41fa9193fd838b09c2b9cec7a0a3d05d1bde00099705be77177f453c"
+      "status": "added"
     },
     {
-      "bytes": 8717,
+      "candidate_blob": {
+        "bytes": 5923,
+        "sha256": "8d1a840d0c8072baf88e64cadf20769129a7854f9ce3de502e2f04d29dcbde2b"
+      },
+      "path": "tests/test_phase475_deletion_discovery.py",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 8010,
+        "sha256": "a4343574084474b20655539d9ce2788261187b057729b3f4b3617159727e3b7a"
+      },
+      "path": "tests/test_phase475_deletion_notification_identity_scrub.py",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 8696,
+        "sha256": "6ce337aef3608767e157b71bf359a940c438ab5923e3f94a04f62c4e8264477f"
+      },
+      "path": "tests/test_phase475_deletion_relationship_scrub.py",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 11800,
+        "sha256": "7e91f6dc4c0fd501c24f53e8550f7be9929eef7be3251384fada4c0a21a87117"
+      },
+      "path": "tests/test_phase475_deletion_teacher_identity_scrub.py",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 8717,
+        "sha256": "bc1ceb6f96ddd269624967c2369a7ca6c75ce2952f981b7baa0ca0fd207567d5"
+      },
       "path": "tests/test_phase475_delivery_begin.py",
-      "sha256": "bc1ceb6f96ddd269624967c2369a7ca6c75ce2952f981b7baa0ca0fd207567d5"
+      "status": "added"
     },
     {
-      "bytes": 13891,
+      "candidate_blob": {
+        "bytes": 30170,
+        "sha256": "54c863272a8da673d412164d0b446a61c2929d568e3c19b23741ce2ba988183f"
+      },
       "path": "tests/test_phase475_evidence_verifier.py",
-      "sha256": "ccf3e830356f3e0d21944b1f76c0213ab8aa4d2a1d376fa7a6b3c8c9348f6630"
+      "status": "added"
     },
     {
-      "bytes": 6106,
+      "candidate_blob": {
+        "bytes": 6106,
+        "sha256": "de54cd3d7cb3c4c73f609db73275ec198549db1df0c93848ec385ef15cc722c7"
+      },
       "path": "tests/test_phase475_mistake_answer.py",
-      "sha256": "de54cd3d7cb3c4c73f609db73275ec198549db1df0c93848ec385ef15cc722c7"
+      "status": "added"
     },
     {
-      "bytes": 12390,
+      "candidate_blob": {
+        "bytes": 16218,
+        "sha256": "a91d367f99ce6668e592c65d30ab33bb689ab8c820b799bc49e5f1b23d602254"
+      },
       "path": "tests/test_phase475_parent_binding_reconciliation.py",
-      "sha256": "29f807d097848a68df5a01e7bf6ab1fce8786dcee1a0144b05d451408f075875"
+      "status": "added"
     },
     {
-      "bytes": 9706,
+      "candidate_blob": {
+        "bytes": 19072,
+        "sha256": "c3c759e9710c7e219131b1bea93275625e258cd29cb29a6e5f320cea64692b54"
+      },
       "path": "tests/test_phase475_parent_binding_transaction.py",
-      "sha256": "ce51d2f058495d2350a9cb845b4095d25a6e2b9fd7cb12aa972e9f3b1d1be86c"
+      "status": "added"
     },
     {
-      "bytes": 11889,
+      "candidate_blob": {
+        "bytes": 11889,
+        "sha256": "fe159355c30a9bf830ab59feba4bded8075e830f2ddafb39dcff8d291a64c6ca"
+      },
       "path": "tests/test_phase475_profile_version_cas.py",
-      "sha256": "fe159355c30a9bf830ab59feba4bded8075e830f2ddafb39dcff8d291a64c6ca"
+      "status": "added"
     },
     {
-      "bytes": 13583,
+      "candidate_blob": {
+        "bytes": 17980,
+        "sha256": "af05cda61e704a7f9602b154d7d5385a4ebca9f10a94ee9b20651f1eb215f4ed"
+      },
       "path": "tests/test_phase475_question_admission.py",
-      "sha256": "ddc7a0fa441f29bdbe38b5b54d3e4722c7c4eced1bf0799e8bd699b2dad5f074"
+      "status": "added"
     },
     {
-      "bytes": 18378,
+      "candidate_blob": {
+        "bytes": 31160,
+        "sha256": "c177437ac47af6abbbf73672c36d55d4fd2a61ef9e11b4a33339dff9db79ef9d"
+      },
+      "path": "tests/test_phase475_question_effect_recovery.py",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 24556,
+        "sha256": "f3ff6b332674822cb606b05fbb2932bd0090447ec56c22ded8385cc79ce465e6"
+      },
       "path": "tests/test_phase475_question_reconciliation.py",
-      "sha256": "ccf0521612bfc86d4b85201454f391046608751cdceff1e66e1be0844c3b0c7f"
+      "status": "added"
     },
     {
-      "bytes": 10034,
+      "candidate_blob": {
+        "bytes": 25393,
+        "sha256": "275954dd8a034c9ce82073cf09b380096032e90524e9533633fa5fd6555cdb86"
+      },
       "path": "tests/test_phase475_question_replay.py",
-      "sha256": "57f97e1e2b3609be557d9a6fc1a9b2808e4d39fa393e737d8ae2461df0759833"
+      "status": "added"
     },
     {
-      "bytes": 10442,
+      "candidate_blob": {
+        "bytes": 16391,
+        "sha256": "4e8390a9499f59120fe21d3ba8589f284a45b40aa0670036fc14776e94123025"
+      },
+      "path": "tests/test_phase475_question_state_cas.py",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 15141,
+        "sha256": "8da2fb829bf54d8088920445bb075eb56230a7122a8dbc3782a868b9c5cdb45c"
+      },
       "path": "tests/test_phase475_rate_limit.py",
-      "sha256": "232c5e9869c64ed4e0c1520bb286867c2283dd00746a3f3638a3910bb392f4b9"
+      "status": "added"
     },
     {
-      "bytes": 9483,
+      "candidate_blob": {
+        "bytes": 16231,
+        "sha256": "3fbb2e533462412f31882693bfcabf6784c8f60c03de1fe37b20c47ddfac55b5"
+      },
       "path": "tests/test_phase475_teacher_takeover.py",
-      "sha256": "e568d5c749e6f55f718a624c011aaa0d256c48bea8681d1aa2c7ac2ce0a6e18f"
+      "status": "added"
     },
     {
-      "bytes": 10070,
+      "candidate_blob": {
+        "bytes": 10070,
+        "sha256": "829224295485179a711865cc6e8517915ef20fdfcc914dfa95826f1fb23364f5"
+      },
       "path": "tests/test_phase475_teacher_takeover_effect.py",
-      "sha256": "829224295485179a711865cc6e8517915ef20fdfcc914dfa95826f1fb23364f5"
+      "status": "added"
     },
     {
-      "bytes": 12471,
+      "candidate_blob": {
+        "bytes": 12471,
+        "sha256": "58b7b68f3fd0c93614a60ffb10a4dcb75253b63a378c4806e140b1d600616e8a"
+      },
       "path": "tests/test_practice.py",
-      "sha256": "58b7b68f3fd0c93614a60ffb10a4dcb75253b63a378c4806e140b1d600616e8a"
+      "status": "modified"
     },
     {
-      "bytes": 37138,
+      "candidate_blob": {
+        "bytes": 42403,
+        "sha256": "7e53d8242e84a7fb79b93895d08d48a7655bc8a4563b901745bc1abec2beee92"
+      },
       "path": "tests/test_questions.py",
-      "sha256": "70612eb5a34c6a7ec15c6bcbc7e568ba3fd780e534790555e6fe886247b23b70"
+      "status": "modified"
     },
     {
-      "bytes": 67946,
+      "candidate_blob": {
+        "bytes": 67946,
+        "sha256": "a7769ebd556d5f09f0b5e9633fc060fc170685b9adf097613f187ef2acf8b0f4"
+      },
       "path": "tests/test_subscription_operations.py",
-      "sha256": "a7769ebd556d5f09f0b5e9633fc060fc170685b9adf097613f187ef2acf8b0f4"
+      "status": "modified"
     },
     {
-      "bytes": 12289,
+      "candidate_blob": {
+        "bytes": 13051,
+        "sha256": "a7f950b7da35a4f0c65b53b85d26d2a068b817cb7babd036873e59a77f10f6b8"
+      },
       "path": "tests/test_teacher_dispatch.py",
-      "sha256": "77ab9c08b8ae300c254b05a24f328a5f3438f6628c7fe9bab7e23a3de4796fd0"
+      "status": "modified"
     },
     {
-      "bytes": 13297,
+      "candidate_blob": {
+        "bytes": 14101,
+        "sha256": "500c2493e621efeebc7a6764142d9334829373950fd3b2bb4da97df7181c1582"
+      },
       "path": "tests/test_teacher_reply_sla.py",
-      "sha256": "21bca6eac710c19a19085cb4bdfb1d52c4dc1befedb2497c4b9f9f1ac0383561"
+      "status": "modified"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 23210,
+        "sha256": "34a211d2c3f24420845571be482a7550a3bdf6cba84bd1e529606a1c1c2a2920"
+      },
+      "path": "tests/test_usage_ledger.py",
+      "status": "modified"
     }
   ]
 }
