@@ -6,7 +6,7 @@ import argparse
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 import json
-from typing import Any, Sequence
+from typing import Any, Never, Sequence
 
 from stoa.db.repositories import question_submission_repo
 
@@ -19,7 +19,7 @@ MAX_STUDENT_ID_LENGTH = 128
 class _RedactedArgumentParser(argparse.ArgumentParser):
     """Emit one coordinate-free CLI diagnostic for every parse failure."""
 
-    def error(self, _message: str) -> None:
+    def error(self, _message: str) -> Never:
         self.exit(2, f"{self.prog}: error: question reconciliation input is invalid\n")
 
 
