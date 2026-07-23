@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-43-PLAN.md
-last_updated: "2026-07-23T09:33:45.562Z"
+stopped_at: Completed 475-44-PLAN.md
+last_updated: "2026-07-23T09:48:08.405Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 137
-  percent: 68
+  completed_plans: 138
+  percent: 69
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 44 of 45
+Plan: 45 of 45
 Status: Ready to execute
 Last activity: 2026-07-22 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-23T09:33:45.545Z
-**Stopped At:** Completed 475-43-PLAN.md
+**Last Date:** 2026-07-23T09:48:08.397Z
+**Stopped At:** Completed 475-44-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -244,6 +244,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P39 | 3 min | 1 tasks | 1 files |
 | Phase 475 P42 | 17 min | 1 tasks | 5 files |
 | Phase 475 P43 | 8 min | 1 tasks | 2 files |
+| Phase 475 P44 | 10 min | 1 tasks | 2 files |
 
 ## Decisions
 
@@ -525,3 +526,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: Source evidence accepts only exact A, M, D, R-similarity, and C-similarity records. — Malformed, ambiguous, duplicate, and unsupported name-status records must fail closed.
 - [Phase 475]: Deletion and rename absence uses a successful literal-path ls-tree query. — A failed blob read cannot be misclassified as proof of absence.
 - [Phase 475]: Source snapshot rows preserve exact inventory cardinality and deterministic ordering. — Missing, extra, duplicate, or reordered evidence rows invalidate publication.
+- [Phase 475]: Coverage publishes exact requirement, decision, review-finding, and review-warning registries; aliases cannot substitute for reviewed IDs.
+- [Phase 475]: CR-04 active-teacher lifecycle fencing and D-08 losing-teacher concealment remain separate evidence claims.
+- [Phase 475]: CR-10 maps only to discovery plus relationship, teacher, and notification cleanup, joining V9DATA-03, V9DATA-02, and V9DATA-07 respectively.
+- [Phase 475]: CR-09 and D-13 share the immutable operation-owned rate receipt node.
