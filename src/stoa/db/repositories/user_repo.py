@@ -726,6 +726,9 @@ def build_parent_binding_status_transition_transaction(
     source: str,
     actor: str,
     updated_at: str,
+    expected_parent_generation: int,
+    expected_student_generation: int,
+    expected_parent_profile_version: int,
     expected_student_profile_version: int,
 ) -> list[TransactionOperation]:
     """Build one exact-status/version transition across all relationship projections."""
@@ -740,6 +743,9 @@ def build_parent_binding_status_transition_transaction(
     source = _required_text(source, "source")
     actor = _required_text(actor, "actor")
     updated_at = _required_text(updated_at, "updated_at")
+    expected_parent_generation = _required_positive_integer(expected_parent_generation)
+    expected_student_generation = _required_positive_integer(expected_student_generation)
+    expected_parent_profile_version = _required_profile_version(expected_parent_profile_version)
     expected_student_profile_version = _required_profile_version(expected_student_profile_version)
     next_version = expected_version + 1
     names = {
@@ -787,6 +793,17 @@ def build_parent_binding_status_transition_transaction(
         }
 
     return [
+        account_deletion_repo.active_fence_condition(
+            parent_id, expected_parent_generation
+        ),
+        account_deletion_repo.active_fence_condition(
+            student_id, expected_student_generation
+        ),
+        _active_profile_observation_condition(
+            parent_id,
+            role="parent",
+            profile_version=expected_parent_profile_version,
+        ),
         binding_update(f"USER#{parent_id}", f"CHILD#{student_id}"),
         binding_update(f"USER#{student_id}", f"PARENT#{parent_id}"),
         profile_update_operation(
@@ -797,18 +814,23 @@ def build_parent_binding_status_transition_transaction(
                 "#user_id": "user_id",
                 "#parent_id": "parent_id",
                 "#relationship": "relationship",
+                "#role": "role",
+                "#account_status": "account_status",
             },
             expression_attribute_values={
                 ":student_id": student_id,
                 ":parent_id": parent_id,
                 ":relationship": relationship,
+                ":student_role": "student",
+                ":active": "active",
                 ":expected_binding_status": expected_status,
                 ":next_status": status,
             },
             expected_version=expected_student_profile_version,
             additional_condition_expression=(
                 "#user_id=:student_id AND #parent_id=:parent_id AND "
-                "#relationship=:relationship AND "
+                "#relationship=:relationship AND #role=:student_role AND "
+                "#account_status=:active AND "
                 "#parent_binding_status=:expected_binding_status"
             ),
         ),
@@ -846,8 +868,21 @@ def transition_parent_student_relationship_status(
         return ParentBindingStatusResult(ParentBindingStatusDisposition.CONFLICT)
     profile = snapshot.profile
     assert profile is not None
+    observations = _parent_binding_authorization_observations(
+        snapshot,
+        parent_id=parent_id,
+        student_id=student_id,
+        table=table,
+    )
+    if observations is None:
+        return ParentBindingStatusResult(ParentBindingStatusDisposition.CONFLICT)
+    (
+        expected_parent_generation,
+        expected_student_generation,
+        expected_parent_profile_version,
+        expected_student_profile_version,
+    ) = observations
     try:
-        expected_profile_version = _required_profile_version(profile.get("version"))
         account_deletion_repo.transact(
             build_parent_binding_status_transition_transaction(
                 parent_id=parent_id,
@@ -859,15 +894,25 @@ def transition_parent_student_relationship_status(
                 source=source,
                 actor=actor,
                 updated_at=updated_at,
-                expected_student_profile_version=expected_profile_version,
+                expected_parent_generation=expected_parent_generation,
+                expected_student_generation=expected_student_generation,
+                expected_parent_profile_version=expected_parent_profile_version,
+                expected_student_profile_version=expected_student_profile_version,
             ),
             table=table,
         )
     except (ValueError, account_deletion_repo.AccountDeletionConflict):
         current = _parent_binding_snapshot(parent_id, student_id)
+        current_observations = _parent_binding_authorization_observations(
+            current,
+            parent_id=parent_id,
+            student_id=student_id,
+            table=table,
+        )
         disposition = (
             ParentBindingStatusDisposition.RETRYABLE
-            if _parent_binding_status_snapshot_matches(
+            if current_observations is not None
+            and _parent_binding_status_snapshot_matches(
                 current,
                 parent_id=parent_id,
                 student_id=student_id,

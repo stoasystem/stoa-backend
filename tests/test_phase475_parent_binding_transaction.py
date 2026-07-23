@@ -12,6 +12,20 @@ from stoa.routers import admin, auth
 from stoa.security.authorization import ParentAuthorizationFacts
 
 
+RELATIONSHIP_STATUSES = (
+    "active",
+    "active_pending_verification",
+    "inactive",
+    "revoked",
+)
+RELATIONSHIP_TRANSITIONS = tuple(
+    (current, requested)
+    for current in RELATIONSHIP_STATUSES
+    for requested in RELATIONSHIP_STATUSES
+    if current != requested
+)
+
+
 class _AtomicRelationshipTable:
     def __init__(self, *, fail_at: int | None = None) -> None:
         self.items: dict[tuple[str, str], dict[str, object]] = {
@@ -163,6 +177,8 @@ class _AtomicRelationshipTable:
             if (
                 profile is None
                 or profile.get("user_id") != profile_values[":student_id"]
+                or profile.get("role") != profile_values[":student_role"]
+                or profile.get("account_status") != profile_values[":active"]
                 or profile.get("parent_id") != profile_values[":parent_id"]
                 or profile.get("relationship") != profile_values[":relationship"]
                 or profile.get("parent_binding_status")
@@ -422,6 +438,78 @@ def test_admin_status_transition_is_expected_status_and_version_cas(monkeypatch)
         table.items[("USER#student-1", "PARENT#parent-1")]["status"],
         table.items[("USER#student-1", "PROFILE")]["parent_binding_status"],
     } == {"revoked"}
+
+
+def test_status_transition_shape_contains_dual_fences_and_active_profile_observations() -> None:
+    operations = user_repo.build_parent_binding_status_transition_transaction(
+        parent_id="parent-1",
+        student_id="student-1",
+        relationship="child",
+        expected_status="inactive",
+        expected_version=4,
+        status="active",
+        source="admin_lifecycle",
+        actor="admin-1",
+        updated_at="2026-07-22T03:00:00+00:00",
+        expected_parent_generation=7,
+        expected_student_generation=3,
+        expected_parent_profile_version=2,
+        expected_student_profile_version=5,
+    )
+
+    assert len(operations) == 6
+    assert [operation["ConditionCheck"]["Key"] for operation in operations[:3]] == [
+        {"PK": "USER#parent-1", "SK": "ACCOUNT_FENCE"},
+        {"PK": "USER#student-1", "SK": "ACCOUNT_FENCE"},
+        {"PK": "USER#parent-1", "SK": "PROFILE"},
+    ]
+    student_profile = operations[-1]["Update"]
+    assert student_profile["Key"] == {"PK": "USER#student-1", "SK": "PROFILE"}
+    assert "#role=:student_role" in student_profile["ConditionExpression"]
+    assert "#account_status=:active" in student_profile["ConditionExpression"]
+    assert student_profile["ExpressionAttributeValues"][":student_role"] == "student"
+    assert student_profile["ExpressionAttributeValues"][":active"] == "active"
+
+
+@pytest.mark.parametrize("participant", ["parent", "student"])
+@pytest.mark.parametrize(("expected_status", "requested_status"), RELATIONSHIP_TRANSITIONS)
+def test_status_transition_lifecycle_race_never_advances_relationship_projection(
+    monkeypatch,
+    participant,
+    expected_status,
+    requested_status,
+) -> None:
+    table = _AtomicRelationshipTable()
+    monkeypatch.setattr(user_repo, "get_table", lambda: table)
+    assert _write_relationship(status=expected_status).disposition is (
+        user_repo.ParentBindingDisposition.CREATED
+    )
+
+    def begin_deletion() -> None:
+        table.items[(f"USER#{participant}-1", "PROFILE")][
+            "account_status"
+        ] = "deletion_pending"
+
+    table.before_transaction = begin_deletion
+    result = user_repo.transition_parent_student_relationship_status(
+        parent_id="parent-1",
+        student_id="student-1",
+        relationship="child",
+        expected_status=expected_status,
+        expected_version=4,
+        status=requested_status,
+        source="admin_lifecycle",
+        actor="admin-1",
+        updated_at="2026-07-22T03:00:00+00:00",
+    )
+
+    assert result.disposition is not user_repo.ParentBindingStatusDisposition.TRANSITIONED
+    assert table.items[("USER#parent-1", "CHILD#student-1")]["status"] == expected_status
+    assert table.items[("USER#student-1", "PARENT#parent-1")]["status"] == expected_status
+    assert (
+        table.items[("USER#student-1", "PROFILE")]["parent_binding_status"]
+        == expected_status
+    )
 
 
 def test_conflicting_parent_is_preserved_and_authorization_remains_denied(monkeypatch) -> None:
