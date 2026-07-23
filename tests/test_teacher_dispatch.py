@@ -247,6 +247,74 @@ def test_dispatch_scans_continue_after_sparse_filtered_page(monkeypatch):
     )
 
 
+class _BusinessFilteredDispatchScanTable:
+    def __init__(self):
+        self.calls = []
+
+    def scan(self, **kwargs):
+        self.calls.append(dict(kwargs))
+        is_profile = kwargs["ExpressionAttributeValues"] == {":profile": "PROFILE"}
+        if "ExclusiveStartKey" not in kwargs:
+            item = (
+                {
+                    **TEACHERS[0],
+                    "user_id": "student-rejected",
+                    "role": "student",
+                }
+                if is_profile
+                else {
+                    **QUESTION,
+                    "status": "pending",
+                    "teacher_requested_at": None,
+                    "queue_visible_at": None,
+                }
+            )
+            return {
+                "Items": [item],
+                "LastEvaluatedKey": {
+                    "PK": "REJECTED#last",
+                    "SK": "PROFILE" if is_profile else "META",
+                },
+            }
+        return {
+            "Items": [
+                dict(TEACHERS[0])
+                if is_profile
+                else {**QUESTION, "question_id": "question-eligible"}
+            ]
+        }
+
+    def get_item(self, *, Key, ConsistentRead=True):  # noqa: N803
+        assert ConsistentRead is True
+        assert Key == {
+            "PK": "USER#teacher-low-load",
+            "SK": "ACCOUNT_FENCE",
+        }
+        return {
+            "Item": {
+                **Key,
+                "status": "active",
+                "generation": 3,
+            }
+        }
+
+
+def test_dispatch_scans_continue_after_nonempty_business_rejected_page(monkeypatch):
+    table = _BusinessFilteredDispatchScanTable()
+    monkeypatch.setattr(teacher_dispatch_service, "get_table", lambda: table)
+
+    teachers = teacher_dispatch_service.list_teacher_profiles(limit=1)
+    questions = teacher_dispatch_service.list_teacher_dispatch_questions(limit=1)
+
+    assert [item["user_id"] for item in teachers] == ["teacher-low-load"]
+    assert [item["question_id"] for item in questions] == ["question-eligible"]
+    assert len(table.calls) == 4
+    assert all(
+        "ExclusiveStartKey" in call
+        for call in (table.calls[1], table.calls[3])
+    )
+
+
 def test_dispatch_question_uses_fresh_escalation_snapshot(monkeypatch):
     updates = []
     monkeypatch.setattr(teacher_dispatch_service, "list_teacher_profiles", lambda: [TEACHERS[0]])

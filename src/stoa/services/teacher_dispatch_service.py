@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol, cast
 
@@ -44,14 +45,8 @@ def _versioned_dispatch_question(
 def list_teacher_profiles(limit: int = 200) -> list[dict[str, Any]]:
     """Return teacher/admin profiles usable by the dispatch planner."""
     table = cast(_ScanTable, get_table())
-    profiles = _scan_filtered_items(
-        table,
-        filter_expression="SK = :profile",
-        expression_attribute_values={":profile": "PROFILE"},
-        limit=limit,
-    )
-    active: list[dict[str, Any]] = []
-    for profile in profiles:
+
+    def eligible_profile(profile: dict[str, Any]) -> dict[str, Any] | None:
         teacher_id = str(profile.get("user_id") or "")
         if (
             not teacher_id
@@ -59,16 +54,23 @@ def list_teacher_profiles(limit: int = 200) -> list[dict[str, Any]]:
             or profile.get("account_status") != "active"
             or _int(profile.get("version"), 0) <= 0
         ):
-            continue
+            return None
         try:
             fence = account_deletion_repo.require_active_account_fence(
                 teacher_id, table=table
             )
             generation = int(fence["generation"])
         except (KeyError, TypeError, ValueError, account_deletion_repo.AccountDeletionConflict):
-            continue
-        active.append({**profile, "account_fence_generation": generation})
-    return active
+            return None
+        return {**profile, "account_fence_generation": generation}
+
+    return _scan_filtered_items(
+        table,
+        filter_expression="SK = :profile",
+        expression_attribute_values={":profile": "PROFILE"},
+        accept_item=eligible_profile,
+        limit=limit,
+    )
 
 
 def list_teacher_dispatch_questions(limit: int = 200) -> list[dict[str, Any]]:
@@ -78,16 +80,21 @@ def list_teacher_dispatch_questions(limit: int = 200) -> list[dict[str, Any]]:
         table,
         filter_expression="SK = :meta",
         expression_attribute_values={":meta": "META"},
+        accept_item=lambda item: item
+        if (
+            item.get("teacher_requested_at")
+            or item.get("queue_visible_at")
+            or item.get("dispatch_status")
+            or item.get("status")
+            in {
+                QuestionStatus.ESCALATED.value,
+                QuestionStatus.TEACHER_ACTIVE.value,
+            }
+        )
+        else None,
         limit=limit,
     )
-    return [
-        item
-        for item in items
-        if item.get("teacher_requested_at")
-        or item.get("queue_visible_at")
-        or item.get("dispatch_status")
-        or item.get("status") in {QuestionStatus.ESCALATED.value, QuestionStatus.TEACHER_ACTIVE.value}
-    ]
+    return items
 
 
 def plan_dispatch(
@@ -563,9 +570,10 @@ def _scan_filtered_items(
     *,
     filter_expression: str,
     expression_attribute_values: dict[str, object],
+    accept_item: Callable[[dict[str, Any]], dict[str, Any] | None],
     limit: int,
 ) -> list[dict[str, Any]]:
-    """Collect filtered scan matches across sparse DynamoDB pages."""
+    """Collect final business-eligible matches across DynamoDB scan pages."""
     if limit <= 0:
         return []
     items: list[dict[str, Any]] = []
@@ -581,7 +589,14 @@ def _scan_filtered_items(
         result = cast(dict[str, Any], table.scan(**scan_kwargs))
         page = result.get("Items", [])
         if isinstance(page, list):
-            items.extend(dict(item) for item in page if isinstance(item, dict))
+            for item in page:
+                if not isinstance(item, dict):
+                    continue
+                accepted = accept_item(dict(item))
+                if accepted is not None:
+                    items.append(accepted)
+                if len(items) >= limit:
+                    break
         next_key = result.get("LastEvaluatedKey")
         if (
             not isinstance(next_key, dict)
