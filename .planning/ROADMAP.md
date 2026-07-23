@@ -678,38 +678,78 @@ Plans:
 5. A Stripe test-mode browser checkout and signed webhook changes parent/student effective entitlement and quota exactly once and appears in the parent/admin Web views.
 
 **Plans:** 29 plans
-
 Plans:
+**Wave 1**
 
 - [ ] 476-01-PLAN.md — Define canonical billing, entitlement, allowance, reminder, and recovery contracts.
 - [ ] 476-02-PLAN.md — Enforce exact configured checkout return origins and paths.
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 476-03-PLAN.md — Converge backend plan identities, defaults, and Stripe configuration.
-- [ ] 476-04-PLAN.md — Preview and conditionally apply legacy plan-identity migration.
 - [ ] 476-05-PLAN.md — Persist one durable checkout command per browser idempotency key.
+- [ ] 476-10-PLAN.md — Persist immutable, ordered, idempotent Stripe billing facts.
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 476-04-PLAN.md — Preview and conditionally apply legacy plan-identity migration.
 - [ ] 476-06-PLAN.md — Create or recover one Stripe Checkout Session per command.
+- [ ] 476-15-PLAN.md — Persist Zurich-week allowance ledgers and exact plan budgets.
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 476-07-PLAN.md — Supersede or expire stale payable attempts on confirmed plan changes.
 - [ ] 476-08-PLAN.md — Reconcile provider/local checkout ambiguity without a second charge path.
-- [ ] 476-09-PLAN.md — Expose parent/admin billing status and same-command recheck APIs.
-- [ ] 476-10-PLAN.md — Persist immutable, ordered, idempotent Stripe billing facts.
-- [ ] 476-11-PLAN.md — Converge signed duplicate, delayed, and out-of-order webhook evidence.
-- [ ] 476-12-PLAN.md — Apply exact beneficiary grants and immediate paid upgrades once.
-- [ ] 476-13-PLAN.md — Apply period-end downgrade/cancel, grace, and storage transitions.
-- [ ] 476-14-PLAN.md — Enforce one historical 14-day free trial and post-expiry AI/support limits.
-- [ ] 476-15-PLAN.md — Persist Zurich-week allowance ledgers and exact plan budgets.
 - [ ] 476-16-PLAN.md — Capture actual provider input/output token evidence.
+- [ ] 476-22-PLAN.md — Converge Web plan types, pricing, and display identities.
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 476-09-PLAN.md — Expose parent/admin billing status and same-command recheck APIs.
+- [ ] 476-11-PLAN.md — Converge signed duplicate, delayed, and out-of-order webhook evidence.
 - [ ] 476-17-PLAN.md — Finalize question token debits across delivery and retry outcomes.
 - [ ] 476-18-PLAN.md — Finalize conversation and hint token debits across terminal outcomes.
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 476-12-PLAN.md — Apply exact beneficiary grants and immediate paid upgrades once.
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 476-13-PLAN.md — Apply period-end downgrade/cancel, grace, and storage transitions.
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 476-14-PLAN.md — Enforce one historical 14-day free trial and post-expiry AI/support limits.
 - [ ] 476-19-PLAN.md — Enforce teacher-supported and family support-case allowances.
 - [ ] 476-20-PLAN.md — Deliver idempotent payment-method expiry reminders safely.
+
+**Wave 9** *(blocked on Wave 8 completion)*
+
 - [ ] 476-21-PLAN.md — Project canonical billing, allowance, reminder, and recovery state.
-- [ ] 476-22-PLAN.md — Converge Web plan types, pricing, and display identities.
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
 - [ ] 476-23-PLAN.md — Drive Web checkout with durable identity and explicit beneficiaries.
+
+**Wave 11** *(blocked on Wave 10 completion)*
+
 - [ ] 476-24-PLAN.md — Render confirming, active, incomplete, and support-needed results.
 - [ ] 476-25-PLAN.md — Render parent allowance, trial, payment-method, and reminder state.
 - [ ] 476-26-PLAN.md — Render redacted admin billing recovery and same-command recheck.
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
 - [ ] 476-27-PLAN.md — Define a mock-disabled, fail-closed Stripe sandbox browser project.
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
 - [ ] 476-28-PLAN.md — Prove hosted Stripe sandbox checkout through signed webhook and paid access.
+
+**Wave 14** *(blocked on Wave 13 completion)*
+
 - [ ] 476-29-PLAN.md — Enforce zero open ASVS L1 High threats and capture source-bound Phase 476 requirement, decision, and security evidence.
+
 **UI hint:** yes
 
 **Required evidence:** Web request payload and idempotency proof, Stripe sandbox request/event IDs, failure-injection results, local/provider reconciliation rows, parent/admin API and browser results, exact-origin negative matrix, and no live charge.
