@@ -103,6 +103,23 @@ class QuestionEffectResult:
     command: QuestionAdmissionItem | None = None
 
 
+class QuestionTerminalFailureDisposition(StrEnum):
+    """Closed outcomes for promoting provider proof to a terminal command."""
+
+    PROVEN = "terminal_failure_proven"
+    ALREADY_PROVEN = "terminal_failure_already_proven"
+    STALE = "terminal_failure_stale"
+    RETRYABLE = "terminal_failure_retryable"
+
+
+@dataclass(frozen=True, slots=True)
+class QuestionTerminalFailureResult:
+    disposition: QuestionTerminalFailureDisposition
+    effect: QuestionAdmissionItem | None = None
+    question: QuestionAdmissionItem | None = None
+    command: QuestionAdmissionItem | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class QuestionReconciliationPreview:
     """Coordinate-free, version-bound reconciliation proposal."""
@@ -451,7 +468,7 @@ def _question_status_matches_command(
         "completed": frozenset(
             {"ai_answered", "escalated", "teacher_active", "resolved"}
         ),
-        "terminal_failed": frozenset({"submission_failed"}),
+        "terminal_failed": frozenset({"pending", "submission_failed"}),
     }
     return isinstance(command_status, str) and question_status in allowed.get(
         command_status, frozenset()
@@ -502,6 +519,17 @@ def classify_question_submission_replay(
         or version < 1
         or not isinstance(command.get("question_id"), str)
         or not command["question_id"]
+        or (
+            command.get("status") == "terminal_failed"
+            and (
+                not isinstance(command.get("terminal_failure_code"), str)
+                or not command.get("terminal_failure_code")
+                or not isinstance(command.get("terminal_failure_proven_at"), str)
+                or not command.get("terminal_failure_proven_at")
+                or not _valid_sha256(command.get("terminal_effect_id"))
+                or command.get("terminal_effect_kind") not in {"ocr", "ai"}
+            )
+        )
     ):
         return QuestionAdmissionResult(QuestionAdmissionDisposition.RETRYABLE)
     try:
@@ -862,7 +890,7 @@ def mark_question_effect_terminal(
     table: object | None = None,
 ) -> QuestionEffectResult:
     target = table or get_table()
-    return _transition_effect(
+    result = _transition_effect(
         effect,
         status="terminal_rejected",
         time_field="terminal_at",
@@ -871,6 +899,318 @@ def mark_question_effect_terminal(
         extra_values={":failure_code": _required_text(failure_code, "failure_code")},
         extra_updates=("terminal_failure_code=:failure_code",),
         table=target,
+    )
+    if result.effect is None:
+        return result
+    return QuestionEffectResult(
+        result.disposition,
+        effect={
+            **result.effect,
+            "terminal_failure_code": _required_text(
+                failure_code, "failure_code"
+            ),
+        },
+        question=result.question,
+        command=result.command,
+    )
+
+
+def _matching_terminal_failure_proof(
+    *,
+    effect: Mapping[str, object] | None,
+    command: Mapping[str, object] | None,
+    question: Mapping[str, object] | None,
+    expected_effect: Mapping[str, object],
+    failure_code: str,
+    proven_at: str,
+) -> bool:
+    if effect is None or command is None or question is None:
+        return False
+    expected_effect_version = expected_effect.get("version")
+    expected_command_version = expected_effect.get("command_version")
+    expected_question_version = expected_effect.get("question_version")
+    if any(
+        isinstance(value, bool) or not isinstance(value, int)
+        for value in (
+            expected_effect_version,
+            expected_command_version,
+            expected_question_version,
+        )
+    ):
+        return False
+    assert isinstance(expected_effect_version, int)
+    assert isinstance(expected_command_version, int)
+    assert isinstance(expected_question_version, int)
+    return bool(
+        effect.get("status") == "terminal_proven"
+        and effect.get("version") == expected_effect_version + 1
+        and effect.get("terminal_failure_code") == failure_code
+        and effect.get("terminal_failure_proven_at") == proven_at
+        and command.get("status") == "terminal_failed"
+        and command.get("version") == expected_command_version + 1
+        and command.get("terminal_failure_code") == failure_code
+        and command.get("terminal_failure_proven_at") == proven_at
+        and command.get("terminal_effect_id") == expected_effect.get("effect_id")
+        and command.get("terminal_effect_kind") == expected_effect.get("effect_kind")
+        and question.get("status") == "pending"
+        and question.get("version") == expected_question_version + 1
+        and question.get("terminal_failure_code") == failure_code
+        and question.get("terminal_failure_proven_at") == proven_at
+        and question.get("terminal_effect_id") == expected_effect.get("effect_id")
+        and question.get("terminal_effect_kind") == expected_effect.get("effect_kind")
+    )
+
+
+def prove_terminal_question_failure(
+    effect: Mapping[str, object],
+    *,
+    proven_at: str,
+    table: object | None = None,
+) -> QuestionTerminalFailureResult:
+    """Conditionally promote one closed provider proof to terminal command work."""
+    target = table or get_table()
+    try:
+        student_id = _required_text(effect.get("student_id"), "student_id")
+        command_id = validate_question_submission_command_digest(
+            effect.get("command_id")
+        )
+        question_id = _required_text(effect.get("question_id"), "question_id")
+        fingerprint = _required_text(effect.get("fingerprint"), "fingerprint")
+        generation = _positive_integer(
+            effect.get("account_fence_generation"),
+            "account_fence_generation",
+            minimum=1,
+        )
+        effect_id = validate_question_submission_command_digest(
+            effect.get("effect_id")
+        )
+        effect_kind = _effect_kind(
+            _required_text(effect.get("effect_kind"), "effect_kind")
+        )
+        effect_version = _positive_integer(
+            effect.get("version"), "effect version", minimum=1
+        )
+        command_version = _positive_integer(
+            effect.get("command_version"), "command version", minimum=1
+        )
+        question_version = _positive_integer(
+            effect.get("question_version"), "question version", minimum=1
+        )
+        failure_code = _required_text(
+            effect.get("terminal_failure_code"), "terminal_failure_code"
+        )
+        terminal_at = _required_text(effect.get("terminal_at"), "terminal_at")
+        proven_at = _required_text(proven_at, "proven_at")
+        if (
+            effect.get("entity_type") != "question_provider_effect"
+            or effect.get("schema_version") != _EFFECT_SCHEMA_VERSION
+            or effect.get("idempotency_digest") != command_id
+            or effect.get("status") != "terminal_rejected"
+            or failure_code != "provider_rejected"
+        ):
+            raise ValueError("question terminal effect proof is stale")
+        command = _read_item(
+            target, question_submission_command_key(student_id, command_id)
+        )
+        question = _read_item(
+            target, {"PK": f"QUESTION#{question_id}", "SK": "META"}
+        )
+        if (
+            command is None
+            or question is None
+            or command.get("entity_type") != "question_submission_command"
+            or command.get("schema_version") != _COMMAND_SCHEMA_VERSION
+            or command.get("student_id") != student_id
+            or command.get("command_id") != command_id
+            or command.get("idempotency_digest") != command_id
+            or command.get("fingerprint") != fingerprint
+            or command.get("question_id") != question_id
+            or command.get("account_fence_generation") != generation
+            or command.get("status") != "processing"
+            or command.get("version") != command_version
+            or question.get("entity_type") != "question"
+            or question.get("schema_version") != _QUESTION_SCHEMA_VERSION
+            or question.get("student_id") != student_id
+            or question.get("question_id") != question_id
+            or question.get("account_fence_generation") != generation
+            or question.get("status") != "pending"
+            or question.get("version") != question_version
+        ):
+            return QuestionTerminalFailureResult(
+                QuestionTerminalFailureDisposition.STALE,
+                effect=dict(effect),
+                command=command,
+                question=question,
+            )
+    except ValueError:
+        return QuestionTerminalFailureResult(
+            QuestionTerminalFailureDisposition.STALE
+        )
+    identity_values: QuestionAdmissionItem = {
+        ":student": student_id,
+        ":command_id": command_id,
+        ":fingerprint": fingerprint,
+        ":question": question_id,
+        ":generation": generation,
+        ":effect_id": effect_id,
+        ":effect_kind": effect_kind.value,
+        ":failure_code": failure_code,
+        ":proven_at": proven_at,
+    }
+    operations: list[QuestionAdmissionItem] = [
+        account_deletion_repo.active_fence_condition(student_id, generation),
+        {
+            "Update": {
+                "Key": question_effect_key(student_id, effect_id),
+                "UpdateExpression": (
+                    "SET #status=:terminal_proven, #version=:next_effect_version, "
+                    "terminal_failure_proven_at=:proven_at, updated_at=:proven_at"
+                ),
+                "ConditionExpression": (
+                    "entity_type=:effect_entity AND schema_version=:effect_schema "
+                    "AND student_id=:student AND command_id=:command_id "
+                    "AND fingerprint=:fingerprint AND question_id=:question "
+                    "AND account_fence_generation=:generation AND effect_id=:effect_id "
+                    "AND effect_kind=:effect_kind AND #status=:terminal_rejected "
+                    "AND terminal_failure_code=:failure_code AND terminal_at=:terminal_at "
+                    "AND #version=:effect_version"
+                ),
+                "ExpressionAttributeNames": {"#status": "status", "#version": "version"},
+                "ExpressionAttributeValues": {
+                    **identity_values,
+                    ":effect_entity": "question_provider_effect",
+                    ":effect_schema": _EFFECT_SCHEMA_VERSION,
+                    ":terminal_rejected": "terminal_rejected",
+                    ":terminal_proven": "terminal_proven",
+                    ":terminal_at": terminal_at,
+                    ":effect_version": effect_version,
+                    ":next_effect_version": effect_version + 1,
+                },
+            }
+        },
+        {
+            "Update": {
+                "Key": question_submission_command_key(student_id, command_id),
+                "UpdateExpression": (
+                    "SET #status=:terminal_failed, #version=:next_command_version, "
+                    "terminal_failure_code=:failure_code, "
+                    "terminal_failure_proven_at=:proven_at, "
+                    "terminal_effect_id=:effect_id, terminal_effect_kind=:effect_kind, "
+                    "updated_at=:proven_at"
+                ),
+                "ConditionExpression": (
+                    "entity_type=:command_entity AND schema_version=:command_schema "
+                    "AND student_id=:student AND command_id=:command_id "
+                    "AND idempotency_digest=:command_id AND fingerprint=:fingerprint "
+                    "AND question_id=:question AND account_fence_generation=:generation "
+                    "AND #status=:processing AND #version=:command_version"
+                ),
+                "ExpressionAttributeNames": {"#status": "status", "#version": "version"},
+                "ExpressionAttributeValues": {
+                    **identity_values,
+                    ":command_entity": "question_submission_command",
+                    ":command_schema": _COMMAND_SCHEMA_VERSION,
+                    ":processing": "processing",
+                    ":terminal_failed": "terminal_failed",
+                    ":command_version": command_version,
+                    ":next_command_version": command_version + 1,
+                },
+            }
+        },
+        {
+            "Update": {
+                "Key": {"PK": f"QUESTION#{question_id}", "SK": "META"},
+                "UpdateExpression": (
+                    "SET #version=:next_question_version, "
+                    "terminal_failure_code=:failure_code, "
+                    "terminal_failure_proven_at=:proven_at, "
+                    "terminal_effect_id=:effect_id, terminal_effect_kind=:effect_kind, "
+                    "updated_at=:proven_at"
+                ),
+                "ConditionExpression": (
+                    "entity_type=:question_entity AND schema_version=:question_schema "
+                    "AND student_id=:student AND question_id=:question "
+                    "AND account_fence_generation=:generation "
+                    "AND #status=:pending AND #version=:question_version"
+                ),
+                "ExpressionAttributeNames": {"#status": "status", "#version": "version"},
+                "ExpressionAttributeValues": {
+                    ":student": student_id,
+                    ":question": question_id,
+                    ":generation": generation,
+                    ":effect_id": effect_id,
+                    ":effect_kind": effect_kind.value,
+                    ":failure_code": failure_code,
+                    ":proven_at": proven_at,
+                    ":question_entity": "question",
+                    ":question_schema": _QUESTION_SCHEMA_VERSION,
+                    ":pending": "pending",
+                    ":question_version": question_version,
+                    ":next_question_version": question_version + 1,
+                },
+            }
+        },
+    ]
+    try:
+        attachment_repo.transact(operations, table=target)
+    except Exception:
+        try:
+            refreshed_effect = _read_item(
+                target, question_effect_key(student_id, effect_id)
+            )
+            refreshed_command = _read_item(
+                target, question_submission_command_key(student_id, command_id)
+            )
+            refreshed_question = _read_item(
+                target, {"PK": f"QUESTION#{question_id}", "SK": "META"}
+            )
+        except Exception:
+            refreshed_effect = refreshed_command = refreshed_question = None
+        if _matching_terminal_failure_proof(
+            effect=refreshed_effect,
+            command=refreshed_command,
+            question=refreshed_question,
+            expected_effect=effect,
+            failure_code=failure_code,
+            proven_at=proven_at,
+        ):
+            return QuestionTerminalFailureResult(
+                QuestionTerminalFailureDisposition.ALREADY_PROVEN,
+                effect=refreshed_effect,
+                command=refreshed_command,
+                question=refreshed_question,
+            )
+        return QuestionTerminalFailureResult(
+            QuestionTerminalFailureDisposition.RETRYABLE
+        )
+    return QuestionTerminalFailureResult(
+        QuestionTerminalFailureDisposition.PROVEN,
+        effect={
+            **effect,
+            "status": "terminal_proven",
+            "version": effect_version + 1,
+            "terminal_failure_proven_at": proven_at,
+            "updated_at": proven_at,
+        },
+        command={
+            **command,
+            "status": "terminal_failed",
+            "version": command_version + 1,
+            "terminal_failure_code": failure_code,
+            "terminal_failure_proven_at": proven_at,
+            "terminal_effect_id": effect_id,
+            "terminal_effect_kind": effect_kind.value,
+            "updated_at": proven_at,
+        },
+        question={
+            **question,
+            "version": question_version + 1,
+            "terminal_failure_code": failure_code,
+            "terminal_failure_proven_at": proven_at,
+            "terminal_effect_id": effect_id,
+            "terminal_effect_kind": effect_kind.value,
+            "updated_at": proven_at,
+        },
     )
 
 
@@ -1680,6 +2020,16 @@ def preview_question_submission_reconciliation(
         and bool(command.get("terminal_failure_code"))
         and isinstance(command.get("terminal_failure_proven_at"), str)
         and bool(command.get("terminal_failure_proven_at"))
+        and _valid_sha256(command.get("terminal_effect_id"))
+        and command.get("terminal_effect_kind") in {"ocr", "ai"}
+        and question.get("status") == "pending"
+        and question.get("terminal_failure_code")
+        == command.get("terminal_failure_code")
+        and question.get("terminal_failure_proven_at")
+        == command.get("terminal_failure_proven_at")
+        and question.get("terminal_effect_id") == command.get("terminal_effect_id")
+        and question.get("terminal_effect_kind")
+        == command.get("terminal_effect_kind")
         and ledger_status != "reversed"
         and counter_count > 0
     ):
@@ -1772,8 +2122,14 @@ def reverse_terminal_question_admission(
                     "updated_at=:reversed_at, #version=:next_version"
                 ),
                 "ConditionExpression": (
-                    "#status=:terminal AND #version=:version AND fingerprint=:fingerprint "
+                    "entity_type=:entity AND schema_version=:schema "
+                    "AND student_id=:student AND command_id=:command_id "
+                    "AND idempotency_digest=:command_id "
+                    "AND account_fence_generation=:generation "
+                    "AND #status=:terminal AND #version=:version AND fingerprint=:fingerprint "
                     "AND terminal_failure_proven_at=:proven_at "
+                    "AND terminal_failure_code=:failure_code "
+                    "AND terminal_effect_id=:effect_id AND terminal_effect_kind=:effect_kind "
                     "AND attribute_not_exists(reversal_id)"
                 ),
                 "ExpressionAttributeNames": {
@@ -1782,10 +2138,18 @@ def reverse_terminal_question_admission(
                 },
                 "ExpressionAttributeValues": {
                     ":terminal": "terminal_failed",
+                    ":entity": "question_submission_command",
+                    ":schema": _COMMAND_SCHEMA_VERSION,
+                    ":student": student_id,
+                    ":command_id": current.command_id,
+                    ":generation": command["account_fence_generation"],
                     ":version": current.observed_command_version,
                     ":next_version": current.observed_command_version + 1,
                     ":fingerprint": fingerprint,
                     ":proven_at": command["terminal_failure_proven_at"],
+                    ":failure_code": command["terminal_failure_code"],
+                    ":effect_id": command["terminal_effect_id"],
+                    ":effect_kind": command["terminal_effect_kind"],
                     ":reversal": reversal_id,
                     ":reversed_at": _required_text(reversed_at, "reversed_at"),
                 },
@@ -1799,8 +2163,14 @@ def reverse_terminal_question_admission(
                     "failed_at=:reversed_at, #version=if_not_exists(#version,:zero)+:one"
                 ),
                 "ConditionExpression": (
-                    "student_id=:student AND question_id=:question AND "
-                    "#status<>:failed AND " + version_condition
+                    "entity_type=:entity AND schema_version=:schema "
+                    "AND student_id=:student AND question_id=:question "
+                    "AND account_fence_generation=:generation "
+                    "AND #status=:pending "
+                    "AND terminal_failure_code=:failure_code "
+                    "AND terminal_failure_proven_at=:proven_at "
+                    "AND terminal_effect_id=:effect_id "
+                    "AND terminal_effect_kind=:effect_kind AND " + version_condition
                 ),
                 "ExpressionAttributeNames": {
                     "#status": "status",
@@ -1809,8 +2179,15 @@ def reverse_terminal_question_admission(
                 "ExpressionAttributeValues": {
                     ":student": student_id,
                     ":question": current.question_id,
+                    ":entity": "question",
+                    ":schema": _QUESTION_SCHEMA_VERSION,
+                    ":generation": command["account_fence_generation"],
+                    ":pending": "pending",
                     ":failed": "submission_failed",
                     ":failure_code": command["terminal_failure_code"],
+                    ":proven_at": command["terminal_failure_proven_at"],
+                    ":effect_id": command["terminal_effect_id"],
+                    ":effect_kind": command["terminal_effect_kind"],
                     ":reversed_at": reversed_at,
                     ":zero": 0,
                     ":one": 1,
@@ -1838,13 +2215,17 @@ def reverse_terminal_question_admission(
                     "reversed_at=:reversed_at, updated_at=:reversed_at"
                 ),
                 "ConditionExpression": (
-                    "event_id=:ledger AND question_id=:question "
+                    "event_id=:ledger AND student_id=:student "
+                    "AND idempotency_digest=:command_id AND question_id=:question "
+                    "AND quantity=:one "
                     "AND (attribute_not_exists(#status) OR #status=:active) "
                     "AND attribute_not_exists(reversal_id)"
                 ),
                 "ExpressionAttributeNames": {"#status": "status"},
                 "ExpressionAttributeValues": {
                     ":ledger": ledger_identity,
+                    ":student": student_id,
+                    ":command_id": current.command_id,
                     ":question": current.question_id,
                     ":active": "active",
                     ":reversed": "reversed",

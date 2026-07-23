@@ -423,6 +423,7 @@ def test_production_question_writer_registry_is_closed_over_cas_calls():
         },
         "src/stoa/db/repositories/question_submission_repo.py": {
             "complete_question_effect",
+            "prove_terminal_question_failure",
             "reverse_terminal_question_admission",
         },
     }

@@ -46,6 +46,7 @@ def _conditional_error() -> ClientError:
 
 def _seed(*, terminal: bool = False) -> dict[tuple[str, str], dict[str, object]]:
     status = "terminal_failed" if terminal else "processing"
+    terminal_effect_id = "e" * 64
     command: dict[str, object] = {
         "PK": COMMAND_KEY[0],
         "SK": COMMAND_KEY[1],
@@ -61,7 +62,8 @@ def _seed(*, terminal: bool = False) -> dict[tuple[str, str], dict[str, object]]
         "ledger_identity": REQUEST_ID,
         "attachment_identities": ["attachment:opaque"],
         "status": status,
-        "version": 1,
+        "version": 2 if terminal else 1,
+        "account_fence_generation": 1,
         "created_at": "2026-07-22T08:00:00+00:00",
         "updated_at": "2026-07-22T08:00:00+00:00",
     }
@@ -69,17 +71,30 @@ def _seed(*, terminal: bool = False) -> dict[tuple[str, str], dict[str, object]]
         command.update(
             terminal_failure_code="provider_terminal_rejection",
             terminal_failure_proven_at="2026-07-22T08:01:00+00:00",
+            terminal_effect_id=terminal_effect_id,
+            terminal_effect_kind="ocr",
         )
     question: dict[str, object] = {
         "PK": QUESTION_KEY[0],
         "SK": QUESTION_KEY[1],
+        "entity_type": "question",
+        "schema_version": "question.v1",
         "question_id": QUESTION_ID,
         "student_id": STUDENT_ID,
+        "account_fence_generation": 1,
         "status": "pending" if terminal else "ai_answered",
+        "version": 2 if terminal else 1,
         "ai_response": None if terminal else {"answer": "private-answer-canary"},
         "attachment_id": "attachment-opaque-1",
         "content": "private-question-canary",
     }
+    if terminal:
+        question.update(
+            terminal_failure_code=command["terminal_failure_code"],
+            terminal_failure_proven_at=command["terminal_failure_proven_at"],
+            terminal_effect_id=terminal_effect_id,
+            terminal_effect_kind="ocr",
+        )
     ledger = {
         "PK": LEDGER_KEY[0],
         "SK": LEDGER_KEY[1],

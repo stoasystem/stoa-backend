@@ -149,6 +149,10 @@ class EffectRecoveryTable:
                 if key[0].startswith("USAGE#"):
                     expected = values.get(":expected")
                     count = int(current.get("count", 0)) if current else 0
+                    if ":next" not in values:
+                        if current is None or count != expected or count < 1:
+                            raise _conditional_error()
+                        continue
                     if expected is None and current is not None:
                         raise _conditional_error()
                     if expected is not None and count != expected:
@@ -179,6 +183,7 @@ class EffectRecoveryTable:
             if token in values and field in current and current.get(field) != values[token]:
                 raise _conditional_error()
         for token in (
+            ":version",
             ":command_version",
             ":question_version",
             ":effect_version",
@@ -190,6 +195,12 @@ class EffectRecoveryTable:
         if expected_status is not None and current.get("status") != expected_status:
             raise _conditional_error()
         if ":processing" in values and current.get("status") != values[":processing"]:
+            raise _conditional_error()
+        if ":terminal_rejected" in values and current.get("status") != values[":terminal_rejected"]:
+            raise _conditional_error()
+        if ":terminal" in values and current.get("status") != values[":terminal"]:
+            raise _conditional_error()
+        if ":pending" in values and current.get("status") != values[":pending"]:
             raise _conditional_error()
         if ":result_ready" in values and ":completed" in values:
             if current.get("status") != values[":result_ready"]:
@@ -224,6 +235,13 @@ class EffectRecoveryTable:
                 terminal_at=values[":observed_at"],
                 version=values[":next_version"],
             )
+        elif values.get(":terminal_proven") == "terminal_proven":
+            current.update(
+                status=values[":terminal_proven"],
+                terminal_failure_proven_at=values[":proven_at"],
+                updated_at=values[":proven_at"],
+                version=values[":next_effect_version"],
+            )
         elif ":completed" in values:
             current.update(
                 status=values[":completed"],
@@ -244,26 +262,71 @@ class EffectRecoveryTable:
             values = update["ExpressionAttributeValues"]
             current = self.items.setdefault(key, {"PK": key[0], "SK": key[1]})
             if key[0].startswith("USAGE#"):
-                current.update(
-                    count=values[":next"],
-                    expires_at=values[":expires"],
-                    usage_type=values[":usage_type"],
-                )
+                if ":next" not in values:
+                    current["count"] = int(current["count"]) - 1
+                else:
+                    current.update(
+                        count=values[":next"],
+                        expires_at=values[":expires"],
+                        usage_type=values[":usage_type"],
+                    )
             elif key[1].startswith("QUESTION_EFFECT#"):
                 self._apply_effect_update(current, update)
             elif key[0].startswith("QUESTION#"):
-                current["status"] = values[":next_status"]
-                current["version"] = values[":next_question_version"]
-                for token, value in values.items():
-                    if token.startswith(":field_"):
-                        current[token.removeprefix(":field_")] = copy.deepcopy(value)
+                if ":failure_code" in values and ":next_question_version" in values and ":next_status" not in values:
+                    current.update(
+                        version=values[":next_question_version"],
+                        terminal_failure_code=values[":failure_code"],
+                        terminal_failure_proven_at=values[":proven_at"],
+                        terminal_effect_id=values[":effect_id"],
+                        terminal_effect_kind=values[":effect_kind"],
+                        updated_at=values[":proven_at"],
+                    )
+                elif ":failed" in values and ":reversed_at" in values:
+                    current.update(
+                        status=values[":failed"],
+                        failure_code=values[":failure_code"],
+                        failed_at=values[":reversed_at"],
+                        version=int(current["version"]) + 1,
+                    )
+                else:
+                    current["status"] = values[":next_status"]
+                    current["version"] = values[":next_question_version"]
+                    for token, value in values.items():
+                        if token.startswith(":field_"):
+                            current[token.removeprefix(":field_")] = copy.deepcopy(value)
             elif key[1].startswith("QUESTION_SUBMISSION#"):
+                if ":terminal_failed" in values:
+                    current.update(
+                        status=values[":terminal_failed"],
+                        version=values[":next_command_version"],
+                        terminal_failure_code=values[":failure_code"],
+                        terminal_failure_proven_at=values[":proven_at"],
+                        terminal_effect_id=values[":effect_id"],
+                        terminal_effect_kind=values[":effect_kind"],
+                        updated_at=values[":proven_at"],
+                    )
+                elif ":reversal" in values:
+                    current.update(
+                        reversal_id=values[":reversal"],
+                        reversed_at=values[":reversed_at"],
+                        updated_at=values[":reversed_at"],
+                        version=values[":next_version"],
+                    )
+                else:
+                    current.update(
+                        status=values[":next_command_status"],
+                        version=values[":next_command_version"],
+                        updated_at=values[":completed_at"],
+                        last_effect_id=values[":effect_id"],
+                        last_effect_kind=values[":effect_kind"],
+                    )
+            elif key[0].startswith("USAGE_LEDGER#") and ":reversal" in values:
                 current.update(
-                    status=values[":next_command_status"],
-                    version=values[":next_command_version"],
-                    updated_at=values[":completed_at"],
-                    last_effect_id=values[":effect_id"],
-                    last_effect_kind=values[":effect_kind"],
+                    status=values[":reversed"],
+                    reversal_id=values[":reversal"],
+                    reversed_at=values[":reversed_at"],
+                    updated_at=values[":reversed_at"],
                 )
 
 
@@ -456,6 +519,48 @@ def test_inflight_intent_response_loss_never_invokes_provider_on_replay(
     assert first.json()["status"] == second.json()["status"] == "pending"
     assert provider_calls == 0
     assert _effect(table, "ai")["status"] == "inflight"
+
+
+def test_malformed_dependency_response_remains_recoverable_without_refund(
+    monkeypatch,
+) -> None:
+    table = EffectRecoveryTable()
+    _patch_runtime(monkeypatch, table)
+    provider_calls = 0
+
+    def malformed(**_kwargs):
+        nonlocal provider_calls
+        provider_calls += 1
+        raise questions.ai_service.AIInvocationFailure("malformed_response")
+
+    monkeypatch.setattr(questions.ai_service, "get_ai_answer", malformed)
+
+    first = _client().post("/questions", json=_request())
+    second = _client().post("/questions", json=_request())
+
+    assert first.status_code == second.status_code == 201
+    assert first.json()["status"] == second.json()["status"] == "pending"
+    assert provider_calls == 1
+    command = next(
+        item
+        for item in table.items.values()
+        if item.get("entity_type") == "question_submission_command"
+    )
+    counter = next(
+        item
+        for (pk, sk), item in table.items.items()
+        if pk == f"USAGE#{STUDENT_ID}" and sk.startswith("QUESTION#")
+    )
+    ledger = next(
+        item
+        for item in table.items.values()
+        if item.get("entity_type") == "usage_ledger_event"
+    )
+    assert command["status"] == "processing"
+    assert counter["count"] == 1
+    assert ledger["status"] == "active"
+    assert "reversal_id" not in ledger
+    assert _effect(table, "ai")["status"] == "provider_outcome_unknown"
 
 
 def test_foreign_stale_and_malformed_receipts_are_rejected_without_write(
@@ -670,7 +775,11 @@ def test_terminal_provider_rejection_proves_and_compensates_once_before_actionab
     )
     question = table.items[(f"QUESTION#{QUESTION_ID}", "META")]
     effect = _effect(table, "ocr")
-    counter = table.items[(f"USAGE#{STUDENT_ID}", "QUESTION#2026-07-22")]
+    counter = next(
+        item
+        for (pk, sk), item in table.items.items()
+        if pk == f"USAGE#{STUDENT_ID}" and sk.startswith("QUESTION#")
+    )
     ledger = next(
         item
         for item in table.items.values()

@@ -96,6 +96,31 @@ def reconcile_question_submissions(
     )
 
 
+def reconcile_proven_terminal_question(
+    *,
+    student_id: str,
+    command_digest: str,
+    repository: Any = question_submission_repo,
+    table: object | None = None,
+    now: datetime | None = None,
+) -> QuestionReconciliationJobResult:
+    """Apply one production-proven terminal coordinate without discovery."""
+    coordinate = _validated_coordinate(
+        QuestionReconciliationCoordinate(
+            student_id=student_id,
+            command_digest=command_digest,
+        )
+    )
+    return reconcile_question_submissions(
+        (coordinate,),
+        apply=True,
+        limit=1,
+        repository=repository,
+        table=table,
+        now=now,
+    )
+
+
 def _validated_limit(value: object) -> int:
     if (
         isinstance(value, bool)

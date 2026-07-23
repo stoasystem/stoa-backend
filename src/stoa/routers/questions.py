@@ -18,6 +18,7 @@ from stoa.db.repositories import (
     user_repo,
 )
 from stoa.deps import get_actor
+from stoa.jobs import reconcile_question_submissions as question_reconciliation_job
 from stoa.security.authorization import AuthorizationAction, AuthorizedResource, ResourceType
 from stoa.security.authorization import AuthorizationPurpose, AuthorizationSpec
 from stoa.security.errors import normalize_correlation_id
@@ -246,6 +247,11 @@ def _project_question_admission(
         return dict(result.question or {})
     if disposition is question_submission_repo.QuestionAdmissionDisposition.RESUME:
         if result.command is not None and result.question is not None:
+            if result.command.get("status") == "terminal_failed":
+                _reconcile_terminal_question_failure(
+                    result.command,
+                    correlation_id=correlation_id,
+                )
             return dict(result.question)
         _raise_question_submission_error(
             QuestionSubmissionErrorCode.ADMISSION_UNAVAILABLE,
@@ -280,6 +286,77 @@ _EFFECT_RECEIPT_READY = frozenset(
         question_submission_repo.QuestionEffectDisposition.RESULT_RECEIPT_AMBIGUOUS,
     }
 )
+_TERMINAL_FAILURE_PROVEN = frozenset(
+    {
+        question_submission_repo.QuestionTerminalFailureDisposition.PROVEN,
+        question_submission_repo.QuestionTerminalFailureDisposition.ALREADY_PROVEN,
+    }
+)
+
+
+def _raise_terminal_question_failure(*, correlation_id: str) -> NoReturn:
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "code": "question_submission_terminal_failed",
+            "message": (
+                "This question could not be completed. "
+                "Create a new submission to try again."
+            ),
+            "action": "create_new_submission",
+        },
+        headers={"X-Correlation-ID": correlation_id},
+    )
+
+
+def _reconcile_terminal_question_failure(
+    command: Mapping[str, object],
+    *,
+    correlation_id: str,
+) -> NoReturn:
+    try:
+        result = question_reconciliation_job.reconcile_proven_terminal_question(
+            student_id=str(command["student_id"]),
+            command_digest=str(command["command_id"]),
+        )
+    except Exception:
+        _raise_question_submission_error(
+            QuestionSubmissionErrorCode.ADMISSION_UNAVAILABLE,
+            correlation_id=correlation_id,
+        )
+    if (
+        result.inspected != 1
+        or len(result.results) != 1
+        or result.results[0].get("disposition") != "committed"
+        or result.results[0].get("proposedAction") != "none"
+    ):
+        _raise_question_submission_error(
+            QuestionSubmissionErrorCode.ADMISSION_UNAVAILABLE,
+            correlation_id=correlation_id,
+        )
+    _raise_terminal_question_failure(correlation_id=correlation_id)
+
+
+def _promote_terminal_effect(
+    receipt: question_submission_repo.QuestionEffectResult,
+    *,
+    correlation_id: str,
+) -> None:
+    if (
+        receipt.disposition
+        is not question_submission_repo.QuestionEffectDisposition.TERMINAL_PROVIDER_REJECTION
+        or receipt.effect is None
+    ):
+        return
+    proof = question_submission_repo.prove_terminal_question_failure(
+        receipt.effect,
+        proven_at=datetime.now(timezone.utc).isoformat(),
+    )
+    if proof.disposition in _TERMINAL_FAILURE_PROVEN and proof.command is not None:
+        _reconcile_terminal_question_failure(
+            proof.command,
+            correlation_id=correlation_id,
+        )
 
 
 def _persisted_question_or_snapshot(
@@ -307,7 +384,10 @@ def _persisted_question_or_snapshot(
 
 
 def _recover_question_effect_receipts(
-    command: Mapping[str, object], question: Mapping[str, object]
+    command: Mapping[str, object],
+    question: Mapping[str, object],
+    *,
+    correlation_id: str,
 ) -> dict[str, Any]:
     """Complete only durable receipts; inflight/unknown effects never reinvoke."""
     current_command = dict(command)
@@ -324,6 +404,17 @@ def _recover_question_effect_receipts(
             return _persisted_question_or_snapshot(current_question, current_command)
         if observed is None:
             continue
+        if (
+            observed.disposition
+            is question_submission_repo.QuestionEffectDisposition.TERMINAL_PROVIDER_REJECTION
+        ):
+            _promote_terminal_effect(
+                observed,
+                correlation_id=correlation_id,
+            )
+            return _persisted_question_or_snapshot(
+                current_question, current_command
+            )
         if observed.disposition is question_submission_repo.QuestionEffectDisposition.COMPLETED:
             try:
                 refreshed = (
@@ -522,7 +613,9 @@ async def submit_question(
             limit=limit,
         )
         recovered = _recover_question_effect_receipts(
-            existing_replay.command or {}, replay or {}
+            existing_replay.command or {},
+            replay or {},
+            correlation_id=correlation_id,
         )
         return _question_response(recovered)
 
@@ -549,7 +642,9 @@ async def submit_question(
                     limit=limit,
                 )
                 recovered = _recover_question_effect_receipts(
-                    replay_result.command or {}, replay or {}
+                    replay_result.command or {},
+                    replay or {},
+                    correlation_id=correlation_id,
                 )
                 return _question_response(recovered)
             _raise_attachment(error, correlation_id)
@@ -681,8 +776,13 @@ async def submit_question(
                 recorded_at=datetime.now(timezone.utc).isoformat(),
             )
         except Exception as error:
-            if isinstance(error, ocr_service.OcrAttachmentFailure) and error.terminal:
-                question_submission_repo.mark_question_effect_terminal(
+            terminal = (
+                isinstance(error, ocr_service.OcrAttachmentFailure)
+                and error.terminal
+                and error.category in {"invalid_attachment", "invalid_object"}
+            )
+            if terminal:
+                terminal_receipt = question_submission_repo.mark_question_effect_terminal(
                     intent.effect,
                     failure_code="provider_rejected",
                     failed_at=datetime.now(timezone.utc).isoformat(),
@@ -699,6 +799,11 @@ async def submit_question(
                 correlation_id=correlation_id,
                 level=logging.WARNING,
             )
+            if terminal:
+                _promote_terminal_effect(
+                    terminal_receipt,
+                    correlation_id=correlation_id,
+                )
             return _question_response(_persisted_question_or_snapshot(item, command))
         completion = _complete_ready_effect(receipt)
         if completion.disposition not in _EFFECT_COMPLETION_SUCCEEDED:
@@ -748,12 +853,12 @@ async def submit_question(
             recorded_at=datetime.now(timezone.utc).isoformat(),
         )
     except Exception as exc:
-        terminal = isinstance(exc, ai_service.AIInvocationFailure) and exc.category in {
-            "malformed_response",
-            "response_cleanup_failed",
-        }
+        terminal = (
+            isinstance(exc, ai_service.AIInvocationFailure)
+            and exc.category == "response_cleanup_failed"
+        )
         if terminal:
-            question_submission_repo.mark_question_effect_terminal(
+            terminal_receipt = question_submission_repo.mark_question_effect_terminal(
                 ai_intent.effect,
                 failure_code="provider_rejected",
                 failed_at=datetime.now(timezone.utc).isoformat(),
@@ -771,6 +876,11 @@ async def submit_question(
             correlation_id=correlation_id,
             level=logging.ERROR,
         )
+        if terminal:
+            _promote_terminal_effect(
+                terminal_receipt,
+                correlation_id=correlation_id,
+            )
         return _question_response(_persisted_question_or_snapshot(item, command))
     ai_completion = _complete_ready_effect(ai_receipt)
     if ai_completion.disposition in _EFFECT_COMPLETION_SUCCEEDED:
