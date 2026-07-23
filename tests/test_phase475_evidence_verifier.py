@@ -222,6 +222,15 @@ def test_coverage_registry_requires_all_truthful_gap_nodes() -> None:
     assert verifier.REVIEW_FINDING_CONTRACTS["CR-09"] == verifier.DECISION_CONTRACTS[
         "D-13"
     ]
+    convergence_nodes = (
+        "tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_retries_validated_result_until_completion",
+        "tests/test_phase475_question_effect_recovery.py::test_intent_response_loss_continues_same_owned_invocation_once",
+        "tests/test_phase475_question_effect_recovery.py::test_missing_intent_dependency_recovers_on_replay_and_invokes_once",
+    )
+    assert set(convergence_nodes).issubset(verifier.DECISION_CONTRACTS["D-01"])
+    assert set(convergence_nodes).issubset(
+        verifier.REVIEW_FINDING_CONTRACTS["CR-01"]
+    )
     assert cr10[1] in verifier.REQUIREMENT_CONTRACTS["V9DATA-03"]
     assert cr10[2] in verifier.REQUIREMENT_CONTRACTS["V9DATA-02"]
     assert cr10[3] in verifier.REQUIREMENT_CONTRACTS["V9DATA-07"]

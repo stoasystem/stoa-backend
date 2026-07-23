@@ -83,6 +83,7 @@ class QuestionEffectKind(StrEnum):
 class QuestionEffectDisposition(StrEnum):
     """Closed outcomes across the provider-effect persistence boundary."""
 
+    INTENT_READY = "intent_ready"
     INVOKE_PROVIDER = "invoke_provider"
     PROVIDER_INFLIGHT = "provider_inflight"
     RESULT_READY = "result_ready"
@@ -354,6 +355,8 @@ def _effect_row_matches(
 
 def _effect_disposition(effect: Mapping[str, object]) -> QuestionEffectDisposition:
     statuses = {
+        "intent_ready": QuestionEffectDisposition.INTENT_READY,
+        "invoking": QuestionEffectDisposition.PROVIDER_INFLIGHT,
         "inflight": QuestionEffectDisposition.PROVIDER_INFLIGHT,
         "result_ready": QuestionEffectDisposition.RESULT_READY,
         "completed": QuestionEffectDisposition.COMPLETED,
@@ -677,6 +680,8 @@ def begin_question_effect(
     kind: QuestionEffectKind | str,
     *,
     started_at: str,
+    invocation_owner: str,
+    lease_expires_at: str,
     table: object | None = None,
 ) -> QuestionEffectResult:
     """Persist one exact intent before permitting a provider invocation."""
@@ -713,7 +718,7 @@ def begin_question_effect(
             "command_version": command_version,
             "question_version": question_version,
             "question_status": question_status,
-            "status": "inflight",
+            "status": "intent_ready",
             "version": 1,
             "started_at": _required_text(started_at, "started_at"),
             "updated_at": started_at,
@@ -776,8 +781,12 @@ def begin_question_effect(
             },
         ]
         attachment_repo.transact(operations, table=target)
-        return QuestionEffectResult(
-            QuestionEffectDisposition.INVOKE_PROVIDER, effect=effect
+        return _claim_question_effect_invocation(
+            effect,
+            invocation_owner=invocation_owner,
+            claimed_at=started_at,
+            lease_expires_at=lease_expires_at,
+            table=target,
         )
     except Exception:
         try:
@@ -785,10 +794,111 @@ def begin_question_effect(
         except Exception:
             existing = None
         if existing is not None:
+            if existing.effect is not None:
+                return _claim_question_effect_invocation(
+                    existing.effect,
+                    invocation_owner=invocation_owner,
+                    claimed_at=started_at,
+                    lease_expires_at=lease_expires_at,
+                    table=target,
+                )
             return existing
         return QuestionEffectResult(
             QuestionEffectDisposition.PRE_PROVIDER_DEPENDENCY_FAILURE
         )
+
+
+def _claim_question_effect_invocation(
+    effect: Mapping[str, object],
+    *,
+    invocation_owner: str,
+    claimed_at: str,
+    lease_expires_at: str,
+    table: object,
+) -> QuestionEffectResult:
+    """Acquire an unstarted or expired provider invocation for one explicit owner."""
+    owner = _required_text(invocation_owner, "invocation_owner")
+    claimed = _required_text(claimed_at, "claimed_at")
+    lease_expiry = _required_text(lease_expires_at, "lease_expires_at")
+    status = str(effect.get("status") or "")
+    if status in {"invoking", "inflight"} and effect.get("invocation_owner") == owner:
+        return QuestionEffectResult(
+            QuestionEffectDisposition.INVOKE_PROVIDER,
+            effect=dict(effect),
+        )
+    if status not in {"intent_ready", "invoking", "inflight"}:
+        return QuestionEffectResult(_effect_disposition(effect), effect=dict(effect))
+    if not isinstance(table, _UpdateTable):
+        return QuestionEffectResult(QuestionEffectDisposition.PRE_PROVIDER_DEPENDENCY_FAILURE)
+
+    effect_version = _positive_integer(
+        effect.get("version"), "effect version", minimum=1
+    )
+    condition = (
+        "entity_type=:entity AND schema_version=:schema "
+        "AND student_id=:student AND command_id=:command_id "
+        "AND fingerprint=:fingerprint AND question_id=:question "
+        "AND account_fence_generation=:generation AND effect_id=:effect_id "
+        "AND effect_kind=:effect_kind AND #status=:expected_status "
+        "AND #version=:effect_version"
+    )
+    if status in {"invoking", "inflight"}:
+        condition += " AND invocation_lease_expires_at<=:claimed_at"
+    values = {
+        **_effect_update_values(effect),
+        ":entity": "question_provider_effect",
+        ":invoking": "invoking",
+        ":invocation_owner": owner,
+        ":claimed_at": claimed,
+        ":lease_expires_at": lease_expiry,
+        ":next_version": effect_version + 1,
+    }
+    try:
+        table.update_item(
+            Key=question_effect_key(
+                str(effect["student_id"]), str(effect["effect_id"])
+            ),
+            UpdateExpression=(
+                "SET #status=:invoking, invocation_owner=:invocation_owner, "
+                "invocation_claimed_at=:claimed_at, "
+                "invocation_lease_expires_at=:lease_expires_at, "
+                "updated_at=:claimed_at, #version=:next_version"
+            ),
+            ConditionExpression=condition,
+            ExpressionAttributeNames={"#status": "status", "#version": "version"},
+            ExpressionAttributeValues=values,
+        )
+    except Exception:
+        refreshed = _reread_effect(effect, table=table)
+        if (
+            refreshed
+            and refreshed.get("status") in {"invoking", "inflight"}
+            and refreshed.get("invocation_owner") == owner
+        ):
+            return QuestionEffectResult(
+                QuestionEffectDisposition.INVOKE_PROVIDER,
+                effect=refreshed,
+            )
+        if refreshed is not None:
+            return QuestionEffectResult(
+                _effect_disposition(refreshed),
+                effect=refreshed,
+            )
+        return QuestionEffectResult(
+            QuestionEffectDisposition.PRE_PROVIDER_DEPENDENCY_FAILURE
+        )
+    return QuestionEffectResult(
+        QuestionEffectDisposition.INVOKE_PROVIDER,
+        effect={
+            **effect,
+            "status": "invoking",
+            "invocation_owner": owner,
+            "invocation_claimed_at": claimed,
+            "invocation_lease_expires_at": lease_expiry,
+            "updated_at": claimed,
+            "version": effect_version + 1,
+        },
+    )
 
 
 def _effect_update_values(effect: Mapping[str, object]) -> QuestionAdmissionItem:
@@ -1242,66 +1352,74 @@ def record_question_effect_result(
         effect_version = _positive_integer(
             effect.get("version"), "effect version", minimum=1
         )
-        if effect.get("status") != "inflight":
+        if effect.get("status") not in {"invoking", "inflight"}:
             raise ValueError("question effect intent is stale")
         validated = _validated_effect_result(kind, result)
         digest = _effect_result_digest(validated)
         if not isinstance(target, _UpdateTable):
             raise ValueError("question effect dependency unavailable")
-        target.update_item(
-            Key=question_effect_key(str(effect["student_id"]), str(effect["effect_id"])),
-            UpdateExpression=(
-                "SET #status=:result_ready, #result=:result, "
-                "result_digest=:result_digest, result_recorded_at=:recorded_at, "
-                "updated_at=:recorded_at, #version=:next_version"
-            ),
-            ConditionExpression=(
-                "entity_type=:entity AND schema_version=:schema "
-                "AND student_id=:student AND command_id=:command_id "
-                "AND fingerprint=:fingerprint AND question_id=:question "
-                "AND account_fence_generation=:generation AND effect_id=:effect_id "
-                "AND effect_kind=:effect_kind AND #status=:expected_status "
-                "AND #version=:effect_version"
-            ),
-            ExpressionAttributeNames={
-                "#status": "status",
-                "#result": "result",
-                "#version": "version",
-            },
-            ExpressionAttributeValues={
-                **_effect_update_values(effect),
-                ":entity": "question_provider_effect",
-                ":result_ready": "result_ready",
-                ":result": validated,
-                ":result_digest": digest,
-                ":recorded_at": _required_text(recorded_at, "recorded_at"),
-                ":next_version": effect_version + 1,
-            },
-        )
+        recorded = _required_text(recorded_at, "recorded_at")
     except ValueError:
         raise
-    except Exception:
-        refreshed = _reread_effect(effect, table=target)
-        if (
-            refreshed
-            and refreshed.get("status") == "result_ready"
-            and refreshed.get("result_digest") == digest
-            and refreshed.get("result") == validated
-        ):
-            return QuestionEffectResult(
-                QuestionEffectDisposition.RESULT_RECEIPT_AMBIGUOUS,
-                effect=refreshed,
+    for _attempt in range(3):
+        try:
+            target.update_item(
+                Key=question_effect_key(
+                    str(effect["student_id"]), str(effect["effect_id"])
+                ),
+                UpdateExpression=(
+                    "SET #status=:result_ready, #result=:result, "
+                    "result_digest=:result_digest, result_recorded_at=:recorded_at, "
+                    "updated_at=:recorded_at, #version=:next_version"
+                ),
+                ConditionExpression=(
+                    "entity_type=:entity AND schema_version=:schema "
+                    "AND student_id=:student AND command_id=:command_id "
+                    "AND fingerprint=:fingerprint AND question_id=:question "
+                    "AND account_fence_generation=:generation AND effect_id=:effect_id "
+                    "AND effect_kind=:effect_kind AND #status=:expected_status "
+                    "AND #version=:effect_version"
+                ),
+                ExpressionAttributeNames={
+                    "#status": "status",
+                    "#result": "result",
+                    "#version": "version",
+                },
+                ExpressionAttributeValues={
+                    **_effect_update_values(effect),
+                    ":entity": "question_provider_effect",
+                    ":result_ready": "result_ready",
+                    ":result": validated,
+                    ":result_digest": digest,
+                    ":recorded_at": recorded,
+                    ":next_version": effect_version + 1,
+                },
             )
-        return mark_question_effect_outcome_unknown(
-            effect, observed_at=recorded_at, table=target
+            break
+        except Exception:
+            refreshed = _reread_effect(effect, table=target)
+            if (
+                refreshed
+                and refreshed.get("status") == "result_ready"
+                and refreshed.get("result_digest") == digest
+                and refreshed.get("result") == validated
+            ):
+                return QuestionEffectResult(
+                    QuestionEffectDisposition.RESULT_RECEIPT_AMBIGUOUS,
+                    effect=refreshed,
+                )
+    else:
+        return QuestionEffectResult(
+            QuestionEffectDisposition.RESULT_RECEIPT_AMBIGUOUS,
+            effect=dict(effect),
         )
     persisted = {
         **effect,
         "status": "result_ready",
         "result": validated,
         "result_digest": digest,
-        "result_recorded_at": recorded_at,
-        "updated_at": recorded_at,
+        "result_recorded_at": recorded,
+        "updated_at": recorded,
         "version": effect_version + 1,
     }
     return QuestionEffectResult(

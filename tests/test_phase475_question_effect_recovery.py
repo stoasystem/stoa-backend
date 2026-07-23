@@ -56,6 +56,7 @@ class EffectRecoveryTable:
         self.fail_completion_before_commit = 0
         self.fail_completion_after_commit = 0
         self.fail_result_before_commit = 0
+        self.fail_intent_before_commit = 0
         self.fail_intent_after_commit = 0
         self.fail_reversal_after_commit = 0
         self._lock = threading.Lock()
@@ -102,6 +103,9 @@ class EffectRecoveryTable:
         )
         with self._lock:
             self._validate_transaction(operations)
+            if intent and self.fail_intent_before_commit:
+                self.fail_intent_before_commit -= 1
+                raise TimeoutError("intent-precommit-canary")
             if completion and self.fail_completion_before_commit:
                 self.fail_completion_before_commit -= 1
                 raise TimeoutError("completion-precommit-canary")
@@ -210,11 +214,27 @@ class EffectRecoveryTable:
 
     def _validate_effect_update(self, current, update) -> None:
         self._validate_bound_row(current, update["ExpressionAttributeValues"])
+        values = update["ExpressionAttributeValues"]
+        if (
+            "invocation_lease_expires_at<=:claimed_at"
+            in update["ConditionExpression"]
+            and str(current.get("invocation_lease_expires_at") or "")
+            > str(values[":claimed_at"])
+        ):
+            raise _conditional_error()
 
     @staticmethod
     def _apply_effect_update(current, update) -> None:
         values = update["ExpressionAttributeValues"]
-        if ":result_ready" in values and ":result" in values:
+        if ":invoking" in values:
+            current.update(
+                status=values[":invoking"],
+                invocation_owner=values[":invocation_owner"],
+                invocation_claimed_at=values[":claimed_at"],
+                invocation_lease_expires_at=values[":lease_expires_at"],
+                version=values[":next_version"],
+            )
+        elif ":result_ready" in values and ":result" in values:
             current.update(
                 status=values[":result_ready"],
                 result=copy.deepcopy(values[":result"]),
@@ -472,7 +492,7 @@ def test_committed_completion_response_loss_reconciles_exact_original_result(
     assert _effect(table, "ai")["status"] == "completed"
 
 
-def test_result_receipt_failure_closes_unknown_state_and_never_blindly_reinvokes(
+def test_result_receipt_failure_retries_validated_result_until_completion(
     monkeypatch,
 ) -> None:
     table = EffectRecoveryTable()
@@ -491,13 +511,13 @@ def test_result_receipt_failure_closes_unknown_state_and_never_blindly_reinvokes
     second = _client().post("/questions", json=_request())
 
     assert first.status_code == second.status_code == 201
-    assert first.json()["status"] == second.json()["status"] == "pending"
+    assert first.json()["status"] == second.json()["status"] == "ai_answered"
+    assert first.json()["ai_response"] == second.json()["ai_response"] == _ai_answer()
     assert provider_calls == 1
-    assert _effect(table, "ai")["status"] == "provider_outcome_unknown"
-    assert table.items[(f"QUESTION#{QUESTION_ID}", "META")]["ai_response"] is None
+    assert _effect(table, "ai")["status"] == "completed"
 
 
-def test_inflight_intent_response_loss_never_invokes_provider_on_replay(
+def test_intent_response_loss_continues_same_owned_invocation_once(
     monkeypatch,
 ) -> None:
     table = EffectRecoveryTable()
@@ -516,9 +536,37 @@ def test_inflight_intent_response_loss_never_invokes_provider_on_replay(
     second = _client().post("/questions", json=_request())
 
     assert first.status_code == second.status_code == 201
-    assert first.json()["status"] == second.json()["status"] == "pending"
-    assert provider_calls == 0
-    assert _effect(table, "ai")["status"] == "inflight"
+    assert first.json()["status"] == second.json()["status"] == "ai_answered"
+    assert first.json()["ai_response"] == second.json()["ai_response"] == _ai_answer()
+    assert provider_calls == 1
+    assert _effect(table, "ai")["status"] == "completed"
+
+
+def test_missing_intent_dependency_recovers_on_replay_and_invokes_once(
+    monkeypatch,
+) -> None:
+    table = EffectRecoveryTable()
+    table.fail_intent_before_commit = 1
+    _patch_runtime(monkeypatch, table)
+    provider_calls = 0
+
+    def answer(**_kwargs):
+        nonlocal provider_calls
+        provider_calls += 1
+        return _ai_answer()
+
+    monkeypatch.setattr(questions.ai_service, "get_ai_answer", answer)
+
+    first = _client().post("/questions", json=_request())
+    second = _client().post("/questions", json=_request())
+    third = _client().post("/questions", json=_request())
+
+    assert first.status_code == second.status_code == third.status_code == 201
+    assert first.json()["status"] == "pending"
+    assert second.json()["status"] == third.json()["status"] == "ai_answered"
+    assert second.json()["ai_response"] == third.json()["ai_response"] == _ai_answer()
+    assert provider_calls == 1
+    assert _effect(table, "ai")["status"] == "completed"
 
 
 def test_malformed_dependency_response_remains_recoverable_without_refund(
@@ -646,19 +694,22 @@ def test_ocr_success_receipt_recovers_real_question_and_command_transaction(
     assert first.status_code == second.status_code == 201
     assert first.json()["ocr_metadata"]["status"] == "processing"
     assert second.json()["ocr_metadata"]["status"] == "succeeded"
+    assert second.json()["status"] == "ai_answered"
+    assert second.json()["ai_response"] == _ai_answer()
     assert ocr_calls == 1
-    assert ai_calls == 0
+    assert ai_calls == 1
     receipt = _effect(table, "ocr")
     assert receipt["status"] == "completed"
     assert receipt["result"]["ocr_text"] == "x + 4 = 10"
-    assert table.items[(f"QUESTION#{QUESTION_ID}", "META")]["version"] == 2
+    assert _effect(table, "ai")["status"] == "completed"
+    assert table.items[(f"QUESTION#{QUESTION_ID}", "META")]["version"] == 3
     command = next(
         item
         for item in table.items.values()
         if item.get("entity_type") == "question_submission_command"
     )
-    assert command["version"] == 2
-    assert command["status"] == "processing"
+    assert command["version"] == 3
+    assert command["status"] == "completed"
 
 
 def test_effect_proof_executes_repository_boundaries_instead_of_monkeypatching_them() -> None:

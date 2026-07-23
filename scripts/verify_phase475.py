@@ -764,8 +764,10 @@ REQUIREMENT_CONTRACTS: dict[str, tuple[str, ...]] = {
 
 DECISION_CONTRACTS: dict[str, tuple[str, ...]] = {
     "D-01": (
-        "tests/test_phase475_question_replay.py::test_ai_failure_returns_queryable_durable_pending_question",
-        "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider",
+        "tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_retries_validated_result_until_completion",
+        "tests/test_phase475_question_effect_recovery.py::test_intent_response_loss_continues_same_owned_invocation_once",
+        "tests/test_phase475_question_effect_recovery.py::test_missing_intent_dependency_recovers_on_replay_and_invokes_once",
+        "tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay",
     ),
     "D-02": (
         "tests/test_phase475_question_admission.py::test_concurrent_identical_keys_commit_one_complete_admission",
@@ -804,8 +806,9 @@ DECISION_CONTRACTS: dict[str, tuple[str, ...]] = {
 
 REVIEW_FINDING_CONTRACTS: dict[str, tuple[str, ...]] = {
     "CR-01": (
-        "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider",
-        "tests/test_phase475_question_effect_recovery.py::test_ocr_success_receipt_recovers_real_question_and_command_transaction",
+        "tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_retries_validated_result_until_completion",
+        "tests/test_phase475_question_effect_recovery.py::test_intent_response_loss_continues_same_owned_invocation_once",
+        "tests/test_phase475_question_effect_recovery.py::test_missing_intent_dependency_recovers_on_replay_and_invokes_once",
     ),
     "CR-02": (
         "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows",
