@@ -46,6 +46,9 @@ def test_teacher_availability_summary_counts_dispatchable_profiles_only():
             {
                 "user_id": "teacher-online",
                 "role": "teacher",
+                "account_status": "active",
+                "version": 1,
+                "account_fence_generation": 1,
                 "subjects": ["math"],
                 "dispatch_availability": "online",
                 "active_session_count": 0,
@@ -54,6 +57,9 @@ def test_teacher_availability_summary_counts_dispatchable_profiles_only():
             {
                 "user_id": "teacher-busy",
                 "role": "teacher",
+                "account_status": "active",
+                "version": 1,
+                "account_fence_generation": 1,
                 "subjects": ["math"],
                 "dispatch_availability": "available",
                 "active_session_count": 2,
@@ -62,6 +68,9 @@ def test_teacher_availability_summary_counts_dispatchable_profiles_only():
             {
                 "user_id": "teacher-no-subjects",
                 "role": "teacher",
+                "account_status": "active",
+                "version": 1,
+                "account_fence_generation": 1,
                 "dispatch_availability": "available",
             },
         ]
