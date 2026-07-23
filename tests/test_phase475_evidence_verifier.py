@@ -312,6 +312,214 @@ def test_mypy_gate_fails_closed_for_every_nonzero_or_ambiguous_outcome(
             verifier.targeted_mypy("b" * 40, "c" * 40, drifted)
 
 
+def test_source_snapshot_is_exhaustive_for_all_git_statuses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verifier = _load_verifier()
+    base = "b" * 40
+    candidate = "c" * 40
+    name_status = (
+        b"M\0modified.py\0"
+        b"A\0added.py\0"
+        b"D\0deleted.py\0"
+        b"R100\0old-name.py\0renamed.py\0"
+        b"C087\0copy-source.py\0copied.py\0"
+    )
+    blobs = {
+        f"{candidate}:added.py": b"added bytes\n",
+        f"{candidate}:modified.py": b"modified bytes\n",
+        f"{base}:deleted.py": b"deleted bytes\n",
+        f"{base}:old-name.py": b"renamed bytes\n",
+        f"{candidate}:renamed.py": b"renamed bytes\n",
+        f"{base}:copy-source.py": b"copy source bytes\n",
+        f"{candidate}:copied.py": b"copy source bytes\n",
+    }
+
+    class _Completed:
+        def __init__(self, returncode: int, stdout: bytes = b"") -> None:
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = b""
+
+    calls: list[tuple[str, ...]] = []
+
+    def run(argv: tuple[str, ...], **kwargs: object) -> _Completed:
+        call = tuple(argv)
+        calls.append(call)
+        if call[:3] == ("git", "diff", "--name-status"):
+            return _Completed(0, name_status)
+        assert call[:2] == ("git", "show")
+        spec = call[2]
+        if spec in {
+            f"{candidate}:deleted.py",
+            f"{candidate}:old-name.py",
+        }:
+            return _Completed(128)
+        if spec in blobs:
+            return _Completed(0, blobs[spec])
+        raise AssertionError(f"unexpected Git read: {spec}")
+
+    monkeypatch.setattr(verifier, "PHASE_BASE_SHA", base)
+    monkeypatch.setattr(verifier, "_run", run)
+
+    assert verifier._source_snapshot(candidate) == [
+        {
+            "status": "added",
+            "path": "added.py",
+            "candidate_blob": {
+                "bytes": len(blobs[f"{candidate}:added.py"]),
+                "sha256": sha256(blobs[f"{candidate}:added.py"]).hexdigest(),
+            },
+        },
+        {
+            "status": "copied",
+            "similarity": 87,
+            "source_path": "copy-source.py",
+            "path": "copied.py",
+            "base_blob": {
+                "bytes": len(blobs[f"{base}:copy-source.py"]),
+                "sha256": sha256(blobs[f"{base}:copy-source.py"]).hexdigest(),
+            },
+            "candidate_blob": {
+                "bytes": len(blobs[f"{candidate}:copied.py"]),
+                "sha256": sha256(blobs[f"{candidate}:copied.py"]).hexdigest(),
+            },
+        },
+        {
+            "status": "deleted",
+            "path": "deleted.py",
+            "candidate_absent": True,
+            "base_blob": {
+                "bytes": len(blobs[f"{base}:deleted.py"]),
+                "sha256": sha256(blobs[f"{base}:deleted.py"]).hexdigest(),
+            },
+        },
+        {
+            "status": "modified",
+            "path": "modified.py",
+            "candidate_blob": {
+                "bytes": len(blobs[f"{candidate}:modified.py"]),
+                "sha256": sha256(blobs[f"{candidate}:modified.py"]).hexdigest(),
+            },
+        },
+        {
+            "status": "renamed",
+            "similarity": 100,
+            "source_path": "old-name.py",
+            "path": "renamed.py",
+            "source_candidate_absent": True,
+            "base_blob": {
+                "bytes": len(blobs[f"{base}:old-name.py"]),
+                "sha256": sha256(blobs[f"{base}:old-name.py"]).hexdigest(),
+            },
+            "candidate_blob": {
+                "bytes": len(blobs[f"{candidate}:renamed.py"]),
+                "sha256": sha256(blobs[f"{candidate}:renamed.py"]).hexdigest(),
+            },
+        },
+    ]
+    assert calls[0] == (
+        "git",
+        "diff",
+        "--name-status",
+        "-z",
+        "--find-renames",
+        "--find-copies",
+        base,
+        candidate,
+    )
+
+
+@pytest.mark.parametrize(
+    "name_status",
+    [
+        b"T\0typed.py\0",
+        b"A\0",
+        b"R100\0old.py\0",
+        b"Rabc\0old.py\0new.py\0",
+        b"A\0duplicate.py\0M\0duplicate.py\0",
+        b"R100\0same.py\0same.py\0",
+        b"M\0bad\xffpath.py\0",
+    ],
+)
+def test_source_snapshot_rejects_malformed_unsupported_or_duplicate_inventory(
+    monkeypatch: pytest.MonkeyPatch,
+    name_status: bytes,
+) -> None:
+    verifier = _load_verifier()
+
+    class _Completed:
+        returncode = 0
+        stdout = name_status
+        stderr = b""
+
+    monkeypatch.setattr(verifier, "_run", lambda argv, **kwargs: _Completed())
+    with pytest.raises(verifier.EvidenceError, match="source snapshot"):
+        verifier._source_snapshot("c" * 40)
+
+
+@pytest.mark.parametrize(
+    ("name_status", "responses"),
+    [
+        (b"A\0added.py\0", {}),
+        (b"M\0modified.py\0", {}),
+        (b"D\0deleted.py\0", {"candidate:deleted.py": b"still present"}),
+        (b"D\0deleted.py\0", {}),
+        (b"R100\0old.py\0new.py\0", {"candidate:old.py": b"still present"}),
+        (b"R100\0old.py\0new.py\0", {}),
+        (b"C100\0old.py\0new.py\0", {}),
+    ],
+)
+def test_source_snapshot_fails_closed_on_required_blob_or_absence_drift(
+    monkeypatch: pytest.MonkeyPatch,
+    name_status: bytes,
+    responses: dict[str, bytes],
+) -> None:
+    verifier = _load_verifier()
+    base = "b" * 40
+    candidate = "c" * 40
+
+    class _Completed:
+        def __init__(self, returncode: int, stdout: bytes = b"") -> None:
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = b""
+
+    def run(argv: tuple[str, ...], **kwargs: object) -> _Completed:
+        call = tuple(argv)
+        if call[:3] == ("git", "diff", "--name-status"):
+            return _Completed(0, name_status)
+        spec = call[2].replace(base, "base").replace(candidate, "candidate")
+        value = responses.get(spec)
+        return _Completed(128) if value is None else _Completed(0, value)
+
+    monkeypatch.setattr(verifier, "PHASE_BASE_SHA", base)
+    monkeypatch.setattr(verifier, "_run", run)
+    with pytest.raises(verifier.EvidenceError, match="source snapshot"):
+        verifier._source_snapshot(candidate)
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [],
+        [
+            {"status": "added", "path": "added.py"},
+            {"status": "modified", "path": "extra.py"},
+        ],
+        [
+            {"status": "added", "path": "added.py"},
+            {"status": "added", "path": "added.py"},
+        ],
+    ],
+)
+def test_source_snapshot_rejects_missing_extra_or_duplicate_rows(rows: list[dict[str, object]]) -> None:
+    verifier = _load_verifier()
+    inventory = [{"status": "A", "path": "added.py"}]
+    with pytest.raises(verifier.EvidenceError, match="source snapshot"):
+        verifier._validate_source_snapshot(inventory, rows)
+
+
 def _publication_repo(tmp_path: Path) -> tuple[Path, str, str]:
     verifier = _load_verifier()
     repo = tmp_path / "repo"
