@@ -1,7 +1,7 @@
 """Question routes — submit, retrieve, teacher escalation, feedback."""
 import logging
 import uuid
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Callable, Coroutine, Mapping
 from datetime import datetime, timezone
 from typing import Any, NoReturn
 
@@ -68,7 +68,9 @@ _FEEDBACK_SOURCE_STATES = frozenset(
 class _QuestionSubmissionRoute(APIRoute):
     """Redact request-validation details at the untrusted submission boundary."""
 
-    def get_route_handler(self) -> Callable[[Request], Awaitable[Response]]:
+    def get_route_handler(
+        self,
+    ) -> Callable[[Request], Coroutine[Any, Any, Response]]:
         route_handler = super().get_route_handler()
 
         async def redacted_route_handler(request: Request) -> Response:
