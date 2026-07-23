@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 475-44-PLAN.md
-last_updated: "2026-07-23T09:48:08.405Z"
+status: verifying
+stopped_at: Completed 475-45-PLAN.md
+last_updated: "2026-07-23T10:05:44.524Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 201
-  completed_plans: 138
-  percent: 69
+  completed_plans: 139
+  percent: 30
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
 Plan: 45 of 45
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Accumulated Context
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-23T09:48:08.397Z
-**Stopped At:** Completed 475-44-PLAN.md
+**Last Date:** 2026-07-23T10:05:44.517Z
+**Stopped At:** Completed 475-45-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -245,6 +245,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P42 | 17 min | 1 tasks | 5 files |
 | Phase 475 P43 | 8 min | 1 tasks | 2 files |
 | Phase 475 P44 | 10 min | 1 tasks | 2 files |
+| Phase 475 P45 | 12 min | 1 tasks | 2 files |
 
 ## Decisions
 
@@ -530,3 +531,5 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: CR-04 active-teacher lifecycle fencing and D-08 losing-teacher concealment remain separate evidence claims.
 - [Phase 475]: CR-10 maps only to discovery plus relationship, teacher, and notification cleanup, joining V9DATA-03, V9DATA-02, and V9DATA-07 respectively.
 - [Phase 475]: CR-09 and D-13 share the immutable operation-owned rate receipt node.
+- [Phase 475]: Final Phase 475 evidence uses one clean immutable candidate and one direct-child two-file publication. — Candidate 677edf994deaee4aa0faef91eb38e2a3a07899ea passed every local gate; publication 458ec9f8970a6ec1657e41862de1cd0ce4b0d3db changes only the generated JSON and Markdown.
+- [Phase 475]: External Phase 475 obligations remain exact later-phase NOT RUN. — Phase 479 owns live AWS DynamoDB; Phase 480 owns live provider effects, deployment, and production smoke.
