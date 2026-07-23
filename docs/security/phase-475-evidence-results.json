@@ -1,5 +1,5 @@
 {
-  "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+  "candidate_sha": "d63af86a9543fd678017d4c8a6ce1f641208ed35",
   "coverage": {
     "decisions": [
       {
@@ -8,15 +8,33 @@
         "selectors": [
           {
             "observed_nodes": [
-              "tests/test_phase475_question_replay.py::test_ai_failure_returns_queryable_durable_pending_question"
+              "tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_retries_validated_result_until_completion"
             ],
-            "selector": "tests/test_phase475_question_replay.py::test_ai_failure_returns_queryable_durable_pending_question"
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_retries_validated_result_until_completion"
           },
           {
             "observed_nodes": [
-              "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider"
+              "tests/test_phase475_question_effect_recovery.py::test_intent_response_loss_continues_same_owned_invocation_once"
             ],
-            "selector": "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider"
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_intent_response_loss_continues_same_owned_invocation_once"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_effect_recovery.py::test_missing_intent_dependency_recovers_on_replay_and_invokes_once"
+            ],
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_missing_intent_dependency_recovers_on_replay_and_invokes_once"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_effect_recovery.py::test_crash_after_provider_before_receipt_expires_to_exact_once_compensation"
+            ],
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_crash_after_provider_before_receipt_expires_to_exact_once_compensation"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay"
+            ],
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay"
           }
         ]
       },
@@ -495,15 +513,27 @@
         "selectors": [
           {
             "observed_nodes": [
-              "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider"
+              "tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_retries_validated_result_until_completion"
             ],
-            "selector": "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider"
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_retries_validated_result_until_completion"
           },
           {
             "observed_nodes": [
-              "tests/test_phase475_question_effect_recovery.py::test_ocr_success_receipt_recovers_real_question_and_command_transaction"
+              "tests/test_phase475_question_effect_recovery.py::test_intent_response_loss_continues_same_owned_invocation_once"
             ],
-            "selector": "tests/test_phase475_question_effect_recovery.py::test_ocr_success_receipt_recovers_real_question_and_command_transaction"
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_intent_response_loss_continues_same_owned_invocation_once"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_effect_recovery.py::test_missing_intent_dependency_recovers_on_replay_and_invokes_once"
+            ],
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_missing_intent_dependency_recovers_on_replay_and_invokes_once"
+          },
+          {
+            "observed_nodes": [
+              "tests/test_phase475_question_effect_recovery.py::test_crash_after_provider_before_receipt_expires_to_exact_once_compensation"
+            ],
+            "selector": "tests/test_phase475_question_effect_recovery.py::test_crash_after_provider_before_receipt_expires_to_exact_once_compensation"
           }
         ]
       },
@@ -755,9 +785,9 @@
   },
   "environment_classification": "local deterministic fakes plus Phase 474 strict full-backend extension",
   "evidence_markdown": {
-    "bytes": 23993,
+    "bytes": 24617,
     "path": "docs/security/phase-475-evidence.md",
-    "sha256": "d3a1d3c3b1314bbf76718fc003cb308708087f359b3b02bafc7b1c07b83b70dc"
+    "sha256": "9593d72a70fdfa1bc44feae593f062f5e6311d1c3910de19d265ec21a554ec82"
   },
   "external_obligations": [
     {
@@ -779,7 +809,7 @@
   "gate_registry": [
     {
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -788,7 +818,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-QUESTION.xml",
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-QUESTION.xml",
         "tests/test_phase475_question_admission.py",
         "tests/test_phase475_question_replay.py",
         "tests/test_phase475_question_reconciliation.py",
@@ -800,7 +830,7 @@
     },
     {
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -809,7 +839,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-TAKEOVER.xml",
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-TAKEOVER.xml",
         "tests/test_phase475_teacher_takeover.py",
         "tests/test_phase475_teacher_takeover_effect.py"
       ],
@@ -818,7 +848,7 @@
     },
     {
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -827,7 +857,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-RELATIONSHIP.xml",
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-RELATIONSHIP.xml",
         "tests/test_phase475_parent_binding_transaction.py",
         "tests/test_phase475_parent_binding_reconciliation.py",
         "tests/test_phase475_profile_version_cas.py"
@@ -837,7 +867,7 @@
     },
     {
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -846,7 +876,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-RATE.xml",
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-RATE.xml",
         "tests/test_phase475_rate_limit.py"
       ],
       "id": "P475-RATE",
@@ -854,7 +884,7 @@
     },
     {
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -863,7 +893,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-MISTAKE.xml",
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-MISTAKE.xml",
         "tests/test_phase475_mistake_answer.py"
       ],
       "id": "P475-MISTAKE",
@@ -871,7 +901,7 @@
     },
     {
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -880,7 +910,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-DELIVERY.xml",
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-DELIVERY.xml",
         "tests/test_phase475_delivery_begin.py",
         "tests/test_phase475_deletion_notification_identity_scrub.py",
         "tests/test_phase473_delivery_intent_recovery.py",
@@ -891,7 +921,7 @@
     },
     {
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -900,7 +930,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-DELETION.xml",
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-DELETION.xml",
         "tests/test_phase475_completed_deletion_replay.py",
         "tests/test_phase475_deletion_discovery.py",
         "tests/test_phase475_deletion_relationship_scrub.py",
@@ -913,7 +943,7 @@
     },
     {
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -922,7 +952,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-INHERITED-AUTH-PRIVACY.xml",
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-INHERITED-AUTH-PRIVACY.xml",
         "tests/test_student_authorization_matrix.py",
         "tests/test_admin_authorization.py",
         "tests/test_practice_privacy.py",
@@ -938,7 +968,7 @@
     },
     {
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -949,14 +979,14 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-PHASE474-FORMAL-EXTENSION.xml"
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-PHASE474-FORMAL-EXTENSION.xml"
       ],
       "id": "P475-PHASE474-FORMAL-EXTENSION",
       "kind": "pytest"
     },
     {
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/ruff",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/ruff",
         "check",
         "src/stoa/db/repositories/account_deletion_repo.py",
         "src/stoa/db/repositories/notification_repo.py",
@@ -988,15 +1018,15 @@
     },
     {
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "scripts/verify_phase475.py",
         "_targeted-mypy",
         "--base",
         "901cb26626cb0f06b7f51a72b95e04aa4f7f4ebf",
         "--candidate",
-        "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+        "d63af86a9543fd678017d4c8a6ce1f641208ed35",
         "--raw-output",
-        "/tmp/phase475-evidence.uSjTTF/raw/MYPY-PHASE475.mypy.log",
+        "/tmp/phase475-capture-Ew3mUb/raw/MYPY-PHASE475.mypy.log",
         "src/stoa/db/repositories/account_deletion_repo.py",
         "src/stoa/db/repositories/notification_repo.py",
         "src/stoa/db/repositories/practice_repo.py",
@@ -1024,7 +1054,7 @@
       "kind": "mypy"
     }
   ],
-  "observed_full_suite_count": 2588,
+  "observed_full_suite_count": 2619,
   "phase475_runtime_files": [
     "src/stoa/db/repositories/account_deletion_repo.py",
     "src/stoa/db/repositories/notification_repo.py",
@@ -1060,10 +1090,10 @@
     {
       "after": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -1072,7 +1102,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-QUESTION.xml",
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-QUESTION.xml",
         "tests/test_phase475_question_admission.py",
         "tests/test_phase475_question_replay.py",
         "tests/test_phase475_question_reconciliation.py",
@@ -1081,36 +1111,36 @@
       ],
       "artifacts": {
         "junit": {
-          "bytes": 10533,
+          "bytes": 10842,
           "logical_path": "junit/P475-QUESTION.xml",
-          "sha256": "a3ce302fb865cc98f8ffe516c81f679ec838edd4d3002c33c34383ec03a57e6e"
+          "sha256": "a1741a9b8a4f0b6c170ddf170fd0930ea435d326e1b3518b863ea5d70eef6e0e"
         },
         "log": {
-          "bytes": 594,
+          "bytes": 629,
           "logical_path": "raw/P475-QUESTION.log",
-          "sha256": "393db90bbe1d4fa0ced0b0940aef228f909535e8a8be72d2d38e1662454c64c3"
+          "sha256": "37d6bd3bc1fba4250426869bc367f4113a9cd1a9b73eaf34f3e7f9b8c1f7f0d9"
         },
         "node_manifest": {
-          "bytes": 11850,
+          "bytes": 12197,
           "logical_path": "nodes/P475-QUESTION.json",
-          "sha256": "55549a4353f4a5730b64e08bbf98b44a2a999c641c600aa3c00f98964c5c2e4b"
+          "sha256": "b9fe6f6cfa0f4280dd20f73d596fa6f6595d6f228c01fe4fb8df028b1e10a9ad"
         }
       },
       "before": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
-      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+      "candidate_sha": "d63af86a9543fd678017d4c8a6ce1f641208ed35",
       "counts": {
         "error": 0,
         "failed": 0,
-        "passed": 67,
+        "passed": 69,
         "skipped": 0,
-        "total": 67,
+        "total": 69,
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-23T09:59:26.948031Z",
+      "ended_at": "2026-07-23T11:26:58.987721Z",
       "exit_code": 0,
       "gate_id": "P475-QUESTION",
       "kind": "pytest",
@@ -1168,6 +1198,10 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_crash_after_provider_before_receipt_expires_to_exact_once_compensation",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_question_effect_recovery.py::test_effect_proof_executes_repository_boundaries_instead_of_monkeypatching_them",
           "outcome": "passed"
         },
@@ -1176,7 +1210,7 @@
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_question_effect_recovery.py::test_inflight_intent_response_loss_never_invokes_provider_on_replay",
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_intent_response_loss_continues_same_owned_invocation_once",
           "outcome": "passed"
         },
         {
@@ -1184,11 +1218,15 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_missing_intent_dependency_recovers_on_replay_and_invokes_once",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_question_effect_recovery.py::test_ocr_success_receipt_recovers_real_question_and_command_transaction",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_closes_unknown_state_and_never_blindly_reinvokes",
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_retries_validated_result_until_completion",
           "outcome": "passed"
         },
         {
@@ -1389,15 +1427,15 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-23T09:59:24.876107Z"
+      "started_at": "2026-07-23T11:26:57.149326Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -1406,7 +1444,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-TAKEOVER.xml",
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-TAKEOVER.xml",
         "tests/test_phase475_teacher_takeover.py",
         "tests/test_phase475_teacher_takeover_effect.py"
       ],
@@ -1414,12 +1452,12 @@
         "junit": {
           "bytes": 3573,
           "logical_path": "junit/P475-TAKEOVER.xml",
-          "sha256": "92548853d4855f55a451be52d7950c5d6d0958d531e5793ce1482cdb35b886cc"
+          "sha256": "c3adb5569df30ad3ade39d71195b6a1adedf87675dd5adc287c13d0dcbe4a649"
         },
         "log": {
-          "bytes": 594,
+          "bytes": 629,
           "logical_path": "raw/P475-TAKEOVER.log",
-          "sha256": "4230e3f4a57137dd478bde443e211c2b0cfbe4972a92d672f363e46618a3e548"
+          "sha256": "1400598fe66d220d1f0c720774a70012ca0319cdd091f20dbd50ce494f5c61db"
         },
         "node_manifest": {
           "bytes": 3978,
@@ -1429,9 +1467,9 @@
       },
       "before": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
-      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+      "candidate_sha": "d63af86a9543fd678017d4c8a6ce1f641208ed35",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -1441,7 +1479,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-23T09:59:28.177174Z",
+      "ended_at": "2026-07-23T11:27:00.017189Z",
       "exit_code": 0,
       "gate_id": "P475-TAKEOVER",
       "kind": "pytest",
@@ -1528,15 +1566,15 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-23T09:59:27.010964Z"
+      "started_at": "2026-07-23T11:26:59.043108Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -1545,43 +1583,43 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-RELATIONSHIP.xml",
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-RELATIONSHIP.xml",
         "tests/test_phase475_parent_binding_transaction.py",
         "tests/test_phase475_parent_binding_reconciliation.py",
         "tests/test_phase475_profile_version_cas.py"
       ],
       "artifacts": {
         "junit": {
-          "bytes": 8961,
+          "bytes": 14774,
           "logical_path": "junit/P475-RELATIONSHIP.xml",
-          "sha256": "701a245e0450ac1225225869ff5dd9e91f0e1d52a8ddf67679ef3d92a833a9df"
+          "sha256": "6cb1347a63d0a5a6d8a0aeff12339e8b2b6e3c0a3378aa798cbf5722075fdc9c"
         },
         "log": {
           "bytes": 99,
           "logical_path": "raw/P475-RELATIONSHIP.log",
-          "sha256": "666ac7376fb483a2d733d3add7e7f3399094c47314396ad63713ea2f059b0e59"
+          "sha256": "cc7bd26dcda099fa2863bd62b93e2b08c2a736abf31224b0a1026524e86f9329"
         },
         "node_manifest": {
-          "bytes": 9860,
+          "bytes": 16148,
           "logical_path": "nodes/P475-RELATIONSHIP.json",
-          "sha256": "2418141805d84869223499032138e0ee3c73939ecc79e012fe6ee21b383cae09"
+          "sha256": "5b7d906fe34c5ebdfc06aecea08110ff3c88bc498842b74e3e3fcf9843f21dc2"
         }
       },
       "before": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
-      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+      "candidate_sha": "d63af86a9543fd678017d4c8a6ce1f641208ed35",
       "counts": {
         "error": 0,
         "failed": 0,
-        "passed": 45,
+        "passed": 70,
         "skipped": 0,
-        "total": 45,
+        "total": 70,
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-23T09:59:29.955744Z",
+      "ended_at": "2026-07-23T11:27:01.705767Z",
       "exit_code": 0,
       "gate_id": "P475-RELATIONSHIP",
       "kind": "pytest",
@@ -1739,6 +1777,106 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-25ffb382edf61073-case-2f5e91f556546580-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-25ffb382edf61073-case-2f5e91f556546580-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-25ffb382edf61073-case-37d3cc864c35dfad-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-25ffb382edf61073-case-37d3cc864c35dfad-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-25ffb382edf61073-case-9e7e96aabf4df0c3-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-25ffb382edf61073-case-9e7e96aabf4df0c3-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-2df0c6ddc4220cda-case-37d3cc864c35dfad-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-2df0c6ddc4220cda-case-37d3cc864c35dfad-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-2df0c6ddc4220cda-case-9e7e96aabf4df0c3-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-2df0c6ddc4220cda-case-9e7e96aabf4df0c3-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-2df0c6ddc4220cda-case-c235318c2c921276-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-2df0c6ddc4220cda-case-c235318c2c921276-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-38dcfe933a5243fc-case-2f5e91f556546580-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-38dcfe933a5243fc-case-2f5e91f556546580-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-38dcfe933a5243fc-case-37d3cc864c35dfad-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-38dcfe933a5243fc-case-37d3cc864c35dfad-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-38dcfe933a5243fc-case-c235318c2c921276-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-38dcfe933a5243fc-case-c235318c2c921276-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-ee95294f1079fece-case-2f5e91f556546580-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-ee95294f1079fece-case-2f5e91f556546580-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-ee95294f1079fece-case-9e7e96aabf4df0c3-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-ee95294f1079fece-case-9e7e96aabf4df0c3-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-ee95294f1079fece-case-c235318c2c921276-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-ee95294f1079fece-case-c235318c2c921276-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_shape_contains_dual_fences_and_active_profile_observations",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_parent_binding_transaction.py::test_transaction_shape_contains_dual_fences_dual_profiles_and_relationship_writes",
           "outcome": "passed"
         },
@@ -1772,15 +1910,15 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-23T09:59:28.237921Z"
+      "started_at": "2026-07-23T11:27:00.080052Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -1789,19 +1927,19 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-RATE.xml",
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-RATE.xml",
         "tests/test_phase475_rate_limit.py"
       ],
       "artifacts": {
         "junit": {
           "bytes": 1833,
           "logical_path": "junit/P475-RATE.xml",
-          "sha256": "65f4c30c77303a9fea17cd9bea8677b7384c0a60c85dddee3a1e5440e27cdfa4"
+          "sha256": "f7a24c896ebb132fa9c2b6fd0de559f3d0625abd5533dc22d76e5a2644837e20"
         },
         "log": {
           "bytes": 99,
           "logical_path": "raw/P475-RATE.log",
-          "sha256": "a8499459c3449501a9554eac8ee286716ab4446a1e6c5d74db262b845e5ce3d8"
+          "sha256": "8fbf1ad2230478d7fa8f87bfde57991b802b3e5bac9b14f4ede1ad1820e4f583"
         },
         "node_manifest": {
           "bytes": 2086,
@@ -1811,9 +1949,9 @@
       },
       "before": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
-      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+      "candidate_sha": "d63af86a9543fd678017d4c8a6ce1f641208ed35",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -1823,7 +1961,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-23T09:59:30.530018Z",
+      "ended_at": "2026-07-23T11:27:02.210481Z",
       "exit_code": 0,
       "gate_id": "P475-RATE",
       "kind": "pytest",
@@ -1878,15 +2016,15 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-23T09:59:30.016830Z"
+      "started_at": "2026-07-23T11:27:01.762188Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -1895,19 +2033,19 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-MISTAKE.xml",
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-MISTAKE.xml",
         "tests/test_phase475_mistake_answer.py"
       ],
       "artifacts": {
         "junit": {
           "bytes": 1823,
           "logical_path": "junit/P475-MISTAKE.xml",
-          "sha256": "903a29e87ac82e8f87f569c5c9598492a0811b5dc52591e02b4359f4085f9a5a"
+          "sha256": "8f5997a8e74e1d8341e5cb98c6d0db44f51d8094a2ddadfdfb13d78e1ce1f8a6"
         },
         "log": {
-          "bytes": 593,
+          "bytes": 628,
           "logical_path": "raw/P475-MISTAKE.log",
-          "sha256": "7acecfc5188123af9ff2ba7fd94eb5fc7285f42745c73957e3f96c69187c249f"
+          "sha256": "50c536240dad0a55e47cc510e923d38da0499b713ebcab4cd2c7c1dafd7c31ec"
         },
         "node_manifest": {
           "bytes": 2037,
@@ -1917,9 +2055,9 @@
       },
       "before": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
-      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+      "candidate_sha": "d63af86a9543fd678017d4c8a6ce1f641208ed35",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -1929,7 +2067,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-23T09:59:31.273775Z",
+      "ended_at": "2026-07-23T11:27:02.864743Z",
       "exit_code": 0,
       "gate_id": "P475-MISTAKE",
       "kind": "pytest",
@@ -1976,15 +2114,15 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-23T09:59:30.586308Z"
+      "started_at": "2026-07-23T11:27:02.266125Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -1993,7 +2131,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-DELIVERY.xml",
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-DELIVERY.xml",
         "tests/test_phase475_delivery_begin.py",
         "tests/test_phase475_deletion_notification_identity_scrub.py",
         "tests/test_phase473_delivery_intent_recovery.py",
@@ -2003,12 +2141,12 @@
         "junit": {
           "bytes": 4311,
           "logical_path": "junit/P475-DELIVERY.xml",
-          "sha256": "fd691c86c58c28ce4d86ca3167da5373376409ca7c6ce68fe562f5e877fb00cd"
+          "sha256": "cdbeaad0544aafe02f1f135fcd501a0edcf12c8f286517ee58750608c00efa83"
         },
         "log": {
           "bytes": 99,
           "logical_path": "raw/P475-DELIVERY.log",
-          "sha256": "a15ead4e7e3ad56fe8773c8504b41229914a60731ea6590fe70297c607ca6c20"
+          "sha256": "50886ddae3b374c3062fbe873c12bb786017c5a8ded064cfcd76ee5e5e79b05e"
         },
         "node_manifest": {
           "bytes": 4830,
@@ -2018,9 +2156,9 @@
       },
       "before": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
-      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+      "candidate_sha": "d63af86a9543fd678017d4c8a6ce1f641208ed35",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -2030,7 +2168,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-23T09:59:31.959432Z",
+      "ended_at": "2026-07-23T11:27:03.456102Z",
       "exit_code": 0,
       "gate_id": "P475-DELIVERY",
       "kind": "pytest",
@@ -2141,15 +2279,15 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-23T09:59:31.337725Z"
+      "started_at": "2026-07-23T11:27:02.918609Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -2158,7 +2296,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-DELETION.xml",
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-DELETION.xml",
         "tests/test_phase475_completed_deletion_replay.py",
         "tests/test_phase475_deletion_discovery.py",
         "tests/test_phase475_deletion_relationship_scrub.py",
@@ -2170,12 +2308,12 @@
         "junit": {
           "bytes": 10640,
           "logical_path": "junit/P475-DELETION.xml",
-          "sha256": "1158f30d6f366a51c5f7cfae4726bcaff29b8489787e5d6cf5d4efdc74a2fbf7"
+          "sha256": "0173c7f4045b9c9417407d3184121288eb98c99f0a5da80eff3108713b335607"
         },
         "log": {
-          "bytes": 594,
+          "bytes": 629,
           "logical_path": "raw/P475-DELETION.log",
-          "sha256": "d970c826e049c63d99a238cec20795af3fc60d4f5ebf318b30bcdb7a3b435aec"
+          "sha256": "9183f28737c9e7055dc5062e448a55ed47d4297f84cc909fd1e2fcc34d2e48dd"
         },
         "node_manifest": {
           "bytes": 11900,
@@ -2185,9 +2323,9 @@
       },
       "before": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
-      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+      "candidate_sha": "d63af86a9543fd678017d4c8a6ce1f641208ed35",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -2197,7 +2335,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-23T09:59:33.076428Z",
+      "ended_at": "2026-07-23T11:27:04.464706Z",
       "exit_code": 0,
       "gate_id": "P475-DELETION",
       "kind": "pytest",
@@ -2464,15 +2602,15 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-23T09:59:32.015893Z"
+      "started_at": "2026-07-23T11:27:03.510398Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -2481,7 +2619,7 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-INHERITED-AUTH-PRIVACY.xml",
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-INHERITED-AUTH-PRIVACY.xml",
         "tests/test_student_authorization_matrix.py",
         "tests/test_admin_authorization.py",
         "tests/test_practice_privacy.py",
@@ -2496,12 +2634,12 @@
         "junit": {
           "bytes": 58760,
           "logical_path": "junit/P475-INHERITED-AUTH-PRIVACY.xml",
-          "sha256": "b5a909239dcee545e30416bea07eee685ef46d928c3caeb874b413d9fd1407f4"
+          "sha256": "008e5fbecba170395e56b98eeb0b6c95dbf3a70220c8ab4c86fb9be783d4ab25"
         },
         "log": {
-          "bytes": 1139,
+          "bytes": 1209,
           "logical_path": "raw/P475-INHERITED-AUTH-PRIVACY.log",
-          "sha256": "87f6f77f9ec0830f6e6c011f0ab636a79af438e51d3199bfa3ff9997ac42bf58"
+          "sha256": "03001607c201b67270ae80fec064cbd47b29cc83484b9290be5687d93df6a0d0"
         },
         "node_manifest": {
           "bytes": 65056,
@@ -2511,9 +2649,9 @@
       },
       "before": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
-      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+      "candidate_sha": "d63af86a9543fd678017d4c8a6ce1f641208ed35",
       "counts": {
         "error": 0,
         "failed": 0,
@@ -2523,7 +2661,7 @@
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-23T09:59:37.301523Z",
+      "ended_at": "2026-07-23T11:27:08.439624Z",
       "exit_code": 0,
       "gate_id": "P475-INHERITED-AUTH-PRIVACY",
       "kind": "pytest",
@@ -3850,15 +3988,15 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-23T09:59:33.136129Z"
+      "started_at": "2026-07-23T11:27:04.522009Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "-m",
         "pytest",
         "-q",
@@ -3869,45 +4007,45 @@
         "-o",
         "xfail_strict=true",
         "--junitxml",
-        "/tmp/phase475-evidence.uSjTTF/junit/P475-PHASE474-FORMAL-EXTENSION.xml"
+        "/tmp/phase475-capture-Ew3mUb/junit/P475-PHASE474-FORMAL-EXTENSION.xml"
       ],
       "artifacts": {
         "junit": {
-          "bytes": 416464,
+          "bytes": 423142,
           "logical_path": "junit/P475-PHASE474-FORMAL-EXTENSION.xml",
-          "sha256": "e7ff4f450ed6b4f62613e4772fc9e917aa099ace01ce6aef36d51acd22ff39ee"
+          "sha256": "0e1ae52fd206df14f1e89648a950556b1069591c80866965ad338891ab2b512d"
         },
         "log": {
-          "bytes": 4357,
+          "bytes": 4507,
           "logical_path": "raw/P475-PHASE474-FORMAL-EXTENSION.log",
-          "sha256": "10754ca1244671525572668dd01c6c57ef96692ca5d08668fc4581d65ae49d31"
+          "sha256": "4d929f2c852d1dc68ad5ff51b174da86a8b4b31eec7e5e0b78b4ba2b541377f1"
         },
         "node_manifest": {
-          "bytes": 465693,
+          "bytes": 472960,
           "logical_path": "nodes/P475-PHASE474-FORMAL-EXTENSION.json",
-          "sha256": "16abe3ff4b03e1bcb76e7086c1e32be96de31608eb6ec637e8b0ab2ff021963b"
+          "sha256": "9e0e883e3189ba6382981b47837aeaffaa8a4bfa1da4b25462f3c611ee74fe7f"
         },
         "phase474_manifest": {
-          "bytes": 1625280,
+          "bytes": 1646435,
           "logical_path": "phase474/P475-PHASE474-FORMAL-EXTENSION.json",
-          "sha256": "03640d421fbaf51b0724417809594dec72a9dfd3e3ae55f99943c13e2efe042c"
+          "sha256": "74e8b5fd56c427154f0fa3a10690137c08bc5fc342410c4e07130f0072c46420"
         }
       },
       "before": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
-      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+      "candidate_sha": "d63af86a9543fd678017d4c8a6ce1f641208ed35",
       "counts": {
         "error": 0,
         "failed": 0,
-        "passed": 2588,
+        "passed": 2619,
         "skipped": 0,
-        "total": 2588,
+        "total": 2619,
         "xfail": 0,
         "xpass": 0
       },
-      "ended_at": "2026-07-23T10:01:45.867822Z",
+      "ended_at": "2026-07-23T11:29:01.966632Z",
       "exit_code": 0,
       "gate_id": "P475-PHASE474-FORMAL-EXTENSION",
       "kind": "pytest",
@@ -11153,6 +11291,106 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-25ffb382edf61073-case-2f5e91f556546580-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-25ffb382edf61073-case-2f5e91f556546580-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-25ffb382edf61073-case-37d3cc864c35dfad-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-25ffb382edf61073-case-37d3cc864c35dfad-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-25ffb382edf61073-case-9e7e96aabf4df0c3-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-25ffb382edf61073-case-9e7e96aabf4df0c3-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-2df0c6ddc4220cda-case-37d3cc864c35dfad-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-2df0c6ddc4220cda-case-37d3cc864c35dfad-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-2df0c6ddc4220cda-case-9e7e96aabf4df0c3-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-2df0c6ddc4220cda-case-9e7e96aabf4df0c3-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-2df0c6ddc4220cda-case-c235318c2c921276-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-2df0c6ddc4220cda-case-c235318c2c921276-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-38dcfe933a5243fc-case-2f5e91f556546580-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-38dcfe933a5243fc-case-2f5e91f556546580-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-38dcfe933a5243fc-case-37d3cc864c35dfad-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-38dcfe933a5243fc-case-37d3cc864c35dfad-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-38dcfe933a5243fc-case-c235318c2c921276-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-38dcfe933a5243fc-case-c235318c2c921276-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-ee95294f1079fece-case-2f5e91f556546580-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-ee95294f1079fece-case-2f5e91f556546580-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-ee95294f1079fece-case-9e7e96aabf4df0c3-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-ee95294f1079fece-case-9e7e96aabf4df0c3-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-ee95294f1079fece-case-c235318c2c921276-case-04626eecb0aaf440]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_lifecycle_race_never_advances_relationship_projection[case-ee95294f1079fece-case-c235318c2c921276-case-94c80b4dfd2ff624]",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_phase475_parent_binding_transaction.py::test_status_transition_shape_contains_dual_fences_and_active_profile_observations",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_parent_binding_transaction.py::test_transaction_shape_contains_dual_fences_dual_profiles_and_relationship_writes",
           "outcome": "passed"
         },
@@ -11233,6 +11471,10 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_crash_after_provider_before_receipt_expires_to_exact_once_compensation",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_question_effect_recovery.py::test_effect_proof_executes_repository_boundaries_instead_of_monkeypatching_them",
           "outcome": "passed"
         },
@@ -11241,7 +11483,7 @@
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_question_effect_recovery.py::test_inflight_intent_response_loss_never_invokes_provider_on_replay",
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_intent_response_loss_continues_same_owned_invocation_once",
           "outcome": "passed"
         },
         {
@@ -11249,11 +11491,15 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_missing_intent_dependency_recovers_on_replay_and_invokes_once",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_phase475_question_effect_recovery.py::test_ocr_success_receipt_recovers_real_question_and_command_transaction",
           "outcome": "passed"
         },
         {
-          "node_id": "tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_closes_unknown_state_and_never_blindly_reinvokes",
+          "node_id": "tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_retries_validated_result_until_completion",
           "outcome": "passed"
         },
         {
@@ -13949,11 +14195,19 @@
           "outcome": "passed"
         },
         {
+          "node_id": "tests/test_teacher_dispatch.py::test_dispatch_assignment_atomically_observes_teacher_profile_and_fence",
+          "outcome": "passed"
+        },
+        {
           "node_id": "tests/test_teacher_dispatch.py::test_dispatch_controls_require_exact_local_capability",
           "outcome": "passed"
         },
         {
           "node_id": "tests/test_teacher_dispatch.py::test_dispatch_planner_ranks_eligible_and_explains_refusals",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_teacher_dispatch.py::test_dispatch_planner_rejects_inactive_deleting_and_implicit_availability",
           "outcome": "passed"
         },
         {
@@ -13966,6 +14220,14 @@
         },
         {
           "node_id": "tests/test_teacher_dispatch.py::test_dispatch_question_uses_fresh_escalation_snapshot",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_teacher_dispatch.py::test_dispatch_scans_continue_after_nonempty_business_rejected_page",
+          "outcome": "passed"
+        },
+        {
+          "node_id": "tests/test_teacher_dispatch.py::test_dispatch_scans_continue_after_sparse_filtered_page",
           "outcome": "passed"
         },
         {
@@ -14267,7 +14529,7 @@
       ],
       "phase474_formal_extension": {
         "clock": "2026-07-01T12:00:00Z",
-        "collection_sha256": "d245f02bf201ceafc13838b9e17345ad8b17b2598e91e2944ef89a05bd5a9ea8",
+        "collection_sha256": "8fd875419f3ed57b5bba00bd97c8bb1cd66dd35fc0205f5d368b79aff9ee0507",
         "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
         "runtime": "3.12.13",
         "schema_version": "stoa.phase474.pytest-nodes.v1",
@@ -14278,15 +14540,15 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-23T09:59:37.375329Z"
+      "started_at": "2026-07-23T11:27:08.500645Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/ruff",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/ruff",
         "check",
         "src/stoa/db/repositories/account_deletion_repo.py",
         "src/stoa/db/repositories/notification_repo.py",
@@ -14322,10 +14584,10 @@
       },
       "before": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
-      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
-      "ended_at": "2026-07-23T10:01:46.050200Z",
+      "candidate_sha": "d63af86a9543fd678017d4c8a6ce1f641208ed35",
+      "ended_at": "2026-07-23T11:29:02.149644Z",
       "exit_code": 0,
       "gate_id": "RUFF-PHASE475",
       "kind": "ruff",
@@ -14334,16 +14596,16 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-23T10:01:46.006249Z"
+      "started_at": "2026-07-23T11:29:02.094668Z"
     },
     {
       "after": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
       "analysis": {
         "base_sha": "901cb26626cb0f06b7f51a72b95e04aa4f7f4ebf",
-        "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+        "candidate_sha": "d63af86a9543fd678017d4c8a6ce1f641208ed35",
         "checked_files": [
           "src/stoa/db/repositories/account_deletion_repo.py",
           "src/stoa/db/repositories/notification_repo.py",
@@ -14370,22 +14632,22 @@
         ],
         "completion_source_count": 22,
         "diagnostic_count": 0,
-        "mypy_argv_sha256": "5bd00489350a964ec4ff7256aa0259b32bae3620ad40ffb39c9e813ec07c79a2",
+        "mypy_argv_sha256": "006741febf5da452afa6445e32f8cd2963ee0a8defc21ae3c46155836b66ba20",
         "raw_output_bytes": 44,
         "raw_output_sha256": "5ca59a2361304496c36048048a43aa6f41eb23e74111d16719b962637888fc08",
         "status": "PASS",
         "tool_exit_code": 0
       },
       "argv": [
-        "/Users/zhdeng/stoa-backend/.venv/bin/python",
+        "/private/tmp/sv-475-reviewfix-NQ7Bh9/.venv/bin/python",
         "scripts/verify_phase475.py",
         "_targeted-mypy",
         "--base",
         "901cb26626cb0f06b7f51a72b95e04aa4f7f4ebf",
         "--candidate",
-        "677edf994deaee4aa0faef91eb38e2a3a07899ea",
+        "d63af86a9543fd678017d4c8a6ce1f641208ed35",
         "--raw-output",
-        "/tmp/phase475-evidence.uSjTTF/raw/MYPY-PHASE475.mypy.log",
+        "/tmp/phase475-capture-Ew3mUb/raw/MYPY-PHASE475.mypy.log",
         "src/stoa/db/repositories/account_deletion_repo.py",
         "src/stoa/db/repositories/notification_repo.py",
         "src/stoa/db/repositories/practice_repo.py",
@@ -14413,7 +14675,7 @@
         "log": {
           "bytes": 1345,
           "logical_path": "raw/MYPY-PHASE475.log",
-          "sha256": "031ad2d6a728f5b42ee88908e6e1505d628c53ca65bdda29bbfe61446e5fda68"
+          "sha256": "b457150b427a023780b2b21bdddc7750cbc9707549d09d41741c8794f13f4355"
         },
         "mypy_output": {
           "bytes": 44,
@@ -14423,10 +14685,10 @@
       },
       "before": {
         "clean": true,
-        "head": "677edf994deaee4aa0faef91eb38e2a3a07899ea"
+        "head": "d63af86a9543fd678017d4c8a6ce1f641208ed35"
       },
-      "candidate_sha": "677edf994deaee4aa0faef91eb38e2a3a07899ea",
-      "ended_at": "2026-07-23T10:01:46.527134Z",
+      "candidate_sha": "d63af86a9543fd678017d4c8a6ce1f641208ed35",
+      "ended_at": "2026-07-23T11:29:02.568017Z",
       "exit_code": 0,
       "gate_id": "MYPY-PHASE475",
       "kind": "mypy",
@@ -14435,7 +14697,7 @@
         "entry_count": 20,
         "match_count": 0
       },
-      "started_at": "2026-07-23T10:01:46.107171Z"
+      "started_at": "2026-07-23T11:29:02.202230Z"
     }
   ],
   "schema_version": "stoa.phase475.evidence-results.v1",
@@ -14450,16 +14712,16 @@
     },
     {
       "candidate_blob": {
-        "bytes": 62090,
-        "sha256": "cb21ca3640a22b9c9bc131abe2687f5495e50eec82e664b7f64b02a480fbaf2c"
+        "bytes": 62123,
+        "sha256": "2f86fdda1068cc097f9765afef462f20f3bfe4ae6ea2c6ad4cdb07ebd13b95eb"
       },
       "path": ".planning/ROADMAP.md",
       "status": "modified"
     },
     {
       "candidate_blob": {
-        "bytes": 81661,
-        "sha256": "169839e10105d01c58dc7373d640e406b932db412c0821103630d6f4b0feb718"
+        "bytes": 82220,
+        "sha256": "a6660afb4859b6676b35a036e3cb241cddd63c69aef82e815380ea39578a571a"
       },
       "path": ".planning/STATE.md",
       "status": "modified"
@@ -15074,8 +15336,24 @@
     },
     {
       "candidate_blob": {
-        "bytes": 14918,
-        "sha256": "e3427b4294a4e1ca1455b61d10a41ada8487a4539b4992f7a5b42a9e57795c70"
+        "bytes": 9254,
+        "sha256": "f8259bc5a7dc08833c63a9e5072ec3225f32f6a59744c7aa8351918ce6c90bbe"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-45-SUMMARY.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 6001,
+        "sha256": "51d8f8d8c750b76a52be272949bdf714ef6caf2511c1189ee4ff1c1ba75d9a8f"
+      },
+      "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-REVIEW-FIX.md",
+      "status": "added"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 9974,
+        "sha256": "bc1b59d8dfd31c19f3f554270ab4c71e595a0e13a7ae9f7a438ac97b51c28937"
       },
       "path": ".planning/phases/475-transactional-usage-assignment-and-relationship-consistency/475-REVIEW.md",
       "status": "added"
@@ -15122,16 +15400,16 @@
     },
     {
       "candidate_blob": {
-        "bytes": 653183,
-        "sha256": "0bc4700d4a2bb29110d6837db0eeba1324effe83161833b587360d7c1ad28b40"
+        "bytes": 742855,
+        "sha256": "e0f62aa7ba5dbb9eaaff79de33676f1c26e170d8b4b5f74fc5acc9ccef600c12"
       },
       "path": "docs/security/phase-475-evidence-results.json",
       "status": "added"
     },
     {
       "candidate_blob": {
-        "bytes": 12802,
-        "sha256": "2f4bc77ee511af685a803b9b5c3e211e52defa65dfa4fb19d8a42d6ec5b8f4cf"
+        "bytes": 23993,
+        "sha256": "d3a1d3c3b1314bbf76718fc003cb308708087f359b3b02bafc7b1c07b83b70dc"
       },
       "path": "docs/security/phase-475-evidence.md",
       "status": "added"
@@ -15170,8 +15448,8 @@
     },
     {
       "candidate_blob": {
-        "bytes": 59891,
-        "sha256": "c1f4ba5707862855d7416631a540e3422f6eeeea4281897d65c914b25b8b1ee7"
+        "bytes": 60545,
+        "sha256": "b32145b49ac6a36721557c825e26c1df637b520defbd3a88aee25cafb6179980"
       },
       "path": "scripts/verify_phase475.py",
       "status": "added"
@@ -15202,24 +15480,24 @@
     },
     {
       "candidate_blob": {
-        "bytes": 37761,
-        "sha256": "37007d2c4b21f17d67f8f586835a6546e3ba0b154260ee02172ad77fd974964b"
+        "bytes": 37859,
+        "sha256": "a5af2b26da2dc2ccddc6a8bd6a40dedcfdf49318d27864110b47fc8fb2302718"
       },
       "path": "src/stoa/db/repositories/question_repo.py",
       "status": "modified"
     },
     {
       "candidate_blob": {
-        "bytes": 101019,
-        "sha256": "9aff5568c0f36d123ed7a24f3fa63654c6d147b7685d0b0548356df3a99032e0"
+        "bytes": 111098,
+        "sha256": "d7c2901e33c4bb2b45d25b6fb942a3e91cf48d203226f7903dd654fc0039c206"
       },
       "path": "src/stoa/db/repositories/question_submission_repo.py",
       "status": "added"
     },
     {
       "candidate_blob": {
-        "bytes": 55117,
-        "sha256": "3b782d4b11b9602b470c5941d1e921dfcd22241c64cc07f1ee21879d29e900e5"
+        "bytes": 57006,
+        "sha256": "f6d19c6c635e1c51eeca4d5d486a25dcb616ed38e9a47940a4d224ae8912dbf3"
       },
       "path": "src/stoa/db/repositories/user_repo.py",
       "status": "modified"
@@ -15274,8 +15552,8 @@
     },
     {
       "candidate_blob": {
-        "bytes": 38494,
-        "sha256": "9eba27722aef3e85c18e8b07255e15d2fe456410b699a420eb4ffc067abc989c"
+        "bytes": 45405,
+        "sha256": "bff88b728bc8350da83fed635125be7a4c8f6d7350910460a1d8559346597b24"
       },
       "path": "src/stoa/routers/questions.py",
       "status": "modified"
@@ -15322,8 +15600,8 @@
     },
     {
       "candidate_blob": {
-        "bytes": 19410,
-        "sha256": "fcc9a53fdfa83323f2ef9d80710cd7553ec3f9e64886d2482a7dc1f2e1314214"
+        "bytes": 19399,
+        "sha256": "58ff8c2a71ed1b9159d6556795d406d7659e8592168169d1de13707088a82e7a"
       },
       "path": "src/stoa/services/rate_limit.py",
       "status": "modified"
@@ -15338,8 +15616,8 @@
     },
     {
       "candidate_blob": {
-        "bytes": 24041,
-        "sha256": "829eca0395f3a19f46de0256472cb4a484c39cfad06d2e9fdd8a7976eb995266"
+        "bytes": 28830,
+        "sha256": "d46468ff2c9f31c4f8ac82d6a641ab1ade13a0d8e3c5be3ff7407c098f0728f7"
       },
       "path": "src/stoa/services/teacher_dispatch_service.py",
       "status": "modified"
@@ -15351,6 +15629,14 @@
       },
       "path": "src/stoa/services/usage_ledger_service.py",
       "status": "modified"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 2087,
+        "sha256": "2ff1fa30a76774c76ed093b4fc69ad8dd2826dfe6a6099976e6c6d60d2c0e159"
+      },
+      "path": "tests/dynamodb_expression_assertions.py",
+      "status": "added"
     },
     {
       "candidate_blob": {
@@ -15506,8 +15792,8 @@
     },
     {
       "candidate_blob": {
-        "bytes": 30170,
-        "sha256": "54c863272a8da673d412164d0b446a61c2929d568e3c19b23741ce2ba988183f"
+        "bytes": 30899,
+        "sha256": "606037129fa41b1c1aa898a84577637c2f16ee50e13aa2b4c9d7ea510b068714"
       },
       "path": "tests/test_phase475_evidence_verifier.py",
       "status": "added"
@@ -15530,8 +15816,8 @@
     },
     {
       "candidate_blob": {
-        "bytes": 19072,
-        "sha256": "c3c759e9710c7e219131b1bea93275625e258cd29cb29a6e5f320cea64692b54"
+        "bytes": 22406,
+        "sha256": "23ecec52c81acea917a58e3a67f5790c8c160c5d10fd4a21dfdc352c63ec80d1"
       },
       "path": "tests/test_phase475_parent_binding_transaction.py",
       "status": "added"
@@ -15546,24 +15832,24 @@
     },
     {
       "candidate_blob": {
-        "bytes": 17980,
-        "sha256": "af05cda61e704a7f9602b154d7d5385a4ebca9f10a94ee9b20651f1eb215f4ed"
+        "bytes": 18084,
+        "sha256": "52a7f0150473f0d520124ddb858ded533c5bd3f9fdf964748111fc60c55dbbb6"
       },
       "path": "tests/test_phase475_question_admission.py",
       "status": "added"
     },
     {
       "candidate_blob": {
-        "bytes": 31160,
-        "sha256": "c177437ac47af6abbbf73672c36d55d4fd2a61ef9e11b4a33339dff9db79ef9d"
+        "bytes": 38091,
+        "sha256": "58521bd23f2ba8c0b34047d50598b811e1ce5f69f8ec79ab16eba72c82d777db"
       },
       "path": "tests/test_phase475_question_effect_recovery.py",
       "status": "added"
     },
     {
       "candidate_blob": {
-        "bytes": 24556,
-        "sha256": "f3ff6b332674822cb606b05fbb2932bd0090447ec56c22ded8385cc79ce465e6"
+        "bytes": 24713,
+        "sha256": "7af350012320ad9c8ccaaedfabc526d0c6cbdc568b9c3f166118638f88a5ae80"
       },
       "path": "tests/test_phase475_question_reconciliation.py",
       "status": "added"
@@ -15586,8 +15872,8 @@
     },
     {
       "candidate_blob": {
-        "bytes": 15141,
-        "sha256": "8da2fb829bf54d8088920445bb075eb56230a7122a8dbc3782a868b9c5cdb45c"
+        "bytes": 15332,
+        "sha256": "58bdc09f55b25ed07fa28ff58637a6b6f5f0d001c0bb4bd73c1d3b866fe01225"
       },
       "path": "tests/test_phase475_rate_limit.py",
       "status": "added"
@@ -15634,8 +15920,16 @@
     },
     {
       "candidate_blob": {
-        "bytes": 13051,
-        "sha256": "a7f950b7da35a4f0c65b53b85d26d2a068b817cb7babd036873e59a77f10f6b8"
+        "bytes": 9871,
+        "sha256": "0a0f38751919eb9751b33d0c7260436b28350bbb47f7eddf15f0aef36c848d7b"
+      },
+      "path": "tests/test_teacher_availability.py",
+      "status": "modified"
+    },
+    {
+      "candidate_blob": {
+        "bytes": 19495,
+        "sha256": "5ad29e1d400236913534eb7f5186cddee84edad6608c3227e00421f8acc0004d"
       },
       "path": "tests/test_teacher_dispatch.py",
       "status": "modified"

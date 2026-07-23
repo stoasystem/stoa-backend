@@ -1,21 +1,21 @@
 # Phase 475 checked transactional consistency evidence
 
-Immutable source candidate: `677edf994deaee4aa0faef91eb38e2a3a07899ea`. Phase base: `901cb26626cb0f06b7f51a72b95e04aa4f7f4ebf`.
+Immutable source candidate: `d63af86a9543fd678017d4c8a6ce1f641208ed35`. Phase base: `901cb26626cb0f06b7f51a72b95e04aa4f7f4ebf`.
 All passing behavioral observations are local deterministic tests/fakes. Live AWS, provider effects, deployment, and production smoke remain exact NOT RUN obligations.
 
 ## Gate receipts
 
 | Gate | Kind | Nodes | Exit | Privacy | Result |
 | --- | --- | ---: | ---: | ---: | --- |
-| `P475-QUESTION` | pytest | 67 | 0 | 0 | PASS |
+| `P475-QUESTION` | pytest | 69 | 0 | 0 | PASS |
 | `P475-TAKEOVER` | pytest | 19 | 0 | 0 | PASS |
-| `P475-RELATIONSHIP` | pytest | 45 | 0 | 0 | PASS |
+| `P475-RELATIONSHIP` | pytest | 70 | 0 | 0 | PASS |
 | `P475-RATE` | pytest | 11 | 0 | 0 | PASS |
 | `P475-MISTAKE` | pytest | 9 | 0 | 0 | PASS |
 | `P475-DELIVERY` | pytest | 25 | 0 | 0 | PASS |
 | `P475-DELETION` | pytest | 64 | 0 | 0 | PASS |
 | `P475-INHERITED-AUTH-PRIVACY` | pytest | 329 | 0 | 0 | PASS |
-| `P475-PHASE474-FORMAL-EXTENSION` | pytest | 2588 | 0 | 0 | PASS |
+| `P475-PHASE474-FORMAL-EXTENSION` | pytest | 2619 | 0 | 0 | PASS |
 | `RUFF-PHASE475` | ruff | — | 0 | 0 | PASS |
 | `MYPY-PHASE475` | mypy | — | 0 | 0 | PASS |
 
@@ -40,7 +40,7 @@ The final backend aggregate uses the fixed Phase 474 full-suite argv prefix, str
 
 | ID | Exact observed nodes | Result |
 | --- | --- | --- |
-| `D-01` | `tests/test_phase475_question_replay.py::test_ai_failure_returns_queryable_durable_pending_question`<br>`tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider` | PASS |
+| `D-01` | `tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_retries_validated_result_until_completion`<br>`tests/test_phase475_question_effect_recovery.py::test_intent_response_loss_continues_same_owned_invocation_once`<br>`tests/test_phase475_question_effect_recovery.py::test_missing_intent_dependency_recovers_on_replay_and_invokes_once`<br>`tests/test_phase475_question_effect_recovery.py::test_crash_after_provider_before_receipt_expires_to_exact_once_compensation`<br>`tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay` | PASS |
 | `D-02` | `tests/test_phase475_question_admission.py::test_concurrent_identical_keys_commit_one_complete_admission`<br>`tests/test_phase475_question_effect_recovery.py::test_committed_completion_response_loss_reconciles_exact_original_result` | PASS |
 | `D-03` | `tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay`<br>`tests/test_phase475_question_reconciliation.py::test_terminal_reversal_is_exact_once_and_attachment_storage_are_unchanged` | PASS |
 | `D-04` | `tests/test_phase475_question_replay.py::test_changed_payload_returns_structured_new_submission_action` | PASS |
@@ -61,7 +61,7 @@ The final backend aggregate uses the fixed Phase 474 full-suite argv prefix, str
 
 | ID | Exact observed nodes | Result |
 | --- | --- | --- |
-| `CR-01` | `tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider`<br>`tests/test_phase475_question_effect_recovery.py::test_ocr_success_receipt_recovers_real_question_and_command_transaction` | PASS |
+| `CR-01` | `tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_retries_validated_result_until_completion`<br>`tests/test_phase475_question_effect_recovery.py::test_intent_response_loss_continues_same_owned_invocation_once`<br>`tests/test_phase475_question_effect_recovery.py::test_missing_intent_dependency_recovers_on_replay_and_invokes_once`<br>`tests/test_phase475_question_effect_recovery.py::test_crash_after_provider_before_receipt_expires_to_exact_once_compensation` | PASS |
 | `CR-02` | `tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[foreign-question-owner]`<br>`tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[invalid-command-status]`<br>`tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[invalid-command-version]`<br>`tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[legacy-command-schema]`<br>`tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[legacy-question-schema]`<br>`tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[processing-question-status-mismatch]`<br>`tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[stale-command-generation]`<br>`tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[wrong-command-owner-key]`<br>`tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[wrong-question-generation]`<br>`tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows[wrong-question-identity]`<br>`tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question[completed-later-resolution-replay]`<br>`tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question[completed-replay]`<br>`tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question[processing-replay]` | PASS |
 | `CR-03` | `tests/test_phase475_question_state_cas.py::test_question_mutation_has_owner_state_version_and_one_increment`<br>`tests/test_phase475_question_state_cas.py::test_takeover_first_makes_barriered_stale_ai_completion_lose` | PASS |
 | `CR-04` | `tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-123dee096bdb6bd3-case-81c4f78aecb54176]`<br>`tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-76c3b52e799a41ba-case-81c4f78aecb54176]`<br>`tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-8a61742159aa94b1-case-81c4f78aecb54176]`<br>`tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-b4bb79aedcc07171-case-81c4f78aecb54176]`<br>`tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-b98396c80fcb5b8d-case-81c4f78aecb54176]`<br>`tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-bea3dc78ed8c9813-case-359bd6cd0304369a]`<br>`tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-bea3dc78ed8c9813-case-ca1a10389ab339c7]`<br>`tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-ca178542d3fceda8-case-81c4f78aecb54176]`<br>`tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-d4eadc3995043874-case-81c4f78aecb54176]`<br>`tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact[case-ff3cfa9330f2309a-case-81c4f78aecb54176]` | PASS |
