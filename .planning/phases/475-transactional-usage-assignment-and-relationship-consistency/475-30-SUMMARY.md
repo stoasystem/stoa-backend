@@ -83,7 +83,20 @@ Each task was committed atomically:
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
+### Auto-fixed Issues
+
+**1. [Rule 1 - Bug] Preserved the SDK-reported project progress percentage**
+- **Found during:** Plan metadata closeout
+- **Issue:** `state.update-progress` reported 65% but wrote 20% into `STATE.md`.
+- **Fix:** Restored the reported 65% value while retaining the SDK's 131/201 completed-plan count and session updates.
+- **Files modified:** `.planning/STATE.md`
+- **Verification:** `STATE.md` records 131/201 completed plans and 65%, matching the SDK result.
+- **Committed in:** Plan metadata commit
+
+---
+
+**Total deviations:** 1 auto-fixed (1 state-update bug).
+**Impact on plan:** The metadata correction prevents a false project-progress regression and does not affect runtime scope.
 
 ## Issues Encountered
 
@@ -117,6 +130,7 @@ None. Empty mappings and collections are existing bounded deletion state, transa
 - The modified repository file and this summary exist.
 - Task commit `b72f159` exists in Git history and modifies only the planned repository file.
 - Exact mypy, all planned regressions, Ruff, diff check, deletion scan, stub scan, and planned threat-boundary review passed.
+- `STATE.md` records the SDK-reported 131/201 completed plans and 65% progress; `ROADMAP.md` records 37/45 Phase 475 plans.
 - No new endpoint, authorization path, file-access pattern, dependency, schema, or trust boundary was introduced.
 
 ---

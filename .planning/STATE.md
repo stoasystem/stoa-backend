@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-20-PLAN.md
-last_updated: "2026-07-23T08:19:44.851Z"
+stopped_at: Completed 475-30-PLAN.md
+last_updated: "2026-07-23T08:26:15.705Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 130
-  percent: 20
+  completed_plans: 131
+  percent: 65
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 22 of 45
+Plan: 23 of 45
 Status: Ready to execute
 Last activity: 2026-07-22 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-23T08:19:44.844Z
-**Stopped At:** Completed 475-20-PLAN.md
+**Last Date:** 2026-07-23T08:26:15.699Z
+**Stopped At:** Completed 475-30-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -237,6 +237,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P27 | 13 min | 1 tasks | 3 files |
 | Phase 475 P37 | 5 min | 1 tasks | 1 files |
 | Phase 475 P20 | 16h 37m multi-session | 1 tasks | 6 files |
+| Phase 475 P30 | 3 min | 1 tasks | 1 files |
 
 ## Decisions
 
@@ -501,3 +502,5 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: Teacher takeover keeps the exact authorized PROFILE key/version observation and existing replay/privacy outcomes. — CR-04 account fencing and D-08 loser concealment remain distinct and unchanged.
 - [Phase 475]: Only closed durable provider evidence may produce terminal question proof — Timeouts, throttles, malformed dependency responses, unknown outcomes, and broad exceptions remain recoverable and cannot refund quota.
 - [Phase 475]: Terminal proof hands only the opaque command digest to bounded reconciliation — Exact effect, command, and question versions are advanced before the existing four-row reversal returns a stable create-new-submission action.
+- [Phase 475]: DynamoDB account-deletion dependencies remain object-valued until runtime-checkable get, scan, or update capabilities establish the exact allowed operation. — Operation-specific Protocols preserve least capability at the provider boundary.
+- [Phase 475]: Provider responses cross a string-keyed Mapping boundary and nested collections are narrowed before use without changing deletion persistence semantics. — Runtime validation removes mypy diagnostics without trusting malformed provider values.
