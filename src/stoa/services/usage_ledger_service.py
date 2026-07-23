@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any
 
 from stoa.config import Settings
@@ -550,17 +551,23 @@ def reconcile_question_usage(
         action=QUESTION_SUBMISSION_ACTION,
         quota_period=day,
     )
-    counter_count = int(counter.get("count") or 0)
+    counter_count = _stored_integer(counter.get("count"), default=0, minimum=0)
     ledger_count = sum(_active_question_usage_quantity(event) for event in events)
     stale = _counter_is_stale(counter)
     status = _reconciliation_status(counter_count, ledger_count, limit=limit, stale=stale)
     repaired = False
     if repair and status in {"counter-missing", "count-mismatch"}:
+        stored_expires_at = counter.get("expires_at")
+        expires_at = (
+            counter_ttl()
+            if stored_expires_at is None
+            else _stored_integer(stored_expires_at, minimum=1)
+        )
         usage_ledger_repo.set_daily_question_counter(
             student_id=student_id,
             day=day,
             count=ledger_count,
-            expires_at=int(counter.get("expires_at") or counter_ttl()),
+            expires_at=expires_at,
         )
         counter_count = ledger_count
         stale = False
@@ -627,7 +634,10 @@ def reconcile_usage_action(
         action=action,
         quota_period=day,
     )
-    ledger_count = sum(int(event.get("quantity") or 0) for event in events)
+    ledger_count = sum(
+        _stored_integer(event.get("quantity"), default=0, minimum=0)
+        for event in events
+    )
     counter_count = 0
     counter_key = None
     status = "ledger-only"
@@ -638,7 +648,7 @@ def reconcile_usage_action(
             counter_prefix=definition.counter_prefix,
             day=day,
         ) or {}
-        counter_count = int(counter.get("count") or 0)
+        counter_count = _stored_integer(counter.get("count"), default=0, minimum=0)
         counter_key = f"USAGE#{student_id}/{definition.counter_prefix}#{day}"
         stale = _counter_is_stale(counter)
         status = _reconciliation_status(counter_count, ledger_count, limit=limit, stale=stale)
@@ -828,7 +838,35 @@ def _active_question_usage_quantity(event: dict[str, Any]) -> int:
     """Exclude durably reversed admissions while retaining their audit quantity."""
     if event.get("status") == "reversed":
         return 0
-    return int(event.get("quantity") or 0)
+    return _stored_integer(event.get("quantity"), default=0, minimum=0)
+
+
+def _stored_integer(
+    value: object,
+    *,
+    default: int | None = None,
+    minimum: int,
+) -> int:
+    """Narrow a persisted DynamoDB integer without accepting lossy coercions."""
+    if value is None:
+        if default is not None:
+            return default
+        raise ValueError("usage ledger integer is required")
+    if isinstance(value, bool):
+        raise ValueError("invalid usage ledger integer")
+    if isinstance(value, int):
+        result = value
+    elif (
+        isinstance(value, Decimal)
+        and value.is_finite()
+        and value == value.to_integral_value()
+    ):
+        result = int(value)
+    else:
+        raise ValueError("invalid usage ledger integer")
+    if result < minimum:
+        raise ValueError("invalid usage ledger integer")
+    return result
 
 
 def _counter_is_stale(counter: dict[str, Any]) -> bool:
