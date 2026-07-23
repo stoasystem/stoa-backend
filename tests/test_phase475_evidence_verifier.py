@@ -392,17 +392,18 @@ def test_rendered_evidence_is_candidate_bound_redacted_and_not_run_exact() -> No
         "candidate_sha": CANDIDATE,
         "phase_base_sha": "b" * 40,
         "receipts": [
-            {
-                "gate_id": "MYPY-PHASE475-CHANGED-LINES",
-                "kind": "mypy",
-                "counts": {},
-                "exit_code": 0,
-                "privacy": {"match_count": 0},
-                "analysis": {
-                    "changed_line_diagnostic_count": 0,
-                    "pre_existing_diagnostic_count": 179,
-                },
-            }
+                {
+                    "gate_id": "MYPY-PHASE475",
+                    "kind": "mypy",
+                    "counts": {},
+                    "exit_code": 0,
+                    "privacy": {"match_count": 0},
+                    "analysis": {
+                        "tool_exit_code": 0,
+                        "diagnostic_count": 0,
+                        "completion_source_count": 1,
+                    },
+                }
         ],
         "coverage": coverage,
         "phase475_runtime_files": ["src/stoa/example.py"],

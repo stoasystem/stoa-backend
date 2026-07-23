@@ -32,6 +32,10 @@ UTC_RE = re.compile(
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 NON_PASS = ("failed", "error", "skipped", "xfail", "xpass")
+MYPY_TIMEOUT_SECONDS = 300
+MYPY_SUCCESS_RE = re.compile(
+    r"Success: no issues found in ([1-9][0-9]*) source files?"
+)
 PUBLICATION_PATHS = {
     "docs/security/phase-475-evidence-results.json",
     "docs/security/phase-475-evidence.md",
@@ -121,6 +125,7 @@ def _run(
     *,
     root: Path = ROOT,
     env: Mapping[str, str] | None = None,
+    timeout: float | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(
         list(argv),
@@ -128,6 +133,7 @@ def _run(
         env=None if env is None else dict(env),
         capture_output=True,
         check=False,
+        timeout=timeout,
     )
 
 
@@ -360,7 +366,7 @@ def gate_registry(candidate: str, capture_root: Path) -> list[dict[str, object]]
         GateSpec("P475-INHERITED-AUTH-PRIVACY", "pytest", INHERITED_MODULES),
         GateSpec("P475-PHASE474-FORMAL-EXTENSION", "pytest", ()),
         GateSpec("RUFF-PHASE475", "ruff"),
-        GateSpec("MYPY-PHASE475-CHANGED-LINES", "mypy"),
+        GateSpec("MYPY-PHASE475", "mypy"),
     )
     runtime_files = _phase_runtime_files(candidate)
     registry: list[dict[str, object]] = []
@@ -384,6 +390,8 @@ def gate_registry(candidate: str, capture_root: Path) -> list[dict[str, object]]
                 PHASE_BASE_SHA,
                 "--candidate",
                 candidate,
+                "--raw-output",
+                str(capture_root / "raw" / "MYPY-PHASE475.mypy.log"),
                 *runtime_files,
             ]
         registry.append({"id": spec.gate_id, "kind": spec.kind, "argv": argv})
@@ -400,45 +408,71 @@ def _phase_runtime_files(candidate: str) -> list[str]:
     return files
 
 
-def _changed_lines(base: str, candidate: str, path: str) -> set[int]:
-    diff = _git(ROOT, "diff", "--unified=0", base, candidate, "--", path)
-    lines: set[int] = set()
-    for match in re.finditer(r"^@@ -[^ ]+ \+(\d+)(?:,(\d+))? @@", diff, re.MULTILINE):
-        start = int(match.group(1))
-        count = int(match.group(2) or "1")
-        lines.update(range(start, start + count))
-    return lines
-
-
-def targeted_mypy(base: str, candidate: str, files: Sequence[str]) -> dict[str, object]:
+def targeted_mypy(
+    base: str,
+    candidate: str,
+    files: Sequence[str],
+    *,
+    raw_output_path: Path | None = None,
+) -> dict[str, object]:
     expected_files = _phase_runtime_files(candidate)
-    if sorted(files) != expected_files:
+    if list(files) != expected_files:
         raise EvidenceError("targeted mypy file registry drift")
     argv = [str(ROOT / ".venv/bin/mypy"), *files]
-    completed = _run(argv)
-    text = (completed.stdout + completed.stderr).decode("utf-8", errors="replace")
-    diagnostics: list[tuple[str, int]] = []
-    for line in text.splitlines():
-        match = re.match(r"([^:]+):(\d+): error:", line)
-        if match:
-            diagnostics.append((match.group(1), int(match.group(2))))
-    changed = {path: _changed_lines(base, candidate, path) for path in files}
-    new_diagnostics = [
-        (path, line) for path, line in diagnostics if line in changed.get(path, set())
-    ]
+    returncode: int | None = None
+    stdout = b""
+    stderr = b""
+    try:
+        completed = _run(argv, timeout=MYPY_TIMEOUT_SECONDS)
+        returncode = completed.returncode
+        stdout = completed.stdout
+        stderr = completed.stderr
+    except (OSError, subprocess.SubprocessError):
+        pass
+    raw_output = stdout + stderr
+    if raw_output_path is not None:
+        raw_output_path.parent.mkdir(parents=True, exist_ok=True)
+        raw_output_path.write_bytes(raw_output)
+
+    text: str | None
+    try:
+        text = raw_output.decode("utf-8")
+    except UnicodeError:
+        text = None
+    diagnostics = (
+        sum(
+            1
+            for line in text.splitlines()
+            if re.match(r"[^:]+:\d+: error:", line)
+        )
+        if text is not None
+        else 0
+    )
+    completion = (
+        MYPY_SUCCESS_RE.fullmatch(stdout.decode("utf-8").strip())
+        if text is not None and not stderr
+        else None
+    )
+    completion_source_count = int(completion.group(1)) if completion else 0
+    passed = (
+        returncode == 0
+        and diagnostics == 0
+        and completion_source_count == len(files)
+        and text is not None
+        and not stderr
+    )
     result: dict[str, object] = {
-        "status": "PASS" if not new_diagnostics else "FAIL",
+        "status": "PASS" if passed else "FAIL",
         "base_sha": base,
         "candidate_sha": candidate,
         "checked_files": list(files),
-        "tool_exit_code": completed.returncode,
-        "diagnostic_count": len(diagnostics),
-        "pre_existing_diagnostic_count": len(diagnostics) - len(new_diagnostics),
-        "changed_line_diagnostic_count": len(new_diagnostics),
+        "tool_exit_code": returncode,
+        "diagnostic_count": diagnostics,
+        "completion_source_count": completion_source_count,
+        "raw_output_bytes": len(raw_output),
+        "raw_output_sha256": sha256(raw_output).hexdigest(),
         "mypy_argv_sha256": sha256(_canonical_bytes(argv)).hexdigest(),
     }
-    if new_diagnostics:
-        result["changed_line_locations"] = [f"{path}:{line}" for path, line in new_diagnostics]
     return result
 
 
@@ -542,7 +576,12 @@ def _capture_gate(
     elif kind == "mypy":
         analysis = json.loads(raw_path.read_text(encoding="utf-8"))
         if analysis.get("status") != "PASS":
-            raise EvidenceError("targeted mypy found a Phase 475 diagnostic")
+            raise EvidenceError("Phase 475 mypy did not complete cleanly")
+        mypy_output_path = capture_root / "raw" / "MYPY-PHASE475.mypy.log"
+        artifacts["mypy_output"] = _file_meta(
+            mypy_output_path, "raw/MYPY-PHASE475.mypy.log"
+        )
+        payloads.append(mypy_output_path.read_bytes())
         receipt["analysis"] = analysis
     privacy = _privacy_contract(payloads)
     receipt["privacy"] = privacy
@@ -610,6 +649,36 @@ def verify_receipt(
                 f"phase474/{gate_id}.json",
             )
             paths.append(phase474_path)
+    elif gate.get("kind") == "mypy":
+        analysis = receipt.get("analysis")
+        expected_files = _phase_runtime_files(candidate)
+        if not isinstance(analysis, dict) or analysis != {
+            "status": "PASS",
+            "base_sha": PHASE_BASE_SHA,
+            "candidate_sha": candidate,
+            "checked_files": expected_files,
+            "tool_exit_code": 0,
+            "diagnostic_count": 0,
+            "completion_source_count": len(expected_files),
+            "raw_output_bytes": analysis.get("raw_output_bytes"),
+            "raw_output_sha256": analysis.get("raw_output_sha256"),
+            "mypy_argv_sha256": sha256(
+                _canonical_bytes([str(ROOT / ".venv/bin/mypy"), *expected_files])
+            ).hexdigest(),
+        }:
+            raise EvidenceError("mypy analysis receipt drift")
+        mypy_output_path = capture_root / "raw" / "MYPY-PHASE475.mypy.log"
+        _verify_file_meta(
+            mypy_output_path,
+            artifacts["mypy_output"],
+            "raw/MYPY-PHASE475.mypy.log",
+        )
+        mypy_output = mypy_output_path.read_bytes()
+        if analysis.get("raw_output_bytes") != len(mypy_output) or analysis.get(
+            "raw_output_sha256"
+        ) != sha256(mypy_output).hexdigest():
+            raise EvidenceError("mypy raw output receipt drift")
+        paths.append(mypy_output_path)
     privacy = _privacy_contract(path.read_bytes() for path in paths)
     if receipt.get("privacy") != privacy or privacy["match_count"]:
         raise EvidenceError("privacy receipt drift")
@@ -864,12 +933,14 @@ def _render_evidence(result: Mapping[str, Any]) -> str:
             )
             lines.append(f"| `{row['id']}` | {nodes} | PASS |")
         lines.append("")
-    mypy = next(row for row in result["receipts"] if row["gate_id"] == "MYPY-PHASE475-CHANGED-LINES")["analysis"]
+    mypy = next(
+        row for row in result["receipts"] if row["gate_id"] == "MYPY-PHASE475"
+    )["analysis"]
     lines.extend(
         [
             "## Static analysis truth",
             "",
-            f"Ruff passed all {len(result['phase475_runtime_files'])} Phase 475 runtime files plus the verifier and its test. Mypy analyzed the same runtime inventory: {mypy['changed_line_diagnostic_count']} diagnostics touch Phase 475 changed lines; {mypy['pre_existing_diagnostic_count']} diagnostics remain on pre-candidate lines and are disclosed rather than suppressed or called zero.",
+            f"Ruff passed all {len(result['phase475_runtime_files'])} Phase 475 runtime files plus the verifier and its test. Mypy analyzed that exact ordered runtime inventory once and completed with exit code {mypy['tool_exit_code']}, {mypy['diagnostic_count']} diagnostics, and a valid zero-error summary covering {mypy['completion_source_count']} source files. The private raw output is bound by byte count and SHA-256; no diagnostic source line is published.",
             "",
             "## External obligations",
             "",
@@ -995,6 +1066,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
     mypy = subparsers.add_parser("_targeted-mypy")
     mypy.add_argument("--base", required=True)
     mypy.add_argument("--candidate", required=True)
+    mypy.add_argument("--raw-output", type=Path)
     mypy.add_argument("files", nargs="+")
     args = parser.parse_args(argv)
     try:
@@ -1005,7 +1077,12 @@ def _main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "verify-publication":
             verify_publication()
         else:
-            result = targeted_mypy(args.base, args.candidate, args.files)
+            result = targeted_mypy(
+                args.base,
+                args.candidate,
+                args.files,
+                raw_output_path=args.raw_output,
+            )
             sys.stdout.write(json.dumps(result, sort_keys=True) + "\n")
             return 0 if result["status"] == "PASS" else 1
     except (EvidenceError, OSError, UnicodeError, ValueError, subprocess.SubprocessError) as exc:
