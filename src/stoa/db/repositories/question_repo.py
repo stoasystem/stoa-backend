@@ -848,6 +848,7 @@ def mutate_question(
     *,
     status: str,
     allowed_source_statuses: frozenset[str],
+    additional_conditions: tuple[Mapping[str, object], ...] = (),
     extra_attrs: Mapping[str, object] | None = None,
     table: object | None = None,
 ) -> QuestionMutationResult:
@@ -873,6 +874,7 @@ def mutate_question(
                 account_deletion_repo.active_fence_condition(
                     student_id, int(fence["generation"])
                 ),
+                *additional_conditions,
                 _question_mutation_operation(
                     question_id=question_id,
                     student_id=student_id,

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol, cast
 
 from stoa.db.dynamodb import get_table
-from stoa.db.repositories import question_repo
+from stoa.db.repositories import account_deletion_repo, question_repo
 from stoa.models.question import QuestionStatus
 from stoa.services import teacher_reply_service
 
@@ -44,35 +44,45 @@ def _versioned_dispatch_question(
 def list_teacher_profiles(limit: int = 200) -> list[dict[str, Any]]:
     """Return teacher/admin profiles usable by the dispatch planner."""
     table = cast(_ScanTable, get_table())
-    result = cast(
-        dict[str, Any],
-        table.scan(
-            FilterExpression="SK = :profile",
-            ExpressionAttributeValues={":profile": "PROFILE"},
-            Limit=limit,
-        ),
+    profiles = _scan_filtered_items(
+        table,
+        filter_expression="SK = :profile",
+        expression_attribute_values={":profile": "PROFILE"},
+        limit=limit,
     )
-    return [
-        item
-        for item in result.get("Items", [])
-        if str(item.get("role") or "").lower() in ELIGIBLE_ROLES
-    ]
+    active: list[dict[str, Any]] = []
+    for profile in profiles:
+        teacher_id = str(profile.get("user_id") or "")
+        if (
+            not teacher_id
+            or str(profile.get("role") or "").lower() not in ELIGIBLE_ROLES
+            or profile.get("account_status") != "active"
+            or _int(profile.get("version"), 0) <= 0
+        ):
+            continue
+        try:
+            fence = account_deletion_repo.require_active_account_fence(
+                teacher_id, table=table
+            )
+            generation = int(fence["generation"])
+        except (KeyError, TypeError, ValueError, account_deletion_repo.AccountDeletionConflict):
+            continue
+        active.append({**profile, "account_fence_generation": generation})
+    return active
 
 
 def list_teacher_dispatch_questions(limit: int = 200) -> list[dict[str, Any]]:
     """Return questions that participate in dispatch and SLA dashboards."""
     table = cast(_ScanTable, get_table())
-    result = cast(
-        dict[str, Any],
-        table.scan(
-            FilterExpression="SK = :meta",
-            ExpressionAttributeValues={":meta": "META"},
-            Limit=limit,
-        ),
+    items = _scan_filtered_items(
+        table,
+        filter_expression="SK = :meta",
+        expression_attribute_values={":meta": "META"},
+        limit=limit,
     )
     return [
         item
-        for item in result.get("Items", [])
+        for item in items
         if item.get("teacher_requested_at")
         or item.get("queue_visible_at")
         or item.get("dispatch_status")
@@ -185,6 +195,7 @@ def dispatch_question(
         question,
         status=QuestionStatus.ESCALATED.value,
         allowed_source_statuses=_DISPATCH_SOURCE_STATES,
+        additional_conditions=_teacher_assignment_conditions(candidate),
         extra_attrs={
             "dispatch_id": dispatch_id,
             "dispatch_status": "dispatched",
@@ -422,12 +433,17 @@ def _normalize_teacher_profile(profile: dict[str, Any]) -> dict[str, Any]:
         profile.get("dispatch_availability")
         or profile.get("availability_status")
         or profile.get("teacher_status")
-        or "available"
+        or "unavailable"
     ).lower()
     active_count = _int(profile.get("dispatch_active_count") or profile.get("active_session_count"), 0)
     return {
         "teacherId": str(profile.get("user_id") or profile.get("teacher_id") or profile.get("sub") or ""),
         "role": str(profile.get("role") or "").lower(),
+        "accountStatus": str(profile.get("account_status") or "").lower(),
+        "profileVersion": _int(profile.get("version"), 0),
+        "accountFenceGeneration": _int(
+            profile.get("account_fence_generation"), 0
+        ),
         "subjects": [str(subject).lower() for subject in subjects],
         "availability": availability,
         "maxActiveSessions": max(1, _int(profile.get("max_active_sessions") or profile.get("maxActiveSessions"), 3)),
@@ -445,6 +461,9 @@ def _candidate_payload(question: dict[str, Any], teacher: dict[str, Any], now: s
     return {
         "teacherId": teacher["teacherId"],
         "role": teacher["role"],
+        "accountStatus": teacher["accountStatus"],
+        "profileVersion": teacher["profileVersion"],
+        "accountFenceGeneration": teacher["accountFenceGeneration"],
         "subjects": teacher["subjects"],
         "availability": teacher["availability"],
         "activeCount": teacher["activeCount"],
@@ -460,6 +479,16 @@ def _refusal_reason(question: dict[str, Any], teacher: dict[str, Any], previous:
         return {"refusalCode": "missing_teacher_id", "refusalReason": "Teacher profile has no stable ID."}
     if teacher["role"] not in ELIGIBLE_ROLES:
         return {"refusalCode": "role_not_eligible", "refusalReason": "Profile role cannot receive teacher dispatch."}
+    if teacher["accountStatus"] != "active":
+        return {
+            "refusalCode": "inactive_account",
+            "refusalReason": "Teacher account is not active.",
+        }
+    if teacher["profileVersion"] <= 0 or teacher["accountFenceGeneration"] <= 0:
+        return {
+            "refusalCode": "lifecycle_observation_missing",
+            "refusalReason": "Teacher lifecycle state could not be safely observed.",
+        }
     if teacher["availability"] in PAUSED_STATES:
         return {"refusalCode": "not_available", "refusalReason": "Teacher is paused, offline, busy, or inactive."}
     if teacher["availability"] not in AVAILABLE_STATES:
@@ -481,6 +510,10 @@ def _is_profile_available_for_dispatch(teacher: dict[str, Any]) -> bool:
         return False
     if teacher["role"] not in ELIGIBLE_ROLES:
         return False
+    if teacher["accountStatus"] != "active":
+        return False
+    if teacher["profileVersion"] <= 0 or teacher["accountFenceGeneration"] <= 0:
+        return False
     if teacher["availability"] in PAUSED_STATES:
         return False
     if teacher["availability"] not in AVAILABLE_STATES:
@@ -488,6 +521,76 @@ def _is_profile_available_for_dispatch(teacher: dict[str, Any]) -> bool:
     if teacher["activeCount"] >= teacher["maxActiveSessions"]:
         return False
     return bool(teacher["subjects"])
+
+
+def _teacher_assignment_conditions(
+    teacher: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Bind the selected teacher's active fence and exact profile into assignment."""
+    teacher_id = str(teacher["teacherId"])
+    role = str(teacher["role"])
+    generation = int(teacher["accountFenceGeneration"])
+    profile_version = int(teacher["profileVersion"])
+    return (
+        account_deletion_repo.active_fence_condition(teacher_id, generation),
+        {
+            "ConditionCheck": {
+                "Key": {"PK": f"USER#{teacher_id}", "SK": "PROFILE"},
+                "ConditionExpression": (
+                    "attribute_exists(PK) AND attribute_exists(SK) AND "
+                    "#user_id=:teacher_id AND #role=:teacher_role AND "
+                    "#account_status=:active AND #version=:teacher_profile_version"
+                ),
+                "ExpressionAttributeNames": {
+                    "#user_id": "user_id",
+                    "#role": "role",
+                    "#account_status": "account_status",
+                    "#version": "version",
+                },
+                "ExpressionAttributeValues": {
+                    ":teacher_id": teacher_id,
+                    ":teacher_role": role,
+                    ":active": "active",
+                    ":teacher_profile_version": profile_version,
+                },
+            }
+        },
+    )
+
+
+def _scan_filtered_items(
+    table: _ScanTable,
+    *,
+    filter_expression: str,
+    expression_attribute_values: dict[str, object],
+    limit: int,
+) -> list[dict[str, Any]]:
+    """Collect filtered scan matches across sparse DynamoDB pages."""
+    if limit <= 0:
+        return []
+    items: list[dict[str, Any]] = []
+    last_evaluated_key: dict[str, object] | None = None
+    while len(items) < limit:
+        scan_kwargs: dict[str, object] = {
+            "FilterExpression": filter_expression,
+            "ExpressionAttributeValues": expression_attribute_values,
+            "Limit": limit - len(items),
+        }
+        if last_evaluated_key is not None:
+            scan_kwargs["ExclusiveStartKey"] = last_evaluated_key
+        result = cast(dict[str, Any], table.scan(**scan_kwargs))
+        page = result.get("Items", [])
+        if isinstance(page, list):
+            items.extend(dict(item) for item in page if isinstance(item, dict))
+        next_key = result.get("LastEvaluatedKey")
+        if (
+            not isinstance(next_key, dict)
+            or not next_key
+            or next_key == last_evaluated_key
+        ):
+            break
+        last_evaluated_key = dict(next_key)
+    return items[:limit]
 
 
 def _has_current_dispatch(question: dict[str, Any], now: str) -> bool:

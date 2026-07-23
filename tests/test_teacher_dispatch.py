@@ -42,6 +42,9 @@ TEACHERS = [
     {
         "user_id": "teacher-low-load",
         "role": "teacher",
+        "account_status": "active",
+        "version": 7,
+        "account_fence_generation": 3,
         "subjects": ["math"],
         "dispatch_availability": "available",
         "active_session_count": 0,
@@ -52,6 +55,9 @@ TEACHERS = [
     {
         "user_id": "teacher-busy",
         "role": "teacher",
+        "account_status": "active",
+        "version": 8,
+        "account_fence_generation": 4,
         "subjects": ["math"],
         "dispatch_availability": "available",
         "active_session_count": 2,
@@ -60,6 +66,9 @@ TEACHERS = [
     {
         "user_id": "teacher-german",
         "role": "teacher",
+        "account_status": "active",
+        "version": 9,
+        "account_fence_generation": 5,
         "subjects": ["german"],
         "dispatch_availability": "available",
         "active_session_count": 0,
@@ -68,6 +77,9 @@ TEACHERS = [
     {
         "user_id": "teacher-paused",
         "role": "teacher",
+        "account_status": "active",
+        "version": 10,
+        "account_fence_generation": 6,
         "subjects": ["math"],
         "dispatch_availability": "paused",
     },
@@ -87,6 +99,37 @@ def test_dispatch_planner_ranks_eligible_and_explains_refusals():
     assert refusals["teacher-busy"] == "max_active_sessions"
     assert refusals["teacher-german"] == "subject_mismatch"
     assert refusals["teacher-paused"] == "not_available"
+
+
+def test_dispatch_planner_rejects_inactive_deleting_and_implicit_availability():
+    profiles = [
+        {
+            **TEACHERS[0],
+            "user_id": "teacher-inactive",
+            "account_status": "inactive",
+        },
+        {
+            **TEACHERS[0],
+            "user_id": "teacher-deleting",
+            "account_status": "deletion_pending",
+        },
+        {
+            key: value
+            for key, value in {
+                **TEACHERS[0],
+                "user_id": "teacher-missing-availability",
+            }.items()
+            if key != "dispatch_availability"
+        },
+    ]
+
+    plan = teacher_dispatch_service.plan_dispatch(QUESTION, profiles)
+
+    assert plan["selected"] == []
+    refusals = {item["teacherId"]: item["refusalCode"] for item in plan["refused"]}
+    assert refusals["teacher-inactive"] == "inactive_account"
+    assert refusals["teacher-deleting"] == "inactive_account"
+    assert refusals["teacher-missing-availability"] == "not_available"
 
 
 def test_dispatch_question_conditionally_claims_best_teacher(monkeypatch):
@@ -112,6 +155,96 @@ def test_dispatch_question_conditionally_claims_best_teacher(monkeypatch):
     assert updates[0][2]["dispatch_status"] == "dispatched"
     assert updates[0][2]["dispatched_teacher_id"] == "teacher-low-load"
     assert updates[0][2]["dispatch_attempt_count"] == 1
+
+
+def test_dispatch_assignment_atomically_observes_teacher_profile_and_fence(monkeypatch):
+    mutations = []
+    monkeypatch.setattr(
+        teacher_dispatch_service,
+        "list_teacher_profiles",
+        lambda: [TEACHERS[0]],
+    )
+    monkeypatch.setattr(
+        teacher_dispatch_service.question_repo,
+        "get_question",
+        lambda question_id: dict(QUESTION),
+    )
+
+    def mutate_question(question, *, status, extra_attrs, **kwargs):
+        mutations.append(kwargs)
+        return _applied_mutation(question, status, extra_attrs)
+
+    monkeypatch.setattr(
+        teacher_dispatch_service.question_repo,
+        "mutate_question",
+        mutate_question,
+    )
+
+    result = teacher_dispatch_service.dispatch_question("question-1")
+
+    assert result["status"] == "dispatched"
+    conditions = mutations[0]["additional_conditions"]
+    assert conditions[0]["ConditionCheck"]["Key"] == {
+        "PK": "USER#teacher-low-load",
+        "SK": "ACCOUNT_FENCE",
+    }
+    profile = conditions[1]["ConditionCheck"]
+    assert profile["Key"] == {
+        "PK": "USER#teacher-low-load",
+        "SK": "PROFILE",
+    }
+    assert profile["ExpressionAttributeValues"] == {
+        ":teacher_id": "teacher-low-load",
+        ":teacher_role": "teacher",
+        ":active": "active",
+        ":teacher_profile_version": 7,
+    }
+
+
+class _SparseDispatchScanTable:
+    def __init__(self):
+        self.calls = []
+
+    def scan(self, **kwargs):
+        self.calls.append(dict(kwargs))
+        if "ExclusiveStartKey" not in kwargs:
+            return {
+                "Items": [],
+                "LastEvaluatedKey": {"PK": "UNRELATED#last", "SK": "ROW"},
+            }
+        if kwargs["ExpressionAttributeValues"] == {":profile": "PROFILE"}:
+            return {"Items": [dict(TEACHERS[0])]}
+        return {"Items": [dict(QUESTION)]}
+
+    def get_item(self, *, Key, ConsistentRead=True):  # noqa: N803
+        assert ConsistentRead is True
+        assert Key == {
+            "PK": "USER#teacher-low-load",
+            "SK": "ACCOUNT_FENCE",
+        }
+        return {
+            "Item": {
+                **Key,
+                "status": "active",
+                "generation": 3,
+            }
+        }
+
+
+def test_dispatch_scans_continue_after_sparse_filtered_page(monkeypatch):
+    table = _SparseDispatchScanTable()
+    monkeypatch.setattr(teacher_dispatch_service, "get_table", lambda: table)
+
+    teachers = teacher_dispatch_service.list_teacher_profiles(limit=1)
+    questions = teacher_dispatch_service.list_teacher_dispatch_questions(limit=1)
+
+    assert [item["user_id"] for item in teachers] == ["teacher-low-load"]
+    assert [item["question_id"] for item in questions] == ["question-1"]
+    assert len(table.calls) == 4
+    assert all(
+        "ExclusiveStartKey" in call
+        for call in (table.calls[1], table.calls[3])
+    )
 
 
 def test_dispatch_question_uses_fresh_escalation_snapshot(monkeypatch):
