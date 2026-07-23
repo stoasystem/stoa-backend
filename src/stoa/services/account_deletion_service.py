@@ -869,13 +869,16 @@ def _report_artifacts_branch(
         try:
             candidate = dict(item)
             if not candidate.get("version_id"):
+                body_length = candidate.get("body_length")
+                if type(body_length) is not int:
+                    raise ValueError("invalid report body length")
                 coordinate = report_repo.reconcile_report_object_version(
                     s3_client=s3,
                     bucket=bucket,
                     object_key=str(candidate["object_key"]),
                     operation_id=str(candidate["operation_id"]),
                     body_sha256=str(candidate["body_sha256"]),
-                    body_length=int(candidate["body_length"]),
+                    body_length=body_length,
                 )
                 candidate.update(coordinate)
             result = report_repo.purge_report_object_intent(
