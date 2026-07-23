@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 475-35-PLAN.md
-last_updated: "2026-07-23T08:42:14.941Z"
+stopped_at: Completed 475-36-PLAN.md
+last_updated: "2026-07-23T08:51:20.481Z"
 last_activity: 2026-07-22 -- Phase 475 execution started
 progress:
   total_phases: 10
   completed_phases: 2
   total_plans: 201
-  completed_plans: 133
+  completed_plans: 134
   percent: 20
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 475 (Transactional Usage Assignment And Relationship Consistency) — EXECUTING
-Plan: 25 of 45
+Plan: 26 of 45
 Status: Ready to execute
 Last activity: 2026-07-22 -- Phase 475 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 
 ## Session
 
-**Last Date:** 2026-07-23T08:42:14.935Z
-**Stopped At:** Completed 475-35-PLAN.md
+**Last Date:** 2026-07-23T08:51:20.475Z
+**Stopped At:** Completed 475-36-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -240,6 +240,7 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 | Phase 475 P30 | 3 min | 1 tasks | 1 files |
 | Phase 475 P33 | 2 min | 1 tasks | 1 files |
 | Phase 475 P35 | 4 min | 1 tasks | 1 files |
+| Phase 475 P36 | 5 min | 1 tasks | 1 files |
 
 ## Decisions
 
@@ -510,3 +511,6 @@ Last activity: 2026-07-22 -- Phase 475 execution started
 - [Phase 475]: Plan 475-33 changes only account-deletion provider-boundary typing. — Valid report cleanup, ordered branches, CAS retry, two clean epochs, final seal, and terminal replay remain unchanged.
 - [Phase 475]: Persisted usage-ledger integers accept only exact int or finite integral Decimal values. — This removes lossy coercion while preserving valid DynamoDB number values and rejecting bool, fractional, or negative accounting state.
 - [Phase 475]: Reversed usage events retain their original audit quantity while active totals exclude them. — Exact-once compensation remains delegated to the existing four-row transaction and opaque digest identity is unchanged.
+- [Phase 475]: Keep DynamoDB handles object-typed until the exact get, put, query, scan, or transaction capability is proven at runtime.
+- [Phase 475]: Validate string-keyed subscription mappings and Items lists at the storage boundary without changing subscription, quota, or refund behavior.
+- [Phase 475]: Use overloads to distinguish optional pending-request responses from required request responses without changing runtime output.
