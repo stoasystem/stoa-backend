@@ -12,6 +12,9 @@ import pytest
 from stoa.db.repositories import question_submission_repo
 from stoa.jobs import reconcile_question_submissions
 from stoa.services import usage_ledger_service
+from tests.dynamodb_expression_assertions import (
+    assert_expression_placeholders_closed,
+)
 
 
 STUDENT_ID = "student-opaque-1"
@@ -180,6 +183,7 @@ class _ReconciliationTable:
 
     def _validate(self, operations: list[dict[str, object]]) -> None:
         for operation in operations:
+            assert_expression_placeholders_closed(operation)
             update = operation.get("Update") or operation.get("ConditionCheck")
             key = (update["Key"]["PK"], update["Key"]["SK"])
             current = self.items.get(key)

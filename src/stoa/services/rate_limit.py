@@ -438,9 +438,8 @@ def check_and_record_operation(
                         "#ttl": "expires_at",
                     },
                     "ExpressionAttributeValues": {
-                        ":expected": counter_value,
+                        **({":expected": counter_value} if count_exists else {}),
                         ":next": next_counter_value,
-                        ":limit": limit,
                         ":expires": expires_at_value,
                         ":counter_type": "rate_counter",
                         ":owner": owner,

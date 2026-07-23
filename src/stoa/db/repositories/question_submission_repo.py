@@ -2256,6 +2256,7 @@ def reverse_terminal_question_admission(
                     ":student": student_id,
                     ":command_id": current.command_id,
                     ":question": current.question_id,
+                    ":one": 1,
                     ":active": "active",
                     ":reversed": "reversed",
                     ":reversal": reversal_id,

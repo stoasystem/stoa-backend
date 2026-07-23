@@ -10,6 +10,9 @@ from fastapi import HTTPException
 
 from stoa.db.repositories import account_deletion_repo
 from stoa.services import rate_limit
+from tests.dynamodb_expression_assertions import (
+    assert_expression_placeholders_closed,
+)
 
 
 PERIOD = "2026-07-21"
@@ -70,6 +73,8 @@ class _RateTable:
 
     def transact_account_deletion(self, operations):
         copied = [dict(operation) for operation in operations]
+        for operation in copied:
+            assert_expression_placeholders_closed(operation)
         with self._lock:
             self.transactions.append(copied)
             put = next(operation["Put"] for operation in operations if "Put" in operation)
@@ -170,7 +175,7 @@ def test_transaction_puts_payload_bound_operation_and_capped_counter_update() ->
     assert put["Item"]["receipt_expires_at"] == int(NOW.timestamp()) + 172800
     assert update["ConditionExpression"] == "attribute_not_exists(#count)"
     assert update["ExpressionAttributeValues"][":next"] == 1
-    assert update["ExpressionAttributeValues"][":limit"] == 2
+    assert ":limit" not in update["ExpressionAttributeValues"]
 
 
 def test_repeating_429_requests_leave_counter_exactly_at_limit(monkeypatch) -> None:
