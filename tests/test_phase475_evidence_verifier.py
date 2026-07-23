@@ -226,6 +226,7 @@ def test_coverage_registry_requires_all_truthful_gap_nodes() -> None:
         "tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_retries_validated_result_until_completion",
         "tests/test_phase475_question_effect_recovery.py::test_intent_response_loss_continues_same_owned_invocation_once",
         "tests/test_phase475_question_effect_recovery.py::test_missing_intent_dependency_recovers_on_replay_and_invokes_once",
+        "tests/test_phase475_question_effect_recovery.py::test_crash_after_provider_before_receipt_expires_to_exact_once_compensation",
     )
     assert set(convergence_nodes).issubset(verifier.DECISION_CONTRACTS["D-01"])
     assert set(convergence_nodes).issubset(

@@ -767,6 +767,7 @@ DECISION_CONTRACTS: dict[str, tuple[str, ...]] = {
         "tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_retries_validated_result_until_completion",
         "tests/test_phase475_question_effect_recovery.py::test_intent_response_loss_continues_same_owned_invocation_once",
         "tests/test_phase475_question_effect_recovery.py::test_missing_intent_dependency_recovers_on_replay_and_invokes_once",
+        "tests/test_phase475_question_effect_recovery.py::test_crash_after_provider_before_receipt_expires_to_exact_once_compensation",
         "tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay",
     ),
     "D-02": (
@@ -809,6 +810,7 @@ REVIEW_FINDING_CONTRACTS: dict[str, tuple[str, ...]] = {
         "tests/test_phase475_question_effect_recovery.py::test_result_receipt_failure_retries_validated_result_until_completion",
         "tests/test_phase475_question_effect_recovery.py::test_intent_response_loss_continues_same_owned_invocation_once",
         "tests/test_phase475_question_effect_recovery.py::test_missing_intent_dependency_recovers_on_replay_and_invokes_once",
+        "tests/test_phase475_question_effect_recovery.py::test_crash_after_provider_before_receipt_expires_to_exact_once_compensation",
     ),
     "CR-02": (
         "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows",
