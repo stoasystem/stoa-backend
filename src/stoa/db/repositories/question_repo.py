@@ -848,7 +848,7 @@ def mutate_question(
     *,
     status: str,
     allowed_source_statuses: frozenset[str],
-    additional_conditions: tuple[Mapping[str, object], ...] = (),
+    additional_conditions: tuple[QuestionItem, ...] = (),
     extra_attrs: Mapping[str, object] | None = None,
     table: object | None = None,
 ) -> QuestionMutationResult:
@@ -869,21 +869,22 @@ def mutate_question(
         fence = account_deletion_repo.require_active_account_fence(
             student_id, table=target
         )
+        operations: list[QuestionItem] = [
+            account_deletion_repo.active_fence_condition(
+                student_id, int(fence["generation"])
+            ),
+            *additional_conditions,
+            _question_mutation_operation(
+                question_id=question_id,
+                student_id=student_id,
+                source_status=source_status,
+                expected_version=expected_version,
+                status=status,
+                extra_attrs=fields,
+            ),
+        ]
         account_deletion_repo.transact(
-            [
-                account_deletion_repo.active_fence_condition(
-                    student_id, int(fence["generation"])
-                ),
-                *additional_conditions,
-                _question_mutation_operation(
-                    question_id=question_id,
-                    student_id=student_id,
-                    source_status=source_status,
-                    expected_version=expected_version,
-                    status=status,
-                    extra_attrs=fields,
-                ),
-            ],
+            operations,
             table=target,
         )
     except Exception:
