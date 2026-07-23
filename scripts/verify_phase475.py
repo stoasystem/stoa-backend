@@ -40,10 +40,12 @@ PUBLICATION_PATHS = {
     "docs/security/phase-475-evidence-results.json",
     "docs/security/phase-475-evidence.md",
 }
-PHASE475_MODULES = (
+_EXPECTED_PHASE475_MODULES = (
     "tests/test_phase475_question_admission.py",
     "tests/test_phase475_question_replay.py",
     "tests/test_phase475_question_reconciliation.py",
+    "tests/test_phase475_question_state_cas.py",
+    "tests/test_phase475_question_effect_recovery.py",
     "tests/test_phase475_teacher_takeover.py",
     "tests/test_phase475_teacher_takeover_effect.py",
     "tests/test_phase475_parent_binding_transaction.py",
@@ -53,7 +55,12 @@ PHASE475_MODULES = (
     "tests/test_phase475_mistake_answer.py",
     "tests/test_phase475_delivery_begin.py",
     "tests/test_phase475_completed_deletion_replay.py",
+    "tests/test_phase475_deletion_discovery.py",
+    "tests/test_phase475_deletion_relationship_scrub.py",
+    "tests/test_phase475_deletion_teacher_identity_scrub.py",
+    "tests/test_phase475_deletion_notification_identity_scrub.py",
 )
+PHASE475_MODULES = _EXPECTED_PHASE475_MODULES
 INHERITED_MODULES = (
     "tests/test_student_authorization_matrix.py",
     "tests/test_admin_authorization.py",
@@ -347,21 +354,36 @@ def _pytest_argv(spec: GateSpec, capture_root: Path) -> list[str]:
 
 
 def gate_registry(candidate: str, capture_root: Path) -> list[dict[str, object]]:
+    if (
+        PHASE475_MODULES != _EXPECTED_PHASE475_MODULES
+        or len(PHASE475_MODULES) != len(set(PHASE475_MODULES))
+    ):
+        raise EvidenceError("Phase 475 module registry drift")
     specs = (
-        GateSpec("P475-QUESTION", "pytest", PHASE475_MODULES[:3]),
-        GateSpec("P475-TAKEOVER", "pytest", PHASE475_MODULES[3:5]),
-        GateSpec("P475-RELATIONSHIP", "pytest", PHASE475_MODULES[5:8]),
-        GateSpec("P475-RATE", "pytest", (PHASE475_MODULES[8],)),
-        GateSpec("P475-MISTAKE", "pytest", (PHASE475_MODULES[9],)),
+        GateSpec("P475-QUESTION", "pytest", PHASE475_MODULES[:5]),
+        GateSpec("P475-TAKEOVER", "pytest", PHASE475_MODULES[5:7]),
+        GateSpec("P475-RELATIONSHIP", "pytest", PHASE475_MODULES[7:10]),
+        GateSpec("P475-RATE", "pytest", (PHASE475_MODULES[10],)),
+        GateSpec("P475-MISTAKE", "pytest", (PHASE475_MODULES[11],)),
         GateSpec(
             "P475-DELIVERY",
             "pytest",
-            (PHASE475_MODULES[10], "tests/test_phase473_delivery_intent_recovery.py", "tests/test_phase473_notification_deletion.py"),
+            (
+                PHASE475_MODULES[12],
+                PHASE475_MODULES[17],
+                "tests/test_phase473_delivery_intent_recovery.py",
+                "tests/test_phase473_notification_deletion.py",
+            ),
         ),
         GateSpec(
             "P475-DELETION",
             "pytest",
-            (PHASE475_MODULES[11], "tests/test_phase473_account_deletion.py", "tests/test_phase473_account_deletion_seal.py"),
+            (
+                PHASE475_MODULES[13],
+                *PHASE475_MODULES[14:17],
+                "tests/test_phase473_account_deletion.py",
+                "tests/test_phase473_account_deletion_seal.py",
+            ),
         ),
         GateSpec("P475-INHERITED-AUTH-PRIVACY", "pytest", INHERITED_MODULES),
         GateSpec("P475-PHASE474-FORMAL-EXTENSION", "pytest", ()),
@@ -696,23 +718,27 @@ REQUIREMENT_CONTRACTS: dict[str, tuple[str, ...]] = {
     "V9DATA-01": (
         "tests/test_phase475_question_admission.py::test_concurrent_identical_keys_commit_one_complete_admission",
         "tests/test_phase475_question_admission.py::test_commit_then_timeout_reconciles_to_resume",
-        "tests/test_phase475_question_reconciliation.py::test_each_terminal_transaction_boundary_fails_without_partial_compensation",
+        "tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question",
+        "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider",
+        "tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay",
         "tests/test_phase475_question_reconciliation.py::test_terminal_reversal_is_exact_once_and_attachment_storage_are_unchanged",
     ),
     "V9DATA-02": (
         "tests/test_phase475_teacher_takeover.py::test_two_barrier_claimants_produce_one_owner_session_and_private_loser",
+        "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact",
         "tests/test_phase475_teacher_takeover_effect.py::test_begin_dependency_failure_then_retry_creates_one_notification",
-        "tests/test_phase475_teacher_takeover_effect.py::test_losing_claim_never_reaches_notification_effect",
+        "tests/test_phase475_deletion_teacher_identity_scrub.py::test_teacher_identity_scrub_preserves_student_question_and_requires_two_clean_epochs",
     ),
     "V9DATA-03": (
-        "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged",
+        "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write",
         "tests/test_phase475_parent_binding_reconciliation.py::test_changed_after_preview_is_skipped_and_new_data_is_preserved",
-        "tests/test_phase475_parent_binding_reconciliation.py::test_one_sided_apply_is_atomic_and_replay_is_zero_write",
+        "tests/test_phase475_parent_binding_reconciliation.py::test_different_parent_conflict_is_report_only_and_remains_unauthorized",
+        "tests/test_phase475_deletion_relationship_scrub.py::test_relationship_identity_scrub_retries_cas_then_requires_two_clean_epochs",
     ),
     "V9DATA-04": (
         "tests/test_phase475_rate_limit.py::test_repeating_429_requests_leave_counter_exactly_at_limit",
         "tests/test_phase475_rate_limit.py::test_two_concurrent_distinct_requests_compete_for_one_final_slot",
-        "tests/test_phase475_rate_limit.py::test_provider_failure_retry_replays_one_count_and_distinct_operation_is_evaluated",
+        "tests/test_phase475_rate_limit.py::test_replay_returns_original_receipt_after_intervening_accepted_and_rejected_traffic",
     ),
     "V9DATA-05": (
         "tests/test_phase475_mistake_answer.py::test_wrong_answer_round_trips_exactly_after_normalization",
@@ -728,6 +754,7 @@ REQUIREMENT_CONTRACTS: dict[str, tuple[str, ...]] = {
         "tests/test_phase475_delivery_begin.py::test_dependency_failure_remains_recoverable_then_healthy_retry_delivers_once",
         "tests/test_phase475_delivery_begin.py::test_ordered_fence_failure_plus_strong_deleted_fence_cancels_without_provider",
         "tests/test_phase475_delivery_begin.py::test_ordered_intent_condition_loss_is_retryable_and_never_mislabeled",
+        "tests/test_phase475_deletion_notification_identity_scrub.py::test_notification_identity_scrub_retries_cas_then_requires_two_clean_epochs",
     ),
     "V9DATA-08": (
         "tests/test_phase475_completed_deletion_replay.py::test_real_endpoint_replays_stored_terminal_receipt_with_zero_new_effects",
@@ -736,37 +763,126 @@ REQUIREMENT_CONTRACTS: dict[str, tuple[str, ...]] = {
 }
 
 DECISION_CONTRACTS: dict[str, tuple[str, ...]] = {
-    "D-01": ("tests/test_phase475_question_replay.py::test_ai_failure_returns_queryable_durable_pending_question",),
-    "D-02": ("tests/test_phase475_question_replay.py::test_lost_response_retry_returns_original_without_repeating_effects",),
-    "D-03": ("tests/test_phase475_question_reconciliation.py::test_terminal_reversal_is_exact_once_and_attachment_storage_are_unchanged",),
+    "D-01": (
+        "tests/test_phase475_question_replay.py::test_ai_failure_returns_queryable_durable_pending_question",
+        "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider",
+    ),
+    "D-02": (
+        "tests/test_phase475_question_admission.py::test_concurrent_identical_keys_commit_one_complete_admission",
+        "tests/test_phase475_question_effect_recovery.py::test_committed_completion_response_loss_reconciles_exact_original_result",
+    ),
+    "D-03": (
+        "tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay",
+        "tests/test_phase475_question_reconciliation.py::test_terminal_reversal_is_exact_once_and_attachment_storage_are_unchanged",
+    ),
     "D-04": ("tests/test_phase475_question_replay.py::test_changed_payload_returns_structured_new_submission_action",),
     "D-05": ("tests/test_phase475_teacher_takeover.py::test_two_barrier_claimants_produce_one_owner_session_and_private_loser",),
-    "D-06": ("tests/test_phase475_teacher_takeover_effect.py::test_losing_claim_never_reaches_notification_effect",),
+    "D-06": (
+        "tests/test_phase475_teacher_takeover.py::test_two_barrier_claimants_produce_one_owner_session_and_private_loser",
+        "tests/test_phase475_teacher_takeover_effect.py::test_losing_claim_never_reaches_notification_effect",
+    ),
     "D-07": ("tests/test_phase475_teacher_takeover_effect.py::test_route_keeps_winner_session_when_effect_fails_then_replays",),
     "D-08": ("tests/test_phase475_teacher_takeover.py::test_two_barrier_claimants_produce_one_owner_session_and_private_loser",),
-    "D-09": ("tests/test_phase475_parent_binding_transaction.py::test_conflicting_parent_is_preserved_and_authorization_remains_denied",),
+    "D-09": (
+        "tests/test_phase475_parent_binding_transaction.py::test_failure_at_every_operation_leaves_all_relationship_projections_unchanged",
+        "tests/test_phase475_parent_binding_transaction.py::test_conflicting_parent_is_preserved_and_authorization_remains_denied",
+    ),
     "D-10": ("tests/test_phase475_parent_binding_reconciliation.py::test_different_parent_conflict_is_report_only_and_remains_unauthorized",),
-    "D-11": ("tests/test_phase475_parent_binding_reconciliation.py::test_changed_after_preview_is_skipped_and_new_data_is_preserved",),
+    "D-11": (
+        "tests/test_phase475_parent_binding_reconciliation.py::test_changed_after_preview_is_skipped_and_new_data_is_preserved",
+        "tests/test_phase475_parent_binding_reconciliation.py::test_one_sided_apply_is_atomic_and_replay_is_zero_write",
+    ),
     "D-12": ("tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",),
-    "D-13": ("tests/test_phase475_rate_limit.py::test_provider_failure_retry_replays_one_count_and_distinct_operation_is_evaluated",),
-    "D-14": ("tests/test_phase475_mistake_answer.py::test_legacy_missing_answer_is_explicit_unknown_and_never_uses_standard_answer",),
-    "D-15": ("tests/test_phase475_delivery_begin.py::test_dependency_failure_remains_recoverable_then_healthy_retry_delivers_once",),
+    "D-13": ("tests/test_phase475_rate_limit.py::test_replay_returns_original_receipt_after_intervening_accepted_and_rejected_traffic",),
+    "D-14": (
+        "tests/test_phase475_mistake_answer.py::test_wrong_answer_round_trips_exactly_after_normalization",
+        "tests/test_phase475_mistake_answer.py::test_legacy_missing_answer_is_explicit_unknown_and_never_uses_standard_answer",
+    ),
+    "D-15": ("tests/test_phase475_delivery_begin.py::test_ordered_fence_failure_plus_strong_deleted_fence_cancels_without_provider",),
     "D-16": ("tests/test_phase475_completed_deletion_replay.py::test_real_endpoint_replays_stored_terminal_receipt_with_zero_new_effects",),
 }
 
-FINDING_CONTRACTS: dict[str, tuple[str, ...]] = {
-    "DATA-001": REQUIREMENT_CONTRACTS["V9DATA-01"],
-    "BUG-002": REQUIREMENT_CONTRACTS["V9DATA-02"],
-    "DATA-003": REQUIREMENT_CONTRACTS["V9DATA-03"],
-    "BUG-006": REQUIREMENT_CONTRACTS["V9DATA-04"],
-    "BUG-004": REQUIREMENT_CONTRACTS["V9DATA-05"],
+REVIEW_FINDING_CONTRACTS: dict[str, tuple[str, ...]] = {
+    "CR-01": (
+        "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider",
+        "tests/test_phase475_question_effect_recovery.py::test_ocr_success_receipt_recovers_real_question_and_command_transaction",
+    ),
+    "CR-02": (
+        "tests/test_phase475_question_replay.py::test_strict_replay_rejects_corrupt_foreign_or_stale_rows",
+        "tests/test_phase475_question_replay.py::test_strict_replay_returns_only_exact_owner_bound_question",
+    ),
+    "CR-03": (
+        "tests/test_phase475_question_state_cas.py::test_question_mutation_has_owner_state_version_and_one_increment",
+        "tests/test_phase475_question_state_cas.py::test_takeover_first_makes_barriered_stale_ai_completion_lose",
+    ),
+    "CR-04": (
+        "tests/test_phase475_teacher_takeover.py::test_stale_authorized_teacher_lifecycle_race_rolls_back_every_artifact",
+    ),
+    "CR-05": (
+        "tests/test_phase475_parent_binding_transaction.py::test_participant_lifecycle_or_version_race_rolls_back_every_binding_write",
+    ),
+    "CR-06": (
+        "tests/test_phase475_parent_binding_transaction.py::test_non_active_relationship_retry_is_conflict_and_never_revives",
+    ),
+    "CR-07": (
+        "tests/test_phase475_question_effect_recovery.py::test_terminal_provider_rejection_proves_and_compensates_once_before_actionable_replay",
+    ),
+    "CR-08": (
+        "tests/test_phase475_question_admission.py::test_arbitrary_caller_key_is_absent_from_every_admission_item",
+        "tests/test_phase475_question_replay.py::test_raw_caller_key_is_absent_from_route_body_and_diagnostics",
+        "tests/test_phase475_question_reconciliation.py::test_cli_uses_command_digest_and_redacts_invalid_input",
+    ),
+    "CR-09": DECISION_CONTRACTS["D-13"],
+    "CR-10": (
+        "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs",
+        "tests/test_phase475_deletion_relationship_scrub.py::test_relationship_identity_scrub_retries_cas_then_requires_two_clean_epochs",
+        "tests/test_phase475_deletion_teacher_identity_scrub.py::test_teacher_identity_scrub_preserves_student_question_and_requires_two_clean_epochs",
+        "tests/test_phase475_deletion_notification_identity_scrub.py::test_notification_identity_scrub_retries_cas_then_requires_two_clean_epochs",
+    ),
 }
 
-FOLLOW_UP_CONTRACTS: dict[str, tuple[str, ...]] = {
-    "profile-version-cas": REQUIREMENT_CONTRACTS["V9DATA-06"],
-    "delivery-begin-dependency-classification": REQUIREMENT_CONTRACTS["V9DATA-07"],
-    "completed-deletion-replay": REQUIREMENT_CONTRACTS["V9DATA-08"],
+REVIEW_WARNING_CONTRACTS: dict[str, tuple[str, ...]] = {
+    "WR-01": (
+        "tests/test_phase475_question_replay.py::test_invalid_idempotency_input_is_redacted_and_effect_free",
+    ),
+    "WR-02": (
+        "tests/test_phase475_evidence_verifier.py::test_mypy_gate_fails_closed_for_every_nonzero_or_ambiguous_outcome",
+    ),
+    "WR-03": (
+        "tests/test_phase475_evidence_verifier.py::test_source_snapshot_is_exhaustive_for_all_git_statuses",
+    ),
+    "WR-04": (
+        "tests/test_phase475_question_effect_recovery.py::test_effect_proof_executes_repository_boundaries_instead_of_monkeypatching_them",
+    ),
 }
+
+
+def _coverage_contracts() -> dict[str, dict[str, tuple[str, ...]]]:
+    contracts = {
+        "requirements": REQUIREMENT_CONTRACTS,
+        "decisions": DECISION_CONTRACTS,
+        "review_findings": REVIEW_FINDING_CONTRACTS,
+        "review_warnings": REVIEW_WARNING_CONTRACTS,
+    }
+    expected_ids = {
+        "requirements": {f"V9DATA-{index:02d}" for index in range(1, 9)},
+        "decisions": {f"D-{index:02d}" for index in range(1, 17)},
+        "review_findings": {f"CR-{index:02d}" for index in range(1, 11)},
+        "review_warnings": {f"WR-{index:02d}" for index in range(1, 5)},
+    }
+    allowed_modules = {
+        *PHASE475_MODULES,
+        "tests/test_phase475_evidence_verifier.py",
+    }
+    for section, registry in contracts.items():
+        if set(registry) != expected_ids[section]:
+            raise EvidenceError(f"coverage contract ID registry drift: {section}")
+        for selectors in registry.values():
+            if not selectors or len(selectors) != len(set(selectors)):
+                raise EvidenceError("coverage contract selector registry drift")
+            if any(selector.partition("::")[0] not in allowed_modules for selector in selectors):
+                raise EvidenceError("coverage contract selector module drift")
+    return contracts
 
 
 def derive_coverage(observed: set[str]) -> dict[str, list[dict[str, object]]]:
@@ -784,20 +900,13 @@ def derive_coverage(observed: set[str]) -> dict[str, list[dict[str, object]]]:
         ]
 
     return {
-        "requirements": rows(REQUIREMENT_CONTRACTS),
-        "decisions": rows(DECISION_CONTRACTS),
-        "audit_findings": rows(FINDING_CONTRACTS),
-        "phase473_follow_ups": rows(FOLLOW_UP_CONTRACTS),
+        section: rows(contracts)
+        for section, contracts in _coverage_contracts().items()
     }
 
 
 def verify_coverage(coverage: Mapping[str, object], observed: set[str]) -> None:
-    expected = {
-        "requirements": REQUIREMENT_CONTRACTS,
-        "decisions": DECISION_CONTRACTS,
-        "audit_findings": FINDING_CONTRACTS,
-        "phase473_follow_ups": FOLLOW_UP_CONTRACTS,
-    }
+    expected = _coverage_contracts()
     if set(coverage) != set(expected):
         raise EvidenceError("coverage sections are not closed")
     for section, contracts in expected.items():
@@ -1107,8 +1216,8 @@ def _render_evidence(result: Mapping[str, Any]) -> str:
     for title, section in (
         ("Requirements", "requirements"),
         ("Decisions", "decisions"),
-        ("Audit findings", "audit_findings"),
-        ("Phase 473 follow-ups", "phase473_follow_ups"),
+        ("Review findings", "review_findings"),
+        ("Review warnings", "review_warnings"),
     ):
         lines.extend((f"### {title}", "", "| ID | Exact observed nodes | Result |", "| --- | --- | --- |"))
         for row in result["coverage"][section]:

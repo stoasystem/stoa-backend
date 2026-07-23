@@ -249,6 +249,43 @@ def test_phase475_module_registry_rejects_missing_extra_or_duplicate_modules(
             verifier.gate_registry(CANDIDATE, tmp_path)
 
 
+def test_coverage_contract_registry_rejects_id_selector_and_module_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verifier = _load_verifier()
+
+    missing_id = dict(verifier.REVIEW_FINDING_CONTRACTS)
+    missing_id.pop("CR-10")
+    monkeypatch.setattr(verifier, "REVIEW_FINDING_CONTRACTS", missing_id)
+    with pytest.raises(verifier.EvidenceError, match="ID registry drift"):
+        verifier.derive_coverage(set())
+
+    monkeypatch.setattr(
+        verifier,
+        "REVIEW_FINDING_CONTRACTS",
+        {
+            **missing_id,
+            "CR-10": (
+                "tests/test_phase475_deletion_discovery.py::test_cross_account_identity_registry_and_two_clean_epochs",
+            )
+            * 2,
+        },
+    )
+    with pytest.raises(verifier.EvidenceError, match="selector registry drift"):
+        verifier.derive_coverage(set())
+
+    monkeypatch.setattr(
+        verifier,
+        "REVIEW_FINDING_CONTRACTS",
+        {
+            **missing_id,
+            "CR-10": ("tests/test_unreviewed.py::test_false_claim",),
+        },
+    )
+    with pytest.raises(verifier.EvidenceError, match="selector module drift"):
+        verifier.derive_coverage(set())
+
+
 def test_coverage_rejects_id_selector_result_and_observed_node_drift() -> None:
     verifier = _load_verifier()
     observed = _all_coverage_nodes(verifier)
@@ -288,7 +325,7 @@ def test_coverage_rejects_id_selector_result_and_observed_node_drift() -> None:
     "selector",
     [
         "tests/test_phase475_question_admission.py::test_concurrent_identical_keys_commit_one_complete_admission",
-        "tests/test_phase475_question_reconciliation.py::test_each_terminal_transaction_boundary_fails_without_partial_compensation",
+        "tests/test_phase475_question_effect_recovery.py::test_ai_success_then_completion_failure_replays_durable_receipt_without_provider",
         "tests/test_phase475_teacher_takeover.py::test_two_barrier_claimants_produce_one_owner_session_and_private_loser",
         "tests/test_phase475_parent_binding_reconciliation.py::test_changed_after_preview_is_skipped_and_new_data_is_preserved",
         "tests/test_phase475_profile_version_cas.py::test_real_locale_writer_races_real_scrub_and_preserves_exact_latest_bytes",
@@ -689,8 +726,8 @@ def _publication_repo(tmp_path: Path) -> tuple[Path, str, str]:
         "coverage": {
             "requirements": [],
             "decisions": [],
-            "audit_findings": [],
-            "phase473_follow_ups": [],
+            "review_findings": [],
+            "review_warnings": [],
         },
     }
     _json(results, result)
@@ -707,10 +744,16 @@ def test_publication_is_direct_source_bound_and_immutable_at_later_head(
     verifier = _load_verifier()
     repo, _, _ = _publication_repo(tmp_path)
     _git(repo, "commit", "--allow-empty", "-m", "later metadata")
-    monkeypatch.setattr(verifier, "REQUIREMENT_CONTRACTS", {})
-    monkeypatch.setattr(verifier, "DECISION_CONTRACTS", {})
-    monkeypatch.setattr(verifier, "FINDING_CONTRACTS", {})
-    monkeypatch.setattr(verifier, "FOLLOW_UP_CONTRACTS", {})
+    monkeypatch.setattr(
+        verifier,
+        "_coverage_contracts",
+        lambda: {
+            "requirements": {},
+            "decisions": {},
+            "review_findings": {},
+            "review_warnings": {},
+        },
+    )
     verifier.verify_publication(repo)
 
 
@@ -723,10 +766,16 @@ def test_publication_rejects_later_blob_change(
     evidence.write_text(evidence.read_text(encoding="utf-8") + "changed\n", encoding="utf-8")
     _git(repo, "add", evidence.relative_to(repo).as_posix())
     _git(repo, "commit", "-m", "mutate evidence")
-    monkeypatch.setattr(verifier, "REQUIREMENT_CONTRACTS", {})
-    monkeypatch.setattr(verifier, "DECISION_CONTRACTS", {})
-    monkeypatch.setattr(verifier, "FINDING_CONTRACTS", {})
-    monkeypatch.setattr(verifier, "FOLLOW_UP_CONTRACTS", {})
+    monkeypatch.setattr(
+        verifier,
+        "_coverage_contracts",
+        lambda: {
+            "requirements": {},
+            "decisions": {},
+            "review_findings": {},
+            "review_warnings": {},
+        },
+    )
     with pytest.raises(verifier.EvidenceError, match="blob changed"):
         verifier.verify_publication(repo)
 
