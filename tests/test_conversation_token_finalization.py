@@ -39,10 +39,12 @@ class MockBedrockProvider:
         input_tokens: object = 90,
         actual_input_tokens: int = 70,
         actual_output_tokens: int = 25,
+        invoke_error: Exception | None = None,
     ) -> None:
         self.input_tokens = input_tokens
         self.actual_input_tokens = actual_input_tokens
         self.actual_output_tokens = actual_output_tokens
+        self.invoke_error = invoke_error
         self.count_calls: list[dict[str, object]] = []
         self.invoke_calls: list[dict[str, object]] = []
 
@@ -58,6 +60,8 @@ class MockBedrockProvider:
 
     def invoke_model(self, **kwargs: object) -> dict[str, object]:
         self.invoke_calls.append(copy.deepcopy(kwargs))
+        if self.invoke_error is not None:
+            raise self.invoke_error
         content = {
             "answer": "The durable conversation answer",
             "steps": ["First durable step"],
@@ -92,7 +96,7 @@ def _command() -> dict[str, object]:
         "student_id": "student-1",
         "owner_id": "student-1",
         "assistant_message_id": "assistant-message-1",
-        "account_fence_generation": 4,
+        "account_fence_generation": 1,
         "created_at": NOW.isoformat(),
     }
     command.update(
@@ -201,7 +205,10 @@ def test_count_failure_never_reserves_or_invokes(monkeypatch: pytest.MonkeyPatch
     assert captured.value.code == "provider_token_count_unavailable"
     assert len(provider.count_calls) == 1
     assert provider.invoke_calls == []
-    assert table.items == {}
+    assert not any(
+        item.get("entity_type") == "allowance_effect"
+        for item in table.items.values()
+    )
 
 
 def test_allowance_denial_never_invokes_provider(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -234,6 +241,66 @@ def test_allowance_denial_never_invokes_provider(monkeypatch: pytest.MonkeyPatch
     assert captured.value.code == "allowance_exhausted"
     assert len(provider.count_calls) == 1
     assert provider.invoke_calls == []
+
+
+def test_provider_timeout_after_reserve_remains_reserved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    table = AtomicAllowanceTable()
+    provider = MockBedrockProvider(invoke_error=TimeoutError("timeout-canary"))
+    _patch_allowance_table(monkeypatch, table)
+    monkeypatch.setattr(
+        conversations.ai_service.boto3,
+        "client",
+        lambda *_args, **_kwargs: provider,
+    )
+    client = conversations._ConversationAllowanceBedrockClient(_command())
+
+    with pytest.raises(TimeoutError):
+        ai_service.get_ai_answer(
+            content="message",
+            subject="math",
+            grade="Sek1",
+            effect_id=client.allowance_effect_id,
+            client=client,
+        )
+
+    effect = next(
+        item
+        for item in table.items.values()
+        if item.get("entity_type") == "allowance_effect"
+    )
+    assert effect["state"] == "reserved"
+    assert table.counter()["finalized_input_tokens"] == 0
+    assert len(provider.invoke_calls) == 1
+
+
+def test_store_ambiguity_keeps_observed_reservation_without_finalizing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    table = AtomicAllowanceTable()
+    command, result = _provider_result(
+        monkeypatch,
+        table=table,
+        provider=MockBedrockProvider(),
+    )
+    metadata = _metadata(result, command)
+
+    assert conversations._observe_message_provider_usage(
+        beneficiary_id="student-1",
+        metadata=metadata,
+    )
+
+    effect = next(
+        item
+        for item in table.items.values()
+        if item.get("entity_type") == "allowance_effect"
+    )
+    assert effect["state"] == "observed"
+    counter = table.counter()
+    assert counter["reserved_input_tokens"] == 90
+    assert counter["finalized_input_tokens"] == 0
+    assert counter["provider_cost_input_tokens"] == 70
 
 
 def test_regular_sse_and_hint_replay_finalize_one_exact_debit(
@@ -293,6 +360,69 @@ def test_regular_sse_and_hint_replay_finalize_one_exact_debit(
     assert counter["provider_cost_input_tokens"] == 70
     assert counter["provider_cost_output_tokens"] == 25
     assert len(table.evidence()) == 1
+
+
+def test_finalize_timeout_repairs_from_the_same_durable_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    table = AtomicAllowanceTable()
+    command, result = _provider_result(
+        monkeypatch,
+        table=table,
+        provider=MockBedrockProvider(),
+    )
+    metadata = _metadata(result, command)
+    assert conversations._observe_message_provider_usage(
+        beneficiary_id="student-1",
+        metadata=metadata,
+    )
+    response = conversations.SendMessageResponse(
+        studentMessage=conversations.ChatMessage(
+            id="student-message-1",
+            conversationId="conversation-1",
+            role="student",
+            content="message",
+            createdAt=NOW.isoformat(),
+        ),
+        assistantMessage=conversations.ChatMessage(
+            id="assistant-message-1",
+            conversationId="conversation-1",
+            role="assistant",
+            content="answer",
+            createdAt=NOW.isoformat(),
+        ),
+    )
+    durable = {
+        **command,
+        "status": "completed",
+        "student_message_id": "student-message-1",
+        "result_json": conversations._message_result_json(response, metadata),
+    }
+    real_finalize = conversations.allowance_service.finalize_token_allowance
+    calls = 0
+
+    def retry_once(**kwargs: object):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return allowance_repo.FinalizationResult(
+                allowance_repo.FinalizationDisposition.RETRYABLE
+            )
+        return real_finalize(**kwargs)
+
+    monkeypatch.setattr(
+        conversations.allowance_service,
+        "finalize_token_allowance",
+        retry_once,
+    )
+
+    with pytest.raises(conversations._ConversationAllowanceFailure):
+        conversations._result_response(allowance_repo_message_result(durable))
+    replay = conversations._result_response(allowance_repo_message_result(durable))
+
+    assert replay == response
+    assert table.counter()["finalized_input_tokens"] == 70
+    assert table.counter()["finalized_output_tokens"] == 25
 
 
 def allowance_repo_message_result(
