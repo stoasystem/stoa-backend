@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-08-PLAN.md
-last_updated: "2026-07-24T11:16:44.419Z"
+stopped_at: Completed 476-16-PLAN.md
+last_updated: "2026-07-24T12:05:58.423Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 150
+  completed_plans: 151
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 11 of 29
+Plan: 12 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T11:16:44.412Z
-**Stopped At:** Completed 476-08-PLAN.md
+**Last Date:** 2026-07-24T12:05:58.417Z
+**Stopped At:** Completed 476-16-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -257,6 +257,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P22 | 10min | 1 tasks | 17 files |
 | Phase 476 P07 | 11min | 1 tasks | 3 files |
 | Phase 476 P08 | 7min | 1 tasks | 2 files |
+| Phase 476 P16 | 46min | 1 tasks | 5 files |
 
 ## Decisions
 
@@ -576,3 +577,6 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Reconciliation reuses the versioned checkout claim and conditional attachment boundary. — Expired leases recover once while active or stale leases cannot double mutate.
 - [Phase 476]: Checkout completion remains confirming until authoritative paid-invoice and active-subscription activation is recorded. — Browser and provider checkout state alone never activates access.
 - [Phase 476]: Billing support projection is a closed allowlist with suffix-only provider identity. — Keys, URLs, PII, full IDs, and provider exceptions remain private.
+- [Phase 476]: Count the configured EU inference profile through Bedrock Runtime using its derived foundation model ID while binding both identities in redacted evidence.
+- [Phase 476]: Never infer Mantle from a CRIS prefix or automatically fall back after Runtime failure; count capability must be explicit and fail closed.
+- [Phase 476]: Return validated provider content separately from ProviderUsageEvidence and keep allowance mutation outside ai_service.
