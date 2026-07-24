@@ -304,6 +304,7 @@ def _production_settings(**overrides) -> Settings:
         "cognito_access_client_ids": ["client-1"],
         "authorization_audit_active_key_id": "active-v2",
         "authorization_audit_active_key": _strong_audit_key(32),
+        "stripe_checkout_web_origins": ["https://app.stoaedu.ch"],
     }
     values.update(overrides)
     return Settings(**values)
