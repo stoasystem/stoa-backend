@@ -59,7 +59,7 @@ def _usage(*, counter_value: int = 1) -> dict[str, Any]:
         counter_value=counter_value,
         quantity=1,
         entitlement={
-            "effectivePlan": "free",
+            "effectivePlan": "free_trial",
             "source": "local",
             "limits": {"dailyAiQuestionLimit": 2},
         },
@@ -263,7 +263,7 @@ def test_arbitrary_caller_key_is_absent_from_every_admission_item() -> None:
         counter_value=1,
         quantity=1,
         entitlement={
-            "effectivePlan": "free",
+            "effectivePlan": "free_trial",
             "source": "local",
             "limits": {"dailyAiQuestionLimit": 2},
         },

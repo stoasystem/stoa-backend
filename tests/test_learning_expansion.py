@@ -61,7 +61,7 @@ def test_submit_question_accepts_foundation_subject_and_stores_topic_seeds(monke
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {"user_id": user_id, "subscription_tier": "free", "grade": "Grade 8", "language": "en"},
+        lambda user_id: {"user_id": user_id, "subscription_tier": "free_trial", "grade": "Grade 8", "language": "en"},
     )
     monkeypatch.setattr(
         questions.question_submission_repo,

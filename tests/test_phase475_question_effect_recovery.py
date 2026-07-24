@@ -411,7 +411,7 @@ def _patch_runtime(monkeypatch, table: EffectRecoveryTable) -> None:
         "get_user",
         lambda _student_id: {
             "user_id": STUDENT_ID,
-            "subscription_tier": "free",
+            "subscription_tier": "free_trial",
             "grade": "Sek1",
             "language": "de",
         },
@@ -420,7 +420,7 @@ def _patch_runtime(monkeypatch, table: EffectRecoveryTable) -> None:
         questions.entitlement_service,
         "resolve_student_entitlement",
         lambda *_args, **_kwargs: {
-            "effectivePlan": "free",
+            "effectivePlan": "free_trial",
             "source": "local",
             "limits": {"dailyAiQuestionLimit": 2},
             "blockingReason": None,

@@ -527,7 +527,9 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
 
     monkeypatch.setattr(conversations, "get_table", lambda: object())
     monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
-    monkeypatch.setattr(conversations, "_attachment_plan_for_student", lambda *_: "free")
+    monkeypatch.setattr(
+        conversations, "_attachment_plan_for_student", lambda *_: "free_trial"
+    )
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
     monkeypatch.setattr(conversations.time, "sleep", lambda *_: threading.Event().wait(0.01))
     monkeypatch.setattr(conversations.boto3, "client", lambda *_args, **_kwargs: object())
@@ -666,7 +668,9 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
     table = Table()
     monkeypatch.setattr(conversations, "get_table", lambda: table)
     monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
-    monkeypatch.setattr(conversations, "_attachment_plan_for_student", lambda *_: "free")
+    monkeypatch.setattr(
+        conversations, "_attachment_plan_for_student", lambda *_: "free_trial"
+    )
     monkeypatch.setattr(
         conversations,
         "_get_messages",
@@ -1279,7 +1283,9 @@ def test_regular_and_stream_message_use_identical_safe_attachment_summary(monkey
         lambda references, actor: calls.append((references, actor.user_id)) or [],
     )
     monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
-    monkeypatch.setattr(conversations, "_attachment_plan_for_student", lambda *_: "free")
+    monkeypatch.setattr(
+        conversations, "_attachment_plan_for_student", lambda *_: "free_trial"
+    )
     monkeypatch.setattr(
         conversations.attachment_service,
         "ensure_message_attachment_capacity",

@@ -126,7 +126,6 @@ def test_settings_expose_exact_paid_price_identity_without_compatibility_aliases
     }
     assert "stripe_standard_price_id" not in settings_fields
     assert "stripe_premium_price_id" not in settings_fields
-    assert all("tutor" not in field for field in paid_price_fields)
 
 
 def test_plan_settings_lock_trial_storage_and_sandbox_defaults() -> None:

@@ -99,7 +99,7 @@ def test_question_usage_event_is_privacy_safe_and_idempotent(monkeypatch):
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
 
     entitlement = {
-        "effectivePlan": "premium",
+        "effectivePlan": "family",
         "source": "provider_billing",
         "parentId": "parent-1",
         "limits": {"dailyAiQuestionLimit": 100},
@@ -142,7 +142,7 @@ def test_question_usage_event_is_privacy_safe_and_idempotent(monkeypatch):
     }
     assert "content" not in created
     assert "image_s3_key" not in created
-    assert created["entitlement_snapshot"]["effectivePlan"] == "premium"
+    assert created["entitlement_snapshot"]["effectivePlan"] == "family"
 
 
 def test_usage_action_taxonomy_covers_v5_11_actions_and_preserves_question_contract():
@@ -267,7 +267,7 @@ def test_reconciliation_reports_and_repairs_counter_mismatch(monkeypatch):
             counter_key="USAGE#student-1/QUESTION#2026-07-03",
             counter_value=index + 1,
             quantity=1,
-            entitlement={"effectivePlan": "free", "limits": {"dailyAiQuestionLimit": 2}},
+            entitlement={"effectivePlan": "free_trial", "limits": {"dailyAiQuestionLimit": 2}},
             created_at="2026-07-03T12:00:00+00:00",
         )
 
@@ -298,7 +298,7 @@ def test_reconciliation_explains_no_usage_without_marking_unreconciled(monkeypat
         lambda student_id, settings, student_profile=None: {
             "studentId": student_id,
             "parentId": "parent-1",
-            "effectivePlan": "free",
+            "effectivePlan": "free_trial",
             "source": "local",
             "billingState": "trial",
             "limits": {"dailyAiQuestionLimit": 2},
@@ -328,7 +328,7 @@ def test_reconciliation_explains_over_limit_counter(monkeypatch):
         lambda student_id, settings, student_profile=None: {
             "studentId": student_id,
             "parentId": "parent-1",
-            "effectivePlan": "free",
+            "effectivePlan": "free_trial",
             "source": "local",
             "billingState": "trial",
             "limits": {"dailyAiQuestionLimit": 2},
@@ -348,7 +348,7 @@ def test_reconciliation_explains_over_limit_counter(monkeypatch):
             counter_key="USAGE#student-1/QUESTION#2026-07-05",
             counter_value=index + 1,
             quantity=1,
-            entitlement={"effectivePlan": "free", "limits": {"dailyAiQuestionLimit": 2}, "parentId": "parent-1"},
+            entitlement={"effectivePlan": "free_trial", "limits": {"dailyAiQuestionLimit": 2}, "parentId": "parent-1"},
             created_at="2026-07-05T10:00:00+00:00",
         )
 
@@ -372,7 +372,7 @@ def test_parent_usage_summaries_use_active_child_bindings(monkeypatch):
         "student-1": {
             "user_id": "student-1",
             "role": "student",
-            "subscription_tier": "free",
+            "subscription_tier": "free_trial",
             "parent_id": "parent-1",
             "parent_binding_status": "active",
         }
@@ -393,7 +393,7 @@ def test_parent_usage_summaries_use_active_child_bindings(monkeypatch):
         lambda student_id, settings, student_profile=None: {
             "studentId": student_id,
             "parentId": "parent-1",
-            "effectivePlan": "standard",
+            "effectivePlan": "student",
             "source": "provider_billing",
             "billingState": "active",
             "limits": {"dailyAiQuestionLimit": 30},
@@ -430,7 +430,7 @@ def test_student_usage_summary_includes_multi_action_groups(monkeypatch):
         lambda student_id, settings, student_profile=None: {
             "studentId": student_id,
             "parentId": "parent-1",
-            "effectivePlan": "premium",
+            "effectivePlan": "family",
             "source": "provider_billing",
             "billingState": "active",
             "limits": {"dailyAiQuestionLimit": 100},
@@ -454,7 +454,7 @@ def test_student_usage_summary_includes_multi_action_groups(monkeypatch):
         counter_key="USAGE#student-1/QUESTION#2026-07-04",
         counter_value=1,
         quantity=1,
-        entitlement={"effectivePlan": "premium", "limits": {"dailyAiQuestionLimit": 100}, "parentId": "parent-1"},
+        entitlement={"effectivePlan": "family", "limits": {"dailyAiQuestionLimit": 100}, "parentId": "parent-1"},
         created_at="2026-07-04T10:00:00+00:00",
     )
     usage_ledger_service.record_usage_event(
@@ -551,7 +551,7 @@ def test_parent_child_usage_endpoint_is_privacy_safe(monkeypatch):
             "consumed": 1,
             "limit": 30,
             "remaining": 29,
-            "effectivePlan": "standard",
+            "effectivePlan": "student",
             "entitlementSource": "provider_billing",
             "billingState": "active",
             "reconciliation": {"status": "matched"},

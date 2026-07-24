@@ -122,6 +122,13 @@ def _settings(**overrides) -> Settings:
             authorization_audit_active_key="test-production-authorization-audit-key-32-bytes",
             stripe_checkout_web_origins=["https://app.stoaedu.ch"],
         )
+    if values.get("stripe_api_key"):
+        values.setdefault("stripe_student_price_id", "price_student_live")
+        values.setdefault(
+            "stripe_teacher_supported_price_id",
+            "price_teacher_supported_live",
+        )
+        values.setdefault("stripe_family_price_id", "price_family_live")
     return Settings(**values)
 
 
@@ -141,14 +148,14 @@ def _profiles():
             "user_id": "parent-1",
             "email": "parent@example.com",
             "role": "parent",
-            "subscription_tier": "free",
+            "subscription_tier": "free_trial",
             "version": 1,
         },
         "student-1": {
             "user_id": "student-1",
             "email": "student@example.com",
             "role": "student",
-            "subscription_tier": "free",
+            "subscription_tier": "free_trial",
             "parent_id": "parent-1",
             "parent_binding_status": "active",
             "version": 1,
@@ -157,7 +164,7 @@ def _profiles():
             "user_id": "admin-1",
             "email": "admin@example.com",
             "role": "admin",
-            "subscription_tier": "premium",
+            "subscription_tier": "family",
             "version": 1,
         },
     }
@@ -222,7 +229,7 @@ def _install_fakes(monkeypatch):
                 {
                     "user_id": user_id,
                     "role": "parent",
-                    "subscription_tier": "free",
+                    "subscription_tier": "free_trial",
                     "version": 1,
                 },
             )
@@ -321,8 +328,8 @@ def _put_active_billing(
         "SK": "SUMMARY",
         "entity_type": "subscription_billing",
         "parent_id": parent_id,
-        "subscription_tier": "premium",
-        "requested_tier": "premium",
+        "subscription_tier": "family",
+        "requested_tier": "family",
         "billing_provider": "stripe",
         "billing_mode": "live",
         "billing_status": "active",
@@ -388,7 +395,7 @@ def test_parent_account_operations_combines_billing_entitlement_usage_and_verifi
     assert body["parentId"] == "parent-1"
     assert body["billing"]["status"] == "active"
     assert body["children"][0]["studentId"] == "student-1"
-    assert body["children"][0]["entitlement"]["effectivePlan"] == "premium"
+    assert body["children"][0]["entitlement"]["effectivePlan"] == "family"
     assert body["children"][0]["usage"]["consumed"] == 2
     assert body["parent"]["verification"]["emailVerificationStatus"] == "verified"
     assert body["parent"]["verification"]["supportRecoveryState"] == "verified"
@@ -451,12 +458,12 @@ def test_parent_can_view_plan_options(monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["currentTier"] == "free"
-    assert body["plans"]["standard"]["dailyAiQuestionLimit"] == 30
+    assert body["currentTier"] == "free_trial"
+    assert body["plans"]["student"]["dailyAiQuestionLimit"] == 30
     assert body["pendingRequest"] is None
     assert body["billing"]["status"] == "none"
     assert body["effectiveEntitlements"][0]["studentId"] == "student-1"
-    assert body["effectiveEntitlements"][0]["effectivePlan"] == "free"
+    assert body["effectiveEntitlements"][0]["effectivePlan"] == "free_trial"
 
 
 def test_parent_can_create_subscription_request_once(monkeypatch):
@@ -465,19 +472,19 @@ def test_parent_can_create_subscription_request_once(monkeypatch):
 
     response = client.post(
         "/parents/me/subscription/requests",
-        json={"requestType": "upgrade", "requestedTier": "standard", "parentNote": "Please upgrade"},
+        json={"requestType": "upgrade", "requestedTier": "student", "parentNote": "Please upgrade"},
     )
 
     assert response.status_code == 201
     body = response.json()
     assert body["status"] == "requested"
     assert body["requestType"] == "upgrade"
-    assert body["requestedTier"] == "standard"
+    assert body["requestedTier"] == "student"
     assert body["history"][0]["eventType"] == "requested"
 
     duplicate = client.post(
         "/parents/me/subscription/requests",
-        json={"requestType": "upgrade", "requestedTier": "premium"},
+        json={"requestType": "upgrade", "requestedTier": "family"},
     )
     assert duplicate.status_code == 409
 
@@ -498,7 +505,7 @@ def test_admin_approve_does_not_mutate_tier_but_apply_does(monkeypatch):
 
     created = parent_client.post(
         "/parents/me/subscription/requests",
-        json={"requestType": "upgrade", "requestedTier": "standard"},
+        json={"requestType": "upgrade", "requestedTier": "student"},
     ).json()
     request_id = created["requestId"]
 
@@ -509,7 +516,7 @@ def test_admin_approve_does_not_mutate_tier_but_apply_does(monkeypatch):
 
     assert approved.status_code == 200
     assert approved.json()["status"] == "approved"
-    assert profiles["parent-1"]["subscription_tier"] == "free"
+    assert profiles["parent-1"]["subscription_tier"] == "free_trial"
 
     applied = admin_client.post(
         f"/admin/subscriptions/requests/{request_id}/apply",
@@ -518,7 +525,7 @@ def test_admin_approve_does_not_mutate_tier_but_apply_does(monkeypatch):
 
     assert applied.status_code == 200
     assert applied.json()["status"] == "applied"
-    assert profiles["parent-1"]["subscription_tier"] == "standard"
+    assert profiles["parent-1"]["subscription_tier"] == "student"
     assert table.items
 
 
@@ -529,12 +536,12 @@ def test_admin_list_filters_and_invalid_apply(monkeypatch):
 
     created = parent_client.post(
         "/parents/me/subscription/requests",
-        json={"requestType": "upgrade", "requestedTier": "standard"},
+        json={"requestType": "upgrade", "requestedTier": "student"},
     ).json()
 
     listed = admin_client.get(
         "/admin/subscriptions/requests",
-        params={"status": "requested", "requested_tier": "standard", "parent_id": "parent-1"},
+        params={"status": "requested", "requested_tier": "student", "parent_id": "parent-1"},
     )
     assert listed.status_code == 200
     assert listed.json()["count"] == 1
@@ -553,7 +560,7 @@ def test_admin_list_follows_scan_pagination(monkeypatch):
 
     created = parent_client.post(
         "/parents/me/subscription/requests",
-        json={"requestType": "upgrade", "requestedTier": "standard"},
+        json={"requestType": "upgrade", "requestedTier": "student"},
     ).json()
     summary = table.items[(f"SUBSCRIPTION_REQUEST#{created['requestId']}", "SUMMARY")]
     table.scan_pages = [
@@ -574,7 +581,7 @@ def test_parent_pending_request_uses_open_guard_not_scan(monkeypatch):
 
     created = client.post(
         "/parents/me/subscription/requests",
-        json={"requestType": "upgrade", "requestedTier": "standard"},
+        json={"requestType": "upgrade", "requestedTier": "student"},
     ).json()
     table.scan_pages = [[]]
 
@@ -591,7 +598,7 @@ def test_request_history_is_isolated_by_request_id(monkeypatch):
 
     first = parent_client.post(
         "/parents/me/subscription/requests",
-        json={"requestType": "upgrade", "requestedTier": "standard"},
+        json={"requestType": "upgrade", "requestedTier": "student"},
     ).json()
     admin_client.patch(
         f"/admin/subscriptions/requests/{first['requestId']}",
@@ -599,7 +606,7 @@ def test_request_history_is_isolated_by_request_id(monkeypatch):
     )
     second = parent_client.post(
         "/parents/me/subscription/requests",
-        json={"requestType": "upgrade", "requestedTier": "premium"},
+        json={"requestType": "upgrade", "requestedTier": "family"},
     ).json()
 
     response = admin_client.get(f"/admin/subscriptions/requests/{first['requestId']}")
@@ -617,7 +624,7 @@ def test_parent_can_create_checkout_session_and_admin_can_inspect_billing(monkey
 
     response = client.post(
         "/parents/me/subscription/checkout",
-        json={"requestedTier": "standard"},
+        json={"requestedTier": "student"},
     )
 
     assert response.status_code == 201
@@ -632,7 +639,7 @@ def test_parent_can_create_checkout_session_and_admin_can_inspect_billing(monkey
 
     subscription = client.get("/parents/me/subscription").json()
     assert subscription["billing"]["status"] == "checkout_pending"
-    assert subscription["billing"]["requestedTier"] == "standard"
+    assert subscription["billing"]["requestedTier"] == "student"
     assert subscription["effectiveEntitlements"][0]["blockingReason"] == "checkout_pending"
 
     admin_response = admin_client.get("/admin/subscriptions/billing")
@@ -649,15 +656,16 @@ def test_production_checkout_requires_explicit_live_enablement(monkeypatch):
         environment="production",
         stripe_api_key="sk_live_ready",
         stripe_webhook_secret="whsec_live",
-        stripe_standard_price_id="price_standard_live",
-        stripe_premium_price_id="price_premium_live",
+        stripe_student_price_id="price_student_live",
+        stripe_teacher_supported_price_id="price_teacher_supported_live",
+        stripe_family_price_id="price_family_live",
         stripe_live_charges_enabled=False,
     )
     client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}, settings))
 
     response = client.post(
         "/parents/me/subscription/checkout",
-        json={"requestedTier": "standard"},
+        json={"requestedTier": "student"},
     )
 
     assert response.status_code == 409
@@ -689,8 +697,9 @@ def test_live_checkout_includes_twint_when_capability_is_confirmed(monkeypatch):
         environment="production",
         stripe_api_key="sk_live_ready",
         stripe_webhook_secret="whsec_live",
-        stripe_standard_price_id="price_standard_live",
-        stripe_premium_price_id="price_premium_live",
+        stripe_student_price_id="price_student_live",
+        stripe_teacher_supported_price_id="price_teacher_supported_live",
+        stripe_family_price_id="price_family_live",
         stripe_live_charges_enabled=True,
         stripe_twint_capability_confirmed=True,
     )
@@ -698,7 +707,7 @@ def test_live_checkout_includes_twint_when_capability_is_confirmed(monkeypatch):
 
     response = client.post(
         "/parents/me/subscription/checkout",
-        json={"requestedTier": "standard"},
+        json={"requestedTier": "student"},
     )
 
     assert response.status_code == 201
@@ -706,7 +715,7 @@ def test_live_checkout_includes_twint_when_capability_is_confirmed(monkeypatch):
     assert captured["payment_method_types"] == ["card", "twint"]
     assert "customer" not in captured
     assert captured["subscription_data"] == {
-        "metadata": {"stoa_parent_id": "parent-1", "requested_tier": "standard"}
+        "metadata": {"stoa_parent_id": "parent-1", "requested_tier": "student"}
     }
 
 
@@ -717,14 +726,14 @@ def test_production_checkout_reports_missing_live_configuration(monkeypatch):
 
     response = client.post(
         "/parents/me/subscription/checkout",
-        json={"requestedTier": "standard"},
+        json={"requestedTier": "student"},
     )
 
     assert response.status_code == 503
     blockers = set(response.json()["detail"]["readiness"]["blockers"])
     assert "missing_stripe_api_key" in blockers
     assert "missing_stripe_webhook_secret" in blockers
-    assert "missing_standard_price_id" in blockers
+    assert "missing_student_price_id" in blockers
 
 
 def test_admin_provider_readiness_reports_missing_production_config(monkeypatch):
@@ -742,8 +751,9 @@ def test_admin_provider_readiness_reports_missing_production_config(monkeypatch)
     blockers = set(body["blockers"])
     assert "missing_stripe_api_key" in blockers
     assert "missing_stripe_webhook_secret" in blockers
-    assert "missing_standard_price_id" in blockers
-    assert "missing_premium_price_id" in blockers
+    assert "missing_student_price_id" in blockers
+    assert "missing_teacher_supported_price_id" in blockers
+    assert "missing_family_price_id" in blockers
     assert "missing_stripe_webhook_endpoint_url" in blockers
     assert body["credentials"]["apiKey"] == "missing"
 
@@ -755,8 +765,9 @@ def test_admin_provider_readiness_rejects_test_key_in_production(monkeypatch):
         environment="production",
         stripe_api_key="sk_test_not_live",
         stripe_webhook_secret="whsec_live",
-        stripe_standard_price_id="price_standard_live",
-        stripe_premium_price_id="price_premium_live",
+        stripe_student_price_id="price_student_live",
+        stripe_teacher_supported_price_id="price_teacher_supported_live",
+        stripe_family_price_id="price_family_live",
         stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
         stripe_live_charges_enabled=True,
     )
@@ -796,8 +807,9 @@ def test_admin_provider_readiness_reports_twint_pending(monkeypatch):
         environment="production",
         stripe_api_key="sk_live_ready",
         stripe_webhook_secret="whsec_live",
-        stripe_standard_price_id="price_standard_live",
-        stripe_premium_price_id="price_premium_live",
+        stripe_student_price_id="price_student_live",
+        stripe_teacher_supported_price_id="price_teacher_supported_live",
+        stripe_family_price_id="price_family_live",
         stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
         stripe_live_charges_enabled=False,
         stripe_twint_capability_confirmed=True,
@@ -813,8 +825,8 @@ def test_admin_provider_readiness_reports_twint_pending(monkeypatch):
     assert body["twint"]["providerCapability"] == "pending"
     assert body["twint"]["status"] == "pending"
     assert "twint_capability_pending" in body["blockers"]
-    assert body["prices"]["standard"]["currency"] == "CHF"
-    assert body["prices"]["standard"]["recurring"] is True
+    assert body["prices"]["student"]["currency"] == "CHF"
+    assert body["prices"]["student"]["recurring"] is True
 
 
 def test_admin_provider_readiness_redacts_provider_failures(monkeypatch):
@@ -834,8 +846,9 @@ def test_admin_provider_readiness_redacts_provider_failures(monkeypatch):
         environment="production",
         stripe_api_key="sk_live_secret_value",
         stripe_webhook_secret="whsec_secret_value",
-        stripe_standard_price_id="price_standard_live",
-        stripe_premium_price_id="price_premium_live",
+        stripe_student_price_id="price_student_live",
+        stripe_teacher_supported_price_id="price_teacher_supported_live",
+        stripe_family_price_id="price_family_live",
         stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
         stripe_live_charges_enabled=True,
         stripe_twint_capability_confirmed=True,
@@ -849,7 +862,7 @@ def test_admin_provider_readiness_redacts_provider_failures(monkeypatch):
     assert body["state"] == "provider_api_failed"
     assert body["checkoutAllowed"] is False
     assert "stripe_account_lookup_failed" in body["blockers"]
-    assert "standard_price_lookup_failed" in body["blockers"]
+    assert "student_price_lookup_failed" in body["blockers"]
     assert "sk_live_secret_value" not in response.text
     assert "whsec_secret_value" not in response.text
     assert "provider exploded" not in response.text
@@ -878,8 +891,9 @@ def test_admin_provider_readiness_reports_live_success(monkeypatch):
         environment="production",
         stripe_api_key="sk_live_ready",
         stripe_webhook_secret="whsec_live",
-        stripe_standard_price_id="price_standard_live",
-        stripe_premium_price_id="price_premium_live",
+        stripe_student_price_id="price_student_live",
+        stripe_teacher_supported_price_id="price_teacher_supported_live",
+        stripe_family_price_id="price_family_live",
         stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
         stripe_live_charges_enabled=True,
         stripe_twint_capability_confirmed=True,
@@ -899,8 +913,8 @@ def test_admin_provider_readiness_reports_live_success(monkeypatch):
     assert body["twint"]["constraints"]["currency"] == "CHF"
     assert body["twint"]["constraints"]["manualCaptureSupported"] is False
     assert body["twint"]["constraints"]["refundWindowDays"] == 180
-    assert body["prices"]["premium"]["currency"] == "CHF"
-    assert body["prices"]["premium"]["recurring"] is True
+    assert body["prices"]["family"]["currency"] == "CHF"
+    assert body["prices"]["family"]["recurring"] is True
     assert body["webhook"]["endpointMode"] == "https"
     assert body["finance"]["accountingExportAvailable"] is True
     assert body["blockers"] == []
@@ -1137,8 +1151,9 @@ def test_rollout_checkout_rollback_blocks_new_live_checkout(monkeypatch):
         environment="production",
         stripe_api_key="sk_live_ready",
         stripe_webhook_secret="whsec_live",
-        stripe_standard_price_id="price_standard_live",
-        stripe_premium_price_id="price_premium_live",
+        stripe_student_price_id="price_student_live",
+        stripe_teacher_supported_price_id="price_teacher_supported_live",
+        stripe_family_price_id="price_family_live",
         stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
         stripe_live_charges_enabled=True,
         stripe_twint_capability_confirmed=True,
@@ -1156,7 +1171,7 @@ def test_rollout_checkout_rollback_blocks_new_live_checkout(monkeypatch):
 
     response = parent_client.post(
         "/parents/me/subscription/checkout",
-        json={"requestedTier": "standard"},
+        json={"requestedTier": "student"},
     )
 
     assert response.status_code == 409
@@ -1240,8 +1255,9 @@ def test_provider_readiness_reports_webhook_last_observed_event(monkeypatch):
         environment="production",
         stripe_api_key="sk_live_ready",
         stripe_webhook_secret="whsec_live",
-        stripe_standard_price_id="price_standard_live",
-        stripe_premium_price_id="price_premium_live",
+        stripe_student_price_id="price_student_live",
+        stripe_teacher_supported_price_id="price_teacher_supported_live",
+        stripe_family_price_id="price_family_live",
         stripe_webhook_endpoint_url="https://api.stoaedu.ch/billing/webhooks/stripe",
         stripe_live_charges_enabled=True,
         stripe_twint_capability_confirmed=True,
@@ -1270,7 +1286,7 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
 
     checkout = parent_client.post(
         "/parents/me/subscription/checkout",
-        json={"requestedTier": "premium"},
+        json={"requestedTier": "family"},
     ).json()
     checkout_completed = {
         "id": "evt_checkout_completed_1",
@@ -1283,7 +1299,7 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
                 "livemode": False,
                 "customer": "cus_test_parent",
                 "subscription": "sub_test_parent",
-                "metadata": {"requested_tier": "premium"},
+                "metadata": {"requested_tier": "family"},
                 "payment_method_types": ["card", "twint"],
             }
         },
@@ -1300,7 +1316,7 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     assert checkout_response.json()["billingStatus"] == "checkout_pending"
     pending_status = parent_client.get("/parents/me/subscription/billing").json()
     assert pending_status["status"] == "checkout_pending"
-    assert pending_status["subscriptionTier"] == "free"
+    assert pending_status["subscriptionTier"] == "free_trial"
     assert pending_status["paymentMethodType"] == "unknown"
     assert pending_status["dunning"]["state"] == "checkout_pending"
 
@@ -1360,7 +1376,7 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     assert duplicate.json()["deduplicated"] is True
     billing_status = parent_client.get("/parents/me/subscription/billing").json()
     assert billing_status["status"] == "active"
-    assert billing_status["subscriptionTier"] == "premium"
+    assert billing_status["subscriptionTier"] == "family"
     assert billing_status["providerSubscriptionId"] == "sub_test_parent"
     assert billing_status["providerLivemode"] is False
     assert billing_status["paymentMethodType"] == "twint"
@@ -1386,7 +1402,7 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     assert webhook_events[0]["providerLivemode"] is False
     assert webhook_events[0]["processingResult"] == "processed"
     assert any(event["processingResult"] == "deduplicated" for event in webhook_events)
-    assert profiles["parent-1"]["subscription_tier"] == "premium"
+    assert profiles["parent-1"]["subscription_tier"] == "family"
     assert table.items[("BILLING_PROVIDER_LOOKUP#stripe#subscription#sub_test_parent", "SUMMARY")][
         "parent_id"
     ] == "parent-1"
@@ -1435,9 +1451,9 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     assert stale_response.json()["billingStatus"] == "active"
     assert stale_response.json()["processingResult"] == "stale_ignored"
     assert stale_status["status"] == "active"
-    assert stale_status["subscriptionTier"] == "premium"
+    assert stale_status["subscriptionTier"] == "family"
     assert stale_events[0]["processingResult"] == "stale_ignored"
-    assert profiles["parent-1"]["subscription_tier"] == "premium"
+    assert profiles["parent-1"]["subscription_tier"] == "family"
     support_evidence = admin_client.get("/admin/subscriptions/billing/parent-1").json()["supportEvidence"]
     assert support_evidence["lifecycle"]["status"] == "active"
     assert support_evidence["lifecycle"]["source"] == "provider_billing"
@@ -1481,7 +1497,7 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
 
     replacement = parent_client.post(
         "/parents/me/subscription/checkout",
-        json={"requestedTier": "standard"},
+        json={"requestedTier": "student"},
     ).json()
     expired = {
         "id": "evt_checkout_expired_1",
@@ -1493,7 +1509,7 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
                 "object": "checkout.session",
                 "livemode": False,
                 "customer": "cus_test_parent",
-                "metadata": {"requested_tier": "standard"},
+                "metadata": {"requested_tier": "student"},
             }
         },
     }
@@ -1508,8 +1524,8 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     assert expired_response.json()["billingStatus"] == "active"
     preserved_status = parent_client.get("/parents/me/subscription/billing").json()
     assert preserved_status["status"] == "active"
-    assert preserved_status["subscriptionTier"] == "premium"
-    assert profiles["parent-1"]["subscription_tier"] == "premium"
+    assert preserved_status["subscriptionTier"] == "family"
+    assert profiles["parent-1"]["subscription_tier"] == "family"
 
 
 def test_payment_failed_projects_dunning_and_twint_lifecycle(monkeypatch):
@@ -1521,7 +1537,7 @@ def test_payment_failed_projects_dunning_and_twint_lifecycle(monkeypatch):
 
     checkout = parent_client.post(
         "/parents/me/subscription/checkout",
-        json={"requestedTier": "standard"},
+        json={"requestedTier": "student"},
     ).json()
     checkout_completed = {
         "id": "evt_checkout_completed_failed_path",
@@ -1533,7 +1549,7 @@ def test_payment_failed_projects_dunning_and_twint_lifecycle(monkeypatch):
                 "object": "checkout.session",
                 "customer": "cus_test_parent_failed",
                 "subscription": "sub_test_parent_failed",
-                "metadata": {"requested_tier": "standard"},
+                "metadata": {"requested_tier": "student"},
             }
         },
     }
@@ -1668,7 +1684,7 @@ def test_manual_subscription_apply_sets_manual_override_billing(monkeypatch):
 
     created = parent_client.post(
         "/parents/me/subscription/requests",
-        json={"requestType": "upgrade", "requestedTier": "standard"},
+        json={"requestType": "upgrade", "requestedTier": "student"},
     ).json()
     admin_client.patch(
         f"/admin/subscriptions/requests/{created['requestId']}",
@@ -1682,7 +1698,7 @@ def test_manual_subscription_apply_sets_manual_override_billing(monkeypatch):
     assert applied.status_code == 200
     billing_status = admin_client.get("/admin/subscriptions/billing/parent-1").json()
     assert billing_status["status"] == "manual_override"
-    assert billing_status["subscriptionTier"] == "standard"
+    assert billing_status["subscriptionTier"] == "student"
     assert billing_status["manualOverrideSource"] == created["requestId"]
-    assert billing_status["effectiveEntitlements"][0]["effectivePlan"] == "standard"
+    assert billing_status["effectiveEntitlements"][0]["effectivePlan"] == "student"
     assert billing_status["effectiveEntitlements"][0]["source"] == "manual_override"

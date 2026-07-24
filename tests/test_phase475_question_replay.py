@@ -49,7 +49,7 @@ def _profile_and_entitlement(monkeypatch) -> None:
         "get_user",
         lambda _student_id: {
             "user_id": "student-1",
-            "subscription_tier": "free",
+            "subscription_tier": "free_trial",
             "grade": "Sek1",
             "language": "de",
         },
@@ -58,7 +58,7 @@ def _profile_and_entitlement(monkeypatch) -> None:
         questions.entitlement_service,
         "resolve_student_entitlement",
         lambda *_args, **_kwargs: {
-            "effectivePlan": "free",
+            "effectivePlan": "free_trial",
             "source": "local",
             "limits": {"dailyAiQuestionLimit": 2},
             "blockingReason": None,
@@ -195,7 +195,7 @@ def test_invalid_idempotency_input_is_redacted_and_effect_free(
         "resolve_student_entitlement",
         lambda *_args, **_kwargs: observed(
             "entitlement",
-            {"effectivePlan": "free", "limits": {"dailyAiQuestionLimit": 2}},
+            {"effectivePlan": "free_trial", "limits": {"dailyAiQuestionLimit": 2}},
         ),
     )
     monkeypatch.setattr(

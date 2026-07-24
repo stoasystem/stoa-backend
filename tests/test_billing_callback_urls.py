@@ -240,7 +240,7 @@ def test_checkout_service_and_route_reject_browser_callback_authority() -> None:
     with pytest.raises(ValidationError):
         ParentCheckoutSessionCreate.model_validate(
             {
-                "requestedTier": "standard",
+                "requestedTier": "student",
                 "successUrl": "https://evil.example",
                 "cancelUrl": "https://evil.example",
             }

@@ -104,9 +104,10 @@ def test_upload_contract_constants_are_locked() -> None:
 @pytest.mark.parametrize(
     "tier,expected",
     [
-        ("free", FREE_STORAGE_BYTES),
-        ("standard", PAID_STORAGE_BYTES),
-        ("premium", PAID_STORAGE_BYTES),
+        ("free_trial", FREE_STORAGE_BYTES),
+        ("student", PAID_STORAGE_BYTES),
+        ("teacher_supported", PAID_STORAGE_BYTES),
+        ("family", PAID_STORAGE_BYTES),
     ],
 )
 def test_effective_entitlement_contract_includes_attachment_storage(
@@ -425,9 +426,10 @@ def test_gateway_issuance_is_owner_bound_opaque_and_multipart_private() -> None:
 
 
 def test_storage_quota_uses_authoritative_entitlement_tiers() -> None:
-    assert storage_limit_for_entitlement("free") == FREE_STORAGE_BYTES
-    assert storage_limit_for_entitlement("standard") == PAID_STORAGE_BYTES
-    assert storage_limit_for_entitlement("premium") == PAID_STORAGE_BYTES
+    assert storage_limit_for_entitlement("free_trial") == FREE_STORAGE_BYTES
+    assert storage_limit_for_entitlement("student") == PAID_STORAGE_BYTES
+    assert storage_limit_for_entitlement("teacher_supported") == PAID_STORAGE_BYTES
+    assert storage_limit_for_entitlement("family") == PAID_STORAGE_BYTES
 
 
 def _pending_upload(owner: str = "student-1", expected_size: int = 3) -> dict:
@@ -1649,7 +1651,7 @@ def test_question_fresh_upload_reservation_and_commit_are_conditional_and_atomic
     prepared = reserve_question_attachment(
         AttachmentReference(uploadId="upload-1"),
         _student_actor(),
-        effective_plan="free",
+        effective_plan="free_trial",
         now=datetime(2026, 7, 16, tzinfo=timezone.utc),
         repository=repository,
     )
@@ -1664,7 +1666,7 @@ def test_question_fresh_upload_reservation_and_commit_are_conditional_and_atomic
         question=question,
         prepared=prepared,
         actor=_student_actor(),
-        effective_plan="free",
+        effective_plan="free_trial",
         now=datetime(2026, 7, 16, tzinfo=timezone.utc),
         repository=repository,
     )
@@ -1704,7 +1706,7 @@ def test_question_saved_image_reuse_has_no_storage_charge() -> None:
     prepared = reserve_question_attachment(
         AttachmentReference(attachmentId="attachment-saved"),
         _student_actor(),
-        effective_plan="free",
+        effective_plan="free_trial",
         repository=repository,
     )
     commit_question_with_attachment(
@@ -1716,7 +1718,7 @@ def test_question_saved_image_reuse_has_no_storage_charge() -> None:
         },
         prepared=prepared,
         actor=_student_actor(),
-        effective_plan="free",
+        effective_plan="free_trial",
         repository=repository,
     )
     operations = repository.transactions[0]
@@ -1752,7 +1754,7 @@ def test_question_missing_foreign_reused_and_non_image_fail_before_effects() -> 
             reserve_question_attachment(
                 reference,
                 _student_actor(),
-                effective_plan="free",
+                effective_plan="free_trial",
                 now=ATTACHMENT_TEST_NOW,
                 repository=repository,
             )
@@ -1767,7 +1769,7 @@ def test_question_transient_reservation_release_preserves_original_expiry() -> N
     prepared = reserve_question_attachment(
         AttachmentReference(uploadId="upload-1"),
         _student_actor(),
-        effective_plan="free",
+        effective_plan="free_trial",
         now=datetime(2026, 7, 16, tzinfo=timezone.utc),
         repository=repository,
     )
@@ -1874,7 +1876,7 @@ def test_fresh_and_reused_message_attachments_share_one_atomic_transaction() -> 
         conversation_id="conv-1",
         actor=_student_actor(),
         prepared=prepared,
-        effective_plan="free",
+        effective_plan="free_trial",
         now=datetime(2026, 7, 16, tzinfo=timezone.utc),
         repository=repository,
     )
@@ -2214,7 +2216,7 @@ def test_transaction_quota_race_dependency_cancellation_is_zero_effect_and_stabl
                 },
                 prepared=prepared,
                 actor=_student_actor(),
-                effective_plan="free",
+                effective_plan="free_trial",
                 now=ATTACHMENT_TEST_NOW,
                 repository=repository,
             )
@@ -2237,7 +2239,7 @@ def test_transaction_quota_race_dependency_cancellation_is_zero_effect_and_stabl
                 conversation_id="conv-zero-effect",
                 actor=_student_actor(),
                 prepared=prepared,
-                effective_plan="free",
+                effective_plan="free_trial",
                 now=ATTACHMENT_TEST_NOW,
                 repository=repository,
             )
@@ -2275,7 +2277,7 @@ def test_saved_attachment_reuse_does_not_mutate_storage_usage() -> None:
         conversation_id="other",
         actor=_student_actor(),
         prepared=prepared,
-        effective_plan="free",
+        effective_plan="free_trial",
         repository=repository,
     )
     assert all(
@@ -2303,7 +2305,7 @@ def test_deterministic_fresh_attachment_ids_preserve_exact_order_and_keys() -> N
         conversation_id="conv-deterministic",
         actor=_student_actor(),
         prepared=[("upload", first), ("attachment", saved), ("upload", second)],
-        effective_plan="free",
+        effective_plan="free_trial",
         deterministic_attachment_ids=expected,
         now=ATTACHMENT_TEST_NOW,
         repository=repository,
@@ -2364,7 +2366,7 @@ def test_deterministic_fresh_attachment_id_cardinality_fails_before_effects(
             conversation_id="conv-cardinality",
             actor=_student_actor(),
             prepared=[("upload", repository.uploads["upload-1"])],
-            effective_plan="free",
+            effective_plan="free_trial",
             deterministic_attachment_ids=values,
             repository=repository,
         )
@@ -2385,7 +2387,7 @@ def test_saved_reuse_consumes_no_deterministic_fresh_id() -> None:
         conversation_id="c",
         actor=_student_actor(),
         prepared=[("attachment", saved), ("upload", repository.uploads["upload-1"])],
-        effective_plan="free",
+        effective_plan="free_trial",
         deterministic_attachment_ids=["only-fresh-id"],
         now=ATTACHMENT_TEST_NOW,
         repository=repository,
@@ -2410,7 +2412,7 @@ def test_lost_transaction_retry_rebuilds_identical_attachment_and_association_ke
                 conversation_id="c",
                 actor=_student_actor(),
                 prepared=[("upload", repository.uploads["upload-1"])],
-                effective_plan="free",
+                effective_plan="free_trial",
                 deterministic_attachment_ids=["command-derived-exact"],
                 now=fixed_now,
                 repository=repository,

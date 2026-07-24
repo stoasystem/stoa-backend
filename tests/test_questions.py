@@ -244,7 +244,7 @@ def _patch_question_submit_dependencies(monkeypatch) -> None:
         "get_user",
         lambda user_id: {
             "user_id": user_id,
-            "subscription_tier": "free",
+            "subscription_tier": "free_trial",
             "grade": "Sek1",
             "language": "de",
         },
@@ -253,7 +253,7 @@ def _patch_question_submit_dependencies(monkeypatch) -> None:
         questions.entitlement_service,
         "resolve_student_entitlement",
         lambda student_id, settings, student_profile=None: {
-            "effectivePlan": "free",
+            "effectivePlan": "free_trial",
             "limits": {"dailyAiQuestionLimit": 2},
             "blockingReason": None,
         },
@@ -285,7 +285,7 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
         "get_user",
         lambda user_id: {
             "user_id": user_id,
-            "subscription_tier": "free",
+            "subscription_tier": "free_trial",
             "grade": "Sek1",
             "language": "de",
         },
@@ -294,7 +294,7 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
         questions.entitlement_service,
         "resolve_student_entitlement",
         lambda student_id, settings, student_profile=None: {
-            "effectivePlan": "free",
+            "effectivePlan": "free_trial",
             "limits": {"dailyAiQuestionLimit": settings.free_tier_daily_question_limit},
             "blockingReason": None,
         },
@@ -357,7 +357,7 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
     assert stored["ocr_text"] is None
     assert stored["original_content"] == "Please solve the image"
     assert stored["corrected_text"] == "Solve 2x + 4 = 10"
-    assert stored["entitlement"]["effectivePlan"] == "free"
+    assert stored["entitlement"]["effectivePlan"] == "free_trial"
     assert stored["status"] == "pending"
 
 
@@ -367,7 +367,7 @@ def test_submit_question_appends_ocr_text_when_no_correction(monkeypatch):
         "get_user",
         lambda user_id: {
             "user_id": user_id,
-            "subscription_tier": "free",
+            "subscription_tier": "free_trial",
             "grade": "Sek1",
             "language": "de",
         },
@@ -376,7 +376,7 @@ def test_submit_question_appends_ocr_text_when_no_correction(monkeypatch):
         questions.entitlement_service,
         "resolve_student_entitlement",
         lambda student_id, settings, student_profile=None: {
-            "effectivePlan": "free",
+            "effectivePlan": "free_trial",
             "limits": {"dailyAiQuestionLimit": settings.free_tier_daily_question_limit},
             "blockingReason": None,
         },
@@ -518,16 +518,16 @@ def test_get_question_hides_private_image_key(monkeypatch):
 
 def test_question_limit_uses_subscription_tier_default():
     settings = _settings()
-    assert questions._question_limit("free", settings) == 2
+    assert questions._question_limit("free_trial", settings) == 2
 
 
 def test_question_limit_uses_effective_entitlement():
     settings = _settings()
     assert questions._question_limit(
-        "free",
+        "free_trial",
         settings,
         entitlement={
-            "effectivePlan": "premium",
+            "effectivePlan": "family",
             "limits": {"dailyAiQuestionLimit": 100},
             "blockingReason": None,
         },
@@ -536,7 +536,7 @@ def test_question_limit_uses_effective_entitlement():
 
 def test_question_limit_uses_configured_tier_when_entitlement_limit_absent():
     settings = _settings()
-    assert questions._question_limit("standard", settings, entitlement={}) == 30
+    assert questions._question_limit("student", settings, entitlement={}) == 30
 
 
 def test_record_daily_question_usage_returns_none_on_condition_failure(monkeypatch):
@@ -560,7 +560,7 @@ def test_submit_question_records_privacy_safe_usage_ledger_event(monkeypatch):
         "get_user",
         lambda user_id: {
             "user_id": user_id,
-            "subscription_tier": "free",
+            "subscription_tier": "free_trial",
             "grade": "Sek1",
             "language": "de",
         },
@@ -569,7 +569,7 @@ def test_submit_question_records_privacy_safe_usage_ledger_event(monkeypatch):
         questions.entitlement_service,
         "resolve_student_entitlement",
         lambda student_id, settings, student_profile=None: {
-            "effectivePlan": "premium",
+            "effectivePlan": "family",
             "source": "provider_billing",
             "limits": {"dailyAiQuestionLimit": settings.premium_tier_daily_question_limit},
             "parentId": "parent-1",
@@ -613,8 +613,8 @@ def test_submit_question_records_privacy_safe_usage_ledger_event(monkeypatch):
         )
     )
     assert "idempotency_key" not in ledger_calls[0]
-    assert ledger_calls[0]["effective_plan"] == "premium"
-    assert ledger_calls[0]["entitlement_snapshot"]["effectivePlan"] == "premium"
+    assert ledger_calls[0]["effective_plan"] == "family"
+    assert ledger_calls[0]["entitlement_snapshot"]["effectivePlan"] == "family"
 
 
 def test_submit_question_idempotent_retry_without_question_does_not_increment_counter(monkeypatch):
@@ -625,7 +625,7 @@ def test_submit_question_idempotent_retry_without_question_does_not_increment_co
         "get_user",
         lambda user_id: {
             "user_id": user_id,
-            "subscription_tier": "free",
+            "subscription_tier": "free_trial",
             "grade": "Sek1",
             "language": "de",
         },
@@ -634,7 +634,7 @@ def test_submit_question_idempotent_retry_without_question_does_not_increment_co
         questions.entitlement_service,
         "resolve_student_entitlement",
         lambda student_id, settings, student_profile=None: {
-            "effectivePlan": "free",
+            "effectivePlan": "free_trial",
             "limits": {"dailyAiQuestionLimit": settings.free_tier_daily_question_limit},
             "blockingReason": None,
         },
@@ -682,7 +682,7 @@ def test_submit_question_rejects_mismatched_idempotent_retry_without_counter(mon
         "get_user",
         lambda user_id: {
             "user_id": user_id,
-            "subscription_tier": "free",
+            "subscription_tier": "free_trial",
             "grade": "Sek1",
             "language": "de",
         },
@@ -691,7 +691,7 @@ def test_submit_question_rejects_mismatched_idempotent_retry_without_counter(mon
         questions.entitlement_service,
         "resolve_student_entitlement",
         lambda student_id, settings, student_profile=None: {
-            "effectivePlan": "free",
+            "effectivePlan": "free_trial",
             "limits": {"dailyAiQuestionLimit": settings.free_tier_daily_question_limit},
             "blockingReason": None,
         },
@@ -935,7 +935,7 @@ def test_idempotency_key_cannot_be_rebound_to_another_attachment(monkeypatch):
         "get_user",
         lambda user_id: {
             "user_id": user_id,
-            "subscription_tier": "free",
+            "subscription_tier": "free_trial",
             "grade": "Sek1",
             "language": "de",
         },
@@ -944,7 +944,7 @@ def test_idempotency_key_cannot_be_rebound_to_another_attachment(monkeypatch):
         questions.entitlement_service,
         "resolve_student_entitlement",
         lambda student_id, settings, student_profile=None: {
-            "effectivePlan": "free",
+            "effectivePlan": "free_trial",
             "limits": {"dailyAiQuestionLimit": 2},
         },
     )
@@ -1075,7 +1075,7 @@ def test_submit_question_precommit_failure_has_no_legacy_partial_writes(
         "get_user",
         lambda user_id: {
             "user_id": user_id,
-            "subscription_tier": "free",
+            "subscription_tier": "free_trial",
             "grade": "Sek1",
             "language": "de",
         },
@@ -1084,7 +1084,7 @@ def test_submit_question_precommit_failure_has_no_legacy_partial_writes(
         questions.entitlement_service,
         "resolve_student_entitlement",
         lambda student_id, settings, student_profile=None: {
-            "effectivePlan": "free",
+            "effectivePlan": "free_trial",
             "source": "local",
             "limits": {"dailyAiQuestionLimit": settings.free_tier_daily_question_limit},
             "blockingReason": None,
