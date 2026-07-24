@@ -2,10 +2,10 @@
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Any
+from typing import Annotated, Any
 
 from boto3.dynamodb.conditions import Attr, Key
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.config import Settings, get_settings
@@ -13,6 +13,7 @@ from stoa.db.dynamodb import get_table
 from stoa.db.repositories import practice_repo, question_repo, report_repo, user_repo
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
+from stoa.models.billing import PurchasablePlanId
 from stoa.models.user import SubscriptionTier
 from stoa.security.authorization import (
     AuthorizationAction,
@@ -226,22 +227,26 @@ class ParentSubscriptionResponse(BaseModel):
     effectiveEntitlements: list[dict[str, Any]] = Field(default_factory=list)
 
 
-class ParentCheckoutSessionCreate(BaseModel):
+class ParentCheckoutCommandCreate(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
-    requested_tier: SubscriptionTier = Field(..., alias="requestedTier")
+    plan: PurchasablePlanId
+    beneficiary_ids: tuple[str, ...] = Field(
+        ...,
+        alias="beneficiaryIds",
+        min_length=1,
+        max_length=3,
+    )
 
 
-class ParentCheckoutSessionResponse(BaseModel):
-    parentId: str
+class ParentCheckoutCommandResponse(BaseModel):
+    checkoutRef: str
+    commandState: str
     checkoutSessionId: str
     checkoutUrl: str
-    provider: str
-    mode: str
-    requestedTier: str
-    billingStatus: str
-    readiness: dict[str, Any] = Field(default_factory=dict)
-    twint: dict[str, Any] = Field(default_factory=dict)
+    safeActions: list[str]
+    targetPlan: PurchasablePlanId
+    beneficiaries: list[str]
 
 
 class ParentBillingResponse(BaseModel):
@@ -723,18 +728,29 @@ async def get_my_subscription(
 
 @router.post(
     "/me/subscription/checkout",
-    response_model=ParentCheckoutSessionResponse,
+    response_model=ParentCheckoutCommandResponse,
     status_code=201,
 )
 async def create_my_subscription_checkout(
-    body: ParentCheckoutSessionCreate,
+    body: ParentCheckoutCommandCreate,
+    idempotency_key: Annotated[
+        str,
+        Header(
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[\x21-\x7e]+$",
+        ),
+    ],
     actor: Actor = Depends(_parent_account_create),
     settings: Settings = Depends(get_settings),
 ):
-    """Create a provider checkout session for the authenticated parent."""
-    return subscription_service.create_checkout_session(
+    """Create or resume one durable sandbox checkout command."""
+    return subscription_service.create_or_resume_checkout_command(
         parent_id=actor.user_id,
-        requested_tier=body.requested_tier.value,
+        idempotency_key=idempotency_key,
+        plan=body.plan.value,
+        beneficiary_ids=body.beneficiary_ids,
         settings=settings,
     )
 

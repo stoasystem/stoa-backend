@@ -21,7 +21,12 @@ from fastapi import HTTPException
 
 from stoa.config import Settings
 from stoa.db.dynamodb import get_table
-from stoa.db.repositories import account_deletion_repo, user_repo
+from stoa.db.repositories import account_deletion_repo, checkout_command_repo, user_repo
+from stoa.models.billing import (
+    CheckoutCommandState,
+    CheckoutIntent,
+    PurchasablePlanId,
+)
 from stoa.models.user import SubscriptionTier
 from stoa.services import entitlement_service, notification_service
 from stoa.services.billing_callback_service import build_checkout_return_urls
@@ -233,111 +238,336 @@ def get_parent_subscription(parent_id: str, settings: Settings | None = None) ->
     }
 
 
-def create_checkout_session(
+CHECKOUT_PRICE_CATALOG_VERSION = 1
+CHECKOUT_PLAN_VERSION = 1
+CHECKOUT_PROVIDER_LEASE_SECONDS = 30
+CHECKOUT_REPLAY_POLL_ATTEMPTS = 50
+CHECKOUT_REPLAY_POLL_SECONDS = 0.005
+
+
+def _checkout_http_error(
+    *,
+    status_code: int,
+    code: str,
+    message: str,
+) -> HTTPException:
+    return HTTPException(
+        status_code=status_code,
+        detail={"code": code, "message": message},
+    )
+
+
+def _require_checkout_beneficiaries(
     *,
     parent_id: str,
-    requested_tier: str,
+    parent: Mapping[str, object],
+    plan: PurchasablePlanId,
+    beneficiary_ids: tuple[str, ...],
+) -> tuple[str, ...]:
+    if (
+        len(set(beneficiary_ids)) != len(beneficiary_ids)
+        or not beneficiary_ids
+        or (plan is PurchasablePlanId.FAMILY and len(beneficiary_ids) > 3)
+        or (
+            plan in {
+                PurchasablePlanId.STUDENT,
+                PurchasablePlanId.TEACHER_SUPPORTED,
+            }
+            and len(beneficiary_ids) != 1
+        )
+    ):
+        raise _checkout_http_error(
+            status_code=400,
+            code="checkout_beneficiary_cardinality",
+            message="The selected plan requires a different beneficiary count.",
+        )
+    if (
+        parent.get("user_id") != parent_id
+        or parent.get("role") != "parent"
+        or parent.get("account_status") != "active"
+    ):
+        raise _checkout_http_error(
+            status_code=409,
+            code="checkout_parent_inactive",
+            message="Checkout is not available for this account.",
+        )
+    for student_id in beneficiary_ids:
+        student = user_repo.get_user(student_id)
+        forward = user_repo.get_parent_student_binding(parent_id, student_id)
+        reverse = user_repo.get_student_parent_binding(student_id, parent_id)
+        expected = {
+            "parent_id": parent_id,
+            "student_id": student_id,
+            "relationship": "child",
+            "status": "active",
+        }
+        if (
+            student is None
+            or student.get("user_id") != student_id
+            or student.get("role") != "student"
+            or student.get("account_status") != "active"
+            or forward is None
+            or reverse is None
+            or any(forward.get(field) != value for field, value in expected.items())
+            or any(reverse.get(field) != value for field, value in expected.items())
+        ):
+            raise _checkout_http_error(
+                status_code=409,
+                code="checkout_beneficiary_invalid",
+                message="One or more selected beneficiaries are unavailable.",
+            )
+    return tuple(sorted(beneficiary_ids))
+
+
+def _require_sandbox_checkout_configuration(
+    *,
+    plan: PurchasablePlanId,
+    settings: Settings,
+) -> str:
+    api_key = settings.stripe_api_key.strip()
+    price_id = _price_id_for_tier(plan.value, settings).strip()
+    if (
+        not api_key.startswith("sk_test_")
+        or not price_id.startswith("price_")
+        or price_id.startswith("price_live_")
+        or "_live" in price_id.lower()
+    ):
+        raise _checkout_http_error(
+            status_code=503,
+            code="checkout_sandbox_required",
+            message="Sandbox checkout is not configured.",
+        )
+    return price_id
+
+
+def _attached_checkout_response(
+    command: Mapping[str, object] | None,
+) -> dict[str, Any] | None:
+    if (
+        command is None
+        or command.get("provider_effect_status") != "session_attached"
+        or not isinstance(command.get("checkout_ref"), str)
+        or not isinstance(command.get("provider_session_id"), str)
+        or not isinstance(command.get("provider_session_url"), str)
+        or not isinstance(command.get("plan_id"), str)
+        or not isinstance(command.get("beneficiary_ids"), list)
+    ):
+        return None
+    try:
+        state = CheckoutCommandState(str(command.get("command_state") or ""))
+    except ValueError:
+        return None
+    if state is not CheckoutCommandState.PROVIDER_SESSION_OPEN:
+        return None
+    return {
+        "checkoutRef": command["checkout_ref"],
+        "commandState": state.value,
+        "checkoutSessionId": command["provider_session_id"],
+        "checkoutUrl": command["provider_session_url"],
+        "safeActions": ["recheck_payment", "contact_support"],
+        "targetPlan": command["plan_id"],
+        "beneficiaries": list(command["beneficiary_ids"]),
+    }
+
+
+def _poll_attached_checkout(
+    *,
+    checkout_ref: str,
+    parent_id: str,
+) -> dict[str, Any] | None:
+    for _ in range(CHECKOUT_REPLAY_POLL_ATTEMPTS):
+        result = checkout_command_repo.get_checkout_command_by_public_ref(
+            checkout_ref,
+            parent_id=parent_id,
+        )
+        response = _attached_checkout_response(result.command)
+        if response is not None:
+            return response
+        if result.disposition not in {
+            checkout_command_repo.CheckoutCommandDisposition.REPLAYED,
+            checkout_command_repo.CheckoutCommandDisposition.RETRYABLE,
+        }:
+            return None
+        time.sleep(CHECKOUT_REPLAY_POLL_SECONDS)
+    return None
+
+
+def create_or_resume_checkout_command(
+    *,
+    parent_id: str,
+    idempotency_key: str,
+    plan: str,
+    beneficiary_ids: tuple[str, ...],
     settings: Settings,
 ) -> dict[str, Any]:
-    profile = _require_parent(parent_id)
-    requested_tier = _normalize_tier(requested_tier)
-    if requested_tier == SubscriptionTier.FREE_TRIAL.value:
-        raise HTTPException(status_code=400, detail="Checkout is only available for paid tiers")
-
-    readiness = get_billing_readiness(settings)
-    _require_checkout_allowed(readiness, settings)
-    provider_mode = _provider_mode(settings, readiness)
-    price_id = _price_id_for_tier(requested_tier, settings)
-    now = now_iso()
-    existing = _get_billing_item(parent_id) or {}
-    customer_id = existing.get("provider_customer_id") or f"cus_test_{uuid4().hex[:24]}"
-    return_urls = build_checkout_return_urls(f"checkout_{uuid4().hex}", settings)
-    session = _create_provider_checkout_session(
+    parent = _require_parent(parent_id)
+    try:
+        target_plan = PurchasablePlanId(plan)
+        command_id = checkout_command_repo.checkout_command_id(
+            parent_id, idempotency_key
+        )
+    except ValueError as exc:
+        raise _checkout_http_error(
+            status_code=400,
+            code="checkout_request_invalid",
+            message="Checkout request is invalid.",
+        ) from exc
+    beneficiaries = _require_checkout_beneficiaries(
         parent_id=parent_id,
-        customer_id=customer_id,
-        requested_tier=requested_tier,
-        price_id=price_id,
-        success_url=return_urls.success_url,
-        cancel_url=return_urls.cancel_url,
-        readiness=readiness,
+        parent=parent,
+        plan=target_plan,
+        beneficiary_ids=beneficiary_ids,
+    )
+    price_id = _require_sandbox_checkout_configuration(
+        plan=target_plan,
         settings=settings,
     )
-    session_id = session["id"]
-    checkout_url = session["url"]
-    customer_id = session.get("customer_id") or customer_id
-    item = {
-        **_billing_key(parent_id),
-        "entity_type": BILLING_ENTITY,
-        "parent_id": parent_id,
-        "subscription_tier": _normalize_tier(profile.get("subscription_tier")),
-        "requested_tier": requested_tier,
-        "billing_provider": "stripe",
-        "billing_mode": provider_mode,
-        "billing_status": "checkout_pending",
-        "provider_customer_id": customer_id,
-        "provider_subscription_id": existing.get("provider_subscription_id"),
-        "provider_price_id": price_id,
-        "checkout_session_id": session_id,
-        "checkout_url": checkout_url,
-        "success_url": session["success_url"],
-        "cancel_url": session["cancel_url"],
-        "provider_livemode": bool(readiness["livemode"]),
-        "readiness_state": readiness["state"],
-        "readiness_blockers": readiness["blockers"],
-        "twint_in_scope": True,
-        "twint_status": readiness["twint"]["status"],
-        "payment_method_type": session.get("payment_method_type"),
-        "previous_billing_status": existing.get("billing_status"),
-        "previous_subscription_tier": existing.get("subscription_tier"),
-        "current_period_start": existing.get("current_period_start"),
-        "current_period_end": existing.get("current_period_end"),
-        "cancel_at_period_end": bool(existing.get("cancel_at_period_end") or False),
-        "last_provider_event_id": existing.get("last_provider_event_id"),
-        "last_provider_event_type": existing.get("last_provider_event_type"),
-        "last_provider_event_at": existing.get("last_provider_event_at"),
-        "manual_override_at": existing.get("manual_override_at"),
-        "manual_override_by": existing.get("manual_override_by"),
-        "manual_override_source": existing.get("manual_override_source"),
-        "created_at": existing.get("created_at") or now,
-        "updated_at": now,
-    }
-    _subscription_put(get_table(), Item=item)
-    _put_provider_lookup_rows(
-        parent_id=parent_id,
-        provider_mode=provider_mode,
-        livemode=bool(readiness["livemode"]),
-        created_at=now,
-        customer=customer_id,
-        checkout_session=session_id,
+    created_at = datetime.now(timezone.utc)
+    intent = CheckoutIntent(
+        commandId=command_id,
+        parentId=parent_id,
+        idempotencyKey=idempotency_key,
+        planId=target_plan,
+        beneficiaryIds=beneficiaries,
+        priceCatalogVersion=CHECKOUT_PRICE_CATALOG_VERSION,
+        planVersion=CHECKOUT_PLAN_VERSION,
+        createdAt=created_at,
     )
-    _put_billing_event(
-        parent_id,
-        {
-            "event_id": f"local_checkout_{session_id}",
-            "event_type": "checkout_session_created",
-            "event_at": now,
-            "provider": "stripe",
-            "provider_mode": provider_mode,
-            "provider_livemode": bool(readiness["livemode"]),
-            "processing_result": "created",
-            "billing_status": "checkout_pending",
-            "requested_tier": requested_tier,
-            "provider_session_id": session_id,
-            "readiness_state": readiness["state"],
-            "twint_status": readiness["twint"]["status"],
-        },
+    registration = checkout_command_repo.register_checkout_command(
+        intent,
+        price_id=price_id,
+        environment=settings.environment,
+        now_iso=created_at.isoformat(),
     )
-    return {
-        "parentId": parent_id,
-        "checkoutSessionId": session_id,
-        "checkoutUrl": checkout_url,
-        "provider": "stripe",
-        "mode": provider_mode,
-        "requestedTier": requested_tier,
-        "billingStatus": "checkout_pending",
-        "readiness": readiness,
-        "twint": readiness["twint"],
+    if (
+        registration.disposition
+        is checkout_command_repo.CheckoutCommandDisposition.IDENTITY_MISMATCH
+    ):
+        raise _checkout_http_error(
+            status_code=409,
+            code="checkout_idempotency_mismatch",
+            message="This checkout key is already bound to another selection.",
+        )
+    if (
+        registration.disposition
+        is checkout_command_repo.CheckoutCommandDisposition.OPEN_COMMAND_EXISTS
+    ):
+        raise _checkout_http_error(
+            status_code=409,
+            code="checkout_already_in_progress",
+            message="Another checkout is already in progress.",
+        )
+    if registration.disposition not in {
+        checkout_command_repo.CheckoutCommandDisposition.CREATED,
+        checkout_command_repo.CheckoutCommandDisposition.REPLAYED,
+    }:
+        raise _checkout_http_error(
+            status_code=503,
+            code="checkout_temporarily_unavailable",
+            message="Checkout is temporarily unavailable.",
+        )
+    replay = _attached_checkout_response(registration.command)
+    if replay is not None:
+        return replay
+    command = registration.command
+    if command is None or not isinstance(command.get("checkout_ref"), str):
+        raise _checkout_http_error(
+            status_code=503,
+            code="checkout_temporarily_unavailable",
+            message="Checkout is temporarily unavailable.",
+        )
+    checkout_ref = str(command["checkout_ref"])
+    now_epoch = int(time.time())
+    claim = checkout_command_repo.claim_provider_create(
+        command,
+        lease_owner=f"checkout-worker-{uuid4().hex}",
+        now_epoch=now_epoch,
+        lease_expires_at=now_epoch + CHECKOUT_PROVIDER_LEASE_SECONDS,
+        now_iso=now_iso(),
+    )
+    if claim.disposition is checkout_command_repo.CheckoutCommandDisposition.LEASE_BUSY:
+        concurrent = _poll_attached_checkout(
+            checkout_ref=checkout_ref,
+            parent_id=parent_id,
+        )
+        if concurrent is not None:
+            return concurrent
+        raise _checkout_http_error(
+            status_code=503,
+            code="checkout_confirmation_pending",
+            message="Checkout creation is still being confirmed.",
+        )
+    replay = _attached_checkout_response(claim.command)
+    if replay is not None:
+        return replay
+    if (
+        claim.disposition
+        is not checkout_command_repo.CheckoutCommandDisposition.CLAIMED
+        or claim.provider_claim is None
+    ):
+        raise _checkout_http_error(
+            status_code=503,
+            code="checkout_temporarily_unavailable",
+            message="Checkout is temporarily unavailable.",
+        )
+    provider_claim = claim.provider_claim
+    return_urls = build_checkout_return_urls(checkout_ref, settings)
+    provider_kwargs = {
+        "checkout_ref": checkout_ref,
+        "provider_idempotency_key": provider_claim.provider_key_digest,
+        "price_id": price_id,
+        "success_url": return_urls.success_url,
+        "cancel_url": return_urls.cancel_url,
+        "settings": settings,
     }
+    try:
+        session = _create_provider_checkout_session(**provider_kwargs)
+    except Exception:
+        try:
+            session = _create_provider_checkout_session(**provider_kwargs)
+        except Exception as exc:
+            checkout_command_repo.mark_provider_outcome_unknown(
+                provider_claim,
+                now_iso=now_iso(),
+            )
+            raise _checkout_http_error(
+                status_code=503,
+                code="checkout_provider_ambiguous",
+                message="Checkout creation is being confirmed.",
+            ) from exc
+    if (
+        session.get("livemode") is not False
+        or not isinstance(session.get("id"), str)
+        or not str(session["id"]).startswith("cs_test_")
+        or not isinstance(session.get("url"), str)
+        or not str(session["url"]).startswith("https://checkout.stripe.com/")
+    ):
+        checkout_command_repo.mark_provider_outcome_unknown(
+            provider_claim,
+            now_iso=now_iso(),
+        )
+        raise _checkout_http_error(
+            status_code=503,
+            code="checkout_provider_ambiguous",
+            message="Checkout creation is being confirmed.",
+        )
+    attached = checkout_command_repo.attach_provider_session(
+        provider_claim,
+        provider_session_id=str(session["id"]),
+        provider_session_url=str(session["url"]),
+        now_iso=now_iso(),
+    )
+    response = _attached_checkout_response(attached.command)
+    if response is not None and attached.disposition in {
+        checkout_command_repo.CheckoutCommandDisposition.ATTACHED,
+        checkout_command_repo.CheckoutCommandDisposition.ALREADY_ATTACHED,
+    }:
+        return response
+    raise _checkout_http_error(
+        status_code=503,
+        code="checkout_confirmation_pending",
+        message="Checkout creation is still being confirmed.",
+    )
 
 
 def get_parent_billing(parent_id: str, settings: Settings | None = None) -> dict[str, Any]:
@@ -1877,60 +2107,34 @@ def _unique(values: list[str]) -> list[str]:
 
 def _create_provider_checkout_session(
     *,
-    parent_id: str,
-    customer_id: str,
-    requested_tier: str,
+    checkout_ref: str,
+    provider_idempotency_key: str,
     price_id: str,
     success_url: str,
     cancel_url: str,
-    readiness: dict[str, Any],
     settings: Settings,
 ) -> dict[str, Any]:
-    if readiness["state"] != "live_enabled":
-        session_id = f"cs_{readiness['mode']}_{uuid4().hex}"
-        return {
-            "id": session_id,
-            "url": _checkout_url(session_id),
-            "customer_id": customer_id,
-            "success_url": success_url,
-            "cancel_url": cancel_url,
-            "payment_method_type": "unknown",
-        }
-
     stripe = _load_stripe_sdk()
     stripe.api_key = settings.stripe_api_key
-    metadata = {"stoa_parent_id": parent_id, "requested_tier": requested_tier}
+    metadata = {"stoa_checkout_ref": checkout_ref}
     create_kwargs: dict[str, Any] = {
         "mode": "subscription",
-        "client_reference_id": parent_id,
+        "client_reference_id": checkout_ref,
         "line_items": [{"price": price_id, "quantity": 1}],
         "success_url": success_url,
         "cancel_url": cancel_url,
         "metadata": metadata,
         "subscription_data": {"metadata": metadata},
+        "idempotency_key": provider_idempotency_key,
     }
-    if not customer_id.startswith("cus_test_"):
-        create_kwargs["customer"] = customer_id
-    payment_method_types = _checkout_payment_method_types(readiness)
-    if payment_method_types:
-        create_kwargs["payment_method_types"] = payment_method_types
-    try:
-        session = stripe.checkout.Session.create(**create_kwargs)
-    except Exception as exc:  # pragma: no cover - requires live Stripe SDK/API behavior.
-        raise HTTPException(status_code=502, detail="Stripe checkout session creation failed") from exc
-
+    session = stripe.checkout.Session.create(**create_kwargs)
     session_dict = _stripe_object_to_dict(session)
     session_id = str(session_dict.get("id") or "")
     checkout_url = str(session_dict.get("url") or "")
-    if not session_id or not checkout_url:
-        raise HTTPException(status_code=502, detail="Stripe checkout response was incomplete")
     return {
         "id": session_id,
         "url": checkout_url,
-        "customer_id": session_dict.get("customer") or customer_id,
-        "success_url": success_url,
-        "cancel_url": cancel_url,
-        "payment_method_type": _selected_payment_method_type_from_provider_object(session_dict),
+        "livemode": session_dict.get("livemode"),
     }
 
 
