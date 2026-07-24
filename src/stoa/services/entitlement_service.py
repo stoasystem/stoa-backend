@@ -9,7 +9,7 @@ from stoa.config import Settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import user_repo
 from stoa.models.user import SubscriptionTier
-from stoa.services import attachment_service, paid_entitlement_service
+from stoa.services import attachment_service, free_trial_service, paid_entitlement_service
 
 
 ACTIVE_BILLING_STATUSES = {"active", "manual_override"}
@@ -55,6 +55,10 @@ def resolve_student_entitlement(
         paid_grant=paid_grant,
     )
     effective_plan = _normalize_tier(decision["effective_plan"])
+    free_trial = free_trial_service.get_free_trial_state(student_profile)
+    new_usage_allowed = free_trial_service.plan_allows_new_usage(
+        effective_plan, free_trial
+    )
     question_limit = _daily_question_limit(effective_plan, settings)
     chat_limit = _daily_chat_message_limit(effective_plan, settings)
     hint_limit = _daily_hint_limit(effective_plan, settings)
@@ -79,6 +83,14 @@ def resolve_student_entitlement(
         "period": period,
         "blockingReason": decision["blocking_reason"],
         "supportExplanation": decision["support_explanation"],
+        "freeTrial": free_trial.public_projection(),
+        "newUsageAllowed": new_usage_allowed,
+        "action": None if new_usage_allowed else free_trial.action,
+        "readAccess": {
+            "account": True,
+            "learningHistory": True,
+            "parentView": True,
+        },
         "bindingStatus": str((binding or {}).get("status") or "missing"),
         "studentTier": student_tier,
         "parentTier": _normalize_tier((parent_profile or {}).get("subscription_tier")),
