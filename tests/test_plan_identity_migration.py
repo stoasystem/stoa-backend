@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import replace
 import json
 from pathlib import Path
-from typing import Any
-
 import pytest
 
 from stoa.jobs.migrate_billing_plan_identity import (
@@ -13,6 +11,8 @@ from stoa.jobs.migrate_billing_plan_identity import (
     PlanMigrationDisposition,
     PlanMigrationOperatorDisposition,
     apply_plan_identity_migration,
+    lambda_handler,
+    main,
     preview_plan_identity_migration,
     verify_preview_receipt,
 )
@@ -419,3 +419,57 @@ def test_tampered_preview_candidate_is_rejected_before_write() -> None:
         )
 
     assert repository.writes == []
+
+
+def test_lambda_rejects_unknown_fields_before_repository_access() -> None:
+    with pytest.raises(ValueError, match="input is invalid"):
+        lambda_handler(
+            {
+                "mode": "preview",
+                "environment": "local-test",
+                "sourceSha": "5" * 40,
+                "pricePlanById": _prices(),
+                "coordinates": [{"pk": "USER#private-canary", "sk": "PROFILE"}],
+                "unknown": "private-canary",
+            },
+            None,
+        )
+
+
+def test_cli_defaults_to_preview_and_writes_a_verified_receipt(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "inventory.json"
+    output_path = tmp_path / "receipt.json"
+    source_path.write_text(
+        json.dumps(
+            {
+                "schemaVersion": "plan_identity_migration_input.v1",
+                "sourceSha": "6" * 40,
+                "pricePlanById": _prices(),
+                "sources": [
+                    {
+                        "coordinate": {
+                            "pk": "USER#private-canary",
+                            "sk": "PROFILE",
+                        },
+                        "row": _source(plan="free", first_activation=None),
+                    }
+                ],
+            }
+        )
+    )
+
+    result = main(
+        [
+            "--environment",
+            "local-test",
+            "--input",
+            str(source_path),
+            "--output",
+            str(output_path),
+        ]
+    )
+
+    assert result == 0
+    assert verify_preview_receipt(output_path)["status"] == "review_required"

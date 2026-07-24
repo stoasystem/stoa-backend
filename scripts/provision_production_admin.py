@@ -117,7 +117,7 @@ def create_or_update_cognito_user(
                 {"Name": "email", "Value": email},
                 {"Name": "email_verified", "Value": "true"},
                 {"Name": "custom:role", "Value": ADMIN_ROLE},
-                {"Name": "custom:subscription_tier", "Value": "free"},
+                {"Name": "custom:subscription_tier", "Value": "free_trial"},
             ],
         )
         cognito.admin_set_user_password(
@@ -188,7 +188,7 @@ def build_admin_profile(
         "role": ADMIN_ROLE,
         "account_status": "active",
         "language": (existing or {}).get("language") or "de",
-        "subscription_tier": (existing or {}).get("subscription_tier") or "free",
+        "subscription_tier": (existing or {}).get("subscription_tier") or "free_trial",
         "created_at": created_at,
         "updated_at": timestamp,
     }
