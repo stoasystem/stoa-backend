@@ -226,7 +226,14 @@ def test_zurich_week_uses_local_monday_dates_across_dst(
     )
 
 
-def test_concurrent_reservations_cannot_overspend_either_dimension() -> None:
+@pytest.mark.parametrize(
+    ("input_tokens", "output_tokens"),
+    [(30_000, 1_000), (1_000, 6_000)],
+)
+def test_concurrent_reservations_cannot_overspend_either_dimension(
+    input_tokens: int,
+    output_tokens: int,
+) -> None:
     table = AtomicAllowanceTable(counter_barrier=threading.Barrier(2))
 
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -235,8 +242,8 @@ def test_concurrent_reservations_cannot_overspend_either_dimension() -> None:
                 lambda effect: _reserve(
                     table,
                     effect_id=effect,
-                    input_tokens=30_000,
-                    output_tokens=6_000,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
                 ),
                 ("effect-a", "effect-b"),
             )
@@ -249,6 +256,65 @@ def test_concurrent_reservations_cannot_overspend_either_dimension() -> None:
     counter = table.counter()
     assert counter["finalized_input_tokens"] + counter["reserved_input_tokens"] <= 50_000
     assert counter["finalized_output_tokens"] + counter["reserved_output_tokens"] <= 10_000
+
+
+def test_adjacent_zurich_week_starts_with_full_budget_and_no_rollover() -> None:
+    table = AtomicAllowanceTable()
+    _reserve(
+        table,
+        effect_id="old-week-effect",
+        input_tokens=30_000,
+        output_tokens=6_000,
+    )
+
+    next_week = allowance_service.get_allowance_projection(
+        beneficiary_id="student-1",
+        plan_id=BillingPlanId.FREE_TRIAL,
+        allowance_version=7,
+        observed_at=datetime(2026, 3, 30, 12, tzinfo=UTC),
+        viewer_role="parent",
+        table=table,
+    )
+
+    assert next_week["weekIdentity"] == "2026-W14"
+    assert next_week["input"]["remainingTokens"] == 50_000
+    assert next_week["output"]["remainingTokens"] == 10_000
+
+
+def test_higher_allowance_version_preserves_usage_and_stale_version_fails_closed() -> None:
+    table = AtomicAllowanceTable()
+    _reserve(table, effect_id="free-effect", input_tokens=100, output_tokens=50)
+
+    upgraded = allowance_service.reserve_token_allowance(
+        beneficiary_id="student-1",
+        effect_id="family-effect",
+        plan_id=BillingPlanId.FAMILY,
+        allowance_version=8,
+        input_tokens=60_000,
+        max_output_tokens=20_000,
+        observed_at=NOW,
+        account_fence_generation=1,
+        table=table,
+    )
+    stale = allowance_service.reserve_token_allowance(
+        beneficiary_id="student-1",
+        effect_id="stale-effect",
+        plan_id=BillingPlanId.FREE_TRIAL,
+        allowance_version=7,
+        input_tokens=1,
+        max_output_tokens=1,
+        observed_at=NOW,
+        account_fence_generation=1,
+        table=table,
+    )
+
+    assert upgraded.disposition is allowance_repo.ReservationDisposition.ADMITTED
+    assert stale.disposition is allowance_repo.ReservationDisposition.RETRYABLE
+    counter = table.counter()
+    assert counter["allowance_version"] == 8
+    assert counter["plan_id"] == "family"
+    assert counter["reserved_input_tokens"] == 60_100
+    assert counter["reserved_output_tokens"] == 20_050
 
 
 def test_replay_is_byte_stable_after_unrelated_traffic_and_changed_payload_conflicts() -> None:
@@ -280,6 +346,16 @@ def test_provider_usage_finalizes_exact_actual_counts_and_redacts_provider_value
         observed_at=NOW,
         table=table,
     )
+    observed_replay = allowance_service.record_provider_usage(
+        beneficiary_id="student-1",
+        effect_id="delivered-effect",
+        provider_request_id="provider-private-request-canary",
+        model_id="provider-private-model-canary",
+        input_tokens=80,
+        output_tokens=30,
+        observed_at=datetime(2026, 3, 25, 12, 1, tzinfo=UTC),
+        table=table,
+    )
     finalized = allowance_service.finalize_token_allowance(
         beneficiary_id="student-1",
         effect_id="delivered-effect",
@@ -290,9 +366,27 @@ def test_provider_usage_finalizes_exact_actual_counts_and_redacts_provider_value
         finalized_at=NOW,
         table=table,
     )
+    finalized_replay = allowance_service.finalize_token_allowance(
+        beneficiary_id="student-1",
+        effect_id="delivered-effect",
+        technical_validation_passed=True,
+        safety_check_passed=True,
+        durable_result_stored=True,
+        stable_replay_readable=True,
+        finalized_at=datetime(2026, 3, 25, 12, 2, tzinfo=UTC),
+        table=table,
+    )
 
     assert observed.disposition is allowance_repo.ProviderUsageDisposition.RECORDED
+    assert observed_replay.disposition is allowance_repo.ProviderUsageDisposition.REPLAYED
+    assert observed_replay.evidence.model_dump(mode="json", by_alias=True) == (
+        observed.evidence.model_dump(mode="json", by_alias=True)
+    )
     assert finalized.disposition is allowance_repo.FinalizationDisposition.FINALIZED
+    assert finalized_replay.disposition is allowance_repo.FinalizationDisposition.REPLAYED
+    assert finalized_replay.finalization.model_dump(mode="json", by_alias=True) == (
+        finalized.finalization.model_dump(mode="json", by_alias=True)
+    )
     assert finalized.finalization.finalized_input_tokens == 80
     assert finalized.finalization.finalized_output_tokens == 30
     counter = table.counter()
@@ -356,6 +450,50 @@ def test_restoration_releases_user_allowance_but_retains_provider_cost_and_repla
     assert counter["finalized_output_tokens"] == 0
     assert counter["provider_cost_input_tokens"] == 80
     assert counter["provider_cost_output_tokens"] == 30
+
+
+def test_provider_overage_cannot_finalize_but_can_restore_user_reservation() -> None:
+    table = AtomicAllowanceTable()
+    _reserve(table, effect_id="provider-overage")
+    allowance_service.record_provider_usage(
+        beneficiary_id="student-1",
+        effect_id="provider-overage",
+        provider_request_id="request-overage",
+        model_id="model-overage",
+        input_tokens=120,
+        output_tokens=60,
+        observed_at=NOW,
+        table=table,
+    )
+
+    refused = allowance_service.finalize_token_allowance(
+        beneficiary_id="student-1",
+        effect_id="provider-overage",
+        technical_validation_passed=True,
+        safety_check_passed=True,
+        durable_result_stored=True,
+        stable_replay_readable=True,
+        finalized_at=NOW,
+        table=table,
+    )
+    restored = allowance_service.restore_user_allowance(
+        beneficiary_id="student-1",
+        effect_id="provider-overage",
+        technical_validation_passed=False,
+        safety_check_passed=False,
+        durable_result_stored=False,
+        stable_replay_readable=False,
+        restored_at=NOW,
+        table=table,
+    )
+
+    assert refused.disposition is allowance_repo.FinalizationDisposition.INVALID_STATE
+    assert restored.disposition is allowance_repo.FinalizationDisposition.RESTORED
+    counter = table.counter()
+    assert counter["reserved_input_tokens"] == 0
+    assert counter["reserved_output_tokens"] == 0
+    assert counter["provider_cost_input_tokens"] == 120
+    assert counter["provider_cost_output_tokens"] == 60
 
 
 @pytest.mark.parametrize("malformed", [True, Decimal("1.5"), -1, "1"])
