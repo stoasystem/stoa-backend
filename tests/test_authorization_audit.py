@@ -294,6 +294,7 @@ def test_production_requires_non_placeholder_audit_key():
             cognito_allowed_issuers=["https://identity.test"],
             cognito_access_client_ids=["client-1"],
             authorization_audit_active_key=DEVELOPMENT_AUDIT_KEY,
+            stripe_checkout_web_origins=["https://app.stoaedu.ch"],
         )
 
 

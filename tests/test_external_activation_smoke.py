@@ -15,6 +15,7 @@ def _settings(**overrides) -> Settings:
             authorization_audit_active_key="test-production-authorization-audit-key-32-bytes",
             cognito_allowed_issuers=["https://identity.test"],
             cognito_access_client_ids=["test-access-client"],
+            stripe_checkout_web_origins=["https://app.stoaedu.ch"],
         )
     return Settings(**values)
 
