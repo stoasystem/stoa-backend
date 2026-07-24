@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-26-PLAN.md
-last_updated: "2026-07-24T16:34:00.389Z"
+stopped_at: Completed 476-24-PLAN.md
+last_updated: "2026-07-24T16:52:38.751Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 163
+  completed_plans: 164
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 27 of 29
+Plan: 28 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T16:34:00.382Z
-**Stopped At:** Completed 476-26-PLAN.md
+**Last Date:** 2026-07-24T16:52:23.996Z
+**Stopped At:** Completed 476-24-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -270,6 +270,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P21 | 15min | 1 tasks | 5 files |
 | Phase 476 P23 | 21min | 1 tasks | 5 files |
 | Phase 476 P26 | 13min | 1 tasks | 6 files |
+| Phase 476 P24 | 12min | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -628,3 +629,6 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Keep legacy manual subscription requests available but route all payable checkout entry through the canonical Billing page. — The parent dashboard must not retain callback-bound or provider-URL checkout authority.
 - [Phase 476]: Admin billing detail and recheck remain bound to the same parent and checkout reference; recheck carries an empty body only. — Prevents changed-operation recheck or browser-supplied payment authority.
 - [Phase 476]: Web support evidence is limited to redacted digests, token counts, masked reminder fields, versions, and a session suffix. — Preserves provider and payment-data boundaries while retaining exact support evidence.
+- [Phase 476]: Checkout result rendering reads only checkoutRef; flow, plan, status, and success-looking paths never contribute payment truth.
+- [Phase 476]: Checkout confirming uses four finite increasing delays before same-reference recheck and support recovery replace automatic polling.
+- [Phase 476]: API errors, unknown outcomes, and malformed active payloads fail closed to support_needed.
