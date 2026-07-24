@@ -200,6 +200,8 @@ def test_ai_prompt_context_differs_for_language_subject(monkeypatch):
         def read(self):
             return json.dumps(
                 {
+                    "id": "msg-learning-expansion",
+                    "model": "anthropic.claude-sonnet-4-6",
                     "content": [
                         {
                             "text": json.dumps(
@@ -212,7 +214,9 @@ def test_ai_prompt_context_differs_for_language_subject(monkeypatch):
                                 }
                             )
                         }
-                    ]
+                    ],
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 31, "output_tokens": 12},
                 }
             ).encode()
 
@@ -222,7 +226,13 @@ def test_ai_prompt_context_differs_for_language_subject(monkeypatch):
     class FakeBedrock:
         def invoke_model(self, **kwargs):
             captured.update(kwargs)
-            return {"body": FakeBody()}
+            return {
+                "body": FakeBody(),
+                "ResponseMetadata": {
+                    "HTTPStatusCode": 200,
+                    "RequestId": "request-learning-expansion",
+                },
+            }
 
     monkeypatch.setattr(ai_service.boto3, "client", lambda *args, **kwargs: FakeBedrock())
 
@@ -236,7 +246,9 @@ def test_ai_prompt_context_differs_for_language_subject(monkeypatch):
     payload = json.loads(captured["body"])
     assert "language learning" in payload["system"]
     assert "Subject label: German" in payload["system"]
-    assert answer["knowledge_points"] == ["word order"]
+    assert answer.content["knowledge_points"] == ["word order"]
+    assert answer.usage.input_tokens == 31
+    assert answer.usage.output_tokens == 12
 
 
 def test_learning_profile_aggregates_subject_activity_and_topic_seeds(monkeypatch):

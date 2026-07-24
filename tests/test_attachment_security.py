@@ -2,6 +2,7 @@ import asyncio
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import hashlib
+import json
 import threading
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -2827,19 +2828,58 @@ def test_ai_private_telemetry_excludes_input_output_and_provider_canaries(
     assert "STUDENT-PRIVATE-CANARY" in cleaned
     ai_service._parse_ai_response(malformed)
 
+    class Body:
+        def read(self):
+            return json.dumps(
+                {
+                    "id": "PROVIDER-MESSAGE-ID-PRIVATE-CANARY",
+                    "model": "bedrock-model-private",
+                    "content": [{"text": "HINT-OUTPUT-PRIVATE-CANARY"}],
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 17, "output_tokens": 5},
+                }
+            ).encode()
+
+        def close(self):
+            return None
+
+    class SuccessfulClient:
+        def invoke_model(self, **_kwargs):
+            return {
+                "body": Body(),
+                "ResponseMetadata": {
+                    "HTTPStatusCode": 200,
+                    "RequestId": "PROVIDER-REQUEST-ID-PRIVATE-CANARY",
+                },
+            }
+
+    hint_result = ai_service.get_hint_answer(
+        "HINT-PRIVATE-CANARY",
+        correlation_id="server-correlation-2",
+        client=SuccessfulClient(),
+    )
+    assert hint_result.content == "HINT-OUTPUT-PRIVATE-CANARY"
+    assert hint_result.usage.input_tokens == 17
+    assert hint_result.usage.output_tokens == 5
+
     class FailingClient:
         def invoke_model(self, **_kwargs):
             raise RuntimeError(provider)
 
     monkeypatch.setattr(ai_service.boto3, "client", lambda *_args, **_kwargs: FailingClient())
-    assert ai_service.get_hint_answer(
-        "HINT-PRIVATE-CANARY", correlation_id="server-correlation-2"
-    ) == ""
+    with pytest.raises(ai_service.AIInvocationFailure) as captured:
+        ai_service.get_hint_answer(
+            "HINT-PRIVATE-CANARY", correlation_id="server-correlation-3"
+        )
+    assert captured.value.category == "provider_dependency_error"
     rendered = caplog.text
     for canary in (
         "STUDENT-PRIVATE-CANARY",
         "MODEL-JSON-PRIVATE-CANARY",
         "PROVIDER-EXCEPTION-PRIVATE-CANARY",
+        "PROVIDER-MESSAGE-ID-PRIVATE-CANARY",
+        "PROVIDER-REQUEST-ID-PRIVATE-CANARY",
+        "HINT-OUTPUT-PRIVATE-CANARY",
         "bedrock-model-private",
         ai_service.settings.bedrock_model_id,
     ):

@@ -337,14 +337,29 @@ def test_terminal_parser_failure_is_closed_and_never_embedded_in_context(monkeyp
 def test_ai_invocation_crossing_injected_deadline_is_rejected_without_result() -> None:
     ticks = iter([10.0, 10.0, 101.0])
 
+    class ProviderBody:
+        def read(self) -> bytes:
+            return json.dumps(
+                {
+                    "id": "msg-deadline-boundary",
+                    "model": "anthropic.claude-sonnet-4-6",
+                    "content": [{"text": '{"steps":["x"],"answer":"y"}'}],
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 9, "output_tokens": 3},
+                }
+            ).encode()
+
+        def close(self) -> None:
+            return None
+
     class Client:
         def invoke_model(self, **_kwargs):
             return {
-                "body": _provider_body(
-                    json.dumps(
-                        {"content": [{"text": '{"steps":["x"],"answer":"y"}'}]}
-                    ).encode()
-                )
+                "body": ProviderBody(),
+                "ResponseMetadata": {
+                    "HTTPStatusCode": 200,
+                    "RequestId": "request-deadline-boundary",
+                },
             }
 
     with pytest.raises(ai_service.AIInvocationFailure) as captured:
