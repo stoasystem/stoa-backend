@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
-status: executing
+status: verifying
 stopped_at: Completed 476-25-PLAN.md
-last_updated: "2026-07-24T17:16:26.413Z"
+last_updated: "2026-07-24T17:38:27.735Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 165
+  completed_plans: 166
   percent: 30
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
 Plan: 29 of 29
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Accumulated Context
@@ -107,7 +107,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T17:16:26.406Z
+**Last Date:** 2026-07-24T17:38:08.285Z
 **Stopped At:** Completed 476-25-PLAN.md
 **Resume File:** None
 
@@ -272,6 +272,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P26 | 13min | 1 tasks | 6 files |
 | Phase 476 P24 | 12min | 1 tasks | 4 files |
 | Phase 476 P25 | 18min | 1 tasks | 9 files |
+| Phase 476 P27 | 14min | 1 tasks | 5 files |
 
 ## Decisions
 
@@ -636,3 +637,5 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Render parent allowance directly from authoritative weekly percentage, remaining, support-case, and Zurich-window fields; no client plan-limit arithmetic remains. — Preserves server calculation as the only allowance truth.
 - [Phase 476]: Use identical closed masked reminder copy for parent and selected students while exposing Billing navigation only to the parent role. — Shares safe information without granting student billing-management authority.
 - [Phase 476]: Prefer recipient-scoped notification reminder state and retain parent billing projection as the persistent fallback; only backend-resolved state clears the reminder. — Keeps Web state independent from email delivery and replacement-safe.
+- [Phase 476]: Real Stripe browser evidence uses a separate dependency-gated stripe-sandbox project; missing test-mode readiness fails rather than falling back to mocks.
+- [Phase 476]: Sandbox receipts retain only modes, counts, API version, payment-method names, source digest, and SHA-256 provider/origin identities.
