@@ -6,7 +6,11 @@ from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from pydantic import ValidationError
 
+from stoa.config import Settings
+from stoa.routers.parents import ParentCheckoutSessionCreate
+from stoa.services import subscription_service
 from stoa.services.billing_callback_service import (
     BillingWebOriginPolicy,
     build_checkout_return_urls,
@@ -50,6 +54,7 @@ def test_exact_origin_positive_matrix(
         ("staging", "https://staging.stoaedu.ch%2fevil.example"),
         ("staging", "https://staging.stoaedu.ch%5cevil.example"),
         ("staging", "https://staging.stoaedu.ch%40evil.example"),
+        ("staging", "https://staging.stoaedu.ch:"),
         ("development", "http://localhost"),
         ("development", "http://127.0.0.1"),
         ("development", "http://[::1]"),
@@ -121,6 +126,25 @@ def test_policy_rejects_duplicate_or_ambiguous_startup_configuration() -> None:
             configured_origins=(),
             result_path="/billing/checkout/result",
         )
+
+
+def test_settings_validate_current_environment_policy_at_startup() -> None:
+    development = Settings(_env_file=None)
+    assert development.stripe_checkout_web_origins == ["http://localhost:5173"]
+    assert development.stripe_checkout_result_path == "/billing/checkout/result"
+
+    staging = Settings(
+        _env_file=None,
+        environment="staging",
+        stripe_checkout_web_origins=["https://staging.stoaedu.ch"],
+    )
+    assert staging.stripe_checkout_web_origins == ["https://staging.stoaedu.ch"]
+
+    with pytest.raises(
+        ValidationError,
+        match="billing_web_origin_https_required",
+    ):
+        Settings(_env_file=None, environment="staging")
 
 
 def test_return_urls_use_only_configured_origin_fixed_path_and_safe_query() -> None:
@@ -203,3 +227,21 @@ def test_builder_api_has_no_browser_or_request_authority_parameters() -> None:
         "x-forwarded-host",
     )
     assert all(marker not in service_source for marker in forbidden)
+
+
+def test_checkout_service_and_route_reject_browser_callback_authority() -> None:
+    assert "success_url" not in inspect.signature(
+        subscription_service.create_checkout_session
+    ).parameters
+    assert "cancel_url" not in inspect.signature(
+        subscription_service.create_checkout_session
+    ).parameters
+
+    with pytest.raises(ValidationError):
+        ParentCheckoutSessionCreate.model_validate(
+            {
+                "requestedTier": "standard",
+                "successUrl": "https://evil.example",
+                "cancelUrl": "https://evil.example",
+            }
+        )

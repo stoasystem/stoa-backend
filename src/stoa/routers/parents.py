@@ -227,11 +227,9 @@ class ParentSubscriptionResponse(BaseModel):
 
 
 class ParentCheckoutSessionCreate(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     requested_tier: SubscriptionTier = Field(..., alias="requestedTier")
-    success_url: str | None = Field(default=None, alias="successUrl", max_length=500)
-    cancel_url: str | None = Field(default=None, alias="cancelUrl", max_length=500)
 
 
 class ParentCheckoutSessionResponse(BaseModel):
@@ -737,8 +735,6 @@ async def create_my_subscription_checkout(
     return subscription_service.create_checkout_session(
         parent_id=actor.user_id,
         requested_tier=body.requested_tier.value,
-        success_url=body.success_url,
-        cancel_url=body.cancel_url,
         settings=settings,
     )
 

@@ -239,6 +239,13 @@ class Settings(BaseSettings):
             raise ValueError("Authorization audit probe bounds must be positive")
         return self
 
+    @model_validator(mode="after")
+    def validate_billing_callback_configuration(self) -> "Settings":
+        from stoa.services.billing_callback_service import BillingWebOriginPolicy
+
+        BillingWebOriginPolicy.from_settings(self)
+        return self
+
     @property
     def cognito_jwks_url(self) -> str:
         issuer = self.allowed_cognito_issuers[0] if self.allowed_cognito_issuers else ""
@@ -322,8 +329,8 @@ class Settings(BaseSettings):
     stripe_standard_price_id: str = ""
     stripe_premium_price_id: str = ""
     stripe_webhook_endpoint_url: str = ""
-    stripe_checkout_success_url: str = "http://localhost:5173/parent/subscription?checkout=success"
-    stripe_checkout_cancel_url: str = "http://localhost:5173/parent/subscription?checkout=cancel"
+    stripe_checkout_web_origins: List[str] = ["http://localhost:5173"]
+    stripe_checkout_result_path: str = "/billing/checkout/result"
     stripe_live_charges_enabled: bool = False
     stripe_refunds_enabled: bool = False
     stripe_twint_enabled: bool = True

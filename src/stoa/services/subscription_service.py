@@ -24,6 +24,7 @@ from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo, user_repo
 from stoa.models.user import SubscriptionTier
 from stoa.services import entitlement_service, notification_service
+from stoa.services.billing_callback_service import build_checkout_return_urls
 
 
 type SubscriptionItem = dict[str, object]
@@ -228,8 +229,6 @@ def create_checkout_session(
     *,
     parent_id: str,
     requested_tier: str,
-    success_url: str | None,
-    cancel_url: str | None,
     settings: Settings,
 ) -> dict[str, Any]:
     profile = _require_parent(parent_id)
@@ -244,13 +243,14 @@ def create_checkout_session(
     now = now_iso()
     existing = _get_billing_item(parent_id) or {}
     customer_id = existing.get("provider_customer_id") or f"cus_test_{uuid4().hex[:24]}"
+    return_urls = build_checkout_return_urls(f"checkout_{uuid4().hex}", settings)
     session = _create_provider_checkout_session(
         parent_id=parent_id,
         customer_id=customer_id,
         requested_tier=requested_tier,
         price_id=price_id,
-        success_url=_safe_url(success_url) or settings.stripe_checkout_success_url,
-        cancel_url=_safe_url(cancel_url) or settings.stripe_checkout_cancel_url,
+        success_url=return_urls.success_url,
+        cancel_url=return_urls.cancel_url,
         readiness=readiness,
         settings=settings,
     )
@@ -1521,8 +1521,8 @@ def get_billing_readiness(settings: Settings) -> dict[str, Any]:
             "webhookSecret": _redacted_presence(webhook_secret),
             "standardPrice": _redacted_presence(standard_price),
             "premiumPrice": _redacted_presence(premium_price),
-            "successUrl": bool(settings.stripe_checkout_success_url),
-            "cancelUrl": bool(settings.stripe_checkout_cancel_url),
+            "webOrigins": bool(settings.stripe_checkout_web_origins),
+            "resultPath": bool(settings.stripe_checkout_result_path),
             "stripeSdk": sdk_available,
         },
         "twint": {
@@ -1935,17 +1935,6 @@ def _price_id_for_tier(tier: str, settings: Settings) -> str:
 
 def _checkout_url(session_id: str) -> str:
     return f"https://checkout.stripe.com/c/pay/{session_id}"
-
-
-def _safe_url(value: str | None) -> str | None:
-    if value is None:
-        return None
-    cleaned = value.strip()
-    if not cleaned:
-        return None
-    if not (cleaned.startswith("https://") or cleaned.startswith("http://localhost")):
-        raise HTTPException(status_code=400, detail="Checkout return URL must use HTTPS or localhost")
-    return cleaned
 
 
 def _put_billing_event(parent_id: str, event: dict[str, Any]) -> None:
