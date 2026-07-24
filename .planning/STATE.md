@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-22-PLAN.md
-last_updated: "2026-07-24T10:31:03.823Z"
+stopped_at: Completed 476-07-PLAN.md
+last_updated: "2026-07-24T11:06:04.131Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 148
+  completed_plans: 149
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 9 of 29
+Plan: 10 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T10:31:03.817Z
-**Stopped At:** Completed 476-22-PLAN.md
+**Last Date:** 2026-07-24T11:06:04.124Z
+**Stopped At:** Completed 476-07-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -255,6 +255,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P06 | 9min | 1 tasks | 3 files |
 | Phase 476 P15 | 8min | 1 tasks | 3 files |
 | Phase 476 P22 | 10min | 1 tasks | 17 files |
+| Phase 476 P07 | 11min | 1 tasks | 3 files |
 
 ## Decisions
 
@@ -567,3 +568,6 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Bind each Web BillingPlan ID to its exact CHF monthly price and purchasability in one discriminated TypeScript union. — Wrong prices and a purchasable free trial must fail at compile time.
 - [Phase 476]: Keep pre-Plan-25 request-count rendering component-local so the canonical billing type module exposes only weekly input/output/support allowance dimensions. — Plan 22 owns contract identity while Plan 25 owns the server-driven usage UI migration.
 - [Phase 476]: Web masked payment contracts expose only brand, last four, and expiry coordinates. — Browser types must not admit PAN, CVC, provider credentials, or payment-capable secrets.
+- [Phase 476]: Persist an expiration intent before Stripe expiration, then require a fresh exact Session retrieval with status expired before transferring the parent guard. — A provider mutation response alone cannot prove that the old purchase is no longer payable.
+- [Phase 476]: Complete and unknown provider outcomes retain the original checkout guard and never create a replacement Session. — Ambiguous or potentially paid Sessions must reconcile rather than risk a second payable Session.
+- [Phase 476]: Transfer the one-open guard in the same transaction as old-command supersession and successor command/lookup creation. — The atomic transfer prevents an unguarded gap and avoids duplicate operations on the guard item.
