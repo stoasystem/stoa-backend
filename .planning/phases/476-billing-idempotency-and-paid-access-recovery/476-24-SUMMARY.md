@@ -71,10 +71,10 @@ TDD execution produced the required RED and GREEN commits in `/Users/zhdeng/stoa
 
 ## Files Created/Modified
 
-- `/Users/zhdeng/stoa-frontend/src/hooks/billing/useCheckoutCommandQuery.ts` - Finite confirming-only status polling and same-reference recheck mutation.
-- `/Users/zhdeng/stoa-frontend/src/pages/billing/CheckoutResultPage.tsx` - Four authoritative, fail-closed, accessible checkout-result branches.
-- `/Users/zhdeng/stoa-frontend/src/app/router/AppRouter.tsx` - One fixed result route with legacy virtual/static routes removed.
-- `/Users/zhdeng/stoa-frontend/tests/e2e/billing-result-states.spec.ts` - Six browser scenarios for truth, recovery, polling, negative URLs, and accessibility.
+- `../stoa-frontend/src/hooks/billing/useCheckoutCommandQuery.ts` - Finite confirming-only status polling and same-reference recheck mutation.
+- `../stoa-frontend/src/pages/billing/CheckoutResultPage.tsx` - Four authoritative, fail-closed, accessible checkout-result branches.
+- `../stoa-frontend/src/app/router/AppRouter.tsx` - One fixed result route with legacy virtual/static routes removed.
+- `../stoa-frontend/tests/e2e/billing-result-states.spec.ts` - Six browser scenarios for truth, recovery, polling, negative URLs, and accessibility.
 - `.planning/phases/476-billing-idempotency-and-paid-access-recovery/476-24-PLAN.md` - Repository-relative key-link source path for executable verification.
 
 ## Decisions Made
