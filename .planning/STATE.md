@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-14-PLAN.md
-last_updated: "2026-07-24T14:54:15.063Z"
+stopped_at: Completed 476-19-PLAN.md
+last_updated: "2026-07-24T15:11:21.507Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 158
+  completed_plans: 159
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 22 of 29
+Plan: 23 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T14:54:15.056Z
-**Stopped At:** Completed 476-14-PLAN.md
+**Last Date:** 2026-07-24T15:11:21.500Z
+**Stopped At:** Completed 476-19-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -265,6 +265,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P12 | 11min | 1 tasks | 8 files |
 | Phase 476 P13 | 8min | 1 tasks | 4 files |
 | Phase 476 P14 | 7 min | 1 tasks | 4 files |
+| Phase 476 P19 | 14min | 1 tasks | 10 files |
 
 ## Decisions
 
@@ -609,3 +610,6 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Derive the immutable student trial start from persisted email-verification activation evidence, never request time.
 - [Phase 476]: Missing or malformed historical trial evidence denies new free usage with migration_review_required while preserving reads.
 - [Phase 476]: Paid-plan admission remains independent of the historical free-trial window; paid-to-free fallback reuses the sealed trial evidence.
+- [Phase 476]: Use one global durable-case receipt so a successfully admitted teacher-support case remains replayable after its paid grant later expires or changes.
+- [Phase 476]: Scope teacher_supported by beneficiary plus exact grant/plan version, and family by parent subscription plus plan version shared across selected beneficiaries.
+- [Phase 476]: Join parent/grant/relationship conditions plus receipt/counter CAS to the beneficiary-fenced durable case transaction owned by the existing repository.
