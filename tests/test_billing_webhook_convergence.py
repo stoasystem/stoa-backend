@@ -263,11 +263,17 @@ class FakePersistence:
 
 
 def test_router_source_binds_raw_official_verification_to_fact_registration() -> None:
-    source = inspect.getsource(billing_router.handle_stripe_webhook)
-    assert "await request.body()" in source
-    assert "construct_event" in source
-    assert "billing_fact_repo.register_provider_event" in source
-    assert source.index("construct_event") < source.index("register_provider_event")
+    route_source = inspect.getsource(billing_router.handle_stripe_webhook)
+    boundary_source = inspect.getsource(
+        billing_router._construct_event_then_register_provider_event
+    )
+    assert "await request.body()" in route_source
+    assert "_construct_event_then_register_provider_event" in route_source
+    assert "construct_event" in boundary_source
+    assert "billing_fact_repo.register_provider_event" in boundary_source
+    assert boundary_source.index("construct_event") < boundary_source.index(
+        "register_provider_event"
+    )
 
 
 def test_official_signature_verification_rejects_unsigned_wrong_mutated_and_old(

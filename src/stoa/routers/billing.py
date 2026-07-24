@@ -28,6 +28,25 @@ class StripeWebhookResponse(BaseModel):
     activationDisposition: str | None = None
 
 
+def _construct_event_then_register_provider_event(
+    *,
+    payload: bytes,
+    signature_header: str | None,
+    settings: Settings,
+) -> dict[str, Any]:
+    """Verify exact bytes, then expose only the durable registration capability."""
+    event = subscription_service.construct_event(
+        payload=payload,
+        signature_header=signature_header,
+        settings=settings,
+    )
+    return subscription_service.process_signed_billing_event(
+        event=event,
+        settings=settings,
+        register_provider_event=billing_fact_repo.register_provider_event,
+    )
+
+
 @router.post("/webhooks/stripe", response_model=StripeWebhookResponse)
 @explicit_route_classification("public", "provider-signature authenticated webhook")
 async def handle_stripe_webhook(
@@ -36,13 +55,8 @@ async def handle_stripe_webhook(
 ) -> dict[str, Any]:
     """Receive Stripe webhook events using the raw request body."""
     payload = await request.body()
-    event = subscription_service.construct_event(
+    return _construct_event_then_register_provider_event(
         payload=payload,
         signature_header=request.headers.get("stripe-signature"),
         settings=settings,
-    )
-    return subscription_service.process_signed_billing_event(
-        event=event,
-        settings=settings,
-        register_provider_event=billing_fact_repo.register_provider_event,
     )
