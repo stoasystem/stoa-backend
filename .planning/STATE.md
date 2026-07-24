@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-20-PLAN.md
-last_updated: "2026-07-24T15:26:39.545Z"
+stopped_at: Completed 476-21-PLAN.md
+last_updated: "2026-07-24T15:49:31.898Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 160
+  completed_plans: 161
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 24 of 29
+Plan: 25 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T15:26:39.539Z
-**Stopped At:** Completed 476-20-PLAN.md
+**Last Date:** 2026-07-24T15:49:31.892Z
+**Stopped At:** Completed 476-21-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -267,6 +267,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P14 | 7 min | 1 tasks | 4 files |
 | Phase 476 P19 | 14min | 1 tasks | 10 files |
 | Phase 476 P20 | 12min | 1 tasks | 4 files |
+| Phase 476 P21 | 15min | 1 tasks | 5 files |
 
 ## Decisions
 
@@ -617,3 +618,6 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Bind payment expiry reminders to method digest plus expiry month and reject delayed lower observation versions. — Prevents delayed provider facts from clearing newer persistent reminder state.
 - [Phase 476]: Route each family recipient and channel through notification_service.register_delivery_intent. — Preserves durable at-most-once retry ownership and failure isolation.
 - [Phase 476]: Require verified and explicitly deliverable email while always retaining in-app delivery. — Fails closed for invalid, bounced, suppressed, unverified, and unknown email states.
+- [Phase 476]: Parent effective billing state derives only from current relationship-fenced paid grants; non-active checkout lifecycle never projects an effective paid plan. — Prevents redirects, requested plans, and legacy tiers from becoming paid-access proof.
+- [Phase 476]: Family token allowance remains per selected beneficiary while teacher cases project once from the shared-family scope. — Matches the locked D-19 and D-20 accounting boundaries without cross-child counter leakage.
+- [Phase 476]: Admin billing detail retains exact counts and lifecycle versions but exposes provider, model, and correlation coordinates only as digests or a suffix. — Support retains auditability without receiving payment-capable or content-bearing secrets.
