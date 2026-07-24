@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-03-PLAN.md
-last_updated: "2026-07-24T08:12:27.568Z"
+stopped_at: Completed 476-05-PLAN.md
+last_updated: "2026-07-24T08:30:42.547Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 142
+  completed_plans: 143
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 4 of 29
+Plan: 5 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T08:12:27.561Z
-**Stopped At:** Completed 476-03-PLAN.md
+**Last Date:** 2026-07-24T08:30:42.540Z
+**Stopped At:** Completed 476-05-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -249,6 +249,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P01 | 7min | 1 tasks | 3 files |
 | Phase 476 P02 | 8min | 1 tasks | 7 files |
 | Phase 476 P03 | 8min | 1 tasks | 5 files |
+| Phase 476 P05 | 15min | 1 tasks | 2 files |
 
 ## Decisions
 
@@ -544,3 +545,6 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Use exactly free_trial, student, teacher_supported, and family in SubscriptionTier, with no legacy enum aliases.
 - [Phase 476]: Treat any configured Stripe API key or paid Price ID as checkout configuration and require all three paid Price IDs to be nonempty and distinct.
 - [Phase 476]: Lock the trial and storage contract at 14 days, 5 GB free, and 15 GB paid while rejecting live keys and live-charge mode outside production.
+- [Phase 476]: Checkout identity separates command, public, and provider coordinates — A parent/key digest, independent random public reference, and versioned provider-key digest prevent raw caller identity leakage while retaining exact replay.
+- [Phase 476]: Checkout command, open guard, and owner lookup commit atomically before provider access — The permanent parent fence and one transaction make retry safety independent of browser and provider-cache lifetime.
+- [Phase 476]: Provider ambiguity retains the open guard and original provider identity — Lease generation and command version prevent a second payable Session or stale Session attachment while outcome is unknown.

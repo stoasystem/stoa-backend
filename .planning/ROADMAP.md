@@ -36,7 +36,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 | 473 | Student Content Privacy And Practice Integrity | Complete — 40/40 plans, independently verified 2026-07-18 | Phase 472 |
 | 474 | 24/87 | In Progress|  |
 | 475 | 45/45 | Complete    | 2026-07-23 |
-| 476 | 3/29 | In Progress|  |
+| 476 | 4/29 | In Progress|  |
 | 477 | Web Foundation And Contract Convergence | Authoritative Web auth/API/config behavior without hidden demo truth | Phases 472, 473, and 474 |
 | 478 | Complete Web Role Journeys And Route Closure | Functional student, parent, teacher, admin/operator, organization, and public browser routes | Phases 475, 476, and 477 |
 | 479 | Broader Versioned Infrastructure And Browser WebSocket Integration | Audit/extend cloud resources and deliver browser realtime without deferring Phase 474 prerequisites | Phases 474 and 477 |
@@ -677,7 +677,7 @@ Plans:
 4. Lookalike, encoded, credential-bearing, wrong-port, and arbitrary HTTPS callback URLs are refused.
 5. A Stripe test-mode browser checkout and signed webhook changes parent/student effective entitlement and quota exactly once and appears in the parent/admin Web views.
 
-**Plans:** 3/29 plans executed
+**Plans:** 4/29 plans executed
 Plans:
 **Wave 1**
 
@@ -687,7 +687,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 476-03-PLAN.md — Converge backend plan identities, defaults, and Stripe configuration.
-- [ ] 476-05-PLAN.md — Persist one durable checkout command per browser idempotency key.
+- [x] 476-05-PLAN.md — Persist one durable checkout command per browser idempotency key.
 - [ ] 476-10-PLAN.md — Persist immutable, ordered, idempotent Stripe billing facts.
 
 **Wave 3** *(blocked on Wave 2 completion)*
