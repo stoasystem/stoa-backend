@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-12-PLAN.md
-last_updated: "2026-07-24T14:25:45.563Z"
+stopped_at: Completed 476-13-PLAN.md
+last_updated: "2026-07-24T14:40:53.128Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 156
+  completed_plans: 157
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 20 of 29
+Plan: 21 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T14:25:45.556Z
-**Stopped At:** Completed 476-12-PLAN.md
+**Last Date:** 2026-07-24T14:40:53.121Z
+**Stopped At:** Completed 476-13-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -263,6 +263,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P17 | 16min | 1 tasks | 2 files |
 | Phase 476 P18 | 11min | 1 tasks | 2 files |
 | Phase 476 P12 | 11min | 1 tasks | 8 files |
+| Phase 476 P13 | 8min | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -601,3 +602,6 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Signed paid activation reaches Plan 10 only through explicit grant construction; relationship/profile/account-fence ConditionChecks join the same activation transaction.
 - [Phase 476]: An active parent billing projection no longer grants every bound child; the resolver requires one exact owner-scoped active beneficiary grant.
 - [Phase 476]: A paid upgrade advances plan, allowance, activation, and grant versions while leaving weekly token/support counters and attachment byte aggregates untouched.
+- [Phase 476]: Keep period-end schedules and renewal grace as separate paid_transition.v1 records under the exact subscription digest so either lifecycle can replay independently.
+- [Phase 476]: Derive the first renewal-failure deadline once and treat every same-plan-version failure as replay, even when a delayed event carries a different delivery identity.
+- [Phase 476]: Apply due transitions atomically with immutable prior-grant history and without touching allowance counters or attachment storage.
