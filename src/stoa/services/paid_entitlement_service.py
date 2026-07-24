@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo, billing_fact_repo, user_repo
 from stoa.models.billing import BillingPlanId
+from stoa.services import attachment_service
 
 
 GRANT_SCHEMA_VERSION = "paid_beneficiary_grant.v1"
+TRANSITION_SCHEMA_VERSION = "paid_transition.v1"
+GRANT_HISTORY_SCHEMA_VERSION = "paid_grant_history.v1"
+RENEWAL_GRACE_DURATION = timedelta(hours=72)
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _PLAN_RANK = {
     BillingPlanId.FREE_TRIAL: 0,
@@ -40,6 +45,17 @@ class PaidGrantDisposition(StrEnum):
     RETRYABLE = "retryable_dependency"
 
 
+class PaidTransitionDisposition(StrEnum):
+    SCHEDULED = "scheduled"
+    GRACE_STARTED = "grace_started"
+    GRACE_CLEARED = "grace_cleared"
+    APPLIED = "applied"
+    NOT_DUE = "not_due"
+    ALREADY_APPLIED = "already_applied"
+    CONFLICT = "conditional_conflict"
+    RETRYABLE = "retryable_dependency"
+
+
 @dataclass(frozen=True, slots=True)
 class PaidGrantBuild:
     grant_items: tuple[dict[str, object], ...]
@@ -49,6 +65,13 @@ class PaidGrantBuild:
 @dataclass(frozen=True, slots=True)
 class PaidGrantResult:
     disposition: PaidGrantDisposition
+    operations: tuple[dict[str, Any], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class PaidTransitionResult:
+    disposition: PaidTransitionDisposition
+    transition: dict[str, object]
     operations: tuple[dict[str, Any], ...] = ()
 
 
@@ -91,6 +114,17 @@ def _aware_timestamp(value: datetime, field: str) -> str:
     return value.isoformat()
 
 
+def _parse_aware_timestamp(value: object, field: str) -> datetime:
+    text = _required_text(value, field)
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"{field} is invalid") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(f"{field} is invalid")
+    return parsed
+
+
 def _mapping(value: object) -> dict[str, object] | None:
     if not isinstance(value, Mapping):
         return None
@@ -112,6 +146,516 @@ def _grant_key(parent_id: str, beneficiary_id: str) -> dict[str, str]:
         "PK": f"PAID_GRANT#{_required_text(parent_id, 'parent_id')}",
         "SK": f"BENEFICIARY#{_required_text(beneficiary_id, 'beneficiary_id')}",
     }
+
+
+def _transition_key(
+    parent_id: str,
+    subscription_id_digest: str,
+    transition_kind: str,
+) -> dict[str, str]:
+    if transition_kind not in {"period_end", "renewal_grace"}:
+        raise ValueError("transition_kind is invalid")
+    return {
+        "PK": f"PAID_TRANSITION#{_required_text(parent_id, 'parent_id')}",
+        "SK": (
+            f"{transition_kind.upper()}#"
+            f"{_digest(subscription_id_digest, 'subscription_id_digest')}"
+        ),
+    }
+
+
+def _transition_identity(*parts: object) -> str:
+    canonical = "\n".join(str(part) for part in parts)
+    return hashlib.sha256(
+        f"stoa:paid-transition:v1\n{canonical}".encode()
+    ).hexdigest()
+
+
+def _transition_beneficiaries(values: Sequence[str]) -> tuple[str, ...]:
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+        raise ValueError("beneficiary_ids are invalid")
+    beneficiaries = tuple(
+        _required_text(value, "beneficiary_id") for value in values
+    )
+    if (
+        not 1 <= len(beneficiaries) <= 3
+        or len(beneficiaries) != len(set(beneficiaries))
+    ):
+        raise ValueError("beneficiary_ids are invalid")
+    return tuple(sorted(beneficiaries))
+
+
+def _transition_item(
+    table: object,
+    key: Mapping[str, str],
+) -> dict[str, object] | None:
+    item = _mapping(_strong_get(table, key))
+    if item is None:
+        return None
+    if (
+        item.get("entity_type") != "paid_transition"
+        or item.get("schema_version") != TRANSITION_SCHEMA_VERSION
+        or item.get("PK") != key["PK"]
+        or item.get("SK") != key["SK"]
+    ):
+        return None
+    return item
+
+
+def _transition_put(
+    item: Mapping[str, object],
+    previous: Mapping[str, object] | None,
+) -> dict[str, Any]:
+    if previous is None:
+        return {
+            "Put": {
+                "Item": dict(item),
+                "ConditionExpression": (
+                    "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                ),
+            }
+        }
+    return {
+        "Put": {
+            "Item": dict(item),
+            "ConditionExpression": (
+                "transition_identity=:transition_identity "
+                "AND transition_version=:transition_version "
+                "AND #status=:status"
+            ),
+            "ExpressionAttributeNames": {"#status": "status"},
+            "ExpressionAttributeValues": {
+                ":transition_identity": previous["transition_identity"],
+                ":transition_version": previous["transition_version"],
+                ":status": previous["status"],
+            },
+        }
+    }
+
+
+def _persist_transition(
+    item: dict[str, object],
+    previous: Mapping[str, object] | None,
+    *,
+    table: object,
+    success: PaidTransitionDisposition,
+) -> PaidTransitionResult:
+    operation = _transition_put(item, previous)
+    try:
+        account_deletion_repo.transact([operation], table=table)
+    except Exception:
+        replayed = _transition_item(
+            table,
+            {"PK": str(item["PK"]), "SK": str(item["SK"])},
+        )
+        if (
+            replayed is not None
+            and replayed.get("transition_identity") == item["transition_identity"]
+            and replayed.get("status") == item["status"]
+            and replayed.get("transition_version") == item["transition_version"]
+        ):
+            return PaidTransitionResult(
+                PaidTransitionDisposition.ALREADY_APPLIED,
+                replayed,
+            )
+        return PaidTransitionResult(PaidTransitionDisposition.RETRYABLE, {})
+    return PaidTransitionResult(success, item, (operation,))
+
+
+def schedule_period_end_transition(
+    *,
+    parent_id: str,
+    beneficiary_ids: Sequence[str],
+    subscription_id_digest: str,
+    current_plan: BillingPlanId,
+    target_plan: BillingPlanId,
+    plan_version: int,
+    period_end: datetime,
+    table: object | None = None,
+) -> PaidTransitionResult:
+    """Persist a lower-plan transition without changing current paid access."""
+    parent = _required_text(parent_id, "parent_id")
+    digest = _digest(subscription_id_digest, "subscription_id_digest")
+    beneficiaries = _transition_beneficiaries(beneficiary_ids)
+    if (
+        not isinstance(current_plan, BillingPlanId)
+        or current_plan is BillingPlanId.FREE_TRIAL
+        or not isinstance(target_plan, BillingPlanId)
+        or _PLAN_RANK[target_plan] >= _PLAN_RANK[current_plan]
+    ):
+        raise ValueError("period-end transition must lower an active paid plan")
+    plan_version = _positive_integer(plan_version, "plan_version")
+    effective_at = _aware_timestamp(period_end, "period_end")
+    identity = _transition_identity(
+        "period_end",
+        digest,
+        plan_version,
+        current_plan,
+        target_plan,
+        effective_at,
+    )
+    target = table or get_table()
+    key = _transition_key(parent, digest, "period_end")
+    previous = _transition_item(target, key)
+    if previous is not None:
+        if previous.get("transition_identity") == identity:
+            return PaidTransitionResult(
+                PaidTransitionDisposition.ALREADY_APPLIED,
+                previous,
+            )
+        try:
+            previous_plan_version = _positive_integer(
+                previous.get("plan_version"),
+                "previous plan_version",
+            )
+        except ValueError:
+            return PaidTransitionResult(PaidTransitionDisposition.CONFLICT, previous)
+        if previous_plan_version >= plan_version or previous.get("status") == "applied":
+            return PaidTransitionResult(PaidTransitionDisposition.CONFLICT, previous)
+    item: dict[str, object] = {
+        **key,
+        "entity_type": "paid_transition",
+        "schema_version": TRANSITION_SCHEMA_VERSION,
+        "transition_kind": "period_end",
+        "transition_identity": identity,
+        "parent_id": parent,
+        "subscription_id_digest": digest,
+        "beneficiary_ids": list(beneficiaries),
+        "current_plan": str(current_plan),
+        "target_plan": str(target_plan),
+        "plan_version": plan_version,
+        "effective_at": effective_at,
+        "grace_started_at": None,
+        "grace_expires_at": None,
+        "transition_version": (
+            _positive_integer(previous["transition_version"], "transition_version") + 1
+            if previous is not None
+            else 1
+        ),
+        "status": "scheduled",
+    }
+    return _persist_transition(
+        item,
+        previous,
+        table=target,
+        success=PaidTransitionDisposition.SCHEDULED,
+    )
+
+
+def start_renewal_grace(
+    *,
+    parent_id: str,
+    beneficiary_ids: Sequence[str],
+    subscription_id_digest: str,
+    plan_id: BillingPlanId,
+    plan_version: int,
+    failure_identity: str,
+    failed_at: datetime,
+    table: object | None = None,
+) -> PaidTransitionResult:
+    """Create one immutable 72-hour grace deadline for a renewal version."""
+    parent = _required_text(parent_id, "parent_id")
+    digest = _digest(subscription_id_digest, "subscription_id_digest")
+    beneficiaries = _transition_beneficiaries(beneficiary_ids)
+    if not isinstance(plan_id, BillingPlanId) or plan_id is BillingPlanId.FREE_TRIAL:
+        raise ValueError("plan_id is not paid")
+    plan_version = _positive_integer(plan_version, "plan_version")
+    failure = _required_text(failure_identity, "failure_identity")
+    started = _aware_timestamp(failed_at, "failed_at")
+    expires = _aware_timestamp(
+        failed_at + RENEWAL_GRACE_DURATION,
+        "grace_expires_at",
+    )
+    identity = _transition_identity(
+        "renewal_grace",
+        digest,
+        plan_version,
+        failure,
+        started,
+    )
+    target = table or get_table()
+    key = _transition_key(parent, digest, "renewal_grace")
+    previous = _transition_item(target, key)
+    if previous is not None:
+        try:
+            previous_plan_version = _positive_integer(
+                previous.get("plan_version"),
+                "previous plan_version",
+            )
+        except ValueError:
+            return PaidTransitionResult(PaidTransitionDisposition.CONFLICT, previous)
+        if previous_plan_version == plan_version:
+            return PaidTransitionResult(
+                PaidTransitionDisposition.ALREADY_APPLIED,
+                previous,
+            )
+        if previous_plan_version > plan_version or previous.get("status") == "grace_started":
+            return PaidTransitionResult(PaidTransitionDisposition.CONFLICT, previous)
+    item: dict[str, object] = {
+        **key,
+        "entity_type": "paid_transition",
+        "schema_version": TRANSITION_SCHEMA_VERSION,
+        "transition_kind": "renewal_grace",
+        "transition_identity": identity,
+        "parent_id": parent,
+        "subscription_id_digest": digest,
+        "beneficiary_ids": list(beneficiaries),
+        "current_plan": str(plan_id),
+        "target_plan": BillingPlanId.FREE_TRIAL.value,
+        "plan_version": plan_version,
+        "failure_identity": failure,
+        "effective_at": expires,
+        "grace_started_at": started,
+        "grace_expires_at": expires,
+        "transition_version": (
+            _positive_integer(previous["transition_version"], "transition_version") + 1
+            if previous is not None
+            else 1
+        ),
+        "status": "grace_started",
+    }
+    return _persist_transition(
+        item,
+        previous,
+        table=target,
+        success=PaidTransitionDisposition.GRACE_STARTED,
+    )
+
+
+def clear_renewal_grace(
+    *,
+    parent_id: str,
+    subscription_id_digest: str,
+    transition_identity: str,
+    recovered_at: datetime,
+    table: object | None = None,
+) -> PaidTransitionResult:
+    """Conditionally close matching grace while preserving usage and history."""
+    parent = _required_text(parent_id, "parent_id")
+    digest = _digest(subscription_id_digest, "subscription_id_digest")
+    identity = _digest(transition_identity, "transition_identity")
+    recovered = _aware_timestamp(recovered_at, "recovered_at")
+    target = table or get_table()
+    key = _transition_key(parent, digest, "renewal_grace")
+    previous = _transition_item(target, key)
+    if previous is None or previous.get("transition_identity") != identity:
+        return PaidTransitionResult(
+            PaidTransitionDisposition.CONFLICT,
+            previous or {},
+        )
+    if previous.get("status") in {"cleared", "applied"}:
+        return PaidTransitionResult(
+            PaidTransitionDisposition.ALREADY_APPLIED,
+            previous,
+        )
+    if previous.get("status") != "grace_started":
+        return PaidTransitionResult(PaidTransitionDisposition.CONFLICT, previous)
+    item = {
+        **previous,
+        "status": "cleared",
+        "cleared_at": recovered,
+        "transition_version": _positive_integer(
+            previous.get("transition_version"),
+            "transition_version",
+        )
+        + 1,
+    }
+    return _persist_transition(
+        item,
+        previous,
+        table=target,
+        success=PaidTransitionDisposition.GRACE_CLEARED,
+    )
+
+
+def _grant_history_item(
+    grant: Mapping[str, object],
+    transition: Mapping[str, object],
+) -> dict[str, object]:
+    parent = _required_text(grant.get("parent_id"), "parent_id")
+    beneficiary = _required_text(grant.get("beneficiary_id"), "beneficiary_id")
+    grant_version = _positive_integer(grant.get("grant_version"), "grant_version")
+    return {
+        "PK": f"PAID_GRANT_HISTORY#{parent}",
+        "SK": f"BENEFICIARY#{beneficiary}#VERSION#{grant_version}",
+        "entity_type": "paid_grant_history",
+        "schema_version": GRANT_HISTORY_SCHEMA_VERSION,
+        "parent_id": parent,
+        "beneficiary_id": beneficiary,
+        "grant_version": grant_version,
+        "plan_id": grant.get("plan_id"),
+        "plan_version": grant.get("plan_version"),
+        "allowance_version": grant.get("allowance_version"),
+        "activation_version": grant.get("activation_version"),
+        "subscription_id_digest": grant.get("subscription_id_digest"),
+        "transition_identity": transition.get("transition_identity"),
+        "retained_at": transition.get("effective_at"),
+    }
+
+
+def apply_due_paid_transition(
+    *,
+    parent_id: str,
+    subscription_id_digest: str,
+    transition_kind: str,
+    transition_identity: str,
+    now: datetime,
+    table: object | None = None,
+) -> PaidTransitionResult:
+    """Apply one due transition atomically, retaining every prior grant and byte."""
+    parent = _required_text(parent_id, "parent_id")
+    digest = _digest(subscription_id_digest, "subscription_id_digest")
+    identity = _digest(transition_identity, "transition_identity")
+    now_text = _aware_timestamp(now, "now")
+    target = table or get_table()
+    key = _transition_key(parent, digest, transition_kind)
+    previous = _transition_item(target, key)
+    if previous is None or previous.get("transition_identity") != identity:
+        return PaidTransitionResult(
+            PaidTransitionDisposition.CONFLICT,
+            previous or {},
+        )
+    if previous.get("status") in {"applied", "cleared"}:
+        return PaidTransitionResult(
+            PaidTransitionDisposition.ALREADY_APPLIED,
+            previous,
+        )
+    expected_status = (
+        "scheduled" if transition_kind == "period_end" else "grace_started"
+    )
+    if previous.get("status") != expected_status:
+        return PaidTransitionResult(PaidTransitionDisposition.CONFLICT, previous)
+    try:
+        due_at = _parse_aware_timestamp(previous.get("effective_at"), "effective_at")
+    except ValueError:
+        return PaidTransitionResult(PaidTransitionDisposition.CONFLICT, previous)
+    if now < due_at:
+        return PaidTransitionResult(PaidTransitionDisposition.NOT_DUE, previous)
+    try:
+        target_plan = BillingPlanId(
+            _required_text(previous.get("target_plan"), "target_plan")
+        )
+        plan_version = _positive_integer(
+            previous.get("plan_version"),
+            "plan_version",
+        )
+        beneficiaries_value = previous.get("beneficiary_ids")
+        if not isinstance(beneficiaries_value, list):
+            raise ValueError("beneficiary_ids are invalid")
+        beneficiaries = _transition_beneficiaries(beneficiaries_value)
+    except ValueError:
+        return PaidTransitionResult(PaidTransitionDisposition.CONFLICT, previous)
+
+    operations: list[dict[str, Any]] = []
+    for beneficiary in beneficiaries:
+        grant = _active_grant(
+            _strong_get(target, _grant_key(parent, beneficiary)),
+            parent_id=parent,
+            beneficiary_id=beneficiary,
+        )
+        if (
+            grant is None
+            or grant.get("subscription_id_digest") != digest
+            or grant.get("plan_id") != previous.get("current_plan")
+        ):
+            return PaidTransitionResult(PaidTransitionDisposition.CONFLICT, previous)
+        try:
+            old_grant_version = _positive_integer(
+                grant.get("grant_version"),
+                "grant_version",
+            )
+            old_plan_version = _positive_integer(
+                grant.get("plan_version"),
+                "grant plan_version",
+            )
+            if plan_version <= old_plan_version:
+                return PaidTransitionResult(
+                    PaidTransitionDisposition.CONFLICT,
+                    previous,
+                )
+        except ValueError:
+            return PaidTransitionResult(PaidTransitionDisposition.CONFLICT, previous)
+        history = _grant_history_item(grant, previous)
+        operations.append(
+            {
+                "Put": {
+                    "Item": history,
+                    "ConditionExpression": (
+                        "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                    ),
+                }
+            }
+        )
+        updated_grant = {
+            **grant,
+            "grant_version": plan_version,
+            "plan_version": plan_version,
+            "allowance_version": plan_version,
+            "transition_identity": identity,
+            "transitioned_at": now_text,
+        }
+        if target_plan is BillingPlanId.FREE_TRIAL:
+            updated_grant.update(
+                {
+                    "grant_status": "historical",
+                    "ended_at": now_text,
+                    "ended_by_transition": identity,
+                }
+            )
+        else:
+            updated_grant["plan_id"] = str(target_plan)
+        operations.append(
+            {
+                "Put": {
+                    "Item": updated_grant,
+                    "ConditionExpression": (
+                        "grant_status=:active AND grant_version=:grant_version "
+                        "AND plan_version=:plan_version "
+                        "AND subscription_id_digest=:subscription_id_digest"
+                    ),
+                    "ExpressionAttributeValues": {
+                        ":active": "active",
+                        ":grant_version": old_grant_version,
+                        ":plan_version": old_plan_version,
+                        ":subscription_id_digest": digest,
+                    },
+                }
+            }
+        )
+
+    applied = {
+        **previous,
+        "status": "applied",
+        "applied_at": now_text,
+        "attachment_storage_limit": attachment_service.attachment_storage_limit(
+            str(target_plan)
+        ),
+        "transition_version": _positive_integer(
+            previous.get("transition_version"),
+            "transition_version",
+        )
+        + 1,
+    }
+    operations.append(_transition_put(applied, previous))
+    try:
+        account_deletion_repo.transact(operations, table=target)
+    except Exception:
+        replayed = _transition_item(target, key)
+        if (
+            replayed is not None
+            and replayed.get("transition_identity") == identity
+            and replayed.get("status") == "applied"
+        ):
+            return PaidTransitionResult(
+                PaidTransitionDisposition.ALREADY_APPLIED,
+                replayed,
+            )
+        return PaidTransitionResult(PaidTransitionDisposition.RETRYABLE, previous)
+    return PaidTransitionResult(
+        PaidTransitionDisposition.APPLIED,
+        applied,
+        tuple(operations),
+    )
 
 
 def validate_beneficiary_selection(
@@ -656,9 +1200,15 @@ __all__ = [
     "PaidGrantConflict",
     "PaidGrantDisposition",
     "PaidGrantResult",
+    "PaidTransitionDisposition",
+    "PaidTransitionResult",
     "apply_paid_upgrade",
+    "apply_due_paid_transition",
     "build_paid_activation_operations",
+    "clear_renewal_grace",
     "commit_paid_activation",
     "get_active_beneficiary_grant",
+    "schedule_period_end_transition",
+    "start_renewal_grace",
     "validate_beneficiary_selection",
 ]

@@ -5,11 +5,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from stoa.config import FREE_STORAGE_BYTES, PAID_STORAGE_BYTES, Settings
+from stoa.config import Settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import user_repo
 from stoa.models.user import SubscriptionTier
-from stoa.services import paid_entitlement_service
+from stoa.services import attachment_service, paid_entitlement_service
 
 
 ACTIVE_BILLING_STATUSES = {"active", "manual_override"}
@@ -281,10 +281,10 @@ def _daily_hint_limit(plan: str, settings: Settings) -> int:
 
 def attachment_storage_limit(plan: str, settings: Settings) -> int:
     """Return the authoritative attachment-storage allowance for an effective plan."""
-    normalized = _normalize_tier(plan)
-    if normalized == SubscriptionTier.FREE_TRIAL.value:
-        return settings.free_attachment_storage_bytes or FREE_STORAGE_BYTES
-    return settings.paid_attachment_storage_bytes or PAID_STORAGE_BYTES
+    return attachment_service.attachment_storage_limit(
+        _normalize_tier(plan),
+        settings=settings,
+    )
 
 
 def _normalize_tier(value: Any) -> str:

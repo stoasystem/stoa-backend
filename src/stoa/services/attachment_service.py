@@ -308,12 +308,25 @@ def _close_provider_body(body: Any) -> bool:
     return True
 
 
+def attachment_storage_limit(
+    effective_plan: str,
+    *,
+    settings: Settings | None = None,
+) -> int:
+    """Return the admission-only byte limit for one effective product plan."""
+    paid = effective_plan in {"student", "teacher_supported", "family"}
+    if settings is not None:
+        return (
+            settings.paid_attachment_storage_bytes
+            if paid
+            else settings.free_attachment_storage_bytes
+        )
+    return PAID_STORAGE_BYTES if paid else FREE_STORAGE_BYTES
+
+
 def storage_limit_for_entitlement(effective_plan: str) -> int:
-    return (
-        PAID_STORAGE_BYTES
-        if effective_plan in {"student", "teacher_supported", "family"}
-        else FREE_STORAGE_BYTES
-    )
+    """Compatibility wrapper for callers that use the locked default limits."""
+    return attachment_storage_limit(effective_plan)
 
 
 def cleanup_upload_intent(
