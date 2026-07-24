@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from botocore.exceptions import ClientError
 
 from stoa.config import Settings, get_settings
+from stoa.db.repositories import checkout_command_repo
 from stoa.routers import admin, billing, parents
 from stoa.services import account_operations_service, entitlement_service, subscription_service
 from actor_helpers import install_actor_overrides
@@ -80,6 +81,9 @@ class FakeTable:
                 key = operation["Delete"]["Key"]
                 self.items.pop((key["PK"], key["SK"]), None)
 
+    def transact_account_deletion(self, operations):
+        self.transact_write_items(TransactItems=operations)
+
     def _check_transaction_operation(self, operation):
         if "ConditionCheck" in operation:
             check = operation["ConditionCheck"]
@@ -94,7 +98,10 @@ class FakeTable:
         if "Put" in operation:
             put = operation["Put"]
             key = (put["Item"]["PK"], put["Item"]["SK"])
-            if put.get("ConditionExpression") == "attribute_not_exists(PK)" and key in self.items:
+            if (
+                "attribute_not_exists(PK)" in str(put.get("ConditionExpression") or "")
+                and key in self.items
+            ):
                 raise _conditional_error()
         if "Update" in operation:
             update = operation["Update"]
@@ -132,6 +139,30 @@ def _settings(**overrides) -> Settings:
     return Settings(**values)
 
 
+def _checkout_settings(**overrides) -> Settings:
+    return _settings(
+        stripe_api_key="sk_test_checkout",
+        stripe_student_price_id="price_test_student",
+        stripe_teacher_supported_price_id="price_test_teacher_supported",
+        stripe_family_price_id="price_test_family",
+        **overrides,
+    )
+
+
+def _checkout_headers(key: str = "checkout-operation-key-0001") -> dict[str, str]:
+    return {"Idempotency-Key": key}
+
+
+def _checkout_body(
+    plan: str = "student",
+    beneficiary_ids: list[str] | None = None,
+) -> dict[str, object]:
+    return {
+        "plan": plan,
+        "beneficiaryIds": beneficiary_ids or ["student-1"],
+    }
+
+
 def _app_for_user(user: dict, settings: Settings | None = None) -> FastAPI:
     app = FastAPI()
     app.include_router(parents.router, prefix="/parents")
@@ -148,6 +179,7 @@ def _profiles():
             "user_id": "parent-1",
             "email": "parent@example.com",
             "role": "parent",
+            "account_status": "active",
             "subscription_tier": "free_trial",
             "version": 1,
         },
@@ -155,6 +187,7 @@ def _profiles():
             "user_id": "student-1",
             "email": "student@example.com",
             "role": "student",
+            "account_status": "active",
             "subscription_tier": "free_trial",
             "parent_id": "parent-1",
             "parent_binding_status": "active",
@@ -164,6 +197,7 @@ def _profiles():
             "user_id": "admin-1",
             "email": "admin@example.com",
             "role": "admin",
+            "account_status": "active",
             "subscription_tier": "family",
             "version": 1,
         },
@@ -221,6 +255,12 @@ def _install_fakes(monkeypatch):
             if pk == f"USER#{parent_id}" and sk.startswith("CHILD#")
         ]
 
+    def get_parent_student_binding(parent_id, student_id):
+        return table.items.get((f"USER#{parent_id}", f"CHILD#{student_id}"))
+
+    def get_student_parent_binding(student_id, parent_id):
+        return table.items.get((f"USER#{student_id}", f"PARENT#{parent_id}"))
+
     def update_item(Key, UpdateExpression, ExpressionAttributeValues, ExpressionAttributeNames=None):
         if Key["PK"].startswith("USER#") and Key["SK"] == "PROFILE":
             user_id = Key["PK"].removeprefix("USER#")
@@ -254,8 +294,19 @@ def _install_fakes(monkeypatch):
 
     table.update_item = update_item
     monkeypatch.setattr(subscription_service, "get_table", lambda: table)
+    monkeypatch.setattr(checkout_command_repo, "get_table", lambda: table)
     monkeypatch.setattr(subscription_service, "_stripe_sdk_available", lambda: False)
     monkeypatch.setattr(subscription_service.user_repo, "get_user", get_user)
+    monkeypatch.setattr(
+        subscription_service.user_repo,
+        "get_parent_student_binding",
+        get_parent_student_binding,
+    )
+    monkeypatch.setattr(
+        subscription_service.user_repo,
+        "get_student_parent_binding",
+        get_student_parent_binding,
+    )
     monkeypatch.setattr(entitlement_service, "get_table", lambda: table)
     monkeypatch.setattr(entitlement_service.user_repo, "get_user", get_user)
     monkeypatch.setattr(
@@ -266,7 +317,7 @@ def _install_fakes(monkeypatch):
     monkeypatch.setattr(
         entitlement_service.user_repo,
         "get_parent_student_binding",
-        lambda parent_id, student_id: table.items.get((f"USER#{parent_id}", f"CHILD#{student_id}")),
+        get_parent_student_binding,
     )
     monkeypatch.setattr(parents.user_repo, "get_user", get_user)
     monkeypatch.setattr(account_operations_service.user_repo, "get_user", get_user)
@@ -286,6 +337,45 @@ def _install_fakes(monkeypatch):
             "relationship": "child",
         }
     )
+    table.put_item(
+        Item={
+            "PK": "USER#student-1",
+            "SK": "PARENT#parent-1",
+            "entity_type": "parent_student_binding",
+            "parent_id": "parent-1",
+            "student_id": "student-1",
+            "status": "active",
+            "relationship": "child",
+        }
+    )
+
+    sessions: dict[str, dict[str, object]] = {}
+
+    class FakeStripeSession:
+        @staticmethod
+        def create(**kwargs):
+            provider_key = str(kwargs["idempotency_key"])
+            return sessions.setdefault(
+                provider_key,
+                {
+                    "id": f"cs_test_{provider_key[:24]}",
+                    "url": (
+                        "https://checkout.stripe.com/c/pay/"
+                        f"cs_test_{provider_key[:24]}"
+                    ),
+                    "livemode": False,
+                    "customer": "cus_test_parent",
+                },
+            )
+
+    class FakeStripeCheckout:
+        Session = FakeStripeSession
+
+    class FakeStripe:
+        checkout = FakeStripeCheckout
+        api_key = None
+
+    monkeypatch.setattr(subscription_service, "_load_stripe_sdk", lambda: FakeStripe)
     return table, profiles
 
 
@@ -618,38 +708,44 @@ def test_request_history_is_isolated_by_request_id(monkeypatch):
 
 
 def test_parent_can_create_checkout_session_and_admin_can_inspect_billing(monkeypatch):
-    _install_fakes(monkeypatch)
-    client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}))
-    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}))
+    table, _profiles = _install_fakes(monkeypatch)
+    settings = _checkout_settings()
+    client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}, settings))
+    admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
 
     response = client.post(
         "/parents/me/subscription/checkout",
-        json={"requestedTier": "student"},
+        headers=_checkout_headers(),
+        json=_checkout_body(),
     )
 
     assert response.status_code == 201
     body = response.json()
-    assert body["provider"] == "stripe"
-    assert body["mode"] == "test"
-    assert body["billingStatus"] == "checkout_pending"
-    assert body["readiness"]["state"] == "test"
-    assert body["twint"]["inScope"] is True
-    assert body["twint"]["status"] == "capability_unconfirmed"
+    assert body["checkoutRef"].startswith("co_")
+    assert body["commandState"] == "provider_session_open"
+    assert body["targetPlan"] == "student"
+    assert body["beneficiaries"] == ["student-1"]
+    assert body["safeActions"] == ["recheck_payment", "contact_support"]
+    assert body["checkoutSessionId"].startswith("cs_test_")
     assert body["checkoutUrl"].startswith("https://checkout.stripe.com/c/pay/cs_test_")
 
     subscription = client.get("/parents/me/subscription").json()
-    assert subscription["billing"]["status"] == "checkout_pending"
-    assert subscription["billing"]["requestedTier"] == "student"
-    assert subscription["effectiveEntitlements"][0]["blockingReason"] == "checkout_pending"
+    assert subscription["billing"]["status"] == "none"
 
     admin_response = admin_client.get("/admin/subscriptions/billing")
     assert admin_response.status_code == 200
-    assert admin_response.json()["count"] == 1
-    assert admin_response.json()["items"][0]["parentId"] == "parent-1"
-    assert admin_response.json()["items"][0]["readiness"]["state"] == "test"
+    assert admin_response.json()["count"] == 0
+    command_rows = [
+        item
+        for item in table.items.values()
+        if item.get("entity_type") == "checkout_command"
+    ]
+    assert len(command_rows) == 1
+    assert command_rows[0]["provider_effect_status"] == "session_attached"
+    assert command_rows[0]["beneficiary_ids"] == ["student-1"]
 
 
-def test_production_checkout_requires_explicit_live_enablement(monkeypatch):
+def test_production_live_checkout_is_refused_before_provider_access(monkeypatch):
     _install_fakes(monkeypatch)
     monkeypatch.setattr(subscription_service, "_stripe_sdk_available", lambda: True)
     settings = _settings(
@@ -665,16 +761,16 @@ def test_production_checkout_requires_explicit_live_enablement(monkeypatch):
 
     response = client.post(
         "/parents/me/subscription/checkout",
-        json={"requestedTier": "student"},
+        headers=_checkout_headers(),
+        json=_checkout_body(),
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 503
     detail = response.json()["detail"]
-    assert detail["readiness"]["state"] == "live_ready_but_blocked"
-    assert detail["readiness"]["checkoutAllowed"] is False
+    assert detail["code"] == "checkout_sandbox_required"
 
 
-def test_live_checkout_includes_twint_when_capability_is_confirmed(monkeypatch):
+def test_live_checkout_is_refused_when_twint_capability_is_confirmed(monkeypatch):
     _install_fakes(monkeypatch)
     captured: dict[str, object] = {}
 
@@ -707,16 +803,13 @@ def test_live_checkout_includes_twint_when_capability_is_confirmed(monkeypatch):
 
     response = client.post(
         "/parents/me/subscription/checkout",
-        json={"requestedTier": "student"},
+        headers=_checkout_headers(),
+        json=_checkout_body(),
     )
 
-    assert response.status_code == 201
-    assert captured["mode"] == "subscription"
-    assert captured["payment_method_types"] == ["card", "twint"]
-    assert "customer" not in captured
-    assert captured["subscription_data"] == {
-        "metadata": {"stoa_parent_id": "parent-1", "requested_tier": "student"}
-    }
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "checkout_sandbox_required"
+    assert captured == {}
 
 
 def test_production_checkout_reports_missing_live_configuration(monkeypatch):
@@ -726,14 +819,12 @@ def test_production_checkout_reports_missing_live_configuration(monkeypatch):
 
     response = client.post(
         "/parents/me/subscription/checkout",
-        json={"requestedTier": "student"},
+        headers=_checkout_headers(),
+        json=_checkout_body(),
     )
 
     assert response.status_code == 503
-    blockers = set(response.json()["detail"]["readiness"]["blockers"])
-    assert "missing_stripe_api_key" in blockers
-    assert "missing_stripe_webhook_secret" in blockers
-    assert "missing_student_price_id" in blockers
+    assert response.json()["detail"]["code"] == "checkout_sandbox_required"
 
 
 def test_admin_provider_readiness_reports_missing_production_config(monkeypatch):
@@ -1144,7 +1235,7 @@ def test_admin_can_update_checkout_and_refund_rollout_controls(monkeypatch):
     assert body["reason"] == "pause checkout while keeping approved refunds"
 
 
-def test_rollout_checkout_rollback_blocks_new_live_checkout(monkeypatch):
+def test_rollout_checkout_rollback_does_not_override_sandbox_only_checkout(monkeypatch):
     _install_fakes(monkeypatch)
     monkeypatch.setattr(subscription_service, "_stripe_sdk_available", lambda: True)
     settings = _settings(
@@ -1171,13 +1262,13 @@ def test_rollout_checkout_rollback_blocks_new_live_checkout(monkeypatch):
 
     response = parent_client.post(
         "/parents/me/subscription/checkout",
-        json={"requestedTier": "student"},
+        headers=_checkout_headers(),
+        json=_checkout_body(),
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 503
     detail = response.json()["detail"]
-    assert detail["readiness"]["state"] == "live_ready_but_blocked"
-    assert detail["readiness"]["rollout"]["checkout"]["state"] == "rolled_back"
+    assert detail["code"] == "checkout_sandbox_required"
 
 
 def test_rollout_refund_rollback_blocks_new_refund_but_preserves_export(monkeypatch):
@@ -1284,22 +1375,22 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     webhook_client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}, settings))
     admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}, settings))
 
-    checkout = parent_client.post(
-        "/parents/me/subscription/checkout",
-        json={"requestedTier": "family"},
-    ).json()
+    checkout_session_id = "cs_test_legacy_webhook_family"
     checkout_completed = {
         "id": "evt_checkout_completed_1",
         "type": "checkout.session.completed",
         "created": int(time.time()),
         "data": {
             "object": {
-                "id": checkout["checkoutSessionId"],
+                "id": checkout_session_id,
                 "object": "checkout.session",
                 "livemode": False,
                 "customer": "cus_test_parent",
                 "subscription": "sub_test_parent",
-                "metadata": {"requested_tier": "family"},
+                "metadata": {
+                    "stoa_parent_id": "parent-1",
+                    "requested_tier": "family",
+                },
                 "payment_method_types": ["card", "twint"],
             }
         },
@@ -1317,7 +1408,7 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     pending_status = parent_client.get("/parents/me/subscription/billing").json()
     assert pending_status["status"] == "checkout_pending"
     assert pending_status["subscriptionTier"] == "free_trial"
-    assert pending_status["paymentMethodType"] == "unknown"
+    assert pending_status["paymentMethodType"] is None
     assert pending_status["dunning"]["state"] == "checkout_pending"
 
     invoice_created = int(time.time())
@@ -1495,21 +1586,29 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     assert refunded_status["accountingHandoff"]["refund"]["providerRefundId"] == "re_test_parent"
     assert refunded_status["accountingHandoff"]["refund"]["eligibleAmount"] == 1000
 
-    replacement = parent_client.post(
-        "/parents/me/subscription/checkout",
-        json={"requestedTier": "student"},
-    ).json()
+    replacement_session_id = "cs_test_legacy_webhook_replacement"
+    replacement_attempt = table.items[("SUBSCRIPTION_BILLING#parent-1", "SUMMARY")]
+    replacement_attempt.update(
+        requested_tier="student",
+        checkout_session_id=replacement_session_id,
+        previous_billing_status="active",
+        previous_subscription_tier="family",
+        billing_status="checkout_pending",
+    )
     expired = {
         "id": "evt_checkout_expired_1",
         "type": "checkout.session.expired",
         "created": int(time.time()),
         "data": {
             "object": {
-                "id": replacement["checkoutSessionId"],
+                "id": replacement_session_id,
                 "object": "checkout.session",
                 "livemode": False,
                 "customer": "cus_test_parent",
-                "metadata": {"requested_tier": "student"},
+                "metadata": {
+                    "stoa_parent_id": "parent-1",
+                    "requested_tier": "student",
+                },
             }
         },
     }
@@ -1535,21 +1634,21 @@ def test_payment_failed_projects_dunning_and_twint_lifecycle(monkeypatch):
     parent_client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}, settings))
     webhook_client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}, settings))
 
-    checkout = parent_client.post(
-        "/parents/me/subscription/checkout",
-        json={"requestedTier": "student"},
-    ).json()
+    checkout_session_id = "cs_test_legacy_webhook_failed"
     checkout_completed = {
         "id": "evt_checkout_completed_failed_path",
         "type": "checkout.session.completed",
         "created": int(time.time()),
         "data": {
             "object": {
-                "id": checkout["checkoutSessionId"],
+                "id": checkout_session_id,
                 "object": "checkout.session",
                 "customer": "cus_test_parent_failed",
                 "subscription": "sub_test_parent_failed",
-                "metadata": {"requested_tier": "student"},
+                "metadata": {
+                    "stoa_parent_id": "parent-1",
+                    "requested_tier": "student",
+                },
             }
         },
     }
