@@ -71,6 +71,7 @@ TDD execution produced the required RED and GREEN commits:
 
 1. **Task 476-03-01 RED: Add failing plan identity contract** - `589ea45` (test)
 2. **Task 476-03-01 GREEN: Establish canonical plan identity settings** - `1bd1af6` (feat)
+3. **Post-completion fix: Migrate existing runtime tier references** - `d1265ba` (fix)
 
 ## Files Created/Modified
 
@@ -119,7 +120,7 @@ None introduced.
 
 ## Issues Encountered
 
-- Removing forbidden enum aliases exposes legacy references in `entitlement_service.py` and `subscription_service.py`; importing the former currently fails on `SubscriptionTier.FREE`. Adding aliases or mapping canonical products back to daily tiers would violate D-02. The canonical paid-grant and free-trial entitlement migrations are explicitly owned by Plans 476-12 and 476-14 and are recorded in `deferred-items.md`.
+- Removing forbidden enum aliases initially exposed legacy runtime references in entitlement, subscription, attachment, usage, question, and conversation paths. The user chose immediate correction: `d1265ba` migrated those references to canonical IDs, retained the old daily counters only as a temporary canonical-keyed compatibility mechanism, and restored complete test collection without implementing future grant, allowance, or trial-lifecycle capabilities.
 
 ## User Setup Required
 
@@ -130,7 +131,7 @@ None introduced.
 
 - Plan 476-04 can inventory and migrate persisted legacy identities against one canonical source vocabulary.
 - Checkout-command plans can bind student, teacher-supported, and family Prices without a standard/premium translation layer.
-- Plans 476-12 and 476-14 must complete the already-assigned entitlement-service migration before broad application imports/regressions can pass under the new enum.
+- Plans 476-12 and 476-14 retain ownership of explicit paid grants and immutable trial-lifecycle behavior; broad application imports and test collection no longer depend on those future capabilities.
 
 ## Self-Check: PASSED
 
@@ -141,8 +142,11 @@ None introduced.
 - FOUND: `tests/test_plan_identity_contract.py`
 - FOUND: `589ea45`
 - FOUND: `1bd1af6`
-- PASS: `PYTHONPATH=. .venv/bin/pytest -q tests/test_plan_identity_contract.py` (`13 passed`)
+- FOUND: `d1265ba`
+- PASS: `PYTHONPATH=. .venv/bin/pytest -q tests/test_plan_identity_contract.py tests/test_entitlements.py` (`19 passed`)
 - PASS: `.venv/bin/ruff check src/stoa/models/user.py src/stoa/config.py src/stoa/routers/auth.py tests/test_plan_identity_contract.py`
+- PASS: `PYTHONPATH=. .venv/bin/pytest --collect-only -q` (`2805 tests collected`)
+- PASS: FastAPI application import (`234 routes`)
 - PASS: active key link includes `FREE_TRIAL|TEACHER_SUPPORTED` and all three canonical paid Price fields.
 - PASS: environment example secret-prefix scan.
 
