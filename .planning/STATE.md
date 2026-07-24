@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-16-PLAN.md
-last_updated: "2026-07-24T12:05:58.423Z"
+stopped_at: Completed 476-09-PLAN.md
+last_updated: "2026-07-24T12:26:13.894Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 151
+  completed_plans: 152
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 12 of 29
+Plan: 13 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T12:05:58.417Z
-**Stopped At:** Completed 476-16-PLAN.md
+**Last Date:** 2026-07-24T12:26:13.887Z
+**Stopped At:** Completed 476-09-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -258,6 +258,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P07 | 11min | 1 tasks | 3 files |
 | Phase 476 P08 | 7min | 1 tasks | 2 files |
 | Phase 476 P16 | 46min | 1 tasks | 5 files |
+| Phase 476 P09 | 10min | 1 tasks | 6 files |
 
 ## Decisions
 
@@ -580,3 +581,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Count the configured EU inference profile through Bedrock Runtime using its derived foundation model ID while binding both identities in redacted evidence.
 - [Phase 476]: Never infer Mantle from a CRIS prefix or automatically fall back after Runtime failure; count capability must be explicit and fail closed.
 - [Phase 476]: Return validated provider content separately from ProviderUsageEvidence and keep allowance mutation outside ai_service.
+- [Phase 476]: Parent status and recheck resolve the opaque reference with the authenticated parent ID before retrieval-only reconciliation.
+- [Phase 476]: Admin checkout read and recheck both require billing_operations_reader and expose no payment-success or provider-mutation authority.
+- [Phase 476]: Parent checkout outcomes are exactly confirming, active, not_completed, or support_needed; only not_completed permits a new checkout.
+- [Phase 476]: Billing recheck provider access is bounded to retrieval-only Stripe test Session reads with suffix-only admin identity.
