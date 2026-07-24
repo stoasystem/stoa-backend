@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-07-PLAN.md
-last_updated: "2026-07-24T11:06:04.131Z"
+stopped_at: Completed 476-08-PLAN.md
+last_updated: "2026-07-24T11:16:44.419Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 149
+  completed_plans: 150
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 10 of 29
+Plan: 11 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T11:06:04.124Z
-**Stopped At:** Completed 476-07-PLAN.md
+**Last Date:** 2026-07-24T11:16:44.412Z
+**Stopped At:** Completed 476-08-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -256,6 +256,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P15 | 8min | 1 tasks | 3 files |
 | Phase 476 P22 | 10min | 1 tasks | 17 files |
 | Phase 476 P07 | 11min | 1 tasks | 3 files |
+| Phase 476 P08 | 7min | 1 tasks | 2 files |
 
 ## Decisions
 
@@ -571,3 +572,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Persist an expiration intent before Stripe expiration, then require a fresh exact Session retrieval with status expired before transferring the parent guard. — A provider mutation response alone cannot prove that the old purchase is no longer payable.
 - [Phase 476]: Complete and unknown provider outcomes retain the original checkout guard and never create a replacement Session. — Ambiguous or potentially paid Sessions must reconcile rather than risk a second payable Session.
 - [Phase 476]: Transfer the one-open guard in the same transaction as old-command supersession and successor command/lookup creation. — The atomic transfer prevents an unguarded gap and avoids duplicate operations on the guard item.
+- [Phase 476]: Billing rechecks receive retrieval-only provider capabilities and use only the original command reference and provider-key digest. — Session creation is structurally unavailable during reconciliation.
+- [Phase 476]: Reconciliation reuses the versioned checkout claim and conditional attachment boundary. — Expired leases recover once while active or stale leases cannot double mutate.
+- [Phase 476]: Checkout completion remains confirming until authoritative paid-invoice and active-subscription activation is recorded. — Browser and provider checkout state alone never activates access.
+- [Phase 476]: Billing support projection is a closed allowlist with suffix-only provider identity. — Keys, URLs, PII, full IDs, and provider exceptions remain private.
