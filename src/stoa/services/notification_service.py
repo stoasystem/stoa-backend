@@ -444,6 +444,32 @@ def run_authoritative_delivery(
     return {"delivery_id": operation_id, "status": str(result.get("status") or "")}
 
 
+def register_delivery_intent(
+    *,
+    recipient_id: str,
+    generation: int,
+    operation_id: str,
+    channel: str,
+    event_ids: list[str],
+    payload: Any,
+    provider_call: Any,
+) -> dict[str, Any]:
+    """Register one private recipient/channel effect through the durable CAS."""
+    result = run_delivery_intent(
+        owner_id=recipient_id,
+        generation=generation,
+        operation_id=operation_id,
+        channel=channel,
+        event_ids=event_ids,
+        payload=payload,
+        provider_call=provider_call,
+    )
+    return {
+        "delivery_id": operation_id,
+        "status": str(result.get("status") or ""),
+    }
+
+
 def run_delivery_intent(
     *,
     scope: notification_repo.DeliveryIntentScope | None = None,

@@ -112,9 +112,7 @@ def _install_grants(monkeypatch: pytest.MonkeyPatch) -> None:
             "subscription_id_digest": SUBSCRIPTION_DIGEST,
         }
 
-    monkeypatch.setattr(
-        paid_entitlement_service, "get_active_beneficiary_grant", get_grant
-    )
+    monkeypatch.setattr(paid_entitlement_service, "get_active_beneficiary_grant", get_grant)
 
 
 class _ReminderStore:
@@ -142,6 +140,11 @@ class _ReminderStore:
             "resolve_payment_expiry_reminder",
             self.resolve,
         )
+        monkeypatch.setattr(
+            payment_reminder_service.notification_repo,
+            "mark_payment_expiry_reminder_notified",
+            self.mark_notified,
+        )
 
     def get(
         self,
@@ -154,14 +157,10 @@ class _ReminderStore:
         row = self.rows.get((parent_id, reminder_identity))
         return deepcopy(row) if row is not None else None
 
-    def list(
-        self, parent_id: str, *, table: object | None = None
-    ) -> list[dict[str, object]]:
+    def list(self, parent_id: str, *, table: object | None = None) -> list[dict[str, object]]:
         del table
         return [
-            deepcopy(row)
-            for (owner, _identity), row in self.rows.items()
-            if owner == parent_id
+            deepcopy(row) for (owner, _identity), row in self.rows.items() if owner == parent_id
         ]
 
     def put(
@@ -191,6 +190,22 @@ class _ReminderStore:
         row["resolved_at"] = resolved_at
         return deepcopy(row)
 
+    def mark_notified(
+        self,
+        parent_id: str,
+        reminder_identity: str,
+        *,
+        notified_at: str,
+        table: object | None = None,
+    ) -> dict[str, object] | None:
+        del table
+        row = self.rows.get((parent_id, reminder_identity))
+        if row is None:
+            return None
+        row["status"] = "notified"
+        row["notified_at"] = notified_at
+        return deepcopy(row)
+
 
 class _IntentRecorder:
     def __init__(self, *, fail_recipient: str | None = None) -> None:
@@ -200,9 +215,7 @@ class _IntentRecorder:
         self.fail_recipient = fail_recipient
 
     def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            notification_service, "register_delivery_intent", self.register
-        )
+        monkeypatch.setattr(notification_service, "register_delivery_intent", self.register)
 
     def register(self, **kwargs: Any) -> dict[str, object]:
         call = dict(kwargs)
@@ -243,9 +256,7 @@ def test_payment_expiry_reminder_at_uses_zurich_month_end_minus_seven_days(
 
 
 def test_payment_expiry_reminder_at_preserves_local_calendar_across_dst() -> None:
-    reminder_at = payment_reminder_service.payment_expiry_reminder_at(
-        exp_month=10, exp_year=2026
-    )
+    reminder_at = payment_reminder_service.payment_expiry_reminder_at(exp_month=10, exp_year=2026)
     month_end = datetime(2026, 10, 31, tzinfo=ZURICH)
 
     assert reminder_at.date().isoformat() == "2026-10-24"
@@ -310,6 +321,36 @@ def test_recipient_resolution_requires_current_explicit_grants(
     assert recipients[2].email_eligibility.reason == "bounced"
 
 
+@pytest.mark.parametrize(
+    ("profile_updates", "reason"),
+    [
+        ({"email": "not-an-address"}, "invalid"),
+        ({"email_verification_status": "pending"}, "unverified"),
+        ({"email_delivery_status": "suppressed"}, "suppressed"),
+        ({"email_delivery_status": "unknown"}, "unknown"),
+    ],
+)
+def test_unusable_email_stays_in_app_only(
+    monkeypatch: pytest.MonkeyPatch,
+    profile_updates: Mapping[str, object],
+    reason: str,
+) -> None:
+    _install_grants(monkeypatch)
+    profiles = _profiles()
+    profiles[PARENT_ID].update(profile_updates)
+
+    recipients = payment_reminder_service.resolve_billing_reminder_recipients(
+        parent_id=PARENT_ID,
+        beneficiary_ids=STUDENT_IDS,
+        subscription_id_digest=SUBSCRIPTION_DIGEST,
+        profile_resolver=lambda account_id: profiles.get(account_id),
+        table=object(),
+    )
+
+    assert recipients[0].email_eligibility.eligible is False
+    assert recipients[0].email_eligibility.reason == reason
+
+
 def _run(
     monkeypatch: pytest.MonkeyPatch,
     *,
@@ -367,6 +408,10 @@ def test_scheduler_before_at_and_after_boundary_is_idempotent_per_intent(
         (STUDENT_IDS[1], "in_app"),
     }
     assert len({str(call["operation_id"]) for call in intents.calls}) == 5
+    artifacts = repr((store.rows, intents.calls, at))
+    assert "pm_provider_secret_alpha" not in artifacts
+    assert "4242424242424242" not in artifacts
+    assert "cvc" not in artifacts.lower()
 
     after = _run(
         monkeypatch,
@@ -388,27 +433,71 @@ def test_replacement_resolves_old_state_and_each_method_month_notifies_once(
     intents = _IntentRecorder()
     now = datetime(2026, 7, 24, 9, 0, tzinfo=UTC)
 
-    first = _run(
-        monkeypatch, provider=provider, store=store, intents=intents, now=now
-    )
+    first = _run(monkeypatch, provider=provider, store=store, intents=intents, now=now)
     old_identity = first.reminder["reminder_identity"]
 
-    provider.payment_method = _method(
-        "pm_provider_secret_beta", exp_month=8, exp_year=2026
-    )
+    provider.payment_method = _method("pm_provider_secret_beta", exp_month=8, exp_year=2026)
+    replacement_subscription = _subscription()
+    replacement_subscription["observation_version"] = 5
     replacement = _run(
-        monkeypatch, provider=provider, store=store, intents=intents, now=now
+        monkeypatch,
+        provider=provider,
+        store=store,
+        intents=intents,
+        now=now,
+        subscription=replacement_subscription,
     )
     assert replacement.disposition is payment_reminder_service.PaymentReminderDisposition.PENDING
     assert store.rows[(PARENT_ID, str(old_identity))]["status"] == "resolved"
     assert store.rows[(PARENT_ID, str(old_identity))]["resolved_at"] is not None
 
     provider.payment_method = _method()
+    replay_subscription = _subscription()
+    replay_subscription["observation_version"] = 6
     replay = _run(
-        monkeypatch, provider=provider, store=store, intents=intents, now=now
+        monkeypatch,
+        provider=provider,
+        store=store,
+        intents=intents,
+        now=now,
+        subscription=replay_subscription,
     )
     assert replay.disposition is payment_reminder_service.PaymentReminderDisposition.RESOLVED
     assert len(intents.provider_calls) == 5
+
+
+def test_delayed_provider_observation_cannot_clear_newer_method(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = _Provider(_method("pm_provider_secret_beta", exp_month=8, exp_year=2026))
+    store = _ReminderStore()
+    intents = _IntentRecorder()
+    now = datetime(2026, 7, 24, 9, 0, tzinfo=UTC)
+    current_subscription = _subscription()
+    current_subscription["observation_version"] = 5
+
+    current = _run(
+        monkeypatch,
+        provider=provider,
+        store=store,
+        intents=intents,
+        now=now,
+        subscription=current_subscription,
+    )
+    provider.payment_method = _method()
+    stale = _run(
+        monkeypatch,
+        provider=provider,
+        store=store,
+        intents=intents,
+        now=now,
+        subscription=_subscription(),
+    )
+
+    assert stale.disposition is payment_reminder_service.PaymentReminderDisposition.RESOLVED
+    assert (
+        store.rows[(PARENT_ID, str(current.reminder["reminder_identity"]))]["status"] == "pending"
+    )
 
 
 def test_recipient_failure_is_isolated_and_does_not_mutate_billing_or_grants(
@@ -439,8 +528,7 @@ def test_recipient_failure_is_isolated_and_does_not_mutate_billing_or_grants(
     )
 
     statuses = {
-        (delivery.recipient_id, delivery.channel): delivery.status
-        for delivery in result.deliveries
+        (delivery.recipient_id, delivery.channel): delivery.status for delivery in result.deliveries
     }
     assert statuses[(STUDENT_IDS[0], "email")] == "failed"
     assert statuses[(STUDENT_IDS[0], "in_app")] == "accepted"
