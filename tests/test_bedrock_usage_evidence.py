@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -316,6 +317,42 @@ def test_inventory_classifies_every_source_invoke_model_call() -> None:
             ai_service.AIInvocationClass.PROVIDER_COST_ONLY
         ),
     }
+
+    discovered: set[str] = set()
+
+    class InvokeModelVisitor(ast.NodeVisitor):
+        def __init__(self, source_path: Path) -> None:
+            self.source_path = source_path
+            self.functions: list[str] = []
+
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            self.functions.append(node.name)
+            self.generic_visit(node)
+            self.functions.pop()
+
+        def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+            self.functions.append(node.name)
+            self.generic_visit(node)
+            self.functions.pop()
+
+        def visit_Call(self, node: ast.Call) -> None:
+            if (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr == "invoke_model"
+                and self.functions
+            ):
+                discovered.add(f"{self.source_path.as_posix()}:{self.functions[-1]}")
+            self.generic_visit(node)
+
+    for source_path in (
+        Path("src/stoa/routers/conversations.py"),
+        Path("src/stoa/services/ai_service.py"),
+        Path("src/stoa/services/report_service.py"),
+    ):
+        tree = ast.parse(source_path.read_text())
+        InvokeModelVisitor(source_path).visit(tree)
+
+    assert discovered == set(inventory)
 
 
 def test_ai_service_contains_no_allowance_counter_mutation() -> None:

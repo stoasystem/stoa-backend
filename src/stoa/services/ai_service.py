@@ -7,15 +7,22 @@ Implements a lightweight AI harness:
 - Output validation (structure check + forbidden-term scan)
 - Daily message rate limiting (per student)
 """
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from enum import StrEnum
+import hashlib
 import json
 import logging
 import re
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Generic, Mapping, TypeVar
 import boto3
 from botocore.config import Config
 
 from stoa.config import settings
+from stoa.models.allowance import MAX_EXACT_COUNT, ProviderUsageEvidence
 from stoa.security.private_telemetry import emit_private_event
 from stoa.services import learning_profile_service
 
@@ -75,6 +82,169 @@ class AIInvocationFailure(Exception):
     def __init__(self, category: str):
         self.category = category
         super().__init__(category)
+
+
+class AIInvocationClass(StrEnum):
+    """Closed cost attribution class for each direct InvokeModel caller."""
+
+    USER_ALLOWANCE = "user_allowance"
+    PROVIDER_COST_ONLY = "provider_cost_only"
+
+
+AIContent = TypeVar("AIContent")
+
+
+@dataclass(frozen=True, slots=True)
+class AIProviderResult(Generic[AIContent]):
+    """Validated content separated from immutable, content-free usage evidence."""
+
+    content: AIContent
+    usage: ProviderUsageEvidence
+    model_id: str
+    inference_profile_id: str
+    provider_message_id_digest: str
+    stop_reason: str
+    invocation_class: AIInvocationClass
+
+
+def inventory_ai_invocation_classes() -> dict[str, AIInvocationClass]:
+    """Return the exhaustive direct InvokeModel caller inventory."""
+    return {
+        "src/stoa/routers/conversations.py:_generate_title": (
+            AIInvocationClass.PROVIDER_COST_ONLY
+        ),
+        "src/stoa/services/ai_service.py:get_ai_answer": (
+            AIInvocationClass.USER_ALLOWANCE
+        ),
+        "src/stoa/services/ai_service.py:get_hint_answer": (
+            AIInvocationClass.USER_ALLOWANCE
+        ),
+        "src/stoa/services/report_service.py:generate_weekly_report_content": (
+            AIInvocationClass.PROVIDER_COST_ONLY
+        ),
+    }
+
+
+def _digest(value: str, *, domain: str) -> str:
+    return hashlib.sha256(f"stoa:{domain}:v1:{value}".encode()).hexdigest()
+
+
+def _exact_provider_count(value: object) -> int:
+    if type(value) is not int or value < 0 or value > MAX_EXACT_COUNT:
+        raise AIInvocationFailure("malformed_provider_usage")
+    return value
+
+
+def parse_provider_usage(
+    payload: Mapping[str, object],
+    *,
+    provider_request_id: str,
+    inference_profile_id: str,
+    effect_id: str,
+    observed_at: datetime | None = None,
+) -> ProviderUsageEvidence:
+    """Parse exact Anthropic usage into the canonical content-free evidence model."""
+    usage = payload.get("usage")
+    message_id = payload.get("id")
+    provider_model_id = payload.get("model")
+    if (
+        not isinstance(usage, Mapping)
+        or not isinstance(message_id, str)
+        or not message_id.strip()
+        or not isinstance(provider_model_id, str)
+        or not provider_model_id.strip()
+        or not provider_request_id.strip()
+        or not inference_profile_id.strip()
+        or not effect_id.strip()
+    ):
+        raise AIInvocationFailure("malformed_provider_usage")
+    input_tokens = _exact_provider_count(usage.get("input_tokens"))
+    output_tokens = _exact_provider_count(usage.get("output_tokens"))
+    observed = observed_at or datetime.now(timezone.utc)
+    if observed.tzinfo is None:
+        raise AIInvocationFailure("malformed_provider_usage")
+    provider_request_id_digest = _digest(
+        provider_request_id.strip(),
+        domain="bedrock-provider-request",
+    )
+    model_id_digest = _digest(
+        f"{inference_profile_id.strip()}:{provider_model_id.strip()}",
+        domain="bedrock-model",
+    )
+    evidence_id = _digest(
+        ":".join(
+            (
+                effect_id.strip(),
+                message_id.strip(),
+                provider_request_id_digest,
+                model_id_digest,
+                str(input_tokens),
+                str(output_tokens),
+            )
+        ),
+        domain="bedrock-provider-evidence",
+    )
+    try:
+        return ProviderUsageEvidence(
+            evidenceId=evidence_id,
+            effectId=effect_id.strip(),
+            providerRequestIdDigest=provider_request_id_digest,
+            modelIdDigest=model_id_digest,
+            inputTokens=input_tokens,
+            outputTokens=output_tokens,
+            providerCostRetained=True,
+            observedAt=observed,
+        )
+    except ValueError:
+        raise AIInvocationFailure("malformed_provider_usage") from None
+
+
+def _provider_result(
+    content: AIContent,
+    payload: Mapping[str, object],
+    *,
+    response: Mapping[str, object],
+    inference_profile_id: str,
+    effect_id: str,
+    observed_at: datetime | None,
+    invocation_class: AIInvocationClass,
+) -> AIProviderResult[AIContent]:
+    metadata = response.get("ResponseMetadata")
+    request_id = ""
+    if isinstance(metadata, Mapping):
+        raw_request_id = metadata.get("RequestId")
+        if isinstance(raw_request_id, str):
+            request_id = raw_request_id.strip()
+    message_id = payload.get("id")
+    model_id = payload.get("model")
+    stop_reason = payload.get("stop_reason")
+    if (
+        not isinstance(message_id, str)
+        or not isinstance(model_id, str)
+        or not model_id.strip()
+        or not isinstance(stop_reason, str)
+        or not stop_reason.strip()
+    ):
+        raise AIInvocationFailure("malformed_provider_usage")
+    usage = parse_provider_usage(
+        payload,
+        provider_request_id=request_id,
+        inference_profile_id=inference_profile_id,
+        effect_id=effect_id,
+        observed_at=observed_at,
+    )
+    return AIProviderResult(
+        content=content,
+        usage=usage,
+        model_id=model_id.strip(),
+        inference_profile_id=inference_profile_id,
+        provider_message_id_digest=_digest(
+            message_id.strip(),
+            domain="bedrock-provider-message",
+        ),
+        stop_reason=stop_reason.strip(),
+        invocation_class=invocation_class,
+    )
 
 
 # ── Input sanitisation ─────────────────────────────────────────────────────────
@@ -232,7 +402,10 @@ def get_ai_answer(
     deadline_monotonic: float | None = None,
     clock: Callable[[], float] | None = None,
     client: Any | None = None,
-) -> dict:
+    effect_id: str | None = None,
+    observed_at: datetime | None = None,
+    invocation_class: AIInvocationClass = AIInvocationClass.USER_ALLOWANCE,
+) -> AIProviderResult[dict]:
     """Invoke Bedrock Claude with a controlled educational prompt.
 
     Args:
@@ -300,6 +473,8 @@ def get_ai_answer(
         if not callable(read):
             raise AIInvocationFailure("malformed_response")
         result = json.loads(read())
+        if not isinstance(result, dict):
+            raise AIInvocationFailure("malformed_response")
         raw_text = result["content"][0]["text"]
     except AIInvocationFailure:
         raise
@@ -325,7 +500,17 @@ def get_ai_answer(
     )
 
     parsed = _parse_ai_response(raw_text)
-    return _validate_output(parsed, raw_text)
+    validated = _validate_output(parsed, raw_text)
+    logical_effect_id = effect_id or correlation_id or "unbound-user-allowance-effect"
+    return _provider_result(
+        validated,
+        result,
+        response=response,
+        inference_profile_id=settings.bedrock_model_id,
+        effect_id=logical_effect_id,
+        observed_at=observed_at,
+        invocation_class=invocation_class,
+    )
 
 
 def get_hint_answer(
@@ -334,7 +519,11 @@ def get_hint_answer(
     grade: str = "6. Klasse",
     *,
     correlation_id: str | None = None,
-) -> str:
+    effect_id: str | None = None,
+    observed_at: datetime | None = None,
+    invocation_class: AIInvocationClass = AIInvocationClass.USER_ALLOWANCE,
+    client: Any | None = None,
+) -> AIProviderResult[str]:
     """Generate a short 1-2 sentence hint for a practice challenge."""
     safe_prompt = _sanitise_input(prompt, correlation_id=correlation_id)
     system = (
@@ -342,7 +531,7 @@ def get_hint_answer(
         "Give a concise hint (1-2 sentences, in German) that guides the student "
         "without revealing the answer. No JSON, just plain text."
     )
-    client = boto3.client("bedrock-runtime", region_name=settings.aws_region)
+    client = client or boto3.client("bedrock-runtime", region_name=settings.aws_region)
     body = json.dumps({
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": 120,
@@ -352,8 +541,36 @@ def get_hint_answer(
     })
     try:
         response = client.invoke_model(modelId=settings.bedrock_model_id, body=body)
-        result = json.loads(response["body"].read())
-        return result["content"][0]["text"].strip()
+        if not isinstance(response, dict):
+            raise AIInvocationFailure("malformed_response")
+        response_body = response.get("body")
+        read = getattr(response_body, "read", None)
+        if not callable(read):
+            raise AIInvocationFailure("malformed_response")
+        try:
+            result = json.loads(read())
+        finally:
+            close = getattr(response_body, "close", None)
+            if not callable(close):
+                raise AIInvocationFailure("response_cleanup_failed")
+            close()
+        if not isinstance(result, dict):
+            raise AIInvocationFailure("malformed_response")
+        text = result["content"][0]["text"]
+        if not isinstance(text, str) or not text.strip():
+            raise AIInvocationFailure("malformed_response")
+        logical_effect_id = effect_id or correlation_id or "unbound-user-allowance-hint"
+        return _provider_result(
+            text.strip(),
+            result,
+            response=response,
+            inference_profile_id=settings.bedrock_model_id,
+            effect_id=logical_effect_id,
+            observed_at=observed_at,
+            invocation_class=invocation_class,
+        )
+    except AIInvocationFailure:
+        raise
     except Exception as exc:
         emit_private_event(
             "hint_generation_failed",
@@ -362,4 +579,4 @@ def get_hint_answer(
             correlation_id=correlation_id,
             level=logging.ERROR,
         )
-        return ""
+        raise AIInvocationFailure("provider_dependency_error") from None
