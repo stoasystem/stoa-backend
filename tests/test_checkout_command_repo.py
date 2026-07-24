@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 import threading
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 import pytest
@@ -26,6 +26,8 @@ class AtomicCheckoutTable:
         self.transactions: list[list[dict[str, Any]]] = []
         self.successful_creates = 0
         self.commit_then_timeout_updates: set[str] = set()
+        self.fail_before_create = False
+        self.commit_then_timeout_create = False
 
     def add_active_fence(self, parent_id: str, generation: int = 1) -> None:
         self.rows[(f"USER#{parent_id}", "ACCOUNT_FENCE")] = {
@@ -43,6 +45,10 @@ class AtomicCheckoutTable:
 
     def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
         with self.lock:
+            is_create = sum("Put" in operation for operation in operations) == 3
+            if is_create and self.fail_before_create:
+                self.fail_before_create = False
+                raise RuntimeError("dependency failed before commit")
             snapshot = {key: dict(value) for key, value in self.rows.items()}
             update_kind = ""
             for operation in operations:
@@ -59,12 +65,16 @@ class AtomicCheckoutTable:
                     else:
                         if current is None:
                             raise RuntimeError("conditional conflict")
-                        if ":command_version" in values and (
-                            current.get("command_version") != values[":command_version"]
+                        if ":expected_command_version" in values and (
+                            current.get("command_version")
+                            != values[":expected_command_version"]
                         ):
                             raise RuntimeError("conditional conflict")
-                        terminal_states = values.get(":terminal_states")
-                        if terminal_states is not None and current.get("command_state") not in terminal_states:
+                        terminal_states = {
+                            values.get(":activated"),
+                            values.get(":without_payment"),
+                        }
+                        if None not in terminal_states and current.get("command_state") not in terminal_states:
                             raise RuntimeError("conditional conflict")
                     continue
 
@@ -148,7 +158,6 @@ class AtomicCheckoutTable:
                     if (
                         current is None
                         or current.get("command_id") != values[":command_id"]
-                        or current.get("command_version") != values[":command_version"]
                     ):
                         raise RuntimeError("conditional conflict")
                     del snapshot[key]
@@ -159,8 +168,11 @@ class AtomicCheckoutTable:
 
             self.rows = snapshot
             self.transactions.append(operations)
-            if sum("Put" in operation for operation in operations) == 3:
+            if is_create:
                 self.successful_creates += 1
+                if self.commit_then_timeout_create:
+                    self.commit_then_timeout_create = False
+                    raise RuntimeError("response lost after create commit")
             if update_kind in self.commit_then_timeout_updates:
                 self.commit_then_timeout_updates.remove(update_kind)
                 raise RuntimeError("response lost after commit")
@@ -197,7 +209,6 @@ def _register(
     table: AtomicCheckoutTable,
     *,
     intent: CheckoutIntent | None = None,
-    public_ref: str | None = None,
 ) -> checkout_command_repo.CheckoutCommandResult:
     value = intent or _intent()
     table.add_active_fence(value.parent_id)
@@ -205,7 +216,6 @@ def _register(
         value,
         price_id="price_test_family_v7",
         environment="test",
-        public_ref=public_ref,
         now_iso=NOW,
         table=table,
     )
@@ -256,7 +266,7 @@ def test_fingerprint_is_canonical_and_binds_every_immutable_intent_coordinate() 
 
 def test_registration_atomically_creates_three_distinct_rows_behind_parent_fence() -> None:
     table = AtomicCheckoutTable()
-    result = _register(table, public_ref="co_public_reference_1234567890")
+    result = _register(table)
 
     assert result.disposition is checkout_command_repo.CheckoutCommandDisposition.CREATED
     assert result.command is not None
@@ -313,6 +323,34 @@ def test_twenty_synchronized_identical_registrations_create_once_and_replay() ->
     assert table.successful_creates == 1
     assert len(table.command_rows()) == 1
     assert len({result.command["checkout_ref"] for result in results if result.command}) == 1
+
+
+def test_registration_distinguishes_precommit_failure_from_committed_response_loss() -> None:
+    failed_table = AtomicCheckoutTable()
+    failed_table.add_active_fence("parent-private-canary")
+    failed_table.fail_before_create = True
+    failed = checkout_command_repo.register_checkout_command(
+        _intent(),
+        price_id="price_test_family_v7",
+        environment="test",
+        now_iso=NOW,
+        table=failed_table,
+    )
+    assert failed.disposition is checkout_command_repo.CheckoutCommandDisposition.RETRYABLE
+    assert failed_table.command_rows() == []
+
+    committed_table = AtomicCheckoutTable()
+    committed_table.add_active_fence("parent-private-canary")
+    committed_table.commit_then_timeout_create = True
+    committed = checkout_command_repo.register_checkout_command(
+        _intent(),
+        price_id="price_test_family_v7",
+        environment="test",
+        now_iso=NOW,
+        table=committed_table,
+    )
+    assert committed.disposition is checkout_command_repo.CheckoutCommandDisposition.REPLAYED
+    assert len(committed_table.command_rows()) == 1
 
 
 def test_same_key_changed_intent_mismatches_without_additional_write() -> None:
@@ -595,4 +633,3 @@ def test_terminal_version_condition_releases_only_matching_open_guard(
     )
     assert result.disposition is checkout_command_repo.CheckoutCommandDisposition.RELEASED
     assert ("CHECKOUT_OPEN#parent-private-canary", "GUARD") not in table.rows
-
