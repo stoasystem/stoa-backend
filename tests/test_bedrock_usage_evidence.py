@@ -11,6 +11,7 @@ from stoa.models.allowance import ProviderUsageEvidence
 from stoa.services import ai_service
 from stoa.services.bedrock_token_count_service import (
     ProviderTokenCountUnavailable,
+    TokenCountEndpoint,
     count_input_tokens,
 )
 
@@ -198,7 +199,7 @@ def _request_body() -> str:
     )
 
 
-def test_configured_eu_profile_uses_mantle_count_only() -> None:
+def test_configured_eu_profile_uses_runtime_foundation_model_count_only() -> None:
     mantle = _MantleCountClient(
         {
             "input_tokens": 23,
@@ -206,7 +207,15 @@ def test_configured_eu_profile_uses_mantle_count_only() -> None:
             "http_status": 200,
         }
     )
-    runtime = _RuntimeCountClient({"inputTokens": 999})
+    runtime = _RuntimeCountClient(
+        {
+            "inputTokens": 37,
+            "ResponseMetadata": {
+                "HTTPStatusCode": 200,
+                "RequestId": "runtime-request-private-coordinate",
+            },
+        }
+    )
 
     count = count_input_tokens(
         _request_body(),
@@ -217,25 +226,26 @@ def test_configured_eu_profile_uses_mantle_count_only() -> None:
         runtime_client=runtime,
     )
 
-    assert count == 23
-    assert runtime.calls == []
-    assert len(mantle.calls) == 1
-    request = mantle.calls[0]
-    assert request["region"] == "eu-central-1"
-    assert request["model_id"] == MODEL_ID
-    payload = request["payload"]
-    assert isinstance(payload, dict)
-    assert payload["model"] == MODEL_ID
-    assert payload["messages"] == [
-        {"role": "user", "content": "Synthetic non-private input."}
+    assert count == 37
+    assert mantle.calls == []
+    assert runtime.calls == [
+        {
+            "modelId": MODEL_ID,
+            "input": {"invokeModel": {"body": _request_body()}},
+        }
     ]
-    assert payload["system"] == "Synthetic non-private system text."
-    assert "max_tokens" not in payload
-    assert "temperature" not in payload
 
 
 def test_regional_model_uses_sdk_count_tokens_with_identical_body() -> None:
-    runtime = _RuntimeCountClient({"inputTokens": 19})
+    runtime = _RuntimeCountClient(
+        {
+            "inputTokens": 19,
+            "ResponseMetadata": {
+                "HTTPStatusCode": 200,
+                "RequestId": "runtime-request-private-coordinate",
+            },
+        }
+    )
     request_body = _request_body()
 
     count = count_input_tokens(
@@ -253,6 +263,130 @@ def test_regional_model_uses_sdk_count_tokens_with_identical_body() -> None:
             "input": {"invokeModel": {"body": request_body}},
         }
     ]
+
+
+def test_explicit_mantle_capability_remains_count_only() -> None:
+    mantle = _MantleCountClient(
+        {
+            "input_tokens": 23,
+            "request_id": "mantle-request-private-coordinate",
+            "http_status": 200,
+        }
+    )
+    runtime = _RuntimeCountClient(
+        {
+            "inputTokens": 999,
+            "ResponseMetadata": {
+                "HTTPStatusCode": 200,
+                "RequestId": "runtime-request-private-coordinate",
+            },
+        }
+    )
+
+    count = count_input_tokens(
+        _request_body(),
+        model_id=MODEL_ID,
+        inference_profile_id=PROFILE_ID,
+        region="eu-central-1",
+        count_endpoint=TokenCountEndpoint.MANTLE,
+        mantle_client=mantle,
+        runtime_client=runtime,
+    )
+
+    assert count == 23
+    assert runtime.calls == []
+    assert len(mantle.calls) == 1
+    payload = mantle.calls[0]["payload"]
+    assert isinstance(payload, dict)
+    assert payload["model"] == MODEL_ID
+    assert payload["messages"] == [
+        {"role": "user", "content": "Synthetic non-private input."}
+    ]
+    assert payload["system"] == "Synthetic non-private system text."
+    assert "max_tokens" not in payload
+    assert "temperature" not in payload
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {},
+        {
+            "inputTokens": True,
+            "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "request-id"},
+        },
+        {
+            "inputTokens": 1.5,
+            "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "request-id"},
+        },
+        {
+            "inputTokens": -1,
+            "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "request-id"},
+        },
+        {
+            "inputTokens": "37",
+            "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "request-id"},
+        },
+        {
+            "inputTokens": 37,
+            "ResponseMetadata": {"HTTPStatusCode": 403, "RequestId": "request-id"},
+        },
+        {
+            "inputTokens": 37,
+            "ResponseMetadata": {"HTTPStatusCode": 200},
+        },
+    ],
+)
+def test_unavailable_or_malformed_runtime_count_is_stable_failure(
+    response: dict[str, object],
+) -> None:
+    mantle = _MantleCountClient(
+        {
+            "input_tokens": 99,
+            "request_id": "must-not-fallback",
+            "http_status": 200,
+        }
+    )
+
+    with pytest.raises(ProviderTokenCountUnavailable) as captured:
+        count_input_tokens(
+            _request_body(),
+            model_id=MODEL_ID,
+            inference_profile_id=PROFILE_ID,
+            region="eu-central-1",
+            mantle_client=mantle,
+            runtime_client=_RuntimeCountClient(response),
+        )
+
+    assert str(captured.value) == "provider_token_count_unavailable"
+    assert captured.value.category == "provider_token_count_unavailable"
+    assert mantle.calls == []
+
+
+def test_runtime_failure_does_not_guess_or_fallback_to_mantle() -> None:
+    class UnsupportedRuntime:
+        def count_tokens(self, **_kwargs: object) -> dict[str, object]:
+            raise RuntimeError("unsupported configured count path")
+
+    mantle = _MantleCountClient(
+        {
+            "input_tokens": 99,
+            "request_id": "must-not-fallback",
+            "http_status": 200,
+        }
+    )
+
+    with pytest.raises(ProviderTokenCountUnavailable):
+        count_input_tokens(
+            _request_body(),
+            model_id=MODEL_ID,
+            inference_profile_id=PROFILE_ID,
+            region="eu-central-1",
+            mantle_client=mantle,
+            runtime_client=UnsupportedRuntime(),
+        )
+
+    assert mantle.calls == []
 
 
 @pytest.mark.parametrize(
@@ -275,6 +409,7 @@ def test_unavailable_or_malformed_mantle_count_is_stable_failure(
             model_id=MODEL_ID,
             inference_profile_id=PROFILE_ID,
             region="eu-central-1",
+            count_endpoint=TokenCountEndpoint.MANTLE,
             mantle_client=_MantleCountClient(response),
         )
 
@@ -293,6 +428,7 @@ def test_count_transport_exception_is_redacted_and_fail_closed() -> None:
             model_id=MODEL_ID,
             inference_profile_id=PROFILE_ID,
             region="eu-central-1",
+            count_endpoint=TokenCountEndpoint.MANTLE,
             mantle_client=FailingMantle(),
         )
 
@@ -388,9 +524,11 @@ def test_probe_fixture_is_redacted_nonpassing_and_never_invokes_generation(
 
         def count_tokens(self, **_kwargs: object) -> dict[str, object]:
             return {
-                "input_tokens": 17,
-                "request_id": "private-mantle-id",
-                "http_status": 200,
+                "inputTokens": 17,
+                "ResponseMetadata": {
+                    "HTTPStatusCode": 200,
+                    "RequestId": "private-runtime-id",
+                },
             }
 
         def invoke_model(self, **_kwargs: object) -> dict[str, object]:
@@ -407,7 +545,7 @@ def test_probe_fixture_is_redacted_nonpassing_and_never_invokes_generation(
     receipt = probe_bedrock_token_count.capture_preflight(
         output,
         sts_client=Sts(),
-        mantle_client=count_only,
+        runtime_client=count_only,
         fixture=True,
         captured_at=OBSERVED_AT,
     )
@@ -421,7 +559,7 @@ def test_probe_fixture_is_redacted_nonpassing_and_never_invokes_generation(
         "private-operator-role",
         "PRIVATEUSERID",
         "private-sts-id",
-        "private-mantle-id",
+        "private-runtime-id",
         "Synthetic STOA Bedrock token-count preflight",
         MODEL_ID,
         PROFILE_ID,
@@ -450,7 +588,7 @@ def test_probe_verify_rejects_source_drift_before_provider_use(
                 "modelDigest": "c" * 64,
                 "inferenceProfileDigest": "d" * 64,
                 "identityDigest": "e" * 64,
-                "action": "bedrock-mantle:CountTokens",
+                "action": "bedrock:CountTokens",
                 "syntheticInputTokens": 17,
                 "responseShape": "valid_exact_integer",
                 "correlationDigest": "f" * 64,

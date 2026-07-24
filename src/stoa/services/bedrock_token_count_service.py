@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 import json
 from typing import Mapping, Protocol
 
@@ -48,6 +49,13 @@ class ProviderTokenCountUnavailable(Exception):
         super().__init__(self.category)
 
 
+class TokenCountEndpoint(StrEnum):
+    """Explicitly verified count-only provider endpoint."""
+
+    RUNTIME = "runtime"
+    MANTLE = "mantle"
+
+
 class MantleCountTokensClient(Protocol):
     """Least-capability dependency for the count-only Mantle endpoint."""
 
@@ -76,19 +84,13 @@ def _exact_nonnegative_int(value: object) -> int:
 
 
 def foundation_model_id_for_profile(inference_profile_id: str) -> str:
-    """Resolve the model name accepted by Mantle from a system CRIS profile ID."""
+    """Resolve the foundation model bound to a system CRIS profile ID."""
     for prefix in _CRIS_PREFIXES:
         if inference_profile_id.startswith(prefix):
             model_id = inference_profile_id.removeprefix(prefix)
             if model_id:
                 return model_id
     raise ProviderTokenCountUnavailable()
-
-
-def _uses_mantle(inference_profile_id: str | None) -> bool:
-    if inference_profile_id is None:
-        return False
-    return inference_profile_id.startswith(_CRIS_PREFIXES)
 
 
 def _parse_invoke_body(request_body: str) -> dict[str, object]:
@@ -189,6 +191,7 @@ def count_input_tokens_with_evidence(
     model_id: str,
     inference_profile_id: str | None,
     region: str,
+    count_endpoint: TokenCountEndpoint = TokenCountEndpoint.RUNTIME,
     mantle_client: MantleCountTokensClient | None = None,
     runtime_client: object | None = None,
 ) -> TokenCountResult:
@@ -196,10 +199,14 @@ def count_input_tokens_with_evidence(
     if not model_id or not region:
         raise ProviderTokenCountUnavailable()
     try:
-        if _uses_mantle(inference_profile_id):
+        if (
+            inference_profile_id is not None
+            and foundation_model_id_for_profile(inference_profile_id) != model_id
+        ):
+            raise ProviderTokenCountUnavailable()
+
+        if count_endpoint is TokenCountEndpoint.MANTLE:
             if inference_profile_id is None:
-                raise ProviderTokenCountUnavailable()
-            if foundation_model_id_for_profile(inference_profile_id) != model_id:
                 raise ProviderTokenCountUnavailable()
             selected_mantle_client = mantle_client or SigV4MantleCountTokensClient()
             response = selected_mantle_client.count_tokens(
@@ -233,12 +240,12 @@ def count_input_tokens_with_evidence(
             raise ProviderTokenCountUnavailable()
         count = _exact_nonnegative_int(response.get("inputTokens"))
         metadata = response.get("ResponseMetadata")
-        request_id = ""
-        if isinstance(metadata, Mapping):
-            raw_request_id = metadata.get("RequestId")
-            if isinstance(raw_request_id, str):
-                request_id = raw_request_id.strip()
-        return TokenCountResult(count, RUNTIME_ACTION, request_id)
+        if not isinstance(metadata, Mapping) or metadata.get("HTTPStatusCode") != 200:
+            raise ProviderTokenCountUnavailable()
+        raw_request_id = metadata.get("RequestId")
+        if not isinstance(raw_request_id, str) or not raw_request_id.strip():
+            raise ProviderTokenCountUnavailable()
+        return TokenCountResult(count, RUNTIME_ACTION, raw_request_id.strip())
     except ProviderTokenCountUnavailable:
         raise
     except Exception:
@@ -251,6 +258,7 @@ def count_input_tokens(
     model_id: str,
     inference_profile_id: str | None,
     region: str,
+    count_endpoint: TokenCountEndpoint = TokenCountEndpoint.RUNTIME,
     mantle_client: MantleCountTokensClient | None = None,
     runtime_client: object | None = None,
 ) -> int:
@@ -260,6 +268,7 @@ def count_input_tokens(
         model_id=model_id,
         inference_profile_id=inference_profile_id,
         region=region,
+        count_endpoint=count_endpoint,
         mantle_client=mantle_client,
         runtime_client=runtime_client,
     ).input_tokens
@@ -270,6 +279,7 @@ __all__ = [
     "RUNTIME_ACTION",
     "ProviderTokenCountUnavailable",
     "SigV4MantleCountTokensClient",
+    "TokenCountEndpoint",
     "TokenCountResult",
     "count_input_tokens",
     "count_input_tokens_with_evidence",

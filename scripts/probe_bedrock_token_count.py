@@ -15,9 +15,9 @@ import boto3
 
 from stoa.config import settings
 from stoa.services.bedrock_token_count_service import (
-    MANTLE_ACTION,
-    MantleCountTokensClient,
     ProviderTokenCountUnavailable,
+    RUNTIME_ACTION,
+    TokenCountEndpoint,
     count_input_tokens_with_evidence,
     foundation_model_id_for_profile,
 )
@@ -108,13 +108,13 @@ def capture_preflight(
     results: Path,
     *,
     sts_client: object | None = None,
-    mantle_client: MantleCountTokensClient | None = None,
+    runtime_client: object | None = None,
     fixture: bool = False,
     captured_at: datetime | None = None,
 ) -> dict[str, object]:
     """Run only identity and CountTokens checks, then write redacted evidence."""
     environment, region, model_id, inference_profile_id = _configuration_values()
-    if not fixture and (sts_client is not None or mantle_client is not None):
+    if not fixture and (sts_client is not None or runtime_client is not None):
         raise PreflightVerificationError("mock_dependency_rejected")
     sts = sts_client or boto3.client("sts", region_name=region)
     get_caller_identity = getattr(sts, "get_caller_identity", None)
@@ -129,13 +129,14 @@ def capture_preflight(
             model_id=model_id,
             inference_profile_id=inference_profile_id,
             region=region,
-            mantle_client=mantle_client,
+            count_endpoint=TokenCountEndpoint.RUNTIME,
+            runtime_client=runtime_client,
         )
     except (ProviderTokenCountUnavailable, PreflightVerificationError):
         raise
     except Exception:
         raise PreflightVerificationError("provider_token_count_unavailable") from None
-    if count_result.action != MANTLE_ACTION:
+    if count_result.action != RUNTIME_ACTION:
         raise PreflightVerificationError("endpoint_mismatch")
 
     captured = captured_at or datetime.now(timezone.utc)
@@ -153,7 +154,7 @@ def capture_preflight(
             domain="bedrock-preflight-profile",
         ),
         "identityDigest": _identity_digest(identity),
-        "action": MANTLE_ACTION,
+        "action": RUNTIME_ACTION,
         "syntheticInputTokens": count_result.input_tokens,
         "responseShape": "valid_exact_integer",
         "correlationDigest": _digest(
@@ -227,7 +228,7 @@ def verify_preflight(results: Path) -> dict[str, object]:
     _required_digest(receipt, "identityDigest")
     _required_digest(receipt, "correlationDigest")
     _exact_count(receipt.get("syntheticInputTokens"))
-    if receipt.get("action") != MANTLE_ACTION:
+    if receipt.get("action") != RUNTIME_ACTION:
         raise PreflightVerificationError("action_mismatch")
     if receipt.get("responseShape") != "valid_exact_integer":
         raise PreflightVerificationError("response_shape_mismatch")
