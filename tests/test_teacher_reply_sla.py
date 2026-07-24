@@ -42,6 +42,17 @@ def _applied_mutation(question, status, attrs):
 def test_request_teacher_records_request_and_queue_timestamps(monkeypatch):
     updates = []
     monkeypatch.setattr(
+        questions.teacher_support_allowance_service,
+        "admit_teacher_support_case",
+        lambda *, persist_case, **_kwargs: (
+            questions.teacher_support_allowance_service.TeacherSupportAdmissionResult(
+                questions.teacher_support_allowance_service.TeacherSupportAdmissionDisposition.ADMITTED
+            )
+            if persist_case(())
+            else None
+        ),
+    )
+    monkeypatch.setattr(
         questions.question_repo,
         "get_question",
         lambda question_id: {

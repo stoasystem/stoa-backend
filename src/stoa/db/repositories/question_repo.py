@@ -849,6 +849,7 @@ def mutate_question(
     status: str,
     allowed_source_statuses: frozenset[str],
     additional_conditions: tuple[QuestionItem, ...] = (),
+    additional_operations: tuple[QuestionItem, ...] = (),
     extra_attrs: Mapping[str, object] | None = None,
     table: object | None = None,
 ) -> QuestionMutationResult:
@@ -874,6 +875,7 @@ def mutate_question(
                 student_id, int(fence["generation"])
             ),
             *additional_conditions,
+            *additional_operations,
             _question_mutation_operation(
                 question_id=question_id,
                 student_id=student_id,

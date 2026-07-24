@@ -1011,6 +1011,17 @@ def test_idempotency_key_cannot_be_rebound_to_another_attachment(monkeypatch):
 def test_request_teacher_records_support_visible_usage_event(monkeypatch):
     ledger_calls = []
     monkeypatch.setattr(
+        questions.teacher_support_allowance_service,
+        "admit_teacher_support_case",
+        lambda *, persist_case, **_kwargs: (
+            questions.teacher_support_allowance_service.TeacherSupportAdmissionResult(
+                questions.teacher_support_allowance_service.TeacherSupportAdmissionDisposition.ADMITTED
+            )
+            if persist_case(())
+            else None
+        ),
+    )
+    monkeypatch.setattr(
         questions.question_repo,
         "get_question",
         lambda question_id: {

@@ -56,6 +56,7 @@ from stoa.services import (
     bedrock_token_count_service,
     entitlement_service,
     teacher_dispatch_service,
+    teacher_support_allowance_service,
     usage_ledger_service,
     attachment_service,
 )
@@ -2178,38 +2179,119 @@ async def request_teacher_help(
 ):
     """Escalate a conversation to a human teacher."""
     student_id = authorized.ref.student_id
-    request_id = str(uuid.uuid4())
+    conv = authorized.value
+    existing_request_id = conv.get("escalation_request_id")
+    request_id = (
+        existing_request_id
+        if isinstance(existing_request_id, str) and existing_request_id
+        else str(uuid.uuid4())
+    )
     now = _now()
+    observed_at = datetime.fromisoformat(now.replace("Z", "+00:00"))
 
     table = get_table()
-    conv = authorized.value
 
     generation = _active_conversation_generation(student_id, table)
-    attachment_repo.record_teacher_help_request(
-        conversation={
-            **conv,
-            "PK": _conv_pk(body.conversationId),
-            "SK": "CONV",
-        },
-        message={
-        "PK": _conv_pk(body.conversationId),
-        "SK": _msg_sk(request_id),
-        "entity_type": "conversation_message",
-        "schema_version": "conversation-message.v1",
-        "message_id": request_id,
-        "conversation_id": body.conversationId,
-        "student_id": student_id,
-        "owner_id": student_id,
-        "account_fence_generation": generation,
-        "role": "system",
-        "content": f"Teacher help requested. {body.message or ''}".strip(),
-        "escalation_message": body.message,
-        "created_at": now,
-        },
-        owner_id=student_id,
-        generation=generation,
+
+    def persist_case(
+        allowance_operations: tuple[dict[str, Any], ...],
+    ) -> bool:
+        if isinstance(existing_request_id, str) and existing_request_id:
+            return False
+        try:
+            attachment_repo.record_teacher_help_request(
+                conversation={
+                    **conv,
+                    "PK": _conv_pk(body.conversationId),
+                    "SK": "CONV",
+                },
+                message={
+                    "PK": _conv_pk(body.conversationId),
+                    "SK": _msg_sk(request_id),
+                    "entity_type": "conversation_message",
+                    "schema_version": "conversation-message.v1",
+                    "message_id": request_id,
+                    "conversation_id": body.conversationId,
+                    "student_id": student_id,
+                    "owner_id": student_id,
+                    "account_fence_generation": generation,
+                    "role": "system",
+                    "content": f"Teacher help requested. {body.message or ''}".strip(),
+                    "escalation_message": body.message,
+                    "created_at": now,
+                },
+                owner_id=student_id,
+                generation=generation,
+                additional_operations=allowance_operations,
+                table=table,
+            )
+        except attachment_repo.AttachmentRepositoryConflict:
+            return False
+        return True
+
+    admission = teacher_support_allowance_service.admit_teacher_support_case(
+        support_case_id=body.conversationId,
+        case_kind="conversation",
+        beneficiary_id=student_id,
+        observed_at=observed_at,
+        persist_case=persist_case,
         table=table,
     )
+    if (
+        admission.disposition
+        is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.PLAN_DENIED
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "teacher_support_not_included",
+                "message": "Teacher support is not included in the active plan.",
+                "action": "choose_paid_plan",
+            },
+        )
+    if (
+        admission.disposition
+        is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.LIMIT_EXCEEDED
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "teacher_support_allowance_exhausted",
+                "message": "The weekly teacher-support allowance is used.",
+                "action": "wait_for_next_week",
+            },
+        )
+    if (
+        admission.disposition
+        is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.IDEMPOTENCY_CONFLICT
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Teacher-support case identity conflicts with prior admission",
+        )
+    if (
+        admission.disposition
+        is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.RETRYABLE
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "teacher_support_admission_recoverable",
+                "message": "Teacher support admission is safely recoverable.",
+                "action": "retry_same_case",
+            },
+        )
+    if (
+        admission.disposition
+        is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.REPLAYED
+    ):
+        return TeacherHelpResponse(
+            requestId=request_id,
+            conversationId=body.conversationId,
+            status=str(conv.get("escalation_status") or "pending"),
+            createdAt=str(conv.get("escalated_at") or now),
+            updatedAt=str(conv.get("updated_at") or now),
+        )
 
     usage_ledger_service.record_usage_event(
         student_id=student_id,

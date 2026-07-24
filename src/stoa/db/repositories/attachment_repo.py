@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
@@ -524,6 +524,7 @@ def record_teacher_help_request(
     message: dict[str, object],
     owner_id: str,
     generation: int = 1,
+    additional_operations: tuple[dict[str, Any], ...] = (),
     table: object | None = None,
 ) -> None:
     """Persist help lifecycle and its system message atomically under one fence."""
@@ -539,6 +540,7 @@ def record_teacher_help_request(
     }
     operations = [
         account_deletion_repo.active_fence_condition(owner_id, generation),
+        *additional_operations,
         {
             "Put": {
                 "Item": {
@@ -567,7 +569,8 @@ def record_teacher_help_request(
             UpdateExpression="SET escalated=:e",
             ExpressionAttributeValues={":e": True},
         )
-        _put_item(target, Item=operations[2]["Put"]["Item"])
+        message_operation = operations[-1]
+        _put_item(target, Item=message_operation["Put"]["Item"])
     else:
         try:
             account_deletion_repo.transact(operations, table=target)

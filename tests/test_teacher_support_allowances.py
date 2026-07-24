@@ -5,14 +5,18 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import datetime, timezone
+import asyncio
 import inspect
 import threading
 from typing import Any, Callable
 
+from fastapi import HTTPException
 import pytest
 
+from stoa.config import Settings
 from stoa.db.repositories import account_deletion_repo
 from stoa.routers import conversations, questions, teachers
+from stoa.security.authorization import AuthorizedResource, ResourceRef, ResourceType
 from stoa.services import teacher_support_allowance_service
 
 
@@ -147,6 +151,7 @@ def _case_committer(
     *,
     kind: str,
     case_id: str,
+    beneficiary_id: str,
     calls: list[tuple[dict[str, Any], ...]] | None = None,
 ) -> Callable[[tuple[dict[str, Any], ...]], bool]:
     def commit(allowance_operations: tuple[dict[str, Any], ...]) -> bool:
@@ -167,7 +172,11 @@ def _case_committer(
         }
         try:
             account_deletion_repo.transact(
-                [*allowance_operations, case_operation],
+                [
+                    account_deletion_repo.active_fence_condition(beneficiary_id, 6),
+                    *allowance_operations,
+                    case_operation,
+                ],
                 table=table,
             )
         except account_deletion_repo.AccountDeletionConflict:
@@ -195,6 +204,7 @@ def _admit(
             table,
             kind=kind,
             case_id=case_id,
+            beneficiary_id=student_id,
             calls=calls,
         ),
         table=table,
@@ -407,6 +417,18 @@ def test_routes_admit_only_at_first_case_and_later_actions_do_not_mutate_allowan
     assert "persist_case=" in question_source
     assert "persist_case=" in conversation_source
     assert "admit_teacher_support_case" not in later_source
+    assert question_source.index("admit_teacher_support_case") < question_source.index(
+        "enqueue_teacher_request"
+    )
+    assert question_source.index("admit_teacher_support_case") < question_source.index(
+        "emit_teacher_requested"
+    )
+    assert question_source.index("admit_teacher_support_case") < question_source.index(
+        "dispatch_question"
+    )
+    assert conversation_source.index(
+        "admit_teacher_support_case"
+    ) < conversation_source.index("record_usage_event")
 
 
 def test_service_reuses_allowance_week_budget_and_conditional_effect_counter() -> None:
@@ -416,3 +438,106 @@ def test_service_reuses_allowance_week_budget_and_conditional_effect_counter() -
     assert "allowance_service.plan_allowance_budget" in source
     assert "attribute_not_exists(PK) AND attribute_not_exists(SK)" in source
     assert "state_version=:expected_state_version" in source
+
+
+def test_question_plan_denial_runs_before_case_queue_notification_and_assignment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authorized = AuthorizedResource(
+        ResourceRef(
+            resource_type=ResourceType.QUESTION,
+            resource_id="question-denied",
+            student_id="student-1",
+        ),
+        {
+            "question_id": "question-denied",
+            "student_id": "student-1",
+            "subject": "math",
+            "status": "ai_answered",
+            "version": 1,
+        },
+    )
+    monkeypatch.setattr(questions, "get_table", lambda: object())
+    monkeypatch.setattr(
+        questions.teacher_support_allowance_service,
+        "admit_teacher_support_case",
+        lambda **_kwargs: teacher_support_allowance_service.TeacherSupportAdmissionResult(
+            teacher_support_allowance_service.TeacherSupportAdmissionDisposition.PLAN_DENIED
+        ),
+    )
+    for dependency, name in (
+        (questions.question_repo, "mutate_question"),
+        (questions.notify_service, "enqueue_teacher_request"),
+        (questions.notification_service, "emit_teacher_requested"),
+        (questions.teacher_dispatch_service, "dispatch_question"),
+        (questions.usage_ledger_service, "record_usage_event"),
+    ):
+        monkeypatch.setattr(
+            dependency,
+            name,
+            lambda *_args, **_kwargs: pytest.fail("denied downstream effect ran"),
+        )
+
+    with pytest.raises(HTTPException) as denied:
+        asyncio.run(
+            questions.request_teacher(
+                authorized=authorized,
+                settings=Settings(),
+            )
+        )
+
+    assert denied.value.status_code == 403
+
+
+def test_conversation_plan_denial_runs_before_case_message_and_usage_effect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authorized = AuthorizedResource(
+        ResourceRef(
+            resource_type=ResourceType.CONVERSATION,
+            resource_id="conversation-denied",
+            student_id="student-1",
+        ),
+        {
+            "conversation_id": "conversation-denied",
+            "student_id": "student-1",
+            "subject": "physics",
+            "grade": "Sek1",
+        },
+    )
+    monkeypatch.setattr(conversations, "get_table", lambda: object())
+    monkeypatch.setattr(
+        conversations,
+        "_active_conversation_generation",
+        lambda *_args: 1,
+    )
+    monkeypatch.setattr(
+        conversations.teacher_support_allowance_service,
+        "admit_teacher_support_case",
+        lambda **_kwargs: teacher_support_allowance_service.TeacherSupportAdmissionResult(
+            teacher_support_allowance_service.TeacherSupportAdmissionDisposition.PLAN_DENIED
+        ),
+    )
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "record_teacher_help_request",
+        lambda **_kwargs: pytest.fail("denied durable case ran"),
+    )
+    monkeypatch.setattr(
+        conversations.usage_ledger_service,
+        "record_usage_event",
+        lambda **_kwargs: pytest.fail("denied usage effect ran"),
+    )
+
+    with pytest.raises(HTTPException) as denied:
+        asyncio.run(
+            conversations.request_teacher_help(
+                body=conversations.TeacherHelpRequest(
+                    conversationId="conversation-denied",
+                    message="private request",
+                ),
+                authorized=authorized,
+            )
+        )
+
+    assert denied.value.status_code == 403

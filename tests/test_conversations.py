@@ -51,6 +51,17 @@ def _client(router, prefix: str = "/conversations", actor=None) -> TestClient:
 
 def test_conversation_teacher_help_records_support_visible_usage(monkeypatch):
     ledger_calls = []
+    monkeypatch.setattr(
+        conversations.teacher_support_allowance_service,
+        "admit_teacher_support_case",
+        lambda *, persist_case, **_kwargs: (
+            conversations.teacher_support_allowance_service.TeacherSupportAdmissionResult(
+                conversations.teacher_support_allowance_service.TeacherSupportAdmissionDisposition.ADMITTED
+            )
+            if persist_case(())
+            else None
+        ),
+    )
 
     class FakeTable:
         def update_item(self, **kwargs):

@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
 from stoa.config import Settings, get_settings
+from stoa.db.dynamodb import get_table
 from stoa.db.repositories import (
     allowance_repo,
     attachment_repo,
@@ -55,6 +56,7 @@ from stoa.services import (
     notify_service,
     ocr_service,
     teacher_dispatch_service,
+    teacher_support_allowance_service,
     usage_ledger_service,
     attachment_service,
 )
@@ -1690,28 +1692,118 @@ async def request_teacher(
     observed_item = authorized.value
     if observed_item.get("status") == QuestionStatus.TEACHER_ACTIVE.value:
         raise HTTPException(status_code=409, detail="Teacher already active on this question")
-    if observed_item.get("status") not in _ESCALATION_SOURCE_STATES:
+    is_replay = observed_item.get("status") == QuestionStatus.ESCALATED.value
+    if not is_replay and observed_item.get("status") not in _ESCALATION_SOURCE_STATES:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Question cannot be escalated from its current state",
         )
-    item = _initialize_legacy_question_for_mutation(
-        observed_item,
-        allowed_source_statuses=_ESCALATION_SOURCE_STATES,
+    item = (
+        dict(observed_item)
+        if is_replay
+        else _initialize_legacy_question_for_mutation(
+            observed_item,
+            allowed_source_statuses=_ESCALATION_SOURCE_STATES,
+        )
     )
+    observed_at = datetime.now(timezone.utc)
+    now = observed_at.isoformat()
+    table = get_table()
+    mutations: list[question_repo.QuestionMutationResult] = []
 
-    now = datetime.now(timezone.utc).isoformat()
-    mutation = question_repo.mutate_question(
-        item,
-        status=QuestionStatus.ESCALATED.value,
-        allowed_source_statuses=_ESCALATION_SOURCE_STATES,
-        extra_attrs={
-            "teacher_requested_at": item.get("teacher_requested_at") or now,
-            "queue_visible_at": item.get("queue_visible_at") or now,
-        },
+    admission = teacher_support_allowance_service.admit_teacher_support_case(
+        support_case_id=question_id,
+        case_kind="question",
+        beneficiary_id=student_id,
+        observed_at=observed_at,
+        persist_case=lambda allowance_operations: (
+            False
+            if is_replay
+            else (
+                mutations.append(
+                    question_repo.mutate_question(
+                        item,
+                        status=QuestionStatus.ESCALATED.value,
+                        allowed_source_statuses=_ESCALATION_SOURCE_STATES,
+                        additional_operations=allowance_operations,
+                        extra_attrs={
+                            "teacher_requested_at": (
+                                item.get("teacher_requested_at") or now
+                            ),
+                            "queue_visible_at": item.get("queue_visible_at") or now,
+                        },
+                        table=table,
+                    )
+                )
+                or mutations[-1].disposition
+                is question_repo.QuestionMutationDisposition.APPLIED
+            )
+        ),
+        table=table,
     )
-    dispatch_question = _require_applied_question_mutation(mutation)
-    operation_id = str(uuid.uuid4())
+    if (
+        admission.disposition
+        is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.PLAN_DENIED
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "teacher_support_not_included",
+                "message": "Teacher support is not included in the active plan.",
+                "action": "choose_paid_plan",
+            },
+        )
+    if (
+        admission.disposition
+        is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.LIMIT_EXCEEDED
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "teacher_support_allowance_exhausted",
+                "message": "The weekly teacher-support allowance is used.",
+                "action": "wait_for_next_week",
+            },
+        )
+    if (
+        admission.disposition
+        is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.IDEMPOTENCY_CONFLICT
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Teacher-support case identity conflicts with prior admission",
+        )
+    if (
+        admission.disposition
+        is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.RETRYABLE
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "teacher_support_admission_recoverable",
+                "message": "Teacher support admission is safely recoverable.",
+                "action": "retry_same_case",
+            },
+        )
+    if (
+        admission.disposition
+        is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.REPLAYED
+    ):
+        return {
+            "question_id": question_id,
+            "status": QuestionStatus.ESCALATED.value,
+            "dispatch": {"questionId": question_id, "status": "replayed"},
+        }
+    if not mutations:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Teacher-support case admission did not return its durable case",
+        )
+    dispatch_question = _require_applied_question_mutation(mutations[-1])
+
+    operation_id = str(
+        uuid.uuid5(uuid.NAMESPACE_URL, f"stoa:teacher-support:question:{question_id}")
+    )
     notify_service.enqueue_teacher_request(
         question_id=question_id,
         operation_id=operation_id,
