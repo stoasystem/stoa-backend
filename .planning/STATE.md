@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-13-PLAN.md
-last_updated: "2026-07-24T14:40:53.128Z"
+stopped_at: Completed 476-14-PLAN.md
+last_updated: "2026-07-24T14:54:15.063Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 157
+  completed_plans: 158
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 21 of 29
+Plan: 22 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T14:40:53.121Z
-**Stopped At:** Completed 476-13-PLAN.md
+**Last Date:** 2026-07-24T14:54:15.056Z
+**Stopped At:** Completed 476-14-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -264,6 +264,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P18 | 11min | 1 tasks | 2 files |
 | Phase 476 P12 | 11min | 1 tasks | 8 files |
 | Phase 476 P13 | 8min | 1 tasks | 4 files |
+| Phase 476 P14 | 7 min | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -605,3 +606,6 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Keep period-end schedules and renewal grace as separate paid_transition.v1 records under the exact subscription digest so either lifecycle can replay independently.
 - [Phase 476]: Derive the first renewal-failure deadline once and treat every same-plan-version failure as replay, even when a delayed event carries a different delivery identity.
 - [Phase 476]: Apply due transitions atomically with immutable prior-grant history and without touching allowance counters or attachment storage.
+- [Phase 476]: Derive the immutable student trial start from persisted email-verification activation evidence, never request time.
+- [Phase 476]: Missing or malformed historical trial evidence denies new free usage with migration_review_required while preserving reads.
+- [Phase 476]: Paid-plan admission remains independent of the historical free-trial window; paid-to-free fallback reuses the sealed trial evidence.
