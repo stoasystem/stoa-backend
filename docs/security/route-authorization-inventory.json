@@ -338,6 +338,24 @@
     "authorization": [
       {
         "action": "read",
+        "capability": "billing_operations_reader",
+        "purpose": "billing_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "parentId"
+    ],
+    "method": "GET",
+    "path": "/admin/billing/checkouts/{checkout_ref}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
         "capability": "platform_operations_reader",
         "purpose": "global_operations",
         "resource_type": "operator_resource"
@@ -1485,6 +1503,22 @@
     "family": "parents",
     "identifiers": [],
     "method": "GET",
+    "path": "/parents/me/subscription/checkout/{checkout_ref}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [],
+    "method": "GET",
     "path": "/parents/me/subscription/requests",
     "sensitive": true
   },
@@ -2369,6 +2403,24 @@
     ],
     "method": "POST",
     "path": "/adaptive/students/{student_id}/memory/refresh",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "billing_operations_reader",
+        "purpose": "billing_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "parentId"
+    ],
+    "method": "POST",
+    "path": "/admin/billing/checkouts/{checkout_ref}/recheck",
     "sensitive": true
   },
   {
@@ -4152,6 +4204,38 @@
     "identifiers": [],
     "method": "POST",
     "path": "/parents/me/subscription/checkout",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/parents/me/subscription/checkout/{checkout_ref}/recheck",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/parents/me/subscription/checkout/{checkout_ref}/supersede",
     "sensitive": true
   },
   {

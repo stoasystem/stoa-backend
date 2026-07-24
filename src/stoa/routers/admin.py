@@ -1,7 +1,9 @@
 """Admin routes — user management, report operations, and platform statistics."""
 from collections.abc import Mapping
+from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any, Literal, Optional, Protocol, runtime_checkable
+from uuid import uuid4
 
 import boto3
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
@@ -10,7 +12,8 @@ from starlette.responses import JSONResponse
 
 from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
-from stoa.db.repositories import report_repo, user_repo
+from stoa.db.repositories import checkout_command_repo, report_repo, user_repo
+from stoa.routers.parents import get_billing_reconciliation_provider
 from stoa.security.admin_authorization import (
     AdminTargetProvider,
     admin_operation,
@@ -40,6 +43,7 @@ from stoa.services import (
     account_operations_service,
     privileged_identity_service,
     bi_observability_service,
+    billing_reconciliation_service,
     external_activation_service,
     curriculum_analytics_service,
     curriculum_migration_service,
@@ -374,6 +378,33 @@ class SubscriptionBillingResponse(BaseModel):
 class SubscriptionBillingListResponse(BaseModel):
     items: list[SubscriptionBillingResponse]
     count: int
+
+
+class AdminCheckoutRecheckRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class AdminCheckoutSupportResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    checkoutRef: str
+    parentId: str
+    targetPlan: str
+    beneficiaryIds: list[str]
+    createdAt: str
+    updatedAt: str
+    commandState: str
+    providerEffectStatus: str
+    lifecycleState: str
+    lastRecheckedAt: str
+    safeAction: str
+    failureCode: str
+    providerSessionSuffix: str | None = None
+    reconciliationLeaseGeneration: int
+
+
+class AdminCheckoutRecheckResponse(AdminCheckoutSupportResponse):
+    pass
 
 
 class SubscriptionAccountingExportResponse(BaseModel):
@@ -1794,6 +1825,188 @@ async def get_subscription_request(
 ):
     """Open one manual subscription request with lifecycle history."""
     return subscription_service.get_request(request_id)
+
+
+def _load_admin_checkout_command(
+    checkout_ref: str,
+    *,
+    parent_id: str,
+) -> Mapping[str, object]:
+    try:
+        lookup = checkout_command_repo.get_checkout_command_by_public_ref(
+            checkout_ref,
+            parent_id=parent_id,
+        )
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "checkout_not_found",
+                "message": "Checkout was not found.",
+            },
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "checkout_temporarily_unavailable",
+                "message": "Checkout status is temporarily unavailable.",
+            },
+        ) from exc
+    if lookup.disposition is checkout_command_repo.CheckoutCommandDisposition.NOT_FOUND:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "checkout_not_found",
+                "message": "Checkout was not found.",
+            },
+        )
+    if (
+        lookup.disposition
+        is not checkout_command_repo.CheckoutCommandDisposition.REPLAYED
+        or lookup.command is None
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "checkout_temporarily_unavailable",
+                "message": "Checkout status is temporarily unavailable.",
+            },
+        )
+    return lookup.command
+
+
+def _admin_checkout_projection(
+    checkout_ref: str,
+    *,
+    command: Mapping[str, object],
+    result: billing_reconciliation_service.BillingReconciliationResult,
+    response_type: type[AdminCheckoutSupportResponse] = AdminCheckoutSupportResponse,
+) -> AdminCheckoutSupportResponse:
+    support = billing_reconciliation_service.project_checkout_support_state(result)
+    beneficiary_ids = command.get("beneficiary_ids")
+    lease_generation = support["reconciliationLeaseGeneration"]
+    if type(lease_generation) is not int or lease_generation < 0:
+        raise RuntimeError("billing reconciliation dependency unavailable")
+    return response_type(
+        checkoutRef=checkout_ref,
+        parentId=_admin_required_text(command.get("parent_id")),
+        targetPlan=_admin_required_text(command.get("plan_id")),
+        beneficiaryIds=[
+            beneficiary
+            for beneficiary in (
+                beneficiary_ids if isinstance(beneficiary_ids, list) else []
+            )
+            if isinstance(beneficiary, str)
+        ],
+        createdAt=_admin_required_text(command.get("created_at")),
+        updatedAt=_admin_required_text(command.get("updated_at")),
+        commandState=_admin_required_text(command.get("command_state")),
+        providerEffectStatus=_admin_required_text(
+            command.get("provider_effect_status")
+        ),
+        lifecycleState=str(support["lifecycleState"]),
+        lastRecheckedAt=str(support["lastRecheckedAt"]),
+        safeAction=str(support["safeAction"]),
+        failureCode=str(support["failureClass"]),
+        providerSessionSuffix=(
+            str(support["providerSessionSuffix"])
+            if support["providerSessionSuffix"] is not None
+            else None
+        ),
+        reconciliationLeaseGeneration=lease_generation,
+    )
+
+
+def _reconcile_admin_checkout(
+    checkout_ref: str,
+    *,
+    parent_id: str,
+    provider: billing_reconciliation_service.BillingReconciliationProvider,
+) -> billing_reconciliation_service.BillingReconciliationResult:
+    now = datetime.now(timezone.utc)
+    result = billing_reconciliation_service.reconcile_checkout_command(
+        checkout_ref,
+        parent_id=parent_id,
+        lease_owner=f"admin-checkout-recheck-{uuid4().hex}",
+        provider=provider,
+        now_epoch=int(now.timestamp()),
+        now_iso=now.isoformat(),
+    )
+    if (
+        result.disposition
+        is billing_reconciliation_service.BillingReconciliationDisposition.NOT_FOUND
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "checkout_not_found",
+                "message": "Checkout was not found.",
+            },
+        )
+    return result
+
+
+@router.get(
+    "/billing/checkouts/{checkout_ref}",
+    response_model=AdminCheckoutSupportResponse,
+)
+async def get_billing_checkout_support(
+    checkout_ref: str,
+    parent_id: str = Query(..., alias="parentId", min_length=1, max_length=200),
+    user: dict = Depends(require_role("admin")),
+    provider: billing_reconciliation_service.BillingReconciliationProvider = Depends(
+        get_billing_reconciliation_provider
+    ),
+):
+    """Inspect one checkout through the billing-support capability."""
+    del user
+    command = _load_admin_checkout_command(
+        checkout_ref,
+        parent_id=parent_id,
+    )
+    result = _reconcile_admin_checkout(
+        checkout_ref,
+        parent_id=parent_id,
+        provider=provider,
+    )
+    return _admin_checkout_projection(
+        checkout_ref,
+        command=command,
+        result=result,
+    )
+
+
+@router.post(
+    "/billing/checkouts/{checkout_ref}/recheck",
+    response_model=AdminCheckoutRecheckResponse,
+)
+async def recheck_billing_checkout_support(
+    checkout_ref: str,
+    body: AdminCheckoutRecheckRequest,
+    parent_id: str = Query(..., alias="parentId", min_length=1, max_length=200),
+    user: dict = Depends(require_role("admin")),
+    provider: billing_reconciliation_service.BillingReconciliationProvider = Depends(
+        get_billing_reconciliation_provider
+    ),
+):
+    """Reconcile one original checkout without payment-creation authority."""
+    del body, user
+    command = _load_admin_checkout_command(
+        checkout_ref,
+        parent_id=parent_id,
+    )
+    result = _reconcile_admin_checkout(
+        checkout_ref,
+        parent_id=parent_id,
+        provider=provider,
+    )
+    return _admin_checkout_projection(
+        checkout_ref,
+        command=command,
+        result=result,
+        response_type=AdminCheckoutRecheckResponse,
+    )
 
 
 @router.get("/subscriptions/billing", response_model=SubscriptionBillingListResponse)

@@ -1,8 +1,11 @@
 """Parent routes - child list and weekly learning reports."""
+import re
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal, cast
+from uuid import uuid4
 
 from boto3.dynamodb.conditions import Attr, Key
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -10,7 +13,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
-from stoa.db.repositories import practice_repo, question_repo, report_repo, user_repo
+from stoa.db.repositories import (
+    checkout_command_repo,
+    practice_repo,
+    question_repo,
+    report_repo,
+    user_repo,
+)
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.models.billing import PurchasablePlanId
@@ -32,6 +41,7 @@ from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.services import (
     account_operations_service,
+    billing_reconciliation_service,
     learning_profile_service,
     subscription_service,
     usage_ledger_service,
@@ -254,6 +264,53 @@ class ParentCheckoutCommandResponse(BaseModel):
     beneficiaries: list[str]
 
 
+class ParentCheckoutStatusResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    checkoutRef: str
+    outcome: Literal["confirming", "active", "not_completed", "support_needed"]
+    newCheckoutAllowed: bool
+    safeActions: list[str]
+    targetPlan: PurchasablePlanId
+    beneficiaries: list[str]
+    effectivePlan: PurchasablePlanId | None = None
+    lastRecheckedAt: str
+
+
+class ParentCheckoutRecheckRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class ParentCheckoutRecheckResponse(ParentCheckoutStatusResponse):
+    pass
+
+
+class ParentCheckoutSupersedeRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    confirmed: Literal[True]
+    plan: PurchasablePlanId
+    beneficiary_ids: tuple[str, ...] = Field(
+        ...,
+        alias="beneficiaryIds",
+        min_length=1,
+        max_length=3,
+    )
+
+
+class ParentCheckoutSupersedeResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    checkoutRef: str | None
+    commandState: str
+    publicOutcome: str | None = None
+    checkoutSessionId: str | None = None
+    checkoutUrl: str | None = None
+    safeActions: list[str]
+    targetPlan: PurchasablePlanId | None = None
+    beneficiaries: list[str] = Field(default_factory=list)
+
+
 class ParentBillingResponse(BaseModel):
     parentId: str
     provider: str | None = None
@@ -343,6 +400,228 @@ def _parent_account_dependency(action: AuthorizationAction):
 
 _parent_account_read = _parent_account_dependency(AuthorizationAction.READ)
 _parent_account_create = _parent_account_dependency(AuthorizationAction.CREATE)
+
+
+def _provider_value(value: object, key: str) -> object:
+    return value.get(key) if isinstance(value, Mapping) else None
+
+
+def _provider_identifier(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    identifier = _provider_value(value, "id")
+    return identifier if isinstance(identifier, str) else ""
+
+
+class StripeBillingReconciliationProvider:
+    """Bounded Stripe test-mode reads for same-command reconciliation."""
+
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+
+    def _session_evidence(
+        self,
+        session: Mapping[str, object],
+    ) -> billing_reconciliation_service.ProviderCheckoutSessionEvidence:
+        metadata = session.get("metadata")
+        metadata_ref = _provider_value(metadata, "stoa_checkout_ref")
+        line_items = session.get("line_items")
+        line_data = _provider_value(line_items, "data")
+        first_line = (
+            line_data[0]
+            if isinstance(line_data, list) and line_data
+            else {}
+        )
+        price_id = _provider_identifier(_provider_value(first_line, "price"))
+        created = session.get("created")
+        livemode = session.get("livemode")
+        created_at = (
+            datetime.fromtimestamp(created, tz=timezone.utc).isoformat()
+            if type(created) is int and created >= 0
+            else str(created or "")
+        )
+        return billing_reconciliation_service.ProviderCheckoutSessionEvidence(
+            session_id=_provider_identifier(session.get("id")),
+            checkout_url=str(session.get("url") or ""),
+            client_reference_id=str(session.get("client_reference_id") or ""),
+            metadata_checkout_ref=(
+                metadata_ref if isinstance(metadata_ref, str) else ""
+            ),
+            customer_id=_provider_identifier(session.get("customer")),
+            price_id=price_id,
+            environment=self._settings.environment,
+            # Malformed provider evidence must fail closed as if it were live.
+            livemode=livemode if type(livemode) is bool else True,
+            status=str(session.get("status") or ""),
+            created_at=created_at,
+        )
+
+    def find_checkout_session(
+        self,
+        *,
+        checkout_ref: str,
+        provider_key_digest: str,
+    ) -> billing_reconciliation_service.ProviderCheckoutSessionEvidence | None:
+        if re.fullmatch(r"[0-9a-f]{64}", provider_key_digest) is None:
+            raise ValueError("provider key evidence is invalid")
+        stripe = subscription_service._load_stripe_sdk()  # noqa: SLF001
+        stripe.api_key = self._settings.stripe_api_key
+        response = subscription_service._stripe_object_to_dict(  # noqa: SLF001
+            stripe.checkout.Session.list(limit=100)
+        )
+        sessions = response.get("data")
+        if not isinstance(sessions, list):
+            raise RuntimeError("provider checkout list is malformed")
+        for raw_session in sessions:
+            session = subscription_service._stripe_object_to_dict(raw_session)  # noqa: SLF001
+            metadata = session.get("metadata")
+            if (
+                session.get("client_reference_id") == checkout_ref
+                and _provider_value(metadata, "stoa_checkout_ref") == checkout_ref
+            ):
+                session_id = _provider_identifier(session.get("id"))
+                if not session_id:
+                    raise RuntimeError("provider checkout identity is malformed")
+                return self.retrieve_checkout_session(session_id=session_id)
+        return None
+
+    def retrieve_checkout_session(
+        self,
+        *,
+        session_id: str,
+    ) -> billing_reconciliation_service.ProviderCheckoutSessionEvidence:
+        stripe = subscription_service._load_stripe_sdk()  # noqa: SLF001
+        stripe.api_key = self._settings.stripe_api_key
+        session = subscription_service._stripe_object_to_dict(  # noqa: SLF001
+            stripe.checkout.Session.retrieve(
+                session_id,
+                expand=["line_items.data.price"],
+            )
+        )
+        return self._session_evidence(session)
+
+
+def get_billing_reconciliation_provider(
+    settings: Settings = Depends(get_settings),
+) -> billing_reconciliation_service.BillingReconciliationProvider:
+    """Build a retrieval-only provider; it has no create or expire capability."""
+    return StripeBillingReconciliationProvider(settings)
+
+
+def _checkout_command_not_found() -> HTTPException:
+    return HTTPException(
+        status_code=404,
+        detail={
+            "code": "checkout_not_found",
+            "message": "Checkout was not found.",
+        },
+    )
+
+
+def _load_owned_checkout_command(
+    checkout_ref: str,
+    *,
+    parent_id: str,
+) -> Mapping[str, object]:
+    try:
+        lookup = checkout_command_repo.get_checkout_command_by_public_ref(
+            checkout_ref,
+            parent_id=parent_id,
+        )
+    except (TypeError, ValueError) as exc:
+        raise _checkout_command_not_found() from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "checkout_temporarily_unavailable",
+                "message": "Checkout status is temporarily unavailable.",
+            },
+        ) from exc
+    if lookup.disposition is checkout_command_repo.CheckoutCommandDisposition.NOT_FOUND:
+        raise _checkout_command_not_found()
+    if (
+        lookup.disposition
+        is not checkout_command_repo.CheckoutCommandDisposition.REPLAYED
+        or lookup.command is None
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "checkout_temporarily_unavailable",
+                "message": "Checkout status is temporarily unavailable.",
+            },
+        )
+    return lookup.command
+
+
+def _reconcile_owned_checkout(
+    checkout_ref: str,
+    *,
+    parent_id: str,
+    provider: billing_reconciliation_service.BillingReconciliationProvider,
+) -> billing_reconciliation_service.BillingReconciliationResult:
+    now = datetime.now(timezone.utc)
+    result = billing_reconciliation_service.reconcile_checkout_command(
+        checkout_ref,
+        parent_id=parent_id,
+        lease_owner=f"checkout-recheck-{uuid4().hex}",
+        provider=provider,
+        now_epoch=int(now.timestamp()),
+        now_iso=now.isoformat(),
+    )
+    if (
+        result.disposition
+        is billing_reconciliation_service.BillingReconciliationDisposition.NOT_FOUND
+    ):
+        raise _checkout_command_not_found()
+    return result
+
+
+def _parent_checkout_status(
+    checkout_ref: str,
+    *,
+    command: Mapping[str, object],
+    result: billing_reconciliation_service.BillingReconciliationResult,
+    response_type: type[ParentCheckoutStatusResponse] = ParentCheckoutStatusResponse,
+) -> ParentCheckoutStatusResponse:
+    raw_beneficiaries = command.get("beneficiary_ids")
+    beneficiaries = (
+        [value for value in raw_beneficiaries if isinstance(value, str)]
+        if isinstance(raw_beneficiaries, list)
+        else []
+    )
+    outcome = cast(
+        Literal["confirming", "active", "not_completed", "support_needed"],
+        (
+            result.lifecycle_state
+            if result.lifecycle_state
+            in {"confirming", "active", "not_completed", "support_needed"}
+            else "support_needed"
+        ),
+    )
+    safe_actions = {
+        "confirming": ["recheck_payment", "contact_support"],
+        "active": ["view_billing", "go_home"],
+        "not_completed": ["start_checkout"],
+        "support_needed": ["recheck_payment", "contact_support"],
+    }[outcome]
+    return response_type(
+        checkoutRef=checkout_ref,
+        outcome=outcome,
+        newCheckoutAllowed=outcome == "not_completed",
+        safeActions=safe_actions,
+        targetPlan=PurchasablePlanId(str(command.get("plan_id") or "")),
+        beneficiaries=beneficiaries,
+        effectivePlan=(
+            PurchasablePlanId(str(command.get("plan_id") or ""))
+            if outcome == "active"
+            else None
+        ),
+        lastRecheckedAt=result.last_rechecked_at,
+    )
+
+
 async def _parent_child_read(
     child_id: str,
     actor: Actor = Depends(get_actor),
@@ -753,6 +1032,95 @@ async def create_my_subscription_checkout(
     """Create or resume one durable sandbox checkout command."""
     return subscription_service.create_or_resume_checkout_command(
         parent_id=actor.user_id,
+        idempotency_key=idempotency_key,
+        plan=body.plan.value,
+        beneficiary_ids=body.beneficiary_ids,
+        settings=settings,
+    )
+
+
+@router.get(
+    "/me/subscription/checkout/{checkout_ref}",
+    response_model=ParentCheckoutStatusResponse,
+)
+async def get_my_subscription_checkout_status(
+    checkout_ref: str,
+    actor: Actor = Depends(_parent_account_read),
+    provider: billing_reconciliation_service.BillingReconciliationProvider = Depends(
+        get_billing_reconciliation_provider
+    ),
+):
+    """Return one owner-authorized checkout command's authoritative status."""
+    command = _load_owned_checkout_command(
+        checkout_ref,
+        parent_id=actor.user_id,
+    )
+    result = _reconcile_owned_checkout(
+        checkout_ref,
+        parent_id=actor.user_id,
+        provider=provider,
+    )
+    return _parent_checkout_status(
+        checkout_ref,
+        command=command,
+        result=result,
+    )
+
+
+@router.post(
+    "/me/subscription/checkout/{checkout_ref}/recheck",
+    response_model=ParentCheckoutRecheckResponse,
+)
+async def recheck_my_subscription_checkout(
+    checkout_ref: str,
+    body: ParentCheckoutRecheckRequest,
+    actor: Actor = Depends(_parent_account_read),
+    provider: billing_reconciliation_service.BillingReconciliationProvider = Depends(
+        get_billing_reconciliation_provider
+    ),
+):
+    """Reconcile only the authenticated parent's original checkout command."""
+    del body
+    command = _load_owned_checkout_command(
+        checkout_ref,
+        parent_id=actor.user_id,
+    )
+    result = _reconcile_owned_checkout(
+        checkout_ref,
+        parent_id=actor.user_id,
+        provider=provider,
+    )
+    return _parent_checkout_status(
+        checkout_ref,
+        command=command,
+        result=result,
+        response_type=ParentCheckoutRecheckResponse,
+    )
+
+
+@router.post(
+    "/me/subscription/checkout/{checkout_ref}/supersede",
+    response_model=ParentCheckoutSupersedeResponse,
+)
+async def supersede_my_subscription_checkout(
+    checkout_ref: str,
+    body: ParentCheckoutSupersedeRequest,
+    idempotency_key: Annotated[
+        str,
+        Header(
+            alias="Idempotency-Key",
+            min_length=8,
+            max_length=128,
+            pattern=r"^[\x21-\x7e]+$",
+        ),
+    ],
+    actor: Actor = Depends(_parent_account_create),
+    settings: Settings = Depends(get_settings),
+):
+    """Confirm one plan change before invoking the guarded supersession flow."""
+    return subscription_service.confirm_checkout_plan_change(
+        parent_id=actor.user_id,
+        checkout_ref=checkout_ref,
         idempotency_key=idempotency_key,
         plan=body.plan.value,
         beneficiary_ids=body.beneficiary_ids,

@@ -350,11 +350,11 @@ def test_wrong_admin_capability_denies_before_checkout_lookup_or_provider(monkey
 def test_openapi_publishes_five_closed_routes_without_payment_authority() -> None:
     schema = main_app.openapi()
     expected = {
-        ("get", f"/parents/me/subscription/checkout/{{checkout_ref}}"),
-        ("post", f"/parents/me/subscription/checkout/{{checkout_ref}}/recheck"),
-        ("post", f"/parents/me/subscription/checkout/{{checkout_ref}}/supersede"),
-        ("get", f"/admin/billing/checkouts/{{checkout_ref}}"),
-        ("post", f"/admin/billing/checkouts/{{checkout_ref}}/recheck"),
+        ("get", "/parents/me/subscription/checkout/{checkout_ref}"),
+        ("post", "/parents/me/subscription/checkout/{checkout_ref}/recheck"),
+        ("post", "/parents/me/subscription/checkout/{checkout_ref}/supersede"),
+        ("get", "/admin/billing/checkouts/{checkout_ref}"),
+        ("post", "/admin/billing/checkouts/{checkout_ref}/recheck"),
     }
     assert all(method in schema["paths"][path] for method, path in expected)
     serialized = str(

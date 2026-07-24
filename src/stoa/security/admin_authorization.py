@@ -535,6 +535,14 @@ def classify_admin_route(method: str, path: str) -> AdminRoutePolicy:
         return _policy(capability, AuthorizationPurpose.ACCOUNT_OPERATIONS,
                        AuthorizationAction.UPDATE if method != "GET" else AuthorizationAction.LOOKUP,
                        "parent_id", "student_id", resource_type=ResourceType.PARENT_BINDING)
+    if path.startswith("/admin/billing/checkouts"):
+        return _policy(
+            "billing_operations_reader",
+            AuthorizationPurpose.BILLING_OPERATIONS,
+            AuthorizationAction.READ,
+            "checkout_ref",
+            "parentId",
+        )
     if path.startswith("/admin/subscriptions"):
         if "/refunds" in path:
             capability, op_action = "billing_refund_executor", AuthorizationAction.UPDATE
