@@ -392,6 +392,44 @@ def _poll_attached_checkout(
     return None
 
 
+def _register_checkout_command_and_claim_provider_create(
+    *,
+    intent: CheckoutIntent,
+    price_id: str,
+    environment: str,
+    registration_iso: str,
+) -> tuple[
+    checkout_command_repo.CheckoutCommandResult,
+    checkout_command_repo.CheckoutCommandResult | None,
+]:
+    """Persist the exact command, then conditionally persist provider-call intent."""
+    registration = checkout_command_repo.register_checkout_command(
+        intent,
+        price_id=price_id,
+        environment=environment,
+        now_iso=registration_iso,
+    )
+    if registration.disposition not in {
+        checkout_command_repo.CheckoutCommandDisposition.CREATED,
+        checkout_command_repo.CheckoutCommandDisposition.REPLAYED,
+    }:
+        return registration, None
+    if _attached_checkout_response(registration.command) is not None:
+        return registration, None
+    command = registration.command
+    if command is None or not isinstance(command.get("checkout_ref"), str):
+        return registration, None
+    now_epoch = int(time.time())
+    claim = checkout_command_repo.claim_provider_create(
+        command,
+        lease_owner=f"checkout-worker-{uuid4().hex}",
+        now_epoch=now_epoch,
+        lease_expires_at=now_epoch + CHECKOUT_PROVIDER_LEASE_SECONDS,
+        now_iso=now_iso(),
+    )
+    return registration, claim
+
+
 def create_or_resume_checkout_command(
     *,
     parent_id: str,
@@ -433,11 +471,11 @@ def create_or_resume_checkout_command(
         planVersion=CHECKOUT_PLAN_VERSION,
         createdAt=created_at,
     )
-    registration = checkout_command_repo.register_checkout_command(
-        intent,
+    registration, claim = _register_checkout_command_and_claim_provider_create(
+        intent=intent,
         price_id=price_id,
         environment=settings.environment,
-        now_iso=created_at.isoformat(),
+        registration_iso=created_at.isoformat(),
     )
     if (
         registration.disposition
@@ -477,14 +515,12 @@ def create_or_resume_checkout_command(
             message="Checkout is temporarily unavailable.",
         )
     checkout_ref = str(command["checkout_ref"])
-    now_epoch = int(time.time())
-    claim = checkout_command_repo.claim_provider_create(
-        command,
-        lease_owner=f"checkout-worker-{uuid4().hex}",
-        now_epoch=now_epoch,
-        lease_expires_at=now_epoch + CHECKOUT_PROVIDER_LEASE_SECONDS,
-        now_iso=now_iso(),
-    )
+    if claim is None:
+        raise _checkout_http_error(
+            status_code=503,
+            code="checkout_temporarily_unavailable",
+            message="Checkout is temporarily unavailable.",
+        )
     if claim.disposition is checkout_command_repo.CheckoutCommandDisposition.LEASE_BUSY:
         concurrent = _poll_attached_checkout(
             checkout_ref=checkout_ref,
