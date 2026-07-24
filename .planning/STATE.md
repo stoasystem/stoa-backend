@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-15-PLAN.md
-last_updated: "2026-07-24T10:16:51.139Z"
+stopped_at: Completed 476-22-PLAN.md
+last_updated: "2026-07-24T10:31:03.823Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 147
+  completed_plans: 148
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 8 of 29
+Plan: 9 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T10:16:51.133Z
-**Stopped At:** Completed 476-15-PLAN.md
+**Last Date:** 2026-07-24T10:31:03.817Z
+**Stopped At:** Completed 476-22-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -254,6 +254,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P04 | 16min | 1 tasks | 4 files |
 | Phase 476 P06 | 9min | 1 tasks | 3 files |
 | Phase 476 P15 | 8min | 1 tasks | 3 files |
+| Phase 476 P22 | 10min | 1 tasks | 17 files |
 
 ## Decisions
 
@@ -563,3 +564,6 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Checkout beneficiary scope requires active parent/student profiles plus exact active forward and reverse relationship rows before any command or provider effect. — Paid access must never be purchased for an inactive, stale, or unrelated student relationship.
 - [Phase 476]: Key weekly token counters by beneficiary and Zurich week so monotonic plan upgrades preserve already used and reserved tokens. — Prevents resets and stale entitlement regressions during in-week upgrades.
 - [Phase 476]: Retain immutable redacted provider-cost evidence independently while finalization or restoration changes only user allowance debit. — Preserves real provider cost and retry auditability without charging an undelivered result.
+- [Phase 476]: Bind each Web BillingPlan ID to its exact CHF monthly price and purchasability in one discriminated TypeScript union. — Wrong prices and a purchasable free trial must fail at compile time.
+- [Phase 476]: Keep pre-Plan-25 request-count rendering component-local so the canonical billing type module exposes only weekly input/output/support allowance dimensions. — Plan 22 owns contract identity while Plan 25 owns the server-driven usage UI migration.
+- [Phase 476]: Web masked payment contracts expose only brand, last four, and expiry coordinates. — Browser types must not admit PAN, CVC, provider credentials, or payment-capable secrets.
