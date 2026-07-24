@@ -1,0 +1,27 @@
+{
+  "applyBlocked": true,
+  "classificationCounts": {
+    "canonical": 0,
+    "exact_provider_match": 0,
+    "malformed": 0,
+    "migration_review_required": 1
+  },
+  "configurationDigest": "340f20f807ab057557fb8e77757a1d8246bcd4959655e2d6fea9caf80946f6d9",
+  "environment": "local-test",
+  "inspected": 1,
+  "mutationCount": 0,
+  "previewDigest": "57959615961c67ae163570d222d3944441ec4adbc152fdb6501c86ad055067b9",
+  "schemaVersion": "plan_identity_migration_preview.v1",
+  "sourceSha": "ccdf1eb5fc05b6e1d504e29358490ea88e1a9616",
+  "status": "review_required",
+  "unresolved": [
+    {
+      "coordinateDigest": "26291da8ce0b518d12e2dcc849135dfed4dd2d36ce6f9832a07d50a58e3cf456",
+      "disposition": "migration_review_required",
+      "evidenceDigest": "11c17d59153d44d02b4aae3a134fdec24d89097d461ea6c2f9790a7b73b18192",
+      "reasonCode": "provider_evidence_missing",
+      "rowDigest": "d0a366a7775e0638e0b5708c37807939153e00ab246bd1d29500d6ec8da7363d",
+      "sourcePlan": "standard"
+    }
+  ]
+}
