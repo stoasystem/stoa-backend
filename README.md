@@ -27,8 +27,24 @@ used to build and verify this increment, not represented as the production infer
 
 ```bash
 uv sync --extra dev
-uv run uvicorn stoa.main:app --reload   # local dev
+aws sso login --profile stoa
+AWS_PROFILE=stoa uv run uvicorn stoa.main:app --reload   # local dev with AWS access
 ```
+
+## AWS authentication
+
+Local development and operator scripts use AWS IAM Identity Center through the `stoa` profile.
+Static `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` credentials and the AWS root user are not
+supported. Before live AWS work, verify the caller is account `562923011260` and an
+`AWSReservedSSO_*` assumed role:
+
+```bash
+aws sso login --profile stoa
+aws sts get-caller-identity --profile stoa
+```
+
+The live operator scripts default to `--profile stoa` and fail before provider access when the
+caller is an IAM User, root, a non-SSO role, or the wrong AWS account.
 
 ## Project Structure
 

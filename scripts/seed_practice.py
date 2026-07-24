@@ -16,11 +16,13 @@ Total: 5 topics × 2 units × 2 lessons × 3 challenges = 60 questions.
 import argparse
 import os
 
-import boto3
-
 from stoa.db.repositories import practice_repo
 from stoa.models.practice import DirectionalHintTemplateId
+from stoa.security.aws_operator_identity import require_sso_operator_session
 from stoa.services import practice_projection_service
+
+
+DEFAULT_AWS_ACCOUNT_ID = "562923011260"
 
 # ── Data ──────────────────────────────────────────────────────────────────
 
@@ -747,7 +749,14 @@ def prepare_challenge_items(challenges: list[dict]) -> list[dict]:
         prepared.extend((canonical, practice_repo.challenge_pointer(canonical)))
     return prepared
 
-def seed(table_name: str, region: str, dry_run: bool = False):
+def seed(
+    table_name: str,
+    region: str,
+    dry_run: bool = False,
+    *,
+    profile_name: str = "stoa",
+    account_id: str = DEFAULT_AWS_ACCOUNT_ID,
+):
     all_topics, all_units, all_lessons, all_challenges = [], [], [], []
 
     for fn in [_brueche_data, _gleichungen_data, _geometrie_data,
@@ -790,7 +799,12 @@ def seed(table_name: str, region: str, dry_run: bool = False):
             print(f"  {item['SK']}: {item.get('title', item.get('name', ''))}")
         return
 
-    dynamodb = boto3.resource("dynamodb", region_name=region)
+    session = require_sso_operator_session(
+        profile_name=profile_name,
+        region_name=region,
+        expected_account_id=account_id,
+    )
+    dynamodb = session.resource("dynamodb", region_name=region)
     table = dynamodb.Table(table_name)
     with table.batch_writer() as batch:
         for item in items_to_write:
@@ -803,6 +817,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--table", default=os.environ.get("STOA_TABLE", "stoa-main"))
     parser.add_argument("--region", default=os.environ.get("AWS_DEFAULT_REGION", "eu-central-2"))
+    parser.add_argument("--profile", default=os.environ.get("AWS_PROFILE", "stoa"))
+    parser.add_argument(
+        "--account-id",
+        default=os.environ.get("AWS_ACCOUNT_ID", DEFAULT_AWS_ACCOUNT_ID),
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-    seed(args.table, args.region, dry_run=args.dry_run)
+    seed(
+        args.table,
+        args.region,
+        dry_run=args.dry_run,
+        profile_name=args.profile,
+        account_id=args.account_id,
+    )

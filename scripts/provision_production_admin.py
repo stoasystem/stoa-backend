@@ -15,12 +15,17 @@ import sys
 import uuid
 from typing import Any
 
-import boto3
 from botocore.exceptions import ClientError
+
+from stoa.security.aws_operator_identity import (
+    AwsOperatorIdentityError,
+    require_sso_operator_session,
+)
 
 
 ADMIN_GROUP = "admins"
 ADMIN_ROLE = "admin"
+DEFAULT_AWS_ACCOUNT_ID = "562923011260"
 
 
 class ProvisioningError(RuntimeError):
@@ -41,6 +46,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--email", required=True, help="Admin email address / Cognito username.")
     parser.add_argument("--name", default="", help="Display name for the DynamoDB profile.")
     parser.add_argument("--region", default=os.environ.get("AWS_REGION", "eu-central-2"))
+    parser.add_argument(
+        "--profile",
+        default=os.environ.get("AWS_PROFILE", "stoa"),
+        help="AWS IAM Identity Center profile; IAM User credentials are refused.",
+    )
+    parser.add_argument(
+        "--account-id",
+        default=os.environ.get("AWS_ACCOUNT_ID", DEFAULT_AWS_ACCOUNT_ID),
+        help="Expected AWS account ID for the SSO identity guard.",
+    )
     parser.add_argument(
         "--user-pool-id",
         default=os.environ.get("COGNITO_USER_POOL_ID", "eu-central-2_Ss93YQzjJ"),
@@ -338,8 +353,13 @@ def main() -> int:
     args = parse_args()
     try:
         password = validate_inputs(args)
-        cognito = boto3.client("cognito-idp", region_name=args.region)
-        dynamodb = boto3.resource("dynamodb", region_name=args.region)
+        session = require_sso_operator_session(
+            profile_name=args.profile,
+            region_name=args.region,
+            expected_account_id=args.account_id,
+        )
+        cognito = session.client("cognito-idp", region_name=args.region)
+        dynamodb = session.resource("dynamodb", region_name=args.region)
         table = dynamodb.Table(args.table_name)
 
         cognito_status = create_or_update_cognito_user(
@@ -381,7 +401,7 @@ def main() -> int:
     except ClientError:
         print("ERROR: provider operation failed safely.", file=sys.stderr)
         return 1
-    except ProvisioningError as exc:
+    except (AwsOperatorIdentityError, ProvisioningError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
