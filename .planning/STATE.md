@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-18-PLAN.md
-last_updated: "2026-07-24T13:21:06.857Z"
+stopped_at: Completed 476-12-PLAN.md
+last_updated: "2026-07-24T14:25:45.563Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 155
+  completed_plans: 156
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 19 of 29
+Plan: 20 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T13:21:06.749Z
-**Stopped At:** Completed 476-18-PLAN.md
+**Last Date:** 2026-07-24T14:25:45.556Z
+**Stopped At:** Completed 476-12-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -262,6 +262,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P11 | 15min | 1 tasks | 5 files |
 | Phase 476 P17 | 16min | 1 tasks | 2 files |
 | Phase 476 P18 | 11min | 1 tasks | 2 files |
+| Phase 476 P12 | 11min | 1 tasks | 8 files |
 
 ## Decisions
 
@@ -597,3 +598,6 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Conversation allowance effects derive from the durable message command, assistant message, entitlement snapshot, and original Zurich week rather than transport IDs. — Regular and SSE retries must own one effect across transport and calendar boundaries.
 - [Phase 476]: Private command result metadata repairs exact token finalization on regular or SSE replay without exposing allowance coordinates publicly. — A durable result may outlive a response or finalization timeout, while public message contracts remain closed.
 - [Phase 476]: Generated conversation hints share the message effect and title generation remains explicitly provider-cost-only. — One provider result must produce one student debit and internal generation must not consume allowance.
+- [Phase 476]: Signed paid activation reaches Plan 10 only through explicit grant construction; relationship/profile/account-fence ConditionChecks join the same activation transaction.
+- [Phase 476]: An active parent billing projection no longer grants every bound child; the resolver requires one exact owner-scoped active beneficiary grant.
+- [Phase 476]: A paid upgrade advances plan, allowance, activation, and grant versions while leaving weekly token/support counters and attachment byte aggregates untouched.
