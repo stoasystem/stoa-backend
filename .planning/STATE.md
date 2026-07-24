@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-21-PLAN.md
-last_updated: "2026-07-24T15:49:31.898Z"
+stopped_at: Completed 476-23-PLAN.md
+last_updated: "2026-07-24T16:17:29.077Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 161
-  percent: 30
+  completed_plans: 162
+  percent: 70
 ---
 
 # Project State
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 25 of 29
+Plan: 26 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T15:49:31.892Z
-**Stopped At:** Completed 476-21-PLAN.md
+**Last Date:** 2026-07-24T16:17:29.071Z
+**Stopped At:** Completed 476-23-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -268,6 +268,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P19 | 14min | 1 tasks | 10 files |
 | Phase 476 P20 | 12min | 1 tasks | 4 files |
 | Phase 476 P21 | 15min | 1 tasks | 5 files |
+| Phase 476 P23 | 21min | 1 tasks | 5 files |
 
 ## Decisions
 
@@ -621,3 +622,6 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Parent effective billing state derives only from current relationship-fenced paid grants; non-active checkout lifecycle never projects an effective paid plan. — Prevents redirects, requested plans, and legacy tiers from becoming paid-access proof.
 - [Phase 476]: Family token allowance remains per selected beneficiary while teacher cases project once from the shared-family scope. — Matches the locked D-19 and D-20 accounting boundaries without cross-child counter leakage.
 - [Phase 476]: Admin billing detail retains exact counts and lifecycle versions but exposes provider, model, and correlation coordinates only as digests or a suffix. — Support retains auditability without receiving payment-capable or content-bearing secrets.
+- [Phase 476]: Persist exactly idempotencyKey and optional checkoutRef under stoa.billing.checkout.v1; plan, beneficiaries, provider URLs, and secrets remain server/query state. — Refresh and retry need durable logical identity without browser-retained payable or intent data.
+- [Phase 476]: Derive a stable successor key from the retained random key and confirmed normalized intent so supersession timeouts can replay without storing extra intent. — A lost supersession response must replay one successor while preserving the original command until authoritative success.
+- [Phase 476]: Keep legacy manual subscription requests available but route all payable checkout entry through the canonical Billing page. — The parent dashboard must not retain callback-bound or provider-URL checkout authority.
