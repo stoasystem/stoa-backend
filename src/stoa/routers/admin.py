@@ -407,6 +407,85 @@ class AdminCheckoutRecheckResponse(AdminCheckoutSupportResponse):
     pass
 
 
+class AdminBillingCommandLifecycle(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    state: str
+    providerEffectStatus: str
+    createdAt: str
+    updatedAt: str
+
+
+class AdminBillingFactLifecycle(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal[
+        "checkout_session_completed",
+        "checkout_session_expired",
+        "invoice_paid",
+        "invoice_payment_failed",
+        "subscription_active",
+        "subscription_inactive",
+    ]
+    factVersion: int = Field(ge=1)
+    providerEventIdDigest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    providerObjectIdDigest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    signatureVerified: Literal[True]
+    providerLivemode: Literal[False]
+    observedAt: str
+
+
+class AdminProviderUsageEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    beneficiaryId: str
+    correlationDigest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    providerRequestIdDigest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    modelIdDigest: str = Field(pattern=r"^[0-9a-f]{64}$")
+    inputTokens: int = Field(ge=0)
+    outputTokens: int = Field(ge=0)
+    providerCostRetained: bool
+    observedAt: str
+
+
+class AdminPaymentReminderProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    brand: str
+    last4: str = Field(pattern=r"^[0-9]{4}$")
+    expiryMonth: int = Field(ge=1, le=12)
+    expiryYear: int = Field(ge=2000, le=9999)
+    reminderAt: str
+    status: Literal["pending", "notified"]
+
+
+class AdminBillingReconciliationProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lifecycleState: str
+    lastRecheckedAt: str
+    safeAction: str
+    failureCode: str
+    providerSessionSuffix: str | None = None
+    reconciliationLeaseGeneration: int = Field(ge=0)
+
+
+class AdminBillingOperationDetail(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    checkoutRef: str
+    parentId: str
+    targetPlan: Literal["student", "teacher_supported", "family"]
+    beneficiaryIds: list[str]
+    commandLifecycle: AdminBillingCommandLifecycle
+    factLifecycle: list[AdminBillingFactLifecycle]
+    grantVersion: dict[str, int]
+    allowanceVersion: dict[str, int]
+    providerUsageEvidence: list[AdminProviderUsageEvidence]
+    paymentReminder: AdminPaymentReminderProjection | None = None
+    reconciliation: AdminBillingReconciliationProjection
+
+
 class SubscriptionAccountingExportResponse(BaseModel):
     items: list[dict[str, Any]]
     count: int
@@ -1949,11 +2028,12 @@ def _reconcile_admin_checkout(
 
 @router.get(
     "/billing/checkouts/{checkout_ref}",
-    response_model=AdminCheckoutSupportResponse,
+    response_model=AdminCheckoutSupportResponse | AdminBillingOperationDetail,
 )
 async def get_billing_checkout_support(
     checkout_ref: str,
     parent_id: str = Query(..., alias="parentId", min_length=1, max_length=200),
+    detail: bool = Query(default=False),
     user: dict = Depends(require_role("admin")),
     provider: billing_reconciliation_service.BillingReconciliationProvider = Depends(
         get_billing_reconciliation_provider
@@ -1970,6 +2050,23 @@ async def get_billing_checkout_support(
         parent_id=parent_id,
         provider=provider,
     )
+    if detail:
+        try:
+            return subscription_service.get_admin_billing_operation_detail(
+                checkout_ref=checkout_ref,
+                command=command,
+                reconciliation=billing_reconciliation_service.project_checkout_support_state(
+                    result
+                ),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "billing_projection_temporarily_unavailable",
+                    "message": "Billing details are temporarily unavailable.",
+                },
+            ) from exc
     return _admin_checkout_projection(
         checkout_ref,
         command=command,

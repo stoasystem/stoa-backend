@@ -541,38 +541,50 @@ def test_parent_child_usage_endpoint_is_privacy_safe(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        parents.usage_ledger_service,
-        "build_student_usage_summary",
-        lambda student_id, settings, day=None: {
-            "studentId": student_id,
-            "parentId": "parent-1",
-            "quotaPeriod": day or "2026-07-03",
-            "action": "question_submission",
-            "consumed": 1,
-            "limit": 30,
-            "remaining": 29,
-            "effectivePlan": "student",
-            "entitlementSource": "provider_billing",
-            "billingState": "active",
-            "reconciliation": {"status": "matched"},
-            "actions": [{"action": "chat_message", "consumed": 1, "summaryGroup": "chat"}],
-            "groups": [{"group": "chat", "consumed": 1, "actions": ["chat_message"]}],
-            "totals": {"consumed": 2, "actionCount": 2},
-            "partial": False,
-            "stale": False,
-            "unreconciled": False,
+        parents.subscription_service,
+        "get_parent_active_billing_grants",
+        lambda parent_id: [
+            {
+                "parent_id": parent_id,
+                "beneficiary_id": "student-1",
+                "plan_id": "student",
+                "allowance_version": 4,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        parents.allowance_service,
+        "get_allowance_projection",
+        lambda **kwargs: {
+            "beneficiaryId": kwargs["beneficiary_id"],
+            "planId": "student",
+            "allowanceVersion": 4,
+            "weekIdentity": "2026-W27",
+            "window": {
+                "start": "2026-06-28T22:00:00+00:00",
+                "end": "2026-07-05T22:00:00+00:00",
+            },
+            "input": {
+                "remainingTokens": 375_000,
+                "usedPercent": 25.0,
+            },
+            "output": {
+                "remainingTokens": 90_000,
+                "usedPercent": 10.0,
+            },
         },
     )
 
-    response = TestClient(app).get("/parents/me/children/student-1/usage?day=2026-07-03")
+    response = TestClient(app).get("/parents/me/children/student-1/usage")
 
     assert response.status_code == 200
     body = response.json()
     assert body["studentId"] == "student-1"
-    assert body["remaining"] == 29
-    assert body["actions"][0]["action"] == "chat_message"
-    assert body["groups"][0]["group"] == "chat"
-    assert body["totals"]["actionCount"] == 2
+    assert body["inputRemaining"] == 375_000
+    assert body["outputRemaining"] == 90_000
+    assert body["inputPercentUsed"] == 25.0
+    assert body["teacherCasesRemaining"] == 0
+    assert body["allowanceWindow"]["timezone"] == "Europe/Zurich"
     assert "content" not in str(body)
     assert "image_s3_key" not in str(body)
 

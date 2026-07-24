@@ -28,7 +28,7 @@ SECRET_CANARIES = (
     "sk_test_private_canary",
     "https://checkout.stripe.com/private",
     "4242424242424242",
-    "999",
+    "cvc-999",
     "cs_test_full_provider_identifier",
     "pm_full_provider_identifier",
     "private prompt canary",
@@ -381,9 +381,11 @@ def test_parent_route_uses_current_grants_and_week_projection(
     app.include_router(parents.router, prefix="/parents")
     app.dependency_overrides[get_actor] = lambda: Actor(
         user_id="parent-1",
-        claims_sub="claims-parent-1",
+        issuer="https://issuer.example.test",
+        subject="claims-parent-1",
         role=CanonicalRole.PARENT,
-        email="parent@example.test",
+        account_status="active",
+        cognito_group="parent",
     )
     monkeypatch.setattr(
         subscription_service,
@@ -394,6 +396,34 @@ def test_parent_route_uses_current_grants_and_week_projection(
         subscription_service,
         "get_current_payment_reminder",
         lambda *_args, **_kwargs: _reminder(),
+    )
+    monkeypatch.setattr(
+        subscription_service,
+        "get_parent_safe_billing_lifecycle",
+        lambda *_args, **_kwargs: {
+            "status": "active",
+            "subscriptionTier": "family",
+            "paymentMethodType": "card",
+            "dunning": {
+                "state": "active",
+                "supportAction": None,
+                "nextPaymentAttempt": None,
+            },
+            "latestInvoice": {
+                "currency": "CHF",
+                "amountPaid": 14900,
+                "amountRemaining": 0,
+                "amountRefunded": 0,
+                "taxStatus": "provider_managed",
+                "hostedInvoiceUrl": None,
+                "receiptUrl": None,
+            },
+            "refund": {
+                "state": "ready_for_provider",
+                "eligibleAmount": 14900,
+                "refundedAmount": 0,
+            },
+        },
     )
     monkeypatch.setattr(
         parents.allowance_service,
@@ -432,6 +462,7 @@ def test_openapi_has_closed_projection_models_and_no_manual_payment_success() ->
     paths = "\n".join(document["paths"]).lower()
 
     assert schemas["ParentBillingOverviewResponse"]["additionalProperties"] is False
+    assert schemas["ParentAllowanceProjection"]["additionalProperties"] is False
     assert schemas["AdminBillingOperationDetail"]["additionalProperties"] is False
     assert "manual-success" not in paths
     assert "mark-payment-success" not in paths

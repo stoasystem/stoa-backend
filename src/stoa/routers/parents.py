@@ -41,10 +41,11 @@ from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.services import (
     account_operations_service,
+    allowance_service,
     billing_reconciliation_service,
     learning_profile_service,
     subscription_service,
-    usage_ledger_service,
+    teacher_support_allowance_service,
 )
 
 router = APIRouter()
@@ -311,61 +312,110 @@ class ParentCheckoutSupersedeResponse(BaseModel):
     beneficiaries: list[str] = Field(default_factory=list)
 
 
-class ParentBillingResponse(BaseModel):
+class ParentBillingBeneficiarySummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    studentId: str
+    effectivePlan: Literal["student", "teacher_supported", "family"]
+
+
+class ParentAllowanceWindow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    weekIdentity: str
+    timezone: Literal["Europe/Zurich"]
+    utcStart: str
+    utcEnd: str
+    localStart: str
+    localEnd: str
+
+
+class ParentTeacherCasesProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scope: Literal["none", "per_beneficiary", "shared_family"]
+    remaining: int | None = Field(default=None, ge=0)
+    limit: int = Field(ge=0)
+    byBeneficiary: dict[str, int] = Field(default_factory=dict)
+
+
+class ParentPaymentReminderProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    brand: str
+    last4: str = Field(pattern=r"^[0-9]{4}$")
+    expiryMonth: int = Field(ge=1, le=12)
+    expiryYear: int = Field(ge=2000, le=9999)
+    reminderAt: str
+    status: Literal["pending", "notified"]
+
+
+class ParentBillingDunningProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    state: str
+    supportAction: str | None = None
+    nextPaymentAttempt: str | None = None
+
+
+class ParentBillingInvoiceProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    currency: str | None = None
+    amountPaid: int | None = Field(default=None, ge=0)
+    amountRemaining: int | None = Field(default=None, ge=0)
+    amountRefunded: int | None = Field(default=None, ge=0)
+    taxStatus: str | None = None
+    hostedInvoiceUrl: None = None
+    receiptUrl: None = None
+
+
+class ParentBillingRefundProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    state: str
+    eligibleAmount: int | None = Field(default=None, ge=0)
+    refundedAmount: int | None = Field(default=None, ge=0)
+
+
+class ParentBillingOverviewResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     parentId: str
-    provider: str | None = None
-    mode: str
+    effectivePlan: Literal["free_trial", "student", "teacher_supported", "family"]
+    beneficiaries: list[ParentBillingBeneficiarySummary]
+    allowanceWindow: ParentAllowanceWindow | None = None
+    inputRemaining: dict[str, int]
+    outputRemaining: dict[str, int]
+    inputPercentUsed: dict[str, float]
+    outputPercentUsed: dict[str, float]
+    teacherCasesRemaining: ParentTeacherCasesProjection
+    paymentReminder: ParentPaymentReminderProjection | None = None
+    supportActions: list[
+        Literal["start_checkout", "view_billing", "go_home", "contact_support"]
+    ]
     status: str
     subscriptionTier: str
-    requestedTier: str | None = None
-    providerCustomerId: str | None = None
-    providerSubscriptionId: str | None = None
-    providerPriceId: str | None = None
-    checkoutSessionId: str | None = None
-    checkoutUrl: str | None = None
-    providerLivemode: bool | None = None
-    readiness: dict[str, Any] = Field(default_factory=dict)
-    twint: dict[str, Any] = Field(default_factory=dict)
-    paymentMethodType: str | None = None
-    latestInvoice: dict[str, Any] = Field(default_factory=dict)
-    refund: dict[str, Any] = Field(default_factory=dict)
-    dunning: dict[str, Any] = Field(default_factory=dict)
-    accountingHandoff: dict[str, Any] = Field(default_factory=dict)
-    supportEvidence: dict[str, Any] = Field(default_factory=dict)
-    currentPeriodStart: str | None = None
-    currentPeriodEnd: str | None = None
-    cancelAtPeriodEnd: bool = False
-    lastProviderEventId: str | None = None
-    lastProviderEventType: str | None = None
-    lastProviderEventAt: str | None = None
-    manualOverrideAt: str | None = None
-    manualOverrideBy: str | None = None
-    manualOverrideSource: str | None = None
-    effectiveEntitlements: list[dict[str, Any]] = Field(default_factory=list)
-    updatedAt: str | None = None
-    events: list[dict[str, Any]] = Field(default_factory=list)
+    paymentMethodType: Literal["card", "twint"] | None = None
+    dunning: ParentBillingDunningProjection
+    latestInvoice: ParentBillingInvoiceProjection
+    refund: ParentBillingRefundProjection
 
 
-class ParentChildUsageSummaryResponse(BaseModel):
+class ParentAllowanceProjection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     studentId: str
-    parentId: str | None = None
-    quotaPeriod: str
-    action: str
-    consumed: int
-    limit: int
-    remaining: int
-    effectivePlan: str | None = None
-    entitlementSource: str | None = None
-    billingState: str | None = None
-    reconciliation: dict[str, Any] = Field(default_factory=dict)
-    supportAction: str | None = None
-    explanation: str | None = None
-    actions: list[dict[str, Any]] = Field(default_factory=list)
-    groups: list[dict[str, Any]] = Field(default_factory=list)
-    totals: dict[str, Any] = Field(default_factory=dict)
-    partial: bool = False
-    stale: bool = False
-    unreconciled: bool = False
+    effectivePlan: Literal["free_trial", "student", "teacher_supported", "family"]
+    allowanceVersion: int = Field(ge=1)
+    allowanceWindow: ParentAllowanceWindow
+    inputRemaining: int = Field(ge=0)
+    outputRemaining: int = Field(ge=0)
+    inputPercentUsed: float = Field(ge=0, le=100)
+    outputPercentUsed: float = Field(ge=0, le=100)
+    teacherCasesRemaining: int = Field(ge=0)
+    teacherCasesLimit: int = Field(ge=0)
+    teacherSupportScope: Literal["none", "per_beneficiary", "shared_family"]
 
 
 class ParentAccountOperationsResponse(BaseModel):
@@ -600,6 +650,14 @@ def _parent_checkout_status(
             else "support_needed"
         ),
     )
+    lifecycle = subscription_service.project_parent_checkout_lifecycle(
+        command,
+        lifecycle_state=outcome,
+    )
+    outcome = cast(
+        Literal["confirming", "active", "not_completed", "support_needed"],
+        lifecycle["lifecycleState"],
+    )
     safe_actions = {
         "confirming": ["recheck_payment", "contact_support"],
         "active": ["view_billing", "go_home"],
@@ -612,9 +670,13 @@ def _parent_checkout_status(
         newCheckoutAllowed=outcome == "not_completed",
         safeActions=safe_actions,
         targetPlan=PurchasablePlanId(str(command.get("plan_id") or "")),
-        beneficiaries=beneficiaries,
+        beneficiaries=(
+            cast(list[str], lifecycle["beneficiaries"])
+            if outcome == "active"
+            else beneficiaries
+        ),
         effectivePlan=(
-            PurchasablePlanId(str(command.get("plan_id") or ""))
+            PurchasablePlanId(str(lifecycle["effectivePlan"]))
             if outcome == "active"
             else None
         ),
@@ -1128,13 +1190,75 @@ async def supersede_my_subscription_checkout(
     )
 
 
-@router.get("/me/subscription/billing", response_model=ParentBillingResponse)
+@router.get(
+    "/me/subscription/billing",
+    response_model=ParentBillingOverviewResponse,
+)
 async def get_my_subscription_billing(
     actor: Actor = Depends(_parent_account_read),
-    settings: Settings = Depends(get_settings),
 ):
-    """Return provider billing status for the authenticated parent."""
-    return subscription_service.get_parent_billing(actor.user_id, settings=settings)
+    """Return current selected-grant allowance and masked reminder state."""
+    observed_at = datetime.now(timezone.utc)
+    try:
+        grants = subscription_service.get_parent_active_billing_grants(
+            actor.user_id
+        )
+        allowance_projections = [
+            allowance_service.get_allowance_projection(
+                beneficiary_id=str(grant["beneficiary_id"]),
+                plan_id=str(grant["plan_id"]),
+                allowance_version=int(grant["allowance_version"]),
+                observed_at=observed_at,
+                viewer_role="parent",
+            )
+            for grant in grants
+        ]
+        teacher_support_projections: list[dict[str, object]] = []
+        for grant, allowance in zip(
+            grants,
+            allowance_projections,
+            strict=True,
+        ):
+            if grant.get("plan_id") in {"teacher_supported", "family"}:
+                teacher_support_projections.append(
+                    teacher_support_allowance_service.get_teacher_support_projection(
+                        beneficiary_id=str(grant["beneficiary_id"]),
+                        observed_at=observed_at,
+                    )
+                )
+            else:
+                teacher_support_projections.append(
+                    {
+                        "supportScope": "none",
+                        "remainingCases": 0,
+                        "limit": 0,
+                        "weekIdentity": allowance["weekIdentity"],
+                    }
+                )
+        reminder = subscription_service.get_current_payment_reminder(
+            actor.user_id
+        )
+        billing_lifecycle = (
+            subscription_service.get_parent_safe_billing_lifecycle(
+                actor.user_id
+            )
+        )
+        return subscription_service.project_parent_billing_overview(
+            parent_id=actor.user_id,
+            grants=grants,
+            allowance_projections=allowance_projections,
+            teacher_support_projections=teacher_support_projections,
+            reminder=reminder,
+            billing_lifecycle=billing_lifecycle,
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "billing_projection_temporarily_unavailable",
+                "message": "Billing details are temporarily unavailable.",
+            },
+        ) from exc
 
 
 @router.get("/me/account-operations", response_model=ParentAccountOperationsResponse)
@@ -1267,24 +1391,92 @@ async def get_child_learning_profile(
     )
 
 
-@router.get("/me/children/{child_id}/usage", response_model=ParentChildUsageSummaryResponse)
+@router.get(
+    "/me/children/{child_id}/usage",
+    response_model=ParentAllowanceProjection,
+)
 async def get_child_usage_summary(
     child_id: str,
-    day: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     actor: Actor = Depends(get_actor),
     authorized_child: AuthorizedResource = Depends(_parent_child_read),
-    settings: Settings = Depends(get_settings),
 ):
-    """Return a privacy-safe quota usage summary for an authorized child."""
+    """Return one authorized child's current Zurich-week allowance."""
     child_id = authorized_child.ref.student_id
-    summary = usage_ledger_service.build_student_usage_summary(
-        student_id=child_id,
-        settings=settings,
-        day=day,
-    )
-    if summary.get("parentId") not in (None, actor.user_id):
-        raise HTTPException(status_code=403, detail="Not your child usage")
-    return summary
+    observed_at = datetime.now(timezone.utc)
+    try:
+        grant = next(
+            (
+                value
+                for value in subscription_service.get_parent_active_billing_grants(
+                    actor.user_id
+                )
+                if value.get("beneficiary_id") == child_id
+            ),
+            None,
+        )
+        plan_id = (
+            str(grant["plan_id"])
+            if grant is not None
+            else "free_trial"
+        )
+        allowance_version = (
+            int(grant["allowance_version"])
+            if grant is not None
+            else 1
+        )
+        allowance = allowance_service.get_allowance_projection(
+            beneficiary_id=child_id,
+            plan_id=plan_id,
+            allowance_version=allowance_version,
+            observed_at=observed_at,
+            viewer_role="parent",
+        )
+        if plan_id in {"teacher_supported", "family"}:
+            teacher = (
+                teacher_support_allowance_service.get_teacher_support_projection(
+                    beneficiary_id=child_id,
+                    observed_at=observed_at,
+                )
+            )
+        else:
+            teacher = {
+                "supportScope": "none",
+                "remainingCases": 0,
+                "limit": 0,
+            }
+        window = cast(dict[str, str], allowance["window"])
+        start = datetime.fromisoformat(window["start"].replace("Z", "+00:00"))
+        end = datetime.fromisoformat(window["end"].replace("Z", "+00:00"))
+        input_projection = cast(dict[str, object], allowance["input"])
+        output_projection = cast(dict[str, object], allowance["output"])
+        return {
+            "studentId": child_id,
+            "effectivePlan": plan_id,
+            "allowanceVersion": allowance_version,
+            "allowanceWindow": {
+                "weekIdentity": allowance["weekIdentity"],
+                "timezone": "Europe/Zurich",
+                "utcStart": start.astimezone(timezone.utc).isoformat(),
+                "utcEnd": end.astimezone(timezone.utc).isoformat(),
+                "localStart": start.astimezone(allowance_service.ZURICH).isoformat(),
+                "localEnd": end.astimezone(allowance_service.ZURICH).isoformat(),
+            },
+            "inputRemaining": input_projection["remainingTokens"],
+            "outputRemaining": output_projection["remainingTokens"],
+            "inputPercentUsed": input_projection["usedPercent"],
+            "outputPercentUsed": output_projection["usedPercent"],
+            "teacherCasesRemaining": teacher["remainingCases"],
+            "teacherCasesLimit": teacher["limit"],
+            "teacherSupportScope": teacher["supportScope"],
+        }
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "allowance_projection_temporarily_unavailable",
+                "message": "Allowance details are temporarily unavailable.",
+            },
+        ) from exc
 
 
 @router.get("/me/children/{child_id}/history", response_model=ParentChildHistoryResponse)

@@ -14,6 +14,7 @@ from decimal import Decimal
 from importlib.util import find_spec
 from typing import Any, Protocol, overload, runtime_checkable
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from boto3.dynamodb.types import TypeSerializer
 from boto3.dynamodb.conditions import Key
@@ -26,6 +27,7 @@ from stoa.db.repositories import (
     account_deletion_repo,
     billing_fact_repo,
     checkout_command_repo,
+    notification_repo,
     user_repo,
 )
 from stoa.models.billing import (
@@ -38,6 +40,7 @@ from stoa.models.billing import (
 )
 from stoa.models.user import SubscriptionTier
 from stoa.services import (
+    allowance_service,
     billing_reconciliation_service,
     entitlement_service,
     notification_service,
@@ -843,6 +846,838 @@ def confirm_checkout_plan_change(
 # Preserve the reviewed callback-boundary inspection name without retaining the
 # provider-first implementation or its former request contract.
 create_checkout_session = create_or_resume_checkout_command
+
+
+_ZURICH = ZoneInfo("Europe/Zurich")
+_PAID_PLAN_IDS = {
+    BillingPlanId.STUDENT.value,
+    BillingPlanId.TEACHER_SUPPORTED.value,
+    BillingPlanId.FAMILY.value,
+}
+_CHECKOUT_LIFECYCLE_STATES = {
+    "confirming",
+    "active",
+    "not_completed",
+    "support_needed",
+}
+
+
+def _billing_required_text(
+    value: object,
+    field: str,
+    *,
+    maximum: int = 200,
+) -> str:
+    if (
+        not isinstance(value, str)
+        or not value.strip()
+        or len(value.strip()) > maximum
+    ):
+        raise ValueError(f"{field} is invalid")
+    return value.strip()
+
+
+def _billing_exact_count(value: object, field: str, *, positive: bool = False) -> int:
+    minimum = 1 if positive else 0
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not minimum <= value <= (1 << 63) - 1
+    ):
+        raise ValueError(f"{field} is invalid")
+    return value
+
+
+def _billing_mapping(value: object, field: str) -> dict[str, object]:
+    if not isinstance(value, Mapping) or any(
+        not isinstance(key, str) for key in value
+    ):
+        raise ValueError(f"{field} is invalid")
+    return dict(value)
+
+
+def _billing_sequence(value: object, field: str) -> list[object]:
+    if (
+        not isinstance(value, Sequence)
+        or isinstance(value, (str, bytes, bytearray))
+    ):
+        raise ValueError(f"{field} is invalid")
+    return list(value)
+
+
+def _billing_percent(value: object, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field} is invalid")
+    percent = float(value)
+    if not 0 <= percent <= 100:
+        raise ValueError(f"{field} is invalid")
+    return percent
+
+
+def _safe_payment_reminder(
+    reminder: Mapping[str, object] | None,
+) -> dict[str, object] | None:
+    if reminder is None:
+        return None
+    value = _billing_mapping(reminder, "payment reminder")
+    status = _billing_required_text(value.get("status"), "reminder status", maximum=32)
+    if status == "resolved":
+        return None
+    if status not in {"pending", "notified"}:
+        raise ValueError("reminder status is invalid")
+    brand = _billing_required_text(value.get("brand"), "payment brand", maximum=30)
+    last4 = _billing_required_text(value.get("last4"), "payment last four", maximum=4)
+    if len(last4) != 4 or not last4.isascii() or not last4.isdigit():
+        raise ValueError("payment last four is invalid")
+    expiry_month = _billing_exact_count(value.get("exp_month"), "expiry month", positive=True)
+    expiry_year = _billing_exact_count(value.get("exp_year"), "expiry year", positive=True)
+    if not 1 <= expiry_month <= 12 or not 2000 <= expiry_year <= 9999:
+        raise ValueError("payment expiry is invalid")
+    reminder_at = _billing_required_text(
+        value.get("reminder_at"), "reminder time", maximum=64
+    )
+    return {
+        "brand": brand,
+        "last4": last4,
+        "expiryMonth": expiry_month,
+        "expiryYear": expiry_year,
+        "reminderAt": reminder_at,
+        "status": status,
+    }
+
+
+def get_parent_active_billing_grants(
+    parent_id: str,
+    *,
+    table: object | None = None,
+) -> list[dict[str, object]]:
+    """Return only current exact grants for this parent's strict bindings."""
+    parent = _billing_required_text(parent_id, "parent_id")
+    _require_parent(parent)
+    try:
+        bindings = user_repo.list_parent_student_bindings(parent)
+    except Exception:
+        raise ValueError("billing projection is temporarily unavailable") from None
+    target = table or get_table()
+    beneficiary_ids = sorted(
+        {
+            str(binding["student_id"])
+            for binding in bindings
+            if isinstance(binding, Mapping)
+            and binding.get("parent_id") == parent
+            and isinstance(binding.get("student_id"), str)
+            and binding.get("status") == "active"
+        }
+    )
+    grants: list[dict[str, object]] = []
+    for beneficiary_id in beneficiary_ids:
+        grant = paid_entitlement_service.get_active_beneficiary_grant(
+            parent,
+            beneficiary_id,
+            table=target,
+        )
+        if isinstance(grant, Mapping):
+            grants.append(dict(grant))
+    return grants
+
+
+def get_current_payment_reminder(
+    parent_id: str,
+    *,
+    table: object | None = None,
+) -> dict[str, object] | None:
+    """Load the newest persistent unresolved reminder under the parent owner."""
+    parent = _billing_required_text(parent_id, "parent_id")
+    target = table or get_table()
+    try:
+        rows = notification_repo.list_payment_expiry_reminders(parent, table=target)
+    except Exception:
+        raise ValueError("billing projection is temporarily unavailable") from None
+    unresolved: list[tuple[int, dict[str, object]]] = []
+    for row in rows:
+        if (
+            not isinstance(row, Mapping)
+            or row.get("parent_id") != parent
+            or row.get("owner_id") != parent
+            or row.get("status") not in {"pending", "notified"}
+        ):
+            continue
+        try:
+            version = _billing_exact_count(
+                row.get("observation_version"),
+                "reminder observation version",
+                positive=True,
+            )
+        except ValueError:
+            continue
+        unresolved.append((version, dict(row)))
+    if not unresolved:
+        return None
+    unresolved.sort(key=lambda item: item[0], reverse=True)
+    return unresolved[0][1]
+
+
+def get_parent_safe_billing_lifecycle(parent_id: str) -> dict[str, object]:
+    """Project legacy provider billing into a content- and identifier-free state."""
+    parent = _billing_required_text(parent_id, "parent_id")
+    profile = _require_parent(parent)
+    response = _billing_response(
+        _get_billing_item(parent),
+        parent_id=parent,
+        include_events=False,
+    )
+    if response["status"] == "none":
+        response["subscriptionTier"] = _normalize_tier(
+            profile.get("subscription_tier")
+        )
+    invoice = _billing_mapping(
+        response.get("latestInvoice") or {}, "latest invoice"
+    )
+    dunning = _billing_mapping(response.get("dunning") or {}, "dunning")
+    refund = _billing_mapping(response.get("refund") or {}, "refund")
+    payment_method_type = response.get("paymentMethodType")
+    if payment_method_type not in {None, "card", "twint"}:
+        payment_method_type = None
+    return {
+        "status": _billing_required_text(
+            response.get("status") or "none", "billing status", maximum=32
+        ),
+        "subscriptionTier": _billing_required_text(
+            response.get("subscriptionTier") or BillingPlanId.FREE_TRIAL.value,
+            "subscription tier",
+            maximum=32,
+        ),
+        "paymentMethodType": payment_method_type,
+        "dunning": {
+            "state": str(dunning.get("state") or "none"),
+            "supportAction": (
+                str(dunning["supportAction"])
+                if dunning.get("supportAction") is not None
+                else None
+            ),
+            "nextPaymentAttempt": (
+                str(dunning["nextPaymentAttempt"])
+                if dunning.get("nextPaymentAttempt") is not None
+                else None
+            ),
+        },
+        "latestInvoice": {
+            "currency": (
+                str(invoice["currency"])
+                if invoice.get("currency") is not None
+                else None
+            ),
+            "amountPaid": (
+                _billing_exact_count(invoice["amountPaid"], "invoice amount paid")
+                if invoice.get("amountPaid") is not None
+                else None
+            ),
+            "amountRemaining": (
+                _billing_exact_count(
+                    invoice["amountRemaining"],
+                    "invoice amount remaining",
+                )
+                if invoice.get("amountRemaining") is not None
+                else None
+            ),
+            "amountRefunded": (
+                _billing_exact_count(
+                    invoice["amountRefunded"],
+                    "invoice amount refunded",
+                )
+                if invoice.get("amountRefunded") is not None
+                else None
+            ),
+            "taxStatus": (
+                str(invoice["taxStatus"])
+                if invoice.get("taxStatus") is not None
+                else None
+            ),
+            # Provider-hosted URLs are intentionally never part of the role DTO.
+            "hostedInvoiceUrl": None,
+            "receiptUrl": None,
+        },
+        "refund": {
+            "state": str(refund.get("state") or "not_eligible"),
+            "eligibleAmount": (
+                _billing_exact_count(
+                    refund["eligibleAmount"],
+                    "refund eligible amount",
+                )
+                if refund.get("eligibleAmount") is not None
+                else None
+            ),
+            "refundedAmount": (
+                _billing_exact_count(
+                    refund["refundedAmount"],
+                    "refund amount",
+                )
+                if refund.get("refundedAmount") is not None
+                else None
+            ),
+        },
+    }
+
+
+def project_parent_checkout_lifecycle(
+    command: Mapping[str, object],
+    *,
+    lifecycle_state: str,
+) -> dict[str, object]:
+    """Expose effective paid coordinates only after authoritative activation."""
+    value = _billing_mapping(command, "checkout command")
+    lifecycle = _billing_required_text(
+        lifecycle_state, "checkout lifecycle", maximum=32
+    )
+    if lifecycle not in _CHECKOUT_LIFECYCLE_STATES:
+        lifecycle = "support_needed"
+    if lifecycle != "active":
+        return {
+            "lifecycleState": lifecycle,
+            "effectivePlan": None,
+            "beneficiaries": [],
+        }
+    if value.get("command_state") != CheckoutCommandState.ACTIVATION_RECORDED:
+        return {
+            "lifecycleState": "support_needed",
+            "effectivePlan": None,
+            "beneficiaries": [],
+        }
+    plan = _billing_required_text(value.get("plan_id"), "checkout plan", maximum=32)
+    if plan not in _PAID_PLAN_IDS:
+        raise ValueError("checkout plan is invalid")
+    beneficiaries = [
+        _billing_required_text(item, "beneficiary")
+        for item in _billing_sequence(
+            value.get("beneficiary_ids"), "checkout beneficiaries"
+        )
+    ]
+    if not beneficiaries or len(beneficiaries) != len(set(beneficiaries)):
+        raise ValueError("checkout beneficiaries are invalid")
+    return {
+        "lifecycleState": "active",
+        "effectivePlan": plan,
+        "beneficiaries": beneficiaries,
+    }
+
+
+def project_parent_billing_overview(
+    *,
+    parent_id: str,
+    grants: Sequence[Mapping[str, object]],
+    allowance_projections: Sequence[Mapping[str, object]],
+    teacher_support_projections: Sequence[Mapping[str, object]],
+    reminder: Mapping[str, object] | None,
+    billing_lifecycle: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    """Join exact current grants with one Zurich-week role-safe projection."""
+    parent = _billing_required_text(parent_id, "parent_id")
+    grant_values = [
+        _billing_mapping(item, "beneficiary grant")
+        for item in _billing_sequence(grants, "beneficiary grants")
+    ]
+    allowances = [
+        _billing_mapping(item, "allowance projection")
+        for item in _billing_sequence(
+            allowance_projections, "allowance projections"
+        )
+    ]
+    teacher = [
+        _billing_mapping(item, "teacher support projection")
+        for item in _billing_sequence(
+            teacher_support_projections, "teacher support projections"
+        )
+    ]
+    lifecycle = _billing_mapping(
+        billing_lifecycle or {},
+        "billing lifecycle",
+    )
+    lifecycle_defaults = {
+        "status": "active" if grant_values else "none",
+        "subscriptionTier": (
+            str(grant_values[0].get("plan_id"))
+            if grant_values
+            else BillingPlanId.FREE_TRIAL.value
+        ),
+        "paymentMethodType": None,
+        "dunning": {
+            "state": "active" if grant_values else "none",
+            "supportAction": None,
+            "nextPaymentAttempt": None,
+        },
+        "latestInvoice": {
+            "currency": None,
+            "amountPaid": None,
+            "amountRemaining": None,
+            "amountRefunded": None,
+            "taxStatus": None,
+            "hostedInvoiceUrl": None,
+            "receiptUrl": None,
+        },
+        "refund": {
+            "state": "not_eligible",
+            "eligibleAmount": None,
+            "refundedAmount": None,
+        },
+    }
+    safe_lifecycle = {**lifecycle_defaults, **lifecycle}
+    if not grant_values:
+        if allowances or teacher:
+            raise ValueError("allowance projection has no current grant")
+        return {
+            "parentId": parent,
+            "effectivePlan": BillingPlanId.FREE_TRIAL.value,
+            "beneficiaries": [],
+            "allowanceWindow": None,
+            "inputRemaining": {},
+            "outputRemaining": {},
+            "inputPercentUsed": {},
+            "outputPercentUsed": {},
+            "teacherCasesRemaining": {
+                "scope": "none",
+                "remaining": 0,
+                "limit": 0,
+                "byBeneficiary": {},
+            },
+            "paymentReminder": _safe_payment_reminder(reminder),
+            "supportActions": ["start_checkout"],
+            **safe_lifecycle,
+        }
+    if len(allowances) != len(grant_values) or len(teacher) != len(grant_values):
+        raise ValueError("billing projection cardinality is invalid")
+
+    grants_by_beneficiary: dict[str, dict[str, object]] = {}
+    plan_ids: set[str] = set()
+    subscription_digests: set[str] = set()
+    for grant in grant_values:
+        if (
+            grant.get("parent_id") != parent
+            or grant.get("grant_status") != "active"
+        ):
+            raise ValueError("beneficiary grant is invalid")
+        beneficiary_id = _billing_required_text(
+            grant.get("beneficiary_id"), "beneficiary"
+        )
+        if beneficiary_id in grants_by_beneficiary:
+            raise ValueError("beneficiary grant is duplicated")
+        plan_id = _billing_required_text(grant.get("plan_id"), "grant plan", maximum=32)
+        if plan_id not in _PAID_PLAN_IDS:
+            raise ValueError("grant plan is invalid")
+        _billing_exact_count(grant.get("grant_version"), "grant version", positive=True)
+        _billing_exact_count(
+            grant.get("allowance_version"), "allowance version", positive=True
+        )
+        subscription_digest = _billing_required_text(
+            grant.get("subscription_id_digest"),
+            "subscription digest",
+            maximum=64,
+        )
+        grants_by_beneficiary[beneficiary_id] = grant
+        plan_ids.add(plan_id)
+        subscription_digests.add(subscription_digest)
+    if len(plan_ids) != 1 or len(subscription_digests) != 1:
+        raise ValueError("current grants do not share one paid lifecycle")
+    effective_plan = next(iter(plan_ids))
+    if effective_plan != BillingPlanId.FAMILY.value and len(grant_values) != 1:
+        raise ValueError("non-family plan has multiple beneficiaries")
+    if len(grant_values) > 3:
+        raise ValueError("family beneficiary limit is exceeded")
+
+    input_remaining: dict[str, int] = {}
+    output_remaining: dict[str, int] = {}
+    input_percent: dict[str, float] = {}
+    output_percent: dict[str, float] = {}
+    allowance_window: dict[str, object] | None = None
+    week_identity: str | None = None
+    for projection in allowances:
+        beneficiary_id = _billing_required_text(
+            projection.get("beneficiaryId"), "allowance beneficiary"
+        )
+        grant = grants_by_beneficiary.get(beneficiary_id)
+        if grant is None:
+            raise ValueError("allowance projection is outside the selected grants")
+        if (
+            projection.get("planId") != effective_plan
+            or projection.get("allowanceVersion") != grant.get("allowance_version")
+        ):
+            raise ValueError("allowance projection does not match the current grant")
+        identity = _billing_required_text(
+            projection.get("weekIdentity"), "allowance week", maximum=16
+        )
+        window = _billing_mapping(projection.get("window"), "allowance window")
+        start_text = _billing_required_text(
+            window.get("start"), "allowance window start", maximum=64
+        )
+        end_text = _billing_required_text(
+            window.get("end"), "allowance window end", maximum=64
+        )
+        try:
+            start = datetime.fromisoformat(start_text.replace("Z", "+00:00"))
+            end = datetime.fromisoformat(end_text.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("allowance window is invalid") from exc
+        if (
+            start.tzinfo is None
+            or end.tzinfo is None
+            or start >= end
+        ):
+            raise ValueError("allowance window is invalid")
+        current_window = {
+            "weekIdentity": identity,
+            "timezone": "Europe/Zurich",
+            "utcStart": start.astimezone(timezone.utc).isoformat(),
+            "utcEnd": end.astimezone(timezone.utc).isoformat(),
+            "localStart": start.astimezone(_ZURICH).isoformat(),
+            "localEnd": end.astimezone(_ZURICH).isoformat(),
+        }
+        if allowance_window is not None and current_window != allowance_window:
+            raise ValueError("allowance projections span different weeks")
+        allowance_window = current_window
+        week_identity = identity
+        input_value = _billing_mapping(projection.get("input"), "input allowance")
+        output_value = _billing_mapping(projection.get("output"), "output allowance")
+        input_remaining[beneficiary_id] = _billing_exact_count(
+            input_value.get("remainingTokens"), "input remaining"
+        )
+        output_remaining[beneficiary_id] = _billing_exact_count(
+            output_value.get("remainingTokens"), "output remaining"
+        )
+        input_percent[beneficiary_id] = _billing_percent(
+            input_value.get("usedPercent"), "input percent"
+        )
+        output_percent[beneficiary_id] = _billing_percent(
+            output_value.get("usedPercent"), "output percent"
+        )
+    if set(input_remaining) != set(grants_by_beneficiary):
+        raise ValueError("allowance projection is incomplete")
+
+    support_scope: str | None = None
+    support_limit: int | None = None
+    shared_remaining: int | None = None
+    per_beneficiary: dict[str, int] = {}
+    for index, projection in enumerate(teacher):
+        beneficiary_id = _billing_required_text(
+            allowances[index].get("beneficiaryId"), "allowance beneficiary"
+        )
+        scope = _billing_required_text(
+            projection.get("supportScope"), "teacher support scope", maximum=32
+        )
+        if scope not in {"none", "per_beneficiary", "shared_family"}:
+            raise ValueError("teacher support scope is invalid")
+        if projection.get("weekIdentity") != week_identity:
+            raise ValueError("teacher support projection spans a different week")
+        remaining = _billing_exact_count(
+            projection.get("remainingCases"), "teacher cases remaining"
+        )
+        limit = _billing_exact_count(
+            projection.get("limit"), "teacher cases limit"
+        )
+        if remaining > limit:
+            raise ValueError("teacher support projection is invalid")
+        if support_scope is not None and scope != support_scope:
+            raise ValueError("teacher support scopes are inconsistent")
+        if support_limit is not None and limit != support_limit:
+            raise ValueError("teacher support limits are inconsistent")
+        support_scope = scope
+        support_limit = limit
+        if scope == "shared_family":
+            if shared_remaining is not None and remaining != shared_remaining:
+                raise ValueError("shared family support projection is inconsistent")
+            shared_remaining = remaining
+        elif scope == "per_beneficiary":
+            per_beneficiary[beneficiary_id] = remaining
+        elif remaining != 0 or limit != 0:
+            raise ValueError("unsupported teacher cases must be zero")
+
+    beneficiaries = [
+        {"studentId": beneficiary_id, "effectivePlan": effective_plan}
+        for beneficiary_id in sorted(grants_by_beneficiary)
+    ]
+    return {
+        "parentId": parent,
+        "effectivePlan": effective_plan,
+        "beneficiaries": beneficiaries,
+        "allowanceWindow": allowance_window,
+        "inputRemaining": {
+            key: input_remaining[key] for key in sorted(input_remaining)
+        },
+        "outputRemaining": {
+            key: output_remaining[key] for key in sorted(output_remaining)
+        },
+        "inputPercentUsed": {
+            key: input_percent[key] for key in sorted(input_percent)
+        },
+        "outputPercentUsed": {
+            key: output_percent[key] for key in sorted(output_percent)
+        },
+        "teacherCasesRemaining": {
+            "scope": support_scope or "none",
+            "remaining": shared_remaining,
+            "limit": support_limit or 0,
+            "byBeneficiary": {
+                key: per_beneficiary[key] for key in sorted(per_beneficiary)
+            },
+        },
+        "paymentReminder": _safe_payment_reminder(reminder),
+        "supportActions": ["view_billing", "go_home", "contact_support"],
+        **safe_lifecycle,
+    }
+
+
+def project_admin_billing_operation_detail(
+    *,
+    checkout_ref: str,
+    command: Mapping[str, object],
+    reconciliation: Mapping[str, object],
+    facts: Sequence[BillingFact],
+    grants: Sequence[Mapping[str, object]],
+    allowance_projections: Sequence[Mapping[str, object]],
+    reminder: Mapping[str, object] | None,
+) -> dict[str, object]:
+    """Return exact counts and digest evidence without provider/content secrets."""
+    reference = _billing_required_text(checkout_ref, "checkout_ref")
+    command_value = _billing_mapping(command, "checkout command")
+    reconciliation_value = _billing_mapping(
+        reconciliation, "billing reconciliation"
+    )
+    parent_id = _billing_required_text(command_value.get("parent_id"), "parent_id")
+    plan_id = _billing_required_text(
+        command_value.get("plan_id"), "checkout plan", maximum=32
+    )
+    if plan_id not in _PAID_PLAN_IDS:
+        raise ValueError("checkout plan is invalid")
+    beneficiary_ids = [
+        _billing_required_text(item, "beneficiary")
+        for item in _billing_sequence(
+            command_value.get("beneficiary_ids"), "checkout beneficiaries"
+        )
+    ]
+    if not beneficiary_ids or len(beneficiary_ids) != len(set(beneficiary_ids)):
+        raise ValueError("checkout beneficiaries are invalid")
+
+    grant_versions: dict[str, int] = {}
+    allowance_versions: dict[str, int] = {}
+    grant_values = [
+        _billing_mapping(item, "beneficiary grant")
+        for item in _billing_sequence(grants, "beneficiary grants")
+    ]
+    for grant in grant_values:
+        beneficiary_id = _billing_required_text(
+            grant.get("beneficiary_id"), "grant beneficiary"
+        )
+        if (
+            beneficiary_id not in beneficiary_ids
+            or grant.get("parent_id") != parent_id
+            or grant.get("grant_status") != "active"
+            or grant.get("plan_id") != plan_id
+        ):
+            raise ValueError("beneficiary grant is outside the checkout scope")
+        grant_versions[beneficiary_id] = _billing_exact_count(
+            grant.get("grant_version"), "grant version", positive=True
+        )
+        allowance_versions[beneficiary_id] = _billing_exact_count(
+            grant.get("allowance_version"), "allowance version", positive=True
+        )
+
+    lifecycle_facts: list[dict[str, object]] = []
+    for fact in _billing_sequence(facts, "billing facts"):
+        if not isinstance(fact, BillingFact):
+            raise ValueError("billing fact is invalid")
+        lifecycle_facts.append(
+            {
+                "kind": str(fact.kind),
+                "factVersion": fact.fact_version,
+                "providerEventIdDigest": fact.provider_event_id_digest,
+                "providerObjectIdDigest": fact.provider_object_id_digest,
+                "signatureVerified": fact.signature_verified,
+                "providerLivemode": fact.provider_livemode,
+                "observedAt": fact.observed_at.isoformat(),
+            }
+        )
+
+    provider_evidence: list[dict[str, object]] = []
+    allowance_values = [
+        _billing_mapping(item, "allowance projection")
+        for item in _billing_sequence(
+            allowance_projections, "allowance projections"
+        )
+    ]
+    for projection in allowance_values:
+        beneficiary_id = _billing_required_text(
+            projection.get("beneficiaryId"), "allowance beneficiary"
+        )
+        if beneficiary_id not in grant_versions:
+            raise ValueError("allowance evidence is outside the current grants")
+        if projection.get("allowanceVersion") != allowance_versions[beneficiary_id]:
+            raise ValueError("allowance evidence version is stale")
+        for evidence_raw in _billing_sequence(
+            projection.get("providerEvidence"), "provider evidence"
+        ):
+            evidence = _billing_mapping(evidence_raw, "provider evidence")
+            provider_evidence.append(
+                {
+                    "beneficiaryId": beneficiary_id,
+                    "correlationDigest": _billing_required_text(
+                        evidence.get("effectId"),
+                        "provider correlation digest",
+                        maximum=64,
+                    ),
+                    "providerRequestIdDigest": _billing_required_text(
+                        evidence.get("providerRequestIdDigest"),
+                        "provider request digest",
+                        maximum=64,
+                    ),
+                    "modelIdDigest": _billing_required_text(
+                        evidence.get("modelIdDigest"),
+                        "model digest",
+                        maximum=64,
+                    ),
+                    "inputTokens": _billing_exact_count(
+                        evidence.get("inputTokens"), "provider input tokens"
+                    ),
+                    "outputTokens": _billing_exact_count(
+                        evidence.get("outputTokens"), "provider output tokens"
+                    ),
+                    "providerCostRetained": evidence.get("providerCostRetained")
+                    is True,
+                    "observedAt": _billing_required_text(
+                        evidence.get("observedAt"),
+                        "provider observation time",
+                        maximum=64,
+                    ),
+                }
+            )
+    provider_evidence.sort(
+        key=lambda item: (
+            str(item["beneficiaryId"]),
+            str(item["observedAt"]),
+            str(item["correlationDigest"]),
+        )
+    )
+    lease_generation = _billing_exact_count(
+        reconciliation_value.get("reconciliationLeaseGeneration"),
+        "reconciliation lease generation",
+    )
+    provider_suffix = reconciliation_value.get("providerSessionSuffix")
+    if provider_suffix is not None:
+        provider_suffix = _billing_required_text(
+            provider_suffix, "provider session suffix", maximum=12
+        )
+    return {
+        "checkoutRef": reference,
+        "parentId": parent_id,
+        "targetPlan": plan_id,
+        "beneficiaryIds": beneficiary_ids,
+        "commandLifecycle": {
+            "state": _billing_required_text(
+                command_value.get("command_state"), "command state", maximum=64
+            ),
+            "providerEffectStatus": _billing_required_text(
+                command_value.get("provider_effect_status"),
+                "provider effect status",
+                maximum=64,
+            ),
+            "createdAt": _billing_required_text(
+                command_value.get("created_at"), "command creation time", maximum=64
+            ),
+            "updatedAt": _billing_required_text(
+                command_value.get("updated_at"), "command update time", maximum=64
+            ),
+        },
+        "factLifecycle": lifecycle_facts,
+        "grantVersion": {
+            key: grant_versions[key] for key in sorted(grant_versions)
+        },
+        "allowanceVersion": {
+            key: allowance_versions[key] for key in sorted(allowance_versions)
+        },
+        "providerUsageEvidence": provider_evidence,
+        "paymentReminder": _safe_payment_reminder(reminder),
+        "reconciliation": {
+            "lifecycleState": _billing_required_text(
+                reconciliation_value.get("lifecycleState"),
+                "billing lifecycle",
+                maximum=32,
+            ),
+            "lastRecheckedAt": _billing_required_text(
+                reconciliation_value.get("lastRecheckedAt"),
+                "last rechecked time",
+                maximum=64,
+            ),
+            "safeAction": _billing_required_text(
+                reconciliation_value.get("safeAction"),
+                "safe action",
+                maximum=64,
+            ),
+            "failureCode": _billing_required_text(
+                reconciliation_value.get("failureClass"),
+                "failure code",
+                maximum=64,
+            ),
+            "providerSessionSuffix": provider_suffix,
+            "reconciliationLeaseGeneration": lease_generation,
+        },
+    }
+
+
+def get_admin_billing_operation_detail(
+    *,
+    checkout_ref: str,
+    command: Mapping[str, object],
+    reconciliation: Mapping[str, object],
+    observed_at: datetime | None = None,
+    table: object | None = None,
+) -> dict[str, object]:
+    """Load exact current facts/grants/allowance evidence for one support view."""
+    command_value = _billing_mapping(command, "checkout command")
+    command_id = _billing_required_text(
+        command_value.get("command_id"), "checkout command identity"
+    )
+    parent_id = _billing_required_text(command_value.get("parent_id"), "parent_id")
+    beneficiary_ids = [
+        _billing_required_text(item, "beneficiary")
+        for item in _billing_sequence(
+            command_value.get("beneficiary_ids"), "checkout beneficiaries"
+        )
+    ]
+    facts = billing_fact_repo.load_activation_facts(command_id, table=table)
+    grants = [
+        grant
+        for beneficiary_id in beneficiary_ids
+        if (
+            grant := paid_entitlement_service.get_active_beneficiary_grant(
+                parent_id,
+                beneficiary_id,
+                table=table,
+            )
+        )
+        is not None
+    ]
+    allowances = [
+        allowance_service.get_allowance_projection(
+            beneficiary_id=str(grant["beneficiary_id"]),
+            plan_id=str(grant["plan_id"]),
+            allowance_version=_billing_exact_count(
+                grant.get("allowance_version"),
+                "allowance version",
+                positive=True,
+            ),
+            observed_at=observed_at,
+            viewer_role="admin",
+            table=table,
+        )
+        for grant in grants
+    ]
+    reminder = get_current_payment_reminder(parent_id, table=table)
+    return project_admin_billing_operation_detail(
+        checkout_ref=checkout_ref,
+        command=command_value,
+        reconciliation=reconciliation,
+        facts=facts,
+        grants=grants,
+        allowance_projections=allowances,
+        reminder=reminder,
+    )
 
 
 def get_parent_billing(parent_id: str, settings: Settings | None = None) -> dict[str, Any]:
