@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-24-PLAN.md
-last_updated: "2026-07-24T16:52:38.751Z"
+stopped_at: Completed 476-25-PLAN.md
+last_updated: "2026-07-24T17:16:26.413Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 164
+  completed_plans: 165
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 28 of 29
+Plan: 29 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T16:52:23.996Z
-**Stopped At:** Completed 476-24-PLAN.md
+**Last Date:** 2026-07-24T17:16:26.406Z
+**Stopped At:** Completed 476-25-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -271,6 +271,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P23 | 21min | 1 tasks | 5 files |
 | Phase 476 P26 | 13min | 1 tasks | 6 files |
 | Phase 476 P24 | 12min | 1 tasks | 4 files |
+| Phase 476 P25 | 18min | 1 tasks | 9 files |
 
 ## Decisions
 
@@ -632,3 +633,6 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Checkout result rendering reads only checkoutRef; flow, plan, status, and success-looking paths never contribute payment truth.
 - [Phase 476]: Checkout confirming uses four finite increasing delays before same-reference recheck and support recovery replace automatic polling.
 - [Phase 476]: API errors, unknown outcomes, and malformed active payloads fail closed to support_needed.
+- [Phase 476]: Render parent allowance directly from authoritative weekly percentage, remaining, support-case, and Zurich-window fields; no client plan-limit arithmetic remains. — Preserves server calculation as the only allowance truth.
+- [Phase 476]: Use identical closed masked reminder copy for parent and selected students while exposing Billing navigation only to the parent role. — Shares safe information without granting student billing-management authority.
+- [Phase 476]: Prefer recipient-scoped notification reminder state and retain parent billing projection as the persistent fallback; only backend-resolved state clears the reminder. — Keeps Web state independent from email delivery and replacement-safe.
