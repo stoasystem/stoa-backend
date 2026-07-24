@@ -36,7 +36,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 | 473 | Student Content Privacy And Practice Integrity | Complete — 40/40 plans, independently verified 2026-07-18 | Phase 472 |
 | 474 | 24/87 | In Progress|  |
 | 475 | 45/45 | Complete    | 2026-07-23 |
-| 476 | 13/29 | In Progress|  |
+| 476 | 14/29 | In Progress|  |
 | 477 | Web Foundation And Contract Convergence | Authoritative Web auth/API/config behavior without hidden demo truth | Phases 472, 473, and 474 |
 | 478 | Complete Web Role Journeys And Route Closure | Functional student, parent, teacher, admin/operator, organization, and public browser routes | Phases 475, 476, and 477 |
 | 479 | Broader Versioned Infrastructure And Browser WebSocket Integration | Audit/extend cloud resources and deliver browser realtime without deferring Phase 474 prerequisites | Phases 474 and 477 |
@@ -677,7 +677,7 @@ Plans:
 4. Lookalike, encoded, credential-bearing, wrong-port, and arbitrary HTTPS callback URLs are refused.
 5. A Stripe test-mode browser checkout and signed webhook changes parent/student effective entitlement and quota exactly once and appears in the parent/admin Web views.
 
-**Plans:** 13/29 plans executed
+**Plans:** 14/29 plans executed
 Plans:
 **Wave 1**
 
@@ -706,7 +706,7 @@ Plans:
 **Wave 5** *(blocked on Wave 4 completion)*
 
 - [x] 476-09-PLAN.md — Expose parent/admin billing status and same-command recheck APIs.
-- [ ] 476-11-PLAN.md — Converge signed duplicate, delayed, and out-of-order webhook evidence.
+- [x] 476-11-PLAN.md — Converge signed duplicate, delayed, and out-of-order webhook evidence.
 - [ ] 476-17-PLAN.md — Finalize question token debits across delivery and retry outcomes.
 - [ ] 476-18-PLAN.md — Finalize conversation and hint token debits across terminal outcomes.
 
