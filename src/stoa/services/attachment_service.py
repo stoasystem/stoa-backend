@@ -309,7 +309,11 @@ def _close_provider_body(body: Any) -> bool:
 
 
 def storage_limit_for_entitlement(effective_plan: str) -> int:
-    return PAID_STORAGE_BYTES if effective_plan in {"standard", "premium"} else FREE_STORAGE_BYTES
+    return (
+        PAID_STORAGE_BYTES
+        if effective_plan in {"student", "teacher_supported", "family"}
+        else FREE_STORAGE_BYTES
+    )
 
 
 def cleanup_upload_intent(

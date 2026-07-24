@@ -173,24 +173,32 @@ ALLOWED_TRANSITIONS = {
 }
 
 PLAN_BENEFITS: dict[str, dict[str, Any]] = {
-    "free": {
-        "label": "Free",
+    "free_trial": {
+        "label": "Free Trial",
         "dailyAiQuestionLimit": 5,
         "dailyChatMessageLimit": 8,
         "dailyHintLimit": 2,
         "teacherSupport": "none",
         "weeklyReport": "none",
     },
-    "standard": {
-        "label": "Standard",
+    "student": {
+        "label": "Student",
         "dailyAiQuestionLimit": 30,
         "dailyChatMessageLimit": 80,
         "dailyHintLimit": 30,
         "teacherSupport": "text_support",
         "weeklyReport": "enabled",
     },
-    "premium": {
-        "label": "Premium",
+    "teacher_supported": {
+        "label": "Teacher-supported",
+        "dailyAiQuestionLimit": 100,
+        "dailyChatMessageLimit": 200,
+        "dailyHintLimit": 80,
+        "teacherSupport": "priority_support",
+        "weeklyReport": "enhanced",
+    },
+    "family": {
+        "label": "Family",
         "dailyAiQuestionLimit": 100,
         "dailyChatMessageLimit": 200,
         "dailyHintLimit": 80,
@@ -233,7 +241,7 @@ def create_checkout_session(
 ) -> dict[str, Any]:
     profile = _require_parent(parent_id)
     requested_tier = _normalize_tier(requested_tier)
-    if requested_tier == SubscriptionTier.FREE.value:
+    if requested_tier == SubscriptionTier.FREE_TRIAL.value:
         raise HTTPException(status_code=400, detail="Checkout is only available for paid tiers")
 
     readiness = get_billing_readiness(settings)
@@ -431,8 +439,17 @@ def get_provider_readiness(settings: Settings) -> dict[str, Any]:
     account_capability_status = "unknown"
 
     prices = {
-        "standard": _price_readiness("standard", settings.stripe_standard_price_id, settings=settings),
-        "premium": _price_readiness("premium", settings.stripe_premium_price_id, settings=settings),
+        "student": _price_readiness(
+            "student", settings.stripe_student_price_id, settings=settings
+        ),
+        "teacher_supported": _price_readiness(
+            "teacher_supported",
+            settings.stripe_teacher_supported_price_id,
+            settings=settings,
+        ),
+        "family": _price_readiness(
+            "family", settings.stripe_family_price_id, settings=settings
+        ),
     }
 
     should_check_provider = (
@@ -510,8 +527,11 @@ def get_provider_readiness(settings: Settings) -> dict[str, Any]:
             "apiKeyMode": provider_mode,
             "apiKey": _redacted_presence(api_key),
             "webhookSecretConfigured": bool(settings.stripe_webhook_secret.strip()),
-            "standardPriceConfigured": bool(settings.stripe_standard_price_id.strip()),
-            "premiumPriceConfigured": bool(settings.stripe_premium_price_id.strip()),
+            "studentPriceConfigured": bool(settings.stripe_student_price_id.strip()),
+            "teacherSupportedPriceConfigured": bool(
+                settings.stripe_teacher_supported_price_id.strip()
+            ),
+            "familyPriceConfigured": bool(settings.stripe_family_price_id.strip()),
         },
         "prices": prices,
         "twint": twint,
@@ -791,7 +811,7 @@ def create_parent_request(
         raise HTTPException(status_code=400, detail="Upgrade request must target a higher tier")
     if request_type == "downgrade" and _tier_rank(target_tier) >= _tier_rank(current_tier):
         raise HTTPException(status_code=400, detail="Downgrade request must target a lower tier")
-    if request_type == "cancel" and target_tier != SubscriptionTier.FREE.value:
+    if request_type == "cancel" and target_tier != SubscriptionTier.FREE_TRIAL.value:
         raise HTTPException(status_code=400, detail="Cancellation requests target the free tier")
 
     created_at = now_iso()
@@ -1296,7 +1316,7 @@ def _billing_response(
             "provider": None,
             "mode": "manual",
             "status": "none",
-            "subscriptionTier": SubscriptionTier.FREE.value,
+            "subscriptionTier": SubscriptionTier.FREE_TRIAL.value,
             "requestedTier": None,
             "providerCustomerId": None,
             "providerSubscriptionId": None,
@@ -1329,7 +1349,9 @@ def _billing_response(
             "provider": item.get("billing_provider"),
             "mode": item.get("billing_mode") or "manual",
             "status": item.get("billing_status") or "none",
-            "subscriptionTier": item.get("subscription_tier") or SubscriptionTier.FREE.value,
+            "subscriptionTier": (
+                item.get("subscription_tier") or SubscriptionTier.FREE_TRIAL.value
+            ),
             "requestedTier": item.get("requested_tier"),
             "providerCustomerId": item.get("provider_customer_id"),
             "providerSubscriptionId": item.get("provider_subscription_id"),
@@ -1467,8 +1489,9 @@ def _stored_twint(item: dict[str, Any]) -> dict[str, Any]:
 def get_billing_readiness(settings: Settings) -> dict[str, Any]:
     api_key = settings.stripe_api_key.strip()
     webhook_secret = settings.stripe_webhook_secret.strip()
-    standard_price = settings.stripe_standard_price_id.strip()
-    premium_price = settings.stripe_premium_price_id.strip()
+    student_price = settings.stripe_student_price_id.strip()
+    teacher_supported_price = settings.stripe_teacher_supported_price_id.strip()
+    family_price = settings.stripe_family_price_id.strip()
     blockers: list[str] = []
     warnings: list[str] = []
     sdk_available = _stripe_sdk_available()
@@ -1481,10 +1504,12 @@ def get_billing_readiness(settings: Settings) -> dict[str, Any]:
             blockers.append("stripe_api_key_not_live")
         if not webhook_secret:
             blockers.append("missing_stripe_webhook_secret")
-        if not standard_price:
-            blockers.append("missing_standard_price_id")
-        if not premium_price:
-            blockers.append("missing_premium_price_id")
+        if not student_price:
+            blockers.append("missing_student_price_id")
+        if not teacher_supported_price:
+            blockers.append("missing_teacher_supported_price_id")
+        if not family_price:
+            blockers.append("missing_family_price_id")
         if not sdk_available:
             blockers.append("stripe_sdk_missing")
         if blockers:
@@ -1519,8 +1544,9 @@ def get_billing_readiness(settings: Settings) -> dict[str, Any]:
         "configured": {
             "apiKey": _redacted_presence(api_key),
             "webhookSecret": _redacted_presence(webhook_secret),
-            "standardPrice": _redacted_presence(standard_price),
-            "premiumPrice": _redacted_presence(premium_price),
+            "studentPrice": _redacted_presence(student_price),
+            "teacherSupportedPrice": _redacted_presence(teacher_supported_price),
+            "familyPrice": _redacted_presence(family_price),
             "webOrigins": bool(settings.stripe_checkout_web_origins),
             "resultPath": bool(settings.stripe_checkout_result_path),
             "stripeSdk": sdk_available,
@@ -1927,8 +1953,9 @@ def _checkout_payment_method_types(readiness: dict[str, Any]) -> list[str] | Non
 
 def _price_id_for_tier(tier: str, settings: Settings) -> str:
     configured = {
-        SubscriptionTier.STANDARD.value: settings.stripe_standard_price_id,
-        SubscriptionTier.PREMIUM.value: settings.stripe_premium_price_id,
+        SubscriptionTier.STUDENT.value: settings.stripe_student_price_id,
+        SubscriptionTier.TEACHER_SUPPORTED.value: settings.stripe_teacher_supported_price_id,
+        SubscriptionTier.FAMILY.value: settings.stripe_family_price_id,
     }[tier]
     return configured or f"price_test_stoa_{tier}_monthly"
 
@@ -2694,7 +2721,7 @@ def _accounting_handoff(item: dict[str, Any] | None, *, parent_id: str) -> dict[
     return {
         "parentId": parent_id,
         "billingAccountRef": item.get("provider_customer_id"),
-        "tier": item.get("subscription_tier") or SubscriptionTier.FREE.value,
+        "tier": item.get("subscription_tier") or SubscriptionTier.FREE_TRIAL.value,
         "provider": item.get("billing_provider"),
         "providerMode": item.get("billing_mode"),
         "providerLivemode": item.get("provider_livemode"),
@@ -2833,11 +2860,15 @@ def _apply_billing_transition(
     current_status = existing.get("billing_status")
     manual_override_active = current_status == "manual_override"
     status = current_status if manual_override_active else transition["billing_status"]
-    tier = transition.get("subscription_tier") or existing.get("subscription_tier") or SubscriptionTier.FREE.value
+    tier = (
+        transition.get("subscription_tier")
+        or existing.get("subscription_tier")
+        or SubscriptionTier.FREE_TRIAL.value
+    )
     if not manual_override_active and status == "active":
         tier = transition.get("subscription_tier") or transition["requested_tier"]
     elif not manual_override_active and status == "canceled":
-        tier = SubscriptionTier.FREE.value
+        tier = SubscriptionTier.FREE_TRIAL.value
 
     updated = {
         **_billing_key(parent_id),
@@ -3127,7 +3158,11 @@ def _require_transition(current: str, target: str) -> None:
 
 
 def _normalize_tier(value: Any) -> str:
-    raw = value.value if isinstance(value, SubscriptionTier) else str(value or SubscriptionTier.FREE.value)
+    raw = (
+        value.value
+        if isinstance(value, SubscriptionTier)
+        else str(value or SubscriptionTier.FREE_TRIAL.value)
+    )
     if raw not in {tier.value for tier in SubscriptionTier}:
         raise HTTPException(status_code=400, detail=f"Invalid subscription tier: {raw}")
     return raw
@@ -3135,7 +3170,11 @@ def _normalize_tier(value: Any) -> str:
 
 def _target_tier(request_type: str, requested_tier: str | None) -> str:
     if request_type == "cancel":
-        return SubscriptionTier.FREE.value if requested_tier is None else _normalize_tier(requested_tier)
+        return (
+            SubscriptionTier.FREE_TRIAL.value
+            if requested_tier is None
+            else _normalize_tier(requested_tier)
+        )
     if requested_tier is None:
         raise HTTPException(status_code=400, detail="requested_tier is required")
     return _normalize_tier(requested_tier)
@@ -3143,9 +3182,10 @@ def _target_tier(request_type: str, requested_tier: str | None) -> str:
 
 def _tier_rank(value: str) -> int:
     return {
-        SubscriptionTier.FREE.value: 0,
-        SubscriptionTier.STANDARD.value: 1,
-        SubscriptionTier.PREMIUM.value: 2,
+        SubscriptionTier.FREE_TRIAL.value: 0,
+        SubscriptionTier.STUDENT.value: 1,
+        SubscriptionTier.TEACHER_SUPPORTED.value: 2,
+        SubscriptionTier.FAMILY.value: 3,
     }[value]
 
 

@@ -12,6 +12,7 @@ from stoa.config import FREE_STORAGE_BYTES, PAID_STORAGE_BYTES, Settings, get_se
 from stoa.models.billing import BillingPlanId
 from stoa.models.user import SubscriptionTier, UserProfile
 from stoa.routers import auth
+from stoa.services import attachment_service, entitlement_service, subscription_service
 
 
 CANONICAL_PLAN_VALUES = {
@@ -24,6 +25,10 @@ LEGACY_PLAN_VALUES = {"free", "standard", "premium", "tutor_supported"}
 AUTH_PATH = Path("src/stoa/routers/auth.py")
 CONFIG_PATH = Path("src/stoa/config.py")
 ENV_EXAMPLE_PATH = Path(".env.example")
+RUNTIME_PLAN_PATHS = (
+    Path("src/stoa/services/entitlement_service.py"),
+    Path("src/stoa/services/subscription_service.py"),
+)
 
 
 def _literal_dict_writes(path: Path, field_name: str) -> set[str]:
@@ -75,6 +80,17 @@ def _example_values() -> dict[str, str]:
         name, value = line.split("=", 1)
         values[name] = value
     return values
+
+
+def _subscription_tier_member_accesses(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return {
+        node.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "SubscriptionTier"
+    }
 
 
 def test_subscription_and_billing_plan_types_have_one_byte_identical_value_set() -> None:
@@ -294,3 +310,55 @@ def test_environment_example_names_every_plan_setting_without_live_secrets() -> 
     assert example["FREE_ATTACHMENT_STORAGE_BYTES"] == str(5 * 1024**3)
     assert example["PAID_ATTACHMENT_STORAGE_BYTES"] == str(15 * 1024**3)
     assert "sk_live_" not in ENV_EXAMPLE_PATH.read_text(encoding="utf-8")
+
+
+def test_runtime_services_import_with_only_canonical_enum_members() -> None:
+    accessed_members = set().union(
+        *(_subscription_tier_member_accesses(path) for path in RUNTIME_PLAN_PATHS)
+    )
+
+    assert accessed_members <= set(SubscriptionTier.__members__)
+    assert accessed_members.isdisjoint({"FREE", "STANDARD", "PREMIUM"})
+    assert set(entitlement_service.PLAN_RANK) == CANONICAL_PLAN_VALUES
+    assert set(subscription_service.PLAN_BENEFITS) == CANONICAL_PLAN_VALUES
+
+
+def test_daily_limit_compatibility_is_keyed_by_canonical_plans_only() -> None:
+    settings = Settings(_env_file=None)
+
+    assert entitlement_service._daily_question_limit("free_trial", settings) == 5
+    assert entitlement_service._daily_question_limit("student", settings) == 30
+    assert entitlement_service._daily_question_limit("teacher_supported", settings) == 100
+    assert entitlement_service._daily_question_limit("family", settings) == 100
+    assert entitlement_service._daily_chat_message_limit("student", settings) == 80
+    assert entitlement_service._daily_hint_limit("teacher_supported", settings) == 80
+    assert entitlement_service._normalize_tier(None) == "free_trial"
+    assert entitlement_service._normalize_tier("standard") == "free_trial"
+
+
+def test_runtime_price_and_storage_helpers_cover_each_canonical_paid_plan() -> None:
+    settings = Settings(
+        _env_file=None,
+        stripe_api_key="sk_test_runtime_identity",
+        stripe_student_price_id="price_student_runtime",
+        stripe_teacher_supported_price_id="price_teacher_runtime",
+        stripe_family_price_id="price_family_runtime",
+    )
+
+    assert subscription_service._price_id_for_tier("student", settings) == (
+        "price_student_runtime"
+    )
+    assert subscription_service._price_id_for_tier(
+        "teacher_supported", settings
+    ) == "price_teacher_runtime"
+    assert subscription_service._price_id_for_tier("family", settings) == (
+        "price_family_runtime"
+    )
+    assert attachment_service.storage_limit_for_entitlement("free_trial") == (
+        FREE_STORAGE_BYTES
+    )
+    for paid_plan in ("student", "teacher_supported", "family"):
+        assert (
+            attachment_service.storage_limit_for_entitlement(paid_plan)
+            == PAID_STORAGE_BYTES
+        )

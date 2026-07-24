@@ -31,11 +31,15 @@ def _settings() -> Settings:
 def _install(monkeypatch):
     table = FakeTable()
     profiles = {
-        "parent-1": {"user_id": "parent-1", "role": "parent", "subscription_tier": "free"},
+        "parent-1": {
+            "user_id": "parent-1",
+            "role": "parent",
+            "subscription_tier": "free_trial",
+        },
         "student-1": {
             "user_id": "student-1",
             "role": "student",
-            "subscription_tier": "free",
+            "subscription_tier": "free_trial",
             "parent_id": "parent-1",
             "parent_binding_status": "active",
         },
@@ -74,7 +78,7 @@ def test_active_parent_billing_grants_linked_student_paid_entitlement(monkeypatc
             "PK": "SUBSCRIPTION_BILLING#parent-1",
             "SK": "SUMMARY",
             "billing_status": "active",
-            "subscription_tier": "premium",
+            "subscription_tier": "family",
             "current_period_start": "2026-07-01T00:00:00+00:00",
             "current_period_end": "2026-08-01T00:00:00+00:00",
         }
@@ -86,7 +90,7 @@ def test_active_parent_billing_grants_linked_student_paid_entitlement(monkeypatc
         student_profile=profiles["student-1"],
     )
 
-    assert entitlement["effectivePlan"] == "premium"
+    assert entitlement["effectivePlan"] == "family"
     assert entitlement["source"] == "provider_billing"
     assert entitlement["limits"]["dailyAiQuestionLimit"] == 100
     assert entitlement["limits"]["dailyChatMessageLimit"] == 200
@@ -101,8 +105,8 @@ def test_pending_checkout_does_not_grant_paid_parent_access(monkeypatch):
             "PK": "SUBSCRIPTION_BILLING#parent-1",
             "SK": "SUMMARY",
             "billing_status": "checkout_pending",
-            "requested_tier": "premium",
-            "subscription_tier": "free",
+            "requested_tier": "family",
+            "subscription_tier": "free_trial",
         }
     )
 
@@ -112,7 +116,7 @@ def test_pending_checkout_does_not_grant_paid_parent_access(monkeypatch):
         student_profile=profiles["student-1"],
     )
 
-    assert entitlement["effectivePlan"] == "free"
+    assert entitlement["effectivePlan"] == "free_trial"
     assert entitlement["limits"]["dailyAiQuestionLimit"] == 2
     assert entitlement["limits"]["dailyChatMessageLimit"] == 8
     assert entitlement["limits"]["dailyHintLimit"] == 2
@@ -126,7 +130,7 @@ def test_manual_override_takes_precedence(monkeypatch):
             "PK": "SUBSCRIPTION_BILLING#parent-1",
             "SK": "SUMMARY",
             "billing_status": "manual_override",
-            "subscription_tier": "standard",
+            "subscription_tier": "student",
             "manual_override_source": "subreq-1",
         }
     )
@@ -137,7 +141,7 @@ def test_manual_override_takes_precedence(monkeypatch):
         student_profile=profiles["student-1"],
     )
 
-    assert entitlement["effectivePlan"] == "standard"
+    assert entitlement["effectivePlan"] == "student"
     assert entitlement["source"] == "manual_override"
     assert entitlement["limits"]["dailyAiQuestionLimit"] == 30
     assert entitlement["limits"]["dailyChatMessageLimit"] == 80

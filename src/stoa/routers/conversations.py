@@ -282,7 +282,7 @@ def _chat_limit_for_student(student_id: str) -> int:
 
 def _attachment_plan_for_student(student_id: str) -> str:
     entitlement = entitlement_service.resolve_student_entitlement(student_id, settings=settings)
-    return str(entitlement.get("effectivePlan") or "free")
+    return str(entitlement.get("effectivePlan") or "free_trial")
 
 
 # ── Request / Response models ──────────────────────────────────────────────────
@@ -1184,7 +1184,7 @@ def _execute_message_command(
                 body.attachmentIds or [], actor
             )
         )
-        effective_plan = "free"
+        effective_plan = "free_trial"
         if body.attachmentIds:
             effective_plan = _conversation_repository_call(
                 lambda: _attachment_plan_for_student(student_id)

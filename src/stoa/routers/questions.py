@@ -105,9 +105,10 @@ def _question_limit(
     entitlement: dict[str, Any] | None = None,
 ) -> int:
     limits = {
-        "free": settings.free_tier_daily_question_limit,
-        "standard": settings.standard_tier_daily_question_limit,
-        "premium": settings.premium_tier_daily_question_limit,
+        "free_trial": settings.free_tier_daily_question_limit,
+        "student": settings.standard_tier_daily_question_limit,
+        "teacher_supported": settings.premium_tier_daily_question_limit,
+        "family": settings.premium_tier_daily_question_limit,
     }
     effective_plan = (entitlement or {}).get("effectivePlan") or subscription_tier
     return int(
@@ -751,7 +752,9 @@ async def submit_question(
         )
     )
     student_profile = user_repo.get_user(student_id) or {}
-    subscription_tier = str(student_profile.get("subscription_tier") or "free")
+    subscription_tier = str(
+        student_profile.get("subscription_tier") or "free_trial"
+    )
     entitlement = entitlement_service.resolve_student_entitlement(
         student_id,
         settings=settings,

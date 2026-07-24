@@ -14,9 +14,10 @@ from stoa.models.user import SubscriptionTier
 ACTIVE_BILLING_STATUSES = {"active", "manual_override"}
 BLOCKED_BILLING_STATUSES = {"checkout_pending", "payment_failed", "past_due", "canceled"}
 PLAN_RANK = {
-    SubscriptionTier.FREE.value: 0,
-    SubscriptionTier.STANDARD.value: 1,
-    SubscriptionTier.PREMIUM.value: 2,
+    SubscriptionTier.FREE_TRIAL.value: 0,
+    SubscriptionTier.STUDENT.value: 1,
+    SubscriptionTier.TEACHER_SUPPORTED.value: 2,
+    SubscriptionTier.FAMILY.value: 3,
 }
 
 
@@ -127,7 +128,11 @@ def _billing_decision(
 
     if billing_status in {"checkout_pending"}:
         return _decision(
-            effective_plan=student_tier if _is_paid(student_tier) else SubscriptionTier.FREE.value,
+            effective_plan=(
+                student_tier
+                if _is_paid(student_tier)
+                else SubscriptionTier.FREE_TRIAL.value
+            ),
             source="student_profile" if _is_paid(student_tier) else "free_tier",
             billing_state=billing_status,
             blocking_reason="checkout_pending",
@@ -136,7 +141,11 @@ def _billing_decision(
 
     if billing_status in {"payment_failed", "past_due"}:
         return _decision(
-            effective_plan=student_tier if _is_paid(student_tier) else SubscriptionTier.FREE.value,
+            effective_plan=(
+                student_tier
+                if _is_paid(student_tier)
+                else SubscriptionTier.FREE_TRIAL.value
+            ),
             source="student_profile" if _is_paid(student_tier) else "free_tier",
             billing_state=billing_status,
             blocking_reason="payment_issue",
@@ -145,7 +154,11 @@ def _billing_decision(
 
     if billing_status == "canceled":
         return _decision(
-            effective_plan=student_tier if _is_paid(student_tier) else SubscriptionTier.FREE.value,
+            effective_plan=(
+                student_tier
+                if _is_paid(student_tier)
+                else SubscriptionTier.FREE_TRIAL.value
+            ),
             source="student_profile" if _is_paid(student_tier) else "free_tier",
             billing_state=billing_status,
             blocking_reason="billing_inactive",
@@ -229,39 +242,42 @@ def _rollout_summary(item: dict[str, Any] | None) -> dict[str, Any]:
 
 def _daily_question_limit(plan: str, settings: Settings) -> int:
     return {
-        SubscriptionTier.FREE.value: settings.free_tier_daily_question_limit,
-        SubscriptionTier.STANDARD.value: settings.standard_tier_daily_question_limit,
-        SubscriptionTier.PREMIUM.value: settings.premium_tier_daily_question_limit,
+        SubscriptionTier.FREE_TRIAL.value: settings.free_tier_daily_question_limit,
+        SubscriptionTier.STUDENT.value: settings.standard_tier_daily_question_limit,
+        SubscriptionTier.TEACHER_SUPPORTED.value: settings.premium_tier_daily_question_limit,
+        SubscriptionTier.FAMILY.value: settings.premium_tier_daily_question_limit,
     }.get(plan, settings.free_tier_daily_question_limit)
 
 
 def _daily_chat_message_limit(plan: str, settings: Settings) -> int:
     return {
-        SubscriptionTier.FREE.value: settings.free_tier_daily_chat_message_limit,
-        SubscriptionTier.STANDARD.value: settings.standard_tier_daily_chat_message_limit,
-        SubscriptionTier.PREMIUM.value: settings.premium_tier_daily_chat_message_limit,
+        SubscriptionTier.FREE_TRIAL.value: settings.free_tier_daily_chat_message_limit,
+        SubscriptionTier.STUDENT.value: settings.standard_tier_daily_chat_message_limit,
+        SubscriptionTier.TEACHER_SUPPORTED.value: settings.premium_tier_daily_chat_message_limit,
+        SubscriptionTier.FAMILY.value: settings.premium_tier_daily_chat_message_limit,
     }.get(plan, settings.free_tier_daily_chat_message_limit)
 
 
 def _daily_hint_limit(plan: str, settings: Settings) -> int:
     return {
-        SubscriptionTier.FREE.value: settings.free_tier_daily_hint_limit,
-        SubscriptionTier.STANDARD.value: settings.standard_tier_daily_hint_limit,
-        SubscriptionTier.PREMIUM.value: settings.premium_tier_daily_hint_limit,
+        SubscriptionTier.FREE_TRIAL.value: settings.free_tier_daily_hint_limit,
+        SubscriptionTier.STUDENT.value: settings.standard_tier_daily_hint_limit,
+        SubscriptionTier.TEACHER_SUPPORTED.value: settings.premium_tier_daily_hint_limit,
+        SubscriptionTier.FAMILY.value: settings.premium_tier_daily_hint_limit,
     }.get(plan, settings.free_tier_daily_hint_limit)
 
 
 def attachment_storage_limit(plan: str, settings: Settings) -> int:
     """Return the authoritative attachment-storage allowance for an effective plan."""
     normalized = _normalize_tier(plan)
-    if normalized == SubscriptionTier.FREE.value:
+    if normalized == SubscriptionTier.FREE_TRIAL.value:
         return settings.free_attachment_storage_bytes or FREE_STORAGE_BYTES
     return settings.paid_attachment_storage_bytes or PAID_STORAGE_BYTES
 
 
 def _normalize_tier(value: Any) -> str:
-    tier = str(value or SubscriptionTier.FREE.value)
-    return tier if tier in PLAN_RANK else SubscriptionTier.FREE.value
+    tier = str(value or SubscriptionTier.FREE_TRIAL.value)
+    return tier if tier in PLAN_RANK else SubscriptionTier.FREE_TRIAL.value
 
 
 def _is_paid(tier: str) -> bool:

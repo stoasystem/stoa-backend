@@ -375,7 +375,7 @@ def build_question_usage_event(
     digest = question_submission_repo.validate_question_submission_command_digest(
         idempotency_digest
     )
-    effective_plan = str(entitlement.get("effectivePlan") or "free")
+    effective_plan = str(entitlement.get("effectivePlan") or "free_trial")
     parent_id = entitlement.get("parentId")
     return {
         "PK": f"USAGE_LEDGER#{student_id}",
