@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-05-PLAN.md
-last_updated: "2026-07-24T08:30:42.547Z"
+stopped_at: Completed 476-10-PLAN.md
+last_updated: "2026-07-24T09:02:06.805Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 143
+  completed_plans: 144
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 5 of 29
+Plan: 6 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T08:30:42.540Z
-**Stopped At:** Completed 476-05-PLAN.md
+**Last Date:** 2026-07-24T09:02:06.799Z
+**Stopped At:** Completed 476-10-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -250,6 +250,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P02 | 8min | 1 tasks | 7 files |
 | Phase 476 P03 | 8min | 1 tasks | 5 files |
 | Phase 476 P05 | 15min | 1 tasks | 2 files |
+| Phase 476 P10 | 27min | 1 tasks | 2 files |
 
 ## Decisions
 
@@ -548,3 +549,6 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Checkout identity separates command, public, and provider coordinates — A parent/key digest, independent random public reference, and versioned provider-key digest prevent raw caller identity leakage while retaining exact replay.
 - [Phase 476]: Checkout command, open guard, and owner lookup commit atomically before provider access — The permanent parent fence and one transaction make retry safety independent of browser and provider-cache lifetime.
 - [Phase 476]: Provider ambiguity retains the open guard and original provider identity — Lease generation and command version prevent a second payable Session or stale Session attachment while outcome is unknown.
+- [Phase 476]: Provider event receipt and semantic side-effect identity are separate digest-only records; different Event IDs for one type/object retain audit evidence without repeating activation.
+- [Phase 476]: Invoice and subscription facts advance independently by provider-object version; no global event timestamp may reject a semantically necessary fact.
+- [Phase 476]: Paid activation requires sandbox invoice/subscription facts and exact command customer, Price, environment, plan, and version bindings in one absent-receipt transaction.
