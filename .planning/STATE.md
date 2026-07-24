@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-10-PLAN.md
-last_updated: "2026-07-24T09:02:06.805Z"
+stopped_at: Completed 476-04-PLAN.md
+last_updated: "2026-07-24T09:47:53.011Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 144
+  completed_plans: 145
   percent: 30
 ---
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T09:02:06.799Z
-**Stopped At:** Completed 476-10-PLAN.md
+**Last Date:** 2026-07-24T09:47:53.005Z
+**Stopped At:** Completed 476-04-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -251,6 +251,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P03 | 8min | 1 tasks | 5 files |
 | Phase 476 P05 | 15min | 1 tasks | 2 files |
 | Phase 476 P10 | 27min | 1 tasks | 2 files |
+| Phase 476 P04 | 16min | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -552,3 +553,6 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Provider event receipt and semantic side-effect identity are separate digest-only records; different Event IDs for one type/object retain audit evidence without repeating activation.
 - [Phase 476]: Invoice and subscription facts advance independently by provider-object version; no global event timestamp may reject a semantically necessary fact.
 - [Phase 476]: Paid activation requires sandbox invoice/subscription facts and exact command customer, Price, environment, plan, and version bindings in one absent-receipt transaction.
+- [Phase 476]: Validate migration targets directly through BillingPlanId — Legacy paid values require exact sandbox Price/subscription and explicit beneficiary evidence.
+- [Phase 476]: Evidence-bound operator dispositions resolve review ambiguity only — Malformed or live provider evidence always blocks apply.
+- [Phase 476]: Publish Plan 476-04 local evidence as review-required — Do not claim approved sandbox inventory evidence or run production/provider mutation.
