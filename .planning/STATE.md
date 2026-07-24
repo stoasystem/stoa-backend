@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-01-PLAN.md
-last_updated: "2026-07-24T07:34:14.417Z"
+stopped_at: Completed 476-02-PLAN.md
+last_updated: "2026-07-24T07:46:00.626Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 140
+  completed_plans: 141
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 2 of 29
+Plan: 3 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T07:34:14.411Z
-**Stopped At:** Completed 476-01-PLAN.md
+**Last Date:** 2026-07-24T07:46:00.619Z
+**Stopped At:** Completed 476-02-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -247,6 +247,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 475 P44 | 10 min | 1 tasks | 2 files |
 | Phase 475 P45 | 12 min | 1 tasks | 2 files |
 | Phase 476 P01 | 7min | 1 tasks | 3 files |
+| Phase 476 P02 | 8min | 1 tasks | 7 files |
 
 ## Decisions
 
@@ -537,3 +538,5 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: BillingPlanId is the closed four-plan vocabulary; PurchasablePlanId structurally excludes free_trial. — Checkout cannot encode a free plan or hidden legacy translation.
 - [Phase 476]: Public active checkout state requires paid-invoice, active-subscription, effective-plan, plan-version, and allowance-version coordinates. — Browser redirects and checkout completion remain non-authoritative hints.
 - [Phase 476]: Allowance evidence uses strict nonnegative signed-64-bit counts and Europe/Zurich Monday boundaries. — Booleans, fractions, overflow, content, and DST-fixed-duration assumptions fail closed.
+- [Phase 476]: Production and staging checkout callbacks accept only canonical exact HTTPS DNS origins; development accepts only explicitly configured loopback origin-port tuples.
+- [Phase 476]: Checkout return URLs use only /billing/checkout/result with opaque checkoutRef and non-authoritative return/cancel flow hints; browser callback fields are forbidden.
