@@ -121,6 +121,7 @@ class PaidActivationRequest:
     active_subscription_fact_id: str
     activated_at: str
     provider_livemode: bool = False
+    provider_subscription_id_digest: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -766,6 +767,7 @@ def commit_paid_activation(
     billing_projection: Mapping[str, object],
     grant_items: Sequence[Mapping[str, object]],
     allowance_item: Mapping[str, object],
+    grant_operations: Sequence[Mapping[str, object]] = (),
     table: object | None = None,
 ) -> ActivationResult:
     """Conditionally publish command, billing, grants, allowance, and one receipt."""
@@ -794,6 +796,26 @@ def commit_paid_activation(
     ]
     if len(set(beneficiaries)) != len(beneficiaries):
         raise ValueError("beneficiary grant identities must be unique")
+    if not isinstance(grant_operations, Sequence) or isinstance(
+        grant_operations, (str, bytes)
+    ):
+        raise ValueError("grant_operations are invalid")
+    relationship_operations: list[dict[str, Any]] = []
+    for operation in grant_operations:
+        normalized = _mapping(operation)
+        if normalized is None or set(normalized) != {"ConditionCheck"}:
+            raise ValueError("grant_operations must contain only condition checks")
+        condition = _mapping(normalized.get("ConditionCheck"))
+        key = _mapping((condition or {}).get("Key"))
+        if (
+            condition is None
+            or key is None
+            or not isinstance(key.get("PK"), str)
+            or not isinstance(key.get("SK"), str)
+            or not isinstance(condition.get("ConditionExpression"), str)
+        ):
+            raise ValueError("grant condition check is invalid")
+        relationship_operations.append(normalized)
     allowance = _activation_item(
         allowance_item,
         entity_type="allowance_plan",
@@ -893,7 +915,7 @@ def commit_paid_activation(
         }
     }
     projected_items = [projection, *grants, allowance]
-    projection_operations = [
+    projection_operations: list[dict[str, Any]] = [
         {
             "Put": {
                 "Item": item,
@@ -908,16 +930,29 @@ def commit_paid_activation(
         for item in projected_items
     ]
     receipt_operation = _create_only(receipt)
-    operations = [command_operation, *projection_operations, receipt_operation]
-    targets = [
-        (
-            str((operation.get("Update") or operation["Put"]).get("Key", {}).get("PK")
-                or (operation.get("Update") or operation["Put"])["Item"]["PK"]),
-            str((operation.get("Update") or operation["Put"]).get("Key", {}).get("SK")
-                or (operation.get("Update") or operation["Put"])["Item"]["SK"]),
-        )
-        for operation in operations
+    operations: list[dict[str, Any]] = [
+        command_operation,
+        *relationship_operations,
+        *projection_operations,
+        receipt_operation,
     ]
+    targets: list[tuple[str, str]] = []
+    for operation in operations:
+        body = _mapping(
+            operation.get("Update")
+            or operation.get("Put")
+            or operation.get("ConditionCheck")
+        )
+        key = _mapping((body or {}).get("Key"))
+        item = _mapping((body or {}).get("Item"))
+        target_item = key or item
+        if (
+            target_item is None
+            or not isinstance(target_item.get("PK"), str)
+            or not isinstance(target_item.get("SK"), str)
+        ):
+            raise ValueError("activation transaction target is invalid")
+        targets.append((str(target_item["PK"]), str(target_item["SK"])))
     if len(targets) != len(set(targets)):
         raise ValueError("activation transaction item targets must be unique")
 

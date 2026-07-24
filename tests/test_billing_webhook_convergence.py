@@ -5,6 +5,7 @@ import hmac
 import inspect
 import json
 import time
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
@@ -241,6 +242,7 @@ class FakePersistence:
         self,
         request: billing_fact_repo.PaidActivationRequest,
         *,
+        command: Mapping[str, object],
         billing_projection: dict[str, object],
         grant_items: list[dict[str, object]],
         allowance_item: dict[str, object],
@@ -249,6 +251,7 @@ class FakePersistence:
         assert request.provider_livemode is False
         assert request.paid_invoice_fact_id
         assert request.active_subscription_fact_id
+        assert command["beneficiary_ids"] == ["student-1"]
         assert billing_projection["plan_id"] == "student"
         assert [grant["beneficiary_id"] for grant in grant_items] == ["student-1"]
         assert allowance_item["allowance_version"] == request.allowance_version

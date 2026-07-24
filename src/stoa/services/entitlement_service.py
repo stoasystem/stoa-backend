@@ -9,6 +9,7 @@ from stoa.config import FREE_STORAGE_BYTES, PAID_STORAGE_BYTES, Settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import user_repo
 from stoa.models.user import SubscriptionTier
+from stoa.services import paid_entitlement_service
 
 
 ACTIVE_BILLING_STATUSES = {"active", "manual_override"}
@@ -36,12 +37,22 @@ def resolve_student_entitlement(
     parent_profile = user_repo.get_user(parent_id) if parent_id else None
     billing = _get_billing_item(parent_id) if parent_id else None
     rollout = _get_payment_rollout_item() if parent_id else None
+    paid_grant = (
+        paid_entitlement_service.get_active_beneficiary_grant(
+            parent_id,
+            student_id,
+            table=get_table(),
+        )
+        if parent_id and binding
+        else None
+    )
 
     decision = _billing_decision(
         billing=billing,
         parent_profile=parent_profile,
         student_tier=student_tier,
         has_active_binding=bool(binding),
+        paid_grant=paid_grant,
     )
     effective_plan = _normalize_tier(decision["effective_plan"])
     question_limit = _daily_question_limit(effective_plan, settings)
@@ -94,6 +105,7 @@ def _billing_decision(
     parent_profile: dict[str, Any] | None,
     student_tier: str,
     has_active_binding: bool,
+    paid_grant: dict[str, object] | None,
 ) -> dict[str, str | None]:
     billing_status = str((billing or {}).get("billing_status") or "none")
     parent_tier = _normalize_tier((parent_profile or {}).get("subscription_tier"))
@@ -108,6 +120,15 @@ def _billing_decision(
             support_explanation="No active parent binding was found; student-local entitlement applies.",
         )
 
+    if paid_grant is not None:
+        return _decision(
+            effective_plan=_normalize_tier(paid_grant.get("plan_id")),
+            source="paid_beneficiary_grant",
+            billing_state=billing_status,
+            blocking_reason=None,
+            support_explanation="An explicit active beneficiary grant determines paid access.",
+        )
+
     if billing_status == "manual_override":
         return _decision(
             effective_plan=billing_tier,
@@ -119,11 +140,11 @@ def _billing_decision(
 
     if billing_status == "active":
         return _decision(
-            effective_plan=billing_tier,
-            source="provider_billing",
+            effective_plan=student_tier,
+            source="student_profile" if _is_paid(student_tier) else "free_tier",
             billing_state=billing_status,
-            blocking_reason=None,
-            support_explanation="Active parent billing currently determines this student's paid access.",
+            blocking_reason="missing_beneficiary_grant",
+            support_explanation="Parent billing is active, but this student has no active beneficiary grant.",
         )
 
     if billing_status in {"checkout_pending"}:
@@ -163,15 +184,6 @@ def _billing_decision(
             billing_state=billing_status,
             blocking_reason="billing_inactive",
             support_explanation="Parent billing is canceled or expired; paid parent access is inactive.",
-        )
-
-    if _is_paid(parent_tier):
-        return _decision(
-            effective_plan=parent_tier,
-            source="parent_profile",
-            billing_state=billing_status,
-            blocking_reason=None,
-            support_explanation="Parent profile tier determines access because no active provider record exists.",
         )
 
     return _decision(

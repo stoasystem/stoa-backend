@@ -130,7 +130,7 @@ def _install_active_relationships(
         paid_entitlement_service.account_deletion_repo,
         "require_active_account_fence",
         lambda user_id, *, table: {
-            "generation": 100 if user_id == "parent-1" else 200 + beneficiary_ids.index(user_id)
+            "generation": 100 if user_id == "parent-1" else 201 + beneficiary_ids.index(user_id)
         },
     )
 

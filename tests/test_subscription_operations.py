@@ -359,6 +359,7 @@ def _install_fakes(monkeypatch):
             "student_id": "student-1",
             "status": "active",
             "relationship": "child",
+            "version": 1,
         }
     )
     table.put_item(
@@ -370,6 +371,7 @@ def _install_fakes(monkeypatch):
             "student_id": "student-1",
             "status": "active",
             "relationship": "child",
+            "version": 1,
         }
     )
 
@@ -488,6 +490,23 @@ def test_parent_account_operations_combines_billing_entitlement_usage_and_verifi
     table, profiles = _install_fakes(monkeypatch)
     _patch_account_usage(monkeypatch)
     _put_active_billing(table)
+    table.put_item(
+        Item={
+            "PK": "PAID_GRANT#parent-1",
+            "SK": "BENEFICIARY#student-1",
+            "entity_type": "beneficiary_grant",
+            "schema_version": "paid_beneficiary_grant.v1",
+            "parent_id": "parent-1",
+            "beneficiary_id": "student-1",
+            "grant_status": "active",
+            "grant_version": 7,
+            "plan_id": "family",
+            "plan_version": 2,
+            "allowance_version": 2,
+            "subscription_id_digest": "a" * 64,
+            "activation_version": 7,
+        }
+    )
     profiles["parent-1"].update(
         {
             "email_verification_status": "verified",

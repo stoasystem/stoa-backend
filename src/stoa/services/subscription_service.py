@@ -41,6 +41,7 @@ from stoa.services import (
     billing_reconciliation_service,
     entitlement_service,
     notification_service,
+    paid_entitlement_service,
 )
 from stoa.services.billing_callback_service import build_checkout_return_urls
 
@@ -1098,6 +1099,7 @@ class BillingFactPersistence(Protocol):
         self,
         request: billing_fact_repo.PaidActivationRequest,
         *,
+        command: Mapping[str, object],
         billing_projection: dict[str, object],
         grant_items: list[dict[str, object]],
         allowance_item: dict[str, object],
@@ -1198,14 +1200,15 @@ class _DefaultBillingFactPersistence:
         self,
         request: billing_fact_repo.PaidActivationRequest,
         *,
+        command: Mapping[str, object],
         billing_projection: dict[str, object],
         grant_items: list[dict[str, object]],
         allowance_item: dict[str, object],
     ) -> billing_fact_repo.ActivationResult:
-        return billing_fact_repo.commit_paid_activation(
+        return paid_entitlement_service.commit_paid_activation(
             request,
+            command=command,
             billing_projection=billing_projection,
-            grant_items=grant_items,
             allowance_item=allowance_item,
             table=self._table,
         )
@@ -1713,7 +1716,11 @@ def process_signed_billing_event(
             active_subscription_fact_id=subscription_fact.fact_id,
             activated_at=observed_at.isoformat(),
             provider_livemode=False,
+            provider_subscription_id_digest=str(
+                command["provider_subscription_id_digest"]
+            ),
         ),
+        command=command,
         billing_projection=projection,
         grant_items=grants,
         allowance_item=allowance,
