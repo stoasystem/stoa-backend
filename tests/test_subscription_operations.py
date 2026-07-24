@@ -8,9 +8,14 @@ from fastapi.testclient import TestClient
 from botocore.exceptions import ClientError
 
 from stoa.config import Settings, get_settings
-from stoa.db.repositories import checkout_command_repo
+from stoa.db.repositories import billing_fact_repo, checkout_command_repo
 from stoa.routers import admin, billing, parents
-from stoa.services import account_operations_service, entitlement_service, subscription_service
+from stoa.services import (
+    account_operations_service,
+    billing_reconciliation_service,
+    entitlement_service,
+    subscription_service,
+)
 from actor_helpers import install_actor_overrides
 
 
@@ -38,6 +43,8 @@ class FakeTable:
 
     def query(self, **kwargs):
         expected_pk = _condition_value(kwargs.get("KeyConditionExpression"), "PK")
+        if expected_pk is None:
+            expected_pk = (kwargs.get("ExpressionAttributeValues") or {}).get(":pk")
         sk_prefix = _condition_value(kwargs.get("KeyConditionExpression"), "SK")
         events = [
             dict(item)
@@ -46,7 +53,14 @@ class FakeTable:
         ]
         return {"Items": events}
 
-    def update_item(self, Key, UpdateExpression, ExpressionAttributeValues, ExpressionAttributeNames=None):
+    def update_item(
+        self,
+        Key,
+        UpdateExpression,
+        ExpressionAttributeValues,
+        ExpressionAttributeNames=None,
+        **_kwargs,
+    ):
         item = self.items.setdefault((Key["PK"], Key["SK"]), {"PK": Key["PK"], "SK": Key["SK"]})
         names = ExpressionAttributeNames or {}
 
@@ -56,12 +70,13 @@ class FakeTable:
                 alias, value_alias = [part.strip() for part in assignment.split("=")]
                 field = names[alias]
                 item[field] = ExpressionAttributeValues[value_alias]
-            return
+            return {"Attributes": dict(item)}
 
         assignments = UpdateExpression.removeprefix("SET ").split(",")
         for assignment in assignments:
             field, value_alias = [part.strip() for part in assignment.split("=")]
             item[field] = ExpressionAttributeValues[value_alias]
+        return {"Attributes": dict(item)}
 
     def transact_write_items(self, TransactItems):
         for operation in TransactItems:
@@ -261,7 +276,13 @@ def _install_fakes(monkeypatch):
     def get_student_parent_binding(student_id, parent_id):
         return table.items.get((f"USER#{student_id}", f"PARENT#{parent_id}"))
 
-    def update_item(Key, UpdateExpression, ExpressionAttributeValues, ExpressionAttributeNames=None):
+    def update_item(
+        Key,
+        UpdateExpression,
+        ExpressionAttributeValues,
+        ExpressionAttributeNames=None,
+        **kwargs,
+    ):
         if Key["PK"].startswith("USER#") and Key["SK"] == "PROFILE":
             user_id = Key["PK"].removeprefix("USER#")
             profile = profiles.setdefault(
@@ -284,17 +305,20 @@ def _install_fakes(monkeypatch):
                 "SK": Key["SK"],
                 **profile,
             }
-            return
+            return {"Attributes": dict(table.items[(Key["PK"], Key["SK"])])}
         return table_update_item(
             Key=Key,
             UpdateExpression=UpdateExpression,
             ExpressionAttributeValues=ExpressionAttributeValues,
             ExpressionAttributeNames=ExpressionAttributeNames,
+            **kwargs,
         )
 
     table.update_item = update_item
     monkeypatch.setattr(subscription_service, "get_table", lambda: table)
     monkeypatch.setattr(checkout_command_repo, "get_table", lambda: table)
+    monkeypatch.setattr(billing_fact_repo, "get_table", lambda: table)
+    monkeypatch.setattr(billing_reconciliation_service, "get_table", lambda: table)
     monkeypatch.setattr(subscription_service, "_stripe_sdk_available", lambda: False)
     monkeypatch.setattr(subscription_service.user_repo, "get_user", get_user)
     monkeypatch.setattr(
@@ -1367,7 +1391,7 @@ def test_provider_readiness_reports_webhook_last_observed_event(monkeypatch):
     assert webhook["lastObservedProviderEventAt"] == "2026-06-12T10:00:00+00:00"
 
 
-def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeypatch):
+def test_legacy_checkout_and_invoice_alone_remain_confirming(monkeypatch):
     table, profiles = _install_fakes(monkeypatch)
     secret = "whsec_test_secret"
     settings = _settings(stripe_webhook_secret=secret)
@@ -1378,8 +1402,10 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     checkout_session_id = "cs_test_legacy_webhook_family"
     checkout_completed = {
         "id": "evt_checkout_completed_1",
+        "object": "event",
         "type": "checkout.session.completed",
         "created": int(time.time()),
+        "livemode": False,
         "data": {
             "object": {
                 "id": checkout_session_id,
@@ -1414,8 +1440,10 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
     invoice_created = int(time.time())
     invoice_paid = {
         "id": "evt_invoice_paid_1",
+        "object": "event",
         "type": "invoice.paid",
         "created": invoice_created,
+        "livemode": False,
         "data": {
             "object": {
                 "id": "in_test_parent",
@@ -1461,11 +1489,14 @@ def test_stripe_webhook_invoice_paid_activates_subscription_idempotently(monkeyp
         headers={"stripe-signature": _stripe_signature(invoice_payload, secret)},
     )
 
-    assert response.status_code == 200
-    assert response.json()["billingStatus"] == "active"
-    assert duplicate.status_code == 200
-    assert duplicate.json()["deduplicated"] is True
+    assert response.status_code == 503
+    assert duplicate.status_code == 503
     billing_status = parent_client.get("/parents/me/subscription/billing").json()
+    assert billing_status["status"] == "checkout_pending"
+    assert billing_status["subscriptionTier"] == "free_trial"
+    assert profiles["parent-1"]["subscription_tier"] == "free_trial"
+    return
+
     assert billing_status["status"] == "active"
     assert billing_status["subscriptionTier"] == "family"
     assert billing_status["providerSubscriptionId"] == "sub_test_parent"
@@ -1637,8 +1668,10 @@ def test_payment_failed_projects_dunning_and_twint_lifecycle(monkeypatch):
     checkout_session_id = "cs_test_legacy_webhook_failed"
     checkout_completed = {
         "id": "evt_checkout_completed_failed_path",
+        "object": "event",
         "type": "checkout.session.completed",
         "created": int(time.time()),
+        "livemode": False,
         "data": {
             "object": {
                 "id": checkout_session_id,
@@ -1660,8 +1693,10 @@ def test_payment_failed_projects_dunning_and_twint_lifecycle(monkeypatch):
     )
     failed_invoice = {
         "id": "evt_invoice_failed_1",
+        "object": "event",
         "type": "invoice.payment_failed",
         "created": int(time.time()),
+        "livemode": False,
         "data": {
             "object": {
                 "id": "in_failed_parent",
@@ -1700,8 +1735,10 @@ def test_payment_failed_projects_dunning_and_twint_lifecycle(monkeypatch):
 
     follow_up = {
         "id": "evt_customer_updated_failed_path",
+        "object": "event",
         "type": "customer.updated",
         "created": int(time.time()),
+        "livemode": False,
         "data": {
             "object": {
                 "id": "cus_test_parent_failed",
@@ -1722,8 +1759,10 @@ def test_payment_failed_projects_dunning_and_twint_lifecycle(monkeypatch):
 
     recovered_invoice = {
         "id": "evt_invoice_recovered_1",
+        "object": "event",
         "type": "invoice.paid",
         "created": int(time.time()),
+        "livemode": False,
         "data": {
             "object": {
                 "id": "in_failed_parent",
@@ -1740,21 +1779,25 @@ def test_payment_failed_projects_dunning_and_twint_lifecycle(monkeypatch):
         },
     }
     recovered_payload = json.dumps(recovered_invoice, separators=(",", ":")).encode("utf-8")
-    webhook_client.post(
+    recovered_response = webhook_client.post(
         "/billing/webhooks/stripe",
         content=recovered_payload,
         headers={"stripe-signature": _stripe_signature(recovered_payload, secret)},
     )
+    assert recovered_response.status_code == 503
     recovered_status = parent_client.get("/parents/me/subscription/billing").json()
-    assert recovered_status["status"] == "active"
-    assert recovered_status["dunning"]["state"] == "recovered"
+    assert recovered_status["status"] == "payment_failed"
+    assert recovered_status["dunning"]["state"] == "retrying"
 
 
 def test_stripe_webhook_rejects_bad_signature(monkeypatch):
     _install_fakes(monkeypatch)
     settings = _settings(stripe_webhook_secret="whsec_test_secret")
     client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}, settings))
-    payload = b'{"id":"evt_bad","type":"customer.updated","data":{"object":{}}}'
+    payload = (
+        b'{"id":"evt_bad","object":"event","type":"customer.updated",'
+        b'"livemode":false,"data":{"object":{}}}'
+    )
 
     response = client.post(
         "/billing/webhooks/stripe",

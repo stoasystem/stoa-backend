@@ -14,6 +14,7 @@ from enum import StrEnum
 from typing import Protocol, runtime_checkable
 from urllib.parse import urlsplit
 
+from stoa.db.dynamodb import get_table
 from stoa.db.repositories import checkout_command_repo
 from stoa.models.billing import CheckoutCommandState
 
@@ -82,6 +83,15 @@ class BillingReconciliationProvider(Protocol):
         *,
         session_id: str,
     ) -> ProviderCheckoutSessionEvidence: ...
+
+
+@runtime_checkable
+class _WebhookCommandTable(Protocol):
+    """Least-capability table boundary for signed webhook command binding."""
+
+    def get_item(self, **kwargs: object) -> object: ...
+
+    def update_item(self, **kwargs: object) -> object: ...
 
 
 class BillingReconciliationRepository(Protocol):
@@ -172,6 +182,170 @@ def _required_text(
     if len(value) > maximum or any(character.isspace() for character in value):
         raise ValueError(f"{field} is invalid")
     return value
+
+
+def _webhook_item(value: object) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if not isinstance(value, Mapping) or any(
+        not isinstance(key, str) for key in value
+    ):
+        raise ValueError("billing webhook dependency returned malformed data")
+    return {str(key): member for key, member in value.items()}
+
+
+def _webhook_get(
+    table: object,
+    key: Mapping[str, str],
+) -> dict[str, object] | None:
+    if not isinstance(table, _WebhookCommandTable):
+        raise ValueError("billing webhook persistence is unavailable")
+    response = table.get_item(Key=dict(key), ConsistentRead=True)
+    if not isinstance(response, Mapping):
+        raise ValueError("billing webhook dependency returned malformed data")
+    return _webhook_item(response.get("Item"))
+
+
+def load_checkout_command_for_webhook(
+    checkout_ref: str,
+    *,
+    table: object | None = None,
+) -> dict[str, object] | None:
+    """Resolve one provider metadata reference to its exact durable command."""
+    reference = _required_text(checkout_ref, "checkout_ref")
+    target = table or get_table()
+    lookup = _webhook_get(
+        target,
+        {"PK": f"CHECKOUT_PUBLIC#{reference}", "SK": "LOOKUP"},
+    )
+    if (
+        lookup is None
+        or lookup.get("entity_type") != "checkout_public_lookup"
+        or lookup.get("schema_version") != checkout_command_repo.PUBLIC_LOOKUP_SCHEMA_VERSION
+        or lookup.get("checkout_ref") != reference
+        or not isinstance(lookup.get("command_id"), str)
+    ):
+        return None
+    command_id = str(lookup["command_id"])
+    command = _webhook_get(
+        target,
+        {"PK": f"CHECKOUT_COMMAND#{command_id}", "SK": "COMMAND"},
+    )
+    if (
+        command is None
+        or command.get("entity_type") != "checkout_command"
+        or command.get("schema_version") != checkout_command_repo.COMMAND_SCHEMA_VERSION
+        or command.get("command_id") != command_id
+        or command.get("checkout_ref") != reference
+        or command.get("parent_id") != lookup.get("parent_id")
+    ):
+        return None
+    return command
+
+
+def bind_webhook_provider_identity(
+    command: Mapping[str, object],
+    *,
+    provider_customer_id_digest: str,
+    provider_subscription_id_digest: str,
+    expected_initial_invoice_id_digest: str,
+    now_iso: str,
+    table: object | None = None,
+) -> dict[str, object] | None:
+    """Conditionally bind verified provider objects to one immutable command."""
+    command_id = _required_text(command.get("command_id"), "command_id")
+    parent_id = _required_text(command.get("parent_id"), "parent_id")
+    command_version = command.get("command_version")
+    if type(command_version) is not int or command_version < 1:
+        raise ValueError("command_version is invalid")
+    digests = {
+        "provider_customer_id_digest": _required_text(
+            provider_customer_id_digest,
+            "provider_customer_id_digest",
+            maximum=64,
+        ),
+        "provider_subscription_id_digest": _required_text(
+            provider_subscription_id_digest,
+            "provider_subscription_id_digest",
+            maximum=64,
+        ),
+        "expected_initial_invoice_id_digest": _required_text(
+            expected_initial_invoice_id_digest,
+            "expected_initial_invoice_id_digest",
+            maximum=64,
+        ),
+    }
+    if any(
+        len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+        for value in digests.values()
+    ):
+        raise ValueError("provider identity digest is invalid")
+    timestamp = _required_text(now_iso, "now_iso", maximum=64)
+    target = table or get_table()
+    if not isinstance(target, _WebhookCommandTable):
+        raise ValueError("billing webhook persistence is unavailable")
+
+    if all(command.get(key) == value for key, value in digests.items()):
+        return dict(command)
+    if any(
+        command.get(key) not in {None, value}
+        for key, value in digests.items()
+    ):
+        return None
+    values: dict[str, object] = {
+        ":entity": "checkout_command",
+        ":schema": checkout_command_repo.COMMAND_SCHEMA_VERSION,
+        ":command_id": command_id,
+        ":parent_id": parent_id,
+        ":expected_version": command_version,
+        ":next_version": command_version + 1,
+        ":reconciling": CheckoutCommandState.RECONCILING,
+        ":updated_at": timestamp,
+        **{f":{key}": value for key, value in digests.items()},
+    }
+    try:
+        response = target.update_item(
+            Key={"PK": f"CHECKOUT_COMMAND#{command_id}", "SK": "COMMAND"},
+            UpdateExpression=(
+                "SET provider_customer_id_digest=:provider_customer_id_digest, "
+                "provider_subscription_id_digest=:provider_subscription_id_digest, "
+                "expected_initial_invoice_id_digest=:expected_initial_invoice_id_digest, "
+                "command_state=:reconciling, command_version=:next_version, "
+                "updated_at=:updated_at"
+            ),
+            ConditionExpression=(
+                "entity_type=:entity AND schema_version=:schema "
+                "AND command_id=:command_id AND parent_id=:parent_id "
+                "AND command_version=:expected_version "
+                "AND (attribute_not_exists(provider_customer_id_digest) "
+                "OR provider_customer_id_digest=:provider_customer_id_digest) "
+                "AND (attribute_not_exists(provider_subscription_id_digest) "
+                "OR provider_subscription_id_digest=:provider_subscription_id_digest) "
+                "AND (attribute_not_exists(expected_initial_invoice_id_digest) "
+                "OR expected_initial_invoice_id_digest=:expected_initial_invoice_id_digest)"
+            ),
+            ExpressionAttributeValues=values,
+            ReturnValues="ALL_NEW",
+        )
+    except Exception:
+        refreshed = _webhook_get(
+            target,
+            {"PK": f"CHECKOUT_COMMAND#{command_id}", "SK": "COMMAND"},
+        )
+        if refreshed is not None and all(
+            refreshed.get(key) == value for key, value in digests.items()
+        ):
+            return refreshed
+        return None
+    if not isinstance(response, Mapping):
+        return None
+    updated = _webhook_item(response.get("Attributes"))
+    if updated is None or not all(
+        updated.get(key) == value for key, value in digests.items()
+    ):
+        return None
+    return updated
 
 
 def _generation(command: Mapping[str, object]) -> int:

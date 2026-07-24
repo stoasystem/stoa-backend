@@ -7,7 +7,8 @@ import hmac
 import importlib
 import json
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from importlib.util import find_spec
@@ -21,14 +22,26 @@ from fastapi import HTTPException
 
 from stoa.config import Settings
 from stoa.db.dynamodb import get_table
-from stoa.db.repositories import account_deletion_repo, checkout_command_repo, user_repo
+from stoa.db.repositories import (
+    account_deletion_repo,
+    billing_fact_repo,
+    checkout_command_repo,
+    user_repo,
+)
 from stoa.models.billing import (
+    BillingFact,
+    BillingFactKind,
+    BillingPlanId,
     CheckoutCommandState,
     CheckoutIntent,
     PurchasablePlanId,
 )
 from stoa.models.user import SubscriptionTier
-from stoa.services import entitlement_service, notification_service
+from stoa.services import (
+    billing_reconciliation_service,
+    entitlement_service,
+    notification_service,
+)
 from stoa.services.billing_callback_service import build_checkout_return_urls
 
 
@@ -1035,13 +1048,700 @@ def get_provider_readiness(settings: Settings) -> dict[str, Any]:
     }
 
 
+@dataclass(frozen=True, slots=True)
+class ActivationPredicateResult:
+    """Closed result from the paid-access provider-object predicate."""
+
+    accepted: bool
+    reason: str
+
+
+class BillingActivationProvider(Protocol):
+    """Retrieval-only Stripe capability used after signature verification."""
+
+    def retrieve_checkout_session(
+        self,
+        provider_session_id: str,
+    ) -> dict[str, object]: ...
+
+    def retrieve_invoice(self, provider_invoice_id: str) -> dict[str, object]: ...
+
+    def retrieve_subscription(
+        self,
+        provider_subscription_id: str,
+    ) -> dict[str, object]: ...
+
+
+class BillingFactPersistence(Protocol):
+    """Narrow durable convergence boundary used by the signed processor."""
+
+    def register_provider_event(self, **kwargs: object) -> billing_fact_repo.BillingEventResult: ...
+
+    def bind_provider_identity(
+        self,
+        command: dict[str, object],
+        *,
+        provider_customer_id_digest: str,
+        provider_subscription_id_digest: str,
+        expected_initial_invoice_id_digest: str,
+        now_iso: str,
+    ) -> dict[str, object] | None: ...
+
+    def record_provider_fact(
+        self,
+        fact: BillingFact,
+    ) -> billing_fact_repo.FactRecordResult: ...
+
+    def load_activation_facts(self, command_id: str) -> tuple[BillingFact, ...]: ...
+
+    def commit_paid_activation(
+        self,
+        request: billing_fact_repo.PaidActivationRequest,
+        *,
+        billing_projection: dict[str, object],
+        grant_items: list[dict[str, object]],
+        allowance_item: dict[str, object],
+    ) -> billing_fact_repo.ActivationResult: ...
+
+
+class _StripeBillingActivationProvider:
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+
+    def _retrieve(self, resource: str, provider_id: str) -> dict[str, object]:
+        stripe = _load_stripe_sdk()
+        stripe.api_key = self._settings.stripe_api_key
+        if resource == "session":
+            value = stripe.checkout.Session.retrieve(provider_id)
+        elif resource == "invoice":
+            value = stripe.Invoice.retrieve(provider_id)
+        elif resource == "subscription":
+            value = stripe.Subscription.retrieve(provider_id)
+        else:  # pragma: no cover - closed internal call set
+            raise ValueError("unsupported billing provider resource")
+        return _subscription_mapping(_stripe_object_to_dict(value))
+
+    def retrieve_checkout_session(
+        self,
+        provider_session_id: str,
+    ) -> dict[str, object]:
+        return self._retrieve("session", provider_session_id)
+
+    def retrieve_invoice(self, provider_invoice_id: str) -> dict[str, object]:
+        return self._retrieve("invoice", provider_invoice_id)
+
+    def retrieve_subscription(
+        self,
+        provider_subscription_id: str,
+    ) -> dict[str, object]:
+        return self._retrieve("subscription", provider_subscription_id)
+
+
+class _DefaultBillingFactPersistence:
+    def __init__(
+        self,
+        *,
+        table: object | None = None,
+        event_registration: Callable[..., billing_fact_repo.BillingEventResult]
+        = billing_fact_repo.register_provider_event,
+    ) -> None:
+        self._table = table
+        self._event_registration = event_registration
+
+    def register_provider_event(self, **kwargs: object) -> billing_fact_repo.BillingEventResult:
+        return self._event_registration(
+            provider_event_id=str(kwargs["provider_event_id"]),
+            event_type=str(kwargs["event_type"]),
+            provider_object_id=str(kwargs["provider_object_id"]),
+            object_version=int(kwargs["object_version"]),
+            fact_observed_at=str(kwargs["fact_observed_at"]),
+            table=self._table,
+        )
+
+    def bind_provider_identity(
+        self,
+        command: dict[str, object],
+        *,
+        provider_customer_id_digest: str,
+        provider_subscription_id_digest: str,
+        expected_initial_invoice_id_digest: str,
+        now_iso: str,
+    ) -> dict[str, object] | None:
+        return billing_reconciliation_service.bind_webhook_provider_identity(
+            command,
+            provider_customer_id_digest=provider_customer_id_digest,
+            provider_subscription_id_digest=provider_subscription_id_digest,
+            expected_initial_invoice_id_digest=expected_initial_invoice_id_digest,
+            now_iso=now_iso,
+            table=self._table,
+        )
+
+    def load_command(self, checkout_ref: str) -> dict[str, object] | None:
+        return billing_reconciliation_service.load_checkout_command_for_webhook(
+            checkout_ref,
+            table=self._table,
+        )
+
+    def record_provider_fact(
+        self,
+        fact: BillingFact,
+    ) -> billing_fact_repo.FactRecordResult:
+        return billing_fact_repo.record_provider_fact(fact, table=self._table)
+
+    def load_activation_facts(self, command_id: str) -> tuple[BillingFact, ...]:
+        return billing_fact_repo.load_activation_facts(
+            command_id,
+            table=self._table,
+        )
+
+    def commit_paid_activation(
+        self,
+        request: billing_fact_repo.PaidActivationRequest,
+        *,
+        billing_projection: dict[str, object],
+        grant_items: list[dict[str, object]],
+        allowance_item: dict[str, object],
+    ) -> billing_fact_repo.ActivationResult:
+        return billing_fact_repo.commit_paid_activation(
+            request,
+            billing_projection=billing_projection,
+            grant_items=grant_items,
+            allowance_item=allowance_item,
+            table=self._table,
+        )
+
+
+def construct_event(
+    *,
+    payload: bytes,
+    signature_header: str | None,
+    settings: Settings,
+) -> dict[str, Any]:
+    """Verify the untouched request body with Stripe's official SDK only."""
+    if not settings.stripe_webhook_secret.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Stripe webhook signing secret is required",
+        )
+    try:
+        stripe = importlib.import_module("stripe")
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Stripe webhook verification is unavailable",
+        ) from exc
+    try:
+        event = stripe.Webhook.construct_event(
+            payload,
+            signature_header,
+            settings.stripe_webhook_secret,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Stripe signature verification failed",
+        ) from exc
+    verified = _stripe_object_to_dict(event)
+    if not verified:
+        raise HTTPException(status_code=400, detail="Provider event is invalid")
+    return verified
+
+
+def extract_invoice_subscription_id(
+    invoice: Mapping[str, object],
+    *,
+    api_version: str | None,
+) -> str | None:
+    """Extract legacy or Basil invoice subscription identity without guessing."""
+    legacy = _provider_id_value(invoice.get("subscription"))
+    parent = invoice.get("parent")
+    basil = ""
+    if isinstance(parent, Mapping):
+        details = parent.get("subscription_details")
+        if isinstance(details, Mapping):
+            basil = _provider_id_value(details.get("subscription"))
+    if legacy and basil and legacy != basil:
+        return None
+    if api_version == "2025-03-31.basil":
+        return basil or None
+    return legacy or basil or None
+
+
+def _nested_mapping(value: object) -> Mapping[str, object]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def _metadata_checkout_ref(value: Mapping[str, object]) -> str | None:
+    metadata = _nested_mapping(value.get("metadata"))
+    reference = metadata.get("stoa_checkout_ref")
+    return reference if isinstance(reference, str) and reference else None
+
+
+def _subscription_price_id(subscription: Mapping[str, object]) -> str | None:
+    items = _nested_mapping(subscription.get("items"))
+    data = items.get("data")
+    if not isinstance(data, Sequence) or isinstance(data, (str, bytes)):
+        return None
+    if len(data) != 1 or not isinstance(data[0], Mapping):
+        return None
+    price = _nested_mapping(data[0].get("price"))
+    price_id = price.get("id")
+    return price_id if isinstance(price_id, str) and price_id else None
+
+
+def activation_predicate(
+    *,
+    command: Mapping[str, object],
+    session: Mapping[str, object],
+    invoice: Mapping[str, object],
+    subscription: Mapping[str, object],
+    api_version: str | None,
+) -> ActivationPredicateResult:
+    """Require the exact first paid invoice and current active subscription."""
+    if (
+        session.get("livemode") is not False
+        or invoice.get("livemode") is not False
+        or subscription.get("livemode") is not False
+        or command.get("environment") == "production"
+    ):
+        return ActivationPredicateResult(False, "live_object")
+
+    checkout_ref = command.get("checkout_ref")
+    session_metadata_ref = _metadata_checkout_ref(session)
+    subscription_metadata_ref = _metadata_checkout_ref(subscription)
+    if (
+        not isinstance(checkout_ref, str)
+        or session.get("id") != command.get("provider_session_id")
+        or session.get("client_reference_id") != checkout_ref
+        or session_metadata_ref != checkout_ref
+        or subscription_metadata_ref != checkout_ref
+    ):
+        return ActivationPredicateResult(False, "command_identity_mismatch")
+
+    session_customer = _provider_id_value(session.get("customer"))
+    invoice_customer = _provider_id_value(invoice.get("customer"))
+    subscription_customer = _provider_id_value(subscription.get("customer"))
+    if (
+        not session_customer
+        or invoice_customer != session_customer
+        or subscription_customer != session_customer
+    ):
+        return ActivationPredicateResult(False, "customer_mismatch")
+
+    subscription_id = _provider_id_value(subscription.get("id"))
+    invoice_id = _provider_id_value(invoice.get("id"))
+    invoice_subscription_id = extract_invoice_subscription_id(
+        invoice,
+        api_version=api_version,
+    )
+    if (
+        not subscription_id
+        or not invoice_id
+        or _provider_id_value(session.get("subscription")) != subscription_id
+        or _provider_id_value(session.get("invoice")) != invoice_id
+        or invoice_subscription_id != subscription_id
+    ):
+        return ActivationPredicateResult(False, "provider_object_mismatch")
+    if _subscription_price_id(subscription) != command.get("price_id"):
+        return ActivationPredicateResult(False, "price_mismatch")
+    if subscription.get("status") != "active":
+        return ActivationPredicateResult(False, "subscription_inactive")
+    if invoice.get("paid") is not True or invoice.get("status") != "paid":
+        return ActivationPredicateResult(False, "invoice_unpaid")
+
+    beneficiaries = command.get("beneficiary_ids")
+    try:
+        plan = BillingPlanId(str(command.get("plan_id") or ""))
+    except ValueError:
+        return ActivationPredicateResult(False, "command_intent_invalid")
+    if (
+        plan is BillingPlanId.FREE_TRIAL
+        or not isinstance(beneficiaries, list)
+        or not 1 <= len(beneficiaries) <= 3
+        or len(set(beneficiaries)) != len(beneficiaries)
+        or any(not isinstance(value, str) or not value for value in beneficiaries)
+        or (
+            plan in {BillingPlanId.STUDENT, BillingPlanId.TEACHER_SUPPORTED}
+            and len(beneficiaries) != 1
+        )
+    ):
+        return ActivationPredicateResult(False, "command_intent_invalid")
+    return ActivationPredicateResult(True, "joint_provider_predicate_satisfied")
+
+
+def _billing_identity_digest(domain: str, value: str) -> str:
+    return hashlib.sha256(
+        f"stoa.billing.{domain}.v1\x00{value}".encode()
+    ).hexdigest()
+
+
+def _safe_event_reference(event_id: str) -> str:
+    return f"event-{_billing_identity_digest('response-event', event_id)[:12]}"
+
+
+def _event_object(event: Mapping[str, object]) -> dict[str, object]:
+    data = _nested_mapping(event.get("data"))
+    value = data.get("object")
+    if not isinstance(value, Mapping) or any(
+        not isinstance(key, str) for key in value
+    ):
+        raise HTTPException(status_code=400, detail="Provider event object is required")
+    return {str(key): member for key, member in value.items()}
+
+
+def _fact(
+    *,
+    command_id: str,
+    event_id: str,
+    provider_object_id: str,
+    kind: BillingFactKind,
+    version: int,
+    observed_at: datetime,
+) -> BillingFact:
+    return BillingFact(
+        factId=f"fact-{_billing_identity_digest(str(kind), provider_object_id)}",
+        checkoutCommandId=command_id,
+        kind=kind,
+        providerEventIdDigest=_billing_identity_digest("event", event_id),
+        providerObjectIdDigest=_billing_identity_digest("object", provider_object_id),
+        signatureVerified=True,
+        providerLivemode=False,
+        factVersion=version,
+        observedAt=observed_at,
+    )
+
+
+def _activation_items(
+    command: Mapping[str, object],
+    *,
+    allowance_version: int,
+    activation_version: int,
+) -> tuple[dict[str, object], list[dict[str, object]], dict[str, object]]:
+    parent_id = str(command["parent_id"])
+    plan_id = str(command["plan_id"])
+    plan_version = int(command["plan_version"])
+    common: dict[str, object] = {
+        "parent_id": parent_id,
+        "plan_id": plan_id,
+        "plan_version": plan_version,
+        "allowance_version": allowance_version,
+        "activation_version": activation_version,
+    }
+    projection = {
+        "PK": f"BILLING#{parent_id}",
+        "SK": "PROJECTION",
+        "entity_type": "billing_projection",
+        **common,
+    }
+    grants = [
+        {
+            "PK": f"PLAN_GRANT#{parent_id}",
+            "SK": f"STUDENT#{beneficiary_id}",
+            "entity_type": "beneficiary_grant",
+            "beneficiary_id": beneficiary_id,
+            **common,
+        }
+        for beneficiary_id in command["beneficiary_ids"]
+        if isinstance(beneficiary_id, str)
+    ]
+    allowance = {
+        "PK": f"ALLOWANCE_PLAN#{parent_id}",
+        "SK": "CURRENT",
+        "entity_type": "allowance_plan",
+        **common,
+    }
+    return projection, grants, allowance
+
+
+def process_signed_billing_event(
+    *,
+    event: Mapping[str, object],
+    settings: Settings,
+    provider: BillingActivationProvider | None = None,
+    persistence: BillingFactPersistence | None = None,
+    command: dict[str, object] | None = None,
+    table: object | None = None,
+    register_provider_event: Callable[
+        ..., billing_fact_repo.BillingEventResult
+    ] = billing_fact_repo.register_provider_event,
+) -> dict[str, Any]:
+    """Converge one signature-authenticated Stripe event into paid activation."""
+    event_id = _provider_id_value(event.get("id"))
+    event_type = str(event.get("type") or "")
+    created = event.get("created")
+    if not event_id or event_type not in PROVIDER_EVENT_TYPES:
+        raise HTTPException(status_code=400, detail="Provider event is invalid")
+    if type(created) is not int or created < 1:
+        raise HTTPException(status_code=400, detail="Provider event time is invalid")
+    provider_object = _event_object(event)
+    provider_object_id = _provider_id_value(provider_object.get("id"))
+    if not provider_object_id:
+        raise HTTPException(status_code=400, detail="Provider object id is required")
+    response = {
+        "received": True,
+        "ignored": False,
+        "deduplicated": False,
+        "eventId": _safe_event_reference(event_id),
+        "eventType": event_type,
+        "signatureVerified": True,
+        "factDisposition": "not_registered",
+        "reconciliationDisposition": "not_attempted",
+        "activationDisposition": "not_attempted",
+    }
+    if event.get("livemode") is not False or provider_object.get("livemode") is True:
+        response.update(
+            ignored=True,
+            factDisposition="refused_live",
+            reconciliationDisposition="refused_live",
+            activationDisposition="predicate_refused",
+        )
+        return response
+
+    observed_at = datetime.fromtimestamp(created, tz=timezone.utc)
+    durable = persistence or _DefaultBillingFactPersistence(
+        table=table,
+        event_registration=register_provider_event,
+    )
+    registration = durable.register_provider_event(
+        provider_event_id=event_id,
+        event_type=event_type,
+        provider_object_id=provider_object_id,
+        object_version=created,
+        fact_observed_at=observed_at.isoformat(),
+    )
+    response["factDisposition"] = str(registration.disposition)
+    response["deduplicated"] = registration.disposition in {
+        billing_fact_repo.BillingEventDisposition.EVENT_DUPLICATE,
+        billing_fact_repo.BillingEventDisposition.SEMANTIC_DUPLICATE,
+    }
+    if registration.disposition is billing_fact_repo.BillingEventDisposition.RETRYABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Billing event persistence is temporarily unavailable",
+        )
+    if event_type == "checkout.session.completed":
+        if persistence is None and command is None:
+            projected = _handle_verified_provider_event(event)
+            response["billingStatus"] = projected.get("billingStatus")
+        response["reconciliationDisposition"] = "confirming"
+        return response
+    if event_type not in {
+        "invoice.paid",
+        "customer.subscription.created",
+        "customer.subscription.updated",
+    }:
+        if persistence is None and command is None:
+            projected = _handle_verified_provider_event(event)
+            response["billingStatus"] = projected.get("billingStatus")
+        response.update(
+            ignored=True,
+            reconciliationDisposition="retained_without_activation",
+        )
+        return response
+
+    retrieval = provider or _StripeBillingActivationProvider(settings)
+    api_version_value = event.get("api_version")
+    api_version = api_version_value if isinstance(api_version_value, str) else None
+    prefetched_subscription: dict[str, object] | None = None
+    checkout_ref = _metadata_checkout_ref(provider_object)
+    try:
+        if command is None and not checkout_ref and event_type == "invoice.paid":
+            event_subscription_id = extract_invoice_subscription_id(
+                provider_object,
+                api_version=api_version,
+            )
+            if not event_subscription_id:
+                raise ValueError("invoice subscription identity unavailable")
+            prefetched_subscription = retrieval.retrieve_subscription(
+                event_subscription_id
+            )
+            checkout_ref = _metadata_checkout_ref(prefetched_subscription)
+        if command is None:
+            loader = getattr(durable, "load_command", None)
+            if not checkout_ref or not callable(loader):
+                raise ValueError("checkout command unavailable")
+            command = loader(checkout_ref)
+        if command is None:
+            raise ValueError("checkout command unavailable")
+        session_id = _provider_id_value(command.get("provider_session_id"))
+        if not session_id:
+            raise ValueError("checkout Session identity unavailable")
+        session = retrieval.retrieve_checkout_session(session_id)
+        subscription_id = _provider_id_value(session.get("subscription"))
+        invoice_id = _provider_id_value(session.get("invoice"))
+        if not subscription_id or not invoice_id:
+            raise ValueError("provider activation identities unavailable")
+        subscription = (
+            prefetched_subscription
+            if prefetched_subscription is not None
+            and prefetched_subscription.get("id") == subscription_id
+            else retrieval.retrieve_subscription(subscription_id)
+        )
+        invoice = retrieval.retrieve_invoice(invoice_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Billing provider reconciliation is temporarily unavailable",
+        ) from exc
+
+    if (
+        (event_type == "invoice.paid" and provider_object_id != invoice_id)
+        or (
+            event_type.startswith("customer.subscription.")
+            and provider_object_id != subscription_id
+        )
+    ):
+        response.update(
+            reconciliationDisposition="predicate_refused",
+            activationDisposition="predicate_refused",
+            processingResult="provider_event_object_mismatch",
+        )
+        return response
+    predicate = activation_predicate(
+        command=command,
+        session=session,
+        invoice=invoice,
+        subscription=subscription,
+        api_version=api_version,
+    )
+    if not predicate.accepted:
+        response.update(
+            reconciliationDisposition="predicate_refused",
+            activationDisposition="predicate_refused",
+            processingResult=predicate.reason,
+        )
+        return response
+
+    customer_id = _provider_id_value(session.get("customer"))
+    bound = durable.bind_provider_identity(
+        command,
+        provider_customer_id_digest=_billing_identity_digest("customer", customer_id),
+        provider_subscription_id_digest=_billing_identity_digest(
+            "subscription",
+            subscription_id,
+        ),
+        expected_initial_invoice_id_digest=_billing_identity_digest(
+            "invoice",
+            invoice_id,
+        ),
+        now_iso=observed_at.isoformat(),
+    )
+    if bound is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Billing command reconciliation is temporarily unavailable",
+        )
+    command = bound
+    command_id = str(command["command_id"])
+    facts = (
+        _fact(
+            command_id=command_id,
+            event_id=event_id,
+            provider_object_id=invoice_id,
+            kind=BillingFactKind.INVOICE_PAID,
+            version=created,
+            observed_at=observed_at,
+        ),
+        _fact(
+            command_id=command_id,
+            event_id=event_id,
+            provider_object_id=subscription_id,
+            kind=BillingFactKind.SUBSCRIPTION_ACTIVE,
+            version=created,
+            observed_at=observed_at,
+        ),
+    )
+    for fact in facts:
+        recorded = durable.record_provider_fact(fact)
+        if recorded.disposition is billing_fact_repo.FactRecordDisposition.RETRYABLE:
+            raise HTTPException(
+                status_code=503,
+                detail="Billing fact persistence is temporarily unavailable",
+            )
+    current_facts = durable.load_activation_facts(command_id)
+    invoice_fact = next(
+        (
+            fact
+            for fact in current_facts
+            if fact.kind is BillingFactKind.INVOICE_PAID
+        ),
+        None,
+    )
+    subscription_fact = next(
+        (
+            fact
+            for fact in current_facts
+            if fact.kind is BillingFactKind.SUBSCRIPTION_ACTIVE
+        ),
+        None,
+    )
+    if invoice_fact is None or subscription_fact is None:
+        response["reconciliationDisposition"] = "awaiting_joint_predicate"
+        return response
+
+    plan_version = int(command["plan_version"])
+    allowance_value = command.get("allowance_version")
+    allowance_version = (
+        allowance_value
+        if type(allowance_value) is int and allowance_value > 0
+        else plan_version
+    )
+    activation_version = max(
+        invoice_fact.fact_version,
+        subscription_fact.fact_version,
+    )
+    projection, grants, allowance = _activation_items(
+        command,
+        allowance_version=allowance_version,
+        activation_version=activation_version,
+    )
+    activation = durable.commit_paid_activation(
+        billing_fact_repo.PaidActivationRequest(
+            command_id=command_id,
+            parent_id=str(command["parent_id"]),
+            expected_command_version=int(command["command_version"]),
+            provider_customer_id_digest=str(
+                command["provider_customer_id_digest"]
+            ),
+            price_id=str(command["price_id"]),
+            environment=str(command["environment"]),
+            plan_id=BillingPlanId(str(command["plan_id"])),
+            plan_version=plan_version,
+            allowance_version=allowance_version,
+            activation_version=activation_version,
+            paid_invoice_fact_id=invoice_fact.fact_id,
+            active_subscription_fact_id=subscription_fact.fact_id,
+            activated_at=observed_at.isoformat(),
+            provider_livemode=False,
+        ),
+        billing_projection=projection,
+        grant_items=grants,
+        allowance_item=allowance,
+    )
+    response.update(
+        reconciliationDisposition="joint_predicate_satisfied",
+        activationDisposition=str(activation.disposition),
+        processingResult="closed",
+    )
+    return response
+
+
 def handle_stripe_webhook(
     *,
     payload: bytes,
     signature_header: str | None,
     settings: Settings,
 ) -> dict[str, Any]:
-    event = _parse_provider_event(payload, signature_header, settings)
+    event = construct_event(
+        payload=payload,
+        signature_header=signature_header,
+        settings=settings,
+    )
+    return process_signed_billing_event(event=event, settings=settings)
+
+
+def _handle_verified_provider_event(event: Mapping[str, object]) -> dict[str, Any]:
+    """Retained legacy projection path for non-activation provider events."""
     event_id = str(event.get("id") or "")
     event_type = str(event.get("type") or "")
     if not event_id or not event_type:
@@ -1084,25 +1784,6 @@ def handle_stripe_webhook(
 
     now = now_iso()
     transition = _billing_transition(event_type, event_object, existing)
-    if _provider_event_is_stale(event.get("created"), existing):
-        _record_stale_provider_event(
-            parent_id=parent_id,
-            event_id=event_id,
-            event_type=event_type,
-            event_created=event.get("created"),
-            event_object=event_object,
-            existing=existing,
-            now=now,
-        )
-        return {
-            "received": True,
-            "deduplicated": False,
-            "eventId": event_id,
-            "eventType": event_type,
-            "parentId": parent_id,
-            "billingStatus": existing.get("billing_status") or "none",
-            "processingResult": "stale_ignored",
-        }
     updated = _apply_billing_transition(
         parent_id=parent_id,
         event_id=event_id,
@@ -2425,6 +3106,8 @@ def _stripe_object_to_dict(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     to_dict = getattr(value, "to_dict_recursive", None)
+    if not callable(to_dict):
+        to_dict = getattr(value, "to_dict", None)
     if callable(to_dict):
         converted = to_dict()
         return converted if isinstance(converted, dict) else {}
@@ -3275,62 +3958,6 @@ def _timestamp_to_iso(value: Any) -> str | None:
         return datetime.fromtimestamp(int(value), tz=timezone.utc).replace(microsecond=0).isoformat()
     except (TypeError, ValueError, OSError):
         return None
-
-
-def _provider_event_is_stale(event_created: Any, existing: dict[str, Any]) -> bool:
-    event_at = _parse_iso_datetime(_timestamp_to_iso(event_created))
-    last_event_at = _parse_iso_datetime(existing.get("last_provider_event_at"))
-    return bool(event_at and last_event_at and event_at < last_event_at)
-
-
-def _record_stale_provider_event(
-    *,
-    parent_id: str,
-    event_id: str,
-    event_type: str,
-    event_created: Any,
-    event_object: dict[str, Any],
-    existing: dict[str, Any],
-    now: str,
-) -> None:
-    event = _provider_processing_event(
-        parent_id=parent_id,
-        event_id=event_id,
-        event_type=event_type,
-        event_created=event_created,
-        event_object=event_object,
-        existing=existing,
-        processing_result="stale_ignored",
-        idempotency_status="ignored",
-        now=now,
-    )
-    event_item = {
-        **event,
-        "PK": _billing_key(parent_id)["PK"],
-        "SK": _billing_event_sk(str(event["event_at"]), str(event["event_id"])),
-        "entity_type": BILLING_EVENT_ENTITY,
-        "parent_id": parent_id,
-    }
-    dedupe = {
-        **_provider_event_key(event_id),
-        "entity_type": BILLING_EVENT_DEDUPE_ENTITY,
-        "provider": "stripe",
-        "provider_event_id": event_id,
-        "event_type": event_type,
-        "parent_id": parent_id,
-        "created_at": now,
-        "processing_result": "stale_ignored",
-    }
-    try:
-        _transact_write(
-            [
-                {"Put": {"Item": dedupe, "ConditionExpression": "attribute_not_exists(PK)"}},
-                {"Put": {"Item": event_item, "ConditionExpression": "attribute_not_exists(PK)"}},
-            ]
-        )
-    except ClientError as exc:
-        if not _is_conditional_failure(exc):
-            raise
 
 
 def _apply_billing_transition(

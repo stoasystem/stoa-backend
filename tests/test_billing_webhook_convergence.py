@@ -5,7 +5,7 @@ import hmac
 import inspect
 import json
 import time
-from dataclasses import replace
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
@@ -130,6 +130,7 @@ def _event(
 ) -> dict[str, object]:
     return {
         "id": event_id,
+        "object": "event",
         "type": event_type,
         "created": created,
         "livemode": False,
@@ -281,10 +282,11 @@ def test_official_signature_verification_rejects_unsigned_wrong_mutated_and_old(
         settings=_settings(),
     )
     assert verified["id"] == "evt_signed"
+    wrong_signature = f"{signature[:-1]}{'0' if signature[-1] != '0' else '1'}"
 
     for candidate_payload, candidate_signature in (
         (payload, None),
-        (payload, signature.replace(signature[-1], "0")),
+        (payload, wrong_signature),
         (payload + b" ", signature),
         _signed_payload(event, timestamp=NOW_EPOCH - 301),
     ):
@@ -383,14 +385,18 @@ def test_signed_fact_orders_and_twenty_duplicates_activate_exactly_once(
     assert first["signatureVerified"] is True
     assert first["activationDisposition"] == "committed"
 
-    for _ in range(20):
-        replay = subscription_service.process_signed_billing_event(
+    def deliver(_: int) -> dict[str, Any]:
+        return subscription_service.process_signed_billing_event(
             event=event,
             settings=_settings(),
             provider=provider,
             persistence=persistence,
             command=_command(),
         )
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        replays = list(executor.map(deliver, range(20)))
+    for replay in replays:
         assert replay["factDisposition"] == "event_duplicate"
         assert replay["activationDisposition"] == "already_committed"
     assert persistence.activation_count == 1
