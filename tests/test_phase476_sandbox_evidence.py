@@ -174,7 +174,7 @@ def _run_collector(
     mutate_preflight=None,
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
     evidence_dir = tmp_path / "evidence"
-    evidence_dir.mkdir()
+    evidence_dir.mkdir(parents=True)
     preflight_path = tmp_path / "preflight.json"
     preflight = _preflight_receipt()
     if mutate_preflight is not None:
