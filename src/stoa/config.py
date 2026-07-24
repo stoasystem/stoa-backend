@@ -18,6 +18,7 @@ DOCUMENT_MAX_BYTES = 50 * 1024 * 1024
 IMAGE_MAX_EDGE = 4096
 FREE_STORAGE_BYTES = 5 * 1024 * 1024 * 1024
 PAID_STORAGE_BYTES = 15 * 1024 * 1024 * 1024
+FREE_TRIAL_DAYS = 14
 DEVELOPMENT_AUDIT_KEY = "stoa-development-authorization-audit-key-change-me"
 AUDIT_KEY_MINIMUM_BYTES = 32
 _AUDIT_PLACEHOLDER_MARKERS = (
@@ -142,6 +143,7 @@ class Settings(BaseSettings):
     image_max_bytes: int = IMAGE_MAX_BYTES
     document_max_bytes: int = DOCUMENT_MAX_BYTES
     image_max_edge: int = IMAGE_MAX_EDGE
+    free_trial_days: int = FREE_TRIAL_DAYS
     free_attachment_storage_bytes: int = FREE_STORAGE_BYTES
     paid_attachment_storage_bytes: int = PAID_STORAGE_BYTES
     immutable_audit_storage_mode: str = "disabled"
@@ -246,6 +248,34 @@ class Settings(BaseSettings):
         BillingWebOriginPolicy.from_settings(self)
         return self
 
+    @model_validator(mode="after")
+    def validate_plan_identity_configuration(self) -> "Settings":
+        if self.free_trial_days != FREE_TRIAL_DAYS:
+            raise ValueError("free_trial_days_locked")
+        if self.free_attachment_storage_bytes != FREE_STORAGE_BYTES:
+            raise ValueError("free_attachment_storage_bytes_locked")
+        if self.paid_attachment_storage_bytes != PAID_STORAGE_BYTES:
+            raise ValueError("paid_attachment_storage_bytes_locked")
+
+        api_key = self.stripe_api_key.strip()
+        if not self.is_production:
+            if api_key.startswith("sk_live_"):
+                raise ValueError("stripe_live_api_key_forbidden")
+            if self.stripe_live_charges_enabled:
+                raise ValueError("stripe_live_charges_forbidden")
+
+        paid_price_ids = (
+            self.stripe_student_price_id.strip(),
+            self.stripe_teacher_supported_price_id.strip(),
+            self.stripe_family_price_id.strip(),
+        )
+        checkout_configured = bool(api_key) or any(paid_price_ids)
+        if checkout_configured and not all(paid_price_ids):
+            raise ValueError("stripe_paid_price_ids_missing")
+        if checkout_configured and len(set(paid_price_ids)) != len(paid_price_ids):
+            raise ValueError("stripe_paid_price_ids_duplicate")
+        return self
+
     @property
     def cognito_jwks_url(self) -> str:
         issuer = self.allowed_cognito_issuers[0] if self.allowed_cognito_issuers else ""
@@ -326,8 +356,9 @@ class Settings(BaseSettings):
     # Payment provider integration (v3.9)
     stripe_api_key: str = ""
     stripe_webhook_secret: str = ""
-    stripe_standard_price_id: str = ""
-    stripe_premium_price_id: str = ""
+    stripe_student_price_id: str = ""
+    stripe_teacher_supported_price_id: str = ""
+    stripe_family_price_id: str = ""
     stripe_webhook_endpoint_url: str = ""
     stripe_checkout_web_origins: List[str] = ["http://localhost:5173"]
     stripe_checkout_result_path: str = "/billing/checkout/result"

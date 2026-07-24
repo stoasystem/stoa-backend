@@ -19,9 +19,10 @@ class PublicRegistrationRole(str, Enum):
 
 
 class SubscriptionTier(str, Enum):
-    FREE = "free"
-    STANDARD = "standard"
-    PREMIUM = "premium"
+    FREE_TRIAL = "free_trial"
+    STUDENT = "student"
+    TEACHER_SUPPORTED = "teacher_supported"
+    FAMILY = "family"
 
 
 class Grade(str, Enum):
@@ -78,5 +79,5 @@ class UserProfile(BaseModel):
     grade: Optional[Grade]
     subjects: List[str]
     language: str
-    subscription_tier: SubscriptionTier
+    subscription_tier: SubscriptionTier = SubscriptionTier.FREE_TRIAL
     created_at: datetime

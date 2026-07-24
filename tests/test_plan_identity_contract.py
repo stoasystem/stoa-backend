@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from stoa.config import FREE_STORAGE_BYTES, PAID_STORAGE_BYTES, Settings, get_settings
 from stoa.models.billing import BillingPlanId
-from stoa.models.user import SubscriptionTier
+from stoa.models.user import SubscriptionTier, UserProfile
 from stoa.routers import auth
 
 
@@ -89,6 +89,10 @@ def test_subscription_and_billing_plan_types_have_one_byte_identical_value_set()
         "FAMILY",
     }
     assert subscription_values.isdisjoint(LEGACY_PLAN_VALUES)
+    assert (
+        UserProfile.model_fields["subscription_tier"].default
+        is SubscriptionTier.FREE_TRIAL
+    )
 
 
 def test_settings_expose_exact_paid_price_identity_without_compatibility_aliases() -> None:
@@ -116,6 +120,31 @@ def test_plan_settings_lock_trial_storage_and_sandbox_defaults() -> None:
     assert settings.free_attachment_storage_bytes == FREE_STORAGE_BYTES == 5 * 1024**3
     assert settings.paid_attachment_storage_bytes == PAID_STORAGE_BYTES == 15 * 1024**3
     assert settings.stripe_live_charges_enabled is False
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "error"),
+    [
+        ("free_trial_days", 13, "free_trial_days_locked"),
+        (
+            "free_attachment_storage_bytes",
+            FREE_STORAGE_BYTES - 1,
+            "free_attachment_storage_bytes_locked",
+        ),
+        (
+            "paid_attachment_storage_bytes",
+            PAID_STORAGE_BYTES + 1,
+            "paid_attachment_storage_bytes_locked",
+        ),
+    ],
+)
+def test_trial_and_storage_contract_cannot_be_reconfigured(
+    field: str,
+    value: int,
+    error: str,
+) -> None:
+    with pytest.raises(ValidationError, match=error):
+        Settings(_env_file=None, **{field: value})
 
 
 def test_checkout_configuration_requires_three_distinct_paid_prices() -> None:

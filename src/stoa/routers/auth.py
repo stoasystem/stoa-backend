@@ -428,7 +428,9 @@ async def register(
             cognito.admin_update_user_attributes(
                 UserPoolId=settings.cognito_user_pool_id,
                 Username=body.email,
-                UserAttributes=[{"Name": "custom:subscription_tier", "Value": "free"}],
+                UserAttributes=[
+                    {"Name": "custom:subscription_tier", "Value": "free_trial"}
+                ],
             )
         except ClientError as exc:
             return public_auth_error_response(
@@ -523,7 +525,7 @@ async def register(
         "parent_name": parent_name,
         "parent_email": parent_email,
         **account_verification_service.registration_profile_fields(_utc_now_iso()),
-        "subscription_tier": "free",
+        "subscription_tier": "free_trial",
         "created_at": _utc_now_iso(),
     }
     if age is not None:
