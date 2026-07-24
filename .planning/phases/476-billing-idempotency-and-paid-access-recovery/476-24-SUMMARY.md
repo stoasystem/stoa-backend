@@ -69,6 +69,8 @@ TDD execution produced the required RED and GREEN commits in `/Users/zhdeng/stoa
 1. **Task 476-24-01 RED: Add failing checkout convergence coverage** - `e1f1412` (test)
 2. **Task 476-24-01 GREEN: Converge checkout result on authoritative status** - `7fa5e92` (feat)
 
+**Plan metadata:** `e225ae7a` (docs)
+
 ## Files Created/Modified
 
 - `../stoa-frontend/src/hooks/billing/useCheckoutCommandQuery.ts` - Finite confirming-only status polling and same-reference recheck mutation.
