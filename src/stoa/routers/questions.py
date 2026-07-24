@@ -1,10 +1,12 @@
 """Question routes — submit, retrieve, teacher escalation, feedback."""
 import logging
+import hashlib
+import json
 import secrets
 import uuid
 from collections.abc import Callable, Coroutine, Mapping
 from datetime import datetime, timedelta, timezone
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.exceptions import RequestValidationError
@@ -13,6 +15,7 @@ from fastapi.routing import APIRoute
 
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import (
+    allowance_repo,
     attachment_repo,
     question_repo,
     question_submission_repo,
@@ -43,6 +46,8 @@ from stoa.models.question import (
 from stoa.models.moderation import ModerationCaseResponse, ModerationReportRequest
 from stoa.services import (
     ai_service,
+    allowance_service,
+    bedrock_token_count_service,
     learning_profile_service,
     moderation_service,
     entitlement_service,
@@ -65,6 +70,210 @@ _FEEDBACK_SOURCE_STATES = frozenset(
     {QuestionStatus.AI_ANSWERED.value, QuestionStatus.RESOLVED.value}
 )
 _QUESTION_EFFECT_LEASE_SECONDS = 30
+
+
+class _QuestionAllowanceFailure(Exception):
+    """Stable user-facing admission/finalization failure."""
+
+    def __init__(self, code: str, message: str, action: str, http_status: int):
+        self.code = code
+        self.message = message
+        self.action = action
+        self.http_status = http_status
+        super().__init__(code)
+
+
+def _raise_question_allowance_failure(
+    error: _QuestionAllowanceFailure,
+    *,
+    correlation_id: str,
+) -> NoReturn:
+    raise HTTPException(
+        status_code=error.http_status,
+        detail={
+            "code": error.code,
+            "message": error.message,
+            "action": error.action,
+        },
+        headers={"X-Correlation-ID": correlation_id},
+    ) from error
+
+
+def _allowance_recoverable_failure() -> _QuestionAllowanceFailure:
+    return _QuestionAllowanceFailure(
+        "allowance_finalization_recoverable",
+        "This answer is safely stored while token accounting finishes. Retry this question.",
+        "retry_same_submission",
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+    )
+
+
+def _question_allowance_coordinates(
+    command: Mapping[str, object],
+    question: Mapping[str, object],
+    *,
+    observed_at: datetime,
+) -> tuple[str, str, int, int]:
+    entitlement = question.get("entitlement")
+    if not isinstance(entitlement, Mapping):
+        entitlement = {}
+    plan_id = str(
+        entitlement.get("effectivePlan")
+        or entitlement.get("effective_plan")
+        or "free_trial"
+    )
+    raw_version = (
+        entitlement.get("allowanceVersion")
+        or entitlement.get("allowance_version")
+        or entitlement.get("planVersion")
+        or 1
+    )
+    if type(raw_version) is not int or raw_version < 1:
+        raise _allowance_recoverable_failure()
+    grant_id = str(
+        entitlement.get("grantId")
+        or entitlement.get("grant_id")
+        or entitlement.get("source")
+        or "student-local"
+    )
+    base_effect_id = question_submission_repo.question_effect_identity(
+        command,
+        question_submission_repo.QuestionEffectKind.AI,
+    )
+    week = allowance_service.zurich_week(observed_at)
+    identity_payload = json.dumps(
+        {
+            "command_effect_id": base_effect_id,
+            "command_id": str(command.get("command_id") or ""),
+            "plan_id": plan_id,
+            "grant_id": grant_id,
+            "allowance_version": raw_version,
+            "week": f"{week.iso_year:04d}-W{week.iso_week:02d}",
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    allowance_effect_id = hashlib.sha256(
+        b"stoa.question.allowance-effect.v1\x00" + identity_payload
+    ).hexdigest()
+    generation = command.get("account_fence_generation")
+    if type(generation) is not int or generation < 1:
+        raise _allowance_recoverable_failure()
+    return allowance_effect_id, plan_id, raw_version, generation
+
+
+class _QuestionAllowanceBedrockClient:
+    """Count, reserve, and persist the Phase 475 intent before InvokeModel."""
+
+    def __init__(
+        self,
+        command: Mapping[str, object],
+        question: Mapping[str, object],
+        *,
+        observed_at: datetime,
+    ) -> None:
+        (
+            self.allowance_effect_id,
+            self.plan_id,
+            self.allowance_version,
+            self.account_fence_generation,
+        ) = _question_allowance_coordinates(
+            command,
+            question,
+            observed_at=observed_at,
+        )
+        self._command = dict(command)
+        self._question = dict(question)
+        self._observed_at = observed_at
+        self.effect: dict[str, object] | None = None
+        self._runtime_client: object | None = None
+
+    def invoke_model(self, **kwargs: object) -> object:
+        model_id = kwargs.get("modelId")
+        request_body = kwargs.get("body")
+        if not isinstance(model_id, str) or not isinstance(request_body, str):
+            raise bedrock_token_count_service.ProviderTokenCountUnavailable()
+        runtime_client = self._runtime_client or ai_service.boto3.client(
+            "bedrock-runtime",
+            region_name=ai_service.settings.aws_region,
+        )
+        self._runtime_client = runtime_client
+        try:
+            foundation_model_id = (
+                bedrock_token_count_service.foundation_model_id_for_profile(
+                    model_id
+                )
+            )
+            inference_profile_id: str | None = model_id
+        except bedrock_token_count_service.ProviderTokenCountUnavailable:
+            foundation_model_id = model_id
+            inference_profile_id = None
+        try:
+            input_tokens = bedrock_token_count_service.count_input_tokens(
+                request_body,
+                model_id=foundation_model_id,
+                inference_profile_id=inference_profile_id,
+                region=ai_service.settings.aws_region,
+                runtime_client=runtime_client,
+            )
+            parsed_body = json.loads(request_body)
+            max_output_tokens = parsed_body.get("max_tokens")
+            if (
+                type(max_output_tokens) is not int
+                or max_output_tokens < 1
+            ):
+                raise bedrock_token_count_service.ProviderTokenCountUnavailable()
+        except (
+            bedrock_token_count_service.ProviderTokenCountUnavailable,
+            json.JSONDecodeError,
+        ):
+            raise _QuestionAllowanceFailure(
+                "provider_token_count_unavailable",
+                "Token admission is temporarily unavailable. Retry this question.",
+                "retry_same_submission",
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+            ) from None
+
+        reservation = allowance_service.reserve_token_allowance(
+            beneficiary_id=str(self._command["student_id"]),
+            effect_id=self.allowance_effect_id,
+            plan_id=self.plan_id,
+            allowance_version=self.allowance_version,
+            input_tokens=input_tokens,
+            max_output_tokens=max_output_tokens,
+            observed_at=self._observed_at,
+            account_fence_generation=self.account_fence_generation,
+        )
+        if reservation.disposition is allowance_repo.ReservationDisposition.LIMIT_EXCEEDED:
+            raise _QuestionAllowanceFailure(
+                "allowance_exhausted",
+                "Weekly AI token allowance is exhausted.",
+                "view_allowance",
+                status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        if reservation.disposition not in {
+            allowance_repo.ReservationDisposition.ADMITTED,
+            allowance_repo.ReservationDisposition.REPLAYED,
+        }:
+            raise _allowance_recoverable_failure()
+
+        if self.effect is None:
+            intent = _begin_owned_question_effect(
+                self._command,
+                self._question,
+                question_submission_repo.QuestionEffectKind.AI,
+            )
+            if (
+                intent.disposition
+                is not question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER
+                or intent.effect is None
+            ):
+                raise _allowance_recoverable_failure()
+            self.effect = dict(intent.effect)
+        invoke_model = getattr(runtime_client, "invoke_model", None)
+        if not callable(invoke_model):
+            raise RuntimeError("Bedrock invocation dependency unavailable")
+        return invoke_model(**kwargs)
 
 
 class _QuestionSubmissionRoute(APIRoute):
@@ -478,6 +687,14 @@ def _recover_question_effect_receipts(
                 return current_question
             current_command = dict(refreshed.command)
             current_question = dict(refreshed.question)
+            if (
+                kind is question_submission_repo.QuestionEffectKind.AI
+                and not _finalize_question_allowance(current_question)
+            ):
+                _raise_question_allowance_failure(
+                    _allowance_recoverable_failure(),
+                    correlation_id=correlation_id,
+                )
             continue
         if (
             observed.disposition
@@ -485,10 +702,17 @@ def _recover_question_effect_receipts(
             or observed.effect is None
         ):
             return _persisted_question_or_snapshot(current_question, current_command)
-        completion = question_submission_repo.complete_question_effect(
-            observed.effect,
-            completed_at=datetime.now(timezone.utc).isoformat(),
-        )
+        try:
+            completion = (
+                _complete_ready_ai_effect(observed)
+                if kind is question_submission_repo.QuestionEffectKind.AI
+                else _complete_ready_effect(observed)
+            )
+        except _QuestionAllowanceFailure as error:
+            _raise_question_allowance_failure(
+                error,
+                correlation_id=correlation_id,
+            )
         if completion.disposition not in _EFFECT_COMPLETION_SUCCEEDED:
             return _persisted_question_or_snapshot(current_question, current_command)
         if completion.question is not None:
@@ -511,6 +735,175 @@ def _complete_ready_effect(
         receipt.effect,
         completed_at=datetime.now(timezone.utc).isoformat(),
     )
+
+
+_QUESTION_ALLOWANCE_METADATA_FIELDS = frozenset(
+    {
+        "allowance_effect_id",
+        "provider_usage_evidence_id",
+        "allowance_finalization_status",
+        "provider_request_id_digest",
+        "provider_model_id_digest",
+        "provider_input_tokens",
+        "provider_output_tokens",
+    }
+)
+
+
+def _question_allowance_metadata(
+    ai_response: object,
+) -> dict[str, object] | None:
+    if not isinstance(ai_response, Mapping):
+        return None
+    if not _QUESTION_ALLOWANCE_METADATA_FIELDS.issubset(ai_response):
+        return None
+    metadata = {
+        field: ai_response[field] for field in _QUESTION_ALLOWANCE_METADATA_FIELDS
+    }
+    text_fields = (
+        "allowance_effect_id",
+        "provider_usage_evidence_id",
+        "allowance_finalization_status",
+        "provider_request_id_digest",
+        "provider_model_id_digest",
+    )
+    if any(
+        not isinstance(metadata[field], str) or not str(metadata[field])
+        for field in text_fields
+    ):
+        return None
+    if (
+        type(metadata["provider_input_tokens"]) is not int
+        or int(metadata["provider_input_tokens"]) < 0
+        or type(metadata["provider_output_tokens"]) is not int
+        or int(metadata["provider_output_tokens"]) < 0
+    ):
+        return None
+    return metadata
+
+
+def _with_question_allowance_metadata(
+    provider_result: ai_service.AIProviderResult[dict[str, object]],
+    *,
+    allowance_effect_id: str,
+) -> dict[str, object]:
+    response = dict(provider_result.content)
+    response.update(
+        {
+            "allowance_effect_id": allowance_effect_id,
+            "provider_usage_evidence_id": provider_result.usage.evidence_id,
+            "allowance_finalization_status": "durable_result_boundary",
+            "provider_request_id_digest": (
+                provider_result.usage.provider_request_id_digest
+            ),
+            "provider_model_id_digest": provider_result.usage.model_id_digest,
+            "provider_input_tokens": provider_result.usage.input_tokens,
+            "provider_output_tokens": provider_result.usage.output_tokens,
+        }
+    )
+    return response
+
+
+def _observe_question_provider_usage(
+    *,
+    beneficiary_id: str,
+    ai_response: object,
+) -> bool:
+    metadata = _question_allowance_metadata(ai_response)
+    if metadata is None:
+        return True
+    observed = allowance_service.record_provider_usage(
+        beneficiary_id=beneficiary_id,
+        effect_id=str(metadata["allowance_effect_id"]),
+        provider_request_id=str(metadata["provider_request_id_digest"]),
+        model_id=str(metadata["provider_model_id_digest"]),
+        input_tokens=cast(int, metadata["provider_input_tokens"]),
+        output_tokens=cast(int, metadata["provider_output_tokens"]),
+    )
+    return (
+        observed.disposition
+        in {
+            allowance_repo.ProviderUsageDisposition.RECORDED,
+            allowance_repo.ProviderUsageDisposition.REPLAYED,
+        }
+        and observed.evidence is not None
+    )
+
+
+def _finalize_question_allowance(
+    question: Mapping[str, object],
+) -> bool:
+    metadata = _question_allowance_metadata(question.get("ai_response"))
+    if metadata is None:
+        return True
+    finalized = allowance_service.finalize_token_allowance(
+        beneficiary_id=str(question["student_id"]),
+        effect_id=str(metadata["allowance_effect_id"]),
+        technical_validation_passed=True,
+        safety_check_passed=True,
+        durable_result_stored=True,
+        stable_replay_readable=True,
+    )
+    return (
+        finalized.disposition
+        in {
+            allowance_repo.FinalizationDisposition.FINALIZED,
+            allowance_repo.FinalizationDisposition.REPLAYED,
+        }
+        and finalized.finalization is not None
+    )
+
+
+def _restore_question_allowance(
+    *,
+    beneficiary_id: str,
+    ai_response: object,
+) -> bool:
+    metadata = _question_allowance_metadata(ai_response)
+    if metadata is None:
+        return True
+    restored = allowance_service.restore_user_allowance(
+        beneficiary_id=beneficiary_id,
+        effect_id=str(metadata["allowance_effect_id"]),
+        technical_validation_passed=True,
+        safety_check_passed=True,
+        durable_result_stored=False,
+        stable_replay_readable=False,
+    )
+    return (
+        restored.disposition
+        in {
+            allowance_repo.FinalizationDisposition.RESTORED,
+            allowance_repo.FinalizationDisposition.REPLAYED,
+        }
+        and restored.finalization is not None
+    )
+
+
+def _complete_ready_ai_effect(
+    receipt: question_submission_repo.QuestionEffectResult,
+) -> question_submission_repo.QuestionEffectResult:
+    effect = receipt.effect
+    effect_result = effect.get("result") if isinstance(effect, Mapping) else None
+    ai_response = (
+        effect_result.get("ai_response")
+        if isinstance(effect_result, Mapping)
+        else None
+    )
+    if _question_allowance_metadata(ai_response) is not None:
+        if effect is None or not effect.get("student_id"):
+            return receipt
+        if not _observe_question_provider_usage(
+            beneficiary_id=str(effect["student_id"]),
+            ai_response=ai_response,
+        ):
+            return receipt
+    completion = _complete_ready_effect(receipt)
+    if completion.disposition in _EFFECT_COMPLETION_SUCCEEDED:
+        question = completion.question
+        if question is not None and not _finalize_question_allowance(question):
+            raise _allowance_recoverable_failure()
+    return completion
 
 
 def _begin_owned_question_effect(
@@ -560,15 +953,33 @@ def _recover_missing_question_effect(
             return None
         prepared = None
 
-    intent = _begin_owned_question_effect(command, question, kind)
-    if (
-        intent.disposition
-        is not question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER
-        or intent.effect is None
-    ):
-        return intent
+    intent: question_submission_repo.QuestionEffectResult | None = None
+    allowance_client: _QuestionAllowanceBedrockClient | None = None
+    if kind is question_submission_repo.QuestionEffectKind.OCR:
+        intent = _begin_owned_question_effect(command, question, kind)
+        if (
+            intent.disposition
+            is not question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER
+            or intent.effect is None
+        ):
+            return intent
+    else:
+        allowance_client = _QuestionAllowanceBedrockClient(
+            command,
+            question,
+            observed_at=datetime.now(timezone.utc),
+        )
+        intent = _begin_owned_question_effect(command, question, kind)
+        if (
+            intent.disposition
+            is not question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER
+            or intent.effect is None
+        ):
+            return intent
+        allowance_client.effect = dict(intent.effect)
     try:
         if kind is question_submission_repo.QuestionEffectKind.OCR:
+            assert intent is not None
             ai_content, ocr_metadata, ocr_text = _build_question_content(
                 body, settings, prepared
             )
@@ -578,6 +989,7 @@ def _recover_missing_question_effect(
                 "ocr_metadata": ocr_metadata,
             }
         else:
+            assert allowance_client is not None
             ai_content = body.corrected_text.strip() if body.corrected_text else body.content
             ocr_text = str(question.get("ocr_text") or "")
             if ocr_text and body.corrected_text is None:
@@ -586,13 +998,24 @@ def _recover_missing_question_effect(
                     if body.content
                     else ocr_text
                 )
-            ai_response = ai_service.get_ai_answer(
+            ai_provider_result = ai_service.get_ai_answer(
                 content=ai_content,
                 subject=subject,
                 grade=grade,
                 language=language,
                 correlation_id=correlation_id,
+                effect_id=allowance_client.allowance_effect_id,
+                client=allowance_client,
             )
+            if isinstance(ai_provider_result, ai_service.AIProviderResult):
+                ai_response = _with_question_allowance_metadata(
+                    ai_provider_result,
+                    allowance_effect_id=allowance_client.allowance_effect_id,
+                )
+            elif isinstance(ai_provider_result, Mapping):
+                ai_response = dict(ai_provider_result)
+            else:
+                raise ValueError("AI provider result is invalid")
             try:
                 topic_seeds = learning_profile_service.topic_seeds_from_ai_response(
                     subject=subject,
@@ -607,7 +1030,35 @@ def _recover_missing_question_effect(
                 "knowledge_points": ai_response.get("knowledge_points", []),
                 "topic_seeds": topic_seeds,
             }
+            if allowance_client.effect is None:
+                intent = _begin_owned_question_effect(command, question, kind)
+                if (
+                    intent.disposition
+                    is not question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER
+                    or intent.effect is None
+                ):
+                    return intent
+            else:
+                intent = question_submission_repo.QuestionEffectResult(
+                    question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER,
+                    effect=allowance_client.effect,
+                )
+    except _QuestionAllowanceFailure as error:
+        _raise_question_allowance_failure(
+            error,
+            correlation_id=correlation_id,
+        )
     except Exception as error:
+        if intent is None and allowance_client is not None:
+            if allowance_client.effect is not None:
+                intent = question_submission_repo.QuestionEffectResult(
+                    question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER,
+                    effect=allowance_client.effect,
+                )
+            else:
+                intent = _begin_owned_question_effect(command, question, kind)
+        if intent.effect is None:
+            return intent
         terminal = (
             kind is question_submission_repo.QuestionEffectKind.OCR
             and isinstance(error, ocr_service.OcrAttachmentFailure)
@@ -630,6 +1081,14 @@ def _recover_missing_question_effect(
             intent.effect,
             observed_at=datetime.now(timezone.utc).isoformat(),
         )
+    assert intent is not None and intent.effect is not None
+    provider_usage_ready = (
+        kind is not question_submission_repo.QuestionEffectKind.AI
+        or _observe_question_provider_usage(
+            beneficiary_id=str(intent.effect["student_id"]),
+            ai_response=provider_result.get("ai_response"),
+        )
+    )
     try:
         receipt = question_submission_repo.record_question_effect_result(
             intent.effect,
@@ -637,13 +1096,31 @@ def _recover_missing_question_effect(
             recorded_at=datetime.now(timezone.utc).isoformat(),
         )
     except ValueError:
+        if (
+            kind is question_submission_repo.QuestionEffectKind.AI
+            and (
+                not provider_usage_ready
+                or not _restore_question_allowance(
+                    beneficiary_id=str(intent.effect["student_id"]),
+                    ai_response=provider_result.get("ai_response"),
+                )
+            )
+        ):
+            _raise_question_allowance_failure(
+                _allowance_recoverable_failure(),
+                correlation_id=correlation_id,
+            )
         receipt = question_submission_repo.mark_question_effect_terminal(
             intent.effect,
-            failure_code="invalid_provider_result",
+            failure_code="provider_rejected",
             failed_at=datetime.now(timezone.utc).isoformat(),
         )
         _promote_terminal_effect(receipt, correlation_id=correlation_id)
         return receipt
+    if kind is question_submission_repo.QuestionEffectKind.AI:
+        if not provider_usage_ready:
+            return receipt
+        return _complete_ready_ai_effect(receipt)
     return _complete_ready_effect(receipt)
 
 
@@ -998,24 +1475,50 @@ async def submit_question(
         if completion.command is not None:
             command = dict(completion.command)
 
-    ai_intent = _begin_owned_question_effect(
-        command, item, question_submission_repo.QuestionEffectKind.AI
-    )
-    if (
-        ai_intent.disposition
-        is not question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER
-        or ai_intent.effect is None
-    ):
-        return _question_response(_persisted_question_or_snapshot(item, command))
-
     try:
-        ai_resp = ai_service.get_ai_answer(
+        allowance_client = _QuestionAllowanceBedrockClient(
+            command,
+            item,
+            observed_at=datetime.now(timezone.utc),
+        )
+        ai_intent = _begin_owned_question_effect(
+            command,
+            item,
+            question_submission_repo.QuestionEffectKind.AI,
+        )
+        if (
+            ai_intent.disposition
+            is not question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER
+            or ai_intent.effect is None
+        ):
+            return _question_response(
+                _persisted_question_or_snapshot(item, command)
+            )
+        allowance_client.effect = dict(ai_intent.effect)
+    except _QuestionAllowanceFailure as error:
+        _raise_question_allowance_failure(
+            error,
+            correlation_id=correlation_id,
+        )
+    try:
+        ai_provider_result = ai_service.get_ai_answer(
             content=ai_content,
             subject=subject,
             grade=grade,
             language=language,
             correlation_id=correlation_id,
+            effect_id=allowance_client.allowance_effect_id,
+            client=allowance_client,
         )
+        if isinstance(ai_provider_result, ai_service.AIProviderResult):
+            ai_resp = _with_question_allowance_metadata(
+                ai_provider_result,
+                allowance_effect_id=allowance_client.allowance_effect_id,
+            )
+        elif isinstance(ai_provider_result, Mapping):
+            ai_resp = dict(ai_provider_result)
+        else:
+            raise ValueError("AI provider result is invalid")
         try:
             topic_seeds = learning_profile_service.topic_seeds_from_ai_response(
                 subject=subject,
@@ -1025,29 +1528,59 @@ async def submit_question(
             )
         except Exception:
             topic_seeds = []
-        ai_receipt = question_submission_repo.record_question_effect_result(
-            ai_intent.effect,
-            {
-                "ai_response": ai_resp,
-                "knowledge_points": ai_resp.get("knowledge_points", []),
-                "topic_seeds": topic_seeds,
-            },
-            recorded_at=datetime.now(timezone.utc).isoformat(),
+        if allowance_client.effect is None:
+            legacy_intent = _begin_owned_question_effect(
+                command,
+                item,
+                question_submission_repo.QuestionEffectKind.AI,
+            )
+            if (
+                legacy_intent.disposition
+                is not question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER
+                or legacy_intent.effect is None
+            ):
+                return _question_response(
+                    _persisted_question_or_snapshot(item, command)
+                )
+            ai_effect = dict(legacy_intent.effect)
+        else:
+            ai_effect = dict(allowance_client.effect)
+    except _QuestionAllowanceFailure as error:
+        _raise_question_allowance_failure(
+            error,
+            correlation_id=correlation_id,
         )
     except Exception as exc:
+        if allowance_client.effect is None:
+            legacy_intent = _begin_owned_question_effect(
+                command,
+                item,
+                question_submission_repo.QuestionEffectKind.AI,
+            )
+            ai_effect = (
+                dict(legacy_intent.effect)
+                if legacy_intent.effect is not None
+                else None
+            )
+        else:
+            ai_effect = dict(allowance_client.effect)
+        if ai_effect is None:
+            return _question_response(
+                _persisted_question_or_snapshot(item, command)
+            )
         terminal = (
             isinstance(exc, ai_service.AIInvocationFailure)
             and exc.category == "response_cleanup_failed"
         )
         if terminal:
             terminal_receipt = question_submission_repo.mark_question_effect_terminal(
-                ai_intent.effect,
+                ai_effect,
                 failure_code="provider_rejected",
                 failed_at=datetime.now(timezone.utc).isoformat(),
             )
         else:
             question_submission_repo.mark_question_effect_outcome_unknown(
-                ai_intent.effect,
+                ai_effect,
                 observed_at=datetime.now(timezone.utc).isoformat(),
             )
         emit_private_event(
@@ -1064,7 +1597,53 @@ async def submit_question(
                 correlation_id=correlation_id,
             )
         return _question_response(_persisted_question_or_snapshot(item, command))
-    ai_completion = _complete_ready_effect(ai_receipt)
+
+    ai_result = {
+        "ai_response": ai_resp,
+        "knowledge_points": ai_resp.get("knowledge_points", []),
+        "topic_seeds": topic_seeds,
+    }
+    provider_usage_ready = _observe_question_provider_usage(
+        beneficiary_id=student_id,
+        ai_response=ai_resp,
+    )
+    try:
+        ai_receipt = question_submission_repo.record_question_effect_result(
+            ai_effect,
+            ai_result,
+            recorded_at=datetime.now(timezone.utc).isoformat(),
+        )
+    except ValueError:
+        if (
+            not provider_usage_ready
+            or not _restore_question_allowance(
+                beneficiary_id=student_id,
+                ai_response=ai_resp,
+            )
+        ):
+            _raise_question_allowance_failure(
+                _allowance_recoverable_failure(),
+                correlation_id=correlation_id,
+            )
+        terminal_receipt = question_submission_repo.mark_question_effect_terminal(
+            ai_effect,
+            failure_code="provider_rejected",
+            failed_at=datetime.now(timezone.utc).isoformat(),
+        )
+        _promote_terminal_effect(
+            terminal_receipt,
+            correlation_id=correlation_id,
+        )
+        return _question_response(_persisted_question_or_snapshot(item, command))
+    if not provider_usage_ready:
+        return _question_response(_persisted_question_or_snapshot(item, command))
+    try:
+        ai_completion = _complete_ready_ai_effect(ai_receipt)
+    except _QuestionAllowanceFailure as error:
+        _raise_question_allowance_failure(
+            error,
+            correlation_id=correlation_id,
+        )
     if ai_completion.disposition in _EFFECT_COMPLETION_SUCCEEDED:
         if ai_completion.question is not None:
             item = dict(ai_completion.question)
