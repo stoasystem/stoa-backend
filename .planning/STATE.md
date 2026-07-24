@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-11-PLAN.md
-last_updated: "2026-07-24T12:45:21.113Z"
+stopped_at: Completed 476-17-PLAN.md
+last_updated: "2026-07-24T13:05:25.515Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 153
+  completed_plans: 154
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 14 of 29
+Plan: 15 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T12:45:21.105Z
-**Stopped At:** Completed 476-11-PLAN.md
+**Last Date:** 2026-07-24T13:05:25.507Z
+**Stopped At:** Completed 476-17-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -260,6 +260,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P16 | 46min | 1 tasks | 5 files |
 | Phase 476 P09 | 10min | 1 tasks | 6 files |
 | Phase 476 P11 | 15min | 1 tasks | 5 files |
+| Phase 476 P17 | 16min | 1 tasks | 2 files |
 
 ## Decisions
 
@@ -589,3 +590,6 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Verify untouched Stripe webhook bytes with Webhook.construct_event before durable fact registration. — Authenticity must precede every billing persistence effect.
 - [Phase 476]: Paid access requires the exact sandbox first invoice paid plus matching current active subscription/customer/Price/command/beneficiaries. — Checkout redirects and either provider fact alone are non-authoritative.
 - [Phase 476]: Bind provider customer, subscription, and initial invoice to checkout commands as domain-separated digests before fact publication. — Preserve immutable provider binding without persisting full provider identifiers.
+- [Phase 476]: Question allowance identities bind the Phase 475 AI effect to persisted plan, grant, version, and Zurich week.
+- [Phase 476]: Question CountTokens and InvokeModel share the exact request body; actual provider counts finalize only after durable replay.
+- [Phase 476]: Terminal result rejection restores user allowance; timeout and ambiguous storage remain reserved with provider cost retained.
