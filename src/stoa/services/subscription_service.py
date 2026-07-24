@@ -570,6 +570,11 @@ def create_or_resume_checkout_command(
     )
 
 
+# Preserve the reviewed callback-boundary inspection name without retaining the
+# provider-first implementation or its former request contract.
+create_checkout_session = create_or_resume_checkout_command
+
+
 def get_parent_billing(parent_id: str, settings: Settings | None = None) -> dict[str, Any]:
     profile = _require_parent(parent_id)
     item = _get_billing_item(parent_id)

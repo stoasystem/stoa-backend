@@ -239,6 +239,11 @@ class ParentCheckoutCommandCreate(BaseModel):
     )
 
 
+# Source-compatibility name for callback-boundary checks. The active model is the
+# durable command contract above; requestedTier and browser callback fields fail.
+ParentCheckoutSessionCreate = ParentCheckoutCommandCreate
+
+
 class ParentCheckoutCommandResponse(BaseModel):
     checkoutRef: str
     commandState: str
