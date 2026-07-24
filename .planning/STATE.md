@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 476-06-PLAN.md
-last_updated: "2026-07-24T10:00:34.675Z"
+stopped_at: Completed 476-15-PLAN.md
+last_updated: "2026-07-24T10:16:51.139Z"
 last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 230
-  completed_plans: 146
+  completed_plans: 147
   percent: 30
 ---
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 7 of 29
+Plan: 8 of 29
 Status: Ready to execute
 Last activity: 2026-07-24 -- Phase 476 execution started
 
@@ -107,8 +107,8 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Session
 
-**Last Date:** 2026-07-24T10:00:34.668Z
-**Stopped At:** Completed 476-06-PLAN.md
+**Last Date:** 2026-07-24T10:16:51.133Z
+**Stopped At:** Completed 476-15-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -253,6 +253,7 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 | Phase 476 P10 | 27min | 1 tasks | 2 files |
 | Phase 476 P04 | 16min | 1 tasks | 4 files |
 | Phase 476 P06 | 9min | 1 tasks | 3 files |
+| Phase 476 P15 | 8min | 1 tasks | 3 files |
 
 ## Decisions
 
@@ -560,3 +561,5 @@ Last activity: 2026-07-24 -- Phase 476 execution started
 - [Phase 476]: Parent checkout accepts one bounded Idempotency-Key plus a paid plan and explicit beneficiaries; browser callback authority and free_trial are structurally excluded. — The Web must resume one exact purchase intent without letting browser navigation select payment authority.
 - [Phase 476]: Stripe receives only the opaque checkout reference and durable digest key; registration and provider-create claim persist before Session.create and attachment follows only a validated test response. — Command-first ordering and one stable provider key prevent duplicate payable Sessions after retries or response loss.
 - [Phase 476]: Checkout beneficiary scope requires active parent/student profiles plus exact active forward and reverse relationship rows before any command or provider effect. — Paid access must never be purchased for an inactive, stale, or unrelated student relationship.
+- [Phase 476]: Key weekly token counters by beneficiary and Zurich week so monotonic plan upgrades preserve already used and reserved tokens. — Prevents resets and stale entitlement regressions during in-week upgrades.
+- [Phase 476]: Retain immutable redacted provider-cost evidence independently while finalization or restoration changes only user allowance debit. — Preserves real provider cost and retry auditability without charging an undelivered result.
