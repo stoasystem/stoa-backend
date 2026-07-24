@@ -17,6 +17,7 @@ from stoa.db.repositories.checkout_command_repo import (
 )
 from stoa.models.billing import CheckoutCommandState, CheckoutIntent, PurchasablePlanId
 from stoa.services import subscription_service
+from tests.test_checkout_command_repo import AtomicCheckoutTable
 
 
 PARENT_ID = "parent-supersession-canary"
@@ -201,6 +202,195 @@ class SupersessionHarness:
             )
 
 
+class SupersessionAtomicTable(AtomicCheckoutTable):
+    """Extend the checkout repository fake with supersession transaction shapes."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.commit_then_timeout_supersede = False
+
+    def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+        update_values = [
+            operation["Update"]["ExpressionAttributeValues"]
+            for operation in operations
+            if "Update" in operation
+        ]
+        if not any(
+            any(
+                marker in values
+                for marker in (
+                    ":expire_claimed",
+                    ":effect_status",
+                    ":new_command_id",
+                )
+            )
+            for values in update_values
+        ):
+            super().transact_account_deletion(operations)
+            return
+        with self.lock:
+            snapshot = {key: dict(value) for key, value in self.rows.items()}
+            for operation in operations:
+                if "ConditionCheck" in operation:
+                    check = operation["ConditionCheck"]
+                    key = (check["Key"]["PK"], check["Key"]["SK"])
+                    current = snapshot.get(key)
+                    values = check["ExpressionAttributeValues"]
+                    if (
+                        current is None
+                        or current.get("status") != values[":active"]
+                        or current.get("generation") != values[":generation"]
+                    ):
+                        raise RuntimeError("conditional conflict")
+                    continue
+                if "Update" in operation:
+                    update = operation["Update"]
+                    key = (update["Key"]["PK"], update["Key"]["SK"])
+                    current = snapshot.get(key)
+                    values = update["ExpressionAttributeValues"]
+                    if current is None:
+                        raise RuntimeError("conditional conflict")
+                    if ":expire_claimed" in values:
+                        if (
+                            current.get("command_version")
+                            != values[":expected_version"]
+                            or current.get("provider_effect_status")
+                            != values[":session_attached"]
+                            or current.get("expiration_effect_status", "not_started")
+                            != values[":not_started"]
+                        ):
+                            raise RuntimeError("conditional conflict")
+                        current.update(
+                            expiration_effect_status=values[":expire_claimed"],
+                            command_version=values[":next_version"],
+                            updated_at=values[":updated_at"],
+                        )
+                    elif ":effect_status" in values:
+                        if (
+                            current.get("command_version")
+                            != values[":expected_version"]
+                            or current.get("expiration_effect_status", "not_started")
+                            != values[":expected_effect_status"]
+                        ):
+                            raise RuntimeError("conditional conflict")
+                        current.update(
+                            expiration_effect_status=values[":effect_status"],
+                            command_state=values[":command_state"],
+                            command_version=values[":next_version"],
+                            updated_at=values[":updated_at"],
+                        )
+                    elif ":old_command_id" in values and key[1] == "COMMAND":
+                        if (
+                            current.get("command_version")
+                            != values[":expected_version"]
+                            or current.get("expiration_effect_status")
+                            != values[":nonpayable"]
+                            or "superseded_by_command_id" in current
+                        ):
+                            raise RuntimeError("conditional conflict")
+                        current.update(
+                            superseded_by_command_id=values[":new_command_id"],
+                            superseded_at=values[":superseded_at"],
+                            command_version=values[":next_version"],
+                            updated_at=values[":superseded_at"],
+                        )
+                    else:
+                        if (
+                            current.get("command_id") != values[":old_command_id"]
+                            or current.get("command_version")
+                            != values[":expected_old_version"]
+                        ):
+                            raise RuntimeError("conditional conflict")
+                        current.update(
+                            command_id=values[":new_command_id"],
+                            command_version=values[":new_version"],
+                            intent_fingerprint=values[":new_fingerprint"],
+                            created_at=values[":created_at"],
+                        )
+                    snapshot[key] = current
+                    continue
+                if "Put" in operation:
+                    item = dict(operation["Put"]["Item"])
+                    key = (str(item["PK"]), str(item["SK"]))
+                    if key in snapshot:
+                        raise RuntimeError("conditional conflict")
+                    snapshot[key] = item
+                    continue
+                raise AssertionError(f"unexpected operation: {operation}")
+            self.rows = snapshot
+            self.transactions.append(operations)
+            if self.commit_then_timeout_supersede and len(update_values) == 2:
+                self.commit_then_timeout_supersede = False
+                raise RuntimeError("response lost after supersession commit")
+
+
+def _register_attached_old(
+    table: SupersessionAtomicTable,
+) -> dict[str, object]:
+    old_intent = CheckoutIntent(
+        commandId=checkout_command_repo.checkout_command_id(
+            PARENT_ID,
+            "old-checkout-key",
+        ),
+        parentId=PARENT_ID,
+        idempotencyKey="old-checkout-key",
+        planId=PurchasablePlanId.STUDENT,
+        beneficiaryIds=(STUDENT_ID,),
+        priceCatalogVersion=1,
+        planVersion=1,
+        createdAt=datetime.fromisoformat(NOW),
+    )
+    table.add_active_fence(PARENT_ID, generation=7)
+    registered = checkout_command_repo.register_checkout_command(
+        old_intent,
+        price_id="price_test_student",
+        environment="test",
+        now_iso=NOW,
+        table=table,
+    )
+    claimed = checkout_command_repo.claim_provider_create(
+        registered.command,
+        lease_owner="old-session-worker",
+        now_epoch=100,
+        lease_expires_at=120,
+        now_iso=NOW,
+        table=table,
+    )
+    assert claimed.provider_claim is not None
+    attached = checkout_command_repo.attach_provider_session(
+        claimed.provider_claim,
+        provider_session_id=OLD_SESSION_ID,
+        provider_session_url=f"https://checkout.stripe.com/c/pay/{OLD_SESSION_ID}",
+        now_iso=NOW,
+        table=table,
+    )
+    assert attached.command is not None
+    return attached.command
+
+
+def _prove_old_nonpayable(
+    table: SupersessionAtomicTable,
+    old_command: dict[str, object],
+) -> dict[str, object]:
+    claimed = checkout_command_repo.claim_session_expiration(
+        old_command,
+        now_iso=NOW,
+        table=table,
+    )
+    assert (
+        claimed.disposition
+        is checkout_command_repo.CheckoutSupersessionDisposition.EXPIRATION_CLAIMED
+    )
+    recorded = checkout_command_repo.record_session_expiration(
+        claimed.command,
+        provider_session_status="expired",
+        now_iso=NOW,
+        table=table,
+    )
+    assert recorded.command is not None
+    return recorded.command
+
+
 def _install_active_scope(monkeypatch: pytest.MonkeyPatch) -> None:
     profiles = {
         PARENT_ID: {
@@ -264,6 +454,105 @@ def test_repository_exports_version_conditioned_supersession_contract() -> None:
         "supersede_checkout_command",
     }
     assert expected <= set(checkout_command_repo.__all__)
+
+
+@pytest.mark.parametrize("commit_then_timeout", [False, True])
+def test_repository_atomically_transfers_guard_and_replays_committed_timeout(
+    commit_then_timeout: bool,
+) -> None:
+    table = SupersessionAtomicTable()
+    old = _prove_old_nonpayable(table, _register_attached_old(table))
+    table.commit_then_timeout_supersede = commit_then_timeout
+
+    result = checkout_command_repo.supersede_checkout_command(
+        old,
+        _new_intent(),
+        price_id="price_test_teacher_supported",
+        environment="test",
+        now_iso=NOW,
+        table=table,
+    )
+
+    assert (
+        result.disposition
+        is checkout_command_repo.CheckoutSupersessionDisposition.SUPERSEDED
+    )
+    assert result.command is not None
+    new_command_id = str(result.command["command_id"])
+    guard = table.rows[(f"CHECKOUT_OPEN#{PARENT_ID}", "GUARD")]
+    assert guard["command_id"] == new_command_id
+    old_row = table.rows[
+        (f"CHECKOUT_COMMAND#{old['command_id']}", "COMMAND")
+    ]
+    assert old_row["superseded_by_command_id"] == new_command_id
+    assert old_row["expiration_effect_status"] == "nonpayable_proven"
+    assert len(
+        [
+            row
+            for row in table.rows.values()
+            if row.get("entity_type") == "checkout_open_guard"
+        ]
+    ) == 1
+    replay = checkout_command_repo.supersede_checkout_command(
+        old,
+        _new_intent(),
+        price_id="price_test_teacher_supported",
+        environment="test",
+        now_iso=NOW,
+        table=table,
+    )
+    assert (
+        replay.disposition
+        is checkout_command_repo.CheckoutSupersessionDisposition.SUPERSEDED
+    )
+    assert replay.command == result.command
+
+
+def test_provider_retrieve_and_expire_use_only_the_bound_test_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str]] = []
+
+    class FakeSession:
+        @staticmethod
+        def retrieve(session_id: str) -> dict[str, object]:
+            calls.append(("retrieve", session_id))
+            return {"id": session_id, "status": "open", "livemode": False}
+
+        @staticmethod
+        def expire(session_id: str) -> dict[str, object]:
+            calls.append(("expire", session_id))
+            return {"id": session_id, "status": "expired", "livemode": False}
+
+    class FakeCheckout:
+        Session = FakeSession
+
+    class FakeStripe:
+        checkout = FakeCheckout
+        api_key = None
+
+    monkeypatch.setattr(
+        subscription_service,
+        "_load_stripe_sdk",
+        lambda: FakeStripe,
+    )
+
+    retrieved = subscription_service._retrieve_provider_checkout_session(
+        provider_session_id=OLD_SESSION_ID,
+        settings=_settings(),
+    )
+    expired = subscription_service._expire_provider_checkout_session(
+        provider_session_id=OLD_SESSION_ID,
+        settings=_settings(),
+    )
+
+    assert retrieved["status"] == "open"
+    assert expired["status"] == "expired"
+    assert calls == [
+        ("retrieve", OLD_SESSION_ID),
+        ("expire", OLD_SESSION_ID),
+    ]
+    assert FakeStripe.api_key == "sk_test_supersession_canary"
 
 
 def test_open_session_is_expired_proven_and_superseded_before_new_create(
@@ -440,14 +729,13 @@ def test_two_concurrent_confirmations_converge_on_one_new_command_and_session(
     harness.install(monkeypatch)
     expire_calls = 0
     create_calls = 0
+    provider_expired = False
     provider_lock = threading.Lock()
 
     def retrieve(**kwargs: object) -> dict[str, object]:
         del kwargs
-        with harness.lock:
-            expired = (
-                harness.old["expiration_effect_status"] == "nonpayable_proven"
-            )
+        with provider_lock:
+            expired = provider_expired
         return {
             "id": OLD_SESSION_ID,
             "status": "expired" if expired else "open",
@@ -455,10 +743,11 @@ def test_two_concurrent_confirmations_converge_on_one_new_command_and_session(
         }
 
     def expire(**kwargs: object) -> dict[str, object]:
-        nonlocal expire_calls
+        nonlocal expire_calls, provider_expired
         del kwargs
         with provider_lock:
             expire_calls += 1
+            provider_expired = True
         return {"id": OLD_SESSION_ID, "status": "expired", "livemode": False}
 
     def create(**kwargs: object) -> dict[str, object]:

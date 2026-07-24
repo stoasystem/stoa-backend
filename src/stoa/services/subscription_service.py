@@ -243,6 +243,7 @@ CHECKOUT_PLAN_VERSION = 1
 CHECKOUT_PROVIDER_LEASE_SECONDS = 30
 CHECKOUT_REPLAY_POLL_ATTEMPTS = 50
 CHECKOUT_REPLAY_POLL_SECONDS = 0.005
+CHECKOUT_EXPIRATION_POLL_ATTEMPTS = 50
 
 
 def _checkout_http_error(
@@ -603,6 +604,225 @@ def create_or_resume_checkout_command(
         status_code=503,
         code="checkout_confirmation_pending",
         message="Checkout creation is still being confirmed.",
+    )
+
+
+def _checkout_supersession_support_response(
+    command: Mapping[str, object] | None,
+) -> dict[str, Any]:
+    state = (
+        str(command.get("command_state"))
+        if isinstance(command, Mapping) and command.get("command_state") is not None
+        else CheckoutCommandState.OPERATOR_ATTENTION_REQUIRED.value
+    )
+    return {
+        "checkoutRef": (
+            command.get("checkout_ref")
+            if isinstance(command, Mapping)
+            and isinstance(command.get("checkout_ref"), str)
+            else None
+        ),
+        "commandState": state,
+        "publicOutcome": "support_needed",
+        "safeActions": ["recheck_payment", "contact_support"],
+    }
+
+
+def _validated_supersession_session(
+    session: Mapping[str, object],
+    *,
+    expected_session_id: str,
+) -> str:
+    status = str(session.get("status") or "")
+    if (
+        session.get("livemode") is not False
+        or not expected_session_id.startswith("cs_test_")
+        or session.get("id") != expected_session_id
+        or status not in {"open", "complete", "expired"}
+    ):
+        return "unknown"
+    return status
+
+
+def confirm_checkout_plan_change(
+    *,
+    parent_id: str,
+    checkout_ref: str,
+    idempotency_key: str,
+    plan: str,
+    beneficiary_ids: tuple[str, ...],
+    settings: Settings,
+) -> dict[str, Any]:
+    """Prove the old Session nonpayable before registering its successor."""
+    parent = _require_parent(parent_id)
+    try:
+        target_plan = PurchasablePlanId(plan)
+        command_id = checkout_command_repo.checkout_command_id(
+            parent_id,
+            idempotency_key,
+        )
+    except ValueError as exc:
+        raise _checkout_http_error(
+            status_code=400,
+            code="checkout_request_invalid",
+            message="Checkout request is invalid.",
+        ) from exc
+    beneficiaries = _require_checkout_beneficiaries(
+        parent_id=parent_id,
+        parent=parent,
+        plan=target_plan,
+        beneficiary_ids=beneficiary_ids,
+    )
+    price_id = _require_sandbox_checkout_configuration(
+        plan=target_plan,
+        settings=settings,
+    )
+    lookup = checkout_command_repo.get_checkout_command_by_public_ref(
+        checkout_ref,
+        parent_id=parent_id,
+    )
+    if (
+        lookup.disposition
+        is checkout_command_repo.CheckoutCommandDisposition.NOT_FOUND
+    ):
+        raise _checkout_http_error(
+            status_code=404,
+            code="checkout_not_found",
+            message="Checkout was not found.",
+        )
+    old_command = lookup.command
+    if (
+        lookup.disposition
+        is not checkout_command_repo.CheckoutCommandDisposition.REPLAYED
+        or old_command is None
+        or old_command.get("checkout_ref") != checkout_ref
+        or old_command.get("parent_id") != parent_id
+        or old_command.get("provider_effect_status") != "session_attached"
+        or not isinstance(old_command.get("provider_session_id"), str)
+    ):
+        raise _checkout_http_error(
+            status_code=503,
+            code="checkout_supersession_unavailable",
+            message="This checkout cannot be changed right now.",
+        )
+    created_at = datetime.now(timezone.utc)
+    new_intent = CheckoutIntent(
+        commandId=command_id,
+        parentId=parent_id,
+        idempotencyKey=idempotency_key,
+        planId=target_plan,
+        beneficiaryIds=beneficiaries,
+        priceCatalogVersion=CHECKOUT_PRICE_CATALOG_VERSION,
+        planVersion=CHECKOUT_PLAN_VERSION,
+        createdAt=created_at,
+    )
+    session_id = str(old_command["provider_session_id"])
+    try:
+        session = _retrieve_provider_checkout_session(
+            provider_session_id=session_id,
+            settings=settings,
+        )
+        provider_status = _validated_supersession_session(
+            session,
+            expected_session_id=session_id,
+        )
+    except Exception:
+        provider_status = "unknown"
+    working_command = old_command
+    if provider_status == "open":
+        claim = checkout_command_repo.claim_session_expiration(
+            working_command,
+            now_iso=now_iso(),
+        )
+        working_command = claim.command or working_command
+        if (
+            claim.disposition
+            is checkout_command_repo.CheckoutSupersessionDisposition.EXPIRATION_CLAIMED
+        ):
+            try:
+                _expire_provider_checkout_session(
+                    provider_session_id=session_id,
+                    settings=settings,
+                )
+            except Exception:
+                pass
+        elif (
+            claim.disposition
+            is checkout_command_repo.CheckoutSupersessionDisposition.NONPAYABLE_PROVEN
+        ):
+            provider_status = "expired"
+        elif (
+            claim.disposition
+            is not checkout_command_repo.CheckoutSupersessionDisposition.EXPIRATION_BUSY
+        ):
+            return _checkout_supersession_support_response(working_command)
+        if provider_status != "expired":
+            provider_status = "unknown"
+            for _ in range(CHECKOUT_EXPIRATION_POLL_ATTEMPTS):
+                try:
+                    session = _retrieve_provider_checkout_session(
+                        provider_session_id=session_id,
+                        settings=settings,
+                    )
+                    provider_status = _validated_supersession_session(
+                        session,
+                        expected_session_id=session_id,
+                    )
+                except Exception:
+                    provider_status = "unknown"
+                if provider_status != "open":
+                    break
+                time.sleep(CHECKOUT_REPLAY_POLL_SECONDS)
+    if provider_status not in {"expired", "complete"}:
+        recorded = checkout_command_repo.record_session_expiration(
+            working_command,
+            provider_session_status="unknown",
+            now_iso=now_iso(),
+        )
+        return _checkout_supersession_support_response(
+            recorded.command or working_command
+        )
+    recorded = checkout_command_repo.record_session_expiration(
+        working_command,
+        provider_session_status=provider_status,
+        now_iso=now_iso(),
+    )
+    if (
+        recorded.disposition
+        is not checkout_command_repo.CheckoutSupersessionDisposition.NONPAYABLE_PROVEN
+    ):
+        return _checkout_supersession_support_response(
+            recorded.command or working_command
+        )
+    superseded = checkout_command_repo.supersede_checkout_command(
+        recorded.command,
+        new_intent,
+        price_id=price_id,
+        environment=settings.environment,
+        now_iso=created_at.isoformat(),
+    )
+    if (
+        superseded.disposition
+        is checkout_command_repo.CheckoutSupersessionDisposition.IDENTITY_MISMATCH
+    ):
+        raise _checkout_http_error(
+            status_code=409,
+            code="checkout_superseded_by_another_change",
+            message="This checkout was already changed.",
+        )
+    if (
+        superseded.disposition
+        is not checkout_command_repo.CheckoutSupersessionDisposition.SUPERSEDED
+    ):
+        return _checkout_supersession_support_response(
+            superseded.command or recorded.command
+        )
+    return create_or_resume_checkout_command(
+        parent_id=parent_id,
+        idempotency_key=idempotency_key,
+        plan=plan,
+        beneficiary_ids=beneficiaries,
+        settings=settings,
     )
 
 
@@ -2177,6 +2397,28 @@ def _create_provider_checkout_session(
         "url": checkout_url,
         "livemode": session_dict.get("livemode"),
     }
+
+
+def _retrieve_provider_checkout_session(
+    *,
+    provider_session_id: str,
+    settings: Settings,
+) -> dict[str, Any]:
+    stripe = _load_stripe_sdk()
+    stripe.api_key = settings.stripe_api_key
+    session = stripe.checkout.Session.retrieve(provider_session_id)
+    return _stripe_object_to_dict(session)
+
+
+def _expire_provider_checkout_session(
+    *,
+    provider_session_id: str,
+    settings: Settings,
+) -> dict[str, Any]:
+    stripe = _load_stripe_sdk()
+    stripe.api_key = settings.stripe_api_key
+    session = stripe.checkout.Session.expire(provider_session_id)
+    return _stripe_object_to_dict(session)
 
 
 def _stripe_object_to_dict(value: Any) -> dict[str, Any]:

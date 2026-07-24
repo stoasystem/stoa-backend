@@ -67,6 +67,22 @@ class CheckoutCommandDisposition(StrEnum):
     RETRYABLE = "retryable_dependency"
 
 
+class CheckoutSupersessionDisposition(StrEnum):
+    """Closed outcomes for one confirmed checkout plan change."""
+
+    EXPIRATION_CLAIMED = "expiration_claimed"
+    EXPIRATION_BUSY = "expiration_busy"
+    NONPAYABLE_PROVEN = "nonpayable_proven"
+    RECONCILIATION_REQUIRED = "reconciliation_required"
+    PROVIDER_UNKNOWN = "provider_unknown"
+    SUPERSEDED = "superseded"
+    IDENTITY_MISMATCH = "identity_mismatch"
+    NOT_FOUND = "not_found"
+    MALFORMED = "malformed"
+    STALE_VERSION = "stale_version"
+    RETRYABLE = "retryable_dependency"
+
+
 @dataclass(frozen=True, slots=True)
 class ProviderCreateClaim:
     command_id: str
@@ -83,6 +99,13 @@ class CheckoutCommandResult:
     disposition: CheckoutCommandDisposition
     command: CheckoutItem | None = None
     provider_claim: ProviderCreateClaim | None = None
+    operations: tuple[dict[str, Any], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CheckoutSupersessionResult:
+    disposition: CheckoutSupersessionDisposition
+    command: CheckoutItem | None = None
     operations: tuple[dict[str, Any], ...] = ()
 
 
@@ -493,6 +516,7 @@ def register_checkout_command(
         "provider_key_version": PROVIDER_KEY_VERSION,
         "provider_key_digest": _provider_key_digest(command_id, fingerprint),
         "provider_effect_status": "not_started",
+        "expiration_effect_status": "not_started",
         "lease_generation": 0,
         "created_at": timestamp,
         "updated_at": timestamp,
@@ -1095,16 +1119,595 @@ def release_open_guard_for_terminal_command(
     )
 
 
+def _supersession_disposition(
+    command: Mapping[str, object],
+) -> CheckoutSupersessionDisposition | None:
+    status = command.get("expiration_effect_status")
+    if status == "nonpayable_proven":
+        return CheckoutSupersessionDisposition.NONPAYABLE_PROVEN
+    if status == "payment_reconciliation_required":
+        return CheckoutSupersessionDisposition.RECONCILIATION_REQUIRED
+    if status == "expiration_outcome_unknown":
+        return CheckoutSupersessionDisposition.PROVIDER_UNKNOWN
+    if status == "expire_claimed":
+        return CheckoutSupersessionDisposition.EXPIRATION_BUSY
+    return None
+
+
+def claim_session_expiration(
+    command: Mapping[str, object] | None,
+    *,
+    now_iso: str,
+    table: object | None = None,
+) -> CheckoutSupersessionResult:
+    """Conditionally persist the one allowed provider Session expiration intent."""
+    if not isinstance(command, Mapping):
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.NOT_FOUND
+        )
+    command_id = _required_text(command.get("command_id"), "command_id")
+    timestamp = _required_text(now_iso, "now_iso", maximum=64)
+    target = table or get_table()
+    try:
+        current = _strong_command(command_id, table=target)
+    except Exception:
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.RETRYABLE
+        )
+    if current is None:
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.NOT_FOUND
+        )
+    integrity = _command_integrity(
+        current,
+        command_id=command_id,
+        parent_id=str(command.get("parent_id") or ""),
+    )
+    if integrity is not None:
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.IDENTITY_MISMATCH
+            if integrity is CheckoutCommandDisposition.IDENTITY_MISMATCH
+            else CheckoutSupersessionDisposition.MALFORMED,
+            command=current,
+        )
+    known = _supersession_disposition(current)
+    if known is not None:
+        return CheckoutSupersessionResult(known, command=current)
+    if (
+        current.get("provider_effect_status") != "session_attached"
+        or not isinstance(current.get("provider_session_id"), str)
+        or current.get("expiration_effect_status", "not_started") != "not_started"
+    ):
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.MALFORMED,
+            command=current,
+        )
+    version = _positive_integer(current.get("command_version"), "command_version")
+    parent_id = _required_text(current.get("parent_id"), "parent_id")
+    operation = {
+        "Update": {
+            "Key": _command_key(command_id),
+            "UpdateExpression": (
+                "SET expiration_effect_status=:expire_claimed, "
+                "command_version=:next_version, updated_at=:updated_at"
+            ),
+            "ConditionExpression": (
+                "entity_type=:entity AND schema_version=:schema "
+                "AND command_id=:command_id AND parent_id=:parent_id "
+                "AND command_version=:expected_version "
+                "AND provider_effect_status=:session_attached "
+                "AND (attribute_not_exists(expiration_effect_status) "
+                "OR expiration_effect_status=:not_started) "
+                "AND attribute_not_exists(superseded_by_command_id)"
+            ),
+            "ExpressionAttributeValues": {
+                ":entity": "checkout_command",
+                ":schema": COMMAND_SCHEMA_VERSION,
+                ":command_id": command_id,
+                ":parent_id": parent_id,
+                ":expected_version": version,
+                ":session_attached": "session_attached",
+                ":not_started": "not_started",
+                ":expire_claimed": "expire_claimed",
+                ":next_version": version + 1,
+                ":updated_at": timestamp,
+            },
+        }
+    }
+    operations = [
+        account_deletion_repo.active_fence_condition(
+            parent_id,
+            _positive_integer(
+                current.get("account_fence_generation"),
+                "account_fence_generation",
+            ),
+        ),
+        operation,
+    ]
+    try:
+        account_deletion_repo.transact(operations, table=target)
+    except Exception:
+        try:
+            refreshed = _strong_command(command_id, table=target)
+        except Exception:
+            return CheckoutSupersessionResult(
+                CheckoutSupersessionDisposition.RETRYABLE
+            )
+        if refreshed is None:
+            return CheckoutSupersessionResult(
+                CheckoutSupersessionDisposition.RETRYABLE
+            )
+        disposition = _supersession_disposition(refreshed)
+        return CheckoutSupersessionResult(
+            disposition or CheckoutSupersessionDisposition.STALE_VERSION,
+            command=refreshed,
+        )
+    claimed = {
+        **current,
+        "expiration_effect_status": "expire_claimed",
+        "command_version": version + 1,
+        "updated_at": timestamp,
+    }
+    return CheckoutSupersessionResult(
+        CheckoutSupersessionDisposition.EXPIRATION_CLAIMED,
+        command=claimed,
+        operations=tuple(operations),
+    )
+
+
+def record_session_expiration(
+    command: Mapping[str, object] | None,
+    *,
+    provider_session_status: str,
+    now_iso: str,
+    table: object | None = None,
+) -> CheckoutSupersessionResult:
+    """Persist provider-authoritative expired, complete, or unknown evidence."""
+    if not isinstance(command, Mapping):
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.NOT_FOUND
+        )
+    status = _required_text(
+        provider_session_status,
+        "provider_session_status",
+        maximum=32,
+    )
+    outcome = {
+        "expired": (
+            "nonpayable_proven",
+            CheckoutCommandState.TERMINAL_WITHOUT_PAYMENT,
+            CheckoutSupersessionDisposition.NONPAYABLE_PROVEN,
+        ),
+        "complete": (
+            "payment_reconciliation_required",
+            CheckoutCommandState.RECONCILING,
+            CheckoutSupersessionDisposition.RECONCILIATION_REQUIRED,
+        ),
+        "unknown": (
+            "expiration_outcome_unknown",
+            CheckoutCommandState.OPERATOR_ATTENTION_REQUIRED,
+            CheckoutSupersessionDisposition.PROVIDER_UNKNOWN,
+        ),
+    }.get(status)
+    if outcome is None:
+        raise ValueError("provider_session_status is invalid")
+    effect_status, command_state, disposition = outcome
+    timestamp = _required_text(now_iso, "now_iso", maximum=64)
+    command_id = _required_text(command.get("command_id"), "command_id")
+    target = table or get_table()
+    try:
+        current = _strong_command(command_id, table=target)
+    except Exception:
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.RETRYABLE
+        )
+    if current is None:
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.NOT_FOUND
+        )
+    integrity = _command_integrity(
+        current,
+        command_id=command_id,
+        parent_id=str(command.get("parent_id") or ""),
+    )
+    if integrity is not None:
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.IDENTITY_MISMATCH
+            if integrity is CheckoutCommandDisposition.IDENTITY_MISMATCH
+            else CheckoutSupersessionDisposition.MALFORMED,
+            command=current,
+        )
+    known = _supersession_disposition(current)
+    if known is not None and known is not CheckoutSupersessionDisposition.EXPIRATION_BUSY:
+        return CheckoutSupersessionResult(known, command=current)
+    if current.get("provider_effect_status") != "session_attached":
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.MALFORMED,
+            command=current,
+        )
+    current_effect = str(current.get("expiration_effect_status") or "not_started")
+    if current_effect not in {"not_started", "expire_claimed"}:
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.STALE_VERSION,
+            command=current,
+        )
+    version = _positive_integer(current.get("command_version"), "command_version")
+    parent_id = _required_text(current.get("parent_id"), "parent_id")
+    operation = {
+        "Update": {
+            "Key": _command_key(command_id),
+            "UpdateExpression": (
+                "SET expiration_effect_status=:effect_status, "
+                "command_state=:command_state, command_version=:next_version, "
+                "updated_at=:updated_at"
+            ),
+            "ConditionExpression": (
+                "entity_type=:entity AND schema_version=:schema "
+                "AND command_id=:command_id AND parent_id=:parent_id "
+                "AND command_version=:expected_version "
+                "AND provider_effect_status=:session_attached "
+                "AND (expiration_effect_status=:expected_effect_status "
+                "OR (attribute_not_exists(expiration_effect_status) "
+                "AND :expected_effect_status=:not_started)) "
+                "AND attribute_not_exists(superseded_by_command_id)"
+            ),
+            "ExpressionAttributeValues": {
+                ":entity": "checkout_command",
+                ":schema": COMMAND_SCHEMA_VERSION,
+                ":command_id": command_id,
+                ":parent_id": parent_id,
+                ":expected_version": version,
+                ":session_attached": "session_attached",
+                ":expected_effect_status": current_effect,
+                ":not_started": "not_started",
+                ":effect_status": effect_status,
+                ":command_state": command_state,
+                ":next_version": version + 1,
+                ":updated_at": timestamp,
+            },
+        }
+    }
+    operations = [
+        account_deletion_repo.active_fence_condition(
+            parent_id,
+            _positive_integer(
+                current.get("account_fence_generation"),
+                "account_fence_generation",
+            ),
+        ),
+        operation,
+    ]
+    try:
+        account_deletion_repo.transact(operations, table=target)
+    except Exception:
+        try:
+            refreshed = _strong_command(command_id, table=target)
+        except Exception:
+            return CheckoutSupersessionResult(
+                CheckoutSupersessionDisposition.RETRYABLE
+            )
+        if refreshed is not None:
+            refreshed_disposition = _supersession_disposition(refreshed)
+            if refreshed_disposition is not None:
+                return CheckoutSupersessionResult(
+                    refreshed_disposition,
+                    command=refreshed,
+                )
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.STALE_VERSION,
+            command=refreshed,
+        )
+    recorded = {
+        **current,
+        "expiration_effect_status": effect_status,
+        "command_state": command_state,
+        "command_version": version + 1,
+        "updated_at": timestamp,
+    }
+    return CheckoutSupersessionResult(
+        disposition,
+        command=recorded,
+        operations=tuple(operations),
+    )
+
+
+def _classify_supersession_replay(
+    *,
+    table: object,
+    old_command_id: str,
+    new_command_id: str,
+    parent_id: str,
+    new_fingerprint: str,
+) -> CheckoutSupersessionResult:
+    try:
+        old = _strong_command(old_command_id, table=table)
+        new = _strong_command(new_command_id, table=table)
+        guard = _strong_get(table, _open_guard_key(parent_id))
+    except Exception:
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.RETRYABLE
+        )
+    if (
+        old is not None
+        and new is not None
+        and old.get("superseded_by_command_id") == new_command_id
+        and guard is not None
+        and guard.get("command_id") == new_command_id
+        and _command_integrity(
+            new,
+            command_id=new_command_id,
+            parent_id=parent_id,
+            intent_fingerprint=new_fingerprint,
+        )
+        is None
+    ):
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.SUPERSEDED,
+            command=new,
+        )
+    if old is not None and isinstance(old.get("superseded_by_command_id"), str):
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.IDENTITY_MISMATCH,
+            command=old,
+        )
+    return CheckoutSupersessionResult(
+        CheckoutSupersessionDisposition.RETRYABLE,
+        command=old,
+    )
+
+
+def supersede_checkout_command(
+    old_command: Mapping[str, object] | None,
+    new_intent: CheckoutIntent,
+    *,
+    price_id: str,
+    environment: str,
+    now_iso: str,
+    table: object | None = None,
+) -> CheckoutSupersessionResult:
+    """Atomically terminalize the old command and transfer its guard."""
+    if not isinstance(old_command, Mapping):
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.NOT_FOUND
+        )
+    if not isinstance(new_intent, CheckoutIntent):
+        raise ValueError("checkout intent is required")
+    old_command_id = _required_text(old_command.get("command_id"), "command_id")
+    parent_id = _required_text(old_command.get("parent_id"), "parent_id")
+    if new_intent.parent_id != parent_id or new_intent.command_id == old_command_id:
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.IDENTITY_MISMATCH
+        )
+    timestamp = _required_text(now_iso, "now_iso", maximum=64)
+    new_command_id = checkout_command_id(
+        new_intent.parent_id,
+        new_intent.idempotency_key,
+    )
+    if new_intent.command_id != new_command_id:
+        raise ValueError("checkout command identity is invalid")
+    new_fingerprint = checkout_intent_fingerprint(
+        new_intent,
+        price_id=price_id,
+        environment=environment,
+    )
+    target = table or get_table()
+    try:
+        current = _strong_command(old_command_id, table=target)
+        guard = _strong_get(target, _open_guard_key(parent_id))
+    except Exception:
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.RETRYABLE
+        )
+    if current is None:
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.NOT_FOUND
+        )
+    integrity = _command_integrity(
+        current,
+        command_id=old_command_id,
+        parent_id=parent_id,
+    )
+    if integrity is not None:
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.IDENTITY_MISMATCH
+            if integrity is CheckoutCommandDisposition.IDENTITY_MISMATCH
+            else CheckoutSupersessionDisposition.MALFORMED,
+            command=current,
+        )
+    if isinstance(current.get("superseded_by_command_id"), str):
+        return _classify_supersession_replay(
+            table=target,
+            old_command_id=old_command_id,
+            new_command_id=new_command_id,
+            parent_id=parent_id,
+            new_fingerprint=new_fingerprint,
+        )
+    if (
+        current.get("expiration_effect_status") != "nonpayable_proven"
+        or current.get("command_state")
+        not in {
+            CheckoutCommandState.TERMINAL_WITHOUT_PAYMENT,
+            CheckoutCommandState.TERMINAL_WITHOUT_PAYMENT.value,
+        }
+    ):
+        return CheckoutSupersessionResult(
+            _supersession_disposition(current)
+            or CheckoutSupersessionDisposition.STALE_VERSION,
+            command=current,
+        )
+    version = _positive_integer(current.get("command_version"), "command_version")
+    generation = _positive_integer(
+        current.get("account_fence_generation"),
+        "account_fence_generation",
+    )
+    if (
+        guard is None
+        or guard.get("entity_type") != "checkout_open_guard"
+        or guard.get("schema_version") != OPEN_GUARD_SCHEMA_VERSION
+        or guard.get("parent_id") != parent_id
+        or guard.get("command_id") != old_command_id
+    ):
+        return CheckoutSupersessionResult(
+            CheckoutSupersessionDisposition.MALFORMED,
+            command=current,
+        )
+    guard_version = _positive_integer(
+        guard.get("command_version"),
+        "guard_command_version",
+    )
+    reference = _new_public_ref()
+    new_command: CheckoutItem = {
+        **_command_key(new_command_id),
+        "entity_type": "checkout_command",
+        "schema_version": COMMAND_SCHEMA_VERSION,
+        "command_id": new_command_id,
+        "parent_id": parent_id,
+        "account_fence_generation": generation,
+        "intent_fingerprint": new_fingerprint,
+        "idempotency_key_digest": hashlib.sha256(
+            new_intent.idempotency_key.encode("utf-8")
+        ).hexdigest(),
+        "checkout_ref": reference,
+        "plan_id": str(new_intent.plan_id),
+        "beneficiary_ids": sorted(new_intent.beneficiary_ids),
+        "price_id": _required_text(price_id, "price_id"),
+        "price_catalog_version": new_intent.price_catalog_version,
+        "plan_version": new_intent.plan_version,
+        "environment": _required_text(
+            environment,
+            "environment",
+            maximum=32,
+        ).lower(),
+        "command_state": CheckoutCommandState.INTENT_RECORDED,
+        "command_version": 1,
+        "provider_key_version": PROVIDER_KEY_VERSION,
+        "provider_key_digest": _provider_key_digest(
+            new_command_id,
+            new_fingerprint,
+        ),
+        "provider_effect_status": "not_started",
+        "expiration_effect_status": "not_started",
+        "lease_generation": 0,
+        "created_at": timestamp,
+        "updated_at": timestamp,
+    }
+    lookup: CheckoutItem = {
+        **_public_lookup_key(reference),
+        "entity_type": "checkout_public_lookup",
+        "schema_version": PUBLIC_LOOKUP_SCHEMA_VERSION,
+        "checkout_ref": reference,
+        "parent_id": parent_id,
+        "account_fence_generation": generation,
+        "command_id": new_command_id,
+        "intent_fingerprint": new_fingerprint,
+        "created_at": timestamp,
+    }
+    operations: list[dict[str, Any]] = [
+        account_deletion_repo.active_fence_condition(parent_id, generation),
+        {
+            "Update": {
+                "Key": _command_key(old_command_id),
+                "UpdateExpression": (
+                    "SET superseded_by_command_id=:new_command_id, "
+                    "superseded_at=:superseded_at, command_version=:next_version, "
+                    "updated_at=:superseded_at"
+                ),
+                "ConditionExpression": (
+                    "entity_type=:entity AND schema_version=:schema "
+                    "AND command_id=:old_command_id AND parent_id=:parent_id "
+                    "AND command_version=:expected_version "
+                    "AND expiration_effect_status=:nonpayable "
+                    "AND command_state=:terminal "
+                    "AND attribute_not_exists(superseded_by_command_id)"
+                ),
+                "ExpressionAttributeValues": {
+                    ":entity": "checkout_command",
+                    ":schema": COMMAND_SCHEMA_VERSION,
+                    ":old_command_id": old_command_id,
+                    ":parent_id": parent_id,
+                    ":expected_version": version,
+                    ":nonpayable": "nonpayable_proven",
+                    ":terminal": CheckoutCommandState.TERMINAL_WITHOUT_PAYMENT,
+                    ":new_command_id": new_command_id,
+                    ":next_version": version + 1,
+                    ":superseded_at": timestamp,
+                },
+            }
+        },
+        {
+            "Update": {
+                "Key": _open_guard_key(parent_id),
+                "UpdateExpression": (
+                    "SET command_id=:new_command_id, command_version=:new_version, "
+                    "intent_fingerprint=:new_fingerprint, created_at=:created_at"
+                ),
+                "ConditionExpression": (
+                    "entity_type=:guard_entity AND schema_version=:guard_schema "
+                    "AND parent_id=:parent_id AND command_id=:old_command_id "
+                    "AND command_version=:expected_old_version"
+                ),
+                "ExpressionAttributeValues": {
+                    ":guard_entity": "checkout_open_guard",
+                    ":guard_schema": OPEN_GUARD_SCHEMA_VERSION,
+                    ":parent_id": parent_id,
+                    ":old_command_id": old_command_id,
+                    ":expected_old_version": guard_version,
+                    ":new_command_id": new_command_id,
+                    ":new_version": 1,
+                    ":new_fingerprint": new_fingerprint,
+                    ":created_at": timestamp,
+                },
+            }
+        },
+        {
+            "Put": {
+                "Item": new_command,
+                "ConditionExpression": (
+                    "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                ),
+            }
+        },
+        {
+            "Put": {
+                "Item": lookup,
+                "ConditionExpression": (
+                    "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                ),
+            }
+        },
+    ]
+    try:
+        account_deletion_repo.transact(operations, table=target)
+    except Exception:
+        return _classify_supersession_replay(
+            table=target,
+            old_command_id=old_command_id,
+            new_command_id=new_command_id,
+            parent_id=parent_id,
+            new_fingerprint=new_fingerprint,
+        )
+    return CheckoutSupersessionResult(
+        CheckoutSupersessionDisposition.SUPERSEDED,
+        command=new_command,
+        operations=tuple(operations),
+    )
+
+
 __all__ = [
     "CheckoutCommandDisposition",
     "CheckoutCommandResult",
+    "CheckoutSupersessionDisposition",
+    "CheckoutSupersessionResult",
     "ProviderCreateClaim",
     "attach_provider_session",
     "checkout_command_id",
     "checkout_intent_fingerprint",
+    "claim_session_expiration",
     "claim_provider_create",
     "get_checkout_command_by_public_ref",
     "mark_provider_outcome_unknown",
+    "record_session_expiration",
     "register_checkout_command",
     "release_open_guard_for_terminal_command",
+    "supersede_checkout_command",
 ]
