@@ -1,0 +1,15 @@
+{
+  "action": "bedrock:CountTokens",
+  "capturedAt": "2026-07-24T12:03:24.150076+00:00",
+  "correlationDigest": "6d408b672d6559c4655bfb9b8d20cec67265d733e7a6f67180c93904cc2f31b5",
+  "environmentDigest": "8e2fee6564c3da87d1c75991736e3726f17b607ded2445435b55517747f7258b",
+  "identityDigest": "daed8d9bd7c9a3e6b711d65414f591a53cf55e6604e89163cf4de1ba6521c8b7",
+  "inferenceProfileDigest": "cff2756a3650beb202640c88aecb97414ce3968ec5ba0788cb3b622ce2ed3e68",
+  "mocked": false,
+  "modelDigest": "8ad3dd979d681736bb41e0b430feb546dfc811e8f7b643a5ae1495b8be20f768",
+  "responseShape": "valid_exact_integer",
+  "schemaVersion": 1,
+  "sourceSha": "f2a78337d78fa8a8e455c829750d460a6dd7c26a",
+  "status": "passing",
+  "syntheticInputTokens": 37
+}
