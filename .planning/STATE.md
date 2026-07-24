@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
-status: Ready to execute
-stopped_at: Phase 476 planned — 29 plans ready
-last_updated: "2026-07-23T23:03:17.820Z"
-last_activity: 2026-07-23 -- Phase 476 planning complete
+status: executing
+stopped_at: Completed 476-01-PLAN.md
+last_updated: "2026-07-24T07:34:14.417Z"
+last_activity: 2026-07-24 -- Phase 476 execution started
 progress:
   total_phases: 10
   completed_phases: 3
-  total_plans: 201
-  completed_plans: 139
+  total_plans: 230
+  completed_plans: 140
   percent: 30
 ---
 
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 476
-Plan: Not started
+Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
+Plan: 2 of 29
 Status: Ready to execute
-Last activity: 2026-07-23 -- Phase 476 planning complete
+Last activity: 2026-07-24 -- Phase 476 execution started
 
 ## Accumulated Context
 
@@ -107,9 +107,9 @@ Last activity: 2026-07-23 -- Phase 476 planning complete
 
 ## Session
 
-**Last Date:** 2026-07-23T20:30:11.113Z
-**Stopped At:** Phase 476 context gathered
-**Resume File:** .planning/phases/476-billing-idempotency-and-paid-access-recovery/476-CONTEXT.md
+**Last Date:** 2026-07-24T07:34:14.411Z
+**Stopped At:** Completed 476-01-PLAN.md
+**Resume File:** None
 
 ## Performance Metrics
 
@@ -246,6 +246,7 @@ Last activity: 2026-07-23 -- Phase 476 planning complete
 | Phase 475 P43 | 8 min | 1 tasks | 2 files |
 | Phase 475 P44 | 10 min | 1 tasks | 2 files |
 | Phase 475 P45 | 12 min | 1 tasks | 2 files |
+| Phase 476 P01 | 7min | 1 tasks | 3 files |
 
 ## Decisions
 
@@ -533,3 +534,6 @@ Last activity: 2026-07-23 -- Phase 476 planning complete
 - [Phase 475]: CR-09 and D-13 share the immutable operation-owned rate receipt node.
 - [Phase 475]: Final Phase 475 evidence uses one clean immutable candidate and one direct-child two-file publication. — Candidate 677edf994deaee4aa0faef91eb38e2a3a07899ea passed every local gate; publication 458ec9f8970a6ec1657e41862de1cd0ce4b0d3db changes only the generated JSON and Markdown.
 - [Phase 475]: External Phase 475 obligations remain exact later-phase NOT RUN. — Phase 479 owns live AWS DynamoDB; Phase 480 owns live provider effects, deployment, and production smoke.
+- [Phase 476]: BillingPlanId is the closed four-plan vocabulary; PurchasablePlanId structurally excludes free_trial. — Checkout cannot encode a free plan or hidden legacy translation.
+- [Phase 476]: Public active checkout state requires paid-invoice, active-subscription, effective-plan, plan-version, and allowance-version coordinates. — Browser redirects and checkout completion remain non-authoritative hints.
+- [Phase 476]: Allowance evidence uses strict nonnegative signed-64-bit counts and Europe/Zurich Monday boundaries. — Booleans, fractions, overflow, content, and DST-fixed-duration assumptions fail closed.
