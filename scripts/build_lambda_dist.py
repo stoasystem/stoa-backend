@@ -384,7 +384,13 @@ def write_manifest(repo_root: Path, dist_dir: Path) -> dict[str, Any]:
     return manifest
 
 
-def build_dist(repo_root: Path, dist_dir: Path, *, skip_install: bool = False) -> dict[str, Any]:
+def build_dist(
+    repo_root: Path,
+    dist_dir: Path,
+    *,
+    skip_install: bool = False,
+    skip_smoke: bool = False,
+) -> dict[str, Any]:
     verify_locked_requirements(repo_root)
     if dist_dir.exists():
         shutil.rmtree(dist_dir)
@@ -392,6 +398,41 @@ def build_dist(repo_root: Path, dist_dir: Path, *, skip_install: bool = False) -
     if not skip_install:
         install_dependencies(repo_root, dist_dir)
     copy_source(repo_root, dist_dir)
+    if skip_smoke:
+        # Build the manifest with a SKIPPED smoke record.
+        # Intended for cross-compilation builds on macOS where Linux ARM64
+        # binaries cannot be imported. CI always runs on Linux and performs the real smoke test.
+        import platform as _platform
+        inventory = {h: str((repo_root / "src" / p).resolve()) for h, p in EXPECTED_HANDLERS.items()}
+        manifest: dict[str, Any] = {
+            "schema_version": 1,
+            "project": "stoa-backend",
+            "source_git_sha": git_sha(repo_root),
+            "source_git_dirty": git_dirty(repo_root),
+            "source_tree_hash": sha256_tree(repo_root, HASHED_SOURCE_ROOTS),
+            "distribution_tree_hash": sha256_dist_tree(dist_dir),
+            "requirements_hash": sha256_file(repo_root / "requirements.txt"),
+            "pyproject_hash": sha256_file(repo_root / "pyproject.toml"),
+            "uv_lock_hash": sha256_file(repo_root / "uv.lock"),
+            "runtime_target": RUNTIME_TARGET,
+            "python_version": PYTHON_VERSION,
+            "platform": PLATFORM,
+            "architecture": ARCHITECTURE,
+            "expected_handlers": sorted(EXPECTED_HANDLERS),
+            "handler_inventory": inventory,
+            "boot_smoke": {
+                "status": "SKIPPED",
+                "reason": (
+                    f"cross-compilation build on {_platform.system()} — "
+                    "Linux ARM64 binaries cannot be imported on host; smoke runs in CI"
+                ),
+                "runtime_target": RUNTIME_TARGET,
+            },
+        }
+        manifest["cdk_asset_hash"] = cdk_asset_hash(manifest)
+        manifest_path = dist_dir / MANIFEST_NAME
+        manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return manifest
     manifest = write_manifest(repo_root, dist_dir)
     validate_manifest(repo_root, dist_dir)
     return manifest
@@ -462,6 +503,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dist", type=Path, default=None)
     parser.add_argument("--verify-only", action="store_true")
     parser.add_argument("--skip-install", action="store_true")
+    parser.add_argument(
+        "--skip-smoke",
+        action="store_true",
+        help="Skip the Lambda handler boot smoke test. Use on macOS cross-compilation "
+             "builds where Linux ARM64 binaries cannot be imported. CI always runs smoke.",
+    )
     parser.add_argument("--zip", type=Path, default=None, help="Optional zip path to create after build")
     return parser.parse_args()
 
@@ -479,7 +526,7 @@ def main() -> int:
                 f"source_tree_hash={manifest['source_tree_hash'][:12]}"
             )
             return 0
-        manifest = build_dist(repo_root, dist_dir, skip_install=args.skip_install)
+        manifest = build_dist(repo_root, dist_dir, skip_install=args.skip_install, skip_smoke=args.skip_smoke)
         if args.zip:
             zip_dist(dist_dir, args.zip.resolve())
         print(
