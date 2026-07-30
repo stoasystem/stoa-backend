@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stoa.release.quality-repair-report.v1",
+  "title": "STOA full-repository quality repair report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "source_scope", "commands", "results", "status"],
+  "properties": {
+    "schema": {"const": "stoa.release.quality-repair-report.v1"},
+    "source_scope": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "src/stoa"},
+        {"const": "scripts"},
+        {"const": "tests"}
+      ],
+      "items": false
+    },
+    "commands": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"type": "array", "items": {"type": "string"}}
+    },
+    "results": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"$ref": "#/$defs/result"}
+    },
+    "status": {"enum": ["PASS", "FAIL"]}
+  },
+  "$defs": {
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "exit_code", "diagnostics"],
+      "properties": {
+        "tool": {"enum": ["ruff", "mypy"]},
+        "exit_code": {"type": "integer", "minimum": 0},
+        "diagnostics": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

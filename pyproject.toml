@@ -31,6 +31,7 @@ dev = [
     "pytest-socket==0.8.0",
     "boto3-stubs==1.43.16",
     "types-python-jose==3.5.0.20260408",
+    "types-pyyaml>=6.0.12.20260724",
 ]
 
 [build-system]

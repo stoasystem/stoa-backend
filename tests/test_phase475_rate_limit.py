@@ -10,7 +10,7 @@ from fastapi import HTTPException
 
 from stoa.db.repositories import account_deletion_repo
 from stoa.services import rate_limit
-from tests.dynamodb_expression_assertions import (
+from dynamodb_expression_assertions import (
     assert_expression_placeholders_closed,
 )
 

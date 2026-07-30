@@ -12,7 +12,7 @@ import pytest
 from stoa.db.repositories import question_submission_repo
 from stoa.jobs import reconcile_question_submissions
 from stoa.services import usage_ledger_service
-from tests.dynamodb_expression_assertions import (
+from dynamodb_expression_assertions import (
     assert_expression_placeholders_closed,
 )
 

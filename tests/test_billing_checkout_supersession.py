@@ -17,7 +17,7 @@ from stoa.db.repositories.checkout_command_repo import (
 )
 from stoa.models.billing import CheckoutCommandState, CheckoutIntent, PurchasablePlanId
 from stoa.services import subscription_service
-from tests.test_checkout_command_repo import AtomicCheckoutTable
+from test_checkout_command_repo import AtomicCheckoutTable
 
 
 PARENT_ID = "parent-supersession-canary"

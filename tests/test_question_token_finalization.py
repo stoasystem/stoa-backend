@@ -9,14 +9,14 @@ from datetime import datetime, timezone
 
 from stoa.db.repositories import allowance_repo, question_submission_repo
 from stoa.services import allowance_service
-from tests.test_phase475_question_effect_recovery import (
+from test_phase475_question_effect_recovery import (
     EffectRecoveryTable,
     _client,
     _effect,
     _patch_runtime,
     _request,
 )
-from tests.test_token_allowances import AtomicAllowanceTable
+from test_token_allowances import AtomicAllowanceTable
 
 from stoa.routers import questions
 

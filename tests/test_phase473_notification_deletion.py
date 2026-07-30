@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from stoa.db.repositories import account_deletion_repo, notification_repo, websocket_repo
+from stoa.db.repositories import notification_repo, websocket_repo
 from stoa.services import account_deletion_service, notification_service
 
 

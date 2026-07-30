@@ -343,7 +343,7 @@ def provision(args: argparse.Namespace) -> dict[str, Any]:
     log(f"  Parent:  {PARENT_EMAIL}")
     for e in STUDENT_EMAILS:
         log(f"  Student: {e}")
-    log(f"  Password: (from SANDBOX_TEST_PASSWORD env var)")
+    log("  Password: (from SANDBOX_TEST_PASSWORD env var)")
     log("\nSave this manifest for the Phase 476-28 evidence bundle:")
     print(json.dumps(result, indent=2))
     return result

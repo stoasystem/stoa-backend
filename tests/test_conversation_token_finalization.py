@@ -12,7 +12,7 @@ import pytest
 from stoa.db.repositories import allowance_repo
 from stoa.routers import conversations
 from stoa.services import ai_service, allowance_service
-from tests.test_token_allowances import AtomicAllowanceTable
+from test_token_allowances import AtomicAllowanceTable
 
 
 NOW = datetime(2026, 3, 25, 12, 0, tzinfo=timezone.utc)

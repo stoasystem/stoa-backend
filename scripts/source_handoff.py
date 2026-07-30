@@ -17,10 +17,7 @@ import sys
 import tomllib
 from typing import Any, Mapping, Sequence
 
-try:
-    from scripts import release_gate as gate
-except ModuleNotFoundError:  # pragma: no cover - direct script execution
-    import release_gate as gate  # type: ignore[no-redef]
+from scripts import release_gate as gate
 
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -16,7 +16,7 @@ from stoa.db.repositories import account_deletion_repo, allowance_repo
 from stoa.models.allowance import TeacherSupportScope
 from stoa.models.billing import BillingPlanId
 from stoa.services import allowance_service
-from tests.dynamodb_expression_assertions import assert_expression_placeholders_closed
+from dynamodb_expression_assertions import assert_expression_placeholders_closed
 
 
 UTC = timezone.utc

@@ -593,16 +593,16 @@ def reserve_allowance(
 
         try:
             input_used = _checked_add(
-                int(counter["finalized_input_tokens"]),
-                int(counter["reserved_input_tokens"]),
+                _stored_count(counter["finalized_input_tokens"], "finalized_input_tokens"),
+                _stored_count(counter["reserved_input_tokens"], "reserved_input_tokens"),
             )
             output_used = _checked_add(
-                int(counter["finalized_output_tokens"]),
-                int(counter["reserved_output_tokens"]),
+                _stored_count(counter["finalized_output_tokens"], "finalized_output_tokens"),
+                _stored_count(counter["reserved_output_tokens"], "reserved_output_tokens"),
             )
         except _AllowanceDependencyFailure:
             return ReservationResult(ReservationDisposition.RETRYABLE)
-        stored_allowance_version = int(counter["allowance_version"])
+        stored_allowance_version = _stored_count(counter["allowance_version"], "allowance_version")
         if budget.allowance_version < stored_allowance_version:
             return ReservationResult(ReservationDisposition.RETRYABLE)
         if (
@@ -620,7 +620,7 @@ def reserve_allowance(
         ):
             return ReservationResult(ReservationDisposition.LIMIT_EXCEEDED)
 
-        next_version = int(counter["state_version"]) + 1
+        next_version = _stored_count(counter["state_version"], "state_version") + 1
         reservation = AllowanceReservation(
             reservationId=effect,
             effectId=effect,
@@ -665,10 +665,10 @@ def reserve_allowance(
             "budget_input_tokens": budget.input_tokens,
             "budget_output_tokens": budget.output_tokens,
             "reserved_input_tokens": input_used
-            - int(counter["finalized_input_tokens"])
+            - _stored_count(counter["finalized_input_tokens"], "finalized_input_tokens")
             + requested_input,
             "reserved_output_tokens": output_used
-            - int(counter["finalized_output_tokens"])
+            - _stored_count(counter["finalized_output_tokens"], "finalized_output_tokens")
             + requested_output,
             "state_version": next_version,
             "account_fence_generation": generation,
@@ -677,7 +677,7 @@ def reserve_allowance(
         counter_operation = (
             _put_replace(
                 next_counter,
-                expected_state_version=int(counter["state_version"]),
+                expected_state_version=_stored_count(counter["state_version"], "state_version"),
             )
             if counter_exists
             else _put_initial_counter(next_counter)
@@ -863,7 +863,7 @@ def record_provider_usage(
         next_effect = {
             **current_effect,
             "state": "observed",
-            "state_version": int(current_effect["state_version"]) + 1,
+            "state_version": _stored_count(current_effect["state_version"], "state_version") + 1,
             "evidence_id": evidence_id,
             "provider_input_tokens": actual_input,
             "provider_output_tokens": actual_output,
@@ -873,10 +873,10 @@ def record_provider_usage(
         }
         try:
             next_provider_input = _checked_add(
-                int(counter["provider_cost_input_tokens"]), actual_input
+                _stored_count(counter["provider_cost_input_tokens"], "provider_cost_input_tokens"), actual_input
             )
             next_provider_output = _checked_add(
-                int(counter["provider_cost_output_tokens"]), actual_output
+                _stored_count(counter["provider_cost_output_tokens"], "provider_cost_output_tokens"), actual_output
             )
         except _AllowanceDependencyFailure:
             return ProviderUsageResult(ProviderUsageDisposition.RETRYABLE)
@@ -884,22 +884,23 @@ def record_provider_usage(
             **counter,
             "provider_cost_input_tokens": next_provider_input,
             "provider_cost_output_tokens": next_provider_output,
-            "state_version": int(counter["state_version"]) + 1,
+            "state_version": _stored_count(counter["state_version"], "state_version") + 1,
             "updated_at": _timestamp_text(now),
         }
         operations = [
             account_deletion_repo.active_fence_condition(
-                beneficiary, int(current_effect["account_fence_generation"])
+                beneficiary,
+                _stored_count(current_effect["account_fence_generation"], "account_fence_generation", positive=True),
             ),
             _put_create(evidence_item),
             _put_replace(
                 next_effect,
-                expected_state_version=int(current_effect["state_version"]),
+                expected_state_version=_stored_count(current_effect["state_version"], "state_version"),
                 expected_state="reserved",
             ),
             _put_replace(
                 next_counter,
-                expected_state_version=int(counter["state_version"]),
+                expected_state_version=_stored_count(counter["state_version"], "state_version"),
             ),
         ]
         try:
@@ -1091,8 +1092,8 @@ def _complete_allowance(
                     or evidence.output_tokens > reserved_output
                 )
             )
-            or int(counter["reserved_input_tokens"]) < reserved_input
-            or int(counter["reserved_output_tokens"]) < reserved_output
+            or _stored_count(counter["reserved_input_tokens"], "reserved_input_tokens") < reserved_input
+            or _stored_count(counter["reserved_output_tokens"], "reserved_output_tokens") < reserved_output
         ):
             return FinalizationResult(FinalizationDisposition.INVALID_STATE)
 
@@ -1103,7 +1104,7 @@ def _complete_allowance(
         next_effect = {
             **current_effect,
             "state": "restored" if restore else "finalized",
-            "state_version": int(current_effect["state_version"]) + 1,
+            "state_version": _stored_count(current_effect["state_version"], "state_version") + 1,
             "finalized_input_tokens": finalized_input,
             "finalized_output_tokens": finalized_output,
             "restored_input_tokens": restored_input,
@@ -1120,36 +1121,37 @@ def _complete_allowance(
         }
         try:
             next_finalized_input = _checked_add(
-                int(counter["finalized_input_tokens"]), finalized_input
+                _stored_count(counter["finalized_input_tokens"], "finalized_input_tokens"), finalized_input
             )
             next_finalized_output = _checked_add(
-                int(counter["finalized_output_tokens"]), finalized_output
+                _stored_count(counter["finalized_output_tokens"], "finalized_output_tokens"), finalized_output
             )
         except _AllowanceDependencyFailure:
             return FinalizationResult(FinalizationDisposition.RETRYABLE)
         next_counter = {
             **counter,
-            "reserved_input_tokens": int(counter["reserved_input_tokens"])
+            "reserved_input_tokens": _stored_count(counter["reserved_input_tokens"], "reserved_input_tokens")
             - reserved_input,
-            "reserved_output_tokens": int(counter["reserved_output_tokens"])
+            "reserved_output_tokens": _stored_count(counter["reserved_output_tokens"], "reserved_output_tokens")
             - reserved_output,
             "finalized_input_tokens": next_finalized_input,
             "finalized_output_tokens": next_finalized_output,
-            "state_version": int(counter["state_version"]) + 1,
+            "state_version": _stored_count(counter["state_version"], "state_version") + 1,
             "updated_at": _timestamp_text(now),
         }
         operations = [
             account_deletion_repo.active_fence_condition(
-                beneficiary, int(current_effect["account_fence_generation"])
+                beneficiary,
+                _stored_count(current_effect["account_fence_generation"], "account_fence_generation", positive=True),
             ),
             _put_replace(
                 next_effect,
-                expected_state_version=int(current_effect["state_version"]),
+                expected_state_version=_stored_count(current_effect["state_version"], "state_version"),
                 expected_state="observed",
             ),
             _put_replace(
                 next_counter,
-                expected_state_version=int(counter["state_version"]),
+                expected_state_version=_stored_count(counter["state_version"], "state_version"),
             ),
         ]
         try:

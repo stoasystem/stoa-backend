@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 import yaml
 
-from tests import test_frontend_workflow_contract as shared
+import test_frontend_workflow_contract as shared
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -241,4 +241,3 @@ def test_shell_inputs_are_indirect_and_every_run_step_is_valid_bash() -> None:
             text=True,
         )
         assert completed.returncode == 0, completed.stderr
-

@@ -311,7 +311,10 @@ class _SinkVisitor(ast.NodeVisitor):
         self.generic_visit(node)
         self.symbols.pop()
 
-    visit_AsyncFunctionDef = visit_FunctionDef
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self.symbols.append(node.name)
+        self.generic_visit(node)
+        self.symbols.pop()
 
     def visit_Call(self, node: ast.Call) -> None:
         method = ""

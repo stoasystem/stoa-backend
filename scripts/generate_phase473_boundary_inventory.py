@@ -64,7 +64,7 @@ def _flows(
     file: str,
     symbol: str,
     call: str,
-    fields: tuple[tuple[str, str, str], ...],
+    fields: tuple[tuple[str, str, str, str], ...],
     fake: str,
     selector: str,
     decisions: tuple[str, ...],
@@ -479,7 +479,8 @@ def validate_taint_semantics(root: Path | str) -> None:
     if deletion.exists():
         source = deletion.read_text()
         functions = _symbol_nodes(ast.parse(source, filename=deletion.as_posix()))
-        claim = ast.get_source_segment(source, functions.get("_claim_from_command"))
+        claim_node = functions.get("_claim_from_command")
+        claim = ast.get_source_segment(source, claim_node) if claim_node is not None else None
         if (
             not claim
             or 'command.get("command_version") or command.get("version")' not in claim
@@ -492,8 +493,11 @@ def validate_taint_semantics(root: Path | str) -> None:
     if notification.exists():
         source = notification.read_text()
         functions = _symbol_nodes(ast.parse(source, filename=notification.as_posix()))
-        resolver = ast.get_source_segment(
-            source, functions.get("resolve_delivery_ownership")
+        resolver_node = functions.get("resolve_delivery_ownership")
+        resolver = (
+            ast.get_source_segment(source, resolver_node)
+            if resolver_node is not None
+            else None
         )
         if (
             not resolver

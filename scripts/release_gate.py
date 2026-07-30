@@ -33,6 +33,22 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "schemas/release/gate-receipt-v1.schema.json"
 RECEIPT_SCHEMA = "stoa.release.gate-receipt.v1"
 FORMAL_RECEIPT_SCHEMA = "stoa.release.formal-gate-run.v1"
+QUALITY_REPORT_SCHEMA = "stoa.release.quality-repair-report.v1"
+QUALITY_GATE_ID = "backend-static-quality"
+QUALITY_SOURCE_SCOPE = ("src/stoa", "scripts", "tests")
+QUALITY_COMMANDS = (
+    ("{python}", "-m", "ruff", "check", "src", "tests", "scripts", "--no-cache"),
+    (
+        "{python}",
+        "-m",
+        "mypy",
+        "--no-incremental",
+        "--explicit-package-bases",
+        "src/stoa",
+        "scripts",
+        "tests",
+    ),
+)
 POLICY_EXIT = 2
 EXECUTION_EXIT = 3
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -587,6 +603,12 @@ def default_registry() -> GateRegistry:
                 config_paths=("scripts/phase474_pytest_guard.py", "tests/conftest.py"),
                 timeout_seconds=7200,
                 evidence_kind="python-matrix",
+            ),
+            GateSpec(
+                gate_id=QUALITY_GATE_ID,
+                argv=("{python}", "scripts/release_gate.py", "quality"),
+                artifact_paths=QUALITY_SOURCE_SCOPE,
+                config_paths=("pyproject.toml", "schemas/release/quality-repair-report-v1.schema.json"),
             ),
             GateSpec(
                 gate_id="frontend-web-fresh",
@@ -3763,6 +3785,94 @@ def run_registered_gate(
         return _freeze_json_object(receipt, "registered gate receipt")
 
 
+def _quality_diagnostics(result: ProcessResult) -> list[str]:
+    """Return the complete tool output as a bounded, line-addressable failure report."""
+    output = result.stdout + result.stderr
+    try:
+        return output.decode("utf-8", errors="strict").splitlines()
+    except UnicodeDecodeError:
+        return ["static-analysis output was not UTF-8"]
+
+
+def _require_quality_sequence(value: Any, expected: tuple[str, ...], label: str) -> None:
+    if not isinstance(value, list) or tuple(value) != expected:
+        raise GatePolicyError(f"quality {label} is not the registered command")
+
+
+def validate_quality_report(report: Mapping[str, Any]) -> None:
+    """Reject every report that is not the exact two-tool, zero-diagnostic result."""
+    _require_exact_keys(
+        report,
+        {"schema", "source_scope", "commands", "results", "status"},
+        "quality report",
+    )
+    if report.get("schema") != QUALITY_REPORT_SCHEMA or report.get("status") != "PASS":
+        raise GatePolicyError("quality report is not a pass")
+    _require_quality_sequence(report.get("source_scope"), QUALITY_SOURCE_SCOPE, "source scope")
+    commands = report.get("commands")
+    if not isinstance(commands, list) or len(commands) != len(QUALITY_COMMANDS):
+        raise GatePolicyError("quality report command count is invalid")
+    for command, expected in zip(commands, QUALITY_COMMANDS, strict=True):
+        _require_quality_sequence(command, expected, "command")
+    results = report.get("results")
+    if not isinstance(results, list) or len(results) != len(QUALITY_COMMANDS):
+        raise GatePolicyError("quality report result count is invalid")
+    for result, tool in zip(results, ("ruff", "mypy"), strict=True):
+        if not isinstance(result, dict):
+            raise GatePolicyError("quality report result is malformed")
+        _require_exact_keys(result, {"tool", "exit_code", "diagnostics"}, "quality result")
+        if (
+            result.get("tool") != tool
+            or result.get("exit_code") != 0
+            or result.get("diagnostics") != []
+        ):
+            raise GatePolicyError("quality report has residual diagnostics")
+
+
+def _execute_quality(args: argparse.Namespace) -> int:
+    if vars(args) != {"command": "quality", "func": _execute_quality}:
+        raise GatePolicyError("quality gate options are forbidden")
+    environment = dict(os.environ)
+    environment["MYPYPATH"] = "src:tests"
+    results: list[dict[str, object]] = []
+    for tool, command in zip(("ruff", "mypy"), QUALITY_COMMANDS, strict=True):
+        argv = tuple(sys.executable if value == "{python}" else value for value in command)
+        completed = subprocess.run(
+            argv,
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+            env=environment,
+            timeout=600,
+        )
+        result = ProcessResult(
+            returncode=completed.returncode,
+            stdout=completed.stdout,
+            stderr=completed.stderr,
+        )
+        results.append(
+            {
+                "tool": tool,
+                "exit_code": result.returncode,
+                "diagnostics": _quality_diagnostics(result),
+            }
+        )
+    report: dict[str, object] = {
+        "schema": QUALITY_REPORT_SCHEMA,
+        "source_scope": list(QUALITY_SOURCE_SCOPE),
+        "commands": [list(command) for command in QUALITY_COMMANDS],
+        "results": results,
+        "status": "PASS" if all(result["exit_code"] == 0 for result in results) else "FAIL",
+    }
+    try:
+        validate_quality_report(report)
+    except GatePolicyError:
+        write_json(report, None)
+        return EXECUTION_EXIT
+    write_json(report, None)
+    return 0
+
+
 def write_json(value: object, path: Path | None) -> None:
     text = json.dumps(value, indent=2, sort_keys=True) + "\n"
     if path is None:
@@ -4193,6 +4303,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     python_hermetic.add_argument("--output")
     python_hermetic.set_defaults(func=_execute_python_matrix)
+
+    quality = subparsers.add_parser(
+        "quality",
+        help="Run the exact full-repository Ruff and mypy quality gate",
+        allow_abbrev=False,
+    )
+    quality.set_defaults(func=_execute_quality)
 
     formal = subparsers.add_parser(
         "formal",
