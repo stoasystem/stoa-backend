@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Protocol, runtime_checkable
 
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Attr, Key
@@ -69,6 +69,79 @@ ADAPTIVE_TOMBSTONE_ALLOWLIST = frozenset(
 class AdaptivePrivatePage:
     items: tuple[dict[str, Any], ...]
     cursor: dict[str, str] | None = None
+
+
+@runtime_checkable
+class _GetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _PutTable(Protocol):
+    def put_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _QueryTable(Protocol):
+    def query(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _UpdateTable(Protocol):
+    def update_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> object: ...
+
+
+def _response(value: object) -> dict[str, Any]:
+    if not isinstance(value, Mapping) or not all(isinstance(key, str) for key in value):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "malformed adaptive learning dependency response"
+        )
+    return dict(value)
+
+
+def _get_item(table: object, **kwargs: object) -> dict[str, Any]:
+    if not isinstance(table, _GetTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "adaptive learning dependency unavailable"
+        )
+    return _response(table.get_item(**kwargs))
+
+
+def _put_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _PutTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "adaptive learning dependency unavailable"
+        )
+    return table.put_item(**kwargs)
+
+
+def _query(table: object, **kwargs: object) -> dict[str, Any]:
+    if not isinstance(table, _QueryTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "adaptive learning dependency unavailable"
+        )
+    return _response(table.query(**kwargs))
+
+
+def _update_item(table: object, **kwargs: object) -> dict[str, Any]:
+    if not isinstance(table, _UpdateTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "adaptive learning dependency unavailable"
+        )
+    return _response(table.update_item(**kwargs))
+
+
+def _scan(table: object, **kwargs: object) -> dict[str, Any]:
+    if not isinstance(table, _ScanTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "adaptive learning dependency unavailable"
+        )
+    return _response(table.scan(**kwargs))
 
 
 def _atomic_table(table: Any) -> bool:
@@ -176,7 +249,8 @@ def put_memory_snapshot(item: dict[str, Any]) -> None:
     owner, generation = _generation(stored, table)
     existing = None
     if _atomic_table(table):
-        existing = table.get_item(
+        existing = _get_item(
+            table,
             Key={"PK": stored["PK"], "SK": stored["SK"]}, ConsistentRead=True
         ).get("Item")
     operations = build_adaptive_write_transaction(
@@ -191,13 +265,14 @@ def put_memory_snapshot(item: dict[str, Any]) -> None:
     if _atomic_table(table):
         account_deletion_repo.transact(operations, table=table)
     else:
-        table.put_item(Item=operations[-1]["Put"]["Item"])
+        _put_item(table, Item=operations[-1]["Put"]["Item"])
     item.update(owner_id=owner, account_fence_generation=generation)
 
 
 def list_memory_snapshots(student_id: str, subject: str | None = None) -> list[dict[str, Any]]:
     table = get_table()
-    resp = table.query(
+    resp = _query(
+        table,
         KeyConditionExpression=(
             Key("PK").eq(f"LEARNING_MEMORY#{student_id}") & Key("SK").begins_with("SUBJECT#")
         )
@@ -223,7 +298,7 @@ def put_assignment(item: dict[str, Any]) -> None:
     if _atomic_table(table):
         account_deletion_repo.transact(operations, table=table)
     else:
-        table.put_item(Item=operations[-1]["Put"]["Item"])
+        _put_item(table, Item=operations[-1]["Put"]["Item"])
     item.update(owner_id=owner, account_fence_generation=generation)
 
 
@@ -243,7 +318,8 @@ def put_assignment_if_absent(item: dict[str, Any]) -> tuple[dict[str, Any], bool
         if _atomic_table(table):
             account_deletion_repo.transact(operations, table=table)
         else:
-            table.put_item(
+            _put_item(
+                table,
                 Item=operations[-1]["Put"]["Item"],
                 ConditionExpression=Attr("PK").not_exists(),
             )
@@ -258,7 +334,9 @@ def put_assignment_if_absent(item: dict[str, Any]) -> tuple[dict[str, Any], bool
 
 def get_assignment(assignment_id: str) -> dict[str, Any] | None:
     table = get_table()
-    resp = table.get_item(Key={"PK": f"ASSIGNMENT#{assignment_id}", "SK": "META"})
+    resp = _get_item(
+        table, Key={"PK": f"ASSIGNMENT#{assignment_id}", "SK": "META"}
+    )
     return resp.get("Item")
 
 
@@ -309,7 +387,7 @@ def update_assignment(
                 mutation["ExpressionAttributeValues"][":expected_status"] = expected_status
             account_deletion_repo.transact(operations, table=table)
             return get_assignment(assignment_id) or {**existing, **updates}
-        resp = table.update_item(**kwargs)
+        resp = _update_item(table, **kwargs)
     except (ClientError, account_deletion_repo.AccountDeletionConflict) as exc:
         if isinstance(exc, account_deletion_repo.AccountDeletionConflict) or exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
             return get_assignment(assignment_id)
@@ -335,7 +413,7 @@ def list_assignments(
         scan_kwargs["Limit"] = limit
     items: list[dict[str, Any]] = []
     while True:
-        resp = table.scan(**scan_kwargs)
+        resp = _scan(table, **scan_kwargs)
         items.extend(resp.get("Items", []))
         if limit and len(items) >= limit:
             items = items[:limit]
@@ -355,14 +433,14 @@ def scan_adaptive_private_rows(
     maximum_pages: int = 1,
     table: Any | None = None,
 ) -> AdaptivePrivatePage:
-    target = table or get_table()
+    target: object = table if table is not None else get_table()
     marker = _cursor(cursor) if cursor is not None else None
     found: list[dict[str, Any]] = []
     for _ in range(maximum_pages):
         kwargs: dict[str, Any] = {"ConsistentRead": True}
         if marker:
             kwargs["ExclusiveStartKey"] = marker
-        response = target.scan(**kwargs)
+        response = _scan(target, **kwargs)
         items = response.get("Items", [])
         if not isinstance(items, list):
             raise account_deletion_repo.AccountDeletionConflict(
