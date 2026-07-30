@@ -412,7 +412,7 @@ def test_parser_worker_enforces_pdf_page_and_archive_structure_limits() -> None:
     pdf_result = worker.parse_document_isolated(pdf.getvalue(), "application/pdf")
     assert pdf_result.category == "document_limit_exceeded"
 
-    slides = [
+    slides: list[tuple[str, str | bytes, int]] = [
         (f"ppt/slides/slide{index}.xml", "<slide/>", ZIP_DEFLATED)
         for index in range(1, 202)
     ]
@@ -421,7 +421,7 @@ def test_parser_worker_enforces_pdf_page_and_archive_structure_limits() -> None:
     )
     assert presentation_result.category == "document_limit_exceeded"
 
-    sheets = [
+    sheets: list[tuple[str, str | bytes, int]] = [
         (f"xl/worksheets/sheet{index}.xml", "<worksheet/>", ZIP_DEFLATED)
         for index in range(1, 52)
     ]

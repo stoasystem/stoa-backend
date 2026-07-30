@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pydantic import BaseModel
 import pytest
 
 from stoa.config import Settings, get_settings
@@ -69,7 +70,7 @@ def _saved_attachment(
     }
 
 
-def _public_schema_text(model: type) -> str:
+def _public_schema_text(model: type[BaseModel]) -> str:
     return str(model.model_json_schema(by_alias=True)).lower()
 
 
@@ -79,8 +80,11 @@ def test_saved_attachment_models_are_coordinate_free_recursively() -> None:
         "SavedAttachmentPage",
         "SavedAttachmentDeleteResult",
     )
-    models = [getattr(attachment_models, name, None) for name in model_names]
-    assert all(model is not None for model in models)
+    models: list[type[BaseModel]] = []
+    for name in model_names:
+        model = getattr(attachment_models, name, None)
+        assert isinstance(model, type) and issubclass(model, BaseModel)
+        models.append(model)
     rendered = " ".join(_public_schema_text(model) for model in models)
     for forbidden in (
         "bucket",

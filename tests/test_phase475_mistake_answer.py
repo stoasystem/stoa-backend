@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
@@ -73,10 +74,15 @@ def test_invalid_answers_fail_before_repository_access_without_echoing_input(
     error_fragment: str,
 ) -> None:
     table_accesses: list[str] = []
+
+    def get_table() -> _PutTable:
+        table_accesses.append("table")
+        return _PutTable()
+
     monkeypatch.setattr(
         practice_repo,
         "get_table",
-        lambda: table_accesses.append("table") or _PutTable(),
+        get_table,
     )
 
     with caplog.at_level(logging.WARNING), pytest.raises(
@@ -187,6 +193,7 @@ def test_mistake_response_schema_types_answer_state_and_nullable_answer() -> Non
         for route in practice.router.routes
         if getattr(route, "path", "") == "/mistakes"
     )
+    assert isinstance(route, APIRoute)
     response_schema = route.response_model.model_json_schema(by_alias=True)
     mistake_schema = response_schema["$defs"]["PracticeMistake"]["properties"]
 

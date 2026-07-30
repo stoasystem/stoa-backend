@@ -298,8 +298,10 @@ async def test_current_fact_repository_reloads_assignment_and_account_each_reque
     )
 
     assert first.curriculum_answer is not None
+    assert first.curriculum_answer.assignment is not None
     assert first.curriculum_answer.assignment["status"] == "active"
     assert second.curriculum_answer is not None
+    assert second.curriculum_answer.assignment is not None
     assert second.curriculum_answer.assignment["status"] == "revoked"
     assert assignment_loads == ["teacher-1", "teacher-1"]
     assert account_loads == ["teacher-1", "teacher-1"]
@@ -505,10 +507,15 @@ def test_missing_or_malformed_loaded_challenge_is_hidden_before_fact_load(
 
 def test_anonymous_request_never_loads_or_serializes_answer(monkeypatch) -> None:
     loads: list[str] = []
+
+    def get_challenge(challenge_id: str) -> dict[str, Any]:
+        loads.append(challenge_id)
+        return _challenge()
+
     monkeypatch.setattr(
         practice.practice_repo,
         "get_challenge",
-        lambda challenge_id: loads.append(challenge_id) or _challenge(),
+        get_challenge,
     )
     app = FastAPI()
     app.include_router(practice.router, prefix="/practice")
