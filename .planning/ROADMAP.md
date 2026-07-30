@@ -36,7 +36,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 | 473 | Student Content Privacy And Practice Integrity | Complete — 40/40 plans, independently verified 2026-07-18 | Phase 472 |
 | 474 | 24/87 | In Progress|  |
 | 475 | 45/45 | Complete    | 2026-07-23 |
-| 476 | 27/29 | In Progress|  |
+| 476 | 27/29 | Complete — manual waiver | 2026-07-30 |
 | 477 | Web Foundation And Contract Convergence | Authoritative Web auth/API/config behavior without hidden demo truth | Phases 472, 473, and 474 |
 | 478 | Complete Web Role Journeys And Route Closure | Functional student, parent, teacher, admin/operator, organization, and public browser routes | Phases 475, 476, and 477 |
 | 479 | Broader Versioned Infrastructure And Browser WebSocket Integration | Audit/extend cloud resources and deliver browser realtime without deferring Phase 474 prerequisites | Phases 474 and 477 |
@@ -49,7 +49,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 - [x] **Phase 473: Student Content Privacy And Practice Integrity** (completed 2026-07-18 — 40/40 plans, independently verified) - Uploads, private content, and practice answers respect the completed safety boundary.
 - [ ] **Phase 474: Deterministic Verification And Gated Delivery** - One formal backend/Web gate and its minimum CDK release topology control one immutable staged release set.
 - [x] **Phase 475: Transactional Usage Assignment And Relationship Consistency** - Core learning and relationship state converges under failure and concurrency. (completed 2026-07-23)
-- [ ] **Phase 476: Billing Idempotency And Paid Access Recovery** - One Web checkout produces one recoverable provider and entitlement outcome.
+- [x] **Phase 476: Billing Idempotency And Paid Access Recovery** (completed 2026-07-30 — manual waiver; 27/29 plans executed) - One Web checkout produces one recoverable provider and entitlement outcome.
 - [ ] **Phase 477: Web Foundation And Contract Convergence** - Web identity, API, and release configuration match authoritative backend contracts.
 - [ ] **Phase 478: Complete Web Role Journeys And Route Closure** - Every retained route works for real student, parent, teacher, and admin/operator accounts or is intentionally disabled.
 - [ ] **Phase 479: Broader Versioned Infrastructure And Browser WebSocket Integration** - Broader versioned cloud resources deliver authorized realtime browser notifications without owning Phase 474 prerequisites.
@@ -677,7 +677,7 @@ Plans:
 4. Lookalike, encoded, credential-bearing, wrong-port, and arbitrary HTTPS callback URLs are refused.
 5. A Stripe test-mode browser checkout and signed webhook changes parent/student effective entitlement and quota exactly once and appears in the parent/admin Web views.
 
-**Plans:** 27/29 plans executed
+**Plans:** 27/29 plans executed; Plans 476-28 and 476-29 accepted as waived by the project owner on 2026-07-30.
 Plans:
 **Wave 1**
 
@@ -755,6 +755,11 @@ Plans:
 **Required evidence:** Web request payload and idempotency proof, Stripe sandbox request/event IDs, failure-injection results, local/provider reconciliation rows, parent/admin API and browser results, exact-origin negative matrix, and no live charge.
 
 **Exit gate:** Paid access has an end-to-end sandbox proof suitable for the real parent Web journey.
+
+**Completion status:** Administratively completed by explicit project-owner
+waiver on 2026-07-30. This is not an automated verification pass. See
+`476-MANUAL-WAIVER.md`; Plans 476-28 and 476-29 remain unchecked to preserve the
+formal evidence gap.
 
 ### Phase 477: Web Foundation And Contract Convergence
 
@@ -987,7 +992,7 @@ Phase 473 remains complete; its four nonblocking verification findings have one 
 | 473. Student Content Privacy And Practice Integrity | 40/40 | Complete | 2026-07-18 |
 | 474. Deterministic Verification And Gated Delivery | 0/80 | Planning revision | - |
 | 475. Transactional Usage Assignment And Relationship Consistency | 45/45 | Complete | 2026-07-23 |
-| 476. Billing Idempotency And Paid Access Recovery | 0/29 | Not started | - |
+| 476. Billing Idempotency And Paid Access Recovery | 27/29 | Complete — manual waiver | 2026-07-30 |
 | 477. Web Foundation And Contract Convergence | 0/TBD | Not started | - |
 | 478. Complete Web Role Journeys And Route Closure | 0/TBD | Not started | - |
 | 479. Broader Versioned Infrastructure And Browser WebSocket Integration | 0/TBD | Not started | - |

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
-status: verifying
-stopped_at: Completed 476-27-PLAN.md
-last_updated: "2026-07-24T17:39:07.837Z"
-last_activity: 2026-07-24 -- Phase 476 execution started
+status: ready_to_plan
+stopped_at: Phase 476 completed by project-owner manual waiver
+last_updated: "2026-07-30T15:57:25+02:00"
+last_activity: 2026-07-30 -- Phase 476 administratively completed with 476-28/29 formal evidence waived
 progress:
   total_phases: 10
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 230
   completed_plans: 166
-  percent: 30
+  percent: 40
 ---
 
 # Project State
@@ -24,12 +24,19 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 476 (Billing Idempotency And Paid Access Recovery) — EXECUTING
-Plan: 29 of 29
-Status: Phase complete — ready for verification
-Last activity: 2026-07-24 -- Phase 476 execution started
+Phase: 477 (Web Foundation And Contract Convergence) — READY TO PLAN
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-07-30 -- Phase 476 administratively completed by explicit project-owner waiver; Plans 476-28/29 remain formally unverified
 
 ## Accumulated Context
+
+- Phase 476 was administratively accepted by explicit project-owner manual
+  waiver on 2026-07-30 after the owner reported independent team testing
+  passed. Plans 476-28 and 476-29 have no SUMMARY, no Phase 476 passed
+  VERIFICATION exists, and the exact planned aggregate security/evidence
+  artifacts remain absent. Later release and milestone gates must read
+  `476-MANUAL-WAIVER.md` and must not reinterpret this as an automated pass.
 
 - The checked private-store and boundary inventories now seal all Plan 36-38 source changes with independent semantic mutation guards, 232 exact write rows, 66 strict read rows, five lower-bound finding selectors, and the unchanged ordered 17 deletion branches.
 - Every reviewed private mutation now maps to a deterministic source-sealed inventory row, narrow retained-evidence class, or one of four reviewed non-student exclusions; exact current-generation results for all 17 ordered branches, two zero epochs, zero blocking debt, and one same-table CAS are required to permanently terminalize deletion.

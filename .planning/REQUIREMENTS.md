@@ -67,10 +67,10 @@ Convert STOA from broad local contracts into a trustworthy Web product that can 
 
 ### Billing And Paid Access
 
-- [ ] **V9BILL-01:** Each Web checkout business request carries a required idempotency key that is reused by the backend, Stripe, and durable local command state, producing at most one active provider session.
-- [ ] **V9BILL-02:** Provider success with local failure, local success with response timeout, duplicate browser retry, and delayed webhook all reconcile to one support-visible billing state.
-- [ ] **V9BILL-03:** Checkout success/cancel URLs are parsed structurally and restricted to configured exact Web origins and approved paths for the current environment.
-- [ ] **V9BILL-04:** A Stripe test-mode browser journey proves signed webhook processing changes parent/student effective entitlement and quota exactly once and remains explainable in parent/admin Web views.
+- [x] **V9BILL-01:** Each Web checkout business request carries a required idempotency key that is reused by the backend, Stripe, and durable local command state, producing at most one active provider session. *(Accepted through Phase 476 project-owner manual waiver on 2026-07-30.)*
+- [x] **V9BILL-02:** Provider success with local failure, local success with response timeout, duplicate browser retry, and delayed webhook all reconcile to one support-visible billing state. *(Accepted through Phase 476 project-owner manual waiver on 2026-07-30.)*
+- [x] **V9BILL-03:** Checkout success/cancel URLs are parsed structurally and restricted to configured exact Web origins and approved paths for the current environment. *(Accepted through Phase 476 project-owner manual waiver on 2026-07-30.)*
+- [x] **V9BILL-04:** A Stripe test-mode browser journey proves signed webhook processing changes parent/student effective entitlement and quota exactly once and remains explainable in parent/admin Web views. *(Accepted through Phase 476 project-owner manual waiver on 2026-07-30; repository-level automated evidence remains incomplete.)*
 
 ### Web Foundation And Contract Convergence
 
