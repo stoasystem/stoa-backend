@@ -2,14 +2,18 @@
 import base64
 import json
 from collections import Counter
+from collections.abc import Mapping
 from datetime import datetime, timezone
-from typing import Optional
+import logging
+from typing import NoReturn, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from stoa.db.repositories import practice_repo, question_repo, user_repo
 from stoa.security.authorization import AuthorizationAction, AuthorizedResource
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
+from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
     STUDENT_CONTENT_READ,
     STUDENT_SELF,
@@ -18,6 +22,7 @@ from stoa.security.route_authorization import (
 from stoa.services import learning_profile_service
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +47,79 @@ class UpdateStudentProfileRequest(BaseModel):
     name: str | None = None
 
 
+def _invalid_stored_student_response(correlation_id: str, field: str) -> NoReturn:
+    logger.warning("student_response_rejected category=invalid_%s", field)
+    error = SecurityDecisionError(
+        SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+        correlation_id=correlation_id,
+        internal_detail=f"student_profile:{field}",
+    )
+    raise HTTPException(status_code=error.status_code, detail=error.public_body()) from error
+
+
+def _required_profile_text(
+    profile: Mapping[str, object], field: str, correlation_id: str
+) -> str:
+    value = profile.get(field)
+    if not isinstance(value, str):
+        _invalid_stored_student_response(correlation_id, field)
+    return value
+
+
+def _profile_subjects(profile: Mapping[str, object], correlation_id: str) -> list[str]:
+    value = profile.get("primary_subjects", profile.get("subjects"))
+    if not isinstance(value, list) or not all(isinstance(subject, str) for subject in value):
+        _invalid_stored_student_response(correlation_id, "primary_subjects")
+    return value
+
+
+def _optional_profile_text(
+    profile: Mapping[str, object], field: str, correlation_id: str
+) -> str | None:
+    value = profile.get(field)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        _invalid_stored_student_response(correlation_id, field)
+    return value
+
+
+def _student_profile_response(
+    profile: Mapping[str, object], *, fallback_user_id: str, correlation_id: str, updated_at: str | None = None
+) -> StudentProfileResponse:
+    user_id = profile.get("user_id", fallback_user_id)
+    if not isinstance(user_id, str):
+        _invalid_stored_student_response(correlation_id, "user_id")
+    return StudentProfileResponse(
+        id=user_id,
+        userId=user_id,
+        name=_required_profile_text(profile, "name", correlation_id),
+        grade=_required_profile_text(profile, "grade", correlation_id),
+        primarySubjects=_profile_subjects(profile, correlation_id),
+        schoolSystem=_optional_profile_text(profile, "school_system", correlation_id),
+        createdAt=_required_profile_text(profile, "created_at", correlation_id),
+        updatedAt=updated_at or _required_profile_text(profile, "updated_at", correlation_id),
+    )
+
+
+def _question_rows(value: object, correlation_id: str) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        _invalid_stored_student_response(correlation_id, "question_items")
+    rows: list[dict[str, object]] = []
+    for value_row in value:
+        if not isinstance(value_row, Mapping) or not all(isinstance(key, str) for key in value_row):
+            _invalid_stored_student_response(correlation_id, "question_item")
+        rows.append(dict(value_row))
+    return rows
+
+
+def _knowledge_points(row: Mapping[str, object], correlation_id: str) -> list[str]:
+    value = row.get("knowledge_points", [])
+    if not isinstance(value, list) or not all(isinstance(point, str) for point in value):
+        _invalid_stored_student_response(correlation_id, "knowledge_points")
+    return value
+
+
 # ---------------------------------------------------------------------------
 # Profile endpoints
 # ---------------------------------------------------------------------------
@@ -53,20 +131,15 @@ async def get_my_profile(
             action=AuthorizationAction.READ, purposes=STUDENT_SELF, self_route=True
         )
     ),
+    correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Return the current student's learning profile."""
     user_id = authorized.ref.student_id
     profile = authorized.value
-    now = datetime.now(timezone.utc).isoformat()
-    return StudentProfileResponse(
-        id=profile.get("user_id", user_id),
-        userId=profile.get("user_id", user_id),
-        name=profile.get("name", ""),
-        grade=profile.get("grade", ""),
-        primarySubjects=profile.get("primary_subjects", profile.get("subjects", [])),
-        schoolSystem=profile.get("school_system"),
-        createdAt=profile.get("created_at", now),
-        updatedAt=profile.get("updated_at", now),
+    return _student_profile_response(
+        profile,
+        fallback_user_id=user_id,
+        correlation_id=correlation_id,
     )
 
 
@@ -78,9 +151,9 @@ async def update_my_profile(
             action=AuthorizationAction.UPDATE, purposes=STUDENT_SELF, self_route=True
         )
     ),
+    correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Update the current student's learning profile."""
-    profile = authorized.value
     user_id = authorized.ref.student_id
 
     now = datetime.now(timezone.utc).isoformat()
@@ -110,15 +183,11 @@ async def update_my_profile(
         expression_attribute_names={"#n": "name"} if body.name is not None else None,
     )
 
-    return StudentProfileResponse(
-        id=updated.get("user_id", user_id),
-        userId=updated.get("user_id", user_id),
-        name=updated.get("name", profile.get("name", "")),
-        grade=updated.get("grade", ""),
-        primarySubjects=updated.get("primary_subjects", []),
-        schoolSystem=updated.get("school_system"),
-        createdAt=updated.get("created_at", now),
-        updatedAt=now,
+    return _student_profile_response(
+        updated,
+        fallback_user_id=user_id,
+        correlation_id=correlation_id,
+        updated_at=now,
     )
 
 
@@ -176,19 +245,20 @@ async def get_summary(
             action=AuthorizationAction.READ, purposes=STUDENT_CONTENT_READ
         )
     ),
+    correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Return aggregated learning stats for a student (student, parent, admin)."""
     student_id = authorized.ref.student_id
 
     result = question_repo.list_by_student(student_id, limit=500)
-    questions = result.get("Items", [])
+    questions = _question_rows(result.get("Items", []), correlation_id)
 
     ai_resolved = sum(1 for q in questions if q.get("status") == "ai_answered")
     teacher_resolved = sum(1 for q in questions if q.get("status") == "resolved")
 
     kp_counter: Counter = Counter()
     for q in questions:
-        for kp in q.get("knowledge_points", []):
+        for kp in _knowledge_points(q, correlation_id):
             kp_counter[kp] += 1
     weak_kps = [kp for kp, _ in kp_counter.most_common(10)]
 
@@ -208,11 +278,15 @@ async def get_learning_profile(
             action=AuthorizationAction.READ, purposes=STUDENT_CONTENT_READ
         )
     ),
+    correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Return subject-level activity and topic seeds for a student."""
     student_id = authorized.ref.student_id
 
-    questions = question_repo.list_by_student(student_id, limit=500).get("Items", [])
+    questions = _question_rows(
+        question_repo.list_by_student(student_id, limit=500).get("Items", []),
+        correlation_id,
+    )
     mistakes = practice_repo.get_mistakes(student_id)
     return learning_profile_service.build_learning_profile(
         student_id=student_id,
@@ -230,6 +304,7 @@ async def list_questions(
     ),
     limit: int = Query(default=20, ge=1, le=100),
     next_token: Optional[str] = Query(default=None),
+    correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Paginated question history for a student."""
     student_id = authorized.ref.student_id
@@ -242,7 +317,7 @@ async def list_questions(
             raise HTTPException(status_code=400, detail="Invalid next_token")
 
     result = question_repo.list_by_student(student_id, limit=limit, last_key=last_key)
-    items = result.get("Items", [])
+    items = _question_rows(result.get("Items", []), correlation_id)
 
     new_token = None
     if "LastEvaluatedKey" in result:
