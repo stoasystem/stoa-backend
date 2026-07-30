@@ -31,6 +31,12 @@ NEW_SESSION_URL = f"https://checkout.stripe.com/c/pay/{NEW_SESSION_ID}"
 NOW = "2026-07-24T10:55:00+00:00"
 
 
+def _fixture_integer(value: object, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise AssertionError(f"fixture {field} must be an integer")
+    return value
+
+
 def _settings() -> Settings:
     return Settings(
         stripe_api_key="sk_test_supersession_canary",
@@ -126,7 +132,9 @@ class SupersessionHarness:
             if self.old["expiration_effect_status"] == "not_started":
                 self.events.append("claim_expiration")
                 self.old["expiration_effect_status"] = "expire_claimed"
-                self.old["command_version"] = int(self.old["command_version"]) + 1
+                self.old["command_version"] = (
+                    _fixture_integer(self.old.get("command_version"), "command_version") + 1
+                )
                 return checkout_command_repo.CheckoutSupersessionResult(
                     checkout_command_repo.CheckoutSupersessionDisposition.EXPIRATION_CLAIMED,
                     command=dict(self.old),
@@ -146,7 +154,9 @@ class SupersessionHarness:
         del command, now_iso
         with self.lock:
             self.events.append(f"record_{provider_session_status}")
-            self.old["command_version"] = int(self.old["command_version"]) + 1
+            self.old["command_version"] = (
+                _fixture_integer(self.old.get("command_version"), "command_version") + 1
+            )
             if provider_session_status == "expired":
                 self.old["expiration_effect_status"] = "nonpayable_proven"
                 self.old["command_state"] = CheckoutCommandState.TERMINAL_WITHOUT_PAYMENT
@@ -572,26 +582,38 @@ def test_open_session_is_expired_proven_and_superseded_before_new_create(
         },
         raising=False,
     )
-    monkeypatch.setattr(
-        subscription_service,
-        "_expire_provider_checkout_session",
-        lambda **kwargs: harness.events.append("provider_expire")
-        or {"id": OLD_SESSION_ID, "status": "expired", "livemode": False},
-        raising=False,
-    )
-    monkeypatch.setattr(
-        subscription_service,
-        "create_or_resume_checkout_command",
-        lambda **kwargs: harness.events.append("provider_create")
-        or {
+    def expire_provider_session(**kwargs: object) -> dict[str, object]:
+        del kwargs
+        harness.events.append("provider_expire")
+        return {"id": OLD_SESSION_ID, "status": "expired", "livemode": False}
+
+    def create_replacement_command(**kwargs: object) -> dict[str, object]:
+        plan = kwargs.get("plan")
+        beneficiary_ids = kwargs.get("beneficiary_ids")
+        assert isinstance(plan, str)
+        assert isinstance(beneficiary_ids, tuple)
+        assert all(isinstance(beneficiary_id, str) for beneficiary_id in beneficiary_ids)
+        harness.events.append("provider_create")
+        return {
             "checkoutRef": NEW_REF,
             "commandState": "provider_session_open",
             "checkoutSessionId": NEW_SESSION_ID,
             "checkoutUrl": NEW_SESSION_URL,
             "safeActions": ["recheck_payment", "contact_support"],
-            "targetPlan": kwargs["plan"],
-            "beneficiaries": list(kwargs["beneficiary_ids"]),
-        },
+            "targetPlan": plan,
+            "beneficiaries": list(beneficiary_ids),
+        }
+
+    monkeypatch.setattr(
+        subscription_service,
+        "_expire_provider_checkout_session",
+        expire_provider_session,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        subscription_service,
+        "create_or_resume_checkout_command",
+        create_replacement_command,
     )
 
     response = _confirm()
@@ -604,6 +626,7 @@ def test_open_session_is_expired_proven_and_superseded_before_new_create(
         "supersede",
         "provider_create",
     ]
+    assert harness.new is not None
     assert harness.guard_command_id == str(harness.new["command_id"])
 
 
