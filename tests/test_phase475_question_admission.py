@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 import re
 import threading
-from typing import Any
+from collections.abc import Mapping
+from typing import TypeGuard
 
 import pytest
 from botocore.exceptions import ClientError
@@ -49,7 +50,7 @@ def _question(**overrides: object) -> dict[str, object]:
     return item
 
 
-def _usage(*, counter_value: int = 1) -> dict[str, Any]:
+def _usage(*, counter_value: int = 1) -> dict[str, object]:
     return usage_ledger_service.build_question_usage_event(
         student_id="student-1",
         question_id="question-1",
@@ -78,6 +79,40 @@ def _conditional_error() -> ClientError:
         },
         "TransactWriteItems",
     )
+
+
+def _is_object_mapping(value: object) -> TypeGuard[Mapping[str, object]]:
+    return isinstance(value, Mapping) and all(
+        isinstance(key, str) for key in value
+    )
+
+
+def _required_mapping(value: object) -> Mapping[str, object]:
+    if not _is_object_mapping(value):
+        raise _conditional_error()
+    return value
+
+
+def _is_object_dict(value: object) -> TypeGuard[dict[str, object]]:
+    return isinstance(value, dict) and all(isinstance(key, str) for key in value)
+
+
+def _required_dict(value: object) -> dict[str, object]:
+    if not _is_object_dict(value):
+        raise _conditional_error()
+    return value
+
+
+def _required_str(value: object) -> str:
+    if not isinstance(value, str):
+        raise _conditional_error()
+    return value
+
+
+def _required_int(value: object) -> int:
+    if type(value) is not int:
+        raise _conditional_error()
+    return value
 
 
 class _AdmissionTable:
@@ -143,10 +178,16 @@ class _AdmissionTable:
     def _apply(self, operations: list[dict[str, object]]) -> None:
         for operation in operations:
             if "ConditionCheck" in operation:
-                check = operation["ConditionCheck"]
-                key = (check["Key"]["PK"], check["Key"]["SK"])
+                check = _required_mapping(operation["ConditionCheck"])
+                check_key = _required_mapping(check["Key"])
+                key = (
+                    _required_str(check_key["PK"]),
+                    _required_str(check_key["SK"]),
+                )
                 item = self.items.get(key)
-                generation = check.get("ExpressionAttributeValues", {}).get(
+                generation = _required_mapping(
+                    check.get("ExpressionAttributeValues", {})
+                ).get(
                     ":generation"
                 )
                 if (
@@ -156,32 +197,44 @@ class _AdmissionTable:
                 ):
                     raise _conditional_error()
             elif "Put" in operation:
-                put = operation["Put"]
-                item = put["Item"]
-                key = (item["PK"], item["SK"])
+                put = _required_mapping(operation["Put"])
+                item = _required_dict(put["Item"])
+                key = (_required_str(item["PK"]), _required_str(item["SK"]))
                 if key in self.items:
                     raise _conditional_error()
             elif "Update" in operation:
-                update = operation["Update"]
-                key = (update["Key"]["PK"], update["Key"]["SK"])
-                values = update["ExpressionAttributeValues"]
+                update = _required_mapping(operation["Update"])
+                update_key = _required_mapping(update["Key"])
+                key = (
+                    _required_str(update_key["PK"]),
+                    _required_str(update_key["SK"]),
+                )
+                values = _required_mapping(update["ExpressionAttributeValues"])
                 current = self.items.get(key)
                 expected = values.get(":expected")
-                count = int(current.get("count", 0)) if current else 0
+                count = _required_int(current.get("count", 0)) if current else 0
                 if expected is None and current is not None:
                     raise _conditional_error()
                 if expected is not None and count != expected:
                     raise _conditional_error()
-                if int(values[":next"]) > int(values[":limit"]):
+                if _required_int(values[":next"]) > _required_int(values[":limit"]):
                     raise _conditional_error()
         for operation in operations:
             if "Put" in operation:
-                item = dict(operation["Put"]["Item"])
-                self.items[(str(item["PK"]), str(item["SK"]))] = item
+                put = _required_mapping(operation["Put"])
+                item = dict(_required_mapping(put["Item"]))
+                self.items[(
+                    _required_str(item["PK"]),
+                    _required_str(item["SK"]),
+                )] = item
             elif "Update" in operation:
-                update = operation["Update"]
-                key = (str(update["Key"]["PK"]), str(update["Key"]["SK"]))
-                values = update["ExpressionAttributeValues"]
+                update = _required_mapping(operation["Update"])
+                update_key = _required_mapping(update["Key"])
+                key = (
+                    _required_str(update_key["PK"]),
+                    _required_str(update_key["SK"]),
+                )
+                values = _required_mapping(update["ExpressionAttributeValues"])
                 item = self.items.setdefault(
                     key, {"PK": key[0], "SK": key[1]}
                 )
@@ -367,7 +420,7 @@ def test_transaction_has_one_counter_update_and_no_duplicate_targets() -> None:
             }
         },
     )
-    command = {
+    command: dict[str, object] = {
         "idempotency_digest": _command_digest(),
         "entity_type": "question_submission_command",
         "schema_version": "question-submission-command.v2",
@@ -393,11 +446,13 @@ def test_transaction_has_one_counter_update_and_no_duplicate_targets() -> None:
     ]
     assert len(targets) == len(set(targets))
     assert sum("Update" in operation for operation in operations) == 1
-    counter = next(operation["Update"] for operation in operations if "Update" in operation)
+    counter = _required_mapping(
+        next(operation["Update"] for operation in operations if "Update" in operation)
+    )
     assert counter["ConditionExpression"] == (
         "(attribute_not_exists(#count) OR #count=:expected) AND :next<=:limit"
     )
-    assert counter["ExpressionAttributeValues"][":expected"] == 0
+    assert _required_mapping(counter["ExpressionAttributeValues"])[":expected"] == 0
     assert ("ATTACHMENT#attachment-1", "REF#QUESTION#question-1") in targets
 
 
@@ -482,8 +537,10 @@ def test_question_usage_builder_contains_no_private_content_or_coordinates() -> 
         "s3://private-coordinate-canary",
     )
 
-    assert event["metadata"]["write_order"] == "question_admission_transaction"
-    assert event["privacy"]["raw_content_stored"] is False
+    metadata = _required_mapping(event["metadata"])
+    privacy = _required_mapping(event["privacy"])
+    assert metadata["write_order"] == "question_admission_transaction"
+    assert privacy["raw_content_stored"] is False
     for forbidden_key in (
         "original_content",
         "corrected_text",
@@ -492,6 +549,6 @@ def test_question_usage_builder_contains_no_private_content_or_coordinates() -> 
         "immutable_object_key",
     ):
         assert forbidden_key not in event
-        assert forbidden_key not in event["metadata"]
+        assert forbidden_key not in metadata
     for private_value in private_values:
         assert private_value not in encoded
