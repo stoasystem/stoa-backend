@@ -123,11 +123,11 @@ def apply_artifact_edit_preview(
         raise ReportArtifactEditError(status_code=409, detail="Report artifact edit preview is not applyable")
     _assert_not_stale(report, draft, operator, source, correlation_id)
 
-    source_json_key = str(draft.get("source_json_s3_key") or "")
+    source_json_key = _required_string(draft, "source_json_s3_key")
     current_artifact = _read_current_artifact(source_json_key, s3_client=s3_client)
     next_artifact = _apply_fields_to_artifact(
         current_artifact,
-        _validate_proposed_fields(draft.get("proposed_fields") or {}),
+        _validate_proposed_fields(draft.get("proposed_fields")),
     )
     version_id = _new_version_id()
     version_keys = report_artifact_service.build_report_artifact_version_keys(
@@ -173,8 +173,8 @@ def apply_artifact_edit_preview(
         report["report_id"],
         expected_updated_at=report.get("updated_at"),
         expected_artifact_version_id=report.get("artifact_version_id"),
-        expected_json_s3_key=draft.get("source_json_s3_key"),
-        expected_html_s3_key=draft.get("source_html_s3_key"),
+        expected_json_s3_key=_required_string(draft, "source_json_s3_key"),
+        expected_html_s3_key=_required_string(draft, "source_html_s3_key"),
         status=current_status,
         fields=update_fields,
     ):
@@ -344,8 +344,8 @@ def apply_artifact_rollback_preview(
         report["report_id"],
         expected_updated_at=report.get("updated_at"),
         expected_artifact_version_id=report.get("artifact_version_id"),
-        expected_json_s3_key=preview.get("source_json_s3_key"),
-        expected_html_s3_key=preview.get("source_html_s3_key"),
+        expected_json_s3_key=_required_string(preview, "source_json_s3_key"),
+        expected_html_s3_key=_required_string(preview, "source_html_s3_key"),
         status=current_status,
         fields=update_fields,
     ):
@@ -472,7 +472,7 @@ def sanitize_artifact_edit_result(report: dict) -> dict:
     }
 
 
-def _validate_proposed_fields(proposed_fields: dict[str, Any]) -> dict[str, Any]:
+def _validate_proposed_fields(proposed_fields: object) -> dict[str, Any]:
     if not isinstance(proposed_fields, dict) or not proposed_fields:
         raise ReportArtifactEditError(status_code=422, detail="At least one editable field is required")
     fields: dict[str, Any] = {}
@@ -611,16 +611,20 @@ def _canonical_content_field(field: str) -> str:
 
 
 def _render_html_from_artifact(artifact: dict[str, Any]) -> str:
-    report = artifact.get("report") if isinstance(artifact.get("report"), dict) else {}
+    raw_report = artifact.get("report")
+    report: dict[str, Any] = raw_report if isinstance(raw_report, dict) else {}
     content = _content_from_artifact(artifact)
     student_name = str(report.get("studentName") or "Student")
     week_start = str(report.get("weekStart") or "")
     week_end = str(report.get("weekEnd") or "")
     title = str(content.get("title") or f"Weekly report for {student_name}")
     summary = str(content.get("summary") or "")
-    recommendations = content.get("recommendations") if isinstance(content.get("recommendations"), list) else []
-    weak_topics = content.get("weakTopics") if isinstance(content.get("weakTopics"), list) else []
-    strengths = content.get("strengths") if isinstance(content.get("strengths"), list) else []
+    raw_recommendations = content.get("recommendations")
+    recommendations: list[Any] = raw_recommendations if isinstance(raw_recommendations, list) else []
+    raw_weak_topics = content.get("weakTopics")
+    weak_topics: list[Any] = raw_weak_topics if isinstance(raw_weak_topics, list) else []
+    raw_strengths = content.get("strengths")
+    strengths: list[Any] = raw_strengths if isinstance(raw_strengths, list) else []
     recommendation_items = "".join(f"<li>{escape(str(item))}</li>" for item in recommendations)
     strength_items = "".join(f"<li>{escape(str(item))}</li>" for item in strengths)
     weak_topic_items = "".join(
@@ -837,6 +841,13 @@ def _required_artifact_key(report: dict, key: str, *, fallback_key: str | None =
     if not value:
         raise ReportArtifactEditError(status_code=422, detail="Report artifact metadata is incomplete")
     return str(value)
+
+
+def _required_string(record: dict, key: str) -> str:
+    value = record.get(key)
+    if not isinstance(value, str) or not value:
+        raise ReportArtifactEditError(status_code=422, detail="Report artifact metadata is incomplete")
+    return value
 
 
 def _current_artifact_version_id(report: dict) -> str | None:

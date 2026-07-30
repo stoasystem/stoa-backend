@@ -95,7 +95,7 @@ def apply_edit_draft(
 
     fields = _validate_proposed_fields(draft.get("proposed_fields") or {})
     applied_at = _now_iso()
-    update_fields = {
+    update_fields: dict[str, object] = {
         **fields,
         "last_operation": "edit_report",
         "last_operation_at": applied_at,
@@ -175,7 +175,7 @@ def sanitize_report_edit_result(report: dict) -> dict:
     return _metadata_snapshot(report)
 
 
-def _validate_proposed_fields(proposed_fields: dict[str, Any]) -> dict[str, str | None]:
+def _validate_proposed_fields(proposed_fields: object) -> dict[str, str | None]:
     if not isinstance(proposed_fields, dict) or not proposed_fields:
         raise ReportEditError(status_code=422, detail="At least one editable field is required")
     fields: dict[str, str | None] = {}
