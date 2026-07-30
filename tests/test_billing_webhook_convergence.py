@@ -25,6 +25,12 @@ NOW_EPOCH = 1_784_899_200
 NOW_ISO = datetime.fromtimestamp(NOW_EPOCH, tz=timezone.utc).isoformat()
 
 
+def _fixture_integer(value: object, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise AssertionError(f"fixture {field} must be an integer")
+    return value
+
+
 def _settings() -> Settings:
     return Settings(
         environment="test",
@@ -201,7 +207,10 @@ class FakePersistence:
             "provider_subscription_id_digest": provider_subscription_id_digest,
             "expected_initial_invoice_id_digest": expected_initial_invoice_id_digest,
             "command_state": "reconciling",
-            "command_version": int(command["command_version"]) + 1,
+            "command_version": _fixture_integer(
+                command.get("command_version"), "command_version"
+            )
+            + 1,
         }
         if self.bound_command is None:
             self.bound_command = candidate
