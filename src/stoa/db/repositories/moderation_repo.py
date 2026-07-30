@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
-from typing import Any
+from typing import Any, Mapping, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
 
@@ -61,6 +60,53 @@ class ModerationPrivatePage:
     items: tuple[dict[str, Any], ...]
     cursor: dict[str, str] | None = None
     unresolved: int = 0
+
+
+@runtime_checkable
+class _GetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _QueryTable(Protocol):
+    def query(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> object: ...
+
+
+def _response(value: object) -> dict[str, Any]:
+    if not isinstance(value, Mapping) or not all(isinstance(key, str) for key in value):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "malformed moderation dependency response"
+        )
+    return dict(value)
+
+
+def _get_item(table: object, **kwargs: object) -> dict[str, Any]:
+    if not isinstance(table, _GetTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "moderation dependency unavailable"
+        )
+    return _response(table.get_item(**kwargs))
+
+
+def _query(table: object, **kwargs: object) -> dict[str, Any]:
+    if not isinstance(table, _QueryTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "moderation dependency unavailable"
+        )
+    return _response(table.query(**kwargs))
+
+
+def _scan(table: object, **kwargs: object) -> dict[str, Any]:
+    if not isinstance(table, _ScanTable):
+        raise account_deletion_repo.AccountDeletionConflict(
+            "moderation dependency unavailable"
+        )
+    return _response(table.scan(**kwargs))
 
 
 def _required_owner(item: Mapping[str, Any]) -> tuple[str, int]:
@@ -124,7 +170,8 @@ def _validated_cursor(value: Any) -> dict[str, str]:
 def _strong_item(
     target: Any, *, pk: str, sk: str
 ) -> dict[str, Any] | None:
-    response = target.get_item(
+    response = _get_item(
+        target,
         Key={"PK": pk, "SK": sk}, ConsistentRead=True
     )
     item = response.get("Item") if isinstance(response, Mapping) else None
@@ -185,7 +232,7 @@ def scan_moderation_private_rows(
         raise account_deletion_repo.AccountDeletionConflict(
             "invalid moderation scan bound"
         )
-    target = table or get_table()
+    target: object = table if table is not None else get_table()
     current = _validated_cursor(cursor) if cursor is not None else None
     seen_cursors = (
         {(current["PK"], current["SK"])} if current is not None else set()
@@ -199,8 +246,8 @@ def scan_moderation_private_rows(
         }
         if current is not None:
             request["ExclusiveStartKey"] = current
-        response = target.scan(**request)
-        raw_items = response.get("Items", []) if isinstance(response, Mapping) else None
+        response = _scan(target, **request)
+        raw_items = response.get("Items", [])
         if not isinstance(raw_items, list):
             raise account_deletion_repo.AccountDeletionConflict(
                 "malformed moderation row page"
@@ -261,7 +308,7 @@ def scrub_moderation_row(
     table: Any | None = None,
 ) -> dict[str, Any]:
     """Replace one resolved moderation row with a strict noncontent tombstone."""
-    target = table or get_table()
+    target: object = table if table is not None else get_table()
     key = _validated_cursor({"PK": item.get("PK"), "SK": item.get("SK")})
     if not key["PK"].startswith("MODERATION#") or not (
         key["SK"] == "SUMMARY" or key["SK"].startswith("EVENT#")
@@ -408,8 +455,9 @@ def put_event(
 def get_case(
     case_id: str, *, table: Any | None = None
 ) -> dict[str, Any] | None:
-    target = table or get_table()
-    resp = target.get_item(
+    target: object = table if table is not None else get_table()
+    resp = _get_item(
+        target,
         Key={"PK": f"MODERATION#{case_id}", "SK": "SUMMARY"},
         ConsistentRead=True,
     )
@@ -421,7 +469,8 @@ def get_case(
 
 def list_case_events(case_id: str, limit: int = 100) -> list[dict[str, Any]]:
     table = get_table()
-    resp = table.query(
+    resp = _query(
+        table,
         KeyConditionExpression=Key("PK").eq(f"MODERATION#{case_id}") & Key("SK").begins_with("EVENT#"),
         Limit=limit,
         ScanIndexForward=True,
@@ -435,7 +484,8 @@ def list_case_events(case_id: str, limit: int = 100) -> list[dict[str, Any]]:
 
 def list_cases(limit: int = 50) -> list[dict[str, Any]]:
     table = get_table()
-    resp = table.scan(
+    resp = _scan(
+        table,
         FilterExpression=Attr("entity_type").eq("moderation_case"),
         Limit=limit,
     )
