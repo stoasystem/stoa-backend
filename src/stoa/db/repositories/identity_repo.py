@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Mapping
 from hashlib import sha256
+from typing import Protocol, runtime_checkable
 
 from botocore.exceptions import ClientError
 
@@ -17,6 +18,39 @@ class IdentityBindingConflict(RuntimeError):
 
 
 type IdentityItem = dict[str, object]
+
+
+@runtime_checkable
+class _GetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _PutTable(Protocol):
+    def put_item(self, **kwargs: object) -> object: ...
+
+
+def _response_mapping(value: object) -> IdentityItem:
+    if not isinstance(value, Mapping):
+        raise ValueError("malformed identity repository response")
+    response: IdentityItem = {}
+    for key, member in value.items():
+        if not isinstance(key, str):
+            raise ValueError("malformed identity repository response")
+        response[key] = member
+    return response
+
+
+def _get_item(table: object, **kwargs: object) -> IdentityItem:
+    if not isinstance(table, _GetTable):
+        raise ValueError("identity repository dependency is unavailable")
+    return _response_mapping(table.get_item(**kwargs))
+
+
+def _put_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _PutTable):
+        raise ValueError("identity repository dependency is unavailable")
+    return table.put_item(**kwargs)
 
 
 def issuer_hash(issuer: str) -> str:
@@ -98,7 +132,8 @@ def create_identity_binding(
                 return existing
             raise IdentityBindingConflict("external identity is already bound") from exc
     try:
-        table.put_item(
+        _put_item(
+            table,
             Item=binding,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
@@ -136,14 +171,16 @@ def _create_or_repair_identity_inventory(
     }
     table = get_table()
     try:
-        table.put_item(
+        _put_item(
+            table,
             Item=inventory,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
     except ClientError as exc:
         if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
             raise
-        response = table.get_item(
+        response = _get_item(
+            table,
             Key={"PK": inventory["PK"], "SK": inventory["SK"]},
             ConsistentRead=True,
         )
@@ -154,7 +191,8 @@ def _create_or_repair_identity_inventory(
 
 
 def get_identity_binding(issuer: str, subject: str) -> IdentityItem | None:
-    response = get_table().get_item(
+    response = _get_item(
+        get_table(),
         Key={
             "PK": f"IDENTITY#{issuer_hash(issuer)}#{subject.strip()}",
             "SK": "BINDING",

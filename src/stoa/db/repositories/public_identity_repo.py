@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 from hashlib import sha256
+from typing import Protocol, runtime_checkable
 
 from botocore.exceptions import ClientError
 
@@ -15,6 +16,39 @@ from stoa.db.repositories import account_deletion_repo
 
 PUBLIC_REGISTRATION_COMMAND = "public_self_service"
 PUBLIC_ROLES = frozenset({"student", "parent"})
+
+
+@runtime_checkable
+class _GetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _PutTable(Protocol):
+    def put_item(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _UpdateTable(Protocol):
+    def update_item(self, **kwargs: object) -> object: ...
+
+
+def _table_get_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _GetTable):
+        raise _malformed_command()
+    return table.get_item(**kwargs)
+
+
+def _table_put_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _PutTable):
+        raise _malformed_command()
+    return table.put_item(**kwargs)
+
+
+def _table_update_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _UpdateTable):
+        raise _malformed_command()
+    return table.update_item(**kwargs)
 
 
 class PublicIdentityCommandConflict(RuntimeError):
@@ -245,7 +279,8 @@ def create_or_get_public_identity_command(
                 "public identity command conflicts"
             ) from exc
     try:
-        table.put_item(
+        _table_put_item(
+            table,
             Item=command.as_item(),
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
@@ -261,10 +296,12 @@ def create_or_get_public_identity_command(
 
 def get_public_identity_command(email: str) -> PublicIdentityCommandState | None:
     digest = normalized_email_digest(email)
-    response = get_table().get_item(
+    response = _table_get_item(
+        get_table(),
         Key={"PK": f"PUBLIC_IDENTITY#{digest}", "SK": "COMMAND"},
         ConsistentRead=True,
     )
+    response = _string_keyed_mapping(response)
     item = response.get("Item")
     return (
         PublicIdentityCommandState.from_item(_string_keyed_mapping(item))
@@ -323,7 +360,8 @@ def advance_public_identity_command(
         assignments.append(f"{name} = :true")
         conditions.append(f"(attribute_not_exists({name}) OR {name} = :false)")
     try:
-        response = get_table().update_item(
+        response = _table_update_item(
+            get_table(),
             Key={
                 "PK": f"PUBLIC_IDENTITY#{normalized_email_digest(email)}",
                 "SK": "COMMAND",
@@ -339,5 +377,5 @@ def advance_public_identity_command(
             raise PublicIdentityCommandConflict("stale public identity command transition") from exc
         raise
     return PublicIdentityCommandState.from_item(
-        _string_keyed_mapping(response.get("Attributes"))
+        _string_keyed_mapping(_string_keyed_mapping(response).get("Attributes"))
     )
