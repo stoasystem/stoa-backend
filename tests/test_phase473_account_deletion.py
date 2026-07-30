@@ -7,7 +7,7 @@ import importlib
 import inspect
 import json
 from dataclasses import asdict
-from typing import Any
+from typing import Any, Mapping
 
 import pytest
 
@@ -67,7 +67,9 @@ class _IdentityFacts:
             "account_status": "active",
         }
 
-    async def get_current_grants(self, _user_id: str) -> list[dict[str, Any]]:
+    async def get_current_grants(
+        self, _user_id: str
+    ) -> list[Mapping[str, object]]:
         self.reads.append("grants")
         return []
 
@@ -216,6 +218,7 @@ def test_legacy_backfill_requires_one_existing_active_canonical_profile() -> Non
     assert fence["status"] == "active"
     assert fence["generation"] == 1
 
+    assert table.profile is not None
     table.profile["account_status"] = "deleted"
     table.fence = None
     with pytest.raises(repository.AccountDeletionConflict):
@@ -311,22 +314,30 @@ def test_every_primary_writer_uses_the_same_active_fence_and_exact_generation() 
     attachment_checks = attachment_repo._retention_fence_checks(
         STUDENT_ID, "question", "q-1", account_fence_generation=4
     )
+    def payload(operation: object) -> dict[str, Any]:
+        if isinstance(operation, attachment_repo.TransactionOperation):
+            if not isinstance(operation.item, Mapping):
+                raise AssertionError("transaction operation has malformed payload")
+            return dict(operation.item)
+        if isinstance(operation, Mapping):
+            return dict(operation)
+        raise AssertionError("unexpected transaction operation")
+
     for operations in (profile_ops, question_ops, attachment_checks):
-        checks = [
-            operation.item.get("ConditionCheck", {})
-            if hasattr(operation, "item")
-            else operation.get("ConditionCheck", {})
-            for operation in operations
-        ]
+        checks: list[dict[str, Any]] = []
+        for operation in operations:
+            condition_check = payload(operation).get("ConditionCheck")
+            if isinstance(condition_check, Mapping):
+                checks.append(dict(condition_check))
         fence = next(check for check in checks if check.get("Key") == expected_key)
         assert "#status=:active" in fence["ConditionExpression"]
         assert "generation=:generation" in fence["ConditionExpression"]
         assert fence["ExpressionAttributeValues"][":generation"] == 4
 
     updates = [
-        operation.get("Update", {})
+        update
         for operation in profile_ops + question_ops
-        if operation.get("Update")
+        if isinstance((update := payload(operation).get("Update")), Mapping)
     ]
     assert all("attribute_exists(PK)" in item["ConditionExpression"] for item in updates)
 
@@ -345,7 +356,7 @@ def test_upload_intent_is_fenced_before_any_provider_creation() -> None:
 class _PagedPrivateTable:
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []
-        self.pages = [
+        self.pages: list[dict[str, Any]] = [
             {
                 "Items": [
                     {
