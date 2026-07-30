@@ -141,7 +141,7 @@ def build_actor(
         account_status=status,
         cognito_group=role.value,
         current_grants=grants,
-        auth_context={"token_use": "access", "client_id": f"{role.value}-client"},
+        auth_context=(("token_use", "access"), ("client_id", f"{role.value}-client")),
     )
 
 

@@ -122,12 +122,14 @@ def test_retries_and_unrelated_profile_changes_never_reset_trial(
         store.profile["free_trial_schema_version"],
     )
 
+    profile_version = store.profile["version"]
+    assert isinstance(profile_version, int)
     store.profile.update(
         {
             "preferred_locale": "de-CH",
             "parent_binding_status": "active",
             "subscription_tier": "student",
-            "version": int(store.profile["version"]) + 3,
+            "version": profile_version + 3,
             "email_verified_at": (START + timedelta(days=90)).isoformat(),
         }
     )

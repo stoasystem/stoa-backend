@@ -108,7 +108,7 @@ def actor_contract(role: CanonicalRole = CanonicalRole.STUDENT, status=AccountSt
         role=role,
         account_status=status,
         cognito_group=group,
-        auth_context={"token_use": "access"},
+        auth_context=(("token_use", "access"),),
     )
 
 

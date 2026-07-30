@@ -535,10 +535,15 @@ def test_formal_publication_revalidates_outer_then_candidate_last(
     monkeypatch.setattr(gate, "_workspace_from_args", lambda args: gate.WorkspaceRoots(()))
     monkeypatch.setattr(gate, "load_candidate", lambda path: {})
     monkeypatch.setattr(gate, "system_operations", lambda: operations)
+
+    def run_formal_gate(**_kwargs: object) -> dict[str, dict[str, int]]:
+        events.append("run")
+        return receipt
+
     monkeypatch.setattr(
         gate,
         "run_formal_gate",
-        lambda **kwargs: events.append("run") or receipt,
+        run_formal_gate,
     )
     monkeypatch.setattr(
         gate,

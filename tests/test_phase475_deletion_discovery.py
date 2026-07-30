@@ -26,7 +26,7 @@ def _row(entity_type: str, **fields: object) -> dict[str, object]:
 class _PagedTable:
     def __init__(self, candidate: dict[str, object]) -> None:
         self.calls: list[dict[str, object]] = []
-        self.pages = [
+        self.pages: list[dict[str, object]] = [
             {"Items": [_row("unrelated", owner_id="someone-else")], "LastEvaluatedKey": CURSOR},
             {"Items": [candidate]},
         ]

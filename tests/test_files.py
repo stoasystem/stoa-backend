@@ -383,7 +383,7 @@ def test_conditional_foreign_or_stale_gateway_state_stays_concealed_404(
     def get_upload_intent(_upload_id):
         raise attachment_repo.AttachmentRepositoryConflict("conditional_conflict")
 
-    repository.get_upload_intent = get_upload_intent
+    monkeypatch.setattr(repository, "get_upload_intent", get_upload_intent)
 
     def complete(upload_id, part_count, actor, **kwargs):
         return attachment_service.complete_upload(
