@@ -300,7 +300,9 @@ def test_atomic_activation_receives_grant_rows_and_binding_conditions(
     )
 
     assert result.disposition is billing_fact_repo.ActivationDisposition.COMMITTED
-    assert len(captured["grant_items"]) == 1
+    grant_items = captured["grant_items"]
+    assert isinstance(grant_items, tuple)
+    assert len(grant_items) == 1
     assert captured["grant_operations"]
     assert captured["table"].__class__ is _ReadTable
 

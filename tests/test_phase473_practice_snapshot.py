@@ -176,6 +176,7 @@ def test_get_challenge_uses_pointer_then_exact_canonical_get(monkeypatch) -> Non
 )
 def test_get_challenge_rejects_missing_or_malformed_pointer(monkeypatch, pointer_override) -> None:
     challenge = _versioned_challenge()
+    responses: list[dict[str, object]]
     if pointer_override is None:
         responses = [{}]
     else:

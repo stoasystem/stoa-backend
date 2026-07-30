@@ -298,7 +298,7 @@ def test_moderation_scrub_removes_all_content_and_private_linkage() -> None:
 def test_moderation_discovery_resolves_legacy_event_owner_and_pages() -> None:
     scan = _require_contract("scan_moderation_private_rows")
     calls: list[dict[str, Any]] = []
-    pages = [
+    pages: list[dict[str, Any]] = [
         {
             "Items": [_summary()],
             "LastEvaluatedKey": {"PK": f"MODERATION#{CASE_ID}", "SK": "SUMMARY"},

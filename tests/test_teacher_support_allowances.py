@@ -50,6 +50,7 @@ class AtomicSupportTable:
                 self._counter_reads += 1
                 wait = True
         if wait:
+            assert self._counter_barrier is not None
             self._counter_barrier.wait(timeout=3)
         return {"Item": item} if item is not None else {}
 

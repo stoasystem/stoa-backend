@@ -117,7 +117,7 @@ def test_object_provider_ack_is_strict_and_lost_response_reconciles_exact_versio
     with pytest.raises(Exception):
         parse({"VersionId": "", "ETag": 12})
 
-    pages = [
+    pages: list[dict[str, Any]] = [
         {
             "Versions": [{"Key": "other", "VersionId": "v0", "ETag": '"bad"'}],
             "DeleteMarkers": [],

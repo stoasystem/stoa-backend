@@ -156,6 +156,7 @@ def test_put_upload_chunk_part_acknowledgement_commit_then_raise_reconciles_with
             raise RuntimeError("provider-diagnostic-canary")
 
         def list_parts(self, **kwargs: Any) -> dict[str, Any]:
+            assert self.part is not None
             return {"Parts": [dict(self.part)], "IsTruncated": False}
 
     repository, provider = Repository(), Provider()
