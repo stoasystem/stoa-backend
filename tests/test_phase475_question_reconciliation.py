@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 from datetime import UTC, datetime
 import threading
+from collections.abc import Mapping, Sequence
+from typing import TypeGuard
 
 from botocore.exceptions import ClientError
 import pytest
@@ -45,6 +47,36 @@ def _conditional_error() -> ClientError:
         },
         "TransactWriteItems",
     )
+
+
+def _is_object_mapping(value: object) -> TypeGuard[Mapping[str, object]]:
+    return isinstance(value, Mapping) and all(
+        isinstance(key, str) for key in value
+    )
+
+
+def _required_mapping(value: object) -> Mapping[str, object]:
+    if not _is_object_mapping(value):
+        raise _conditional_error()
+    return value
+
+
+def _required_str(value: object) -> str:
+    if not isinstance(value, str):
+        raise _conditional_error()
+    return value
+
+
+def _required_int(value: object) -> int:
+    if type(value) is not int:
+        raise _conditional_error()
+    return value
+
+
+def _required_tuple(value: object) -> tuple[object, ...]:
+    if not isinstance(value, tuple):
+        raise AssertionError("expected a closed reconciliation result tuple")
+    return value
 
 
 def _seed(*, terminal: bool = False) -> dict[tuple[str, str], dict[str, object]]:
@@ -184,12 +216,18 @@ class _ReconciliationTable:
     def _validate(self, operations: list[dict[str, object]]) -> None:
         for operation in operations:
             assert_expression_placeholders_closed(operation)
-            update = operation.get("Update") or operation.get("ConditionCheck")
-            key = (update["Key"]["PK"], update["Key"]["SK"])
+            update = _required_mapping(
+                operation.get("Update") or operation.get("ConditionCheck")
+            )
+            update_key = _required_mapping(update["Key"])
+            key = (
+                _required_str(update_key["PK"]),
+                _required_str(update_key["SK"]),
+            )
             current = self.items.get(key)
             if current is None:
                 raise _conditional_error()
-            values = update["ExpressionAttributeValues"]
+            values = _required_mapping(update["ExpressionAttributeValues"])
             if "ConditionCheck" in operation:
                 if current.get("student_id") != values[":student"]:
                     raise _conditional_error()
@@ -238,10 +276,14 @@ class _ReconciliationTable:
         for operation in operations:
             if "Update" not in operation:
                 continue
-            update = operation["Update"]
-            key = (update["Key"]["PK"], update["Key"]["SK"])
+            update = _required_mapping(operation["Update"])
+            update_key = _required_mapping(update["Key"])
+            key = (
+                _required_str(update_key["PK"]),
+                _required_str(update_key["SK"]),
+            )
             current = self.items[key]
-            values = update["ExpressionAttributeValues"]
+            values = _required_mapping(update["ExpressionAttributeValues"])
             if key == COMMAND_KEY and ":completed" in values:
                 current.update(
                     status="completed",
@@ -261,10 +303,10 @@ class _ReconciliationTable:
                     status="submission_failed",
                     failure_code=values[":failure_code"],
                     failed_at=values[":reversed_at"],
-                    version=int(current.get("version", 0)) + 1,
+                    version=_required_int(current.get("version", 0)) + 1,
                 )
             elif key == COUNTER_KEY:
-                current["count"] = int(current["count"]) - 1
+                current["count"] = _required_int(current["count"]) - 1
             elif key == LEDGER_KEY:
                 current.update(
                     status="reversed",
@@ -276,13 +318,16 @@ class _ReconciliationTable:
 
 def _preview(
     table: _ReconciliationTable,
-    **kwargs: object,
+    *,
+    question_id: str | None = None,
+    quota_period: str | None = None,
 ) -> question_submission_repo.QuestionReconciliationPreview:
     return question_submission_repo.preview_question_submission_reconciliation(
         student_id=STUDENT_ID,
         idempotency_key=REQUEST_ID,
         table=table,
-        **kwargs,
+        question_id=question_id,
+        quota_period=quota_period,
     )
 
 
@@ -374,7 +419,7 @@ def test_terminal_reversal_is_exact_once_and_attachment_storage_are_unchanged() 
     assert table.items[ATTACHMENT_KEY] == attachment_before
     assert table.items[STORAGE_KEY] == storage_before
     assert all(
-        operation["Update"]["Key"] not in (
+        _required_mapping(_required_mapping(operation["Update"])["Key"]) not in (
             {"PK": ATTACHMENT_KEY[0], "SK": ATTACHMENT_KEY[1]},
             {"PK": STORAGE_KEY[0], "SK": STORAGE_KEY[1]},
         )
@@ -547,9 +592,16 @@ def test_privacy_rejects_malformed_coordinate_before_repository_access() -> None
 
 def test_lambda_accepts_only_closed_opaque_coordinate_fields(monkeypatch) -> None:
     raw_key_canary = "raw-lambda-private-canary"
-    calls: list[tuple[object, ...]] = []
+    calls: list[
+        tuple[reconcile_question_submissions.QuestionReconciliationCoordinate, ...]
+    ] = []
 
-    def fake_reconcile(coordinates, **_kwargs):
+    def fake_reconcile(
+        coordinates: Sequence[
+            reconcile_question_submissions.QuestionReconciliationCoordinate
+        ],
+        **_kwargs: object,
+    ) -> reconcile_question_submissions.QuestionReconciliationJobResult:
         calls.append(tuple(coordinates))
         return reconcile_question_submissions.QuestionReconciliationJobResult(
             mode="preview", inspected=1, mutated=0, results=()
@@ -610,9 +662,16 @@ def test_lambda_accepts_only_closed_opaque_coordinate_fields(monkeypatch) -> Non
 
 def test_cli_uses_command_digest_and_redacts_invalid_input(monkeypatch, capsys) -> None:
     raw_key_canary = "raw-cli-private-canary"
-    captured_coordinates: list[object] = []
+    captured_coordinates: list[
+        reconcile_question_submissions.QuestionReconciliationCoordinate
+    ] = []
 
-    def fake_reconcile(coordinates, **_kwargs):
+    def fake_reconcile(
+        coordinates: Sequence[
+            reconcile_question_submissions.QuestionReconciliationCoordinate
+        ],
+        **_kwargs: object,
+    ) -> reconcile_question_submissions.QuestionReconciliationJobResult:
         captured_coordinates.extend(coordinates)
         return reconcile_question_submissions.QuestionReconciliationJobResult(
             mode="preview", inspected=1, mutated=0, results=()
@@ -663,7 +722,8 @@ def test_preview_output_is_closed_and_contains_only_opaque_identities() -> None:
     ).public_dict()
 
     assert set(result) == {"mode", "inspected", "mutated", "results"}
-    assert set(result["results"][0]) == {
+    result_item = _required_mapping(_required_tuple(result["results"])[0])
+    assert set(result_item) == {
         "disposition",
         "commandId",
         "questionId",
@@ -673,7 +733,7 @@ def test_preview_output_is_closed_and_contains_only_opaque_identities() -> None:
         "proposedAction",
         "mutationCount",
     }
-    assert result["results"][0]["commandId"] == REQUEST_ID
+    assert result_item["commandId"] == REQUEST_ID
     assert repository.preview_calls == [
         {
             "student_id": STUDENT_ID,
