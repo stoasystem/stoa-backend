@@ -5,6 +5,7 @@ import inspect
 import subprocess
 import sys
 import threading
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
@@ -473,7 +474,9 @@ def test_stage_a_mismatch_fails_before_attachment_lookup(monkeypatch) -> None:
                 "conv-1", body, _actor(), "correlation-1"
             )
         )
-    assert captured.value.detail["code"] == "message_idempotency_conflict"
+    detail = captured.value.detail
+    assert isinstance(detail, dict)
+    assert detail["code"] == "message_idempotency_conflict"
     assert effects == []
 
 
@@ -529,7 +532,7 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
         }
     )
     fingerprint = conversations.message_request_fingerprint(body)
-    command_state = {}
+    command_state: dict[str, Any] = {}
     effects = {"claim": 0, "bind": 0, "extract": 0, "ai": 0, "complete": 0}
     lock = threading.Lock()
     claim_barrier = threading.Barrier(2)
@@ -605,20 +608,22 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
     )
     monkeypatch.setattr(conversations.attachment_repo, "complete_message_command", complete)
     monkeypatch.setattr(conversations.attachment_service, "bind_message_attachments", bind)
+    def extract_context(*_args: object, **_kwargs: object) -> object:
+        effects["extract"] += 1
+        return conversations.attachment_service.AttachmentContextResult(
+            conversations.attachment_service.AttachmentContextDisposition.READY
+        )
+
+    def get_ai_answer(**_kwargs: object) -> dict[str, Any]:
+        effects["ai"] += 1
+        return {"steps": ["one"], "answer": "safe", "hints": []}
+
     monkeypatch.setattr(
         conversations.attachment_service,
         "extract_message_attachment_context",
-        lambda *_args, **_kwargs: effects.__setitem__("extract", effects["extract"] + 1)
-        or conversations.attachment_service.AttachmentContextResult(
-            conversations.attachment_service.AttachmentContextDisposition.READY
-        ),
+        extract_context,
     )
-    monkeypatch.setattr(
-        conversations.ai_service,
-        "get_ai_answer",
-        lambda **_kwargs: effects.__setitem__("ai", effects["ai"] + 1)
-        or {"steps": ["one"], "answer": "safe", "hints": []},
-    )
+    monkeypatch.setattr(conversations.ai_service, "get_ai_answer", get_ai_answer)
     results = []
     failures = []
 
@@ -761,21 +766,23 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
         conversations.attachment_repo, "renew_message_ai_lease", lambda **_kwargs: True
     )
     monkeypatch.setattr(conversations.attachment_repo, "complete_message_command", complete)
+    def extract_context(*_args: object, **_kwargs: object) -> object:
+        effects["extract"] += 1
+        return conversations.attachment_service.AttachmentContextResult(
+            conversations.attachment_service.AttachmentContextDisposition.READY,
+            context="private text",
+        )
+
+    def get_ai_answer(**_kwargs: object) -> dict[str, Any]:
+        effects["ai"] += 1
+        return {"steps": [], "answer": "original safe answer", "hints": []}
+
     monkeypatch.setattr(
         conversations.attachment_service,
         "extract_message_attachment_context",
-        lambda *_args, **_kwargs: effects.__setitem__("extract", effects["extract"] + 1)
-        or conversations.attachment_service.AttachmentContextResult(
-            conversations.attachment_service.AttachmentContextDisposition.READY,
-            context="private text",
-        ),
+        extract_context,
     )
-    monkeypatch.setattr(
-        conversations.ai_service,
-        "get_ai_answer",
-        lambda **_kwargs: effects.__setitem__("ai", effects["ai"] + 1)
-        or {"steps": [], "answer": "original safe answer", "hints": []},
-    )
+    monkeypatch.setattr(conversations.ai_service, "get_ai_answer", get_ai_answer)
 
     first = conversations._execute_message_command(
         conv_id="conv-1",
@@ -1288,12 +1295,16 @@ def test_regular_and_stream_message_use_identical_safe_attachment_summary(monkey
         "subject": "math",
         "grade": "Sek1",
     }
-    calls = []
+    calls: list[tuple[object, str]] = []
     monkeypatch.setattr(conversations, "_get_conversation", lambda *_: conv)
+    def prepare_message_attachments(references: object, actor: Actor) -> list[object]:
+        calls.append((references, actor.user_id))
+        return []
+
     monkeypatch.setattr(
         conversations.attachment_service,
         "prepare_message_attachments",
-        lambda references, actor: calls.append((references, actor.user_id)) or [],
+        prepare_message_attachments,
     )
     monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
     monkeypatch.setattr(
