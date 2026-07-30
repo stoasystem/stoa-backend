@@ -1,6 +1,6 @@
 """Executable registered-route authorization inventory tests."""
 
-from typing import Annotated
+from typing import Annotated, Awaitable, Protocol, cast
 
 import pytest
 from fastapi import APIRouter, Depends, FastAPI
@@ -28,6 +28,13 @@ SENSITIVE_ROUTE_FAMILIES = {
     "admin",
     "notifications",
 }
+
+
+class _PolicyDependency(Protocol):
+    authorization_specs: tuple[AuthorizationSpec, ...]
+    safe_public: bool
+
+    def __call__(self, student_id: str) -> Awaitable[str]: ...
 
 REAL_NESTED_IDENTIFIER_ROUTES = {
     ("GET", "/questions/{question_id}"): ("question_id",),
@@ -98,7 +105,8 @@ def _policy_dependency(
     async def dependency(student_id: str):
         return student_id
 
-    dependency.authorization_specs = (
+    policy_dependency = cast(_PolicyDependency, dependency)
+    policy_dependency.authorization_specs = (
         AuthorizationSpec(
             resource_type,
             AuthorizationAction.READ,
@@ -106,8 +114,8 @@ def _policy_dependency(
             _resolver,
         ),
     )
-    dependency.safe_public = safe_public
-    return dependency
+    policy_dependency.safe_public = safe_public
+    return policy_dependency
 
 
 class NestedIdentifierLeaf(BaseModel):
@@ -389,11 +397,15 @@ def test_authenticated_global_identifier_requires_exact_self_only_declaration(
     app = FastAPI()
 
     if field_name == "user_id":
-        async def identity_dependency(user_id: str):
+        async def user_identity_dependency(user_id: str):
             return user_id
+
+        identity_dependency = user_identity_dependency
     else:
-        async def identity_dependency(student_id: str):
+        async def student_identity_dependency(student_id: str):
             return student_id
+
+        identity_dependency = student_identity_dependency
 
     @app.post("/me/command")
     @explicit_route_classification(

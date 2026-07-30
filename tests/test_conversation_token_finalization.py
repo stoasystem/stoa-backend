@@ -401,14 +401,33 @@ def test_finalize_timeout_repairs_from_the_same_durable_result(
     real_finalize = conversations.allowance_service.finalize_token_allowance
     calls = 0
 
-    def retry_once(**kwargs: object):
+    def retry_once(
+        *,
+        beneficiary_id: str,
+        effect_id: str,
+        technical_validation_passed: bool,
+        safety_check_passed: bool,
+        durable_result_stored: bool,
+        stable_replay_readable: bool,
+        finalized_at: datetime | None = None,
+        table: object | None = None,
+    ) -> allowance_repo.FinalizationResult:
         nonlocal calls
+        del table
         calls += 1
         if calls == 1:
             return allowance_repo.FinalizationResult(
                 allowance_repo.FinalizationDisposition.RETRYABLE
             )
-        return real_finalize(**kwargs)
+        return real_finalize(
+            beneficiary_id=beneficiary_id,
+            effect_id=effect_id,
+            technical_validation_passed=technical_validation_passed,
+            safety_check_passed=safety_check_passed,
+            durable_result_stored=durable_result_stored,
+            stable_replay_readable=stable_replay_readable,
+            finalized_at=finalized_at,
+        )
 
     monkeypatch.setattr(
         conversations.allowance_service,

@@ -376,6 +376,7 @@ def test_disconnect_style_replay_keeps_exact_result_and_one_final_debit(
     assert len(provider.invoke_calls) == 1
     assert durable_after_disconnect["status"] == "ai_answered"
     internal = durable_after_disconnect["ai_response"]
+    assert isinstance(internal, dict)
     assert internal["allowance_effect_id"]
     assert internal["provider_usage_evidence_id"]
     assert internal["allowance_finalization_status"] == "durable_result_boundary"
