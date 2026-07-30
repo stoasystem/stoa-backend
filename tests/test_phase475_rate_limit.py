@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import hashlib
 import threading
+from collections.abc import Mapping
+from typing import TypeGuard
 
 from fastapi import HTTPException
 
@@ -21,6 +23,24 @@ NOW = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
 
 def _digest(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _is_object_mapping(value: object) -> TypeGuard[Mapping[str, object]]:
+    return isinstance(value, Mapping) and all(
+        isinstance(key, str) for key in value
+    )
+
+
+def _required_mapping(value: object) -> Mapping[str, object]:
+    if not _is_object_mapping(value):
+        raise AssertionError("expected a string-keyed DynamoDB mapping")
+    return value
+
+
+def _required_int(value: object) -> int:
+    if type(value) is not int:
+        raise AssertionError("expected an exact integer DynamoDB value")
+    return value
 
 
 class _RateTable:
@@ -118,7 +138,7 @@ class _RateTable:
             }
 
     def count(self, kind: str = "hint", period: str = PERIOD) -> int:
-        return int(
+        return _required_int(
             self.items.get(("USAGE#student-1", f"{kind.upper()}#{period}"), {}).get(
                 "count", 0
             )
@@ -162,20 +182,26 @@ def test_transaction_puts_payload_bound_operation_and_capped_counter_update() ->
     assert result.disposition is rate_limit.RateAdmissionDisposition.ADMITTED
     assert table.count() == 1
     operations = table.transactions[0]
-    put = next(operation["Put"] for operation in operations if "Put" in operation)
-    update = next(operation["Update"] for operation in operations if "Update" in operation)
-    assert put["Item"]["owner_id"] == "student-1"
-    assert put["Item"]["kind"] == "hint"
-    assert put["Item"]["quota_period"] == PERIOD
-    assert put["Item"]["payload_digest"] == _digest("challenge-1")
-    assert put["Item"]["status"] == "admitted"
-    assert put["Item"]["decision"] == "admitted"
-    assert put["Item"]["counter_value_after"] == 1
-    assert put["Item"]["limit"] == 2
-    assert put["Item"]["receipt_expires_at"] == int(NOW.timestamp()) + 172800
+    put = _required_mapping(
+        next(operation["Put"] for operation in operations if "Put" in operation)
+    )
+    update = _required_mapping(
+        next(operation["Update"] for operation in operations if "Update" in operation)
+    )
+    item = _required_mapping(put["Item"])
+    assert item["owner_id"] == "student-1"
+    assert item["kind"] == "hint"
+    assert item["quota_period"] == PERIOD
+    assert item["payload_digest"] == _digest("challenge-1")
+    assert item["status"] == "admitted"
+    assert item["decision"] == "admitted"
+    assert item["counter_value_after"] == 1
+    assert item["limit"] == 2
+    assert item["receipt_expires_at"] == int(NOW.timestamp()) + 172800
     assert update["ConditionExpression"] == "attribute_not_exists(#count)"
-    assert update["ExpressionAttributeValues"][":next"] == 1
-    assert ":limit" not in update["ExpressionAttributeValues"]
+    values = _required_mapping(update["ExpressionAttributeValues"])
+    assert values[":next"] == 1
+    assert ":limit" not in values
 
 
 def test_repeating_429_requests_leave_counter_exactly_at_limit(monkeypatch) -> None:
@@ -284,7 +310,10 @@ def test_concurrent_distinct_operations_commit_exact_unique_receipts() -> None:
         rate_limit.RateAdmissionDisposition.ADMITTED
     }
     assert sorted(result.counter_value for result in results) == [1, 2]
-    assert sorted(row["counter_value_after"] for row in table.operation_rows()) == [1, 2]
+    assert sorted(
+        _required_int(row["counter_value_after"])
+        for row in table.operation_rows()
+    ) == [1, 2]
     assert table.count() == 2
 
 
