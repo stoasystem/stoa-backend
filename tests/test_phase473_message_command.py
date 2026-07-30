@@ -78,7 +78,6 @@ def _transaction_cancel(codes: list[str]) -> ClientError:
                 {
                     "Code": code,
                     "Message": "repository-private-canary",
-                    "Item": {"PK": {"S": "private-coordinate-canary"}},
                 }
                 for code in codes
             ],
@@ -258,11 +257,16 @@ def test_bind_transaction_uses_persisted_period_and_puts_usage_with_message_effe
         command=command,
     )
 
-    usage = next(
-        operation["Put"]["Item"]
+    usage_operation = next(
+        operation
         for operation in operations
         if operation.kind is attachment_repo.TransactionOperationKind.USAGE_EVENT_PUT
     )
+    assert isinstance(usage_operation.item, dict)
+    put = usage_operation.item["Put"]
+    assert isinstance(put, dict)
+    usage = put["Item"]
+    assert isinstance(usage, dict)
     assert usage["quota_period"] == "2026-07-17"
     assert usage["counter_value_after"] == 3
     assert usage["event_id"] == command["usage_event_id"]
@@ -534,11 +538,16 @@ def test_cross_midnight_replay_uses_original_quota_and_usage_identity() -> None:
         now_iso="2026-07-18T00:00:05+00:00",
         command=classified.command,
     )
-    usage = next(
-        operation["Put"]["Item"]
+    usage_operation = next(
+        operation
         for operation in operations
         if operation.kind is attachment_repo.TransactionOperationKind.USAGE_EVENT_PUT
     )
+    assert isinstance(usage_operation.item, dict)
+    put = usage_operation.item["Put"]
+    assert isinstance(put, dict)
+    usage = put["Item"]
+    assert isinstance(usage, dict)
     assert usage["quota_period"] == "2026-07-17"
     assert usage["counter_value_after"] == 5
     assert usage["event_id"] == before_midnight["usage_event_id"]
