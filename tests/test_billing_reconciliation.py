@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import inspect
+from collections.abc import Mapping
 from dataclasses import replace
-from typing import Any
+from typing import Callable
 
 import pytest
 
@@ -24,6 +25,13 @@ SESSION_URL = "https://checkout.stripe.com/c/pay/cs_test_reconciliation_12345678
 PRICE_ID = "price_test_family_v7"
 NOW_ISO = "2026-07-24T10:30:00+00:00"
 NOW_EPOCH = 1784889000
+
+
+def _fixture_integer(value: object, field: str) -> int:
+    """Make fixture assumptions explicit instead of coercing malformed rows."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise AssertionError(f"fixture {field} must be an integer")
+    return value
 
 
 def _command(
@@ -123,7 +131,7 @@ class FakeCheckoutRepository:
 
     def claim_provider_create(
         self,
-        command: dict[str, object],
+        command: Mapping[str, object],
         *,
         lease_owner: str,
         now_epoch: int,
@@ -131,7 +139,7 @@ class FakeCheckoutRepository:
         now_iso: str,
         table: object | None = None,
     ) -> checkout_command_repo.CheckoutCommandResult:
-        del table, now_iso
+        del command, table, now_iso
         self.claim_calls += 1
         if self.claim_disposition is not checkout_command_repo.CheckoutCommandDisposition.CLAIMED:
             return checkout_command_repo.CheckoutCommandResult(
@@ -141,14 +149,15 @@ class FakeCheckoutRepository:
         if (
             self.command.get("provider_effect_status")
             in {"create_claimed", "provider_outcome_unknown"}
-            and int(self.command.get("lease_expires_at") or 0) > now_epoch
+            and _fixture_integer(self.command.get("lease_expires_at"), "lease_expires_at")
+            > now_epoch
         ):
             return checkout_command_repo.CheckoutCommandResult(
                 checkout_command_repo.CheckoutCommandDisposition.LEASE_BUSY,
                 command=dict(self.command),
             )
-        generation = int(self.command.get("lease_generation") or 0) + 1
-        version = int(self.command["command_version"]) + 1
+        generation = _fixture_integer(self.command.get("lease_generation"), "lease_generation") + 1
+        version = _fixture_integer(self.command.get("command_version"), "command_version") + 1
         self.command.update(
             provider_effect_status="create_claimed",
             command_state=CheckoutCommandState.PROVIDER_CREATE_PENDING,
@@ -202,7 +211,8 @@ class FakeCheckoutRepository:
             command_state=CheckoutCommandState.PROVIDER_SESSION_OPEN,
             provider_session_id=provider_session_id,
             provider_session_url=provider_session_url,
-            command_version=int(self.command["command_version"]) + 1,
+            command_version=_fixture_integer(self.command.get("command_version"), "command_version")
+            + 1,
         )
         return checkout_command_repo.CheckoutCommandResult(
             checkout_command_repo.CheckoutCommandDisposition.ATTACHED,
@@ -221,7 +231,8 @@ class FakeCheckoutRepository:
         self.command.update(
             provider_effect_status="provider_outcome_unknown",
             command_state=CheckoutCommandState.OPERATOR_ATTENTION_REQUIRED,
-            command_version=int(self.command["command_version"]) + 1,
+            command_version=_fixture_integer(self.command.get("command_version"), "command_version")
+            + 1,
         )
         return checkout_command_repo.CheckoutCommandResult(
             checkout_command_repo.CheckoutCommandDisposition.PROVIDER_OUTCOME_UNKNOWN,
@@ -278,20 +289,27 @@ class FailIfCreateProvider(RetrievalOnlyProvider):
 def _reconcile(
     repository: FakeCheckoutRepository,
     provider: RetrievalOnlyProvider,
-    **overrides: Any,
+    *,
+    checkout_ref: str = CHECKOUT_REF,
+    parent_id: str = PARENT_ID,
+    lease_owner: str = "reconciliation-worker",
+    now_epoch: int = NOW_EPOCH,
+    now_iso: str = NOW_ISO,
+    lease_seconds: int = 30,
+    failure_injector: Callable[[billing_reconciliation_service.BillingReconciliationFailurePoint], None]
+    | None = None,
 ) -> billing_reconciliation_service.BillingReconciliationResult:
-    arguments: dict[str, object] = {
-        "checkout_ref": CHECKOUT_REF,
-        "parent_id": PARENT_ID,
-        "lease_owner": "reconciliation-worker",
-        "provider": provider,
-        "repository": repository,
-        "now_epoch": NOW_EPOCH,
-        "now_iso": NOW_ISO,
-        "lease_seconds": 30,
-    }
-    arguments.update(overrides)
-    return billing_reconciliation_service.reconcile_checkout_command(**arguments)
+    return billing_reconciliation_service.reconcile_checkout_command(
+        checkout_ref,
+        parent_id=parent_id,
+        lease_owner=lease_owner,
+        provider=provider,
+        repository=repository,
+        now_epoch=now_epoch,
+        now_iso=now_iso,
+        lease_seconds=lease_seconds,
+        failure_injector=failure_injector,
+    )
 
 
 def test_reconciliation_source_links_owner_lookup_claim_and_conditional_attach() -> None:
@@ -657,9 +675,11 @@ def test_support_projection_is_closed_and_redacted() -> None:
 
 
 def test_provider_dependency_is_retrieval_only_and_result_fields_are_bounded() -> None:
-    members = set(
-        billing_reconciliation_service.BillingReconciliationProvider.__protocol_attrs__
-    )
+    members = {
+        name
+        for name, value in billing_reconciliation_service.BillingReconciliationProvider.__dict__.items()
+        if not name.startswith("_") and callable(value)
+    }
     assert members == {"find_checkout_session", "retrieve_checkout_session"}
     fields = set(
         billing_reconciliation_service.BillingReconciliationResult.__dataclass_fields__
@@ -670,4 +690,3 @@ def test_provider_dependency_is_retrieval_only_and_result_fields_are_bounded() -
         "reconciliation_reason",
         "failure_code",
     } <= fields
-

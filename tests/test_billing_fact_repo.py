@@ -74,7 +74,10 @@ class AtomicBillingTable:
                         raise RuntimeError("conditional conflict")
                     current = deepcopy(values[":next_item"])
                 elif ":now_epoch" in values:
-                    if int(current.get("lease_expires_at", 0)) > values[":now_epoch"]:
+                    lease_expires_at = current.get("lease_expires_at")
+                    if isinstance(lease_expires_at, bool) or not isinstance(lease_expires_at, int):
+                        raise AssertionError("lease fixture must retain an integer expiration")
+                    if lease_expires_at > values[":now_epoch"]:
                         raise RuntimeError("conditional conflict")
                     current.update(
                         lease_owner=values[":lease_owner"],
@@ -183,25 +186,25 @@ def _record_activation_facts(table: AtomicBillingTable) -> tuple[BillingFact, Bi
 def _activation_request(
     invoice: BillingFact,
     subscription: BillingFact,
-    **changes: object,
+    *,
+    environment: str = "test",
+    provider_customer_id_digest: str = "a" * 64,
 ) -> billing_fact_repo.PaidActivationRequest:
-    values: dict[str, object] = {
-        "command_id": "checkout-command-1",
-        "parent_id": "parent-1",
-        "expected_command_version": 7,
-        "provider_customer_id_digest": "a" * 64,
-        "price_id": "price_test_family_v7",
-        "environment": "test",
-        "plan_id": BillingPlanId.FAMILY,
-        "plan_version": 11,
-        "allowance_version": 13,
-        "activation_version": 17,
-        "paid_invoice_fact_id": invoice.fact_id,
-        "active_subscription_fact_id": subscription.fact_id,
-        "activated_at": NOW,
-    }
-    values.update(changes)
-    return billing_fact_repo.PaidActivationRequest(**values)
+    return billing_fact_repo.PaidActivationRequest(
+        command_id="checkout-command-1",
+        parent_id="parent-1",
+        expected_command_version=7,
+        provider_customer_id_digest=provider_customer_id_digest,
+        price_id="price_test_family_v7",
+        environment=environment,
+        plan_id=BillingPlanId.FAMILY,
+        plan_version=11,
+        allowance_version=13,
+        activation_version=17,
+        paid_invoice_fact_id=invoice.fact_id,
+        active_subscription_fact_id=subscription.fact_id,
+        activated_at=NOW,
+    )
 
 
 def _activation_items() -> tuple[dict[str, object], list[dict[str, object]], dict[str, object]]:
@@ -436,11 +439,16 @@ def test_activation_transaction_has_unique_targets_binding_conditions_and_absent
 
     assert result.disposition is billing_fact_repo.ActivationDisposition.COMMITTED
     operations = list(result.operations)
-    targets = []
+    targets: list[tuple[str, str]] = []
     for operation in operations:
         body = operation.get("Put") or operation.get("Update")
-        targets.append((body.get("Item") or body.get("Key"))["PK"])
-        targets[-1] = (targets[-1], (body.get("Item") or body.get("Key"))["SK"])
+        assert isinstance(body, dict)
+        target = body.get("Item") or body.get("Key")
+        assert isinstance(target, dict)
+        pk = target.get("PK")
+        sk = target.get("SK")
+        assert isinstance(pk, str) and isinstance(sk, str)
+        targets.append((pk, sk))
     assert len(targets) == len(set(targets))
     command_update = operations[0]["Update"]
     condition = command_update["ConditionExpression"]
