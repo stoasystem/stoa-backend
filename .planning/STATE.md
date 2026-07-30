@@ -46,7 +46,7 @@ Phases 477-481 around exact remaining gaps
   - Phase 473: historically passed 3/3; real S3 and deployed scheduler/log
     observations remain later external obligations.
 
-  - Phase 474: 32/47 summaries; 15 retained plans; no `474-VERIFICATION.md`.
+  - Phase 474: 33/47 summaries; 14 retained plans; no `474-VERIFICATION.md`.
   - Phase 475: historically passed 8/8 and closed the three Phase 473 data
     follow-ups.
 
@@ -135,7 +135,7 @@ Phases 477-481 around exact remaining gaps
 
 ### Pending Todos
 
-- Execute only the 15 retained Phase 474 plans and produce current-candidate
+- Execute only the 14 remaining retained Phase 474 plans and produce current-candidate
   independent verification.
 
 - Preserve all 51 requirement mappings, the Phase 476 waiver, and all 31 finding
@@ -165,7 +165,7 @@ Phases 477-481 around exact remaining gaps
 
 ## Operator Next Steps
 
-- Run `$gsd-execute-phase 474` against the 15 retained plans; do not regenerate
+- Run `$gsd-execute-phase 474` against the 14 remaining retained plans; do not regenerate
   the 47 removed plans.
 
 - Independently verify Phase 474 against the current backend/Web/infra tuple.

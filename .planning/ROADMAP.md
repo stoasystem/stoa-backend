@@ -35,7 +35,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 | --- | --- | --- | --- |
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
 | 473 | Student Content Privacy And Practice Integrity | Complete — 40/40 plans, independently verified 2026-07-18 | Phase 472 |
-| 474 | Deterministic Verification And Gated Delivery | In progress — 32/47 summaries; 15 retained plans; verification missing | Phases 472 and 473 |
+| 474 | Deterministic Verification And Gated Delivery | In progress — 33/47 summaries; 14 retained plans; verification missing | Phases 472 and 473 |
 | 475 | Transactional Usage Assignment And Relationship Consistency | Complete — 45/45 plans, independently verified 2026-07-23 | Phase 473 |
 | 476 | Billing Idempotency And Paid Access Recovery | Administratively complete by owner waiver — 27/29 summaries; verification incomplete | Phase 475 |
 | 477 | Web Authentication And Contract Convergence | Close login-code, Web role, adapter-contract, and reachable static-truth gaps | Phase 474; consumes Phases 472 and 473 |
@@ -408,9 +408,9 @@ Plans:
 - [x] `474-72`, `474-73` — Closed Web runtime configuration and served-release descriptor contracts.
 - [x] `474-81` through `474-94` — Runtime startup closure, portable exact-source gate, fresh Web verification, formal aggregate, thin read-only callers, final source handoff, and two Linux formal PASS runs.
 
-**Remaining Wave 5**
+**Completed Wave 5**
 
-- [ ] `474-77` — Published Lambda versions and environment aliases.
+- [x] `474-77` — Published Lambda versions and environment aliases.
 
 **Remaining Wave 7**
 
@@ -1060,7 +1060,7 @@ were closed and independently verified by Phase 475; only
 
 ## Next Command
 
-Execute the 15 retained Phase 474 plans; do not regenerate the removed plans:
+Execute the 14 remaining retained Phase 474 plans; do not regenerate the removed plans:
 
 `$gsd-execute-phase 474`
 
