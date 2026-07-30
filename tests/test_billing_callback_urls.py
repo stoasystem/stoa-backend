@@ -129,14 +129,15 @@ def test_policy_rejects_duplicate_or_ambiguous_startup_configuration() -> None:
 
 
 def test_settings_validate_current_environment_policy_at_startup() -> None:
-    development = Settings(_env_file=None)
+    development = Settings.model_validate({})
     assert development.stripe_checkout_web_origins == ["http://localhost:5173"]
     assert development.stripe_checkout_result_path == "/billing/checkout/result"
 
-    staging = Settings(
-        _env_file=None,
-        environment="staging",
-        stripe_checkout_web_origins=["https://staging.stoaedu.ch"],
+    staging = Settings.model_validate(
+        {
+            "environment": "staging",
+            "stripe_checkout_web_origins": ["https://staging.stoaedu.ch"],
+        }
     )
     assert staging.stripe_checkout_web_origins == ["https://staging.stoaedu.ch"]
 
@@ -144,7 +145,7 @@ def test_settings_validate_current_environment_policy_at_startup() -> None:
         ValidationError,
         match="billing_web_origin_https_required",
     ):
-        Settings(_env_file=None, environment="staging")
+        Settings.model_validate({"environment": "staging"})
 
 
 def test_return_urls_use_only_configured_origin_fixed_path_and_safe_query() -> None:
