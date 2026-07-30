@@ -31,6 +31,11 @@ RUNTIME_PLAN_PATHS = (
 )
 
 
+def _settings(**values: object) -> Settings:
+    """Validate explicit test settings without reading a developer dotenv file."""
+    return Settings.model_validate(values)
+
+
 def _literal_dict_writes(path: Path, field_name: str) -> set[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     writes: set[str] = set()
@@ -129,7 +134,7 @@ def test_settings_expose_exact_paid_price_identity_without_compatibility_aliases
 
 
 def test_plan_settings_lock_trial_storage_and_sandbox_defaults() -> None:
-    settings = Settings(_env_file=None)
+    settings = _settings()
 
     assert settings.free_trial_days == 14
     assert settings.free_attachment_storage_bytes == FREE_STORAGE_BYTES == 5 * 1024**3
@@ -159,12 +164,11 @@ def test_trial_and_storage_contract_cannot_be_reconfigured(
     error: str,
 ) -> None:
     with pytest.raises(ValidationError, match=error):
-        Settings(_env_file=None, **{field: value})
+        _settings(**{field: value})
 
 
 def test_checkout_configuration_requires_three_distinct_paid_prices() -> None:
-    configured = Settings(
-        _env_file=None,
+    configured = _settings(
         stripe_api_key="sk_test_plan_identity",
         stripe_student_price_id="price_student_test",
         stripe_teacher_supported_price_id="price_teacher_supported_test",
@@ -181,16 +185,14 @@ def test_checkout_configuration_requires_three_distinct_paid_prices() -> None:
     }
 
     with pytest.raises(ValidationError, match="stripe_paid_price_ids_missing"):
-        Settings(
-            _env_file=None,
+        _settings(
             stripe_api_key="sk_test_plan_identity",
             stripe_student_price_id="price_student_test",
             stripe_teacher_supported_price_id="price_teacher_supported_test",
         )
 
     with pytest.raises(ValidationError, match="stripe_paid_price_ids_duplicate"):
-        Settings(
-            _env_file=None,
+        _settings(
             stripe_api_key="sk_test_plan_identity",
             stripe_student_price_id="price_shared_test",
             stripe_teacher_supported_price_id="price_shared_test",
@@ -207,16 +209,14 @@ def test_nonproduction_settings_reject_live_keys_and_charge_mode(environment: st
     }
 
     with pytest.raises(ValidationError, match="stripe_live_api_key_forbidden"):
-        Settings(
-            _env_file=None,
+        _settings(
             environment=environment,
             stripe_api_key="sk_live_forbidden_canary",
             **paid_prices,
         )
 
     with pytest.raises(ValidationError, match="stripe_live_charges_forbidden"):
-        Settings(
-            _env_file=None,
+        _settings(
             environment=environment,
             stripe_api_key="sk_test_plan_identity",
             stripe_live_charges_enabled=True,
@@ -268,8 +268,7 @@ def test_new_public_account_profiles_and_provider_attributes_start_free_trial(
 
     app = FastAPI()
     app.include_router(auth.router, prefix="/auth")
-    app.dependency_overrides[get_settings] = lambda: Settings(
-        _env_file=None,
+    app.dependency_overrides[get_settings] = lambda: _settings(
         cognito_user_pool_id="pool-id",
         cognito_student_client_id="public-client-id",
     )
@@ -323,7 +322,7 @@ def test_runtime_services_import_with_only_canonical_enum_members() -> None:
 
 
 def test_daily_limit_compatibility_is_keyed_by_canonical_plans_only() -> None:
-    settings = Settings(_env_file=None)
+    settings = _settings()
 
     assert entitlement_service._daily_question_limit("free_trial", settings) == 5
     assert entitlement_service._daily_question_limit("student", settings) == 30
@@ -336,8 +335,7 @@ def test_daily_limit_compatibility_is_keyed_by_canonical_plans_only() -> None:
 
 
 def test_runtime_price_and_storage_helpers_cover_each_canonical_paid_plan() -> None:
-    settings = Settings(
-        _env_file=None,
+    settings = _settings(
         stripe_api_key="sk_test_runtime_identity",
         stripe_student_price_id="price_student_runtime",
         stripe_teacher_supported_price_id="price_teacher_runtime",
