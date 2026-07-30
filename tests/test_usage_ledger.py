@@ -61,9 +61,11 @@ def _condition_value(condition, key_name: str):
     if condition is None:
         return None
     for child in getattr(condition, "_values", ()):
-        values = getattr(child, "_values", ())
-        if len(values) == 2 and getattr(values[0], "name", None) == key_name:
-            return values[1]
+        values: object = getattr(child, "_values", ())
+        if isinstance(values, tuple) and len(values) == 2:
+            field, value = values
+            if getattr(field, "name", None) == key_name:
+                return value
         nested = _condition_value(child, key_name)
         if nested is not None:
             return nested
