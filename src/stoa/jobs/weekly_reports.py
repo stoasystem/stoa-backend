@@ -2,7 +2,8 @@
 
 from datetime import date, datetime, timedelta, timezone
 import logging
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, Protocol, cast
 from zoneinfo import ZoneInfo
 
 from stoa.db.dynamodb import get_table
@@ -13,6 +14,34 @@ logger = logging.getLogger(__name__)
 
 ZURICH_TZ = ZoneInfo("Europe/Zurich")
 SKIPPED_STATUSES = {"generated", "email_sent", "email_failed"}
+
+
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> Mapping[str, object]: ...
+
+
+def _increment_count(counts: dict[str, object], field: str) -> None:
+    value = counts.get(field)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise RuntimeError(f"weekly report count is invalid: {field}")
+    counts[field] = value + 1
+
+
+def _positive_fence_generation(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise RuntimeError("weekly report account fence generation is invalid")
+    return value
+
+
+def _dynamodb_item(value: object) -> Mapping[str, object] | None:
+    if not isinstance(value, Mapping) or not all(isinstance(key, str) for key in value):
+        return None
+    return value
+
+
+def _dynamodb_key(value: object) -> dict[str, object] | None:
+    item = _dynamodb_item(value)
+    return dict(item) if item is not None else None
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
@@ -55,30 +84,30 @@ def run_weekly_report_job(event: dict[str, Any] | None = None, *, now: datetime 
         student_id = pair["student_id"]
         existing = report_repo.get_report_for_child_by_week(parent_id, student_id, week_start)
         if existing and existing.get("status") in SKIPPED_STATUSES:
-            counts["skipped_existing"] += 1
+            _increment_count(counts, "skipped_existing")
             if existing.get("status") == "email_failed":
-                counts["failed"] += 1
+                _increment_count(counts, "failed")
             continue
 
         claim = report_service.build_weekly_report_claim(parent_id, student_id, week_start)
         fence = account_deletion_repo.require_active_account_fence(student_id)
-        claim["account_fence_generation"] = int(fence["generation"])
+        claim["account_fence_generation"] = _positive_fence_generation(fence.get("generation"))
         if not report_repo.try_claim_report_generation(claim):
-            counts["skipped_existing"] += 1
+            _increment_count(counts, "skipped_existing")
             continue
 
-        counts["attempted"] += 1
+        _increment_count(counts, "attempted")
         try:
             payload = report_service.build_weekly_learning_payload(parent_id, student_id, week_start)
             generated_content = report_service.generate_weekly_report_content(payload)
             stored_report = report_service.store_and_send_weekly_report(payload, generated_content)
-            counts["generated"] += 1
+            _increment_count(counts, "generated")
             if stored_report.get("email_status") == "sent" or stored_report.get("status") == "email_sent":
-                counts["email_sent"] += 1
+                _increment_count(counts, "email_sent")
             if stored_report.get("status") == "email_failed":
-                counts["failed"] += 1
+                _increment_count(counts, "failed")
         except Exception as exc:
-            counts["failed"] += 1
+            _increment_count(counts, "failed")
             failed_at = datetime.now(timezone.utc).isoformat()
             report_repo.update_report_status(
                 claim["report_id"],
@@ -124,7 +153,7 @@ def previous_zurich_week_start(now: datetime | None = None) -> date:
 
 def discover_linked_parent_student_pairs() -> list[dict[str, str]]:
     """Discover linked parent/student pairs from formal bindings and legacy student profiles."""
-    table = get_table()
+    table = cast(_ScanTable, get_table())
     scan_kwargs: dict[str, Any] = {
         "FilterExpression": "#role = :role AND attribute_exists(#pid)",
         "ExpressionAttributeNames": {"#role": "role", "#pid": "parent_id"},
@@ -138,26 +167,38 @@ def discover_linked_parent_student_pairs() -> list[dict[str, str]]:
     }
     while True:
         result = table.scan(**binding_scan_kwargs)
-        for item in result.get("Items", []):
+        raw_items = result.get("Items", [])
+        if not isinstance(raw_items, list):
+            break
+        for raw_item in raw_items:
+            item = _dynamodb_item(raw_item)
+            if item is None:
+                continue
             if not str(item.get("SK", "")).startswith("CHILD#"):
                 continue
             parent_id = item.get("parent_id")
             student_id = item.get("student_id")
-            if parent_id and student_id:
+            if isinstance(parent_id, str) and isinstance(student_id, str):
                 pairs_by_key[(parent_id, student_id)] = {"parent_id": parent_id, "student_id": student_id}
-        last_key = result.get("LastEvaluatedKey")
-        if not last_key:
+        last_key = _dynamodb_key(result.get("LastEvaluatedKey"))
+        if last_key is None:
             break
         binding_scan_kwargs["ExclusiveStartKey"] = last_key
 
     while True:
         result = table.scan(**scan_kwargs)
-        for item in result.get("Items", []):
+        raw_items = result.get("Items", [])
+        if not isinstance(raw_items, list):
+            return list(pairs_by_key.values())
+        for raw_item in raw_items:
+            item = _dynamodb_item(raw_item)
+            if item is None:
+                continue
             parent_id = item.get("parent_id")
             student_id = item.get("user_id") or item.get("id")
-            if parent_id and student_id:
+            if isinstance(parent_id, str) and isinstance(student_id, str):
                 pairs_by_key.setdefault((parent_id, student_id), {"parent_id": parent_id, "student_id": student_id})
-        last_key = result.get("LastEvaluatedKey")
-        if not last_key:
+        last_key = _dynamodb_key(result.get("LastEvaluatedKey"))
+        if last_key is None:
             return list(pairs_by_key.values())
         scan_kwargs["ExclusiveStartKey"] = last_key
