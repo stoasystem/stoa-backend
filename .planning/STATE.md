@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 474
 current_phase_name: deterministic-verification-and-gated-delivery
 status: executing
-stopped_at: v9 reality audit completed; Phase 474 has 15 retained plans
-last_updated: "2026-07-30T16:04:13.421Z"
+stopped_at: Completed 474-77-PLAN.md
+last_updated: "2026-07-30T16:16:30.959Z"
 last_activity: 2026-07-30
 last_activity_desc: Phase 474 execution started
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 183
-  completed_plans: 166
+  completed_plans: 167
   percent: 30
 ---
 
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (deterministic-verification-and-gated-delivery) — EXECUTING
-Next retained plan: 474-77 (earliest retained wave)
+Next retained plan: 474-78 (next dependency-ready retained wave)
 Status: Executing Phase 474
-Last activity: 2026-07-30 — Phase 474 execution started
+Last activity: 2026-07-30 — Plan 474-77 alias delivery topology executed; full synth remains NOT RUN pending a verified backend dist manifest
 Phases 477-481 around exact remaining gaps
 
 ## Accumulated Context
@@ -174,8 +174,8 @@ Phases 477-481 around exact remaining gaps
 
 ## Session
 
-**Last Date:** 2026-07-30T17:01:51+02:00
-**Stopped At:** v9 current-state reconciliation and Phase 477-481 scope cleanup
+**Last Date:** 2026-07-30T16:16:30.936Z
+**Stopped At:** Completed 474-77-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -340,6 +340,11 @@ Phases 477-481 around exact remaining gaps
 | Phase 476 P24 | 12min | 1 tasks | 4 files |
 | Phase 476 P25 | 18min | 1 tasks | 9 files |
 | Phase 476 P27 | 14min | 1 tasks | 5 files |
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 474 P77 | 45 min | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -706,3 +711,4 @@ Phases 477-481 around exact remaining gaps
 - [Phase 476]: Prefer recipient-scoped notification reminder state and retain parent billing projection as the persistent fallback; only backend-resolved state clears the reminder. — Keeps Web state independent from email delivery and replacement-safe.
 - [Phase 476]: Real Stripe browser evidence uses a separate dependency-gated stripe-sandbox project; missing test-mode readiness fails rather than falling back to mocks.
 - [Phase 476]: Sandbox receipts retain only modes, counts, API version, payment-method names, source digest, and SHA-256 provider/origin identities.
+- [Phase 474]: Lambda delivery uses published versions and staging/production aliases; release authority can only transition aliases after runtime CodeSha256 and RevisionId validation.

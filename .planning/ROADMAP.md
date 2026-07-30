@@ -342,7 +342,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 **Requirements:** V9QUAL-01, V9QUAL-02, V9QUAL-03, V9QUAL-04, V9QUAL-05, V9QUAL-06, V9QUAL-07.
 
-**Plans:** 32/47 plans complete; 15 current plans remain after the 2026-07-30 cleanup.
+**Plans:** 33/47 plans complete; 14 current plans remain after the 2026-07-30 cleanup.
 
 **Cleanup record:** `474-CLEANUP.md` removes 47 unexecuted plans that were obsolete, duplicated by the completed formal-gate rebuild, or reassigned to Phases 477–480. Completed PLAN/SUMMARY pairs were preserved and plan IDs are not reused.
 
@@ -352,6 +352,54 @@ finish and an independent `474-VERIFICATION.md` passes against the current
 backend/Web/infra candidate.
 
 Plans:
+
+- [x] 474-01-PLAN.md
+- [x] 474-02-PLAN.md
+- [x] 474-03-PLAN.md
+- [x] 474-04-PLAN.md
+- [x] 474-05-PLAN.md
+- [x] 474-06-PLAN.md
+- [x] 474-07-PLAN.md
+- [x] 474-08-PLAN.md
+- [x] 474-09-PLAN.md
+- [x] 474-10-PLAN.md
+- [ ] 474-22-PLAN.md
+- [x] 474-23-PLAN.md
+- [x] 474-26-PLAN.md
+- [ ] 474-27-PLAN.md
+- [ ] 474-28-PLAN.md
+- [ ] 474-32-PLAN.md
+- [ ] 474-33-PLAN.md
+- [ ] 474-34-PLAN.md
+- [ ] 474-35-PLAN.md
+- [ ] 474-36-PLAN.md
+- [ ] 474-37-PLAN.md
+- [ ] 474-38-PLAN.md
+- [x] 474-39-PLAN.md
+- [x] 474-40-PLAN.md
+- [x] 474-41-PLAN.md
+- [x] 474-42-PLAN.md
+- [x] 474-72-PLAN.md
+- [x] 474-73-PLAN.md
+- [ ] 474-76-PLAN.md
+- [x] 474-77-PLAN.md
+- [ ] 474-78-PLAN.md
+- [ ] 474-79-PLAN.md
+- [ ] 474-80-PLAN.md
+- [x] 474-81-PLAN.md
+- [x] 474-82-PLAN.md
+- [x] 474-83-PLAN.md
+- [x] 474-84-PLAN.md
+- [x] 474-85-PLAN.md
+- [x] 474-86-PLAN.md
+- [x] 474-87-PLAN.md
+- [x] 474-88-PLAN.md
+- [x] 474-89-PLAN.md
+- [x] 474-90-PLAN.md
+- [x] 474-91-PLAN.md
+- [x] 474-92-PLAN.md
+- [x] 474-93-PLAN.md
+- [x] 474-94-PLAN.md
 
 **Completed verification and policy foundation**
 
@@ -808,6 +856,7 @@ Plans:
    direct-event isolation.
 4. Deployed connect/disconnect/subscribe/refresh lifecycle plus indexed,
    paginated fanout and stale cleanup.
+
 5. Browser visibility/network recovery, resubscription, ordering, deduplication,
    polling fallback, and one real staged notification.
 
@@ -1000,7 +1049,7 @@ were closed and independently verified by Phase 475; only
 | --- | --- | --- | --- |
 | 472. Privileged Identity And Student Resource Authorization | 22/22 | Complete | 2026-07-15 |
 | 473. Student Content Privacy And Practice Integrity | 40/40 | Complete | 2026-07-18 |
-| 474. Deterministic Verification And Gated Delivery | 32/47 | In progress — verification missing | - |
+| 474. Deterministic Verification And Gated Delivery | 33/47 | In progress — verification missing | - |
 | 475. Transactional Usage Assignment And Relationship Consistency | 45/45 | Complete — independently verified | 2026-07-23 |
 | 476. Billing Idempotency And Paid Access Recovery | 27/29 | Administratively complete — owner waiver; verification incomplete | 2026-07-30 |
 | 477. Web Authentication And Contract Convergence | 0/TBD | Reconciled scope; not planned | - |
