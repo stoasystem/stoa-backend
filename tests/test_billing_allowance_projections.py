@@ -16,7 +16,7 @@ from stoa.config import get_settings
 from stoa.deps import get_actor
 from stoa.models.billing import BillingFact, BillingFactKind
 from stoa.routers import admin, parents
-from stoa.security.identity import Actor, CanonicalRole
+from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import subscription_service
 
 
@@ -169,8 +169,10 @@ def test_parent_projection_keeps_exact_allowance_boundaries(
 
     assert result["inputRemaining"] == {"student-selected": remaining}
     assert result["inputPercentUsed"] == {"student-selected": percent}
-    assert result["allowanceWindow"]["localStart"] == "2026-07-20T00:00:00+02:00"
-    assert result["allowanceWindow"]["localEnd"] == "2026-07-27T00:00:00+02:00"
+    allowance_window = result["allowanceWindow"]
+    assert isinstance(allowance_window, dict)
+    assert allowance_window["localStart"] == "2026-07-20T00:00:00+02:00"
+    assert allowance_window["localEnd"] == "2026-07-27T00:00:00+02:00"
 
 
 def test_family_projection_is_per_selected_beneficiary_and_support_is_shared() -> None:
@@ -335,11 +337,19 @@ def test_admin_detail_exposes_exact_redacted_evidence_and_versions() -> None:
     )
     encoded = json.dumps(result, sort_keys=True)
 
-    assert result["commandLifecycle"]["state"] == "activation_recorded"
-    assert result["factLifecycle"][0]["providerEventIdDigest"] == DIGEST_A
+    command_lifecycle = result["commandLifecycle"]
+    fact_lifecycle = result["factLifecycle"]
+    provider_usage_evidence = result["providerUsageEvidence"]
+    assert isinstance(command_lifecycle, dict)
+    assert isinstance(fact_lifecycle, list) and fact_lifecycle
+    assert isinstance(fact_lifecycle[0], dict)
+    assert isinstance(provider_usage_evidence, list) and provider_usage_evidence
+    assert isinstance(provider_usage_evidence[0], dict)
+    assert command_lifecycle["state"] == "activation_recorded"
+    assert fact_lifecycle[0]["providerEventIdDigest"] == DIGEST_A
     assert result["grantVersion"] == {"student-selected": 7}
     assert result["allowanceVersion"] == {"student-selected": 4}
-    assert result["providerUsageEvidence"][0] == {
+    assert provider_usage_evidence[0] == {
         "beneficiaryId": "student-selected",
         "correlationDigest": DIGEST_B,
         "providerRequestIdDigest": DIGEST_A,
@@ -384,7 +394,7 @@ def test_parent_route_uses_current_grants_and_week_projection(
         issuer="https://issuer.example.test",
         subject="claims-parent-1",
         role=CanonicalRole.PARENT,
-        account_status="active",
+        account_status=AccountStatus.ACTIVE,
         cognito_group="parent",
     )
     monkeypatch.setattr(
