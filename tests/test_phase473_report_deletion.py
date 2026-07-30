@@ -198,7 +198,7 @@ def test_email_intent_claim_rechecks_fence_and_provider_unknown_is_terminal() ->
 def test_report_discovery_is_strong_paginated_and_scrub_is_allowlisted() -> None:
     scan = _contract("scan_report_private_rows")
     scrub = _contract("scrub_report_private_row")
-    pages = [
+    pages: list[dict[str, Any]] = [
         {"Items": [_report_row()], "LastEvaluatedKey": {"PK": f"REPORT#{REPORT_ID}", "SK": "SUMMARY"}},
         {"Items": [_report_row("AUDIT#1#event", before={"canary": "private"}, after={"canary": "private"})]},
     ]

@@ -153,7 +153,7 @@ def test_message_association_transaction_checks_resource_and_account_fences() ->
 
 
 def test_question_association_transaction_checks_resource_and_account_fences() -> None:
-    prepared = {"kind": "attachment", "record": _attachment()}
+    prepared: dict[str, object] = {"kind": "attachment", "record": _attachment()}
     operations = attachment_repo.build_question_attachment_transaction(
         question={"PK": "STUDENT#1", "SK": "QUESTION#question-1", "question_id": "question-1"},
         prepared=prepared,

@@ -126,7 +126,13 @@ def test_command_claim_and_text_only_message_commit_share_account_fence() -> Non
         account_fence_generation=7,
     )
     assert claim[0].kind is attachment_repo.TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK
-    assert claim[0].item["ConditionCheck"]["ExpressionAttributeValues"][":generation"] == 7
+    claim_item = claim[0].item
+    assert isinstance(claim_item, dict)
+    condition_check = claim_item["ConditionCheck"]
+    assert isinstance(condition_check, dict)
+    values = condition_check["ExpressionAttributeValues"]
+    assert isinstance(values, dict)
+    assert values[":generation"] == 7
 
     commit = attachment_repo.build_message_attachment_transaction(
         message=_message(),
@@ -153,7 +159,7 @@ def test_direct_router_writes_are_forbidden_by_static_writer_gate() -> None:
 def test_private_row_discovery_is_strong_paginated_and_scrub_is_allowlisted() -> None:
     scan = _contract("scan_conversation_private_rows")
     scrub = _contract("scrub_conversation_private_row")
-    pages = [
+    pages: list[dict[str, Any]] = [
         {
             "Items": [_message()],
             "LastEvaluatedKey": {"PK": f"CONV#{CONVERSATION_ID}", "SK": "MSG#student"},
@@ -242,10 +248,14 @@ def test_conversation_branch_releases_associations_before_scrub_and_requires_lat
         "scan_conversation_private_rows",
         lambda *_args, **_kwargs: pages.pop(0),
     )
+    def release_conversation_attachments(**_kwargs: Any) -> dict[str, int]:
+        order.append("release")
+        return {"released": 1, "deleted": 0}
+
     monkeypatch.setattr(
         attachment_service,
         "release_conversation_attachments",
-        lambda **_kwargs: order.append("release") or {"released": 1, "deleted": 0},
+        release_conversation_attachments,
     )
     monkeypatch.setattr(
         attachment_repo,
