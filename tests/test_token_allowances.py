@@ -54,6 +54,7 @@ class AtomicAllowanceTable:
                 self._initial_counter_reads += 1
                 wait = True
         if wait:
+            assert self._counter_barrier is not None
             self._counter_barrier.wait(timeout=3)
         return {"Item": item} if item is not None else {}
 
@@ -254,8 +255,16 @@ def test_concurrent_reservations_cannot_overspend_either_dimension(
         "limit_exceeded",
     ]
     counter = table.counter()
-    assert counter["finalized_input_tokens"] + counter["reserved_input_tokens"] <= 50_000
-    assert counter["finalized_output_tokens"] + counter["reserved_output_tokens"] <= 10_000
+    finalized_input_tokens = counter["finalized_input_tokens"]
+    reserved_input_tokens = counter["reserved_input_tokens"]
+    finalized_output_tokens = counter["finalized_output_tokens"]
+    reserved_output_tokens = counter["reserved_output_tokens"]
+    assert isinstance(finalized_input_tokens, int)
+    assert isinstance(reserved_input_tokens, int)
+    assert isinstance(finalized_output_tokens, int)
+    assert isinstance(reserved_output_tokens, int)
+    assert finalized_input_tokens + reserved_input_tokens <= 50_000
+    assert finalized_output_tokens + reserved_output_tokens <= 10_000
 
 
 def test_adjacent_zurich_week_starts_with_full_budget_and_no_rollover() -> None:
@@ -378,12 +387,16 @@ def test_provider_usage_finalizes_exact_actual_counts_and_redacts_provider_value
     )
 
     assert observed.disposition is allowance_repo.ProviderUsageDisposition.RECORDED
+    assert observed.evidence is not None
     assert observed_replay.disposition is allowance_repo.ProviderUsageDisposition.REPLAYED
+    assert observed_replay.evidence is not None
     assert observed_replay.evidence.model_dump(mode="json", by_alias=True) == (
         observed.evidence.model_dump(mode="json", by_alias=True)
     )
     assert finalized.disposition is allowance_repo.FinalizationDisposition.FINALIZED
+    assert finalized.finalization is not None
     assert finalized_replay.disposition is allowance_repo.FinalizationDisposition.REPLAYED
+    assert finalized_replay.finalization is not None
     assert finalized_replay.finalization.model_dump(mode="json", by_alias=True) == (
         finalized.finalization.model_dump(mode="json", by_alias=True)
     )
@@ -439,7 +452,9 @@ def test_restoration_releases_user_allowance_but_retains_provider_cost_and_repla
     )
 
     assert restored.disposition is allowance_repo.FinalizationDisposition.RESTORED
+    assert restored.finalization is not None
     assert replay.disposition is allowance_repo.FinalizationDisposition.REPLAYED
+    assert replay.finalization is not None
     assert replay.finalization.model_dump(mode="json", by_alias=True) == (
         restored.finalization.model_dump(mode="json", by_alias=True)
     )
