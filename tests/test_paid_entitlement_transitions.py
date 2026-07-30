@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Mapping
 
 import pytest
 
@@ -41,6 +41,12 @@ def _grant(
         "activation_version": grant_version,
         "activated_at": "2026-07-01T00:00:00+00:00",
     }
+
+
+def _transition_identity(transition: Mapping[str, object]) -> str:
+    value = transition.get("transition_identity")
+    assert isinstance(value, str)
+    return value
 
 
 class _AtomicTable:
@@ -104,7 +110,7 @@ def test_cancel_or_downgrade_applies_only_at_period_end_once(
         parent_id="parent-1",
         subscription_id_digest=_DIGEST,
         transition_kind="period_end",
-        transition_identity=scheduled.transition["transition_identity"],
+        transition_identity=_transition_identity(scheduled.transition),
         now=_PERIOD_END - timedelta(seconds=1),
         table=table,
     )
@@ -115,7 +121,7 @@ def test_cancel_or_downgrade_applies_only_at_period_end_once(
         parent_id="parent-1",
         subscription_id_digest=_DIGEST,
         transition_kind="period_end",
-        transition_identity=scheduled.transition["transition_identity"],
+        transition_identity=_transition_identity(scheduled.transition),
         now=_PERIOD_END,
         table=table,
     )
@@ -130,7 +136,7 @@ def test_cancel_or_downgrade_applies_only_at_period_end_once(
         parent_id="parent-1",
         subscription_id_digest=_DIGEST,
         transition_kind="period_end",
-        transition_identity=scheduled.transition["transition_identity"],
+        transition_identity=_transition_identity(scheduled.transition),
         now=_PERIOD_END + timedelta(seconds=1),
         table=table,
     )
@@ -193,7 +199,7 @@ def test_duplicate_delayed_failure_cannot_extend_fixed_grace_and_recovery_clears
     recovered = paid_entitlement_service.clear_renewal_grace(
         parent_id="parent-1",
         subscription_id_digest=_DIGEST,
-        transition_identity=first.transition["transition_identity"],
+        transition_identity=_transition_identity(first.transition),
         recovered_at=_PERIOD_END + timedelta(hours=48),
         table=table,
     )
@@ -202,7 +208,7 @@ def test_duplicate_delayed_failure_cannot_extend_fixed_grace_and_recovery_clears
         parent_id="parent-1",
         subscription_id_digest=_DIGEST,
         transition_kind="renewal_grace",
-        transition_identity=first.transition["transition_identity"],
+        transition_identity=_transition_identity(first.transition),
         now=_PERIOD_END + timedelta(hours=73),
         table=table,
     )
@@ -242,7 +248,7 @@ def test_unresolved_grace_falls_to_free_once_and_preserves_history_and_storage(
         parent_id="parent-1",
         subscription_id_digest=_DIGEST,
         transition_kind="renewal_grace",
-        transition_identity=grace.transition["transition_identity"],
+        transition_identity=_transition_identity(grace.transition),
         now=_PERIOD_END + timedelta(hours=72, seconds=-1),
         table=table,
     )
@@ -252,7 +258,7 @@ def test_unresolved_grace_falls_to_free_once_and_preserves_history_and_storage(
         parent_id="parent-1",
         subscription_id_digest=_DIGEST,
         transition_kind="renewal_grace",
-        transition_identity=grace.transition["transition_identity"],
+        transition_identity=_transition_identity(grace.transition),
         now=_PERIOD_END + timedelta(hours=72),
         table=table,
     )
@@ -268,7 +274,7 @@ def test_unresolved_grace_falls_to_free_once_and_preserves_history_and_storage(
         parent_id="parent-1",
         subscription_id_digest=_DIGEST,
         transition_kind="renewal_grace",
-        transition_identity=grace.transition["transition_identity"],
+        transition_identity=_transition_identity(grace.transition),
         now=_PERIOD_END + timedelta(days=4),
         table=table,
     )

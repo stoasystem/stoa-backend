@@ -81,6 +81,7 @@ def test_repository_claim_uses_explicit_current_time_not_proposed_expiry(
         table=table,
     )
 
+    assert claim is not None
     assert claim.intent_version == 5
     assert table.update_kwargs is not None
     expression = table.update_kwargs["ConditionExpression"]
@@ -117,9 +118,10 @@ def test_unexpired_pre_effect_claim_and_inflight_are_never_takeover_eligible(
                 "lease_expires_at": expiry,
             }
         )
-        table.update_item = lambda **_kwargs: (_ for _ in ()).throw(
-            account_deletion_repo.AccountDeletionConflict("conditional loss")
-        )
+        def _reject_update(**_kwargs: Any) -> dict[str, Any]:
+            raise account_deletion_repo.AccountDeletionConflict("conditional loss")
+
+        monkeypatch.setattr(table, "update_item", _reject_update)
         assert (
             notification_repo.claim_delivery_intent(
                 scope=scope,
@@ -309,7 +311,7 @@ class _MemoryIntentStore:
             raise RuntimeError("lost completion acknowledgement")
         return dict(self.item)
 
-    def provider(self, *, accept_then_raise: bool = False) -> dict[str, bool]:
+    def provider(self, *, accept_then_raise: bool = False) -> dict[str, object]:
         self.order.append("provider")
         self.provider_calls += 1
         if accept_then_raise:

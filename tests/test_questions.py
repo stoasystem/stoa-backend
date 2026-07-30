@@ -2,6 +2,7 @@ from botocore.exceptions import ClientError
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
+from typing import Mapping, cast
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.config import Settings, get_settings
@@ -751,7 +752,8 @@ def test_submit_question_rejects_mismatched_idempotent_retry_without_counter(mon
 
 
 def test_question_contract_has_no_client_storage_coordinates() -> None:
-    schema = _client().app.openapi()
+    app = cast(FastAPI, _client().app)
+    schema = app.openapi()
     request_schema = str(schema["components"]["schemas"]["SubmitQuestionRequest"]).lower()
     response_schema = str(schema["components"]["schemas"]["QuestionResponse"]).lower()
     for forbidden in ("image_s3_key", "s3key", "objectkey", "bucket"):
@@ -770,11 +772,12 @@ def test_ocr_receives_only_server_resolved_attachment(monkeypatch) -> None:
         "reserve_question_attachment",
         lambda *args, **kwargs: prepared,
     )
-    monkeypatch.setattr(
-        questions.ocr_service,
-        "extract_text_from_attachment",
-        lambda attachment, settings_obj: observed.append(dict(attachment)) or "2x = 4",
-    )
+    def _extract_text(attachment: Mapping[str, object], *, settings_obj: Settings) -> str:
+        del settings_obj
+        observed.append(dict(attachment))
+        return "2x = 4"
+
+    monkeypatch.setattr(questions.ocr_service, "extract_text_from_attachment", _extract_text)
     monkeypatch.setattr(
         questions.attachment_service,
         "commit_question_with_attachment",

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import is_dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Mapping
 
 import pytest
 from botocore.exceptions import ClientError
@@ -261,7 +261,9 @@ def test_production_service_clock_is_nonblank_timezone_aware_utc() -> None:
     value = worker.now()
     parsed = datetime.fromisoformat(value)
     assert value and parsed.tzinfo is not None
-    assert parsed.utcoffset() is not None and parsed.utcoffset().total_seconds() == 0
+    offset = parsed.utcoffset()
+    assert offset is not None
+    assert offset.total_seconds() == 0
 
 
 def test_service_invokes_no_branch_or_later_write_after_claim_renewal_loss() -> None:
@@ -289,13 +291,20 @@ def test_service_invokes_no_branch_or_later_write_after_claim_renewal_loss() -> 
         def finalize_account_deletion(self, *_args: Any, **_kwargs: Any) -> None:
             calls.append("finalize")
 
+    def _retryable_handler(
+        branch_id: str,
+    ) -> Callable[..., account_deletion_service.BranchResult]:
+        def _handler(
+            *, command: Mapping[str, object], previous: Mapping[str, object]
+        ) -> account_deletion_service.BranchResult:
+            del command, previous
+            calls.append(f"handler:{branch_id}")
+            return account_deletion_service.BranchResult("retryable")
+
+        return _handler
+
     handlers = {
-        branch_id: (
-            lambda *, command, previous, branch_id=branch_id: (
-                calls.append(f"handler:{branch_id}")
-                or account_deletion_service.BranchResult("retryable")
-            )
-        )
+        branch_id: _retryable_handler(branch_id)
         for branch_id in account_deletion_service.ACCOUNT_DELETION_BRANCH_IDS
     }
     worker = account_deletion_service.AccountDeletionService(
@@ -472,9 +481,15 @@ def test_fresh_parent_rescan_removes_only_child_and_advances_row_version() -> No
     assert profile["version"] == 5
     assert profile["preferences"] == {"digest": "daily"}
     assert profile["subscription"] == {"status": "active"}
-    assert [row["student_id"] for row in profile["child_summaries"]] == [
-        "student-2"
-    ]
+    child_summaries = profile["child_summaries"]
+    assert isinstance(child_summaries, list)
+    student_ids: list[str] = []
+    for row in child_summaries:
+        assert isinstance(row, Mapping)
+        student_id = row.get("student_id")
+        assert isinstance(student_id, str)
+        student_ids.append(student_id)
+    assert student_ids == ["student-2"]
 
 
 def test_account_profile_row_conflict_stays_retryable_debt(monkeypatch: Any) -> None:

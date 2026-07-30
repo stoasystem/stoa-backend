@@ -119,11 +119,13 @@ def test_hint_schema_carries_only_approved_directional_hint() -> None:
         "hint": "Use the inverse operation on both sides.",
     }
     with pytest.raises(ValidationError):
-        PracticeHintResponse(
-            challengeId="challenge-1",
-            hintAvailable=True,
-            hint="Try an inverse operation.",
-            standardAnswer="x = 5",
+        PracticeHintResponse.model_validate(
+            {
+                "challengeId": "challenge-1",
+                "hintAvailable": True,
+                "hint": "Try an inverse operation.",
+                "standardAnswer": "x = 5",
+            }
         )
 
 

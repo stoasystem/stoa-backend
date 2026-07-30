@@ -25,7 +25,7 @@ from audit_helpers import MemoryAuthorizationAuditSink
 
 def _app(user: dict) -> TestClient:
     role = CanonicalRole(user["role"])
-    grants = ()
+    grants: tuple[CapabilityGrant, ...] = ()
     if role is CanonicalRole.ADMIN:
         capability_names = user.get("grantCapabilities") or (
             "learning_assignment_manager",
