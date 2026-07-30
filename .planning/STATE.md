@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (deterministic-verification-and-gated-delivery) — EXECUTING
-Next retained plan: 474-78 (next dependency-ready retained wave)
+Next retained plan: 474-22 (next dependency-ready retained wave)
 Status: Executing Phase 474
 Last activity: 2026-07-30 — Plan 474-77 alias delivery topology executed; full synth remains NOT RUN pending a verified backend dist manifest
 Phases 477-481 around exact remaining gaps
