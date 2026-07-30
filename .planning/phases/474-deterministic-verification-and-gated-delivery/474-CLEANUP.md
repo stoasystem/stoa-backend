@@ -27,9 +27,10 @@ Phase 474 now owns:
 4. final source, failure-matrix, and evidence sealing.
 
 Product-level Web contracts and real role journeys belong to Phases 477 and
-478. Broader cloud resources and browser WebSocket integration belong to Phase
-479. Operational probes and release resilience beyond the minimum topology
-belong to Phase 480.
+478. Only retained-route runtime deltas and browser WebSocket integration belong
+to Phase 479. Redaction, readiness, non-WebSocket pagination, alarms, and staged
+probe evidence belong to Phase 480; that phase consumes rather than rebuilds
+Phase 474 delivery and rollback.
 
 ## Removed obsolete mypy decomposition
 
@@ -74,7 +75,7 @@ map. Plan `474-22` now owns one source-current zero-error repair and gate.
 | `474-79` | Protected GitHub environments |
 | `474-80` | Owner staging-policy checkpoint |
 | `474-35` | Staging delivery and controlled rollback |
-| `474-36` | Intentional-failure evidence matrix |
+| `474-36` | Intentional-failure evidence matrix for the candidate-bound release gate; real Playwright journey acceptance remains Phase 478 work |
 | `474-37` | Final requirement/source coverage audit |
 | `474-38` | Final evidence sealing and later-HEAD verification |
 

@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
 status: ready_to_execute
-stopped_at: Phase 474 plan cleanup completed; 15 current plans remain
-last_updated: "2026-07-30T16:14:56+02:00"
-last_activity: 2026-07-30 -- Phase 474 reduced from 94 plans to 47, with 15 current plans remaining
+stopped_at: v9 reality audit completed; Phase 474 has 15 retained plans
+last_updated: "2026-07-30T17:01:51+02:00"
+last_activity: 2026-07-30 -- reconciled current work and removed duplicate scope from Phases 477-481
 progress:
   total_phases: 10
   completed_phases: 4
@@ -25,12 +25,31 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (Deterministic Verification And Gated Delivery) — READY TO EXECUTE
-Plan: 22 of 47
-Status: Plan cleanup complete — execute the 15 retained plans
-Last activity: 2026-07-30 -- Phase 474 reduced from 94 plans to 47; 32 complete and 15 current plans remain
+Next retained plan: 474-77 (earliest retained wave)
+Status: 32/47 summaries; 15 retained plans; independent verification missing
+Last activity: 2026-07-30 -- audited all current v9 evidence and compressed
+Phases 477-481 around exact remaining gaps
 
 ## Accumulated Context
 
+- Current v9 status is three historically phase-verified phases, one
+  owner-waived phase, one incomplete phase, and five reconciled future phases;
+  the three verified phase artifacts bind older candidates and require
+  current-candidate revalidation through the common gate:
+  - Phase 472: historically passed 8/8; external Cognito operations remain
+    exact `NOT RUN`.
+  - Phase 473: historically passed 3/3; real S3 and deployed scheduler/log
+    observations remain later external obligations.
+  - Phase 474: 32/47 summaries; 15 retained plans; no `474-VERIFICATION.md`.
+  - Phase 475: historically passed 8/8 and closed the three Phase 473 data
+    follow-ups.
+  - Phase 476: administratively complete by owner waiver; 27/29 summaries;
+    Plans 28/29 and independent verification remain absent.
+- `.planning/v9.0-MILESTONE-AUDIT.md` records the 2026-07-30 three-source and
+  cross-repository reconciliation. Strictly, 19/51 requirements have historical
+  three-source phase verification but still need current-candidate
+  revalidation; seven Phase 474 requirements are partial, four Phase 476
+  requirements are owner-waived, and 21 requirements remain in Phases 477-481.
 - Phase 474 was reduced on 2026-07-30 from 94 plans (62 incomplete) to
   47 plans (15 incomplete). All completed PLAN/SUMMARY pairs remain; forty stale
   mypy family plans were consolidated into current Plan 474-22, obsolete source
@@ -42,6 +61,11 @@ Last activity: 2026-07-30 -- Phase 474 reduced from 94 plans to 47; 32 complete 
   VERIFICATION exists, and the exact planned aggregate security/evidence
   artifacts remain absent. Later release and milestone gates must read
   `476-MANUAL-WAIVER.md` and must not reinterpret this as an automated pass.
+- Phases 477-481 now have strict non-overlapping ownership: 477 auth/contracts,
+  478 real role journeys and route closure, 479 runtime deltas/WebSocket, 480
+  operational evidence/pagination/probes, and 481 evidence reconciliation plus
+  the early-test decision. Phase 474 alone owns common staging, promotion, and
+  rollback machinery.
 
 - The checked private-store and boundary inventories now seal all Plan 36-38 source changes with independent semantic mutation guards, 232 exact write rows, 66 strict read rows, five lower-bound finding selectors, and the unchanged ordered 17 deletion branches.
 - Every reviewed private mutation now maps to a deterministic source-sealed inventory row, narrow retained-evidence class, or one of four reviewed non-student exclusions; exact current-generation results for all 17 ordered branches, two zero epochs, zero blocking debt, and one same-table CAS are required to permanently terminalize deletion.
@@ -63,13 +87,11 @@ Last activity: 2026-07-30 -- Phase 474 reduced from 94 plans to 47; 32 complete 
 - v8.0-v8.4 are complete as local gated operations contracts; they do not prove integrated product or live rollout completion.
 - The 2026-07-14 audit at `de3bf1e` records 31 findings: 2 P0, 9 P1, 18 P2, and 2 P3.
 - `SEC-001` public privileged registration and `SEC-002` horizontal student-data access are the first mandatory closure boundary.
-- The full Python suite currently reports 12 failed and 640 passed on both local Python 3.14 and a clean Python 3.12 environment.
-- The mobile dependency manifest is currently unresolvable and most routes remain placeholder UI; v9.0 requires clean builds and real student/parent journeys.
 - Curriculum mutation remains restricted to explicitly capability-authorized operators; teacher role alone is insufficient.
 - External rollout, paid marketing, new markets, enterprise automation, broader AI autonomy, and uncontrolled provider writes remain out of scope.
 - Phase 472 uses one closed canonical role enum: `student|parent|teacher|admin`; historical aliases are rejection/reconciliation inputs only.
 - Security responses expose only stable `code`, safe `message`, and `correlationId`; temporary dependency retries are bounded and idempotent-read-only.
-- Wave 0 client recovery behavior is generated and tested in Phase 472; Phase 478 owns web/mobile rendering and integration.
+- Wave 0 client recovery behavior is generated and tested in Phase 472; Phase 478 consumes it for Web rendering and integration.
 - Authentication accepts only RS256 access tokens bound to an explicitly configured issuer and client; JWKS caching is issuer-isolated and bounded through provider outages.
 - Business identity resolves only through a unique issuer-subject binding to one fresh active local role and authoritative grants; request-time email fallback and Cognito privilege mutation are removed.
 - Public self-service registration accepts only exact student/parent commands before provider access, and confirmation revalidates persisted non-privileged registration provenance.
@@ -83,7 +105,6 @@ Last activity: 2026-07-30 -- Phase 474 reduced from 94 plans to 47; 32 complete 
 - Every canonical teacher route now uses Actor plus executable self, current-task, assignment, or exact-capability policy; queue metadata is bounded, indirect help/draft IDs resolve before effects, and stale assignments never preserve access.
 - All 219 registered FastAPI method/path operations now derive deterministic authorization inventory and OpenAPI metadata from the executable dependency graph; unknown routes and sensitive identifier mutations fail closed.
 - Privileged identity reconciliation is redacted and dry-run-first, can only suspend/remove/sign-out/revoke automatically, and requires a separate active `admin_identity_manager` command for any elevation.
-- The extended Phase 472 focused gate reports 546 passed; the full suite reports 1019 passed and the same 23 unrelated strict production-configuration fixture failures owned by Phase 474.
 - Non-production Cognito sandbox evidence was not approved/configured and remains explicitly NOT RUN; no production/provider mutation was performed.
 - Conflicted privileged identities now lose every current grant through a conditional current-pointer transition backed by immutable generation/version history.
 - Account/provider restore cannot revive historical capability authority; only a new manager-approved command and grant identity can create the next generation.
@@ -96,31 +117,46 @@ Last activity: 2026-07-30 -- Phase 474 reduced from 94 plans to 47; 32 complete 
 - Authorization audit HMAC keys now share one canonical decoded-byte contract across Settings, cache identity, and direct sink construction; production rejects weak, placeholder, malformed, colliding, or duplicate active/retained material without echoing secrets.
 - Password recovery now always crosses the public provider boundary and exposes only one metadata-free initiation success or one structured invalid-proof recovery action, independent of account existence, role, or lifecycle state.
 - All six final review findings pass together in 321 source-bound adversarial/positive controls; the extended Phase 472 gate passes 610 tests, while the full suite retains exactly 23 Phase 474-owned Settings fixture failures.
-- Plans 473-18 through 473-40 have executed the source-backed provider, replay, retention, parser, practice, permanent-account-fence, inventory, deletion/delivery race, and immutable-evidence closure. The last independent Phase 473 report predates Plans 36-40 and must be rerun before phase or requirement completion is accepted.
+- Plans 473-18 through 473-40 executed the source-backed provider, replay,
+  retention, parser, practice, permanent-account-fence, inventory,
+  deletion/delivery race, and immutable-evidence closure; the final independent
+  Phase 473 verification passed on 2026-07-18.
 
 ### Pending Todos
 
-- Independently re-verify the complete Phase 473 aggregate before marking Phase 473 or V9PRIV-02 complete.
-- Preserve all 44 requirement mappings and all 31 finding assignments while phase plans are refined.
-- Require approved sandbox or read-only evidence for external systems; do not fabricate live results or authorize production mutation through planning.
+- Execute only the 15 retained Phase 474 plans and produce current-candidate
+  independent verification.
+- Preserve all 51 requirement mappings, the Phase 476 waiver, and all 31 finding
+  assignments while detailed Phase 477 plans are created.
+- Require approved sandbox or read-only evidence for external systems; do not
+  fabricate live results or authorize production mutation through planning.
 
 ### Blockers/Concerns
 
-- Phase 472's P0 authorization defects are locally closed; external rollout still requires the explicitly unavailable Cognito evidence and later v9 release gates.
-- The direct main-to-Lambda workflow, red test baseline, and stale artifact/runtime state prevent a trustworthy release candidate today.
-- Mobile native build/device verification cannot begin until Phase 477 repairs and locks the Expo dependency matrix.
-- Authoritative IaC currently appears external to this repository and must be imported or cross-repository traced in Phase 479.
+- Phase 472's P0 authorization defects are locally closed; external rollout
+  still requires later v9 release gates.
+- Phase 474 delivery, protected-environment, staging, and rollback evidence is
+  incomplete, so a trustworthy current release candidate does not yet exist.
+- Authoritative IaC is `/Users/zhdeng/stoa-infra`; Phase 479 must bind its exact
+  SHA and add only runtime deltas proven by the retained-route inventory.
+- Login-code authentication, OpenAPI/Web adapter convergence, integrated role
+  journeys, and deployed WebSocket lifecycle remain real product gaps.
+- Direct realtime channel matching may broaden a user-specific event to
+  same-role connections and must be closed before deployed notification proof.
 - Global `gsd progress` still scans 55 pre-v9 phase directories left in `.planning/phases/`; use `STATE.md` and `roadmap analyze` for v9 status until those historical records are safely archived rather than deleted.
 
 ## Operator Next Steps
 
-- Run the independent aggregate Phase 473 verification against publication `5da6936095c2b5647a8f992c280d371837f35b0f` before changing phase status.
-- Do not begin Phase 478 core mobile completion before Phases 473, 475, 476, and 477 satisfy their exit gates.
+- Run `$gsd-execute-phase 474` against the 15 retained plans; do not regenerate
+  the 47 removed plans.
+- Independently verify Phase 474 against the current backend/Web/infra tuple.
+- Then run `$gsd-discuss-phase 477` using the reconciled four-boundary scope in
+  ROADMAP and `.planning/v9.0-MILESTONE-AUDIT.md`.
 
 ## Session
 
-**Last Date:** 2026-07-24T17:39:07.829Z
-**Stopped At:** Completed 476-27-PLAN.md
+**Last Date:** 2026-07-30T17:01:51+02:00
+**Stopped At:** v9 current-state reconciliation and Phase 477-481 scope cleanup
 **Resume File:** None
 
 ## Performance Metrics
@@ -571,7 +607,7 @@ Last activity: 2026-07-30 -- Phase 474 reduced from 94 plans to 47; 32 complete 
 - [Phase 475]: CR-10 maps only to discovery plus relationship, teacher, and notification cleanup, joining V9DATA-03, V9DATA-02, and V9DATA-07 respectively.
 - [Phase 475]: CR-09 and D-13 share the immutable operation-owned rate receipt node.
 - [Phase 475]: Final Phase 475 evidence uses one clean immutable candidate and one direct-child two-file publication. — Candidate 677edf994deaee4aa0faef91eb38e2a3a07899ea passed every local gate; publication 458ec9f8970a6ec1657e41862de1cd0ce4b0d3db changes only the generated JSON and Markdown.
-- [Phase 475]: External Phase 475 obligations remain exact later-phase NOT RUN. — Phase 479 owns live AWS DynamoDB; Phase 480 owns live provider effects, deployment, and production smoke.
+- [Phase 475]: External Phase 475 obligations remain exact later-phase NOT RUN. — Phase 479 owns retained-route live AWS runtime evidence; Phase 480 owns live provider-effect and staged-probe evidence; Phase 474 alone owns deployment and rollback, while production smoke remains separately authorized or exact NOT RUN.
 - [Phase 476]: BillingPlanId is the closed four-plan vocabulary; PurchasablePlanId structurally excludes free_trial. — Checkout cannot encode a free plan or hidden legacy translation.
 - [Phase 476]: Public active checkout state requires paid-invoice, active-subscription, effective-plan, plan-version, and allowance-version coordinates. — Browser redirects and checkout completion remain non-authoritative hints.
 - [Phase 476]: Allowance evidence uses strict nonnegative signed-64-bit counts and Europe/Zurich Monday boundaries. — Booleans, fractions, overflow, content, and DST-fixed-duration assumptions fail closed.
