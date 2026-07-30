@@ -223,7 +223,7 @@ def _condition_value(condition, key_name: str):
     if condition is None:
         return None
     for child in getattr(condition, "_values", ()):
-        values = getattr(child, "_values", ())
+        values: tuple[object, ...] = tuple(getattr(child, "_values", ()))
         if len(values) == 2 and getattr(values[0], "name", None) == key_name:
             return values[1]
     return None
