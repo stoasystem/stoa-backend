@@ -6,6 +6,7 @@ import copy
 import inspect
 import threading
 from collections.abc import Mapping
+from typing import TypeGuard
 
 from botocore.exceptions import ClientError
 from fastapi import FastAPI
@@ -36,6 +37,40 @@ def _conditional_error() -> ClientError:
         },
         "TransactWriteItems",
     )
+
+
+def _is_object_mapping(value: object) -> TypeGuard[Mapping[str, object]]:
+    return isinstance(value, Mapping) and all(
+        isinstance(key, str) for key in value
+    )
+
+
+def _required_mapping(value: object) -> Mapping[str, object]:
+    if not _is_object_mapping(value):
+        raise _conditional_error()
+    return value
+
+
+def _is_object_dict(value: object) -> TypeGuard[dict[str, object]]:
+    return isinstance(value, dict) and all(isinstance(key, str) for key in value)
+
+
+def _required_dict(value: object) -> dict[str, object]:
+    if not _is_object_dict(value):
+        raise _conditional_error()
+    return value
+
+
+def _required_str(value: object) -> str:
+    if not isinstance(value, str):
+        raise _conditional_error()
+    return value
+
+
+def _required_int(value: object) -> int:
+    if type(value) is not int:
+        raise _conditional_error()
+    return value
 
 
 class EffectRecoveryTable:
@@ -126,11 +161,18 @@ class EffectRecoveryTable:
     def _validate_transaction(self, operations: list[dict[str, object]]) -> None:
         for operation in operations:
             if "ConditionCheck" in operation:
-                check = operation["ConditionCheck"]
-                current = self.items.get((check["Key"]["PK"], check["Key"]["SK"]))
+                check = _required_mapping(operation["ConditionCheck"])
+                check_key = _required_mapping(check["Key"])
+                condition_key = (
+                    _required_str(check_key["PK"]),
+                    _required_str(check_key["SK"]),
+                )
+                current = self.items.get(condition_key)
                 if current is None:
                     raise _conditional_error()
-                values = check.get("ExpressionAttributeValues", {})
+                values = _required_mapping(
+                    check.get("ExpressionAttributeValues", {})
+                )
                 if ":active" in values and current.get("status") != values[":active"]:
                     raise _conditional_error()
                 if (
@@ -141,19 +183,26 @@ class EffectRecoveryTable:
                     raise _conditional_error()
                 self._validate_bound_row(current, values)
             elif "Put" in operation:
-                put = operation["Put"]
-                item = put["Item"]
-                key = (item["PK"], item["SK"])
-                if key in self.items:
+                put = _required_mapping(operation["Put"])
+                item = _required_dict(put["Item"])
+                item_key = (
+                    _required_str(item["PK"]),
+                    _required_str(item["SK"]),
+                )
+                if item_key in self.items:
                     raise _conditional_error()
             elif "Update" in operation:
-                update = operation["Update"]
-                key = (update["Key"]["PK"], update["Key"]["SK"])
-                current = self.items.get(key)
-                values = update["ExpressionAttributeValues"]
-                if key[0].startswith("USAGE#"):
+                update = _required_mapping(operation["Update"])
+                update_key = _required_mapping(update["Key"])
+                update_item_key = (
+                    _required_str(update_key["PK"]),
+                    _required_str(update_key["SK"]),
+                )
+                current = self.items.get(update_item_key)
+                values = _required_mapping(update["ExpressionAttributeValues"])
+                if update_item_key[0].startswith("USAGE#"):
                     expected = values.get(":expected")
-                    count = int(current.get("count", 0)) if current else 0
+                    count = _required_int(current.get("count", 0)) if current else 0
                     if ":next" not in values:
                         if current is None or count != expected or count < 1:
                             raise _conditional_error()
@@ -162,13 +211,13 @@ class EffectRecoveryTable:
                         raise _conditional_error()
                     if expected is not None and count != expected:
                         raise _conditional_error()
-                    if int(values[":next"]) > int(values[":limit"]):
+                    if _required_int(values[":next"]) > _required_int(values[":limit"]):
                         raise _conditional_error()
                     continue
                 if current is None:
                     raise _conditional_error()
                 self._validate_bound_row(current, values)
-                if key[1].startswith("QUESTION_EFFECT#"):
+                if update_item_key[1].startswith("QUESTION_EFFECT#"):
                     self._validate_effect_update(current, update)
 
     @staticmethod
@@ -300,27 +349,37 @@ class EffectRecoveryTable:
     def _apply_transaction(self, operations: list[dict[str, object]]) -> None:
         for operation in operations:
             if "Put" in operation:
-                item = copy.deepcopy(operation["Put"]["Item"])
-                self.items[(item["PK"], item["SK"])] = item
+                put = _required_mapping(operation["Put"])
+                item = copy.deepcopy(_required_dict(put["Item"]))
+                self.items[(
+                    _required_str(item["PK"]),
+                    _required_str(item["SK"]),
+                )] = item
                 continue
             if "Update" not in operation:
                 continue
-            update = operation["Update"]
-            key = (update["Key"]["PK"], update["Key"]["SK"])
-            values = update["ExpressionAttributeValues"]
-            current = self.items.setdefault(key, {"PK": key[0], "SK": key[1]})
-            if key[0].startswith("USAGE#"):
+            update = _required_mapping(operation["Update"])
+            update_key = _required_mapping(update["Key"])
+            item_key = (
+                _required_str(update_key["PK"]),
+                _required_str(update_key["SK"]),
+            )
+            values = _required_mapping(update["ExpressionAttributeValues"])
+            current = self.items.setdefault(
+                item_key, {"PK": item_key[0], "SK": item_key[1]}
+            )
+            if item_key[0].startswith("USAGE#"):
                 if ":next" not in values:
-                    current["count"] = int(current["count"]) - 1
+                    current["count"] = _required_int(current["count"]) - 1
                 else:
                     current.update(
                         count=values[":next"],
                         expires_at=values[":expires"],
                         usage_type=values[":usage_type"],
                     )
-            elif key[1].startswith("QUESTION_EFFECT#"):
+            elif item_key[1].startswith("QUESTION_EFFECT#"):
                 self._apply_effect_update(current, update)
-            elif key[0].startswith("QUESTION#"):
+            elif item_key[0].startswith("QUESTION#"):
                 if ":failure_code" in values and ":next_question_version" in values and ":next_status" not in values:
                     current.update(
                         version=values[":next_question_version"],
@@ -335,7 +394,7 @@ class EffectRecoveryTable:
                         status=values[":failed"],
                         failure_code=values[":failure_code"],
                         failed_at=values[":reversed_at"],
-                        version=int(current["version"]) + 1,
+                        version=_required_int(current["version"]) + 1,
                     )
                 else:
                     current["status"] = values[":next_status"]
@@ -343,7 +402,7 @@ class EffectRecoveryTable:
                     for token, value in values.items():
                         if token.startswith(":field_"):
                             current[token.removeprefix(":field_")] = copy.deepcopy(value)
-            elif key[1].startswith("QUESTION_SUBMISSION#"):
+            elif item_key[1].startswith("QUESTION_SUBMISSION#"):
                 if ":terminal_failed" in values:
                     current.update(
                         status=values[":terminal_failed"],
@@ -369,7 +428,7 @@ class EffectRecoveryTable:
                         last_effect_id=values[":effect_id"],
                         last_effect_kind=values[":effect_kind"],
                     )
-            elif key[0].startswith("USAGE_LEDGER#") and ":reversal" in values:
+            elif item_key[0].startswith("USAGE_LEDGER#") and ":reversal" in values:
                 current.update(
                     status=values[":reversed"],
                     reversal_id=values[":reversal"],
@@ -491,7 +550,7 @@ def test_ai_success_then_completion_failure_replays_durable_receipt_without_prov
     assert receipt_after_failure["account_fence_generation"] == 1
     assert receipt_after_failure["command_version"] == 1
     assert receipt_after_failure["question_version"] == 1
-    assert receipt_after_failure["result"]["ai_response"] == _ai_answer()
+    assert _required_mapping(receipt_after_failure["result"])["ai_response"] == _ai_answer()
     assert _effect(table, "ai")["status"] == "completed"
 
 
@@ -756,8 +815,11 @@ def test_foreign_stale_and_malformed_receipts_are_rejected_without_write(
     transaction_count = len(table.transactions)
 
     foreign = {**receipt, "student_id": "student-foreign"}
-    stale = {**receipt, "command_version": int(receipt["command_version"]) + 1}
-    malformed_result = dict(receipt["result"])
+    stale = {
+        **receipt,
+        "command_version": _required_int(receipt["command_version"]) + 1,
+    }
+    malformed_result = dict(_required_mapping(receipt["result"]))
     malformed_result["unexpected"] = "private-result-canary"
     malformed = {**receipt, "result": malformed_result}
 
@@ -828,7 +890,7 @@ def test_ocr_success_receipt_recovers_real_question_and_command_transaction(
     assert ai_calls == 1
     receipt = _effect(table, "ocr")
     assert receipt["status"] == "completed"
-    assert receipt["result"]["ocr_text"] == "x + 4 = 10"
+    assert _required_mapping(receipt["result"])["ocr_text"] == "x + 4 = 10"
     assert _effect(table, "ai")["status"] == "completed"
     assert table.items[(f"QUESTION#{QUESTION_ID}", "META")]["version"] == 3
     command = next(
@@ -868,7 +930,7 @@ def test_terminal_provider_rejection_proves_and_compensates_once_before_actionab
 ) -> None:
     table = EffectRecoveryTable()
     table.fail_reversal_after_commit = 1
-    reusable_rows = {
+    reusable_rows: dict[tuple[str, str], dict[str, object]] = {
         ("ATTACHMENT#attachment-1", "META"): {
             "PK": "ATTACHMENT#attachment-1",
             "SK": "META",
