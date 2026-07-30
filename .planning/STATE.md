@@ -2,16 +2,19 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
-status: ready_to_execute
+current_phase: 474
+current_phase_name: deterministic-verification-and-gated-delivery
+status: executing
 stopped_at: v9 reality audit completed; Phase 474 has 15 retained plans
-last_updated: "2026-07-30T17:01:51+02:00"
-last_activity: 2026-07-30 -- reconciled current work and removed duplicate scope from Phases 477-481
+last_updated: "2026-07-30T16:04:13.421Z"
+last_activity: 2026-07-30
+last_activity_desc: Phase 474 execution started
 progress:
   total_phases: 10
-  completed_phases: 4
+  completed_phases: 3
   total_plans: 183
   completed_plans: 166
-  percent: 40
+  percent: 30
 ---
 
 # Project State
@@ -24,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 474 (Deterministic Verification And Gated Delivery) — READY TO EXECUTE
+Phase: 474 (deterministic-verification-and-gated-delivery) — EXECUTING
 Next retained plan: 474-77 (earliest retained wave)
-Status: 32/47 summaries; 15 retained plans; independent verification missing
-Last activity: 2026-07-30 -- audited all current v9 evidence and compressed
+Status: Executing Phase 474
+Last activity: 2026-07-30 — Phase 474 execution started
 Phases 477-481 around exact remaining gaps
 
 ## Accumulated Context
@@ -36,31 +39,39 @@ Phases 477-481 around exact remaining gaps
   owner-waived phase, one incomplete phase, and five reconciled future phases;
   the three verified phase artifacts bind older candidates and require
   current-candidate revalidation through the common gate:
+
   - Phase 472: historically passed 8/8; external Cognito operations remain
     exact `NOT RUN`.
+
   - Phase 473: historically passed 3/3; real S3 and deployed scheduler/log
     observations remain later external obligations.
+
   - Phase 474: 32/47 summaries; 15 retained plans; no `474-VERIFICATION.md`.
   - Phase 475: historically passed 8/8 and closed the three Phase 473 data
     follow-ups.
+
   - Phase 476: administratively complete by owner waiver; 27/29 summaries;
     Plans 28/29 and independent verification remain absent.
+
 - `.planning/v9.0-MILESTONE-AUDIT.md` records the 2026-07-30 three-source and
   cross-repository reconciliation. Strictly, 19/51 requirements have historical
   three-source phase verification but still need current-candidate
   revalidation; seven Phase 474 requirements are partial, four Phase 476
   requirements are owner-waived, and 21 requirements remain in Phases 477-481.
+
 - Phase 474 was reduced on 2026-07-30 from 94 plans (62 incomplete) to
   47 plans (15 incomplete). All completed PLAN/SUMMARY pairs remain; forty stale
   mypy family plans were consolidated into current Plan 474-22, obsolete source
   handoffs were superseded by 474-93, and product Web acceptance was reassigned
   to Phases 477/478. See `474-CLEANUP.md`.
+
 - Phase 476 was administratively accepted by explicit project-owner manual
   waiver on 2026-07-30 after the owner reported independent team testing
   passed. Plans 476-28 and 476-29 have no SUMMARY, no Phase 476 passed
   VERIFICATION exists, and the exact planned aggregate security/evidence
   artifacts remain absent. Later release and milestone gates must read
   `476-MANUAL-WAIVER.md` and must not reinterpret this as an automated pass.
+
 - Phases 477-481 now have strict non-overlapping ownership: 477 auth/contracts,
   478 real role journeys and route closure, 479 runtime deltas/WebSocket, 480
   operational evidence/pagination/probes, and 481 evidence reconciliation plus
@@ -126,8 +137,10 @@ Phases 477-481 around exact remaining gaps
 
 - Execute only the 15 retained Phase 474 plans and produce current-candidate
   independent verification.
+
 - Preserve all 51 requirement mappings, the Phase 476 waiver, and all 31 finding
   assignments while detailed Phase 477 plans are created.
+
 - Require approved sandbox or read-only evidence for external systems; do not
   fabricate live results or authorize production mutation through planning.
 
@@ -135,20 +148,26 @@ Phases 477-481 around exact remaining gaps
 
 - Phase 472's P0 authorization defects are locally closed; external rollout
   still requires later v9 release gates.
+
 - Phase 474 delivery, protected-environment, staging, and rollback evidence is
   incomplete, so a trustworthy current release candidate does not yet exist.
+
 - Authoritative IaC is `/Users/zhdeng/stoa-infra`; Phase 479 must bind its exact
   SHA and add only runtime deltas proven by the retained-route inventory.
+
 - Login-code authentication, OpenAPI/Web adapter convergence, integrated role
   journeys, and deployed WebSocket lifecycle remain real product gaps.
+
 - Direct realtime channel matching may broaden a user-specific event to
   same-role connections and must be closed before deployed notification proof.
+
 - Global `gsd progress` still scans 55 pre-v9 phase directories left in `.planning/phases/`; use `STATE.md` and `roadmap analyze` for v9 status until those historical records are safely archived rather than deleted.
 
 ## Operator Next Steps
 
 - Run `$gsd-execute-phase 474` against the 15 retained plans; do not regenerate
   the 47 removed plans.
+
 - Independently verify Phase 474 against the current backend/Web/infra tuple.
 - Then run `$gsd-discuss-phase 477` using the reconciled four-boundary scope in
   ROADMAP and `.planning/v9.0-MILESTONE-AUDIT.md`.
