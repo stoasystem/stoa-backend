@@ -396,16 +396,21 @@ def test_completion_condition_binds_lease_owner_generation_and_unexpired_deadlin
         table=object(),
     )
     assert result.disposition is attachment_repo.MessageCommandDisposition.COMPLETED
-    update = next(
-        operation.item["Update"]
+    update_operation = next(
+        operation
         for operation in captured
         if operation.kind is attachment_repo.TransactionOperationKind.MESSAGE_COMMAND_UPDATE
     )
+    assert isinstance(update_operation.item, dict)
+    update = update_operation.item["Update"]
+    assert isinstance(update, dict)
     assert "leaseOwner=:lease_owner" in update["ConditionExpression"]
     assert "attempt=:lease_attempt" in update["ConditionExpression"]
     assert "expiresAt>:completed_epoch" in update["ConditionExpression"]
-    assert update["ExpressionAttributeValues"][":lease_attempt"] == 1
-    assert update["ExpressionAttributeValues"][":completed_epoch"] == 219
+    values = update["ExpressionAttributeValues"]
+    assert isinstance(values, dict)
+    assert values[":lease_attempt"] == 1
+    assert values[":completed_epoch"] == 219
 
 
 def test_stale_worker_result_is_refused_after_deterministic_takeover(monkeypatch) -> None:
