@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from collections.abc import Callable
 
 import pytest
 
@@ -45,7 +46,7 @@ class _RepairTable:
         }
         self.transactions: list[list[dict[str, object]]] = []
         self.transaction_attempts = 0
-        self.before_transaction = None
+        self.before_transaction: Callable[[], None] | None = None
 
     def get_item(self, *, Key, ConsistentRead=False):  # noqa: N803
         assert ConsistentRead is True
@@ -192,6 +193,32 @@ def _install_projection(table: _RepairTable, parent_id: str = "parent-1") -> Non
     )
 
 
+def _install_consistent(table: _RepairTable) -> None:
+    _install_forward(table)
+    _install_reverse(table)
+    _install_projection(table)
+
+
+def _install_missing_forward(table: _RepairTable) -> None:
+    _install_reverse(table)
+    _install_projection(table)
+
+
+def _install_missing_reverse(table: _RepairTable) -> None:
+    _install_forward(table)
+    _install_projection(table)
+
+
+def _install_missing_projection(table: _RepairTable) -> None:
+    _install_forward(table)
+    _install_reverse(table)
+
+
+def _install_conflict(table: _RepairTable) -> None:
+    _install_reverse(table, "parent-2")
+    _install_projection(table, "parent-2")
+
+
 def _preview(table: _RepairTable) -> user_repo.ParentBindingRepairPreview:
     return user_repo.preview_parent_binding_repair(
         parent_id="parent-1", student_id="student-1", relationship="child"
@@ -202,23 +229,23 @@ def _preview(table: _RepairTable) -> user_repo.ParentBindingRepairPreview:
     ("setup", "expected"),
     [
         (
-            lambda table: (_install_forward(table), _install_reverse(table), _install_projection(table)),
+            _install_consistent,
             user_repo.ParentBindingRepairClassification.CONSISTENT,
         ),
         (
-            lambda table: (_install_reverse(table), _install_projection(table)),
+            _install_missing_forward,
             user_repo.ParentBindingRepairClassification.REPAIRABLE_MISSING_FORWARD,
         ),
         (
-            lambda table: (_install_forward(table), _install_projection(table)),
+            _install_missing_reverse,
             user_repo.ParentBindingRepairClassification.REPAIRABLE_MISSING_REVERSE,
         ),
         (
-            lambda table: (_install_forward(table), _install_reverse(table)),
+            _install_missing_projection,
             user_repo.ParentBindingRepairClassification.REPAIRABLE_PROFILE_PROJECTION,
         ),
         (
-            lambda table: (_install_reverse(table, "parent-2"), _install_projection(table, "parent-2")),
+            _install_conflict,
             user_repo.ParentBindingRepairClassification.CONFLICT,
         ),
         (
