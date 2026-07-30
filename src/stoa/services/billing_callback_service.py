@@ -20,9 +20,14 @@ _DNS_HOST = re.compile(
 
 
 class BillingCallbackSettings(Protocol):
-    environment: str
-    stripe_checkout_web_origins: Sequence[str]
-    stripe_checkout_result_path: str
+    @property
+    def environment(self) -> str: ...
+
+    @property
+    def stripe_checkout_web_origins(self) -> Sequence[str]: ...
+
+    @property
+    def stripe_checkout_result_path(self) -> str: ...
 
 
 class CheckoutReturnUrls(NamedTuple):

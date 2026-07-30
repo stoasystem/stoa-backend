@@ -134,6 +134,9 @@ def write_fenced_report_artifacts(
         account_deletion_repo.require_active_account_fence(
             owner_id, generation, table=table
         )
+        body_length = intent.get("body_length")
+        if isinstance(body_length, bool) or not isinstance(body_length, int):
+            raise ValueError("report artifact intent has invalid body length")
         try:
             response = s3.put_object(
                 Bucket=bucket,
@@ -153,7 +156,7 @@ def write_fenced_report_artifacts(
                 object_key=key,
                 operation_id=operation,
                 body_sha256=str(intent["body_sha256"]),
-                body_length=int(intent["body_length"]),
+                body_length=body_length,
             )
         report_repo.record_report_object_coordinate(
             intent, coordinate, now_iso=datetime.now(UTC).isoformat(), table=table

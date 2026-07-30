@@ -228,6 +228,38 @@ def test_direct_user_fanout_records_delivery_attempt_metadata(monkeypatch):
     ]
 
 
+def test_fanout_skips_malformed_persisted_channel_records(monkeypatch):
+    events = _install_notification_repo(monkeypatch)
+    connections = _install_websocket_repo(monkeypatch)
+    connections["malformed"] = {
+        "connection_id": "malformed",
+        "subscribed_channels": "user:student-1",
+        "expires_at": 4_102_444_800,
+    }
+    event = {
+        "event_id": "notif-malformed-channel",
+        "recipient_id": "student-1",
+        "recipient_role": "student",
+        "event_type": "teacher_reply",
+        "target_type": "question",
+        "target_id": "question-1",
+        "title": "Teacher replied",
+        "summary": "Your teacher added a reply.",
+        "created_at": "2026-06-09T10:00:00+00:00",
+        "metadata": {},
+    }
+    events[event["event_id"]] = dict(event)
+    sent: list[dict] = []
+
+    result = websocket_service.fanout_notification_event(
+        event,
+        post_func=lambda connection, _envelope: sent.append(connection),
+    )
+
+    assert result["results"] == []
+    assert sent == []
+
+
 def test_delivery_failure_does_not_break_durable_notification(monkeypatch):
     events = _install_notification_repo(monkeypatch)
     _install_websocket_repo(monkeypatch)

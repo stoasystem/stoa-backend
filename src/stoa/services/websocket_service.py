@@ -213,7 +213,12 @@ def fanout_notification_event(
                 {"connection_id": connection_ref, "status": "stale_removed"}
             )
             continue
-        if not target_channels.intersection(set(connection.get("subscribed_channels") or [])):
+        raw_channels = connection.get("subscribed_channels")
+        if not isinstance(raw_channels, list) or not all(
+            isinstance(channel, str) for channel in raw_channels
+        ):
+            continue
+        if not target_channels.intersection(raw_channels):
             continue
 
         endpoint_url = str(connection.get("endpoint_url") or settings.websocket_api_endpoint or "")

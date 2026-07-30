@@ -97,7 +97,7 @@ def extract_pptx_text(data) -> str:
                     for name in archive.namelist()
                     if re.fullmatch(r"ppt/slides/slide\d+\.xml", name)
                 ),
-                key=lambda value: int(re.search(r"(\d+)", value).group(1)),
+                key=_archive_part_index,
             )
             if len(slides) > MAX_PRESENTATION_SLIDES:
                 raise DocumentExtractionFailure("document_limit_exceeded")
@@ -118,7 +118,7 @@ def extract_xlsx_text(data) -> str:
                     for name in archive.namelist()
                     if re.fullmatch(r"xl/worksheets/sheet\d+\.xml", name)
                 ),
-                key=lambda value: int(re.search(r"(\d+)", value).group(1)),
+                key=_archive_part_index,
             )
             if len(sheets) > MAX_WORKBOOK_SHEETS:
                 raise DocumentExtractionFailure("document_limit_exceeded")
@@ -157,6 +157,13 @@ def extract_xlsx_text(data) -> str:
         raise
     except Exception:
         raise DocumentExtractionFailure("invalid_document") from None
+
+
+def _archive_part_index(value: str) -> int:
+    match = re.search(r"(\d+)", value)
+    if match is None:
+        raise DocumentExtractionFailure("invalid_document")
+    return int(match.group(1))
 
 
 def extract_plain_text(data) -> str:

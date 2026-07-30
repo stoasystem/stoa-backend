@@ -20,6 +20,7 @@ import json
 import os
 from pathlib import Path
 import re
+import sys
 from typing import Never, Protocol
 
 from botocore.exceptions import ClientError
@@ -1223,10 +1224,11 @@ def _load_local_inventory(
             or not isinstance(row, dict)
         ):
             raise ValueError("plan migration input is invalid")
-        coordinate = PlanMigrationCoordinate(
-            pk=raw_coordinate.get("pk"),
-            sk=raw_coordinate.get("sk"),
-        )
+        pk = raw_coordinate.get("pk")
+        sk = raw_coordinate.get("sk")
+        if not isinstance(pk, str) or not isinstance(sk, str):
+            raise ValueError("plan migration input is invalid")
+        coordinate = PlanMigrationCoordinate(pk=pk, sk=sk)
         coordinates.append(coordinate)
         sources[(coordinate.pk, coordinate.sk)] = row
     return (
@@ -1256,12 +1258,11 @@ def _event_coordinates(value: object) -> tuple[PlanMigrationCoordinate, ...]:
     for raw_coordinate in value:
         if not isinstance(raw_coordinate, dict) or set(raw_coordinate) != {"pk", "sk"}:
             raise ValueError("plan migration input is invalid")
-        coordinates.append(
-            PlanMigrationCoordinate(
-                pk=raw_coordinate.get("pk"),
-                sk=raw_coordinate.get("sk"),
-            )
-        )
+        pk = raw_coordinate.get("pk")
+        sk = raw_coordinate.get("sk")
+        if not isinstance(pk, str) or not isinstance(sk, str):
+            raise ValueError("plan migration input is invalid")
+        coordinates.append(PlanMigrationCoordinate(pk=pk, sk=sk))
     return _validated_coordinates(coordinates)
 
 
@@ -1281,9 +1282,10 @@ def _event_operator_dispositions(
         coordinate_digest = raw_disposition.get("coordinateDigest")
         target_plan = raw_disposition.get("targetPlan")
         evidence_digest = raw_disposition.get("evidenceDigest")
-        if not all(
-            isinstance(field, str)
-            for field in (coordinate_digest, target_plan, evidence_digest)
+        if (
+            not isinstance(coordinate_digest, str)
+            or not isinstance(target_plan, str)
+            or not isinstance(evidence_digest, str)
         ):
             raise ValueError("plan migration input is invalid")
         disposition = PlanMigrationOperatorDisposition(
@@ -1331,19 +1333,19 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    arguments = list(argv) if argv is not None else list(os.sys.argv[1:])
+    arguments = list(argv) if argv is not None else list(sys.argv[1:])
     if not arguments or arguments[0].startswith("-"):
         arguments.insert(0, "preview")
     parser = _parser()
     args = parser.parse_args(arguments)
     try:
         if args.command == "verify-preview":
-            result = verify_preview_receipt(args.results)
+            verification_result = verify_preview_receipt(args.results)
             print(
                 json.dumps(
                     {
-                        "status": result["status"],
-                        "previewDigest": result["previewDigest"],
+                        "status": verification_result["status"],
+                        "previewDigest": verification_result["previewDigest"],
                     },
                     sort_keys=True,
                 )
@@ -1362,7 +1364,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "apply":
             dispositions_document = json.loads(args.dispositions)
             dispositions = _event_operator_dispositions(dispositions_document)
-            result = apply_plan_identity_migration(
+            apply_result = apply_plan_identity_migration(
                 migration_preview,
                 preview_digest=args.preview_digest,
                 operator_dispositions=dispositions,
@@ -1370,7 +1372,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 environment=args.environment,
                 applied_at=args.applied_at,
             )
-            print(json.dumps(result.public_dict(), sort_keys=True))
+            print(json.dumps(apply_result.public_dict(), sort_keys=True))
             return 0
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)

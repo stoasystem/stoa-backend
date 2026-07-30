@@ -7,6 +7,7 @@ import codecs
 from io import BytesIO
 import posixpath
 from pathlib import PurePosixPath
+from typing import Never
 import unicodedata
 from urllib.parse import unquote, urlsplit
 import warnings
@@ -106,7 +107,7 @@ class PassivePackageFacts:
     uncompressed_bytes: int
 
 
-def _fail(code: AttachmentErrorCode) -> None:
+def _fail(code: AttachmentErrorCode) -> Never:
     raise ValidationFailure(code)
 
 
@@ -372,7 +373,11 @@ def _safe_xml_elements(data: bytes) -> list[tuple[str, dict[str, str]]]:
     parser.StartDoctypeDeclHandler = reject
     parser.EntityDeclHandler = reject
     parser.UnparsedEntityDeclHandler = reject
-    parser.ExternalEntityRefHandler = lambda *_args: reject()
+    def reject_external_entity(*_args: object) -> int:
+        reject()
+        return 0
+
+    parser.ExternalEntityRefHandler = reject_external_entity
     parser.Parse(data, True)
     return elements
 

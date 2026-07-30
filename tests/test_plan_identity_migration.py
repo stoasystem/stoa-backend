@@ -436,6 +436,29 @@ def test_lambda_rejects_unknown_fields_before_repository_access() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "coordinate",
+    [
+        {"pk": None, "sk": "PROFILE"},
+        {"pk": "USER#private-canary", "sk": []},
+    ],
+)
+def test_lambda_rejects_malformed_coordinates_before_repository_access(
+    coordinate: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError, match="input is invalid"):
+        lambda_handler(
+            {
+                "mode": "preview",
+                "environment": "local-test",
+                "sourceSha": "5" * 40,
+                "pricePlanById": _prices(),
+                "coordinates": [coordinate],
+            },
+            None,
+        )
+
+
 def test_cli_defaults_to_preview_and_writes_a_verified_receipt(
     tmp_path: Path,
 ) -> None:
