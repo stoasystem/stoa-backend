@@ -10,7 +10,7 @@ from enum import StrEnum
 import hashlib
 import json
 from tempfile import SpooledTemporaryFile
-from typing import Any
+from typing import Any, Sequence
 from urllib.parse import quote
 from uuid import uuid4
 
@@ -2354,7 +2354,7 @@ def bind_message_attachments(
     now: datetime | None = None,
     repository: Any = attachment_repo,
     command: dict[str, Any] | None = None,
-    deterministic_attachment_ids: list[str] | None = None,
+    deterministic_attachment_ids: Sequence[object] | None = None,
 ) -> list[AttachmentSummary]:
     """Atomically persist a message and every fresh/reused attachment reference."""
     now = (now or datetime.now(UTC)).astimezone(UTC)
@@ -2372,7 +2372,12 @@ def bind_message_attachments(
     summaries: list[AttachmentSummary] = []
     associations: list[dict[str, Any]] = []
     bound_attachment_ids: list[str] = []
-    deterministic_ids = iter(deterministic_attachment_ids or [])
+    valid_deterministic_ids = (
+        [value for value in deterministic_attachment_ids if isinstance(value, str)]
+        if deterministic_attachment_ids is not None
+        else []
+    )
+    deterministic_ids = iter(valid_deterministic_ids)
     for kind, item in prepared:
         if kind == "upload":
             attachment_id = (
@@ -2886,21 +2891,24 @@ def purge_student_attachments(
                 and durable_attachment_id in live_attachment_ids
             ):
                 continue
-            current = upload
+            current: dict[str, Any] | None = upload
             if upload.get("status") != "cleanup_pending":
                 if not callable(claim_cleanup):
                     continue
                 try:
-                    current = claim_cleanup(
+                    claimed_current = claim_cleanup(
                         upload,
                         owner_id=student_id,
                         account_fence_generation=account_fence_generation,
                     )
                 except Exception:
-                    current = None
-                if not current:
                     continue
-            outcome = cleanup_upload_intent(
+                if not isinstance(claimed_current, dict):
+                    continue
+                current = claimed_current
+            if current is None:
+                continue
+            cleanup_outcome = cleanup_upload_intent(
                 current,
                 s3=s3,
                 settings=settings,
@@ -2908,7 +2916,7 @@ def purge_student_attachments(
                 reference_scan_limit=100,
                 repository=repository,
             )
-            if outcome == "deleted" and callable(delete_tombstone):
+            if cleanup_outcome == "deleted" and callable(delete_tombstone):
                 try:
                     delete_tombstone(
                         current["upload_id"],

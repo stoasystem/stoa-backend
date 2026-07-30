@@ -1189,7 +1189,7 @@ def record_staging_multipart(
     version: int,
     *,
     operation_fence: str,
-    multipart_upload_id: str,
+    multipart_upload_id: object,
     table: object | None = None,
 ) -> bool:
     multipart_upload_id = _require_provider_coordinate(multipart_upload_id)
@@ -1208,7 +1208,7 @@ def mark_upload_issued(
     version: int,
     *,
     staging_object_key: str,
-    multipart_upload_id: str,
+    multipart_upload_id: object,
     table: object | None = None,
 ) -> bool:
     item = get_upload_intent(upload_id, table=table)
@@ -1501,8 +1501,8 @@ def recover_staging_completion(
     version: int,
     *,
     operation_fence: str,
-    staging_version_id: str,
-    staging_etag: str,
+    staging_version_id: object,
+    staging_etag: object,
     table: object | None = None,
 ) -> bool:
     operation_fence = _require_provider_coordinate(operation_fence)
@@ -1571,8 +1571,8 @@ def mark_staging_completed(
     owner_id: str,
     version: int,
     *,
-    staging_version_id: str,
-    staging_etag: str,
+    staging_version_id: object,
+    staging_etag: object,
     table: object | None = None,
 ) -> bool:
     item = get_upload_intent(upload_id, table=table)
@@ -3755,8 +3755,8 @@ def record_immutable_version(
     version: int,
     *,
     operation_fence: str,
-    immutable_version_id: str,
-    immutable_etag: str,
+    immutable_version_id: object,
+    immutable_etag: object,
     validated_at: str,
     table: object | None = None,
 ) -> bool:

@@ -26,6 +26,7 @@ from stoa.models.attachment import (
     AttachmentSummary,
     UploadIntentRequest,
     UploadIntentResponse,
+    UploadPurpose,
 )
 from stoa.security.attachment_errors import (
     ATTACHMENT_ERROR_REGISTRY,
@@ -80,7 +81,7 @@ SENSITIVE_CANARIES = {
 ATTACHMENT_TEST_NOW = datetime(2026, 7, 16, tzinfo=timezone.utc)
 
 
-MALFORMED_PROVIDER_COORDINATES = [
+MALFORMED_PROVIDER_COORDINATES: list[object] = [
     None,
     False,
     True,
@@ -91,6 +92,31 @@ MALFORMED_PROVIDER_COORDINATES = [
     "",
     " \t",
 ]
+
+
+def _operation_value(
+    operation: attachment_repo.TransactionOperation, *keys: str
+) -> object:
+    value: object = operation.item
+    for key in keys:
+        assert isinstance(value, dict)
+        value = value[key]
+    return value
+
+
+def _operation_text(
+    operation: attachment_repo.TransactionOperation, *keys: str
+) -> str:
+    value = _operation_value(operation, *keys)
+    assert isinstance(value, str)
+    return value
+
+
+def _operation_has_key(
+    operation: attachment_repo.TransactionOperation, *keys: str
+) -> bool:
+    value = _operation_value(operation, *keys[:-1])
+    return isinstance(value, dict) and keys[-1] in value
 
 
 def test_upload_contract_constants_are_locked() -> None:
@@ -397,7 +423,10 @@ def test_gateway_issuance_is_owner_bound_opaque_and_multipart_private() -> None:
     repository, s3 = _IntentRepository(), _MultipartS3()
     result = create_upload_intent(
         UploadIntentRequest(
-            purpose="question_image", filename="work.png", contentType="image/png", sizeBytes=10
+            purpose=UploadPurpose.QUESTION_IMAGE,
+            filename="work.png",
+            contentType="image/png",
+            sizeBytes=10,
         ),
         _student_actor(),
         s3=s3,
@@ -423,6 +452,7 @@ def test_gateway_issuance_is_owner_bound_opaque_and_multipart_private() -> None:
         value not in str(result)
         for value in (repository.item["staging_object_key"], "private-provider-upload-id", "bucket")
     )
+    assert s3.call is not None
     assert s3.call["ChecksumAlgorithm"] == "SHA256"
 
 
@@ -560,7 +590,7 @@ def test_synchronized_same_part_different_bytes_mutates_provider_at_most_once() 
             return super().upload_part(**kwargs)
 
     repository, s3 = _ChunkRepository(), BlockingS3()
-    outcomes = []
+    outcomes: list[dict[str, object] | AttachmentErrorCode] = []
 
     def worker(value: bytes) -> None:
         try:
@@ -786,11 +816,11 @@ class _PromotionRepository:
 
 
 class _PromotionS3:
-    def __init__(self, body: _GeneratedBody) -> None:
+    def __init__(self, body: object) -> None:
         self.body = body
         self.get_call = None
-        self.put_lengths = []
-        self.deleted = []
+        self.put_lengths: list[int] = []
+        self.deleted: list[dict[str, object]] = []
 
     def get_object(self, **kwargs):
         self.get_call = kwargs
@@ -835,11 +865,13 @@ def test_fifty_mib_document_promotion_uses_bounded_spool_and_exact_version() -> 
     )
     assert result["status"] == "validated"
     assert body.total_read == DOCUMENT_MAX_BYTES
+    assert s3.get_call is not None
     assert s3.get_call["VersionId"] == "staging-version-exact"
     assert s3.put_lengths == [DOCUMENT_MAX_BYTES]
     expected_digest = hashlib.sha256()
     for _ in range(50):
         expected_digest.update(b"a" * (1024 * 1024))
+    assert repository.validated is not None
     assert repository.validated["content_sha256"] == expected_digest.hexdigest()
     assert repository.validated["immutable_version_id"] == "immutable-version-exact"
     assert body.close_count == 1
@@ -1035,7 +1067,7 @@ def test_issuance_failure_is_service_unavailable_and_terminal() -> None:
     with pytest.raises(AttachmentDecisionError) as error:
         create_upload_intent(
             UploadIntentRequest(
-                purpose="question_image",
+                purpose=UploadPurpose.QUESTION_IMAGE,
                 filename="work.png",
                 contentType="image/png",
                 sizeBytes=10,
@@ -1065,7 +1097,7 @@ def test_malformed_success_upload_id_retains_issuance_fence(response: dict) -> N
     with pytest.raises(AttachmentDecisionError) as captured:
         create_upload_intent(
             UploadIntentRequest(
-                purpose="question_image",
+                purpose=UploadPurpose.QUESTION_IMAGE,
                 filename="work.png",
                 contentType="image/png",
                 sizeBytes=10,
@@ -1260,7 +1292,7 @@ def test_issuing_lost_response_retains_exact_durable_cleanup_coordinate() -> Non
     with pytest.raises(AttachmentDecisionError) as error:
         create_upload_intent(
             UploadIntentRequest(
-                purpose="question_image",
+                purpose=UploadPurpose.QUESTION_IMAGE,
                 filename="work.png",
                 contentType="image/png",
                 sizeBytes=10,
@@ -1272,6 +1304,7 @@ def test_issuing_lost_response_retains_exact_durable_cleanup_coordinate() -> Non
             repository=repository,
         )
     assert error.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert repository.item is not None
     assert repository.item["status"] == "cleanup_pending"
     assert repository.item["staging_object_key"] == s3.created["Key"]
     assert repository.item["operation_kind"] == "staging_issuance"
@@ -1291,6 +1324,7 @@ def test_assembling_provider_success_repository_split_recovers_after_restart() -
             now=started, repository=repository,
         )
     assert error.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert repository.item is not None
     assert repository.item["status"] == "assembling"
     recovered = complete_upload(
         "upload-1", 1, _student_actor(), s3=s3,
@@ -1315,6 +1349,7 @@ def test_promotion_provider_success_repository_split_recovers_exact_version() ->
     repository.fail_immutable_record_once = True
     s3 = _CrashLifecycleS3(data)
     started = datetime(2026, 7, 16, tzinfo=timezone.utc)
+    assert repository.item is not None
     with pytest.raises(AttachmentDecisionError) as error:
         _validate_and_promote_completed(
             repository.item, _student_actor(), s3=s3,
@@ -1322,6 +1357,7 @@ def test_promotion_provider_success_repository_split_recovers_exact_version() ->
             now=started, repository=repository,
         )
     assert error.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert repository.item is not None
     assert repository.item["status"] == "promoting"
     immutable_key = repository.item["immutable_object_key"]
     recovered = complete_upload(
@@ -1367,6 +1403,7 @@ def test_malformed_success_staging_coordinate_retains_assembly_fence(
             repository=repository,
         )
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert repository.item is not None
     assert repository.item["status"] == "assembling"
     assert repository.item["operation_kind"] == "staging_assembly"
     assert repository.item["operation_fence"]
@@ -1399,6 +1436,7 @@ def test_malformed_success_immutable_coordinate_retains_promotion_fence(
             result[field] = value
             return result
 
+    assert repository.item is not None
     with pytest.raises(AttachmentDecisionError) as captured:
         _validate_and_promote_completed(
             repository.item,
@@ -1409,6 +1447,7 @@ def test_malformed_success_immutable_coordinate_retains_promotion_fence(
             repository=repository,
         )
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert repository.item is not None
     assert repository.item["status"] == "promoting"
     assert repository.item["operation_kind"] == "immutable_promotion"
     assert repository.item["operation_fence"]
@@ -1439,6 +1478,7 @@ def test_malformed_success_coordinates_recover_after_restart_without_new_mutatio
             now=started,
             repository=repository,
         )
+    assert repository.item is not None
     assert repository.item["status"] == "assembling"
     recovered = complete_upload(
         "upload-1",
@@ -1568,7 +1608,7 @@ class _MessageAttachmentRepository:
         self.uploads = uploads or {}
         self.attachments = attachments or {}
         self.used_bytes = used_bytes
-        self.transactions = []
+        self.transactions: list[list[attachment_repo.TransactionOperation]] = []
 
     def get_upload_intent(self, upload_id):
         return self.uploads.get(upload_id)
@@ -1683,15 +1723,17 @@ def test_question_fresh_upload_reservation_and_commit_are_conditional_and_atomic
         attachment_repo.TransactionOperationKind.ASSOCIATION_PUT,
         attachment_repo.TransactionOperationKind.QUESTION_PUT,
     ]
-    assert operations[-1]["Put"]["Item"] is question
+    assert _operation_value(operations[-1], "Put", "Item") is question
     assert any(
-        operation.get("Update", {}).get("Key", {}).get("PK") == "UPLOAD#upload-1"
-        and ":consuming" in operation["Update"]["ExpressionAttributeValues"]
+        _operation_value(operation, "Update", "Key", "PK") == "UPLOAD#upload-1"
+        and _operation_has_key(operation, "Update", "ExpressionAttributeValues", ":consuming")
         for operation in operations
+        if "Update" in operation
     )
     assert any(
-        operation.get("Update", {}).get("Key", {}).get("PK") == "STORAGE#student-1"
+        _operation_value(operation, "Update", "Key", "PK") == "STORAGE#student-1"
         for operation in operations
+        if "Update" in operation
     )
 
 
@@ -1724,12 +1766,14 @@ def test_question_saved_image_reuse_has_no_storage_charge() -> None:
     )
     operations = repository.transactions[0]
     assert not any(
-        operation.get("Update", {}).get("Key", {}).get("PK", "").startswith("STORAGE#")
+        _operation_text(operation, "Update", "Key", "PK").startswith("STORAGE#")
         for operation in operations
+        if "Update" in operation
     )
     assert any(
-        "ref_count" in operation.get("Update", {}).get("UpdateExpression", "")
+        "ref_count" in _operation_text(operation, "Update", "UpdateExpression")
         for operation in operations
+        if "Update" in operation
     )
 
 
@@ -1896,21 +1940,29 @@ def test_fresh_and_reused_message_attachments_share_one_atomic_transaction() -> 
     ]
     assert sum("Update" in operation for operation in operations) == 3
     storage_updates = [
-        operation["Update"]
+        _operation_value(operation, "Update")
         for operation in operations
-        if "Update" in operation and operation["Update"]["Key"]["PK"].startswith("STORAGE#")
+        if "Update" in operation
+        and _operation_text(operation, "Update", "Key", "PK").startswith("STORAGE#")
     ]
-    assert storage_updates[0]["ExpressionAttributeValues"][":size"] == 321
+    assert isinstance(storage_updates[0], dict)
+    storage_values = storage_updates[0]["ExpressionAttributeValues"]
+    assert isinstance(storage_values, dict)
+    assert storage_values[":size"] == 321
     assert any(
-        "ref_count=if_not_exists" in operation.get("Update", {}).get("UpdateExpression", "")
+        "ref_count=if_not_exists" in _operation_text(operation, "Update", "UpdateExpression")
         for operation in operations
+        if "Update" in operation
     )
     message = next(
-        operation["Put"]["Item"]
+        _operation_value(operation, "Put", "Item")
         for operation in operations
         if operation.kind is attachment_repo.TransactionOperationKind.MESSAGE_PUT
     )
-    assert message["attachment_ids"][1] == "attachment-saved"
+    assert isinstance(message, dict)
+    attachment_ids = message["attachment_ids"]
+    assert isinstance(attachment_ids, list)
+    assert attachment_ids[1] == "attachment-saved"
     public = str([summary.model_dump(by_alias=True) for summary in summaries])
     assert "provider-coordinate" not in public
     assert "immutable-version" not in public
@@ -1919,9 +1971,9 @@ def test_fresh_and_reused_message_attachments_share_one_atomic_transaction() -> 
 def _transaction_cancel_error(
     codes: list[str], *, include_private_diagnostics: bool = True
 ) -> ClientError:
-    reasons = []
+    reasons: list[dict[str, object]] = []
     for index, code in enumerate(codes):
-        reason = {"Code": code}
+        reason: dict[str, object] = {"Code": code}
         if include_private_diagnostics:
             reason.update(
                 {
@@ -1934,7 +1986,18 @@ def _transaction_cancel_error(
                 }
             )
         reasons.append(reason)
-    return ClientError(
+    error = ClientError(
+        {
+            "Error": {
+                "Code": "TransactionCanceledException",
+                "Message": "Amazon DynamoDB private-provider-canary",
+            },
+        },
+        "TransactWriteItems",
+    )
+    object.__setattr__(
+        error,
+        "response",
         {
             "Error": {
                 "Code": "TransactionCanceledException",
@@ -1942,8 +2005,8 @@ def _transaction_cancel_error(
             },
             "CancellationReasons": reasons,
         },
-        "TransactWriteItems",
     )
+    return error
 
 
 class _CancellationClient:
@@ -2191,7 +2254,7 @@ def test_transaction_quota_race_dependency_cancellation_is_zero_effect_and_stabl
                 "status": "consuming",
                 "consume_epoch": int(ATTACHMENT_TEST_NOW.timestamp()),
             }
-            prepared = {
+            prepared_question: dict[str, object] = {
                 "kind": "upload",
                 "record": upload,
                 "attachment": {
@@ -2202,7 +2265,7 @@ def test_transaction_quota_race_dependency_cancellation_is_zero_effect_and_stabl
                 },
             }
         else:
-            prepared = {
+            prepared_question = {
                 "kind": "attachment",
                 "record": repository.attachments["attachment-saved"],
                 "attachment": repository.attachments["attachment-saved"],
@@ -2215,14 +2278,14 @@ def test_transaction_quota_race_dependency_cancellation_is_zero_effect_and_stabl
                     "question_id": "question-zero-effect",
                     "student_id": "student-1",
                 },
-                prepared=prepared,
+                prepared=prepared_question,
                 actor=_student_actor(),
                 effective_plan="free_trial",
                 now=ATTACHMENT_TEST_NOW,
                 repository=repository,
             )
     else:
-        prepared = [
+        prepared_message: list[tuple[str, dict[str, object]]] = [
             (
                 "upload" if fresh else "attachment",
                 repository.uploads["upload-1"]
@@ -2239,7 +2302,7 @@ def test_transaction_quota_race_dependency_cancellation_is_zero_effect_and_stabl
                 },
                 conversation_id="conv-zero-effect",
                 actor=_student_actor(),
-                prepared=prepared,
+                prepared=prepared_message,
                 effective_plan="free_trial",
                 now=ATTACHMENT_TEST_NOW,
                 repository=repository,
@@ -2282,7 +2345,10 @@ def test_saved_attachment_reuse_does_not_mutate_storage_usage() -> None:
         repository=repository,
     )
     assert all(
-        not ("Update" in operation and operation["Update"]["Key"]["PK"].startswith("STORAGE#"))
+        not (
+            "Update" in operation
+            and _operation_text(operation, "Update", "Key", "PK").startswith("STORAGE#")
+        )
         for operation in repository.transactions[0]
     )
 
@@ -2319,13 +2385,15 @@ def test_deterministic_fresh_attachment_ids_preserve_exact_order_and_keys() -> N
     assert [summary.attachment_id for summary in summaries] == message["attachment_ids"]
     operations = repository.transactions[0]
     put_items = [
-        operation.item["Put"]["Item"]
+        item
         for operation in operations
         if operation.kind
         in {
             attachment_repo.TransactionOperationKind.ATTACHMENT_PUT,
             attachment_repo.TransactionOperationKind.ASSOCIATION_PUT,
         }
+        for item in [_operation_value(operation, "Put", "Item")]
+        if isinstance(item, dict)
     ]
     assert {
         item["PK"] for item in put_items if item.get("entity_type") == "attachment"
@@ -2352,7 +2420,7 @@ def test_deterministic_fresh_attachment_ids_preserve_exact_order_and_keys() -> N
     [[], ["one", "two"], [""], ["   "], [None]],
 )
 def test_deterministic_fresh_attachment_id_cardinality_fails_before_effects(
-    supplied,
+    supplied: list[str | None],
 ) -> None:
     repository = _MessageAttachmentRepository(uploads={"upload-1": _validated_upload()})
     message = {
@@ -2360,7 +2428,7 @@ def test_deterministic_fresh_attachment_id_cardinality_fails_before_effects(
         "SK": "MSG#message-cardinality",
         "message_id": "message-cardinality",
     }
-    values = supplied if supplied != [None] else [None]
+    values: list[object] = list(supplied) if supplied != [None] else [None]
     with pytest.raises(AttachmentDecisionError) as captured:
         bind_message_attachments(
             message=message,
@@ -2436,7 +2504,7 @@ def test_lost_transaction_retry_rebuilds_identical_attachment_and_association_ke
 
 
 def test_message_command_claim_groups_command_quota_operation_and_counter() -> None:
-    command = {
+    command: dict[str, object] = {
         "command_id": "opaque-command",
         "conversation_id": "opaque-conversation",
         "idempotency_key": "safe-key",
@@ -2459,17 +2527,31 @@ def test_message_command_claim_groups_command_quota_operation_and_counter() -> N
         attachment_repo.TransactionOperationKind.CHAT_QUOTA_OPERATION_PUT,
         attachment_repo.TransactionOperationKind.CHAT_QUOTA_UPDATE,
     ]
-    assert operations[0]["ConditionCheck"]["Key"] == {
+    condition = operations[0]["ConditionCheck"]
+    assert isinstance(condition, dict)
+    condition_key = condition["Key"]
+    assert isinstance(condition_key, dict)
+    assert condition_key == {
         "PK": "USER#student-1",
         "SK": "ACCOUNT_FENCE",
     }
-    command_item = operations[1]["Put"]["Item"]
+    put = operations[1]["Put"]
+    assert isinstance(put, dict)
+    command_item = put["Item"]
+    assert isinstance(command_item, dict)
     assert command_item["fingerprint"] == "f" * 64
     assert command_item["counter_value"] == 5
     assert "content" not in command_item and "attachment_ids" not in command_item
-    quota_item = operations[2]["Put"]["Item"]
+    quota_put = operations[2]["Put"]
+    assert isinstance(quota_put, dict)
+    quota_item = quota_put["Item"]
+    assert isinstance(quota_item, dict)
     assert quota_item["SK"] == "CHAT_QUOTA_OP#opaque-command"
-    assert operations[3]["Update"]["ExpressionAttributeValues"][":next"] == 5
+    update = operations[3]["Update"]
+    assert isinstance(update, dict)
+    update_values = update["ExpressionAttributeValues"]
+    assert isinstance(update_values, dict)
+    assert update_values[":next"] == 5
 
 
 class _LeaseTable:
@@ -2700,9 +2782,12 @@ class _ReadBody:
 
 
 class _PrivateS3:
-    def __init__(self, objects=None) -> None:
+    def __init__(
+        self,
+        objects: dict[str, bytes | tuple[bytes, str] | tuple[bytes, str, str]] | None = None,
+    ) -> None:
         self.objects = objects or {}
-        self.deleted = []
+        self.deleted: list[tuple[str, str, str]] = []
 
     def get_object(self, Bucket, Key, VersionId):
         value = self.objects[Key]
@@ -2893,7 +2978,7 @@ def test_ai_private_telemetry_excludes_input_output_and_provider_canaries(
 class _OcrClient:
     def __init__(self, *, error_code: str | None = None) -> None:
         self.error_code = error_code
-        self.calls = []
+        self.calls: list[dict[str, object]] = []
 
     def detect_text(self, **kwargs):
         self.calls.append(kwargs)
@@ -2933,7 +3018,11 @@ def test_private_ocr_boundary_uses_resolved_attachment_and_safe_categories() -> 
         client=client,
     )
     assert result == "first\nlater"
-    assert client.calls[0]["Image"]["S3Object"] == {
+    image = client.calls[0]["Image"]
+    assert isinstance(image, dict)
+    s3_object = image["S3Object"]
+    assert isinstance(s3_object, dict)
+    assert s3_object == {
         "Bucket": "private-images",
         "Name": "objects/private/ocr-coordinate-canary.png",
         "Version": "immutable-version-saved",
