@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: milestone
-status: ready_to_plan
-stopped_at: Phase 476 completed by project-owner manual waiver
-last_updated: "2026-07-30T15:57:25+02:00"
-last_activity: 2026-07-30 -- Phase 476 administratively completed with 476-28/29 formal evidence waived
+status: ready_to_execute
+stopped_at: Phase 474 plan cleanup completed; 15 current plans remain
+last_updated: "2026-07-30T16:14:56+02:00"
+last_activity: 2026-07-30 -- Phase 474 reduced from 94 plans to 47, with 15 current plans remaining
 progress:
   total_phases: 10
   completed_phases: 4
-  total_plans: 230
+  total_plans: 183
   completed_plans: 166
   percent: 40
 ---
@@ -24,13 +24,18 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 
 ## Current Position
 
-Phase: 477 (Web Foundation And Contract Convergence) — READY TO PLAN
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-07-30 -- Phase 476 administratively completed by explicit project-owner waiver; Plans 476-28/29 remain formally unverified
+Phase: 474 (Deterministic Verification And Gated Delivery) — READY TO EXECUTE
+Plan: 22 of 47
+Status: Plan cleanup complete — execute the 15 retained plans
+Last activity: 2026-07-30 -- Phase 474 reduced from 94 plans to 47; 32 complete and 15 current plans remain
 
 ## Accumulated Context
 
+- Phase 474 was reduced on 2026-07-30 from 94 plans (62 incomplete) to
+  47 plans (15 incomplete). All completed PLAN/SUMMARY pairs remain; forty stale
+  mypy family plans were consolidated into current Plan 474-22, obsolete source
+  handoffs were superseded by 474-93, and product Web acceptance was reassigned
+  to Phases 477/478. See `474-CLEANUP.md`.
 - Phase 476 was administratively accepted by explicit project-owner manual
   waiver on 2026-07-30 after the owner reported independent team testing
   passed. Plans 476-28 and 476-29 have no SUMMARY, no Phase 476 passed
