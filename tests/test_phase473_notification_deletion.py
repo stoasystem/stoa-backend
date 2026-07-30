@@ -187,10 +187,16 @@ def test_delivery_claim_rechecks_fence_immediately_before_provider_effect(
             notification_repo.DeliveryBeginDisposition.PROVEN_ACCOUNT_DELETED
         ),
     )
+    def cancel_delivery_intent(**kwargs: Any) -> dict[str, Any]:
+        calls.append("canceled_account_deletion")
+        return dict(kwargs)
+
+    def provider_call() -> dict[str, bool]:
+        calls.append("provider")
+        return {"accepted": True}
+
     monkeypatch.setattr(
-        notification_repo,
-        "cancel_delivery_intent",
-        lambda **kw: calls.append("canceled_account_deletion") or dict(kw),
+        notification_repo, "cancel_delivery_intent", cancel_delivery_intent
     )
     result = _contract(notification_service, "run_delivery_intent")(
         owner_id=STUDENT_ID,
@@ -199,7 +205,7 @@ def test_delivery_claim_rechecks_fence_immediately_before_provider_effect(
         channel="push",
         event_ids=["event-private"],
         payload={"title": "private title canary"},
-        provider_call=lambda: calls.append("provider") or {"accepted": True},
+        provider_call=provider_call,
     )
     assert "provider" not in calls
     assert result["status"] == "canceled_account_deletion"
@@ -230,10 +236,12 @@ def test_commit_then_raise_is_unknown_and_same_operation_is_not_blindly_retried(
         "begin_delivery_effect",
         lambda **kw: replace(kw["claim"], intent_version=3),
     )
+    def complete_delivery_intent(**kwargs: Any) -> dict[str, Any]:
+        completions.append(str(kwargs["status"]))
+        return dict(kwargs)
+
     monkeypatch.setattr(
-        notification_repo,
-        "complete_delivery_intent",
-        lambda **kw: completions.append(str(kw["status"])) or dict(kw),
+        notification_repo, "complete_delivery_intent", complete_delivery_intent
     )
 
     def ambiguous() -> None:
@@ -256,7 +264,7 @@ def test_commit_then_raise_is_unknown_and_same_operation_is_not_blindly_retried(
 
 
 def test_strong_paginated_scans_and_scrubs_leave_only_strict_tombstones() -> None:
-    notification_pages = [
+    notification_pages: list[dict[str, Any]] = [
         {
             "Items": [_event()],
             "LastEvaluatedKey": {"PK": "NOTIFICATION#event-private", "SK": "META"},
