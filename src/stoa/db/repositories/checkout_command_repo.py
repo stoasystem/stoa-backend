@@ -131,6 +131,12 @@ def _positive_integer(value: object, field: str, *, allow_zero: bool = False) ->
     return value
 
 
+def _beneficiary_ids(value: object) -> tuple[str, ...]:
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise ValueError("beneficiary_ids are invalid")
+    return tuple(_required_text(member, "beneficiary_id") for member in value)
+
+
 def _length_prefixed(parts: tuple[str, ...]) -> bytes:
     encoded = bytearray()
     for part in parts:
@@ -312,24 +318,24 @@ def _command_integrity(
             or _PUBLIC_REF_PATTERN.fullmatch(checkout_ref) is None
         ):
             return CheckoutCommandDisposition.MALFORMED
-        stored_fingerprint = _canonical_intent_fingerprint(
-            parent_id=_required_text(item.get("parent_id"), "parent_id"),
-            plan_id=_required_text(item.get("plan_id"), "plan_id", maximum=32),
-            beneficiary_ids=item.get("beneficiary_ids")
-            if isinstance(item.get("beneficiary_ids"), Sequence)
-            and not isinstance(item.get("beneficiary_ids"), (str, bytes))
-            else (),
-            price_id=_required_text(item.get("price_id"), "price_id"),
-            price_catalog_version=_positive_integer(
-                item.get("price_catalog_version"), "price_catalog_version"
-            ),
-            plan_version=_positive_integer(
-                item.get("plan_version"), "plan_version"
-            ),
-            environment=_required_text(
-                item.get("environment"), "environment", maximum=32
-            ),
-        )
+        try:
+            stored_fingerprint = _canonical_intent_fingerprint(
+                parent_id=_required_text(item.get("parent_id"), "parent_id"),
+                plan_id=_required_text(item.get("plan_id"), "plan_id", maximum=32),
+                beneficiary_ids=_beneficiary_ids(item.get("beneficiary_ids")),
+                price_id=_required_text(item.get("price_id"), "price_id"),
+                price_catalog_version=_positive_integer(
+                    item.get("price_catalog_version"), "price_catalog_version"
+                ),
+                plan_version=_positive_integer(
+                    item.get("plan_version"), "plan_version"
+                ),
+                environment=_required_text(
+                    item.get("environment"), "environment", maximum=32
+                ),
+            )
+        except ValueError:
+            return CheckoutCommandDisposition.MALFORMED
         if (
             fingerprint != stored_fingerprint
             or provider_key != _provider_key_digest(command_id, fingerprint)

@@ -418,16 +418,28 @@ def billing_fact_from_item(item: Mapping[str, object]) -> BillingFact:
         or item.get("schema_version") != OBJECT_FACT_SCHEMA_VERSION
     ):
         raise ValueError("billing fact row is malformed")
+    kind_value = _required_text(item.get("kind"), "kind", maximum=64)
+    try:
+        kind = BillingFactKind(kind_value)
+    except ValueError as exc:
+        raise ValueError("billing fact row is malformed") from exc
+    observed_at = _timestamp(item.get("fact_observed_at"), "fact_observed_at")
+    try:
+        observed_at_value = datetime.fromisoformat(observed_at)
+    except ValueError as exc:
+        raise ValueError("billing fact row is malformed") from exc
     return BillingFact(
-        factId=item.get("fact_id"),
-        checkoutCommandId=item.get("checkout_command_id"),
-        kind=item.get("kind"),
-        providerEventIdDigest=item.get("provider_event_id_digest"),
-        providerObjectIdDigest=item.get("provider_object_id_digest"),
+        factId=_required_text(item.get("fact_id"), "fact_id"),
+        checkoutCommandId=_required_text(item.get("checkout_command_id"), "checkout_command_id"),
+        kind=kind,
+        providerEventIdDigest=_digest(item.get("provider_event_id_digest"), "provider_event_id_digest"),
+        providerObjectIdDigest=_digest(
+            item.get("provider_object_id_digest"), "provider_object_id_digest"
+        ),
         signatureVerified=True,
         providerLivemode=False,
-        factVersion=item.get("object_version"),
-        observedAt=item.get("fact_observed_at"),
+        factVersion=_positive_integer(item.get("object_version"), "object_version"),
+        observedAt=observed_at_value,
     )
 
 
