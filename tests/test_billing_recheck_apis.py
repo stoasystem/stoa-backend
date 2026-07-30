@@ -258,11 +258,10 @@ def test_student_and_unknown_recheck_body_fail_before_repository_or_provider(mon
 
 def test_parent_supersede_requires_literal_confirmation_and_closed_body(monkeypatch) -> None:
     calls: list[dict[str, Any]] = []
-    monkeypatch.setattr(
-        subscription_service,
-        "confirm_checkout_plan_change",
-        lambda **kwargs: calls.append(kwargs)
-        or {
+
+    def confirm_checkout_plan_change(**kwargs: object) -> dict[str, object]:
+        calls.append(dict(kwargs))
+        return {
             "checkoutRef": "co_" + ("N" * 32),
             "commandState": "provider_session_open",
             "checkoutSessionId": "cs_test_successor",
@@ -270,7 +269,12 @@ def test_parent_supersede_requires_literal_confirmation_and_closed_body(monkeypa
             "safeActions": ["continue_checkout"],
             "targetPlan": "student",
             "beneficiaries": ["student-a"],
-        },
+        }
+
+    monkeypatch.setattr(
+        subscription_service,
+        "confirm_checkout_plan_change",
+        confirm_checkout_plan_change,
     )
     client, _ = _parent_app()
     path = f"/parents/me/subscription/checkout/{CHECKOUT_REF}/supersede"
@@ -385,12 +389,13 @@ def test_openapi_publishes_five_closed_routes_without_payment_authority() -> Non
 
 
 def test_no_admin_manual_success_route_or_recheck_create_capability() -> None:
-    routes = {
-        (method, route.path)
-        for route in main_app.routes
-        for method in getattr(route, "methods", set())
-        if route.path.startswith("/admin")
-    }
+    routes: set[tuple[str, str]] = set()
+    for route in main_app.routes:
+        path = getattr(route, "path", None)
+        if not isinstance(path, str) or not path.startswith("/admin"):
+            continue
+        for method in getattr(route, "methods", set()):
+            routes.add((method, path))
     assert not any(
         marker in path.lower()
         for _, path in routes

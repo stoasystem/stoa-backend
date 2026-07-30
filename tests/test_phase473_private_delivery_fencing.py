@@ -150,7 +150,11 @@ def test_legacy_question_owner_resolution_uses_closed_strong_target_join(
         "student_id": OWNER,
         "account_fence_generation": GENERATION,
     }
-    table = _StrongTable({(question["PK"], question["SK"]): question})
+    question_pk = question["PK"]
+    question_sk = question["SK"]
+    assert isinstance(question_pk, str)
+    assert isinstance(question_sk, str)
+    table = _StrongTable({(question_pk, question_sk): question})
     monkeypatch.setattr(
         account_deletion_repo,
         "require_active_account_fence",
@@ -281,6 +285,11 @@ def test_websocket_invalid_persisted_scope_lists_no_connections_and_posts_nothin
     persisted = _private_event(account_fence_generation=None)
     listed: list[str] = []
     posted: list[tuple[dict[str, Any], dict[str, Any]]] = []
+
+    def list_connections(**_kwargs: object) -> list[dict[str, Any]]:
+        listed.append("listed")
+        return []
+
     monkeypatch.setattr(
         notification_repo,
         "load_delivery_event_strong",
@@ -290,7 +299,7 @@ def test_websocket_invalid_persisted_scope_lists_no_connections_and_posts_nothin
     monkeypatch.setattr(
         websocket_service.websocket_repo,
         "list_connections",
-        lambda **_kwargs: listed.append("listed") or [],
+        list_connections,
     )
 
     result = websocket_service.fanout_notification_event(

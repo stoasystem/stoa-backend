@@ -161,11 +161,13 @@ class _TeacherDeletionTable:
         assert current["student_id"] == values[":student"]
         assert current["status"] == values[":status"]
         assert current["version"] == values[":version"]
+        previous_dispatch_teacher_ids = current.get("previous_dispatch_teacher_ids", [])
+        assert isinstance(previous_dispatch_teacher_ids, list)
         assert (
             current.get("teacher_id") == values[":teacher"]
             or current.get("dispatched_teacher_id") == values[":teacher"]
             or values[":teacher"]
-            in current.get("previous_dispatch_teacher_ids", [])
+            in previous_dispatch_teacher_ids
         )
         expression = update["UpdateExpression"]
         current["version"] = values[":next_version"]
@@ -292,7 +294,9 @@ def test_teacher_identity_scrub_preserves_student_question_and_requires_two_clea
     for item in table.rows.values():
         assert item.get("teacher_id") != TEACHER_ID
         assert item.get("dispatched_teacher_id") != TEACHER_ID
-        assert TEACHER_ID not in item.get("previous_dispatch_teacher_ids", [])
+        previous_dispatch_teacher_ids = item.get("previous_dispatch_teacher_ids", [])
+        assert isinstance(previous_dispatch_teacher_ids, list)
+        assert TEACHER_ID not in previous_dispatch_teacher_ids
         assert item.get("teacher_takeover_claim_id") not in {
             "claim-direct",
             "claim-late",
