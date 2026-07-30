@@ -100,8 +100,8 @@ class RecordingS3Client:
     def __init__(self, events, *, fail_on_call: int | None = None):
         self.events = events
         self.fail_on_call = fail_on_call
-        self.puts = []
-        self.deletes = []
+        self.puts: list[dict[str, object]] = []
+        self.deletes: list[dict[str, object]] = []
 
     def put_object(self, **kwargs):
         self.puts.append(kwargs)
@@ -118,7 +118,7 @@ class RecordingSESClient:
     def __init__(self, events, *, error: Exception | None = None):
         self.events = events
         self.error = error
-        self.emails = []
+        self.emails: list[dict[str, object]] = []
 
     def send_email(self, **kwargs):
         self.emails.append(kwargs)
