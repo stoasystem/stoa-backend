@@ -4,7 +4,7 @@ from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Annotated, Any, Literal, cast
+from typing import Annotated, Any, Literal, Protocol, cast
 from uuid import uuid4
 
 from boto3.dynamodb.conditions import Attr, Key
@@ -49,6 +49,49 @@ from stoa.services import (
 )
 
 router = APIRouter()
+
+
+class _DynamoQueryTable(Protocol):
+    def query(self, **kwargs: object) -> dict[str, object]: ...
+
+
+def _response_items(response: Mapping[str, object]) -> list[dict[str, Any]]:
+    """Return only item maps from a repository response.
+
+    Repository data is persistent input, not a response-model default.  A malformed
+    page therefore fails the request rather than being converted into an invented
+    empty result.
+    """
+    raw_items = response.get("Items", [])
+    if not isinstance(raw_items, list) or any(
+        not isinstance(item, dict) for item in raw_items
+    ):
+        raise ValueError("malformed repository item page")
+    return [cast(dict[str, Any], item) for item in raw_items]
+
+
+def _report_cursor(value: object) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("malformed report cursor")
+    return cast(dict[str, object], value)
+
+
+def _response_text(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def _response_string_list(value: object) -> list[str]:
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError("malformed response string list")
+    return value
+
+
+def _required_positive_int(value: object, field: str) -> int:
+    if type(value) is not int or value < 1:
+        raise ValueError(f"malformed {field}")
+    return value
 
 
 @dataclass(frozen=True)
@@ -742,6 +785,8 @@ def _list_children_for_parent(parent_user_id: str) -> list[dict[str, Any]]:
             continue
         reverse = user_repo.get_student_parent_binding(str(student_id), parent_user_id)
         profile = user_repo.get_user(str(student_id))
+        if profile is None:
+            continue
         facts = ParentAuthorizationFacts(binding, reverse, parent, profile)
         if facts.matches(parent_user_id, str(student_id)):
             children.append(
@@ -813,7 +858,7 @@ def _is_current_week(value: Any) -> bool:
 
 
 def _list_conversations_for_child(child_id: str, limit: int = 50) -> list[dict[str, Any]]:
-    table = get_table()
+    table = cast(_DynamoQueryTable, get_table())
     result = table.query(
         IndexName="GSI-StudentId",
         KeyConditionExpression=Key("student_id").eq(child_id),
@@ -821,35 +866,35 @@ def _list_conversations_for_child(child_id: str, limit: int = 50) -> list[dict[s
         Limit=limit,
         ScanIndexForward=False,
     )
-    return result.get("Items", [])
+    return _response_items(result)
 
 
 def _latest_report_for_child(parent_user_id: str, child_id: str) -> dict[str, Any] | None:
-    last_key = None
+    last_key: dict[str, object] | None = None
     while True:
         result = report_repo.list_reports_for_parent(parent_user_id, last_key=last_key)
-        for report in result.get("Items", []):
+        for report in _response_items(result):
             if report.get("student_id") == child_id:
                 return report
-        last_key = result.get("LastEvaluatedKey")
+        last_key = _report_cursor(result.get("LastEvaluatedKey"))
         if not last_key:
             return None
 
 
 def _question_activity(question: dict[str, Any]) -> ParentChildActivity | None:
-    created_at = question.get("created_at") or question.get("createdAt")
-    if not _parse_iso_datetime(created_at):
+    created_at = _response_text(question.get("created_at") or question.get("createdAt"))
+    if created_at is None or not _parse_iso_datetime(created_at):
         return None
     status = question.get("status", "")
     title = "Question answered" if status == "ai_answered" else "Question asked"
     if status in ("escalated", "teacher_requested"):
         title = "Teacher help requested"
     return ParentChildActivity(
-        id=question.get("question_id") or question.get("id") or f"question-{created_at}",
+        id=_response_text(question.get("question_id") or question.get("id")) or f"question-{created_at}",
         type="teacher_help" if status in ("escalated", "teacher_requested") else "question",
         title=title,
-        summary=question.get("summary") or question.get("prompt") or question.get("question", ""),
-        subject=question.get("subject"),
+        summary=_response_text(question.get("summary") or question.get("prompt") or question.get("question")) or "",
+        subject=_response_text(question.get("subject")),
         createdAt=created_at,
     )
 
@@ -859,42 +904,42 @@ def _history_event_from_activity(activity: ParentChildActivity) -> ParentChildHi
 
 
 def _practice_activity(item: dict[str, Any], event_type: str) -> ParentChildActivity | None:
-    created_at = (
+    created_at = _response_text(
         item.get("completed_at")
         or item.get("created_at")
         or item.get("updated_at")
         or item.get("createdAt")
     )
-    if not _parse_iso_datetime(created_at):
+    if created_at is None or not _parse_iso_datetime(created_at):
         return None
     title = "Practice lesson completed" if event_type == "practice" else "Practice mistake logged"
     return ParentChildActivity(
-        id=item.get("lesson_id") or item.get("challenge_id") or f"{event_type}-{created_at}",
+        id=_response_text(item.get("lesson_id") or item.get("challenge_id")) or f"{event_type}-{created_at}",
         type=event_type,
         title=title,
-        summary=item.get("lesson_title") or item.get("topic_id") or item.get("subject_id") or "",
-        subject=item.get("subject_id"),
+        summary=_response_text(item.get("lesson_title") or item.get("topic_id") or item.get("subject_id")) or "",
+        subject=_response_text(item.get("subject_id")),
         createdAt=created_at,
     )
 
 
 def _conversation_activity(item: dict[str, Any]) -> ParentChildActivity | None:
-    created_at = item.get("updated_at") or item.get("created_at")
-    if not _parse_iso_datetime(created_at):
+    created_at = _response_text(item.get("updated_at") or item.get("created_at"))
+    if created_at is None or not _parse_iso_datetime(created_at):
         return None
     escalated = bool(item.get("escalated"))
     return ParentChildActivity(
-        id=item.get("conversation_id") or f"conversation-{created_at}",
+        id=_response_text(item.get("conversation_id")) or f"conversation-{created_at}",
         type="teacher_help" if escalated else "conversation",
         title="Teacher help requested" if escalated else "AI conversation",
-        summary=item.get("last_message_preview") or item.get("title") or "",
-        subject=item.get("subject"),
+        summary=_response_text(item.get("last_message_preview") or item.get("title")) or "",
+        subject=_response_text(item.get("subject")),
         createdAt=created_at,
     )
 
 
 def _report_activity(report: dict[str, Any]) -> ParentChildActivity | None:
-    created_at = report.get("created_at") or report.get("week_start")
+    created_at = _response_text(report.get("created_at") or report.get("week_start"))
     if not created_at:
         return None
     if len(str(created_at)) == 10:
@@ -902,10 +947,10 @@ def _report_activity(report: dict[str, Any]) -> ParentChildActivity | None:
     if not _parse_iso_datetime(created_at):
         return None
     return ParentChildActivity(
-        id=report.get("report_id") or f"report-{created_at}",
+        id=_response_text(report.get("report_id")) or f"report-{created_at}",
         type="report",
         title="Weekly report available",
-        summary=report.get("summary") or report.get("recommendations", ""),
+        summary=_response_text(report.get("summary") or report.get("recommendations")) or "",
         subject=None,
         createdAt=created_at,
     )
@@ -923,7 +968,7 @@ def _question_history_events(child_id: str, limit: int = 100) -> list[ParentChil
     result = question_repo.list_by_student(child_id, limit=limit)
     return [
         activity
-        for question in result.get("Items", [])
+        for question in _response_items(result)
         if (activity := _question_activity(question)) is not None
     ]
 
@@ -951,16 +996,16 @@ def _conversation_history_events(child_id: str) -> list[ParentChildActivity]:
 
 def _report_history_events(parent_user_id: str, child_id: str) -> list[ParentChildActivity]:
     activities: list[ParentChildActivity] = []
-    last_key = None
+    last_key: dict[str, object] | None = None
     while True:
         result = report_repo.list_reports_for_parent(parent_user_id, last_key=last_key)
-        for report in result.get("Items", []):
+        for report in _response_items(result):
             if report.get("student_id") != child_id:
                 continue
             activity = _report_activity(report)
             if activity:
                 activities.append(activity)
-        last_key = result.get("LastEvaluatedKey")
+        last_key = _report_cursor(result.get("LastEvaluatedKey"))
         if not last_key:
             return activities
 
@@ -1207,7 +1252,9 @@ async def get_my_subscription_billing(
             allowance_service.get_allowance_projection(
                 beneficiary_id=str(grant["beneficiary_id"]),
                 plan_id=str(grant["plan_id"]),
-                allowance_version=int(grant["allowance_version"]),
+                allowance_version=_required_positive_int(
+                    grant.get("allowance_version"), "allowance version"
+                ),
                 observed_at=observed_at,
                 viewer_role="parent",
             )
@@ -1301,7 +1348,10 @@ async def list_my_subscription_requests(
 ):
     """Return the authenticated parent's recent manual subscription requests."""
     items = subscription_service.list_parent_requests(actor.user_id, limit=limit)
-    return ParentSubscriptionRequestListResponse(items=items, count=len(items))
+    return ParentSubscriptionRequestListResponse(
+        items=[ParentSubscriptionRequestResponse.model_validate(item) for item in items],
+        count=len(items),
+    )
 
 
 @router.get("/me/children/{child_id}/summary", response_model=ParentChildSummaryResponse)
@@ -1313,7 +1363,7 @@ async def get_child_summary(
     child = dict(authorized_child.value)
     child_id = authorized_child.ref.student_id
 
-    questions = question_repo.list_by_student(child_id, limit=500).get("Items", [])
+    questions = _response_items(question_repo.list_by_student(child_id, limit=500))
     progress = practice_repo.get_progress(child_id)
     mistakes = practice_repo.get_mistakes(child_id)
     conversations = _list_conversations_for_child(child_id)
@@ -1341,13 +1391,16 @@ async def get_child_summary(
 
     weak_topics_counter: Counter[str] = Counter()
     for question in questions:
-        weak_topics_counter.update(question.get("knowledge_points", []))
+        weak_topics_counter.update(_response_string_list(question.get("knowledge_points", [])))
     for mistake in mistakes:
         for key in ("topic_id", "subject_id"):
-            if mistake.get(key):
-                weak_topics_counter[mistake[key]] += 1
+            value = _response_text(mistake.get(key))
+            if value:
+                weak_topics_counter[value] += 1
     if latest_report:
-        weak_topics_counter.update(latest_report.get("weak_knowledge_points", []))
+        weak_topics_counter.update(
+            _response_string_list(latest_report.get("weak_knowledge_points", []))
+        )
 
     activities = []
     activities.extend(_question_history_events(child_id, limit=20))
@@ -1358,9 +1411,10 @@ async def get_child_summary(
 
     return ParentChildSummaryResponse(
         student=ParentChildSummaryStudent(
-            id=child.get("user_id", child_id),
-            name=child.get("name") or child.get("email", "").split("@")[0],
-            grade=child.get("grade"),
+            id=_response_text(child.get("user_id")) or child_id,
+            name=_response_text(child.get("name"))
+            or (_response_text(child.get("email")) or "").split("@")[0],
+            grade=_response_text(child.get("grade")),
         ),
         questionsAskedThisWeek=len(current_week_questions),
         aiResolvedThisWeek=ai_resolved,
@@ -1382,7 +1436,7 @@ async def get_child_learning_profile(
     """Return subject-level profile seeds for an authorized child."""
     child_id = authorized_child.ref.student_id
 
-    questions = question_repo.list_by_student(child_id, limit=500).get("Items", [])
+    questions = _response_items(question_repo.list_by_student(child_id, limit=500))
     mistakes = practice_repo.get_mistakes(child_id)
     return learning_profile_service.build_learning_profile(
         student_id=child_id,
@@ -1420,7 +1474,7 @@ async def get_child_usage_summary(
             else "free_trial"
         )
         allowance_version = (
-            int(grant["allowance_version"])
+            _required_positive_int(grant.get("allowance_version"), "allowance version")
             if grant is not None
             else 1
         )

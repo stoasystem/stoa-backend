@@ -16,10 +16,11 @@ import time
 import uuid
 from collections.abc import Mapping
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Protocol, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 import boto3
+from boto3.dynamodb.conditions import Attr, Key
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -64,6 +65,47 @@ from stoa.services import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+class _DynamoConversationTable(Protocol):
+    def query(self, **kwargs: object) -> dict[str, object]: ...
+
+    def get_item(self, **kwargs: object) -> dict[str, object]: ...
+
+
+def _conversation_response_items(
+    response: Mapping[str, object],
+) -> list[dict[str, object]]:
+    raw_items = response.get("Items", [])
+    if not isinstance(raw_items, list) or any(
+        not isinstance(item, dict) for item in raw_items
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return [dict(cast(Mapping[str, object], item)) for item in raw_items]
+
+
+def _conversation_response_item(
+    response: Mapping[str, object],
+) -> dict[str, object] | None:
+    item = response.get("Item")
+    if item is None:
+        return None
+    if not isinstance(item, dict):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return dict(cast(Mapping[str, object], item))
+
+
+def _required_conversation_text(record: Mapping[str, object], field: str) -> str:
+    value = record.get(field)
+    if not isinstance(value, str) or not value:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return value
+
+
+def _conversation_record(value: object) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return value
 
 
 class _ConversationAllowanceFailure(Exception):
@@ -116,20 +158,20 @@ def _msg_sk(msg_id: str) -> str:
 
 
 def _list_conversations(student_id: str) -> list[dict]:
-    table = get_table()
+    table = cast(_DynamoConversationTable, get_table())
     resp = table.query(
         IndexName="GSI-StudentId",
-        KeyConditionExpression=boto3.dynamodb.conditions.Key("student_id").eq(student_id),
-        FilterExpression=boto3.dynamodb.conditions.Attr("entity_type").eq("conversation"),
+        KeyConditionExpression=Key("student_id").eq(student_id),
+        FilterExpression=Attr("entity_type").eq("conversation"),
         ScanIndexForward=False,
     )
-    return resp.get("Items", [])
+    return _conversation_response_items(resp)
 
 
 def _get_conversation(conv_id: str) -> dict | None:
-    table = get_table()
+    table = cast(_DynamoConversationTable, get_table())
     resp = table.get_item(Key={"PK": _conv_pk(conv_id), "SK": "CONV"})
-    return resp.get("Item")
+    return _conversation_response_item(resp)
 
 
 def _get_messages(conv_id: str) -> list[dict]:
@@ -208,8 +250,8 @@ def _load_anchored_message_history(
     for _page in range(64):
         request = {
             "KeyConditionExpression": (
-                boto3.dynamodb.conditions.Key("PK").eq(_conv_pk(conversation_id))
-                & boto3.dynamodb.conditions.Key("SK").begins_with("MSG#")
+                Key("PK").eq(_conv_pk(conversation_id))
+                & Key("SK").begins_with("MSG#")
             ),
             "ScanIndexForward": True,
             "ConsistentRead": True,
@@ -1014,7 +1056,7 @@ async def create_conversation(
     title = f"{body.subject} – {body.grade}"
 
     table = get_table()
-    conv_item = {
+    conv_item: dict[str, object] = {
         "PK": _conv_pk(conv_id),
         "SK": "CONV",
         "conversation_id": conv_id,
@@ -1082,7 +1124,7 @@ async def get_conversation(
     ),
 ):
     conv_id = authorized.ref.resource_id
-    conv = authorized.value
+    conv = _conversation_record(authorized.value)
 
     raw_messages = _get_messages(conv_id)
     attachment_ids = [value for message in raw_messages for value in message.get("attachment_ids", [])]
@@ -1106,10 +1148,10 @@ async def get_conversation(
 
     return ConversationDetail(
         id=conv_id,
-        title=conv.get("title", ""),
-        subject=conv.get("subject", ""),
-        grade=conv.get("grade", ""),
-        updatedAt=conv.get("updated_at", _now()),
+        title=_required_conversation_text(conv, "title"),
+        subject=_required_conversation_text(conv, "subject"),
+        grade=_required_conversation_text(conv, "grade"),
+        updatedAt=_required_conversation_text(conv, "updated_at"),
         messages=messages,
     )
 
@@ -1129,14 +1171,14 @@ async def send_message(
 ):
     conv_id = authorized.ref.resource_id
     student_id = authorized.ref.student_id
-    conv = authorized.value
+    conv = _conversation_record(authorized.value)
 
     try:
         result = _execute_message_command(
             conv_id=conv_id,
             student_id=student_id,
-            subject=conv.get("subject", "math"),
-            grade=conv.get("grade", ""),
+            subject=_required_conversation_text(conv, "subject"),
+            grade=_required_conversation_text(conv, "grade"),
             body=body,
             command_context=message_command,
         )
@@ -1171,14 +1213,14 @@ async def stream_message(
     """
     conv_id = authorized.ref.resource_id
     student_id = authorized.ref.student_id
-    conv = authorized.value
+    conv = _conversation_record(authorized.value)
 
     try:
         result = _execute_message_command(
             conv_id=conv_id,
             student_id=student_id,
-            subject=conv.get("subject", "math"),
-            grade=conv.get("grade", ""),
+            subject=_required_conversation_text(conv, "subject"),
+            grade=_required_conversation_text(conv, "grade"),
             body=body,
             command_context=message_command,
         )
@@ -1469,7 +1511,7 @@ def _execute_message_command(
     """Run the shared regular/SSE command through claim, message, and AI fences."""
     actor: Actor = command_context["actor"]
     fingerprint = str(command_context["fingerprint"])
-    table = get_table()
+    table = cast(_DynamoConversationTable, get_table())
     existing = command_context.get("existing")
     account_fence_generation = int(
         command_context.get("account_fence_generation")
@@ -2152,14 +2194,14 @@ async def _teacher_help_conversation_metadata_resolver(conversation_id: str):
     return _get_conversation(conversation_id)
 
 
-_teacher_help_conversation_dependency.authorization_specs = (
+setattr(_teacher_help_conversation_dependency, "authorization_specs", (
     AuthorizationSpec(
         ResourceType.CONVERSATION,
         AuthorizationAction.UPDATE,
         AuthorizationPurpose.SELF_SERVICE,
         _teacher_help_conversation_metadata_resolver,
     ),
-)
+))
 
 
 @teacher_help_router.get("/availability", response_model=TeacherAvailabilityResponse)

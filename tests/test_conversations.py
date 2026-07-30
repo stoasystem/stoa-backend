@@ -1076,6 +1076,8 @@ def test_regular_sse_stage_a_transport_has_identical_structured_retry(
             "student_id": "student-1",
             "subject": "math",
             "grade": "Sek1",
+            "title": "Mathematics – Sek1",
+            "updated_at": "2026-07-16T00:00:00Z",
         },
     )
     monkeypatch.setattr(
@@ -1343,6 +1345,8 @@ def test_conversation_history_batch_projects_only_safe_attachment_summaries(monk
             "student_id": "student-1",
             "subject": "math",
             "grade": "Sek1",
+            "title": "Mathematics – Sek1",
+            "updated_at": "2026-07-16T00:00:00Z",
         },
     )
     monkeypatch.setattr(
