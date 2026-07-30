@@ -659,9 +659,12 @@ def admit_formal_runs(
     digests = [_require_sha(receipt.get("receipt_sha256"), "formal receipt digest") for receipt in frozen]
     if digests[0] == digests[1]:
         raise HandoffPolicyError("formal receipts are not distinct")
-    runtimes = [receipt.get("runtime") for receipt in frozen]
-    if any(not isinstance(runtime, dict) for runtime in runtimes):
-        raise HandoffPolicyError("formal runtime identity is malformed")
+    runtimes: list[dict[str, Any]] = []
+    for receipt in frozen:
+        runtime = receipt.get("runtime")
+        if not isinstance(runtime, dict):
+            raise HandoffPolicyError("formal runtime identity is malformed")
+        runtimes.append(runtime)
     platforms = [runtime.get("platform") for runtime in runtimes]
     if platforms[0] != platforms[1] or platforms[0] not in {
         "linux-aarch64",

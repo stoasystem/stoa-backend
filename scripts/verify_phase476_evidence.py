@@ -102,6 +102,7 @@ def _load_json(path: Path) -> dict[str, Any]:
         return json.loads(path.read_bytes())
     except Exception as exc:  # noqa: BLE001
         _die(f"Cannot read {path}: {exc}")
+    raise AssertionError("_die must terminate the process")
 
 
 def _validate_preflight_receipt(

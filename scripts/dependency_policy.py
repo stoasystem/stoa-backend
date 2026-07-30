@@ -336,18 +336,18 @@ def _apply_exceptions(
     used: set[tuple[Any, ...]] = set()
     for blocker in blockers:
         identity = _exception_identity(blocker, lock_sha256)
-        exception = exception_map.get(identity)
-        if exception is None:
+        matched_exception = exception_map.get(identity)
+        if matched_exception is None:
             remaining.append(blocker)
             continue
         used.add(identity)
         accepted.append(
             {
-                "ecosystem": exception["ecosystem"],
-                "package": _normalize_package(exception["package"]),
-                "advisory": exception["advisory"],
-                "advisory_aliases": exception["advisory_aliases"],
-                "installed_version": exception["installed_version"],
+                "ecosystem": matched_exception["ecosystem"],
+                "package": _normalize_package(matched_exception["package"]),
+                "advisory": matched_exception["advisory"],
+                "advisory_aliases": matched_exception["advisory_aliases"],
+                "installed_version": matched_exception["installed_version"],
                 "lock_sha256": exception["lock_sha256"],
                 "reachability": exception["reachability"],
                 "expires_at": exception["expires_at"],

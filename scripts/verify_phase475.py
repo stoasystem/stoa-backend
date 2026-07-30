@@ -102,6 +102,12 @@ class EvidenceError(ValueError):
     """Evidence is incomplete, ambiguous, stale, or privacy-unsafe."""
 
 
+def _require_similarity(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 100:
+        raise EvidenceError("source snapshot similarity is invalid")
+    return value
+
+
 def _canonical_bytes(value: object) -> bytes:
     return json.dumps(
         value,
@@ -1114,7 +1120,7 @@ def _source_snapshot(candidate: str) -> list[dict[str, object]]:
             source_path = str(change["source_path"])
             row: dict[str, object] = {
                 "status": _SOURCE_STATUS_NAMES[status],
-                "similarity": int(change["similarity"]),
+                "similarity": _require_similarity(change.get("similarity")),
                 "source_path": source_path,
                 "path": path,
             }

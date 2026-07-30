@@ -513,18 +513,27 @@ def redact_identifiers(
     provider: Mapping[str, object],
     operation: Mapping[str, object],
 ) -> dict[str, object]:
+    event_ids = provider["eventIds"]
+    beneficiary_ids = operation["beneficiaryIds"]
+    if (
+        not isinstance(event_ids, list)
+        or not all(isinstance(event_id, str) for event_id in event_ids)
+        or not isinstance(beneficiary_ids, list)
+        or not all(isinstance(beneficiary, str) for beneficiary in beneficiary_ids)
+    ):
+        fail("REDACTION_PROOF_FAILED")
     return {
         "checkoutSessionSha256": sha256_text(str(provider["checkoutSessionId"])),
         "invoiceSha256": sha256_text(str(provider["invoiceId"])),
         "subscriptionSha256": sha256_text(str(provider["subscriptionId"])),
         "eventSha256": sorted(
             sha256_text(str(event_id))
-            for event_id in provider["eventIds"]  # type: ignore[union-attr]
+            for event_id in event_ids
         ),
         "checkoutRefSha256": sha256_text(str(operation["checkoutRef"])),
         "beneficiarySha256": sorted(
             sha256_text(str(beneficiary))
-            for beneficiary in operation["beneficiaryIds"]  # type: ignore[union-attr]
+            for beneficiary in beneficiary_ids
         ),
         "idempotencyKeyDigest": operation["idempotencyKeyDigest"],
     }
