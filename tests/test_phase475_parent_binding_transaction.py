@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
 import inspect
 
@@ -61,7 +62,7 @@ class _AtomicRelationshipTable:
         }
         self.fail_at = fail_at
         self.transactions: list[list[dict[str, object]]] = []
-        self.before_transaction = None
+        self.before_transaction: Callable[[], None] | None = None
 
     def get_item(self, *, Key, ConsistentRead=False):  # noqa: N803
         assert ConsistentRead is True
