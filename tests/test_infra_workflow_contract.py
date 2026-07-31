@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 from pathlib import Path
-import re
 import subprocess
 import tomllib
 from typing import Any
@@ -59,10 +57,10 @@ def _validation_run() -> str:
         'for sha in "$BACKEND_SHA" "$INFRA_SHA" "$WORKFLOW_SHA"; do\n'
         '  [[ "$sha" =~ $sha_pattern ]] || exit 1\n'
         "done\n"
-        '[[ "$INFRA_SHA" == "$WORKFLOW_SHA" ]]\n'
-        '[[ "$TRANSACTION_SHA256" =~ $digest_pattern ]]\n'
-        '[[ "$TRANSACTION_PATH" =~ ^receipts/staging/[A-Za-z0-9][A-Za-z0-9._/-]{0,240}\\.json$ ]]\n'
-        '[[ "$TRANSACTION_PATH" != *".."* ]]\n'
+        '[[ "$INFRA_SHA" == "$WORKFLOW_SHA" ]] || exit 1\n'
+        '[[ "$TRANSACTION_SHA256" =~ $digest_pattern ]] || exit 1\n'
+        '[[ "$TRANSACTION_PATH" =~ ^receipts/staging/[A-Za-z0-9][A-Za-z0-9._/-]{0,240}\\.json$ ]] || exit 1\n'
+        '[[ "$TRANSACTION_PATH" != *".."* ]] || exit 1\n'
     )
 
 
@@ -96,27 +94,25 @@ def _infra_preflight_run() -> str:
 
 
 def _delivery_run() -> str:
-    return (
-        "set -euo pipefail\n"
-        'transaction="$GITHUB_WORKSPACE/stoa-backend/$TRANSACTION_PATH"\n'
-        'test -f "$transaction"\n'
-        'test ! -L "$transaction"\n'
-        'test "$(sha256sum "$transaction" | cut -d " " -f 1)" = "$TRANSACTION_SHA256"\n'
-        "python scripts/release_gate.py delivery-validate \\\n+"
-        '  --transaction "$transaction" \\\n+'
-        '  --output "$EVIDENCE_DIR/delivery-validation.json"\n'
-    )
+    return """set -euo pipefail
+transaction="$GITHUB_WORKSPACE/stoa-backend/$TRANSACTION_PATH"
+test -f "$transaction"
+test ! -L "$transaction"
+test "$(sha256sum "$transaction" | cut -d " " -f 1)" = "$TRANSACTION_SHA256"
+python scripts/release_gate.py delivery-validate \\
+  --transaction "$transaction" \\
+  --output "$EVIDENCE_DIR/delivery-validation.json"
+"""
 
 
 def _not_run_run() -> str:
-    return (
-        "set -euo pipefail\n"
-        "printf '%s\\n' \\\n+"
-        "  'production-infrastructure=NOT RUN' \\\n+"
-        "  'production-deploy=NOT RUN' \\\n+"
-        "  'production-smoke=NOT RUN' \\\n+"
-        "  'production-rollback=NOT RUN'\n"
-    )
+    return """set -euo pipefail
+printf '%s\\n' \\
+  'production-infrastructure=NOT RUN' \\
+  'production-deploy=NOT RUN' \\
+  'production-smoke=NOT RUN' \\
+  'production-rollback=NOT RUN'
+"""
 
 
 def _checkout(component: str, repository: str) -> dict[str, Any]:
@@ -235,7 +231,7 @@ def _expected_workflow() -> dict[str, Any]:
                     {
                         "name": "Retain reviewed staging authority boundary",
                         "shell": "bash",
-                        "run": "set -euo pipefail\\nprintf '%s\\n' 'staging-authority=controller-owned'\\n",
+                        "run": "set -euo pipefail\nprintf '%s\\n' 'staging-authority=controller-owned'\n",
                     }
                 ],
             },
