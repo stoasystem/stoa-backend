@@ -396,6 +396,7 @@ def _direct_question_updates(path: Path) -> set[str]:
 def test_production_question_writer_registry_is_closed_over_cas_calls():
     registry = {
         "src/stoa/routers/questions.py": {
+            ("persist_case", "mutate_question"),
             ("request_teacher", "mutate_question"),
             ("submit_feedback", "mutate_question"),
         },
