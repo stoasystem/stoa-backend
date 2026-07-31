@@ -57,7 +57,7 @@ def create_exercise_draft(
     source_context = _source_context(evidence_questions, student_id=student_id)
     created_at = now_iso()
     draft_id = f"aitool-{uuid4().hex}"
-    item = {
+    item: ai_teacher_tools_repo.AIDraftItem = {
         "entity_type": ai_teacher_tools_repo.DRAFT_ENTITY,
         "draft_id": draft_id,
         "draft_type": "practice_exercise",
@@ -205,7 +205,8 @@ def _store_summary_draft(
 ) -> dict[str, Any]:
     created_at = now_iso()
     topics = _topic_labels(question)
-    ai_response = question.get("ai_response") if isinstance(question.get("ai_response"), dict) else {}
+    raw_ai_response = question.get("ai_response")
+    ai_response: dict[str, Any] = raw_ai_response if isinstance(raw_ai_response, dict) else {}
     draft_id = f"aitool-{uuid4().hex}"
     item = {
         "entity_type": ai_teacher_tools_repo.DRAFT_ENTITY,
