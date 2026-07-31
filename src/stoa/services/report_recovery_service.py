@@ -177,7 +177,7 @@ def retry_report_generation(
             raise ValueError("Retry generated a mismatched report id")
     except Exception as exc:
         failed_at = _now_iso()
-        fields = {
+        fields: dict[str, object] = {
             "generation_failed_at": failed_at,
             "generation_error_class": type(exc).__name__,
             "generation_error_message": safe_error_message(exc),
@@ -250,7 +250,7 @@ def retry_report_generation(
 
 
 def safe_error_message(exc: Exception) -> str:
-    return redact_private_artifact_text(str(exc))[:240] or type(exc).__name__
+    return (redact_private_artifact_text(str(exc)) or type(exc).__name__)[:240]
 
 
 def redact_private_artifact_text(value: object) -> str | None:
