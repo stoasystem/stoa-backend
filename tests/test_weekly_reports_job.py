@@ -553,10 +553,16 @@ def test_report_recovery_resend_worker_marks_cancelled_pending_targets(monkeypat
 
     result = weekly_reports.report_recovery_job_service.execute_resend_job("job-1")
 
-    assert result["status"] == "cancelled"
-    assert target_updates[0][2] == "skipped_cancelled"
-    assert job_updates[0][1] == "cancelled"
-    assert audits[0][1]["result"] == "cancelled"
+    # Historical rows without the mandatory job_type are not resumable.  They
+    # must be preserved for operator review rather than rewritten as cancelled.
+    assert result == {
+        "status": "ignored",
+        "job_id": "job-1",
+        "reason": "incomplete_job_record",
+    }
+    assert target_updates == []
+    assert job_updates == []
+    assert audits == []
 
 
 def test_report_recovery_retry_generation_worker_completes_target(monkeypatch):
