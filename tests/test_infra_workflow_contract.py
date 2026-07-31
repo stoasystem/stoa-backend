@@ -115,6 +115,14 @@ printf '%s\\n' \\
 """
 
 
+def _staging_boundary_run() -> str:
+    return """set -euo pipefail
+printf '%s\\n' \\
+  'staging-authority=controller-owned' \\
+  'deployed-state-read=NOT RUN: Plan 32 protected inventory/controller'
+"""
+
+
 def _checkout(component: str, repository: str) -> dict[str, Any]:
     return {
         "name": f"Check out {component}",
@@ -231,7 +239,7 @@ def _expected_workflow() -> dict[str, Any]:
                     {
                         "name": "Retain reviewed staging authority boundary",
                         "shell": "bash",
-                        "run": "set -euo pipefail\nprintf '%s\\n' 'staging-authority=controller-owned'\n",
+                        "run": _staging_boundary_run(),
                     }
                 ],
             },
@@ -368,6 +376,19 @@ def test_workflow_keeps_verification_credential_free_and_staging_dependency_clos
     }
 
 
+def test_credential_free_diff_defers_deployed_state_reads_to_plan32_controller() -> None:
+    _, workflow = _load_workflow()
+    verify = workflow["jobs"]["verify"]
+    assert verify.get("permissions") is None
+    assert "environment" not in verify
+    preflight = verify["steps"][7]
+    assert preflight["name"] == "Run frozen infrastructure preflight"
+    assert "uv run cdk diff --no-change-set > /dev/null" in preflight["run"]
+
+    staging_run = workflow["jobs"]["staging"]["steps"][0]["run"]
+    assert "deployed-state-read=NOT RUN: Plan 32 protected inventory/controller" in staging_run
+
+
 def test_workflow_has_only_the_canonical_gate_and_no_production_mutation() -> None:
     raw, workflow = _load_workflow()
     lowered = raw.lower()
@@ -401,7 +422,11 @@ def test_workflow_has_only_the_canonical_gate_and_no_production_mutation() -> No
     )
     assert not [token for token in forbidden if token in lowered]
     assert "delivery-validate" in raw
-    assert workflow["jobs"]["production_not_run"].get("environment") is None
+    production = workflow["jobs"]["production_not_run"]
+    assert production["needs"] == ["verify"]
+    assert production.get("environment") is None
+    assert production.get("permissions") is None
+    assert production["steps"][0]["run"] == _not_run_run()
 
 
 def test_shell_inputs_are_indirect_and_every_run_step_is_valid_bash() -> None:
