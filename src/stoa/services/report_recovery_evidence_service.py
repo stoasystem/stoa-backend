@@ -228,10 +228,7 @@ def _string_or_none(value: object) -> str | None:
 
 
 def _int_or_zero(value: object) -> int:
-    try:
-        return int(value or 0)
-    except (TypeError, ValueError):
-        return 0
+    return value if type(value) is int and value >= 0 else 0
 
 
 def _is_private_artifact_field(key: str) -> bool:

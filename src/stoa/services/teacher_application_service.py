@@ -44,7 +44,7 @@ def submit_application(
         raise HTTPException(status_code=422, detail={"code": "verified_email_required"})
     application_id = str(payload.get("application_id") or f"teacherapp_{uuid4().hex}").strip()
     existing = teacher_application_repo.list_application_versions(application_id)
-    version = max((int(item.get("version") or 0) for item in existing), default=0) + 1
+    version = max((_positive_version(item.get("version"), "application") for item in existing), default=0) + 1
     timestamp = _timestamp(now)
     row = teacher_application_repo.create_application_version(
         {
@@ -190,7 +190,9 @@ def activate_from_invitation(
         {
             "command_id": command_id,
             "application_id": invitation["application_id"],
-            "application_version": int(invitation["application_version"]),
+            "application_version": _positive_version(
+                invitation.get("application_version"), "invitation application"
+            ),
             "invitation_id": invitation["invitation_id"],
             "verified_email": email,
             "issuer": issuer.strip().rstrip("/"),
@@ -268,7 +270,7 @@ def _resume_activation(command: dict[str, Any], *, provider: Any, now: datetime)
         latest = teacher_application_repo.get_activation_command(command["command_id"]) or command
         teacher_application_repo.update_activation_command(
             command["command_id"],
-            expected_version=int(latest["version"]),
+            expected_version=_positive_version(latest.get("version"), "activation command"),
             status="provider_failed",
             updated_at=now.isoformat(),
             evidence_reference=f"teacher-activation:{command['command_id']}",
@@ -290,7 +292,7 @@ def _resume_activation(command: dict[str, Any], *, provider: Any, now: datetime)
     latest = teacher_application_repo.get_activation_command(command["command_id"]) or command
     completed = teacher_application_repo.update_activation_command(
         command["command_id"],
-        expected_version=int(latest["version"]),
+        expected_version=_positive_version(latest.get("version"), "activation command"),
         status="active",
         updated_at=now.isoformat(),
         evidence_reference=f"teacher-activation:{command['command_id']}",
@@ -392,3 +394,9 @@ def _timestamp(now: Callable[[], datetime] | None) -> str:
 def _parse_timestamp(value: Any) -> datetime:
     parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def _positive_version(value: object, label: str) -> int:
+    if type(value) is not int or value <= 0:
+        raise HTTPException(status_code=409, detail={"code": f"{label}_state_invalid"})
+    return value
