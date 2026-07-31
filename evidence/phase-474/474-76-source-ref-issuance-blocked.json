@@ -1,0 +1,45 @@
+{
+  "schema": "stoa.release.source-ref-issuance-blocker.v1",
+  "status": "BLOCKED",
+  "observed_at": "2026-07-31T11:48:01Z",
+  "scope": "Plan 474-76 local auditable current frontend and infrastructure source-ref issuance only",
+  "owner_approval": {
+    "provenance": "project-owner explicit Codex instruction",
+    "approved_at": "2026-07-31T11:48:01Z",
+    "scope": [
+      "local-auditable-source-ref-receipts",
+      "no-push",
+      "no-workflow-dispatch",
+      "no-provider-or-AWS-mutation",
+      "no-deploy-or-staging-mutation",
+      "no-production-operation"
+    ]
+  },
+  "frontend": {
+    "commit": "a1ad044175517eb1896b386519640f938406ee49",
+    "tree": "c9c569e368d307c47f49ab353685dad2cc959928",
+    "lock_path": "package-lock.json",
+    "lock_sha256": "2a7762935fa88be068efa1cd3230e87cbc1e8899e4857a791a563da6d5ba5c17",
+    "worktree": "CLEAN",
+    "source_ref": "NOT ISSUED"
+  },
+  "infra": {
+    "commit": "56fc1b1f33cf74fa4d66bfb61aa74dc4404e412b",
+    "tree": "df1ec9fbda8506b86d7853d3d8de5faa59d23cf8",
+    "lock_path": "uv.lock",
+    "lock_sha256": "8c84a57b55b663b315f7d1b689e4f8ef6eba2c10c5b357d8914932731778bfd9",
+    "worktree": "BLOCKED_UNTRACKED_FILE",
+    "untracked_paths": [
+      ".DS_Store"
+    ],
+    "source_ref": "NOT ISSUED"
+  },
+  "reason_code": "INFRA_WORKTREE_NOT_CLEAN",
+  "external_operations": {
+    "push": "NOT RUN",
+    "workflow_dispatch": "NOT RUN",
+    "provider_or_aws_mutation": "NOT RUN",
+    "deploy_or_staging_mutation": "NOT RUN",
+    "production": "NOT RUN"
+  }
+}
