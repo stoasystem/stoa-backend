@@ -1,0 +1,91 @@
+{
+  "schema": "stoa.release.protected-environments-receipt.v1",
+  "status": "BLOCKED",
+  "observed_at": "2026-07-31T12:04:50Z",
+  "repository": "stoasystem/stoa-backend",
+  "actor": {
+    "login": "DengZhiyuan-math",
+    "id": 125728853,
+    "repository_permission": "push",
+    "repository_admin": false
+  },
+  "contract": {
+    "environments": [
+      "staging",
+      "staging-smoke",
+      "staging-rollback",
+      "production",
+      "production-smoke",
+      "production-rollback"
+    ],
+    "deployment_branch_policy": {
+      "mode": "custom-branch-policy",
+      "allowed_branch": "main",
+      "allowed_tags": []
+    },
+    "production_reviewer": {
+      "type": "User",
+      "id": 125728853,
+      "prevent_self_review": false
+    },
+    "oidc_subjects": [
+      "repo:stoasystem/stoa-backend:environment:staging",
+      "repo:stoasystem/stoa-backend:environment:staging-smoke",
+      "repo:stoasystem/stoa-backend:environment:staging-rollback",
+      "repo:stoasystem/stoa-backend:environment:production",
+      "repo:stoasystem/stoa-backend:environment:production-smoke",
+      "repo:stoasystem/stoa-backend:environment:production-rollback"
+    ]
+  },
+  "before_state": {
+    "environment_count": 0,
+    "environment_names": [],
+    "ruleset_count": 0,
+    "main_branch_protection": "NOT CONFIGURED"
+  },
+  "observations": [
+    {
+      "endpoint": "GET /user",
+      "http_status": 200,
+      "request_id": "A79D:1B7E8A:1DF70F2:1C6C3ED:6A6C8F61"
+    },
+    {
+      "endpoint": "GET /repos/stoasystem/stoa-backend/environments",
+      "http_status": 200,
+      "request_id": "6EB6:37D61F:1E673A1:1CDEEAA:6A6C8F62"
+    },
+    {
+      "endpoint": "GET /repos/stoasystem/stoa-backend/branches/main/protection",
+      "http_status": 404,
+      "request_id": "D8D2:24730C:1EB99D5:1D2B039:6A6C8F62",
+      "reason_code": "MAIN_BRANCH_PROTECTION_NOT_CONFIGURED"
+    },
+    {
+      "endpoint": "GET /repos/stoasystem/stoa-backend/rulesets",
+      "http_status": 200,
+      "request_id": "17C6:259018:1E1894B:1C8C3BA:6A6C8F62"
+    }
+  ],
+  "mutation": {
+    "github_configuration": "NOT RUN",
+    "application": "NOT RUN",
+    "infrastructure": "NOT RUN",
+    "staging_deploy": "NOT RUN",
+    "production_deploy": "NOT RUN",
+    "production_smoke": "NOT RUN",
+    "production_rollback": "NOT RUN"
+  },
+  "verification": {
+    "environment-contract-tests": "PASS: 11 passed",
+    "plan-79-command": "BLOCKED",
+    "plan-79-command-reason": "scripts/release_environment.py does not implement the planned verify-github subcommand; available commands are plan-staging, apply-staging, verify-staging, and verify-inventory."
+  },
+  "blockers": [
+    {
+      "code": "GITHUB_REPOSITORY_ADMIN_REQUIRED",
+      "detail": "The authenticated user has push permission but repository_admin=false. GitHub's environment, deployment-branch-policy, branch-protection, and ruleset write endpoints require Administration write permission.",
+      "resolution": "Grant DengZhiyuan-math repository Administration permission in the stoasystem organization, or run this exact configuration through an already-authorized repository administrator."
+    }
+  ],
+  "production_mutation": "NOT RUN"
+}
