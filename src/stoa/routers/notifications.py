@@ -137,7 +137,10 @@ async def list_notifications(
     actor: Actor = Depends(notification_self_dependency(ResourceType.NOTIFICATION_COLLECTION, AuthorizationAction.READ)),
 ):
     items = notification_service.list_user_events(actor, status=status_filter, limit=limit)
-    return NotificationListResponse(items=items, count=len(items))
+    return NotificationListResponse(
+        items=[NotificationEventResponse.model_validate(item) for item in items],
+        count=len(items),
+    )
 
 
 @router.get("/preferences", response_model=NotificationPreferenceResponse)
@@ -245,7 +248,10 @@ async def list_admin_notifications(
         event_type=event_type,
         limit=limit,
     )
-    return NotificationListResponse(items=items, count=len(items))
+    return NotificationListResponse(
+        items=[NotificationEventResponse.model_validate(item) for item in items],
+        count=len(items),
+    )
 
 
 @admin_router.get("/notifications/delivery-status", response_model=NotificationDeliveryStatusResponse)

@@ -1548,7 +1548,7 @@ def revoke_push_token(user: dict[str, Any], token_reference: str) -> dict[str, A
     return push_token_response(updated)
 
 
-def revoke_authorized_push_token(item: dict[str, Any]) -> dict[str, Any]:
+def revoke_authorized_push_token(item: Mapping[str, object]) -> dict[str, Any]:
     updated = notification_repo.update_push_token(
         str(item.get("user_id") or ""),
         str(item.get("token_reference") or ""),
@@ -1784,7 +1784,7 @@ def mark_event(event_id: str, user: dict[str, Any], next_status: str) -> dict[st
     return event_response(updated)
 
 
-def mark_authorized_event(item: dict[str, Any], next_status: str) -> dict[str, Any]:
+def mark_authorized_event(item: Mapping[str, object], next_status: str) -> dict[str, Any]:
     if next_status not in {"read", "archived"}:
         raise HTTPException(status_code=400, detail="Unsupported notification transition")
     event_id = str(item.get("event_id") or "")
