@@ -218,9 +218,15 @@ def _live_inventory() -> dict[str, object]:
                 )
             ],
             "oidc_subjects": [
-                "repo:stoasystem/stoa-backend:environment:staging",
-                "repo:stoasystem/stoa-backend:environment:staging-smoke",
-                "repo:stoasystem/stoa-backend:environment:staging-rollback",
+                f"repo:stoasystem/stoa-backend:environment:{name}"
+                for name in (
+                    "staging",
+                    "staging-smoke",
+                    "staging-rollback",
+                    "production",
+                    "production-smoke",
+                    "production-rollback",
+                )
             ],
             "request_sha256": "e" * 64,
         },
@@ -264,7 +270,9 @@ def test_live_inventory_is_closed_source_bound_and_rejects_unsafe_diff(tmp_path:
 
     module.verify_inventory(receipt, frontend_ref, infra_ref)
 
-    receipt["cdk"]["changes"] = [{"logical_id": "ReleaseAlias", "action": "Modify", "replacement": True}]
+    cdk = receipt["cdk"]
+    assert isinstance(cdk, dict)
+    cdk["changes"] = [{"logical_id": "ReleaseAlias", "action": "Modify", "replacement": True}]
     with pytest.raises(module.EnvironmentPolicyError, match="replacement"):
         module.verify_inventory(receipt, frontend_ref, infra_ref)
 
