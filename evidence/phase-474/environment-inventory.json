@@ -1,0 +1,71 @@
+{
+  "schema": "stoa.release.environment-inventory-blocker.v1",
+  "status": "BLOCKED",
+  "observed_at": "2026-07-31T11:19:32Z",
+  "scope": "read-only GitHub/AWS/CloudFormation/CDK before-state",
+  "github": {
+    "authentication": "PASS",
+    "repository": "stoasystem/stoa-backend",
+    "observations": [
+      {
+        "endpoint": "GET /repos/stoasystem/stoa-backend/environments",
+        "result": "PASS",
+        "environment_count": 0
+      },
+      {
+        "endpoint": "GET /repos/stoasystem/stoa-backend/rulesets",
+        "result": "PASS",
+        "ruleset_count": 0
+      },
+      {
+        "endpoint": "GET /repos/stoasystem/stoa-backend/branches/main/protection",
+        "result": "BLOCKED",
+        "http_status": 404,
+        "reason_code": "MAIN_BRANCH_PROTECTION_NOT_CONFIGURED"
+      }
+    ],
+    "oidc_subjects": "NOT RUN",
+    "reason_code": "AWS_IAM_TRUST_READ_REQUIRES_UNAVAILABLE_AWS_SESSION"
+  },
+  "aws": {
+    "status": "NOT RUN",
+    "profile": "stoa",
+    "region": "eu-central-2",
+    "reason_code": "CODEX_EXECUTION_SESSION_SSO_CACHE_UNAVAILABLE",
+    "account_identity": "NOT RUN",
+    "cloudformation": "NOT RUN",
+    "lambda_aliases": "NOT RUN",
+    "s3_buckets": "NOT RUN",
+    "cloudfront_distribution": "NOT RUN",
+    "iam_release_roles": "NOT RUN",
+    "cdk_diff": "NOT RUN"
+  },
+  "source_refs": {
+    "status": "NOT ISSUED",
+    "required": [
+      "evidence/phase-474/frontend-source-ref.json",
+      "evidence/phase-474/infra-source-ref.json"
+    ],
+    "historical_owner_approved_handoff": {
+      "backend_commit": "6b3b464af7f4a37f187d9d75dea6b62ad0439624",
+      "frontend_commit": "13c4d1067492eead665999d2b43cd359141a6dd6",
+      "infra_commit": "6d545ad8cae8d2fe67087f298d9d5fc7cc29b3f6"
+    },
+    "reason_code": "CURRENT_OWNER_APPROVED_SOURCE_REFS_MISSING"
+  },
+  "mutation": {
+    "github_configuration": "NOT RUN",
+    "cloudformation_change_set_execution": "NOT RUN",
+    "cdk_deploy": "NOT RUN",
+    "staging_deploy": "NOT RUN",
+    "production_infrastructure": "NOT RUN",
+    "production_deploy": "NOT RUN",
+    "production_smoke": "NOT RUN",
+    "production_rollback": "NOT RUN"
+  },
+  "blockers": [
+    "GITHUB_ENVIRONMENTS_AND_RULESETS_MISSING",
+    "CODEX_EXECUTION_SESSION_SSO_CACHE_UNAVAILABLE",
+    "CURRENT_OWNER_APPROVED_SOURCE_REFS_MISSING"
+  ]
+}

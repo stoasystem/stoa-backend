@@ -430,7 +430,7 @@ Plans:
 
 **Remaining Wave 18**
 
-- [ ] `474-33` — Read-only live environment and CDK inventory.
+- [ ] `474-33` — Read-only live environment and CDK inventory. **BLOCKED:** authenticated GitHub read found zero environments/rulesets and no main protection; AWS read is unavailable only to the Codex execution session; current owner-approved source refs are not issued. See `evidence/phase-474/environment-inventory.json`.
 - [ ] `474-76` — Thin exact-ref frontend delivery workflow.
 
 **Wave 19 — 1/3 completed**
