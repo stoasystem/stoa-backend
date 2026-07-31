@@ -179,7 +179,14 @@ def build_manifest(
         skipped_count=len(skipped_refs),
         refusal_count=len(refusal_reasons),
     )
-    manifest_body = {
+    verification: dict[str, object] = {
+        "item_count": len(evidence_items),
+        "missing_references": missing_refs,
+        "skipped_references": skipped_refs,
+        "refusal_reasons": refusal_reasons,
+        "privacy": {"metadata_only": True, "private_artifact_fields_omitted": True},
+    }
+    manifest_body: dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
         "manifest_id": manifest_id,
         "generated_at": generated_at,
@@ -195,24 +202,21 @@ def build_manifest(
             "started_at": generated_at,
         },
         "items": evidence_items,
-        "verification": {
-            "item_count": len(evidence_items),
-            "missing_references": missing_refs,
-            "skipped_references": skipped_refs,
-            "refusal_reasons": refusal_reasons,
-            "privacy": {"metadata_only": True, "private_artifact_fields_omitted": True},
-        },
+        "verification": verification,
         "status": manifest_status,
     }
     privacy = _privacy_result(manifest_body)
-    manifest_body["verification"]["privacy"] = privacy
+    verification["privacy"] = privacy
     if not privacy["passed"]:
         manifest_body = _refusal_envelope(
             manifest_body,
             privacy=privacy,
             refusal_reason="privacy denylist check failed",
         )
-    manifest_body["verification"]["manifest_digest"] = _digest(_manifest_digest_body(manifest_body))
+    final_verification = manifest_body.get("verification")
+    if not isinstance(final_verification, dict):
+        raise AuditRetentionError(500, "retention manifest verification is malformed")
+    final_verification["manifest_digest"] = _digest(_manifest_digest_body(manifest_body))
     write_manifest_audit_event(
         manifest_body,
         actor=safe_operator,
@@ -240,7 +244,7 @@ def build_immutable_status_response(
         request_id=request_id,
         limit=limit,
     )
-    response = {
+    response: dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
         "checked_at": now_iso(),
         "request_id": request_id,
@@ -281,7 +285,7 @@ def build_governance_status_response(
                 "review_version": review.get("review_version") if review else None,
             }
         )
-    response = {
+    response: dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
         "checked_at": now_iso(),
         "request_id": request_id,
@@ -607,7 +611,7 @@ def build_legal_hold_status_response(
     limit: int = 25,
 ) -> dict[str, Any]:
     request_id = sanitize_request_id(request_id)
-    items = []
+    items: list[dict[str, object]] = []
     for reference in references[:limit]:
         safe_ref = _legal_hold_reference(reference)
         scope_key = _scope_key(safe_ref)
@@ -623,7 +627,7 @@ def build_legal_hold_status_response(
                 "updated_at": _redact_text(current.get("updated_at")) if current else None,
             }
         )
-    response = {
+    response: dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
         "checked_at": now_iso(),
         "request_id": request_id,
@@ -656,11 +660,12 @@ def record_legal_hold_review_metadata(
     if not safe_reason:
         raise ImmutableEvidenceError(422, "legal hold review reason is required")
     now = now_iso()
-    items = []
+    items: list[dict[str, object]] = []
     for reference in references[:limit]:
         safe_ref = _legal_hold_reference(reference)
         scope = safe_ref.get("scope")
         scope_key = _scope_key(safe_ref)
+        item: dict[str, object]
         if scope not in SUPPORTED_SCOPES:
             item = {
                 "reference": safe_ref,
@@ -735,7 +740,7 @@ def record_legal_hold_review_metadata(
         }
         _write_legal_hold_review_audit(scope_key, item, actor=actor, request_id=request_id, reason=safe_reason)
         items.append(item)
-    response = {
+    response: dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
         "updated_at": now,
         "request_id": request_id,
@@ -765,11 +770,12 @@ def apply_legal_hold_metadata(
         raise ImmutableEvidenceError(422, "legal hold reason is required")
 
     now = now_iso()
-    items = []
+    items: list[dict[str, object]] = []
     for reference in references[:limit]:
         safe_ref = _legal_hold_reference(reference)
         scope = safe_ref.get("scope")
         scope_key = _scope_key(safe_ref)
+        item: dict[str, object]
         if scope not in SUPPORTED_SCOPES:
             item = {
                 "reference": safe_ref,
@@ -798,7 +804,7 @@ def apply_legal_hold_metadata(
             else f"legal-hold-{uuid4().hex}"
         )
         state = "active" if safe_action == "apply" else "released"
-        current = {
+        current: dict[str, object] = {
             "hold_id": hold_id,
             "scope_key": scope_key,
             "reference": safe_ref,
@@ -849,7 +855,7 @@ def apply_legal_hold_metadata(
         }
         _write_legal_hold_audit(scope_key, item, actor=actor, request_id=request_id, reason=safe_reason)
         items.append(item)
-    response = {
+    response: dict[str, object] = {
         "schema_version": SCHEMA_VERSION,
         "updated_at": now,
         "request_id": request_id,
@@ -1200,6 +1206,14 @@ def _write_legal_hold_audit(
     return event
 
 
+def _repository_items(response: dict[str, object], *, label: str) -> list[dict[str, object]]:
+    """Return only well-formed repository rows; malformed evidence fails closed."""
+    raw_items = response.get("Items")
+    if not isinstance(raw_items, list) or any(not isinstance(item, dict) for item in raw_items):
+        raise AuditRetentionError(500, f"{label} repository response is malformed")
+    return [dict(item) for item in raw_items]
+
+
 def _resolve_reference(
     reference: dict[str, Any],
     *,
@@ -1236,8 +1250,14 @@ def _resolve_recovery_job(
     evidence: dict[str, Any] | None = None
     counts = {"jobs": 1}
     if include_evidence:
-        targets = report_repo.list_recovery_job_targets(str(job_id), limit=target_limit).get("Items", [])
-        audits = report_repo.list_recovery_job_audit_events(str(job_id), limit=audit_limit).get("Items", [])
+        targets = _repository_items(
+            report_repo.list_recovery_job_targets(str(job_id), limit=target_limit),
+            label="recovery targets",
+        )
+        audits = _repository_items(
+            report_repo.list_recovery_job_audit_events(str(job_id), limit=audit_limit),
+            label="recovery job audit events",
+        )
         counts = {"jobs": 1, "targets": len(targets), "job_audit": len(audits)}
         evidence = report_recovery_evidence_service.build_export_response(
             scope="recovery_job",
@@ -1269,7 +1289,10 @@ def _resolve_report(
     evidence = None
     audits: list[dict[str, Any]] = []
     if include_evidence:
-        audits = report_repo.list_report_audit_events(str(report["report_id"]), limit=audit_limit).get("Items", [])
+        audits = _repository_items(
+            report_repo.list_report_audit_events(str(report["report_id"]), limit=audit_limit),
+            label="report audit events",
+        )
         evidence = {
             "scope": "report",
             "report": _report_summary(report),
@@ -1288,7 +1311,10 @@ def _resolve_support_handoff(
     package_id = reference.get("package_id")
     if not package_id:
         return {"reference": reference, "status": "missing", "reason": "missing package_id"}
-    audits = report_repo.list_support_handoff_audit_events(str(package_id), limit=audit_limit).get("Items", [])
+    audits = _repository_items(
+        report_repo.list_support_handoff_audit_events(str(package_id), limit=audit_limit),
+        label="support handoff audit events",
+    )
     if not audits:
         return {"reference": reference, "status": "missing", "reason": "support handoff audit not found"}
     evidence = None
