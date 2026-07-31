@@ -100,6 +100,16 @@ def test_provider_observability_rejects_raw_private_evidence():
         )
 
 
+@pytest.mark.parametrize("field", ["cost_cents", "latency_ms"])
+@pytest.mark.parametrize("value", ["1", True, -1])
+def test_provider_observability_rejects_malformed_numeric_event_values(field, value):
+    with pytest.raises(ValueError, match=f"Invalid provider event {field}"):
+        ai_operations_service.summarize_provider_events(
+            [{field: value}],
+            budget_cents=10,
+        )
+
+
 def test_safety_teacher_review_states_and_parent_copy_are_explicit():
     assert ai_operations_service.teacher_review_state("draft") == "needs_review"
     assert ai_operations_service.teacher_review_state("refused") == "refused"

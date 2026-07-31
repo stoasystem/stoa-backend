@@ -193,8 +193,8 @@ def assert_ai_evidence_safe(evidence: dict[str, object]) -> None:
 def summarize_provider_events(events: list[dict[str, object]], *, budget_cents: int) -> dict[str, object]:
     for event in events:
         assert_ai_evidence_safe(event)
-    total_cost = sum(int(event.get("cost_cents", 0)) for event in events)
-    latencies = [int(event.get("latency_ms", 0)) for event in events]
+    total_cost = sum(_optional_event_nonnegative_int(event, "cost_cents") for event in events)
+    latencies = [_optional_event_nonnegative_int(event, "latency_ms") for event in events]
     refusals = sum(1 for event in events if event.get("refusal") is True)
     fallbacks = sum(1 for event in events if event.get("fallback") is True)
     failures = sum(1 for event in events if event.get("failure_class"))
@@ -208,6 +208,15 @@ def summarize_provider_events(events: list[dict[str, object]], *, budget_cents: 
         "failureCount": failures,
         "providerBlocked": any(event.get("failure_class") == "provider_blocked" for event in events),
     }
+
+
+def _optional_event_nonnegative_int(event: dict[str, object], field: str) -> int:
+    value = event.get(field)
+    if value is None:
+        return 0
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"Invalid provider event {field}")
+    return value
 
 
 def teacher_review_state(raw_status: str) -> ReviewState:
