@@ -25,6 +25,7 @@ OBSERVATION_SCHEMA: Final = "stoa.release.environment-observation.v1"
 SOURCE_REF_SCHEMA: Final = "stoa.release.source-ref.v1"
 PLAN_SCHEMA: Final = "stoa.release.environment-plan.v1"
 RECEIPT_SCHEMA: Final = "stoa.release.environment-receipt.v1"
+PROTECTED_ENVIRONMENTS_RECEIPT_SCHEMA: Final = "stoa.release.protected-environments-receipt.v1"
 STAGING: Final = "staging"
 _IDENTITY_FIELDS: Final = ("environment", "actor", "repository", "account_id", "region", "stack")
 _INVENTORY_FIELDS: Final = frozenset({"schema", *_IDENTITY_FIELDS, "resources"})
@@ -41,6 +42,46 @@ _AWS_FIELDS: Final = frozenset({"account_id", "region", "stack", "stack_sha256",
 _AWS_RESOURCE_FIELDS: Final = frozenset({"logical_id", "kind", "physical_id_sha256"})
 _CDK_FIELDS: Final = frozenset({"infra_commit", "infra_tree", "infra_lock_sha256", "diff_sha256", "changes"})
 _PRODUCTION_FIELDS: Final = frozenset({"infrastructure", "deploy", "smoke", "rollback"})
+_WORKFLOW_POLICY_FIELDS: Final = frozenset(
+    {
+        "authority_repository",
+        "build_once",
+        "forbidden",
+        "github_environments",
+        "production_mutation",
+        "required_jobs",
+        "schema",
+        "sole_owner_self_approval",
+        "staging_environments",
+    }
+)
+_PROTECTED_ENVIRONMENT_RECEIPT_FIELDS: Final = frozenset(
+    {"schema", "status", "observed_at", "repository", "actor", "readback", "mutation", "production_mutation"}
+)
+_GITHUB_ACTOR_FIELDS: Final = frozenset({"login", "id", "repository_permission", "repository_admin"})
+_GITHUB_READBACK_FIELDS: Final = frozenset(
+    {"environments", "main_branch_protection", "rulesets", "oidc_subjects"}
+)
+_GITHUB_PROTECTED_ENVIRONMENT_FIELDS: Final = frozenset(
+    {"name", "branch_policies", "reviewers", "prevent_self_review"}
+)
+_GITHUB_BRANCH_POLICY_FIELDS: Final = frozenset({"name", "type"})
+_GITHUB_REVIEWER_FIELDS: Final = frozenset({"type", "id"})
+_MAIN_BRANCH_PROTECTION_FIELDS: Final = frozenset(
+    {"branch", "protected", "enforce_admins", "allow_force_pushes", "allow_deletions"}
+)
+_RULESET_FIELDS: Final = frozenset({"target", "enforcement", "ref_name_include", "rules"})
+_GITHUB_MUTATION_FIELDS: Final = frozenset(
+    {
+        "github_configuration",
+        "application",
+        "infrastructure",
+        "staging_deploy",
+        "production_deploy",
+        "production_smoke",
+        "production_rollback",
+    }
+)
 _EXPECTED_ENVIRONMENTS: Final = (
     "staging",
     "staging-smoke",
@@ -273,6 +314,132 @@ def verify_inventory(receipt: object, frontend_ref: object, infra_ref: object) -
         raise EnvironmentPolicyError("production operations must remain not run")
 
 
+def _validate_workflow_policy(value: object) -> tuple[str, tuple[str, ...]]:
+    policy = _as_closed_mapping(value, _WORKFLOW_POLICY_FIELDS, "workflow policy")
+    if policy["schema"] != "stoa.release.workflow-policy.v1":
+        raise EnvironmentPolicyError("workflow policy schema is not recognized")
+    repository = _require_text(policy["authority_repository"], "workflow policy repository")
+    environments = policy["github_environments"]
+    if not isinstance(environments, list) or tuple(environments) != _EXPECTED_ENVIRONMENTS:
+        raise EnvironmentPolicyError("workflow policy GitHub environments are unsafe")
+    if policy["sole_owner_self_approval"] is not True:
+        raise EnvironmentPolicyError("workflow policy must permit sole-owner self-approval")
+    if policy["production_mutation"] != "NOT RUN":
+        raise EnvironmentPolicyError("workflow policy production mutation is unsafe")
+    if policy["build_once"] is not True:
+        raise EnvironmentPolicyError("workflow policy must preserve build-once delivery")
+    return repository, tuple(environments)
+
+
+def _validate_github_inventory(value: object, repository: str, environments: tuple[str, ...]) -> None:
+    inventory = _as_closed_mapping(value, _OBSERVATION_FIELDS, "environment inventory")
+    if inventory["schema"] != OBSERVATION_SCHEMA or inventory["status"] != "PASS":
+        raise EnvironmentPolicyError("environment inventory is not a PASS receipt")
+    github = _as_closed_mapping(inventory["github"], _GITHUB_FIELDS, "GitHub inventory")
+    if github["repository"] != repository:
+        raise EnvironmentPolicyError("GitHub inventory repository drifts from policy")
+    rows = github["environments"]
+    if not isinstance(rows, list) or len(rows) != len(environments):
+        raise EnvironmentPolicyError("GitHub inventory environments are incomplete")
+    actual_environments: list[str] = []
+    for row in rows:
+        normalized = _as_closed_mapping(row, _GITHUB_ENVIRONMENT_FIELDS, "GitHub inventory environment")
+        if normalized["branch_policy"] != "main-only" or normalized["protection"] != "required":
+            raise EnvironmentPolicyError("GitHub inventory environment is unsafe")
+        actual_environments.append(_require_text(normalized["name"], "GitHub inventory environment name"))
+    if tuple(actual_environments) != environments:
+        raise EnvironmentPolicyError("GitHub inventory environments drift from policy")
+    expected_subjects = [f"repo:{repository}:environment:{name}" for name in environments]
+    if github["oidc_subjects"] != expected_subjects:
+        raise EnvironmentPolicyError("GitHub inventory OIDC subjects drift from policy")
+
+
+def _validate_protected_environment_readback(value: object, repository: str, environments: tuple[str, ...]) -> None:
+    receipt = _as_closed_mapping(value, _PROTECTED_ENVIRONMENT_RECEIPT_FIELDS, "protected environment receipt")
+    if receipt["schema"] != PROTECTED_ENVIRONMENTS_RECEIPT_SCHEMA or receipt["status"] != "PASS":
+        raise EnvironmentPolicyError("protected environment receipt is not a PASS receipt")
+    if receipt["repository"] != repository:
+        raise EnvironmentPolicyError("protected environment receipt repository drifts from policy")
+    _require_text(receipt["observed_at"], "protected environment observation time")
+    actor = _as_closed_mapping(receipt["actor"], _GITHUB_ACTOR_FIELDS, "GitHub actor")
+    _require_text(actor["login"], "GitHub actor login")
+    if not isinstance(actor["id"], int) or actor["id"] <= 0:
+        raise EnvironmentPolicyError("GitHub actor id is invalid")
+    if actor["repository_permission"] != "admin" or actor["repository_admin"] is not True:
+        raise EnvironmentPolicyError("GitHub actor lacks repository administration authority")
+    readback = _as_closed_mapping(receipt["readback"], _GITHUB_READBACK_FIELDS, "GitHub protected environment readback")
+    actual_environments = readback["environments"]
+    if not isinstance(actual_environments, list) or len(actual_environments) != len(environments):
+        raise EnvironmentPolicyError("GitHub protected environment readback is incomplete")
+    owner_id = actor["id"]
+    production_environments = frozenset(name for name in environments if name.startswith("production"))
+    observed_names: list[str] = []
+    for row in actual_environments:
+        environment = _as_closed_mapping(row, _GITHUB_PROTECTED_ENVIRONMENT_FIELDS, "GitHub protected environment")
+        name = _require_text(environment["name"], "GitHub protected environment name")
+        observed_names.append(name)
+        branch_policies = environment["branch_policies"]
+        if not isinstance(branch_policies, list) or len(branch_policies) != 1:
+            raise EnvironmentPolicyError("GitHub deployment branch policy is incomplete")
+        branch_policy = _as_closed_mapping(branch_policies[0], _GITHUB_BRANCH_POLICY_FIELDS, "GitHub deployment branch policy")
+        if branch_policy["name"] != "main" or branch_policy["type"] != "branch":
+            raise EnvironmentPolicyError("GitHub deployment branch policy is unsafe")
+        reviewers = environment["reviewers"]
+        if not isinstance(reviewers, list):
+            raise EnvironmentPolicyError("GitHub required reviewers are malformed")
+        if environment["prevent_self_review"] is not False:
+            raise EnvironmentPolicyError("GitHub self-approval is incorrectly disabled")
+        if name in production_environments:
+            if len(reviewers) != 1:
+                raise EnvironmentPolicyError("GitHub production reviewer is incomplete")
+            reviewer = _as_closed_mapping(reviewers[0], _GITHUB_REVIEWER_FIELDS, "GitHub production reviewer")
+            if reviewer["type"] != "User" or reviewer["id"] != owner_id:
+                raise EnvironmentPolicyError("GitHub production reviewer drifts from owner")
+        elif reviewers:
+            raise EnvironmentPolicyError("GitHub staging environment must not require a reviewer")
+    if tuple(observed_names) != environments:
+        raise EnvironmentPolicyError("GitHub protected environments drift from policy")
+    protection = _as_closed_mapping(
+        readback["main_branch_protection"], _MAIN_BRANCH_PROTECTION_FIELDS, "GitHub main branch protection"
+    )
+    if (
+        protection["branch"] != "main"
+        or protection["protected"] is not True
+        or protection["enforce_admins"] is not True
+        or protection["allow_force_pushes"] is not False
+        or protection["allow_deletions"] is not False
+    ):
+        raise EnvironmentPolicyError("GitHub main branch protection is unsafe")
+    rulesets = readback["rulesets"]
+    if not isinstance(rulesets, list) or len(rulesets) != 1:
+        raise EnvironmentPolicyError("GitHub main ruleset is incomplete")
+    ruleset = _as_closed_mapping(rulesets[0], _RULESET_FIELDS, "GitHub main ruleset")
+    if (
+        ruleset["target"] != "branch"
+        or ruleset["enforcement"] != "active"
+        or ruleset["ref_name_include"] != ["refs/heads/main"]
+        or ruleset["rules"] != ["deletion", "non_fast_forward"]
+    ):
+        raise EnvironmentPolicyError("GitHub main ruleset is unsafe")
+    if readback["oidc_subjects"] != [f"repo:{repository}:environment:{name}" for name in environments]:
+        raise EnvironmentPolicyError("GitHub protected environment OIDC subjects drift from policy")
+    mutation = _as_closed_mapping(receipt["mutation"], _GITHUB_MUTATION_FIELDS, "GitHub mutation receipt")
+    if mutation["github_configuration"] != "PASS" or any(
+        mutation[field] != "NOT RUN" for field in _GITHUB_MUTATION_FIELDS - {"github_configuration"}
+    ):
+        raise EnvironmentPolicyError("GitHub protected environment receipt has unsafe mutations")
+    if receipt["production_mutation"] != "NOT RUN":
+        raise EnvironmentPolicyError("production mutation must remain not run")
+
+
+def verify_github(inventory_value: object, receipt_value: object, policy_value: object) -> None:
+    """Fail closed unless an authenticated GitHub readback exactly matches D-05/D-06."""
+
+    repository, environments = _validate_workflow_policy(policy_value)
+    _validate_github_inventory(inventory_value, repository, environments)
+    _validate_protected_environment_readback(receipt_value, repository, environments)
+
+
 def _validate_identity(receipt: Mapping[str, object], policy: Mapping[str, object]) -> None:
     substrate = policy["staging_substrate"]
     if not isinstance(substrate, Mapping):
@@ -445,6 +612,10 @@ def _parser() -> argparse.ArgumentParser:
     inventory.add_argument("--receipt", required=True, type=Path)
     inventory.add_argument("--frontend-ref", required=True, type=Path)
     inventory.add_argument("--infra-ref", required=True, type=Path)
+    github = commands.add_parser("verify-github")
+    github.add_argument("--inventory", required=True, type=Path)
+    github.add_argument("--receipt", required=True, type=Path)
+    github.add_argument("--policy", required=True, type=Path)
     return parser
 
 
@@ -458,6 +629,13 @@ def main(argv: list[str] | None = None) -> int:
                 _load_json(args.receipt),
                 _load_json(args.frontend_ref),
                 _load_json(args.infra_ref),
+            )
+            return 0
+        if args.command == "verify-github":
+            verify_github(
+                _load_json(args.inventory),
+                _load_json(args.receipt),
+                _load_json(args.policy),
             )
             return 0
         if args.command == "plan-staging":

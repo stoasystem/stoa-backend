@@ -76,9 +76,9 @@
     "production_rollback": "NOT RUN"
   },
   "verification": {
-    "environment-contract-tests": "PASS: 11 passed",
+    "environment-contract-tests": "PASS: 21 passed",
     "plan-79-command": "BLOCKED",
-    "plan-79-command-reason": "scripts/release_environment.py does not implement the planned verify-github subcommand; available commands are plan-staging, apply-staging, verify-staging, and verify-inventory."
+    "plan-79-command-reason": "verify-github is implemented and fails closed because the supplied Plan 474-33 inventory is a BLOCKED before-state record rather than a PASS environment-observation receipt. GitHub configuration remains NOT RUN because the authenticated actor lacks repository Administration permission."
   },
   "blockers": [
     {

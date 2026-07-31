@@ -370,4 +370,62 @@ def _protected_environment_receipt() -> dict[str, object]:
 def test_verify_github_accepts_an_exact_authenticated_protected_environment_readback() -> None:
     module = _load_module()
 
-    module.verify_github(_live_inventory(), _protected_environment_receipt(), module.default_policy())
+    policy = json.loads((ROOT / "docs" / "security" / "phase-474-workflow-policy.json").read_text(encoding="utf-8"))
+    module.verify_github(_live_inventory(), _protected_environment_receipt(), policy)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda receipt: receipt["readback"].update({"unexpected": True}), "unknown or missing"),
+        (lambda receipt: receipt["readback"].pop("rulesets"), "unknown or missing"),
+        (lambda receipt: receipt["readback"]["environments"][0]["branch_policies"][0].update({"name": "release"}), "unsafe"),
+        (lambda receipt: receipt["readback"]["environments"][3].update({"reviewers": []}), "reviewer"),
+        (lambda receipt: receipt["readback"]["main_branch_protection"].update({"protected": False}), "unsafe"),
+        (lambda receipt: receipt["readback"].__setitem__("rulesets", []), "ruleset"),
+        (lambda receipt: receipt["readback"].update({"oidc_subjects": []}), "OIDC"),
+        (lambda receipt: receipt["actor"].update({"repository_admin": False}), "administration"),
+    ],
+)
+def test_verify_github_fails_closed_on_unknown_or_unsafe_readback(
+    mutate: object, message: str
+) -> None:
+    module = _load_module()
+    receipt = _protected_environment_receipt()
+    policy = json.loads((ROOT / "docs" / "security" / "phase-474-workflow-policy.json").read_text(encoding="utf-8"))
+    assert callable(mutate)
+    mutate(receipt)
+
+    with pytest.raises(module.EnvironmentPolicyError, match=message):
+        module.verify_github(_live_inventory(), receipt, policy)
+
+
+def test_verify_github_cli_accepts_exact_readback(tmp_path: Path) -> None:
+    inventory_path = tmp_path / "inventory.json"
+    receipt_path = tmp_path / "receipt.json"
+    policy_path = tmp_path / "policy.json"
+    inventory_path.write_text(json.dumps(_live_inventory()), encoding="utf-8")
+    receipt_path.write_text(json.dumps(_protected_environment_receipt()), encoding="utf-8")
+    policy_path.write_text(
+        (ROOT / "docs" / "security" / "phase-474-workflow-policy.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    verified = subprocess.run(
+        [
+            str(ROOT / ".venv" / "bin" / "python"),
+            str(MODULE_PATH),
+            "verify-github",
+            "--inventory",
+            str(inventory_path),
+            "--receipt",
+            str(receipt_path),
+            "--policy",
+            str(policy_path),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert verified.returncode == 0, verified.stderr
