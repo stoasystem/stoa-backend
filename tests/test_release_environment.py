@@ -183,3 +183,111 @@ def test_cli_only_validates_local_receipts_and_fails_closed(tmp_path: Path) -> N
     )
     assert applied.returncode == 0, applied.stderr
     assert json.loads(output_path.read_text(encoding="utf-8"))["operation"] == "apply"
+
+
+def _source_ref(name: str, commit: str) -> dict[str, object]:
+    return {
+        "schema": "stoa.release.source-ref.v1",
+        "name": name,
+        "commit": commit,
+        "tree": "a" * 40,
+        "lock_path": "package-lock.json" if name == "frontend" else "uv.lock",
+        "lock_sha256": "b" * 64,
+    }
+
+
+def _live_inventory() -> dict[str, object]:
+    return {
+        "schema": "stoa.release.environment-observation.v1",
+        "status": "PASS",
+        "source": {
+            "frontend": _source_ref("frontend", "c" * 40),
+            "infra": _source_ref("infra", "d" * 40),
+        },
+        "github": {
+            "repository": "stoasystem/stoa-backend",
+            "environments": [
+                {"name": name, "branch_policy": "main-only", "protection": "required"}
+                for name in (
+                    "staging",
+                    "staging-smoke",
+                    "staging-rollback",
+                    "production",
+                    "production-smoke",
+                    "production-rollback",
+                )
+            ],
+            "oidc_subjects": [
+                "repo:stoasystem/stoa-backend:environment:staging",
+                "repo:stoasystem/stoa-backend:environment:staging-smoke",
+                "repo:stoasystem/stoa-backend:environment:staging-rollback",
+            ],
+            "request_sha256": "e" * 64,
+        },
+        "aws": {
+            "account_id": "123456789012",
+            "region": "eu-central-2",
+            "stack": "StoaReleaseStaging",
+            "stack_sha256": "f" * 64,
+            "resources": [
+                {"logical_id": "ReleaseAlias", "kind": "AWS::Lambda::Alias", "physical_id_sha256": "1" * 64},
+                {"logical_id": "ReleaseBucket", "kind": "AWS::S3::Bucket", "physical_id_sha256": "2" * 64},
+                {"logical_id": "ReleaseDistribution", "kind": "AWS::CloudFront::Distribution", "physical_id_sha256": "3" * 64},
+                {"logical_id": "ReleaseRole", "kind": "AWS::IAM::Role", "physical_id_sha256": "4" * 64},
+            ],
+            "request_sha256": "5" * 64,
+        },
+        "cdk": {
+            "infra_commit": "d" * 40,
+            "infra_tree": "a" * 40,
+            "infra_lock_sha256": "b" * 64,
+            "diff_sha256": "6" * 64,
+            "changes": [
+                {"logical_id": "ReleaseAlias", "action": "Modify", "replacement": False},
+                {"logical_id": "ReleaseBucket", "action": "Modify", "replacement": False},
+            ],
+        },
+        "production": {
+            "infrastructure": "NOT RUN",
+            "deploy": "NOT RUN",
+            "smoke": "NOT RUN",
+            "rollback": "NOT RUN",
+        },
+    }
+
+
+def test_live_inventory_is_closed_source_bound_and_rejects_unsafe_diff(tmp_path: Path) -> None:
+    module = _load_module()
+    receipt = _live_inventory()
+    frontend_ref = _source_ref("frontend", "c" * 40)
+    infra_ref = _source_ref("infra", "d" * 40)
+
+    module.verify_inventory(receipt, frontend_ref, infra_ref)
+
+    receipt["cdk"]["changes"] = [{"logical_id": "ReleaseAlias", "action": "Modify", "replacement": True}]
+    with pytest.raises(module.EnvironmentPolicyError, match="replacement"):
+        module.verify_inventory(receipt, frontend_ref, infra_ref)
+
+    receipt_path = tmp_path / "receipt.json"
+    frontend_path = tmp_path / "frontend.json"
+    infra_path = tmp_path / "infra.json"
+    receipt_path.write_text(json.dumps(_live_inventory()), encoding="utf-8")
+    frontend_path.write_text(json.dumps(frontend_ref), encoding="utf-8")
+    infra_path.write_text(json.dumps(infra_ref), encoding="utf-8")
+    verified = subprocess.run(
+        [
+            str(ROOT / ".venv" / "bin" / "python"),
+            str(MODULE_PATH),
+            "verify-inventory",
+            "--receipt",
+            str(receipt_path),
+            "--frontend-ref",
+            str(frontend_path),
+            "--infra-ref",
+            str(infra_path),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert verified.returncode == 0, verified.stderr
