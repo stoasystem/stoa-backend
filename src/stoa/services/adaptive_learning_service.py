@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -40,6 +41,14 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def _question_rows(student_id: str) -> list[dict[str, Any]]:
+    response = question_repo.list_by_student(student_id, limit=500)
+    raw_items = response.get("Items")
+    if not isinstance(raw_items, list) or any(not isinstance(item, Mapping) for item in raw_items):
+        raise HTTPException(status_code=503, detail="Question history is temporarily unavailable")
+    return [dict(item) for item in raw_items]
+
+
 def get_memory_summary(
     *,
     student_id: str,
@@ -48,7 +57,7 @@ def get_memory_summary(
     persist: bool = False,
 ) -> dict[str, Any]:
     normalized_subject = _safe_subject(subject) if subject else None
-    questions = question_repo.list_by_student(student_id, limit=500).get("Items", [])
+    questions = _question_rows(student_id)
     mistakes = practice_repo.get_mistakes(student_id)
     profile = learning_profile_service.build_learning_profile(
         student_id=student_id,
@@ -640,7 +649,10 @@ def _automation_refusal(
 
 
 def _automation_candidate_stale(recommendation: dict[str, Any], freshness_days: int) -> bool:
-    freshness = recommendation.get("freshness") if isinstance(recommendation.get("freshness"), dict) else {}
+    freshness_value = recommendation.get("freshness")
+    if not isinstance(freshness_value, Mapping):
+        return True
+    freshness = freshness_value
     if freshness.get("status") == "stale":
         return True
     last_evidence_at = freshness.get("lastEvidenceAt")
@@ -1053,8 +1065,8 @@ def _find_assignment_by_automation_key(assignments: list[dict[str, Any]], automa
     for assignment in assignments:
         if assignment.get("automation_key") == automation_key:
             return assignment
-        automation = assignment.get("automation") if isinstance(assignment.get("automation"), dict) else {}
-        if automation.get("automationKey") == automation_key:
+        automation = assignment.get("automation")
+        if isinstance(automation, Mapping) and automation.get("automationKey") == automation_key:
             return assignment
     return None
 
@@ -1152,11 +1164,11 @@ def _string_list(value: Any, *, allow_blank: bool = True) -> list[str]:
 
 
 def _assignment_attempt_count(item: dict[str, Any]) -> int:
-    result = item.get("completion_result") if isinstance(item.get("completion_result"), dict) else {}
-    try:
-        return int(result.get("attemptCount") or 0)
-    except (TypeError, ValueError):
+    result = item.get("completion_result")
+    if not isinstance(result, Mapping):
         return 0
+    attempt_count = result.get("attemptCount")
+    return attempt_count if type(attempt_count) is int and attempt_count >= 0 else 0
 
 
 def _pending_assignment_effect(
