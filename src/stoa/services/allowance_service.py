@@ -300,10 +300,11 @@ def get_allowance_projection(
     except Exception:
         raise ValueError("allowance projection is temporarily unavailable") from None
 
-    finalized_input = int((counter or {}).get("finalized_input_tokens", 0))
-    finalized_output = int((counter or {}).get("finalized_output_tokens", 0))
-    reserved_input = int((counter or {}).get("reserved_input_tokens", 0))
-    reserved_output = int((counter or {}).get("reserved_output_tokens", 0))
+    counter_values: dict[str, object] = {} if counter is None else counter
+    finalized_input = _exact_count(counter_values.get("finalized_input_tokens", 0), "finalized_input_tokens")
+    finalized_output = _exact_count(counter_values.get("finalized_output_tokens", 0), "finalized_output_tokens")
+    reserved_input = _exact_count(counter_values.get("reserved_input_tokens", 0), "reserved_input_tokens")
+    reserved_output = _exact_count(counter_values.get("reserved_output_tokens", 0), "reserved_output_tokens")
     input_used = finalized_input + reserved_input
     output_used = finalized_output + reserved_output
     input_remaining = max(0, budget.input_tokens - input_used)
@@ -350,11 +351,13 @@ def get_allowance_projection(
                 "reservedOutputTokens": reserved_output,
             },
             "providerCost": {
-                "inputTokens": int(
-                    (counter or {}).get("provider_cost_input_tokens", 0)
+                "inputTokens": _exact_count(
+                    counter_values.get("provider_cost_input_tokens", 0),
+                    "provider_cost_input_tokens",
                 ),
-                "outputTokens": int(
-                    (counter or {}).get("provider_cost_output_tokens", 0)
+                "outputTokens": _exact_count(
+                    counter_values.get("provider_cost_output_tokens", 0),
+                    "provider_cost_output_tokens",
                 ),
             },
             "providerEvidence": [
