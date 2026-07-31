@@ -162,7 +162,7 @@ def build_learning_profile(
             sum(values) / len(values), 2
         )
 
-    weak_topics = [
+    weak_topics: list[dict[str, object]] = [
         {
             "subject": subject_id,
             "topicId": topic_id,
@@ -173,7 +173,7 @@ def build_learning_profile(
         }
         for (subject_id, topic_id, label), count in topic_counter.items()
     ]
-    weak_topics.sort(key=lambda item: (-int(item["count"]), item["subject"], item["label"]))
+    weak_topics.sort(key=_weak_topic_sort_key)
 
     return {
         "studentId": student_id,
@@ -190,6 +190,15 @@ def build_learning_profile(
         "strengthTopics": [],
         "updatedAt": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def _weak_topic_sort_key(item: dict[str, object]) -> tuple[int, str, str]:
+    count = item.get("count")
+    subject = item.get("subject")
+    label = item.get("label")
+    if not isinstance(count, int) or isinstance(count, bool) or not isinstance(subject, str) or not isinstance(label, str):
+        raise ValueError("Learning profile weak topic is incomplete")
+    return (-count, subject, label)
 
 
 def _empty_subject_activity(subject_id: str) -> dict[str, Any]:
