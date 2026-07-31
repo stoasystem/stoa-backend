@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 474
 current_phase_name: deterministic-verification-and-gated-delivery
 status: executing
-stopped_at: Completed 474-77-PLAN.md
-last_updated: "2026-07-30T16:16:30.959Z"
-last_activity: 2026-07-30
-last_activity_desc: Phase 474 execution started
+stopped_at: Completed 474-22-PLAN.md
+last_updated: "2026-07-31T08:34:39.728Z"
+last_activity: 2026-07-31
+last_activity_desc: Plan 474-22 full-repository Ruff/mypy-zero gate and sharded regression receipt completed
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 183
-  completed_plans: 167
+  completed_plans: 168
   percent: 30
 ---
 
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (deterministic-verification-and-gated-delivery) — EXECUTING
-Next retained plan: 474-22 (next dependency-ready retained wave)
+Next retained plan: 474-78 (immutable served Web release pointer)
 Status: Executing Phase 474
-Last activity: 2026-07-30 — Plan 474-77 alias delivery topology executed; full synth remains NOT RUN pending a verified backend dist manifest
+Last activity: 2026-07-31 — Plan 474-22 reached an exact Ruff/mypy zero and 134-file sharded pytest receipt; no deployment, staging, or production operation was run
 Phases 477-481 around exact remaining gaps
 
 ## Accumulated Context
@@ -46,7 +46,7 @@ Phases 477-481 around exact remaining gaps
   - Phase 473: historically passed 3/3; real S3 and deployed scheduler/log
     observations remain later external obligations.
 
-  - Phase 474: 33/47 summaries; 14 retained plans; no `474-VERIFICATION.md`.
+  - Phase 474: 34/47 summaries; 13 retained plans; no `474-VERIFICATION.md`.
   - Phase 475: historically passed 8/8 and closed the three Phase 473 data
     follow-ups.
 
@@ -60,7 +60,7 @@ Phases 477-481 around exact remaining gaps
   requirements are owner-waived, and 21 requirements remain in Phases 477-481.
 
 - Phase 474 was reduced on 2026-07-30 from 94 plans (62 incomplete) to
-  47 plans (15 incomplete). All completed PLAN/SUMMARY pairs remain; forty stale
+  47 plans (14 incomplete). All completed PLAN/SUMMARY pairs remain; forty stale
   mypy family plans were consolidated into current Plan 474-22, obsolete source
   handoffs were superseded by 474-93, and product Web acceptance was reassigned
   to Phases 477/478. See `474-CLEANUP.md`.
@@ -174,8 +174,8 @@ Phases 477-481 around exact remaining gaps
 
 ## Session
 
-**Last Date:** 2026-07-30T16:16:30.936Z
-**Stopped At:** Completed 474-77-PLAN.md
+**Last Date:** 2026-07-31T08:34:39.703Z
+**Stopped At:** Completed 474-22-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -345,6 +345,7 @@ Phases 477-481 around exact remaining gaps
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 474 P77 | 45 min | 1 tasks | 4 files |
+| Phase 474 P22 | multiple execution waves | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -712,3 +713,5 @@ Phases 477-481 around exact remaining gaps
 - [Phase 476]: Real Stripe browser evidence uses a separate dependency-gated stripe-sandbox project; missing test-mode readiness fails rather than falling back to mocks.
 - [Phase 476]: Sandbox receipts retain only modes, counts, API version, payment-method names, source digest, and SHA-256 provider/origin identities.
 - [Phase 474]: Lambda delivery uses published versions and staging/production aliases; release authority can only transition aliases after runtime CodeSha256 and RevisionId validation.
+- [Phase 474]: Plan 474-22 exact Ruff/mypy scope reached true zero; no baseline, exclusion, broad Any, or suppression was introduced.
+- [Phase 474]: Full pytest recovery is recorded only through 14 mutually exclusive passed shards: 134 files and 3,088 tests.

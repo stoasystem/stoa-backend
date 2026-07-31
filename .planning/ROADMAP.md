@@ -35,7 +35,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 | --- | --- | --- | --- |
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
 | 473 | Student Content Privacy And Practice Integrity | Complete — 40/40 plans, independently verified 2026-07-18 | Phase 472 |
-| 474 | Deterministic Verification And Gated Delivery | In progress — 33/47 summaries; 14 retained plans; verification missing | Phases 472 and 473 |
+| 474 | Deterministic Verification And Gated Delivery | In progress — 34/47 summaries; 13 retained plans; verification missing | Phases 472 and 473 |
 | 475 | Transactional Usage Assignment And Relationship Consistency | Complete — 45/45 plans, independently verified 2026-07-23 | Phase 473 |
 | 476 | Billing Idempotency And Paid Access Recovery | Administratively complete by owner waiver — 27/29 summaries; verification incomplete | Phase 475 |
 | 477 | Web Authentication And Contract Convergence | Close login-code, Web role, adapter-contract, and reachable static-truth gaps | Phase 474; consumes Phases 472 and 473 |
@@ -342,7 +342,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 **Requirements:** V9QUAL-01, V9QUAL-02, V9QUAL-03, V9QUAL-04, V9QUAL-05, V9QUAL-06, V9QUAL-07.
 
-**Plans:** 33/47 plans complete; 14 current plans remain after the 2026-07-30 cleanup.
+**Plans:** 34/47 plans executed; 13 retained plans remain.
 
 **Cleanup record:** `474-CLEANUP.md` removes 47 unexecuted plans that were obsolete, duplicated by the completed formal-gate rebuild, or reassigned to Phases 477–480. Completed PLAN/SUMMARY pairs were preserved and plan IDs are not reused.
 
@@ -363,7 +363,7 @@ Plans:
 - [x] 474-08-PLAN.md
 - [x] 474-09-PLAN.md
 - [x] 474-10-PLAN.md
-- [ ] 474-22-PLAN.md
+- [x] 474-22-PLAN.md
 - [x] 474-23-PLAN.md
 - [x] 474-26-PLAN.md
 - [ ] 474-27-PLAN.md
@@ -412,9 +412,9 @@ Plans:
 
 - [x] `474-77` — Published Lambda versions and environment aliases.
 
-**Remaining Wave 7**
+**Completed Wave 7**
 
-- [ ] `474-22` — Current full-repository Ruff/mypy-zero gate.
+- [x] `474-22` — Current full-repository Ruff/mypy-zero gate.
 
 **Remaining Wave 8**
 
@@ -915,6 +915,7 @@ Plans:
    alarms, and runbook links.
 4. Exact index and complete pagination closure for non-WebSocket practice,
    teacher, admin, and notification paths.
+
 5. Live provider-effect observation for the current candidate.
 6. Staged browser/API synthetic probes and observation of the existing Phase 474
    rollback coordinator under one controlled non-production failure.
@@ -1049,7 +1050,7 @@ were closed and independently verified by Phase 475; only
 | --- | --- | --- | --- |
 | 472. Privileged Identity And Student Resource Authorization | 22/22 | Complete | 2026-07-15 |
 | 473. Student Content Privacy And Practice Integrity | 40/40 | Complete | 2026-07-18 |
-| 474. Deterministic Verification And Gated Delivery | 33/47 | In progress — verification missing | - |
+| 474. Deterministic Verification And Gated Delivery | 34/47 | In progress — 13 retained plans; verification missing | - |
 | 475. Transactional Usage Assignment And Relationship Consistency | 45/45 | Complete — independently verified | 2026-07-23 |
 | 476. Billing Idempotency And Paid Access Recovery | 27/29 | Administratively complete — owner waiver; verification incomplete | 2026-07-30 |
 | 477. Web Authentication And Contract Convergence | 0/TBD | Reconciled scope; not planned | - |
