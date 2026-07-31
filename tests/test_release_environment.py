@@ -193,6 +193,11 @@ def _source_ref(name: str, commit: str) -> dict[str, object]:
         "tree": "a" * 40,
         "lock_path": "package-lock.json" if name == "frontend" else "uv.lock",
         "lock_sha256": "b" * 64,
+        "approval": {
+            "provenance": "project-owner-explicit-codex-instruction",
+            "approved_at": "2026-07-31T12:00:00Z",
+            "scope": ["local-auditable-source-ref-receipts-only"],
+        },
     }
 
 

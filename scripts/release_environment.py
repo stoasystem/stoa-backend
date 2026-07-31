@@ -13,7 +13,9 @@ from copy import deepcopy
 import hashlib
 import json
 from collections.abc import Mapping
+from datetime import datetime
 from pathlib import Path
+import re
 import sys
 from typing import Final
 
@@ -29,7 +31,9 @@ _INVENTORY_FIELDS: Final = frozenset({"schema", *_IDENTITY_FIELDS, "resources"})
 _PLAN_FIELDS: Final = frozenset({"schema", *_IDENTITY_FIELDS, "inventory_sha256", "changes"})
 _RESOURCE_FIELDS: Final = frozenset({"logical_id", "kind", "physical_id"})
 _CHANGE_FIELDS: Final = frozenset({"logical_id", "action", "replacement"})
-_SOURCE_REF_FIELDS: Final = frozenset({"schema", "name", "commit", "tree", "lock_path", "lock_sha256"})
+_SOURCE_REF_FIELDS: Final = frozenset({"schema", "name", "commit", "tree", "lock_path", "lock_sha256", "approval"})
+_SOURCE_REF_APPROVAL_FIELDS: Final = frozenset({"provenance", "approved_at", "scope"})
+_SOURCE_REF_APPROVAL_TOKEN: Final = re.compile(r"^[a-z0-9][a-z0-9-]{2,127}$")
 _OBSERVATION_FIELDS: Final = frozenset({"schema", "status", "source", "github", "aws", "cdk", "production"})
 _GITHUB_FIELDS: Final = frozenset({"repository", "environments", "oidc_subjects", "request_sha256"})
 _GITHUB_ENVIRONMENT_FIELDS: Final = frozenset({"name", "branch_policy", "protection"})
@@ -125,6 +129,27 @@ def _validate_source_ref(value: object, expected_name: str) -> Mapping[str, obje
     if source["lock_path"] != expected_lock_path:
         raise EnvironmentPolicyError(f"{expected_name} source lock path is not recognized")
     _require_sha256(source["lock_sha256"], f"{expected_name} lock sha256")
+    approval = _as_closed_mapping(source["approval"], _SOURCE_REF_APPROVAL_FIELDS, f"{expected_name} source approval")
+    provenance = _require_text(approval["provenance"], f"{expected_name} source approval provenance")
+    if _SOURCE_REF_APPROVAL_TOKEN.fullmatch(provenance) is None:
+        raise EnvironmentPolicyError(f"{expected_name} source approval provenance is invalid")
+    approved_at = _require_text(approval["approved_at"], f"{expected_name} source approval time")
+    try:
+        parsed_approved_at = datetime.strptime(approved_at, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError as error:
+        raise EnvironmentPolicyError(f"{expected_name} source approval time is invalid") from error
+    if parsed_approved_at.strftime("%Y-%m-%dT%H:%M:%SZ") != approved_at:
+        raise EnvironmentPolicyError(f"{expected_name} source approval time is invalid")
+    scope = approval["scope"]
+    if not isinstance(scope, list) or not scope:
+        raise EnvironmentPolicyError(f"{expected_name} source approval scope is invalid")
+    if any(
+        not isinstance(item, str) or _SOURCE_REF_APPROVAL_TOKEN.fullmatch(item) is None
+        for item in scope
+    ):
+        raise EnvironmentPolicyError(f"{expected_name} source approval scope is invalid")
+    if len(scope) != len(set(scope)):
+        raise EnvironmentPolicyError(f"{expected_name} source approval scope is invalid")
     return source
 
 
