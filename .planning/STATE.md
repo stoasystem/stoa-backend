@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 474
 current_phase_name: deterministic-verification-and-gated-delivery
 status: executing
-stopped_at: Completed 474-27-PLAN.md
-last_updated: "2026-07-31T09:02:37.523Z"
+stopped_at: Completed 474-28-PLAN.md
+last_updated: "2026-07-31T09:19:12.298Z"
 last_activity: 2026-07-31
-last_activity_desc: Plan 474-78 made `/served-release.json` an actual cache-disabled CloudFront path over a versioned retained bucket; topology tests and targeted Ruff passed, while full synth remains exact NOT RUN without a verified backend distribution manifest
+last_activity_desc: Plan 474-28 made the infrastructure workflow a thin exact-receipt staging-eligibility caller; deployed-state reads remain fail-closed until the Plan 32 protected staging inventory/controller
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 183
-  completed_plans: 170
+  completed_plans: 171
   percent: 30
 ---
 
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (deterministic-verification-and-gated-delivery) — EXECUTING
-Next retained plan: 474-28 (thin exact-ref infrastructure workflow)
+Next retained plan: 474-32 (fail-closed environment inventory, configuration, and staging controls)
 Status: Executing Phase 474
-Last activity: 2026-07-31 — Plan 474-27 added a durable staging-only two-pointer promotion coordinator with exact readback, compensation, and canonical non-mutating gate validation; provider/staging execution remains later-plan work
+Last activity: 2026-07-31 — Plan 474-28 made the infrastructure workflow a thin exact-receipt staging-eligibility caller; deployed-state reads remain fail-closed until the Plan 32 protected staging inventory/controller
 Phases 477-481 around exact remaining gaps
 
 ## Accumulated Context
@@ -46,7 +46,7 @@ Phases 477-481 around exact remaining gaps
   - Phase 473: historically passed 3/3; real S3 and deployed scheduler/log
     observations remain later external obligations.
 
-  - Phase 474: 36/47 summaries; 11 retained plans; no `474-VERIFICATION.md`.
+  - Phase 474: 37/47 summaries; 10 retained plans; no `474-VERIFICATION.md`.
   - Phase 475: historically passed 8/8 and closed the three Phase 473 data
     follow-ups.
 
@@ -135,7 +135,7 @@ Phases 477-481 around exact remaining gaps
 
 ### Pending Todos
 
-- Execute only the 14 remaining retained Phase 474 plans and produce current-candidate
+- Execute only the 10 remaining retained Phase 474 plans and produce current-candidate
   independent verification.
 
 - Preserve all 51 requirement mappings, the Phase 476 waiver, and all 31 finding
@@ -165,7 +165,7 @@ Phases 477-481 around exact remaining gaps
 
 ## Operator Next Steps
 
-- Run `$gsd-execute-phase 474` against the 14 remaining retained plans; do not regenerate
+- Run `$gsd-execute-phase 474` against the 10 remaining retained plans; do not regenerate
   the 47 removed plans.
 
 - Independently verify Phase 474 against the current backend/Web/infra tuple.
@@ -174,8 +174,8 @@ Phases 477-481 around exact remaining gaps
 
 ## Session
 
-**Last Date:** 2026-07-31T09:02:37.501Z
-**Stopped At:** Completed 474-27-PLAN.md
+**Last Date:** 2026-07-31T09:19:12.276Z
+**Stopped At:** Completed 474-28-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -348,6 +348,7 @@ Phases 477-481 around exact remaining gaps
 | Phase 474 P22 | multiple execution waves | 1 tasks | 4 files |
 | Phase 474 P78 | 10 min | 1 tasks | 4 infra files plus summary |
 | Phase 474 P27 | 6min | 2 tasks | 5 files |
+| Phase 474 P28 | 31m | 2 tasks | 2 files |
 
 ## Decisions
 
@@ -719,3 +720,5 @@ Phases 477-481 around exact remaining gaps
 - [Phase 474]: Plan 474-22 exact Ruff/mypy scope reached true zero; no baseline, exclusion, broad Any, or suppression was introduced.
 - [Phase 474]: Full pytest recovery is recorded only through 14 mutually exclusive passed shards: 134 files and 3,088 tests.
 - [Phase 474]: Plan 474-27 keeps delivery as a durable staging-only compensating transaction: exact Lambda alias and descriptor/config/Web coordinates are persisted, read back, and restored without provider mutation through the local gate.
+- [Phase 474]: Plan 474-28 keeps verify credential-free; deployed-state reads are fail-closed until Plan 32 protected staging inventory/controller.
+- [Phase 474]: Plan 474-28 records production infrastructure, deploy, smoke, and rollback as separate exact NOT RUN obligations.
