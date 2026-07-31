@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 474
 current_phase_name: deterministic-verification-and-gated-delivery
 status: executing
-stopped_at: Completed 474-78-PLAN.md
-last_updated: "2026-07-31T08:49:17Z"
+stopped_at: Completed 474-27-PLAN.md
+last_updated: "2026-07-31T09:02:37.523Z"
 last_activity: 2026-07-31
-last_activity_desc: Plan 474-78 immutable served Web release pointer topology and bounded authority completed
+last_activity_desc: Plan 474-78 made `/served-release.json` an actual cache-disabled CloudFront path over a versioned retained bucket; topology tests and targeted Ruff passed, while full synth remains exact NOT RUN without a verified backend distribution manifest
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 183
-  completed_plans: 169
+  completed_plans: 170
   percent: 30
 ---
 
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (deterministic-verification-and-gated-delivery) — EXECUTING
-Next retained plan: 474-27 (durable two-pointer delivery coordinator)
+Next retained plan: 474-28 (thin exact-ref infrastructure workflow)
 Status: Executing Phase 474
-Last activity: 2026-07-31 — Plan 474-78 made `/served-release.json` an actual cache-disabled CloudFront path over a versioned retained bucket; topology tests and targeted Ruff passed, while full synth remains exact NOT RUN without a verified backend distribution manifest
+Last activity: 2026-07-31 — Plan 474-27 added a durable staging-only two-pointer promotion coordinator with exact readback, compensation, and canonical non-mutating gate validation; provider/staging execution remains later-plan work
 Phases 477-481 around exact remaining gaps
 
 ## Accumulated Context
@@ -46,7 +46,7 @@ Phases 477-481 around exact remaining gaps
   - Phase 473: historically passed 3/3; real S3 and deployed scheduler/log
     observations remain later external obligations.
 
-  - Phase 474: 35/47 summaries; 12 retained plans; no `474-VERIFICATION.md`.
+  - Phase 474: 36/47 summaries; 11 retained plans; no `474-VERIFICATION.md`.
   - Phase 475: historically passed 8/8 and closed the three Phase 473 data
     follow-ups.
 
@@ -174,8 +174,8 @@ Phases 477-481 around exact remaining gaps
 
 ## Session
 
-**Last Date:** 2026-07-31T08:34:39.703Z
-**Stopped At:** Completed 474-22-PLAN.md
+**Last Date:** 2026-07-31T09:02:37.501Z
+**Stopped At:** Completed 474-27-PLAN.md
 **Resume File:** None
 
 ## Performance Metrics
@@ -347,6 +347,7 @@ Phases 477-481 around exact remaining gaps
 | Phase 474 P77 | 45 min | 1 tasks | 4 files |
 | Phase 474 P22 | multiple execution waves | 1 tasks | 4 files |
 | Phase 474 P78 | 10 min | 1 tasks | 4 infra files plus summary |
+| Phase 474 P27 | 6min | 2 tasks | 5 files |
 
 ## Decisions
 
@@ -717,3 +718,4 @@ Phases 477-481 around exact remaining gaps
 - [Phase 474]: CloudFront serves one cache-disabled, versioned `/served-release.json` descriptor through the owned SPA origin; release identities can read exact Web object versions, write only the bounded descriptor/release namespace, and invalidate only the declared distribution. — The durable promotion coordinator must validate descriptor-selected VersionIds and bytes before recording commit or compensation.
 - [Phase 474]: Plan 474-22 exact Ruff/mypy scope reached true zero; no baseline, exclusion, broad Any, or suppression was introduced.
 - [Phase 474]: Full pytest recovery is recorded only through 14 mutually exclusive passed shards: 134 files and 3,088 tests.
+- [Phase 474]: Plan 474-27 keeps delivery as a durable staging-only compensating transaction: exact Lambda alias and descriptor/config/Web coordinates are persisted, read back, and restored without provider mutation through the local gate.

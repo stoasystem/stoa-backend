@@ -342,7 +342,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 **Requirements:** V9QUAL-01, V9QUAL-02, V9QUAL-03, V9QUAL-04, V9QUAL-05, V9QUAL-06, V9QUAL-07.
 
-**Plans:** 35/47 plans executed; 12 retained plans remain.
+**Plans:** 36/47 plans executed; 11 retained plans remain.
 
 **Cleanup record:** `474-CLEANUP.md` removes 47 unexecuted plans that were obsolete, duplicated by the completed formal-gate rebuild, or reassigned to Phases 477–480. Completed PLAN/SUMMARY pairs were preserved and plan IDs are not reused.
 
@@ -366,7 +366,7 @@ Plans:
 - [x] 474-22-PLAN.md
 - [x] 474-23-PLAN.md
 - [x] 474-26-PLAN.md
-- [ ] 474-27-PLAN.md
+- [x] 474-27-PLAN.md
 - [ ] 474-28-PLAN.md
 - [ ] 474-32-PLAN.md
 - [ ] 474-33-PLAN.md
@@ -796,6 +796,7 @@ Plans:
    consumption journey.
 5. Real teacher queue, dispatch/takeover, conversation/reply/resolve, and
    answer-read journey using canonical `/teachers` contracts.
+
 6. Real admin/operator retained routes, with placeholder routes disabled and
    capability/error/audit behavior visible.
 
@@ -854,6 +855,7 @@ Plans:
    `NOT RUN` and a phase `HOLD`, not a local-fake pass.
 3. WebSocket identity, channel authorization, safe credential transport, and
    direct-event isolation.
+
 4. Deployed connect/disconnect/subscribe/refresh lifecycle plus indexed,
    paginated fanout and stale cleanup.
 
@@ -1050,7 +1052,7 @@ were closed and independently verified by Phase 475; only
 | --- | --- | --- | --- |
 | 472. Privileged Identity And Student Resource Authorization | 22/22 | Complete | 2026-07-15 |
 | 473. Student Content Privacy And Practice Integrity | 40/40 | Complete | 2026-07-18 |
-| 474. Deterministic Verification And Gated Delivery | 34/47 | In progress — 13 retained plans; verification missing | - |
+| 474. Deterministic Verification And Gated Delivery | 36/47 | In progress — 11 retained plans; verification missing | - |
 | 475. Transactional Usage Assignment And Relationship Consistency | 45/45 | Complete — independently verified | 2026-07-23 |
 | 476. Billing Idempotency And Paid Access Recovery | 27/29 | Administratively complete — owner waiver; verification incomplete | 2026-07-30 |
 | 477. Web Authentication And Contract Convergence | 0/TBD | Reconciled scope; not planned | - |
