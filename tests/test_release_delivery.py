@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 DELIVERY_PATH = ROOT / "scripts" / "release_delivery.py"
+GATE_PATH = ROOT / "scripts" / "release_gate.py"
 SCHEMA_PATH = ROOT / "schemas" / "release" / "promotion-transaction-v1.schema.json"
 SHA256_A = "a" * 64
 SHA256_B = "b" * 64
@@ -25,6 +27,15 @@ def _load_module() -> Any:
     spec = importlib.util.spec_from_file_location("release_delivery", DELIVERY_PATH)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_gate() -> Any:
+    spec = importlib.util.spec_from_file_location("release_gate", GATE_PATH)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -249,3 +260,37 @@ def test_invalid_or_production_transaction_is_rejected_before_provider_access() 
         module.promote_staging(bad, store=store, delivery=delivery, smoke=_passing_smoke)
 
     assert delivery.calls == []
+
+
+def test_canonical_gate_registers_only_non_mutating_staging_delivery_validation(
+    tmp_path: Path,
+) -> None:
+    gate = _load_gate()
+    transaction_path = tmp_path / "transaction.json"
+    output_path = tmp_path / "receipt.json"
+    transaction_path.write_text(json.dumps(_transaction()), encoding="utf-8")
+
+    assert gate.main(
+        [
+            "delivery-validate",
+            "--transaction",
+            str(transaction_path),
+            "--output",
+            str(output_path),
+        ]
+    ) == 0
+    receipt = json.loads(output_path.read_text(encoding="utf-8"))
+    assert receipt == {
+        "schema": "stoa.release.delivery-validation.v1",
+        "status": "PASS",
+        "transaction_id": "promotion-474-27-0001",
+        "release_id": RELEASE_ID,
+        "manifest_sha256": MANIFEST_SHA,
+        "state": "PREPARED",
+        "production": {
+            "infrastructure": "NOT RUN",
+            "deploy": "NOT RUN",
+            "smoke": "NOT RUN",
+            "rollback": "NOT RUN",
+        },
+    }

@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "scripts" / "release_manifest.py"
 SCHEMA_PATH = ROOT / "schemas" / "release" / "release-manifest-v1.schema.json"
 GATE_RECEIPT_SCHEMA_PATH = ROOT / "schemas" / "release" / "gate-receipt-v1.schema.json"
+PROMOTION_SCHEMA_PATH = ROOT / "schemas" / "release" / "promotion-transaction-v1.schema.json"
 SHA256_A = "a" * 64
 SHA256_B = "b" * 64
 SHA256_C = "c" * 64
@@ -161,6 +162,22 @@ def test_schema_is_closed_versioned_and_requires_every_identity() -> None:
     assert schema["$defs"]["gate_backend_hermetic"]["properties"]["gate_id"] == {
         "const": "backend-python-hermetic"
     }
+
+
+def test_manifest_and_promotion_contracts_bind_exact_staging_identities() -> None:
+    manifest_schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    promotion_schema = json.loads(PROMOTION_SCHEMA_PATH.read_text(encoding="utf-8"))
+
+    assert manifest_schema["properties"]["production"]["$ref"] == "#/$defs/production"
+    assert all(
+        property_schema["const"] == "NOT RUN"
+        for property_schema in manifest_schema["$defs"]["production"]["properties"].values()
+    )
+    assert promotion_schema["properties"]["environment"] == {"const": "staging"}
+    assert promotion_schema["properties"]["release_id"] == {"$ref": "#/$defs/sha256"}
+    assert promotion_schema["properties"]["manifest_sha256"] == {"$ref": "#/$defs/sha256"}
+    pointer = promotion_schema["$defs"]["pointer"]
+    assert set(pointer["required"]) == {"lambda", "descriptor", "runtime_config", "web"}
 
 
 def test_stable_inputs_produce_one_release_id_and_manifest_digest() -> None:

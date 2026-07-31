@@ -30,6 +30,11 @@ import urllib.request
 
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts import release_delivery  # noqa: E402
+
 SCHEMA_PATH = ROOT / "schemas/release/gate-receipt-v1.schema.json"
 RECEIPT_SCHEMA = "stoa.release.gate-receipt.v1"
 FORMAL_RECEIPT_SCHEMA = "stoa.release.formal-gate-run.v1"
@@ -4236,6 +4241,33 @@ def _execute_python_matrix(args: argparse.Namespace) -> int:
     return python_matrix_exit_code(result)
 
 
+def _execute_delivery_validate(args: argparse.Namespace) -> int:
+    """Validate a staging transaction through the canonical gate without mutation."""
+    output = _prepare_external_output(args)
+    try:
+        transaction = release_delivery.validate_transaction(
+            load_json(Path(args.transaction))
+        )
+    except release_delivery.DeliveryPolicyError as exc:
+        raise GatePolicyError("delivery transaction is rejected") from exc
+    receipt = {
+        "schema": "stoa.release.delivery-validation.v1",
+        "status": "PASS",
+        "transaction_id": transaction["transaction_id"],
+        "release_id": transaction["release_id"],
+        "manifest_sha256": transaction["manifest_sha256"],
+        "state": transaction["state"],
+        "production": {
+            "infrastructure": "NOT RUN",
+            "deploy": "NOT RUN",
+            "smoke": "NOT RUN",
+            "rollback": "NOT RUN",
+        },
+    }
+    write_json(receipt, output)
+    return 0
+
+
 def _execute_formal(args: argparse.Namespace) -> int:
     output = _prepare_formal_output(args)
     workspace = _workspace_from_args(args)
@@ -4310,6 +4342,15 @@ def build_parser() -> argparse.ArgumentParser:
         allow_abbrev=False,
     )
     quality.set_defaults(func=_execute_quality)
+
+    delivery_validate = subparsers.add_parser(
+        "delivery-validate",
+        help="Validate a durable staging delivery transaction without provider mutation",
+        allow_abbrev=False,
+    )
+    delivery_validate.add_argument("--transaction", required=True, action=_StoreOnceAction)
+    delivery_validate.add_argument("--output")
+    delivery_validate.set_defaults(func=_execute_delivery_validate)
 
     formal = subparsers.add_parser(
         "formal",
