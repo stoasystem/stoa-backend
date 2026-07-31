@@ -304,3 +304,70 @@ def test_live_inventory_is_closed_source_bound_and_rejects_unsafe_diff(tmp_path:
         text=True,
     )
     assert verified.returncode == 0, verified.stderr
+
+
+def _protected_environment_receipt() -> dict[str, object]:
+    environments = (
+        "staging",
+        "staging-smoke",
+        "staging-rollback",
+        "production",
+        "production-smoke",
+        "production-rollback",
+    )
+    production = {"production", "production-smoke", "production-rollback"}
+    return {
+        "schema": "stoa.release.protected-environments-receipt.v1",
+        "status": "PASS",
+        "observed_at": "2026-07-31T12:00:00Z",
+        "repository": "stoasystem/stoa-backend",
+        "actor": {
+            "login": "DengZhiyuan-math",
+            "id": 125728853,
+            "repository_permission": "admin",
+            "repository_admin": True,
+        },
+        "readback": {
+            "environments": [
+                {
+                    "name": name,
+                    "branch_policies": [{"name": "main", "type": "branch"}],
+                    "reviewers": ([{"type": "User", "id": 125728853}] if name in production else []),
+                    "prevent_self_review": False,
+                }
+                for name in environments
+            ],
+            "main_branch_protection": {
+                "branch": "main",
+                "protected": True,
+                "enforce_admins": True,
+                "allow_force_pushes": False,
+                "allow_deletions": False,
+            },
+            "rulesets": [
+                {
+                    "target": "branch",
+                    "enforcement": "active",
+                    "ref_name_include": ["refs/heads/main"],
+                    "rules": ["deletion", "non_fast_forward"],
+                }
+            ],
+            "oidc_subjects": [f"repo:stoasystem/stoa-backend:environment:{name}" for name in environments],
+        },
+        "mutation": {
+            "github_configuration": "PASS",
+            "application": "NOT RUN",
+            "infrastructure": "NOT RUN",
+            "staging_deploy": "NOT RUN",
+            "production_deploy": "NOT RUN",
+            "production_smoke": "NOT RUN",
+            "production_rollback": "NOT RUN",
+        },
+        "production_mutation": "NOT RUN",
+    }
+
+
+def test_verify_github_accepts_an_exact_authenticated_protected_environment_readback() -> None:
+    module = _load_module()
+
+    module.verify_github(_live_inventory(), _protected_environment_receipt(), module.default_policy())
