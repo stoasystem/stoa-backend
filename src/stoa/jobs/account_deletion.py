@@ -42,6 +42,7 @@ def run_pending_deletions(
                 )
                 items, next_cursor = list(page.items), page.cursor
             else:
+                assert callable(scan)
                 raw = scan(limit=page_limit, exclusive_start_key=cursor)
                 if isinstance(raw, tuple):
                     items, next_cursor = list(raw[0]), raw[1]
