@@ -4,6 +4,10 @@
 **Domain:** Hermetic cross-repository verification, immutable release provenance, staged AWS delivery, and compensating rollback
 **Confidence:** HIGH
 
+## Superseding Release-Control Scope (2026-07-31)
+
+The owner narrowed the remaining Phase 474 release-control scope after this research was first written. The executable contract is now staging-only: exactly one reviewer-free, main-only/no-tag GitHub Environment `staging`; one `StoaReleaseStaging` stack; three least-privilege roles `StoaStagingDeployRole`, `StoaStagingReadRole`, and `StoaStagingRollbackRole`; and one exact OIDC subject `repo:stoasystem/stoa-backend:environment:staging`. Separate deploy, smoke, and rollback jobs share that Environment. Production GitHub Environments, AWS stacks, IAM roles, OIDC trusts, approval/eligibility, deployment, smoke, and rollback are `DEFERRED_OUT_OF_SCOPE` to a separate future phase or milestone. Any older production-control recommendation below is historical research context and is not an implementation requirement.
+
 <user_constraints>
 ## User Constraints (from CONTEXT.md)
 
@@ -20,10 +24,10 @@
 
 ### CI, Promotion, And Rollback Authority
 
-- **D-05:** A `main` candidate that passes every required gate builds one immutable release set and deploys it automatically to staging. Production promotion requires manual approval of the exact staging-verified release set.
-- **D-06:** STOA is currently a one-person team. The project owner is the sole production approver and may approve their own candidate through the protected production environment. Do not invent a two-person or no-self-approval policy until the team changes.
-- **D-07:** No emergency path may deploy new or rebuilt code without the complete gate and staging smoke. An emergency may immediately roll back to a previously verified artifact; a hotfix still follows the normal path.
-- **D-08:** A failed production smoke stops promotion and automatically returns the Lambda alias and Web release pointer to the previous verified release set. The failed release IDs, request/run IDs, health evidence, rollback action, and rollback result remain durable evidence.
+- **D-05:** A `main` candidate that passes every required gate builds one immutable release set and deploys it automatically to `StoaReleaseStaging`; the entire production release control plane is `DEFERRED_OUT_OF_SCOPE`.
+- **D-06:** Exactly one GitHub Environment `staging` allows only branch `main`, no tags, and no reviewer. Separate deploy/read/rollback AWS roles all trust only `repo:stoasystem/stoa-backend:environment:staging`.
+- **D-07:** No staging path may deploy new or rebuilt code without the complete gate and staging smoke. A controlled staging failure may restore a previously verified artifact; a hotfix follows the same gated staging path.
+- **D-08:** A failed staging smoke restores the staging Lambda alias and Web release pointer to the previous verified release set and retains complete failure/rollback evidence.
 
 ### Typing And Dependency Risk
 
@@ -35,8 +39,8 @@
 ### Immutable Cross-Repository Release Evidence
 
 - **D-13:** One cross-repository release manifest identifies a candidate by exact backend commit, frontend commit, both lockfile hashes, source-tree identities, backend and frontend artifact digests, target runtime/platform, verification run IDs, and gate results. Neither repository's branch name or mutable `latest` pointer is release identity.
-- **D-14:** Backend and frontend use build once, promote unchanged. Staging and production consume byte-identical artifacts. Environment differences enter only through reviewed runtime configuration; production may not rebuild a frontend bundle or Lambda package.
-- **D-15:** Production manifests, artifacts, approvals, smoke evidence, and rollback evidence are retained long term. Failed and staging-only candidates remain available for at least 90 days. The current and most recent known-good rollback artifacts are never automatically deleted.
+- **D-14:** Backend and frontend use build once for staging and deploy the verified Lambda package and Web bytes unchanged. Any later production phase must consume immutable digest-bound artifacts and cannot infer production authorization from Phase 474.
+- **D-15:** Staging manifests, artifacts, smoke evidence, controlled-failure evidence, and rollback evidence remain available for at least 90 days; current and known-good staging rollback artifacts are never automatically deleted. Production retention is deferred with the production control plane.
 - **D-16:** Every CI/gate change runs automated intentional-failure scenarios for tests, Ruff, mypy, dependency policy, provenance, and artifact tampering and proves the deploy job cannot receive an artifact. Initial activation and every structural gate redesign also perform a controlled non-production failure exercise with retained CI run IDs.
 
 ### v9.0 Web-First Product Correction
@@ -67,19 +71,19 @@
 | V9QUAL-03 | The actual Web repository passes locked install, ESLint, TypeScript production build, dependency checks, focused backend/OpenAPI contract checks, and Playwright browser suites through the same formal gate; production-critical acceptance is not satisfied by demo login or route-intercepted APIs alone. | Web gate baseline, real-service acceptance boundary, Playwright policy, and runtime-config design below. |
 | V9QUAL-04 | Ruff has zero errors and a full-repository mypy-zero repair attempt is completed before any temporary baseline is proposed; only an explicit owner decision may accept documented irreducible errors, and broad `Any`, exclusions, ignores, or global missing-import suppression are forbidden shortcuts. | Exact mypy command, measured baseline, repair sequence, and semantic weakening guard below. |
 | V9QUAL-05 | Backend and Web lockfiles have no unaccepted release-blocking advisory: Critical/High block by default and production-reachable Medium also blocks; every temporary exception records exact package/advisory/version, reachability evidence, owner, expiry, and upgrade/removal target. | Lockfile-native audit commands, current red baseline, and exception-ledger schema below. |
-| V9QUAL-06 | Phase 474 implements the minimum versioned cross-repository release infrastructure—staging/production release roles, immutable artifact/evidence storage, Lambda versions and aliases, Web release prefixes/pointers or an equivalent atomic mechanism, protected environments, and rollback authority—then one manifest binds exact backend/Web/infra commits, lock/source identities, runtimes, verification runs, and artifact digests. Artifacts build once, differ only through reviewed runtime configuration, and deploy unchanged to staging; the gate permits unchanged production promotion only after protected owner approval and staging smoke, prohibits bypass, and automatically restores the previously verified set after failed production smoke. Phase 474 proves promotion and rollback semantics through staging plus a controlled non-production failure exercise; the owner's policy selection does not authorize a real production mutation. Actual production promotion/smoke occurs only under later explicit operational approval, otherwise its evidence is exact `NOT RUN` and Phase 474 remains fully enforceable. Emergencies may only restore a previously verified set and hotfixes follow the normal gate. Production evidence, when generated, is retained long term; failed/staging candidates are retained at least 90 days and current/known-good rollback sets indefinitely; every gate change runs intentional-failure/tamper tests. | Minimum CDK topology, immutable manifest, promotion transaction, compensation, environment controls, retention, and failure-injection plan below. |
+| V9QUAL-06 | Phase 474 implements only the staging release control plane: one `staging` GitHub Environment, main protection/ruleset, `StoaReleaseStaging`, immutable artifacts/evidence, Lambda staging aliases, a versioned Web pointer, three exact staging roles sharing one OIDC subject, build-once delivery, staging smoke, and controlled rollback. Production control-plane work is `DEFERRED_OUT_OF_SCOPE`. | Staging-only CDK topology, immutable manifest, three-role permission separation, compensation, retention, and failure-injection plan below. |
 | V9QUAL-07 | Phase 473 evidence publication can be reverified from a later clean metadata HEAD by selecting the explicit candidate and its single direct publication commit, reading the four publication artifacts from immutable Git blobs, and proving the current HEAD descends from that publication without changing those blobs. | Explicit candidate/publication Git-blob algorithm and history tests below. |
 </phase_requirements>
 
 ## Summary
 
-Phase 474 should introduce one backend-owned, dependency-light release command that is the only authoritative path used locally and by CI. It must verify exact backend, frontend, and infrastructure commits; create fresh locked environments; emit content-addressed receipts; build one backend/Web artifact set; and drive staging, approval, promotion, smoke, and compensating rollback. The existing workflows instead deploy independently and directly from `main`, while the existing AWS CDK lacks Lambda aliases, isolated staging/production release roles, and an immutable Web release pointer. [VERIFIED: codebase grep across stoa-backend, stoa-frontend, and stoa-infra]
+Phase 474 should introduce one backend-owned, dependency-light release command that is the only authoritative path used locally and by CI. It must verify exact backend, frontend, and infrastructure commits; create fresh locked environments; emit content-addressed receipts; build one backend/Web artifact set; and drive staging deploy, smoke, and compensating rollback. The remaining workflow must use one `staging` Environment and three staging-only least-privilege roles; production control-plane topology is deferred. [VERIFIED: codebase grep across stoa-backend, stoa-frontend, and stoa-infra plus owner scope correction]
 
 The current baseline is intentionally red, not close to release-ready: the existing Python 3.14 environment reports `2009 passed` and Ruff zero, but that is not a fresh Python 3.12 frozen run; the proposed full-repository mypy command reports 435 errors across 113 files; backend dependency audit reports nine advisories in five runtime packages; frontend Playwright reports two failures plus one skip; and frontend dependency audit reports two High, one Moderate, and one Low advisory. These findings must become explicit repair tasks before gate activation; the planner must not disguise them with a baseline, skip, retry, or exception. [VERIFIED: local diagnostic commands on 2026-07-18]
 
 Observed checkout identities are planning evidence only, not release evidence: backend `b2b5281c777f29469a262ec82d9f7de8fd974319`, Web `0d0df6fa2a505bca372c5ddfc23e9a1fe3031387`, and infra `a4d5cfeb22163d6d7f8f70016a0f98be4732a7a9`; backend `uv.lock` SHA-256 is `f9f3de7dc008d791eeb29f154abf699ede27d47a95fe4bd6c1661f81b76c600b`, Web `package-lock.json` is `7549be39bf202adaff1f9dd056ba863707b95811b53191b552bbf826296e17e0`, and infra `uv.lock` is `77605e95bd0bd4e609fd68732855ad596a6c06ef054717646673611b9f581e9e`. The formal gate must recompute these from detached clean checkouts and reject dirt or ref movement. [VERIFIED: `git rev-parse HEAD` and `shasum -a 256` on 2026-07-18]
 
-The delivery design must treat backend and Web promotion as a durable transaction with compensation, because changing Lambda aliases and a Web pointer cannot be one atomic AWS operation. Production mutation is outside this phase's present authority: implement and test the topology and exercise staging rollback, but record production promotion/smoke as exact `NOT RUN` unless separately approved. [VERIFIED: 474-CONTEXT.md and REQUIREMENTS.md] [CITED: https://docs.aws.amazon.com/lambda/latest/dg/configuring-alias-routing.html]
+The staging delivery design must treat backend and Web pointer changes as a durable transaction with compensation, because changing Lambda aliases and a Web pointer cannot be one atomic AWS operation. Production control-plane work is not an unexecuted current obligation; it is `DEFERRED_OUT_OF_SCOPE`. [VERIFIED: 474-CONTEXT.md and REQUIREMENTS.md] [CITED: https://docs.aws.amazon.com/lambda/latest/dg/configuring-alias-routing.html]
 
 **Primary recommendation:** implement a canonical `scripts/release_gate.py` command plus versioned JSON schemas, backed by CDK-owned immutable storage, Lambda versions/aliases, Web release prefixes/pointer, scoped OIDC roles, and protected GitHub environments; make all three repository workflows thin callers of this command and fail closed on any missing or mismatched evidence. [VERIFIED: codebase architecture inspection] [CITED: https://docs.github.com/en/actions/concepts/workflows-and-actions/deployment-environments]
 
@@ -93,7 +97,7 @@ The delivery design must treat backend and Web promotion as a durable transactio
 | Cross-repository candidate identity | Release control plane | Git repositories | The control plane joins exact Git and lock identities without treating a branch as identity. [VERIFIED: D-13] |
 | Backend artifact and Lambda routing | API / Backend + AWS Lambda | CI release role | Lambda versions hold immutable code/config snapshots and aliases route to published versions. [CITED: https://docs.aws.amazon.com/lambda/latest/dg/configuration-versions.html] |
 | Web artifact and release pointer | CDN / Static storage | CI release role | Immutable prefixes retain bytes; one bounded pointer change selects the active release. [VERIFIED: D-14/D-15] |
-| Production approval | GitHub protected environment | Project owner | Environment approval gates secret/OIDC availability while allowing the sole owner to approve. [CITED: https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments] |
+| Staging job separation | One GitHub `staging` Environment + three AWS IAM roles | GitHub Actions / AWS IAM | Environment-scoped OIDC narrows trust while separate deploy/read/rollback policies preserve least privilege without extra Environments. [CITED: https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments] |
 | Promotion and rollback transaction | CI / release control plane | Lambda + S3/CloudFront | The coordinator records previous/target state and compensates both service pointers after smoke failure. [VERIFIED: D-08] |
 | Artifact/evidence retention | S3 Object Lock storage tier | Lifecycle policy | Versioned WORM retention supplies durable, non-overwritable evidence. [CITED: https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html] |
 | Phase 473 publication verification | Git object database | Repository script | Explicit commit/blob reads remain valid from a later metadata HEAD without checkout mutation. [VERIFIED: V9QUAL-07 and existing verifier inspection] |
@@ -203,26 +207,16 @@ exact backend SHA + exact frontend SHA + exact infra SHA
                          v
        staging Lambda aliases + staging Web pointer
                          |
-                  staging smoke
+                  staging smoke using read role
                    /          \
               fail/            \pass
                  v              v
-       durable failure      protected production environment
-       evidence only            owner approval
-                                  |
-                            explicit authority?
-                              /          \
-                      no -> NOT RUN       yes
-                                           |
-                         promote exact Lambda versions + Web object version
-                                           |
-                                     production smoke
-                                      /          \
-                                  pass            fail
-                                   |               |
-                            commit success     restore both previous
-                                               verified pointers and
-                                               retain rollback evidence
+       rollback job uses      retain verified
+       rollback role to       staging release
+       restore both previous
+       verified pointers and retain rollback evidence
+
+       production release control plane -> DEFERRED_OUT_OF_SCOPE
 ```
 
 This is a compensation workflow, not a claim of atomic cross-service mutation. [VERIFIED: D-08 and AWS service boundary inspection]
@@ -387,7 +381,7 @@ Repair in this order: (1) import/package-root resolution and maintained stubs, (
 | Category | Items Found | Action Required |
 |----------|-------------|-----------------|
 | Stored data | Live Lambda versions/aliases, S3 objects/version IDs, CloudFront state, and CloudFormation resources could not be inventoried because no AWS credentials are available. The local backend `dist` fails its own freshness checks; no `lambda.zip` exists. [VERIFIED: AWS CLI and builder diagnostics] | Add a read-only live-state inventory checkpoint before any CDK deployment. Treat current live state as unverified, not known-good. No application-data migration is indicated; infrastructure imports/replacements must be resolved from inventory. |
-| Live service config | GitHub reports zero environments in backend/frontend/infra; branch protection queries returned 404; current workflows independently deploy direct to production. AWS role/alias live config is `NOT RUN`. [VERIFIED: GitHub API and workflow inspection] | Owner/admin creates staging/production environments, reviewer/branch rules, OIDC trust, and cross-repo credential; executor records AWS inventory as PASS or exact NOT RUN. |
+| Live service config | GitHub reports zero environments in backend/frontend/infra; branch protection queries returned 404; the current workflow still contains obsolete production jobs. The declared `StoaReleaseStaging` stack is absent. [VERIFIED: GitHub/AWS readback] | Owner/admin creates exactly one reviewer-free, main-only/no-tag `staging` Environment plus main protection/ruleset; CDK creates only `StoaReleaseStaging` and the three exact staging roles. Production is `DEFERRED_OUT_OF_SCOPE`. |
 | OS-registered state | No launchd/systemd/pm2/task registrations are part of the release path. Docker CLI exists but its daemon is unavailable. [VERIFIED: repository search and environment probe] | None for OS registration. Provision Docker/Podman or an equivalent Linux network namespace before local formal evidence; run arm64 artifact boot smoke in the same capable isolated runner. |
 | Secrets/env vars | GitHub API exposes no repository Actions secret or variable names. Existing workflows rely on OIDC role ARNs; local AWS credentials are absent. Cross-repo check dispatch/write authority is not configured. [VERIFIED: GitHub API, workflows, and AWS CLI] | Create environment-scoped OIDC roles and a least-privilege GitHub App/fine-grained credential for cross-repo status/dispatch if needed; never pass credentials to verification jobs. |
 | Build artifacts | Backend `dist` is stale, Web `dist` is ignored, and local `.venv`, `node_modules`, infra `.venv`, and `cdk.out` are ignored developer artifacts. [VERIFIED: filesystem and git-ignore inspection] | Delete/rebuild only inside the formal build task after a green gate; publish new content-addressed artifacts. Never promote any existing local artifact. |
@@ -543,13 +537,13 @@ The gate validates every field exactly and fails when time, lock, package versio
 2. **Wave 1 — Backend deterministic verification:** fresh Python 3.12 x2, fixed clocks, network/AWS denial, strict pytest receipts, Ruff, Phase 473 verifier fix. [VERIFIED: V9QUAL-01/02/07]
 3. **Wave 2 — Quality closure:** mypy zero repair attempt plus backend/frontend dependency remediation and exact exception policy. [VERIFIED: V9QUAL-04/05]
 4. **Wave 3 — Web release gate:** runtime-config refactor, locked build, contract checks, Playwright repair and real-service staging acceptance. [VERIFIED: V9QUAL-03/D-14]
-5. **Wave 4 — Minimum infrastructure:** read-only live inventory, CDK assertions, immutable stores, aliases, Web prefixes/pointer, staging/prod roles, protected environments, cross-repo authority. [VERIFIED: V9QUAL-06]
-6. **Wave 5 — Build/promotion coordinator:** deterministic artifact bytes, cross-repo manifest, staging auto-deploy/smoke, approval boundary, exact production NOT RUN behavior, compensation. [VERIFIED: V9QUAL-06]
+5. **Wave 4 — Minimum infrastructure:** read-only live baseline, CDK assertions, immutable stores, staging aliases, Web prefixes/pointer, exactly three staging roles, and exactly one protected `staging` Environment. [VERIFIED: V9QUAL-06]
+6. **Wave 5 — Staging coordinator:** deterministic artifact bytes, cross-repo manifest, staging deploy/smoke, and compensation through separate deploy/read/rollback roles sharing one Environment. [VERIFIED: V9QUAL-06]
 7. **Wave 6 — Adversarial activation:** intentional failures for test/Ruff/mypy/dependency/provenance/tamper, prove deploy receives neither artifacts nor credentials, then controlled staging failure/rollback exercise with retained IDs. [VERIFIED: D-16]
 
 Do not parallelize waves that would allow infrastructure/promotion to be declared complete before gate contracts and red-baseline repairs are closed. [VERIFIED: dependency structure]
 
-The activation order inside Wave 5/6 is strict: synth/policy tests -> provision isolated staging substrate -> upload content-addressed artifacts -> automatic staging promotion -> staging smoke -> injected nonproduction smoke failure -> automatic two-pointer rollback -> verify restored backend/Web digests -> configure the protected production job. The production job must stop after policy/manifest validation and emit exact `NOT RUN` obligations unless a later, separate operational authorization explicitly permits mutation. [VERIFIED: D-05/D-08/D-16 and V9QUAL-06]
+The activation order inside Wave 5/6 is strict: synth/policy tests -> provision isolated staging substrate -> upload content-addressed artifacts -> staging deploy -> staging smoke -> injected staging smoke failure -> automatic two-pointer rollback -> verify restored backend/Web digests. No production job, Environment, role, trust, approval, or eligibility node exists in the current DAG. [VERIFIED: D-05/D-06/D-08/D-16 and V9QUAL-06]
 
 ### Verification Command Matrix
 
@@ -565,7 +559,7 @@ The activation order inside Wave 5/6 is strict: synth/policy tests -> provision 
 | Infra | infra locked sync, `cdk synth`, `cdk diff`, and CDK assertion tests | No replacement/destruction accepted without resolved inventory; aliases, roles, stores, pointer, retention, rollback permissions present. [VERIFIED: V9QUAL-06] |
 | Phase 473 publication | `python scripts/verify_phase473_evidence.py verify-publication --candidate <sha> --publication <sha>` from later clean HEAD | Direct child, exact four paths, immutable blob equality, valid ancestry. [VERIFIED: V9QUAL-07] |
 | Staging/rollback | canonical deploy subcommand on the bound manifest, then smoke and injected-failure exercise | Automatic staging is mandatory; both pointers restore exact known-good digests without rebuild. [VERIFIED: V9QUAL-06/D-16] |
-| Production | protected job validating the same manifest/artifacts | No mutation absent later explicit authorization; approval/deploy/smoke/rollback each record exact `NOT RUN`. [VERIFIED: V9QUAL-06] |
+| Production | no current command or job | `DEFERRED_OUT_OF_SCOPE`; a separate future phase or milestone must define its own contract before any production resource or action exists. [VERIFIED: V9QUAL-06] |
 
 ## State of the Art
 
@@ -596,11 +590,11 @@ The activation order inside Wave 5/6 is strict: synth/policy tests -> provision 
 1. **RESOLVED — What exact AWS resources and CloudFormation stacks are live?**
    - What we know: the repository CDK uses hard-coded production names and no alias/pointer topology. [VERIFIED: stoa-infra inspection]
    - What's unclear: live physical IDs, deployed templates, roles, bucket lock state, aliases, and safe import/replacement boundaries because credentials are unavailable. [VERIFIED: AWS CLI probe]
-   - Selected answer: Plan 474-33 performs the blocking, read-only AWS/CloudFormation inventory and retained `cdk diff` before Plan 474-34 may apply the staging-only substrate. Unknown resources, replacements, destructive changes, or unavailable read authority block staging; production is always exact `NOT RUN` in Phase 474. [RESOLVED: Plans 474-33/34, D-03]
+   - Selected answer: Plan 474-33 performs only the read-only pre-change baseline and may classify declared missing staging targets as `SAFE_ABSENT`; it does not require the backend dist manifest or CDK diff. Plan 474-34 owns manifest generation, synth/diff, exact owner confirmation, apply, and provider readback. Production is `DEFERRED_OUT_OF_SCOPE`. [RESOLVED: Plans 474-33/34, D-03/D-05]
 2. **RESOLVED — Who has GitHub admin authority to create protected environments and cross-repo credentials?**
    - What we know: all three repositories currently report zero environments; the current token cannot establish admin configuration. [VERIFIED: GitHub API]
    - What's unclear: whether the executor or only the owner can configure environment reviewers, deployment branches, OIDC subjects, and a GitHub App/fine-grained token. [VERIFIED: current token capability]
-   - Selected answer: Plan 474-79 configures and verifies protected environments; Plan 474-80 is the blocking owner verification after both GitHub and staging evidence exist. The sole project owner is the required production reviewer and self-approval is allowed; no second reviewer or prevent-self-review policy is invented, and the checkpoint grants no production mutation authority. [RESOLVED: Plans 474-79/80, D-06] [CITED: https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments]
+   - Selected answer: Plan 474-79 configures and verifies exactly one reviewer-free `staging` Environment plus main protection/ruleset; Plan 474-80 is the blocking owner verification after both GitHub and AWS staging evidence exist. No production reviewer or self-review contract exists in this phase. [RESOLVED: Plans 474-79/80, D-06] [CITED: https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments]
 3. **RESOLVED — Can the initial mypy-zero attempt complete within the phase?**
    - What we know: the defined full command reports 435 errors across 113 files, with concentrated import/type-cascade categories. [VERIFIED: local mypy run]
    - What's unclear: the irreducible residual and repair cost until stubs/package roots/shared DTOs are repaired. [VERIFIED: D-09 sequencing]
@@ -625,9 +619,9 @@ The activation order inside Wave 5/6 is strict: synth/policy tests -> provision 
 | `act` | Local Actions emulation | ✗ | — | Not required; test the checked-in command and workflow contract directly. [VERIFIED: environment probe] |
 | `cosign` / `syft` | Optional signing/SBOM | ✗ | — | Not required by locked decisions; SHA-256 manifest and ecosystem audits are sufficient phase scope. [VERIFIED: environment probe and phase requirements] |
 
-**Missing dependencies with no fallback:** AWS credentials/admin authority block live inventory/configuration/deployment. Production mutation remains unauthorized independently of credentials. [VERIFIED: environment probe and V9QUAL-06]
+**Missing dependencies with no fallback:** AWS credentials/admin authority block live staging inventory/configuration/deployment. The production release-control plane is `DEFERRED_OUT_OF_SCOPE` for this phase independently of credential availability. [VERIFIED: environment probe and V9QUAL-06]
 
-Staging deployment/smoke and the controlled nonproduction failed-promotion/two-pointer rollback are not optional external checks: they are Phase 474 completion evidence. If staging OIDC/admin authority cannot be supplied, the plan may continue through local/CDK work but the phase remains blocked; exact `NOT RUN` is permitted for production mutation, not as a substitute for the required staging exercise. [VERIFIED: V9QUAL-06, D-05, D-16]
+Staging deployment/smoke and the controlled failed-smoke/two-pointer rollback are not optional external checks: they are Phase 474 completion evidence. If staging OIDC/admin authority cannot be supplied, the phase remains blocked. Production is excluded through the `DEFERRED_OUT_OF_SCOPE` contract, not represented as a required operation that happened not to run. [VERIFIED: V9QUAL-06, D-05, D-16]
 
 **Missing dependencies with fallback:** GitHub Actions emulation is replaced by script/workflow-contract tests. The absent local isolation runtime is not a silent fallback: local formal evidence remains exact `NOT RUN` until Docker/Podman or an equivalent network namespace is available, while CI must still run the complete isolated gate. [VERIFIED: environment probe and D-03/D-04]
 
@@ -658,7 +652,7 @@ Staging deployment/smoke and the controlled nonproduction failed-promotion/two-p
 
 - **Per task commit:** run the exact targeted test file plus Ruff/mypy over changed Python modules. [VERIFIED: phase validation design]
 - **Per wave merge:** run all new release-gate tests, existing backend suite once, frontend lint/build and focused Playwright, and infra assertions. [VERIFIED: phase validation design]
-- **Phase gate:** canonical full command from clean exact refs; backend suite twice; all self/failure tests green; staging controlled failure exercise retained; production exact NOT RUN absent later explicit authorization. [VERIFIED: V9QUAL-01..06]
+- **Phase gate:** canonical full command from clean exact refs; backend suite twice; all self/failure tests green; staging controlled failure exercise retained; production release control recorded as `DEFERRED_OUT_OF_SCOPE` for a separate future phase. [VERIFIED: V9QUAL-01..06]
 
 ### Wave 0 Gaps
 
@@ -691,10 +685,10 @@ Staging deployment/smoke and the controlled nonproduction failed-promotion/two-p
 |---------|--------|---------------------|
 | Artifact substitution after verification | Tampering | Content digest in manifest, immutable object version, Lambda `CodeSha256` precondition, and pre-promotion revalidation. [CITED: https://docs.aws.amazon.com/lambda/latest/api/API_PublishVersion.html] |
 | Candidate ref changes between jobs | Tampering | Resolve SHAs once, check out detached exact commits, bind tree/lock hashes, never consume branch names as identity. [VERIFIED: D-13] |
-| OIDC token used from wrong repo/branch/environment | Spoofing / elevation | IAM trust conditions for exact repository/ref/environment and separate staging/production roles. [CITED: https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws] |
+| OIDC token used from wrong repo/branch/environment | Spoofing / elevation | All three staging roles require the exact audience and subject `repo:stoasystem/stoa-backend:environment:staging`; resource policies separate deploy/read/rollback authority. [CITED: https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws] |
 | Verification job leaks deployment authority | Elevation / information disclosure | No AWS credentials/environment on verification; artifact handoff occurs only after every required job; failure-injection tests assert deploy cannot start or receive artifact. [VERIFIED: D-16] |
 | Mutable third-party Action tag | Tampering | Pin full commit SHA and review updates. [CITED: https://docs.github.com/en/actions/reference/security/secure-use] |
-| Direct old role bypasses gate | Elevation | Remove direct update policies/workflows and stale-build bypass; production role can promote only manifest-bound immutable objects. [VERIFIED: current role/workflow inspection and D-07] |
+| Direct old role bypasses gate | Elevation | Remove obsolete ref-wide and production release identities; only the three exact staging roles can act after the common gate. [VERIFIED: current role/workflow inspection and D-07] |
 | Partial rollback leaves split-brain release | Tampering / denial of service | Durable prior/target transaction, idempotent compensation of both pointers, verify restored identity, retain partial-failure evidence. [VERIFIED: D-08] |
 | Evidence overwrite/deletion | Repudiation | S3 versioning, Object Lock retention, lifecycle rules that do not remove locked/current/known-good versions. AWS notes lifecycle cannot delete a protected object version until retention permits it. [CITED: https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock-managing.html] |
 | Runtime config injects secret or unreviewed endpoint | Information disclosure / tampering | Non-secret allowlisted runtime schema, digest in manifest, separate review, CSP/origin validation; secrets stay server-side. [VERIFIED: D-14] |
@@ -703,7 +697,7 @@ Staging deployment/smoke and the controlled nonproduction failed-promotion/two-p
 
 - Pin every third-party Action by full SHA and add a workflow-contract test. [CITED: https://docs.github.com/en/actions/reference/security/secure-use]
 - Assert verify jobs have no `id-token: write`, AWS role, environment, or release bucket write. [VERIFIED: least-privilege design]
-- Assert staging and production roles cannot overwrite content-addressed artifact keys or build artifacts. [VERIFIED: D-14]
+- Assert the deploy/read/rollback roles have disjoint, resource-scoped actions and cannot overwrite verified content-addressed bytes outside their exact staging responsibility. [VERIFIED: D-06/D-14]
 - Treat manifest/config/artifact mismatch as tamper, fail before deployment, and retain the failure receipt. [VERIFIED: D-13/D-16]
 - Privacy-scan receipts/logs and record IDs/digests rather than credentials, tokens, or student payloads. [VERIFIED: existing release_evidence/Phase 473 convention]
 

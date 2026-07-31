@@ -6,7 +6,7 @@
 <domain>
 ## Phase Boundary
 
-Phase 474 establishes one deterministic, release-blocking verification and artifact path for the STOA Python backend and the real Web frontend in `/Users/zhdeng/stoa-frontend`. It owns clean target-runtime bootstrap, hermetic and repeated tests, lint and typing closure, dependency policy, cross-repository release identity, immutable build provenance, CI gate enforcement, staging promotion, owner-approved production promotion, and rollback evidence.
+Phase 474 establishes one deterministic, release-blocking verification and artifact path for the STOA Python backend and the real Web frontend in `/Users/zhdeng/stoa-frontend`. It owns clean target-runtime bootstrap, hermetic and repeated tests, lint and typing closure, dependency policy, cross-repository release identity, immutable build provenance, CI gate enforcement, and a complete staging deploy/smoke/rollback path. Production release control-plane work is deferred out of the phase to a separate future phase or milestone.
 
 STOA is Web-first. Expo, React Native, iOS, Android, and the repository's `mobile/` skeleton are not part of the v9.0 release path. Native client work is deferred until the Web App has launched for testing and is stable. Phase 474 establishes the trustworthy delivery baseline; later replanned v9.0 phases complete every retained production Web route, all student/parent/teacher/admin-operator journeys, and every known reachable backend/Web defect.
 
@@ -24,10 +24,10 @@ STOA is Web-first. Expo, React Native, iOS, Android, and the repository's `mobil
 
 ### CI, Promotion, And Rollback Authority
 
-- **D-05:** A `main` candidate that passes every required gate builds one immutable release set and deploys it automatically to staging. Production promotion requires manual approval of the exact staging-verified release set.
-- **D-06:** STOA is currently a one-person team. The project owner is the sole production approver and may approve their own candidate through the protected production environment. Do not invent a two-person or no-self-approval policy until the team changes.
-- **D-07:** No emergency path may deploy new or rebuilt code without the complete gate and staging smoke. An emergency may immediately roll back to a previously verified artifact; a hotfix still follows the normal path.
-- **D-08:** A failed production smoke stops promotion and automatically returns the Lambda alias and Web release pointer to the previous verified release set. The failed release IDs, request/run IDs, health evidence, rollback action, and rollback result remain durable evidence.
+- **D-05:** A `main` candidate that passes every required gate builds one immutable release set and deploys it automatically to `StoaReleaseStaging`. This phase creates no production GitHub Environment, AWS stack, IAM role, OIDC trust, deployment, smoke, rollback, or promotion eligibility path; all such production work is `DEFERRED_OUT_OF_SCOPE` to a separate future phase or milestone.
+- **D-06:** STOA is currently a one-person team. GitHub has exactly one release Environment, `staging`, restricted to branch `main`, disallowing tags, and requiring no manual reviewer. The `deploy-staging`, `smoke-staging`, and `rollback-staging` jobs share that Environment while assuming separate least-privilege AWS roles named `StoaStagingDeployRole`, `StoaStagingReadRole`, and `StoaStagingRollbackRole`; all three roles trust only `repo:stoasystem/stoa-backend:environment:staging`.
+- **D-07:** No staging path may deploy new or rebuilt code without the complete gate and staging smoke. A controlled staging failure may immediately roll back to a previously verified artifact; a hotfix still follows the normal gated staging path.
+- **D-08:** A failed staging smoke automatically returns the Lambda staging alias and Web release pointer to the previous verified release set. The failed release IDs, request/run IDs, health evidence, rollback action, and rollback result remain durable evidence.
 
 ### Typing And Dependency Risk
 
@@ -39,8 +39,8 @@ STOA is Web-first. Expo, React Native, iOS, Android, and the repository's `mobil
 ### Immutable Cross-Repository Release Evidence
 
 - **D-13:** One cross-repository release manifest identifies a candidate by exact backend commit, frontend commit, both lockfile hashes, source-tree identities, backend and frontend artifact digests, target runtime/platform, verification run IDs, and gate results. Neither repository's branch name or mutable `latest` pointer is release identity.
-- **D-14:** Backend and frontend use build once, promote unchanged. Staging and production consume byte-identical artifacts. Environment differences enter only through reviewed runtime configuration; production may not rebuild a frontend bundle or Lambda package.
-- **D-15:** Production manifests, artifacts, approvals, smoke evidence, and rollback evidence are retained long term. Failed and staging-only candidates remain available for at least 90 days. The current and most recent known-good rollback artifacts are never automatically deleted.
+- **D-14:** Backend and frontend use build once for the staging release path. The verified Lambda package and Web bytes are deployed unchanged to staging; environment differences enter only through reviewed runtime configuration. Any later production phase must consume immutable, digest-bound artifacts and may not reinterpret this phase as production authorization.
+- **D-15:** Staging manifests, artifacts, smoke evidence, controlled-failure evidence, and rollback evidence remain available for at least 90 days. The current and most recent known-good staging rollback artifacts are never automatically deleted. Production retention policy is `DEFERRED_OUT_OF_SCOPE` with the rest of the production control plane.
 - **D-16:** Every CI/gate change runs automated intentional-failure scenarios for tests, Ruff, mypy, dependency policy, provenance, and artifact tampering and proves the deploy job cannot receive an artifact. Initial activation and every structural gate redesign also perform a controlled non-production failure exercise with retained CI run IDs.
 
 ### v9.0 Web-First Product Correction
@@ -119,8 +119,8 @@ STOA is Web-first. Expo, React Native, iOS, Android, and the repository's `mobil
 ## Specific Ideas
 
 - The project owner explicitly rejected native mobile as a current product goal: “网页端测试通过，开始稳定运行后，才去考虑推进客户端 app 的开发.” The owner also required completion of all Web App functionality and all known reachable bugs before early testing, including teacher/admin/operator routes rather than only student and parent journeys.
-- The desired operational flow is: verify both repositories → build once → automatically deploy staging → run smoke → owner approval → promote identical bytes → automatically roll back on failed production smoke.
-- The current one-person team must not be blocked by artificial two-person approval policy, but production still requires an explicit protected-environment approval action.
+- The current operational flow is: verify both repositories → build once → deploy staging with `StoaStagingDeployRole` → smoke staging with `StoaStagingReadRole` → run the controlled failed-smoke exercise and restore the prior verified set with `StoaStagingRollbackRole`.
+- The current one-person team uses one reviewer-free `staging` GitHub Environment. Separate deploy/read/rollback AWS roles provide permission separation without separate `staging-smoke` or `staging-rollback` GitHub Environments.
 
 </specifics>
 
@@ -128,6 +128,7 @@ STOA is Web-first. Expo, React Native, iOS, Android, and the repository's `mobil
 ## Deferred Ideas
 
 - Native Expo/iOS/Android client development, dependency repair, native builds, device E2E, push/offline client behavior, and app distribution are deferred until the Web App has launched for testing and reached stable operation. They require a future milestone based on Web production evidence, not automatic continuation of the current Phase 477/478 text.
+- All production release-control-plane work is deferred to a separate future phase or milestone: no `production`, `production-smoke`, or `production-rollback` GitHub Environment; no production AWS stack, IAM role, or OIDC trust; and no production deployment, smoke, rollback, approval, or eligibility contract. Current receipts represent this as `DEFERRED_OUT_OF_SCOPE`, not `NOT RUN`.
 
 </deferred>
 

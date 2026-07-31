@@ -26,7 +26,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 - Every known audit, test-discovered, Phase 473 follow-up, or launch-blocking defect reachable through the backend or retained production Web route inventory is milestone scope; undiscovered theoretical defects are not implied by this bounded commitment.
 - Curriculum editing remains capability-authorized; the milestone must not grant all teachers mutation rights.
 - Production writes, real charging, bulk notification, and user expansion require separate approved operational execution even after code completion.
-- One formal gate owns both repositories: build once, deploy the exact set automatically to staging, implement protected owner approval for unchanged production promotion, prohibit bypass, retain evidence, and implement automatic rollback for failed production smoke. Phase 474 proves these semantics through staging and a controlled non-production failure; actual production mutation requires later explicit operational approval or remains exact `NOT RUN`.
+- One formal gate owns both repositories: build once, deploy the exact set automatically to staging, prohibit bypass, retain evidence, and implement automatic rollback for a controlled staging smoke failure. The production release control plane is `DEFERRED_OUT_OF_SCOPE` to a separate future phase or milestone.
 - Public launch, paid marketing, new markets, enterprise automation, and expanded AI autonomy remain out of scope.
 
 ## Execution Order
@@ -35,7 +35,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 | --- | --- | --- | --- |
 | 472 | Privileged Identity And Student Resource Authorization | Complete — 22/22 plans, independently verified 2026-07-15 | Audit baseline |
 | 473 | Student Content Privacy And Practice Integrity | Complete — 40/40 plans, independently verified 2026-07-18 | Phase 472 |
-| 474 | Deterministic Verification And Gated Delivery | In progress — 35/47 summaries; 12 retained plans; verification missing | Phases 472 and 473 |
+| 474 | Deterministic Verification And Gated Delivery | In progress — 39/47 plans executed; 8 retained plans; verification missing | Phases 472 and 473 |
 | 475 | Transactional Usage Assignment And Relationship Consistency | Complete — 45/45 plans, independently verified 2026-07-23 | Phase 473 |
 | 476 | Billing Idempotency And Paid Access Recovery | Administratively complete by owner waiver — 27/29 summaries; verification incomplete | Phase 475 |
 | 477 | Web Authentication And Contract Convergence | Close login-code, Web role, adapter-contract, and reachable static-truth gaps | Phase 474; consumes Phases 472 and 473 |
@@ -334,7 +334,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 ### Phase 474: Deterministic Verification And Gated Delivery
 
-**Goal:** Make it impossible for unverified backend or Web source to reach staging or production, while preserving one reproducible release identity and the minimum versioned release infrastructure from clean verification through rollback.
+**Goal:** Make it impossible for unverified backend or Web source to reach staging, while preserving one reproducible release identity and the staging-only minimum versioned release infrastructure from clean verification through rollback; defer the entire production release control plane to a separate future phase or milestone.
 
 **Why now:** The repository needs one source-bound backend/Web/infra verification and delivery authority before later Web, realtime, and operational phases can use a trustworthy release candidate.
 
@@ -350,6 +350,18 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 implementation evidence, but Phase 474 cannot close until all retained plans
 finish and an independent `474-VERIFICATION.md` passes against the current
 backend/Web/infra candidate.
+
+**Bootstrap execution route:** `474-33` is a read-only pre-change baseline and may
+return `PASS` with `READY_TO_BOOTSTRAP` when only the single policy-declared
+`staging` Environment, main protection/ruleset, and/or `StoaReleaseStaging` are
+`SAFE_ABSENT`; it must not represent them as configured and does not require a
+dist manifest or CDK diff. From that baseline, `474-79` (one staging Environment
+plus main protection/ruleset) and `474-34` (owner-confirmed additive staging
+substrate with three exact staging roles) are sibling Wave 19 branches. `474-80`
+joins both completed provider readbacks before `474-35` through `474-38`
+continue. The existing blocked inventory and protected-environment receipts
+remain immutable historical before-state and are resolved only by new execution
+artifacts. Production release control-plane work is `DEFERRED_OUT_OF_SCOPE`.
 
 Plans:
 
@@ -430,18 +442,18 @@ Plans:
 
 **Remaining Wave 18**
 
-- [ ] `474-33` — Read-only live environment and CDK inventory. **BLOCKED:** current source refs and AWS identity readback pass, but GitHub has zero environments/rulesets and no main protection; `StoaReleaseStaging` does not exist; source CDK preflight lacks the required backend dist manifest. See `evidence/phase-474/environment-inventory.json`.
+- [ ] `474-33` — Read-only pre-change baseline. Re-read the historical blocked evidence, bind exact source/repository/account/region identities, classify only declared missing GitHub targets and `StoaReleaseStaging` as `SAFE_ABSENT`, and issue a new `PASS` plus `READY`/`READY_TO_BOOTSTRAP` resolution only when no unknown, unreadable, conflicting, destructive, or ambiguous state exists. No target is configured by this plan.
 - [x] `474-76` — Thin exact-ref frontend delivery workflow and auditable current source refs. The sole root infra `.DS_Store` metadata exception is bounded by adversarial tests; all other drift fails closed. See `474-76-SUMMARY.md` and `evidence/phase-474/474-76-source-ref-resolution.json`.
 
 **Wave 19 — 1/3 completed**
 
 - [x] `474-32` — Backend delivery workflow and environment controller.
-- [ ] `474-34` — Staging-only immutable CDK substrate.
-- [ ] `474-79` — GitHub protected environments.
+- [ ] `474-34` — Generate/verify the canonical backend dist manifest before synth, require an additive-only exact-source `StoaReleaseStaging` diff and exact owner confirmation digest, then apply/read back only staging resources and `StoaStagingDeployRole`/`StoaStagingReadRole`/`StoaStagingRollbackRole`; production is `DEFERRED_OUT_OF_SCOPE`.
+- [ ] `474-79` — With external repository Admin authority, configure/read back exactly one backend GitHub Environment `staging`, main-only/no-tag/no-reviewer policy, main protection/ruleset, the one exact OIDC subject, and a workflow whose deploy/smoke/rollback jobs share `staging`; no application, infrastructure, or deploy action occurs.
 
 **Remaining Wave 20**
 
-- [ ] `474-80` — Owner verification of GitHub and staging evidence. *(blocking checkpoint)*
+- [ ] `474-80` — Join the completed 474-34 and 474-79 staging-only provider readbacks for owner verification; verify that production is deferred rather than eligible. *(blocking checkpoint)*
 
 **Remaining Wave 21**
 
@@ -470,12 +482,12 @@ the release and rollback mechanism implemented here.
 1. One authoritative command verifies exact clean backend/Web/infra identities; the existing fixed formal aggregate remains source-bound and reproducible.
 2. Ruff and the exact full-repository mypy command reach true zero without baselines, broad suppression, exclusions, or reduced scope.
 3. Backend and Web artifacts build once, and the minimum Lambda alias plus immutable served-Web topology deploys the verified set without rebuilding.
-4. Protected environments enforce sole-owner review; staging delivery and a controlled nonproduction failure prove automatic backend/Web rollback.
-5. The final failure matrix, source audit, and evidence index bind the current source tuple and retain production mutation as exact `NOT RUN` absent separate approval.
+4. Main protection and one reviewer-free, main-only/no-tag `staging` Environment gate three jobs that assume separate deploy/read/rollback roles; staging delivery and a controlled staging failure prove automatic backend/Web rollback.
+5. The final failure matrix, source audit, and evidence index bind the current source tuple and classify the entire production release control plane as `DEFERRED_OUT_OF_SCOPE`.
 
 **Required evidence:** Current Ruff/mypy results; exact source/formal receipts; immutable release topology; protected-environment owner verification; staging substrate and delivery; controlled rollback; failure matrix; source audit; final evidence index.
 
-**Exit gate:** All 47 retained plan records have matching summaries, the current formal and quality gates pass, staging/rollback evidence is live and source-bound, production mutation remains exact `NOT RUN`, and independent Phase 474 verification passes.
+**Exit gate:** All 47 retained plan records have matching summaries, the current formal and quality gates pass, staging/rollback evidence is live and source-bound, the production release control plane is `DEFERRED_OUT_OF_SCOPE`, and independent Phase 474 verification passes.
 
 ### Phase 475: Transactional Usage Assignment And Relationship Consistency
 
@@ -583,7 +595,7 @@ Plans:
 
 - [x] `475-45` — Final immutable source-bound evidence publication.
 
-**Cross-cutting constraints:** Every plan contains exactly one implementation task; application-owned commands provide durable idempotency; strict bidirectional authorization remains unchanged; canonical roles are exactly `student|parent|teacher|admin` and teacher is spelled only `teacher`; public errors stay structured and redacted; evidence exercises lower-boundary failure and concurrency; no native/mobile scope is introduced. Live AWS runtime evidence belongs to Phase 479, live provider-effect and staged-probe evidence to Phase 480, deployment/rollback to Phase 474, and production smoke remains separately authorized or exact `NOT RUN`.
+**Cross-cutting constraints:** Every plan contains exactly one implementation task; application-owned commands provide durable idempotency; strict bidirectional authorization remains unchanged; canonical roles are exactly `student|parent|teacher|admin` and teacher is spelled only `teacher`; public errors stay structured and redacted; evidence exercises lower-boundary failure and concurrency; no native/mobile scope is introduced. Live AWS runtime evidence belongs to Phase 479, live provider-effect and staged-probe evidence to Phase 480, staging deployment/smoke/rollback to Phase 474, and the production release-control plane is `DEFERRED_OUT_OF_SCOPE` for a separate future phase.
 
 **Success Criteria**:
 
@@ -896,8 +908,8 @@ probe produces correlation/alarm evidence. Phase 473's deployed cleanup
 scheduler/retry/alarm and deployed-log observations plus Phase 475's live
 provider-effect observation remain exact obligations here. Phase 475's older
 assignment of deployment/production smoke to Phase 480 is superseded: Phase 474
-owns deployment/rollback, and production smoke remains separately authorized or
-exact `NOT RUN`.
+owns staging deployment/smoke/rollback, while the production release-control
+plane is `DEFERRED_OUT_OF_SCOPE` for a separate future phase.
 
 **Depends on:** Phases 478 and 479; consumes Phase 474 delivery and rollback.
 
@@ -979,7 +991,7 @@ already exists, or milestone archive before the decision.
 1. Project documentation matches clean-checkout behavior and uses precise contract, integrated, staging-verified, live-verified, waived, and product-complete vocabulary.
 2. Every finding is closed, explicitly owner-accepted, or deferred with owner and trigger; native-only findings are not relabeled.
 3. One index validates the current backend/Web/infra tuple and all mandatory receipts without accepting stale, intercepted, or mismatched-candidate proof.
-4. The result is explicit: begin early Web testing, continue internal-only, limited beta, or hold. Missing mandatory evidence yields `HOLD`; production work remains exact `NOT RUN` unless separately authorized.
+4. The result is explicit: begin early Web testing, continue internal-only, limited beta, or hold. Missing mandatory evidence yields `HOLD`; the production release-control plane remains `DEFERRED_OUT_OF_SCOPE` until a separate future phase defines it.
 
 **Required evidence:** `481-VERIFICATION.md`; v9.0 milestone audit; reconciled
 requirement/finding matrix; clean-checkout result; evidence index; current route
@@ -1065,7 +1077,7 @@ were closed and independently verified by Phase 475; only
 
 ## Next Command
 
-Execute the 14 remaining retained Phase 474 plans; do not regenerate the removed plans:
+Execute the 8 remaining retained Phase 474 plans; do not regenerate the removed plans:
 
 `$gsd-execute-phase 474`
 

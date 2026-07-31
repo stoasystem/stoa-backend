@@ -5,10 +5,10 @@ milestone_name: milestone
 current_phase: 474
 current_phase_name: deterministic-verification-and-gated-delivery
 status: executing
-stopped_at: Blocked 474-33-PLAN.md
-last_updated: "2026-07-31T12:00:48.591Z"
+stopped_at: Ready 474-33-PLAN.md after staging-only bootstrap correction
+last_updated: "2026-07-31T15:30:00Z"
 last_activity: 2026-07-31
-last_activity_desc: "Plan 474-76 completed and Plan 474-33 revalidated AWS identity/current source refs, but GitHub protection is absent, StoaReleaseStaging does not exist, and source CDK preflight lacks the backend dist manifest."
+last_activity_desc: "Replanned the retained release bootstrap as a SAFE_ABSENT baseline, exactly one staging GitHub Environment, StoaReleaseStaging with three least-privilege staging roles, joined owner verification, and production DEFERRED_OUT_OF_SCOPE; historical blocked receipts remain unchanged."
 progress:
   total_phases: 10
   completed_phases: 3
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 Phase: 474 (deterministic-verification-and-gated-delivery) — EXECUTING
 Next retained plan: 474-33 (read-only provider/CDK inventory)
 Status: Executing Phase 474
-Last activity: 2026-07-31 — Plan 474-76 completed; Plan 474-33 has AWS identity and current source refs, but remains BLOCKED on GitHub protection, missing StoaReleaseStaging, and the missing backend dist manifest for CDK diff.
+Last activity: 2026-07-31 — The bootstrap dependency and release scope were corrected without changing the 39/47 count: Plan 474-33 may issue PASS/READY_TO_BOOTSTRAP for only the declared single-staging targets that are SAFE_ABSENT; Plans 474-79 and 474-34 create only the staging GitHub/AWS control plane, and production is deferred out of scope.
 Phases 477-481 around exact remaining gaps
 
 ## Accumulated Context
@@ -64,6 +64,15 @@ Phases 477-481 around exact remaining gaps
   mypy family plans were consolidated into current Plan 474-22, obsolete source
   handoffs were superseded by 474-93, and product Web acceptance was reassigned
   to Phases 477/478. See `474-CLEANUP.md`.
+
+- The project owner narrowed the remaining Phase 474 release control plane on
+  2026-07-31 to exactly one reviewer-free, main-only/no-tag GitHub Environment
+  `staging`; one `StoaReleaseStaging` stack; and three least-privilege roles
+  `StoaStagingDeployRole`, `StoaStagingReadRole`, and
+  `StoaStagingRollbackRole`, all trusting only
+  `repo:stoasystem/stoa-backend:environment:staging`. Production environments,
+  AWS identities, stacks, OIDC trusts, eligibility, deployment, smoke, and
+  rollback are `DEFERRED_OUT_OF_SCOPE` to a separate future phase or milestone.
 
 - Phase 476 was administratively accepted by explicit project-owner manual
   waiver on 2026-07-30 after the owner reported independent team testing
@@ -165,13 +174,28 @@ Phases 477-481 around exact remaining gaps
 
 ## Operator Next Steps
 
-- Resolve the remaining Wave 18 blocker before any later plan: configure all six GitHub
-  environments/rulesets plus main protection, provide the allowlisted StoaReleaseStaging
-  stack through the later staging-only authority, and provide the backend Lambda dist
-  manifest required for a source-bound CDK diff. Do not regenerate the 47 removed plans.
+- Execute Plan 474-33 read-only. It must bind exact source refs, repository,
+  account `562923011260`, region `eu-central-2`, and readable GitHub/AWS before-state.
+  Only the declared `staging` Environment, main protection/ruleset, and
+  `StoaReleaseStaging` may be `SAFE_ABSENT`; unknown conflicts, destructive drift,
+  unreadable required state, or permission ambiguity remain `BLOCKED`. The
+  baseline does not require a dist manifest, synth, diff, or post-change state.
+  Preserve `environment-inventory.json` and `protected-environments.json` as
+  immutable historical before-state and issue a new baseline resolution.
 
-- No retained plan is presently dependency-ready: 474-34 and 474-79 directly require
-  474-33; 474-80 requires both; and 474-35 through 474-38 depend transitively on them.
+- After a PASS plus READY/READY_TO_BOOTSTRAP baseline, execute 474-79 and 474-34 as
+  sibling Wave 19 branches. Plan 474-79 retains the external GitHub Admin gate and
+  configures/read backs exactly one reviewer-free, main-only/no-tag `staging`
+  Environment plus main protection/ruleset and the one exact OIDC subject; its
+  deploy/smoke/rollback jobs all reference `staging`. Plan 474-34 generates and
+  verifies the canonical backend dist manifest before synth, pauses on the
+  additive-only `StoaReleaseStaging` diff digest, creates only the three exact
+  staging roles/resources, and applies only after owner confirmation. Production
+  is `DEFERRED_OUT_OF_SCOPE`, not an unexecuted current obligation.
+
+- Execute 474-80 only after both provider readbacks PASS; then continue
+  474-35 -> 474-36 -> 474-37 -> 474-38. Do not regenerate the 47 removed plans or
+  change the 39/47 completion count during this planning correction.
 
 - Independently verify Phase 474 against the current backend/Web/infra tuple.
 - Then run `$gsd-discuss-phase 477` using the reconciled four-boundary scope in
@@ -180,7 +204,7 @@ Phases 477-481 around exact remaining gaps
 ## Session
 
 **Last Date:** 2026-07-31T11:59:49.041Z
-**Stopped At:** Blocked 474-33-PLAN.md — GitHub environment/ruleset/main protection remain missing; StoaReleaseStaging does not exist; source CDK preflight lacks the required backend Lambda dist manifest. Plan 474-76 source refs are issued under the exact root-only infra `.DS_Store` metadata policy.
+**Stopped At:** Ready 474-33-PLAN.md after staging-only dependency correction — the prior zero-environment/no-protection state and missing StoaReleaseStaging remain historical before-state, not proof of configuration and not an intrinsic baseline blocker. The missing backend dist manifest is not a Plan 474-33 baseline prerequisite and belongs to Plan 474-34. Plan 474-33 must issue a new safe resolution before either bootstrap branch can run. Plan 474-76 source refs remain issued under the exact root-only infra `.DS_Store` metadata policy.
 **Resume File:** 474-33-PLAN.md
 
 ## Performance Metrics
@@ -499,7 +523,7 @@ Phases 477-481 around exact remaining gaps
 - [Phase 474]: Dependency acquisition precedes formal isolation; pytest receives no proxy or AWS credential paths and requires a proved OS network-none boundary. — This permits reviewed package acquisition without allowing the release test process or its children to escape hermetic execution.
 - [Phase 474]: Hosts without a proved Linux network namespace emit exact NOT RUN with zero run counts and never fall back to plugin-only isolation. — A Python plugin cannot constrain arbitrary child processes, so unavailable OS isolation cannot count as PASS.
 - [Phase 474]: Phase 473 AST source seals reproduce the existing reviewed Python 3.14 canonical bytes on Python 3.12 without regenerating evidence. — Interpreter-version defaults must not change mutation identity for identical source.
-- [Phase 474]: Release ID binds only execution-receipted source, lock, and runtime identities; final manifest SHA-256 binds gates, artifacts, configs, and production NOT RUN. — This avoids circular pre-build identity while making final byte substitution detectable.
+- [Phase 474]: Release ID binds only execution-receipted source, lock, and runtime identities; final manifest SHA-256 binds gates, artifacts, configs, and the current release-scope disposition. — This avoids circular pre-build identity while making final byte substitution detectable; the remaining Phase 474 plans now encode production release control as `DEFERRED_OUT_OF_SCOPE`.
 - [Phase 474]: Lambda promotion must consume the one normalized frozen-lock ZIP digest; staging or production may never rebuild it. — Build-once promotion is required by D-14.
 - [Phase 474]: Untrusted identity and JWKS provider records remain object-valued mappings until authority-bearing fields are explicitly narrowed. — This keeps malformed provider input untrusted without Any, casts, or authorization broadening.
 - [Phase 474]: Cached RS256 keys use python-jose's stable Key base while optional RSA construction fails closed when unavailable. — The maintained stub models RSAKey as an optional runtime-selected factory rather than a valid annotation.
@@ -642,7 +666,7 @@ Phases 477-481 around exact remaining gaps
 - [Phase 475]: CR-10 maps only to discovery plus relationship, teacher, and notification cleanup, joining V9DATA-03, V9DATA-02, and V9DATA-07 respectively.
 - [Phase 475]: CR-09 and D-13 share the immutable operation-owned rate receipt node.
 - [Phase 475]: Final Phase 475 evidence uses one clean immutable candidate and one direct-child two-file publication. — Candidate 677edf994deaee4aa0faef91eb38e2a3a07899ea passed every local gate; publication 458ec9f8970a6ec1657e41862de1cd0ce4b0d3db changes only the generated JSON and Markdown.
-- [Phase 475]: External Phase 475 obligations remain exact later-phase NOT RUN. — Phase 479 owns retained-route live AWS runtime evidence; Phase 480 owns live provider-effect and staged-probe evidence; Phase 474 alone owns deployment and rollback, while production smoke remains separately authorized or exact NOT RUN.
+- [Phase 475]: External Phase 475 obligations remain exact later-phase NOT RUN. — Phase 479 owns retained-route live AWS runtime evidence; Phase 480 owns live provider-effect and staged-probe evidence; Phase 474 owns staging deployment/smoke/rollback, while the production release-control plane is `DEFERRED_OUT_OF_SCOPE` for a separate future phase.
 - [Phase 476]: BillingPlanId is the closed four-plan vocabulary; PurchasablePlanId structurally excludes free_trial. — Checkout cannot encode a free plan or hidden legacy translation.
 - [Phase 476]: Public active checkout state requires paid-invoice, active-subscription, effective-plan, plan-version, and allowance-version coordinates. — Browser redirects and checkout completion remain non-authoritative hints.
 - [Phase 476]: Allowance evidence uses strict nonnegative signed-64-bit counts and Europe/Zurich Monday boundaries. — Booleans, fractions, overflow, content, and DST-fixed-duration assumptions fail closed.
