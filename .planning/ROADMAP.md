@@ -420,9 +420,9 @@ Plans:
 
 - [x] `474-78` — Immutable served Web release pointer.
 
-**Remaining Wave 9**
+**Completed Wave 9**
 
-- [ ] `474-27` — Durable two-pointer delivery coordinator.
+- [x] `474-27` — Durable two-pointer delivery coordinator.
 
 **Completed Wave 10**
 
@@ -433,9 +433,9 @@ Plans:
 - [ ] `474-33` — Read-only live environment and CDK inventory.
 - [ ] `474-76` — Thin exact-ref frontend delivery workflow.
 
-**Remaining Wave 19**
+**Wave 19 — 1/3 completed**
 
-- [ ] `474-32` — Backend delivery workflow and environment controller.
+- [x] `474-32` — Backend delivery workflow and environment controller.
 - [ ] `474-34` — Staging-only immutable CDK substrate.
 - [ ] `474-79` — GitHub protected environments.
 
