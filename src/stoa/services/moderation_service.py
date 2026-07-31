@@ -56,7 +56,10 @@ def create_case(
 
     created_at = now_iso()
     case_id = f"mod-{uuid4().hex}"
-    item = {
+    reporter_id = str(user.get("sub") or user.get("username") or "unknown")
+    reporter_role = str(user.get("role") or "unknown")
+    report_note = _clean_note(body.note)
+    item: dict[str, object] = {
         "entity_type": "moderation_case",
         "case_id": case_id,
         "status": ModerationStatus.OPEN.value,
@@ -66,10 +69,10 @@ def create_case(
         "question_id": question_id,
         "student_id": student_id,
         "privacy_generation": privacy_generation,
-        "reporter_id": str(user.get("sub") or user.get("username") or "unknown"),
-        "reporter_role": str(user.get("role") or "unknown"),
+        "reporter_id": reporter_id,
+        "reporter_role": reporter_role,
         "assigned_admin_id": None,
-        "report_note": _clean_note(body.note),
+        "report_note": report_note,
         "resolution_note": None,
         "created_at": created_at,
         "updated_at": created_at,
@@ -79,15 +82,15 @@ def create_case(
     event = _event(
         case_id,
         "reported",
-        actor_id=item["reporter_id"],
-        actor_role=item["reporter_role"],
+        actor_id=reporter_id,
+        actor_role=reporter_role,
         at=created_at,
         changes={
             "surface": item["surface"],
             "reason": item["reason"],
             "severity": item["severity"],
         },
-        note=item["report_note"],
+        note=report_note,
         student_id=student_id,
         privacy_generation=privacy_generation,
     )
@@ -95,8 +98,8 @@ def create_case(
     moderation_repo.put_case(item, event)
     notification_service.emit_moderation_created(
         case_item=item,
-        actor_id=item["reporter_id"],
-        actor_role=item["reporter_role"],
+        actor_id=reporter_id,
+        actor_role=reporter_role,
         owner_id=student_id,
         privacy_generation=privacy_generation,
     )
