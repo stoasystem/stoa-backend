@@ -270,8 +270,8 @@ def transition_delivery_status(
     if status not in DELIVERY_STATUSES:
         raise ValueError(f"Unsupported delivery status: {status}")
     now = now_iso()
-    safe_refusals = [_safe_text(value) for value in refusal_reasons or []]
-    safe_failures = [_safe_text(value) for value in failure_reasons or []]
+    safe_refusals = _safe_reason_list(refusal_reasons or [], "refusal_reasons")
+    safe_failures = _safe_reason_list(failure_reasons or [], "failure_reasons")
     updated = report_repo.update_support_handoff_delivery_status(
         delivery_id,
         status=status,
@@ -323,7 +323,7 @@ def retry_provider_delivery(
     if not record:
         return None
     status = str(record.get("status") or "")
-    retry_count = int(record.get("retry_count") or 0)
+    retry_count = _nonnegative_int(record.get("retry_count", 0), "retry_count")
     if (
         record.get("destination_mode") != THIRD_PARTY_SUPPORT_DESTINATION
         or status not in {"delivery_failed", "failed", "retry_pending"}
@@ -334,7 +334,7 @@ def retry_provider_delivery(
     now = now_iso()
     next_count = retry_count + 1
     exhausted = next_count >= MAX_PROVIDER_RETRY_ATTEMPTS
-    failure_reasons = [_safe_text(value) for value in record.get("failure_reasons", [])]
+    failure_reasons = _safe_reason_list(record.get("failure_reasons", []), "failure_reasons")
     provider_metadata: dict[str, Any] = {
         "retry_count": next_count,
         "provider_attempt_count": next_count,
@@ -412,7 +412,7 @@ def sync_provider_ticket(
         return support_handoff_delivery_response(record)
 
     safe_event_id = _safe_text(provider_event_id) or ""
-    seen_events = [_safe_text(value) for value in record.get("provider_sync_event_ids", [])]
+    seen_events = _safe_reason_list(record.get("provider_sync_event_ids", []), "provider_sync_event_ids")
     if safe_event_id in seen_events:
         return support_handoff_delivery_response({**record, "last_sync_result": "duplicate"})
 
@@ -464,8 +464,8 @@ def sync_provider_ticket(
         actor=_safe_text(actor) or "unknown-admin",
         correlation_id=request_id,
         retryable=bool(record.get("retryable", False)),
-        refusal_reasons=record.get("refusal_reasons", []),
-        failure_reasons=record.get("failure_reasons", []),
+        refusal_reasons=_safe_reason_list(record.get("refusal_reasons", []), "refusal_reasons"),
+        failure_reasons=_safe_reason_list(record.get("failure_reasons", []), "failure_reasons"),
         extra_updates=extra_updates,
     )
     if not updated:
@@ -574,7 +574,8 @@ def _write_delivery_audit(
 
 
 def support_handoff_delivery_audit_response(event: dict[str, Any]) -> dict[str, Any]:
-    metadata = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
+    raw_metadata = event.get("metadata")
+    metadata: dict[str, Any] = raw_metadata if isinstance(raw_metadata, dict) else {}
     response = {
         "event_id": _safe_text(event.get("event_id")),
         "event_at": _safe_text(event.get("event_at")),
@@ -592,8 +593,8 @@ def support_handoff_delivery_audit_response(event: dict[str, Any]) -> dict[str, 
             "retryable": bool(metadata.get("retryable", False)),
             "payload_digest": _safe_text(metadata.get("payload_digest")),
             "privacy_passed": bool(metadata.get("privacy_passed", False)),
-            "refusal_reasons": [_safe_text(value) for value in metadata.get("refusal_reasons", [])],
-            "failure_reasons": [_safe_text(value) for value in metadata.get("failure_reasons", [])],
+            "refusal_reasons": _safe_reason_list(metadata.get("refusal_reasons", []), "refusal_reasons"),
+            "failure_reasons": _safe_reason_list(metadata.get("failure_reasons", []), "failure_reasons"),
         },
     }
     release_evidence_service.private_marker_hits(response)
@@ -894,6 +895,24 @@ def _safe_text(value: object) -> str | None:
     if text is None:
         return None
     return PRIVATE_FREE_TEXT_PATTERN.sub("[private-credential]", str(text).strip())
+
+
+def _safe_reason_list(value: object, field: str) -> list[str]:
+    if not isinstance(value, list):
+        raise ValueError(f"{field} is invalid")
+    reasons: list[str] = []
+    for item in value:
+        text = _safe_text(item)
+        if text is None:
+            raise ValueError(f"{field} is invalid")
+        reasons.append(text)
+    return reasons
+
+
+def _nonnegative_int(value: object, field: str) -> int:
+    if type(value) is not int or value < 0:
+        raise ValueError(f"{field} is invalid")
+    return value
 
 
 def _public_record(record: dict[str, Any]) -> dict[str, Any]:
