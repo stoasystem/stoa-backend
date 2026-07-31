@@ -416,7 +416,7 @@ def test_committed_ecdsa_exception_is_exact_approved_expiring_and_source_support
             "advisory": "PYSEC-2026-1325",
             "advisory_aliases": ["CVE-2024-23342", "GHSA-wj6h-64fc-37mp"],
             "installed_version": "0.19.2",
-            "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
+            "lock_sha256": "19910f62932829f069c21ac21c54cf6125deda55d0a63dfe6b8f0efa98e3fd7e",
             "dependency_scope": "runtime",
             "severity": "unavailable",
             "reachability": "proven-unreachable",
@@ -537,7 +537,7 @@ def test_committed_ecdsa_exception_accepts_only_the_exact_audit_identity():
             "advisory": "PYSEC-2026-1325",
             "advisory_aliases": ["CVE-2024-23342", "GHSA-wj6h-64fc-37mp"],
             "installed_version": "0.19.2",
-            "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
+            "lock_sha256": "19910f62932829f069c21ac21c54cf6125deda55d0a63dfe6b8f0efa98e3fd7e",
             "reachability": "proven-unreachable",
             "expires_at": "2026-08-18T09:00:00Z",
         }

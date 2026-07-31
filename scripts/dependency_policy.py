@@ -348,9 +348,9 @@ def _apply_exceptions(
                 "advisory": matched_exception["advisory"],
                 "advisory_aliases": matched_exception["advisory_aliases"],
                 "installed_version": matched_exception["installed_version"],
-                "lock_sha256": exception["lock_sha256"],
-                "reachability": exception["reachability"],
-                "expires_at": exception["expires_at"],
+                "lock_sha256": matched_exception["lock_sha256"],
+                "reachability": matched_exception["reachability"],
+                "expires_at": matched_exception["expires_at"],
             }
         )
     if set(exception_map) != used:

@@ -10,7 +10,7 @@
         "GHSA-wj6h-64fc-37mp"
       ],
       "installed_version": "0.19.2",
-      "lock_sha256": "68efeb83c23ff4683cba1ff735130c365e8f9ec16dfb0eff5959a827536748fa",
+      "lock_sha256": "19910f62932829f069c21ac21c54cf6125deda55d0a63dfe6b8f0efa98e3fd7e",
       "dependency_scope": "runtime",
       "severity": "unavailable",
       "reachability": "proven-unreachable",
