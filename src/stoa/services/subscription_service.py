@@ -377,6 +377,11 @@ def _attached_checkout_response(
         return None
     if state is not CheckoutCommandState.PROVIDER_SESSION_OPEN:
         return None
+    beneficiaries = command.get("beneficiary_ids")
+    if not isinstance(beneficiaries, list):
+        return None
+    if any(not isinstance(beneficiary_id, str) or not beneficiary_id for beneficiary_id in beneficiaries):
+        return None
     return {
         "checkoutRef": command["checkout_ref"],
         "commandState": state.value,
@@ -384,7 +389,7 @@ def _attached_checkout_response(
         "checkoutUrl": command["provider_session_url"],
         "safeActions": ["recheck_payment", "contact_support"],
         "targetPlan": command["plan_id"],
-        "beneficiaries": list(command["beneficiary_ids"]),
+        "beneficiaries": beneficiaries,
     }
 
 
@@ -566,19 +571,25 @@ def create_or_resume_checkout_command(
         )
     provider_claim = claim.provider_claim
     return_urls = build_checkout_return_urls(checkout_ref, settings)
-    provider_kwargs = {
-        "checkout_ref": checkout_ref,
-        "provider_idempotency_key": provider_claim.provider_key_digest,
-        "price_id": price_id,
-        "success_url": return_urls.success_url,
-        "cancel_url": return_urls.cancel_url,
-        "settings": settings,
-    }
     try:
-        session = _create_provider_checkout_session(**provider_kwargs)
+        session = _create_provider_checkout_session(
+            checkout_ref=checkout_ref,
+            provider_idempotency_key=provider_claim.provider_key_digest,
+            price_id=price_id,
+            success_url=return_urls.success_url,
+            cancel_url=return_urls.cancel_url,
+            settings=settings,
+        )
     except Exception:
         try:
-            session = _create_provider_checkout_session(**provider_kwargs)
+            session = _create_provider_checkout_session(
+                checkout_ref=checkout_ref,
+                provider_idempotency_key=provider_claim.provider_key_digest,
+                price_id=price_id,
+                success_url=return_urls.success_url,
+                cancel_url=return_urls.cancel_url,
+                settings=settings,
+            )
         except Exception as exc:
             checkout_command_repo.mark_provider_outcome_unknown(
                 provider_claim,
@@ -1293,12 +1304,12 @@ def project_parent_billing_overview(
         beneficiary_id = _billing_required_text(
             projection.get("beneficiaryId"), "allowance beneficiary"
         )
-        grant = grants_by_beneficiary.get(beneficiary_id)
-        if grant is None:
+        beneficiary_grant = grants_by_beneficiary.get(beneficiary_id)
+        if beneficiary_grant is None:
             raise ValueError("allowance projection is outside the selected grants")
         if (
             projection.get("planId") != effective_plan
-            or projection.get("allowanceVersion") != grant.get("allowance_version")
+            or projection.get("allowanceVersion") != beneficiary_grant.get("allowance_version")
         ):
             raise ValueError("allowance projection does not match the current grant")
         identity = _billing_required_text(
@@ -1322,7 +1333,7 @@ def project_parent_billing_overview(
             or start >= end
         ):
             raise ValueError("allowance window is invalid")
-        current_window = {
+        current_window: dict[str, object] = {
             "weekIdentity": identity,
             "timezone": "Europe/Zurich",
             "utcStart": start.astimezone(timezone.utc).isoformat(),
@@ -1986,11 +1997,14 @@ class _DefaultBillingFactPersistence:
         self._event_registration = event_registration
 
     def register_provider_event(self, **kwargs: object) -> billing_fact_repo.BillingEventResult:
+        object_version = _billing_exact_count(
+            kwargs.get("object_version"), "provider fact version", positive=True
+        )
         return self._event_registration(
             provider_event_id=str(kwargs["provider_event_id"]),
             event_type=str(kwargs["event_type"]),
             provider_object_id=str(kwargs["provider_object_id"]),
-            object_version=int(kwargs["object_version"]),
+            object_version=object_version,
             fact_observed_at=str(kwargs["fact_observed_at"]),
             table=self._table,
         )
@@ -2257,7 +2271,10 @@ def _activation_items(
 ) -> tuple[dict[str, object], list[dict[str, object]], dict[str, object]]:
     parent_id = str(command["parent_id"])
     plan_id = str(command["plan_id"])
-    plan_version = int(command["plan_version"])
+    plan_version = _billing_exact_count(command.get("plan_version"), "plan version", positive=True)
+    beneficiaries = _billing_sequence(command.get("beneficiary_ids"), "beneficiary ids")
+    if any(not isinstance(beneficiary_id, str) or not beneficiary_id for beneficiary_id in beneficiaries):
+        raise ValueError("beneficiary ids are invalid")
     common: dict[str, object] = {
         "parent_id": parent_id,
         "plan_id": plan_id,
@@ -2279,8 +2296,7 @@ def _activation_items(
             "beneficiary_id": beneficiary_id,
             **common,
         }
-        for beneficiary_id in command["beneficiary_ids"]
-        if isinstance(beneficiary_id, str)
+        for beneficiary_id in beneficiaries
     ]
     allowance = {
         "PK": f"ALLOWANCE_PLAN#{parent_id}",
@@ -2517,7 +2533,7 @@ def process_signed_billing_event(
         response["reconciliationDisposition"] = "awaiting_joint_predicate"
         return response
 
-    plan_version = int(command["plan_version"])
+    plan_version = _billing_exact_count(command.get("plan_version"), "plan version", positive=True)
     allowance_value = command.get("allowance_version")
     allowance_version = (
         allowance_value
@@ -2537,7 +2553,9 @@ def process_signed_billing_event(
         billing_fact_repo.PaidActivationRequest(
             command_id=command_id,
             parent_id=str(command["parent_id"]),
-            expected_command_version=int(command["command_version"]),
+            expected_command_version=_billing_exact_count(
+                command.get("command_version"), "command version", positive=True
+            ),
             provider_customer_id_digest=str(
                 command["provider_customer_id_digest"]
             ),
@@ -2591,9 +2609,15 @@ def _handle_verified_provider_event(event: Mapping[str, object]) -> dict[str, An
     if event_type not in PROVIDER_EVENT_TYPES:
         return {"received": True, "ignored": True, "eventId": event_id, "eventType": event_type}
 
-    event_object = ((event.get("data") or {}).get("object") or {})
-    if not isinstance(event_object, dict):
+    event_data = event.get("data")
+    if not isinstance(event_data, Mapping):
+        raise HTTPException(status_code=400, detail="Provider event data is required")
+    raw_event_object = event_data.get("object")
+    if not isinstance(raw_event_object, Mapping) or any(
+        not isinstance(key, str) for key in raw_event_object
+    ):
         raise HTTPException(status_code=400, detail="Provider event object is required")
+    event_object = dict(raw_event_object)
 
     parent_id = _parent_id_from_provider_object(event_object)
     if not parent_id:
