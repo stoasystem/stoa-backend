@@ -1,7 +1,7 @@
 {
   "schema": "stoa.release.environment-inventory-blocker.v1",
   "status": "BLOCKED",
-  "observed_at": "2026-07-31T11:19:32Z",
+  "observed_at": "2026-07-31T12:00:00Z",
   "scope": "read-only GitHub/AWS/CloudFormation/CDK before-state",
   "github": {
     "authentication": "PASS",
@@ -25,33 +25,60 @@
       }
     ],
     "oidc_subjects": "NOT RUN",
-    "reason_code": "AWS_IAM_TRUST_READ_REQUIRES_UNAVAILABLE_AWS_SESSION"
+    "reason_code": "NO_RELEASE_IAM_ROLE_IS_DISCOVERABLE_WITHOUT_THE_REQUIRED_STAGING_STACK"
   },
   "aws": {
-    "status": "NOT RUN",
+    "status": "BLOCKED",
     "profile": "stoa",
     "region": "eu-central-2",
-    "reason_code": "CODEX_EXECUTION_SESSION_SSO_CACHE_UNAVAILABLE",
-    "account_identity": "NOT RUN",
-    "cloudformation": "NOT RUN",
+    "account_identity": {
+      "result": "PASS",
+      "account_id": "562923011260",
+      "response_sha256": "35bd661e683d7ee63ed53b3725248aad5a81359d2181f44d4a2093e37e90de89"
+    },
+    "expected_staging_stack": {
+      "name": "StoaReleaseStaging",
+      "result": "BLOCKED",
+      "reason_code": "CLOUDFORMATION_STACK_DOES_NOT_EXIST"
+    },
+    "active_stack_inventory": {
+      "result": "PASS",
+      "count": 15,
+      "response_sha256": "b9fc1c5ea53458c0869b379f7416c889efe96383ce3988188b892129a053fc51",
+      "names": [
+        "CDKToolkit",
+        "StoaAiStack",
+        "StoaApiStack",
+        "StoaAuthStack",
+        "StoaDatabaseStack",
+        "StoaFrontendStack",
+        "StoaMonitoringStack",
+        "StoaNotificationStack",
+        "StoaSandboxApiStack",
+        "StoaSandboxAuthStack",
+        "StoaSandboxDatabaseStack",
+        "StoaSandboxNotificationStack",
+        "StoaSandboxStorageStack",
+        "StoaStorageStack",
+        "StoawebStack"
+      ]
+    },
     "lambda_aliases": "NOT RUN",
     "s3_buckets": "NOT RUN",
     "cloudfront_distribution": "NOT RUN",
     "iam_release_roles": "NOT RUN",
-    "cdk_diff": "NOT RUN"
+    "cdk_diff": {
+      "result": "NOT RUN",
+      "infra_commit": "56fc1b1f33cf74fa4d66bfb61aa74dc4404e412b",
+      "reason_code": "BACKEND_LAMBDA_DIST_MANIFEST_MISSING"
+    }
   },
   "source_refs": {
-    "status": "NOT ISSUED",
-    "required": [
-      "evidence/phase-474/frontend-source-ref.json",
-      "evidence/phase-474/infra-source-ref.json"
-    ],
-    "historical_owner_approved_handoff": {
-      "backend_commit": "6b3b464af7f4a37f187d9d75dea6b62ad0439624",
-      "frontend_commit": "13c4d1067492eead665999d2b43cd359141a6dd6",
-      "infra_commit": "6d545ad8cae8d2fe67087f298d9d5fc7cc29b3f6"
-    },
-    "reason_code": "CURRENT_OWNER_APPROVED_SOURCE_REFS_MISSING"
+    "status": "PASS",
+    "frontend_ref_sha256": "f2cd0da55bee40a9b7b2c467c6bd63670949be552eb686278040c690baed23bd",
+    "infra_ref_sha256": "8a7350ecbd90b13eb906e7951dc5ba86056e374ac7fcc8b37591d2d974bebe64",
+    "frontend_commit": "a1ad044175517eb1896b386519640f938406ee49",
+    "infra_commit": "56fc1b1f33cf74fa4d66bfb61aa74dc4404e412b"
   },
   "mutation": {
     "github_configuration": "NOT RUN",
@@ -65,7 +92,7 @@
   },
   "blockers": [
     "GITHUB_ENVIRONMENTS_AND_RULESETS_MISSING",
-    "CODEX_EXECUTION_SESSION_SSO_CACHE_UNAVAILABLE",
-    "CURRENT_OWNER_APPROVED_SOURCE_REFS_MISSING"
+    "CLOUDFORMATION_STAGING_STACK_DOES_NOT_EXIST",
+    "BACKEND_LAMBDA_DIST_MANIFEST_MISSING"
   ]
 }

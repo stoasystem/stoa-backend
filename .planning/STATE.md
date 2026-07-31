@@ -8,7 +8,7 @@ status: executing
 stopped_at: Blocked 474-33-PLAN.md
 last_updated: "2026-07-31T12:00:48.591Z"
 last_activity: 2026-07-31
-last_activity_desc: "Plan 474-76 completed: exact-ref frontend callers and owner-approved current frontend/infra source refs are retained; the exact infra-root `.DS_Store` exception is tested and no other drift is accepted. Plan 474-33's external inventory remains BLOCKED."
+last_activity_desc: "Plan 474-76 completed and Plan 474-33 revalidated AWS identity/current source refs, but GitHub protection is absent, StoaReleaseStaging does not exist, and source CDK preflight lacks the backend dist manifest."
 progress:
   total_phases: 10
   completed_phases: 3
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 Phase: 474 (deterministic-verification-and-gated-delivery) — EXECUTING
 Next retained plan: 474-33 (read-only provider/CDK inventory)
 Status: Executing Phase 474
-Last activity: 2026-07-31 — Plan 474-76 completed: exact-ref frontend callers and owner-approved current frontend/infra source refs are retained; the exact infra-root `.DS_Store` exception is tested and no other drift is accepted. Plan 474-33's external inventory remains BLOCKED.
+Last activity: 2026-07-31 — Plan 474-76 completed; Plan 474-33 has AWS identity and current source refs, but remains BLOCKED on GitHub protection, missing StoaReleaseStaging, and the missing backend dist manifest for CDK diff.
 Phases 477-481 around exact remaining gaps
 
 ## Accumulated Context
@@ -165,10 +165,10 @@ Phases 477-481 around exact remaining gaps
 
 ## Operator Next Steps
 
-- Resolve the remaining Wave 18 blocker before any later plan: make the existing AWS SSO
-  session visible to the execution environment and configure all six GitHub
-  environments/rulesets plus main protection for Plan 474-33. Current frontend/infra
-  source refs are now retained in `evidence/phase-474/`; do not regenerate the 47 removed plans.
+- Resolve the remaining Wave 18 blocker before any later plan: configure all six GitHub
+  environments/rulesets plus main protection, provide the allowlisted StoaReleaseStaging
+  stack through the later staging-only authority, and provide the backend Lambda dist
+  manifest required for a source-bound CDK diff. Do not regenerate the 47 removed plans.
 
 - No retained plan is presently dependency-ready: 474-34 and 474-79 directly require
   474-33; 474-80 requires both; and 474-35 through 474-38 depend transitively on them.
@@ -180,7 +180,7 @@ Phases 477-481 around exact remaining gaps
 ## Session
 
 **Last Date:** 2026-07-31T11:59:49.041Z
-**Stopped At:** Blocked 474-33-PLAN.md — GitHub environment/ruleset/main protection remain missing and this execution session cannot access the existing AWS SSO cache. Plan 474-76 source refs are issued under the exact root-only infra `.DS_Store` metadata policy.
+**Stopped At:** Blocked 474-33-PLAN.md — GitHub environment/ruleset/main protection remain missing; StoaReleaseStaging does not exist; source CDK preflight lacks the required backend Lambda dist manifest. Plan 474-76 source refs are issued under the exact root-only infra `.DS_Store` metadata policy.
 **Resume File:** 474-33-PLAN.md
 
 ## Performance Metrics
