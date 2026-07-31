@@ -6,7 +6,8 @@ from html import escape
 import json
 import logging
 import re
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, Protocol, runtime_checkable
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
@@ -23,6 +24,29 @@ from stoa.db.repositories import (
 from stoa.services import notify_service, report_artifact_service
 
 logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _QueryTable(Protocol):
+    def query(self, **kwargs: object) -> object: ...
+
+
+def _repository_response(value: object, *, label: str) -> dict[str, object]:
+    if not isinstance(value, Mapping) or any(not isinstance(key, str) for key in value):
+        raise RuntimeError(f"{label} repository response is malformed")
+    return dict(value)
+
+
+def _repository_items(response: Mapping[str, object], *, label: str) -> list[dict[str, object]]:
+    raw_items = response.get("Items")
+    if not isinstance(raw_items, list) or any(not isinstance(item, Mapping) for item in raw_items):
+        raise RuntimeError(f"{label} repository response is malformed")
+    return [dict(item) for item in raw_items]
 
 _MAX_REPORT_WEAK_TOPICS = 5
 _MAX_REPORT_ACTIVITIES = 6
@@ -611,6 +635,8 @@ def _is_in_window(value: Any, start: date, end: date) -> bool:
 
 def _scan_children_for_parent(parent_id: str) -> list[dict[str, Any]]:
     table = get_table()
+    if not isinstance(table, _ScanTable):
+        raise RuntimeError("report table scan dependency is unavailable")
     scan_kwargs: dict[str, Any] = {
         "FilterExpression": "#pid = :pid AND #role = :role",
         "ExpressionAttributeNames": {"#pid": "parent_id", "#role": "role"},
@@ -618,12 +644,14 @@ def _scan_children_for_parent(parent_id: str) -> list[dict[str, Any]]:
     }
     children: list[dict[str, Any]] = []
     while True:
-        result = table.scan(**scan_kwargs)
-        children.extend(result.get("Items", []))
+        result = _repository_response(table.scan(**scan_kwargs), label="report child scan")
+        children.extend(_repository_items(result, label="report child scan"))
         last_key = result.get("LastEvaluatedKey")
-        if not last_key:
+        if last_key is None:
             return children
-        scan_kwargs["ExclusiveStartKey"] = last_key
+        if not isinstance(last_key, Mapping):
+            raise RuntimeError("report child scan pagination is malformed")
+        scan_kwargs["ExclusiveStartKey"] = dict(last_key)
 
 
 def _get_linked_student_profile(parent_id: str, student_id: str) -> dict[str, Any]:
@@ -635,25 +663,30 @@ def _get_linked_student_profile(parent_id: str, student_id: str) -> dict[str, An
 
 def _list_all_questions(student_id: str) -> list[dict[str, Any]]:
     questions: list[dict[str, Any]] = []
-    last_key = None
+    last_key: dict[str, object] | None = None
     while True:
         result = question_repo.list_by_student(student_id, limit=500, last_key=last_key)
-        questions.extend(result.get("Items", []))
-        last_key = result.get("LastEvaluatedKey")
-        if not last_key:
+        questions.extend(_repository_items(result, label="student questions"))
+        raw_last_key = result.get("LastEvaluatedKey")
+        if raw_last_key is None:
             return questions
+        if not isinstance(raw_last_key, Mapping):
+            raise RuntimeError("student question pagination is malformed")
+        last_key = dict(raw_last_key)
 
 
 def _list_conversations_for_student(student_id: str) -> list[dict[str, Any]]:
     table = get_table()
-    result = table.query(
+    if not isinstance(table, _QueryTable):
+        raise RuntimeError("report table query dependency is unavailable")
+    result = _repository_response(table.query(
         IndexName="GSI-StudentId",
         KeyConditionExpression=Key("student_id").eq(student_id),
         FilterExpression=Attr("entity_type").eq("conversation"),
         Limit=100,
         ScanIndexForward=False,
-    )
-    return result.get("Items", [])
+    ), label="student conversations")
+    return _repository_items(result, label="student conversations")
 
 
 def _question_requested_teacher_help(question: dict[str, Any]) -> bool:
