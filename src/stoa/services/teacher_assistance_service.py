@@ -24,7 +24,8 @@ def build_summary_seed(
 
     created_at = now_iso()
     topic_labels = _topic_labels(question)
-    ai_response = question.get("ai_response") if isinstance(question.get("ai_response"), dict) else {}
+    raw_ai_response = question.get("ai_response")
+    ai_response: dict[str, Any] = raw_ai_response if isinstance(raw_ai_response, dict) else {}
     seed = {
         "entity_type": notification_repo.SUMMARY_SEED_ENTITY,
         "summary_id": f"assist-{uuid4().hex}",
