@@ -1711,34 +1711,29 @@ async def request_teacher(
     table = get_table()
     mutations: list[question_repo.QuestionMutationResult] = []
 
+    def persist_case(allowance_operations: tuple[dict[str, Any], ...]) -> bool:
+        if is_replay:
+            return False
+        mutation = question_repo.mutate_question(
+            item,
+            status=QuestionStatus.ESCALATED.value,
+            allowed_source_statuses=_ESCALATION_SOURCE_STATES,
+            additional_operations=allowance_operations,
+            extra_attrs={
+                "teacher_requested_at": item.get("teacher_requested_at") or now,
+                "queue_visible_at": item.get("queue_visible_at") or now,
+            },
+            table=table,
+        )
+        mutations.append(mutation)
+        return mutation.disposition is question_repo.QuestionMutationDisposition.APPLIED
+
     admission = teacher_support_allowance_service.admit_teacher_support_case(
         support_case_id=question_id,
         case_kind="question",
         beneficiary_id=student_id,
         observed_at=observed_at,
-        persist_case=lambda allowance_operations: (
-            False
-            if is_replay
-            else (
-                mutations.append(
-                    question_repo.mutate_question(
-                        item,
-                        status=QuestionStatus.ESCALATED.value,
-                        allowed_source_statuses=_ESCALATION_SOURCE_STATES,
-                        additional_operations=allowance_operations,
-                        extra_attrs={
-                            "teacher_requested_at": (
-                                item.get("teacher_requested_at") or now
-                            ),
-                            "queue_visible_at": item.get("queue_visible_at") or now,
-                        },
-                        table=table,
-                    )
-                )
-                or mutations[-1].disposition
-                is question_repo.QuestionMutationDisposition.APPLIED
-            )
-        ),
+        persist_case=persist_case,
         table=table,
     )
     if (
@@ -1804,16 +1799,34 @@ async def request_teacher(
     operation_id = str(
         uuid.uuid5(uuid.NAMESPACE_URL, f"stoa:teacher-support:question:{question_id}")
     )
+    raw_generation = item.get("account_fence_generation")
+    subject = item.get("subject")
+    if raw_generation is None:
+        # Historical question rows predate the account-fence field; absence is a
+        # supported legacy state, while an explicitly malformed value is refused.
+        generation = 1
+    elif type(raw_generation) is int and raw_generation > 0:
+        generation = raw_generation
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Question state is not writable",
+        )
+    if not isinstance(subject, str) or not subject:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Question state is not writable",
+        )
     notify_service.enqueue_teacher_request(
         question_id=question_id,
         operation_id=operation_id,
-        generation=int(item.get("account_fence_generation") or 1),
+        generation=generation,
         owner_id=student_id,
     )
     notification_service.emit_teacher_requested(
         question_id=question_id,
         student_id=student_id,
-        subject=item["subject"],
+        subject=subject,
     )
     try:
         dispatch = teacher_dispatch_service.dispatch_question(question_id, question=dispatch_question, now=now)

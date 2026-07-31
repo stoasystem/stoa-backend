@@ -1,5 +1,7 @@
 """Opaque, owner-bound file upload and saved attachment routes."""
 
+from typing import Never
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
@@ -67,7 +69,7 @@ _upload_actor_dependency.authorization_specs = (  # type: ignore[attr-defined]
 )
 
 
-def _raise_safe(error: AttachmentDecisionError, correlation_id: str) -> None:
+def _raise_safe(error: AttachmentDecisionError, correlation_id: str) -> Never:
     error.correlation_id = correlation_id
     headers = {"X-Correlation-ID": correlation_id}
     if error.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE:
@@ -79,7 +81,7 @@ def _raise_safe(error: AttachmentDecisionError, correlation_id: str) -> None:
     ) from error
 
 
-def _raise_security(error: SecurityDecisionError) -> None:
+def _raise_security(error: SecurityDecisionError) -> Never:
     headers = {"X-Correlation-ID": error.correlation_id} if error.correlation_id else None
     if error.code is SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE:
         headers = {**(headers or {}), "Retry-After": "30"}
