@@ -36,6 +36,14 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def _repository_items(response: dict[str, object], *, label: str) -> list[dict[str, object]]:
+    """Read only a well-formed repository list; analytics never guess missing rows."""
+    raw_items = response.get("Items")
+    if not isinstance(raw_items, list) or any(not isinstance(item, dict) for item in raw_items):
+        raise RuntimeError(f"{label} repository response is malformed")
+    return [dict(item) for item in raw_items]
+
+
 def build_support_sla_analytics(
     *,
     settings: Settings,
@@ -51,11 +59,14 @@ def build_support_sla_analytics(
     )
     deliveries = [
         support_destination_service.support_handoff_delivery_response(item)
-        for item in result.get("Items", [])
+        for item in _repository_items(result, label="support delivery summaries")
     ]
     messages = [
         support_crm_message_response(item)
-        for item in report_repo.list_support_crm_message_events(limit=limit).get("Items", [])
+        for item in _repository_items(
+            report_repo.list_support_crm_message_events(limit=limit),
+            label="support CRM message events",
+        )
     ]
     now = datetime.now(timezone.utc)
     status_counts: dict[str, int] = {}
@@ -159,6 +170,7 @@ def send_support_message(
         return None
     delivery = support_destination_service.support_handoff_delivery_response(record)
     safe_template = _safe_text(template)
+    template_key = safe_template if safe_template is not None else "unknown"
     safe_destination = _safe_text(destination)
     now = now_iso()
     refusal_reasons: list[str] = []
@@ -170,9 +182,9 @@ def send_support_message(
         refusal_reasons.append("support CRM destination is not approved")
     if safe_destination not in MESSAGE_DESTINATIONS:
         refusal_reasons.append("support CRM destination is unsupported")
-    if safe_template not in MESSAGE_TEMPLATES:
+    if template_key not in MESSAGE_TEMPLATES:
         refusal_reasons.append("support CRM template is unsupported")
-    elif safe_template not in set(settings.support_crm_approved_templates):
+    elif template_key not in set(settings.support_crm_approved_templates):
         refusal_reasons.append("support CRM template is not approved")
     if customer_opted_out or delivery_id in set(settings.support_crm_opt_out_delivery_ids):
         refusal_reasons.append("customer opted out of support CRM messaging")
@@ -186,9 +198,9 @@ def send_support_message(
         outcome = "sent"
 
     message_id = hashlib.sha256(
-        f"{delivery_id}:{safe_template}:{safe_destination}:{now}:{request_id or ''}".encode()
+        f"{delivery_id}:{template_key}:{safe_destination}:{now}:{request_id or ''}".encode()
     ).hexdigest()[:32]
-    template_info = MESSAGE_TEMPLATES.get(safe_template, {"version": "unknown", "trigger": ""})
+    template_info = MESSAGE_TEMPLATES.get(template_key, {"version": "unknown", "trigger": ""})
     event = {
         "message_id": message_id,
         "event_at": now,
@@ -197,7 +209,7 @@ def send_support_message(
         "actor": _safe_text(actor) or "unknown-admin",
         "source": "admin_api",
         "destination": safe_destination,
-        "template": safe_template,
+        "template": template_key,
         "template_version": template_info.get("version"),
         "trigger": _safe_text(trigger) or template_info.get("trigger"),
         "outcome": outcome,
@@ -287,4 +299,6 @@ def _safe_text(value: object) -> str | None:
     if value is None:
         return None
     text = report_recovery_service.redact_private_artifact_text(str(value))
+    if text is None:
+        return None
     return text[:500]

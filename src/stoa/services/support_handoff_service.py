@@ -121,7 +121,7 @@ def build_package(
         refusal_reasons.extend(validation_failures)
     validation_status = "refused" if refusal_reasons else "passed"
     destination_status = "refused" if refusal_reasons else "ready"
-    package = {
+    package: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "package_id": package_id,
         "generated_at": generated_at,
@@ -254,7 +254,8 @@ def _release_reference_id(bundle: dict[str, Any]) -> str:
 
 def _release_validation_result(bundle: dict[str, Any]) -> dict[str, Any]:
     validated = release_evidence_service.validate_release_bundle(bundle)
-    privacy = validated.get("privacy") if isinstance(validated.get("privacy"), dict) else {}
+    raw_privacy = validated.get("privacy")
+    privacy = raw_privacy if isinstance(raw_privacy, dict) else {}
     return {
         "schema_version": validated.get("schema_version"),
         "validated_at": validated.get("validated_at"),
