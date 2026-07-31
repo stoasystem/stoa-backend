@@ -139,3 +139,218 @@ jobs:
             --frontend-root "$GITHUB_WORKSPACE/stoa-frontend" \
             --infra-root "$GITHUB_WORKSPACE/stoa-infra" \
             --output "$EVIDENCE_DIR/formal.json"
+
+      - name: Stage immutable formal evidence
+        working-directory: stoa-backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 0700 release-evidence
+          install -m 0600 "$EVIDENCE_DIR/candidate.json" release-evidence/candidate.json
+          install -m 0600 "$EVIDENCE_DIR/formal.json" release-evidence/formal.json
+
+      - name: Upload immutable formal evidence
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: formal-evidence
+          path: stoa-backend/release-evidence
+          if-no-files-found: error
+          retention-days: 90
+
+  immutable_build:
+    name: Bind one immutable release set
+    needs: [formal]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      backend_artifact_sha256: ${{ steps.build.outputs.backend_artifact_sha256 }}
+    steps:
+      - name: Check out exact backend release source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: stoasystem/stoa-backend
+          ref: ${{ inputs.backend_sha }}
+          path: stoa-backend
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Download immutable formal evidence
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: formal-evidence
+          path: stoa-backend/release-evidence
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: 3.12.13
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version: 0.11.16
+          enable-cache: false
+
+      - name: Build one immutable backend artifact
+        id: build
+        working-directory: stoa-backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s release-evidence/candidate.json
+          test -s release-evidence/formal.json
+          uv sync --frozen
+          uv run python scripts/build_lambda_dist.py \
+            --repo-root . \
+            --dist "$RUNNER_TEMP/stoa-lambda-dist" \
+            --zip "$RUNNER_TEMP/stoa-lambda.zip"
+          artifact_sha256="$(sha256sum "$RUNNER_TEMP/stoa-lambda.zip" | cut -d ' ' -f 1)"
+          [[ "$artifact_sha256" =~ ^[0-9a-f]{64}$ ]] || exit 1
+          printf 'backend_artifact_sha256=%s\n' "$artifact_sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Upload immutable backend artifact
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: backend-lambda-artifact
+          path: ${{ runner.temp }}/stoa-lambda.zip
+          if-no-files-found: error
+          retention-days: 90
+
+  staging_substrate:
+    name: Protected staging substrate inventory boundary
+    needs: [immutable_build]
+    environment: staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out exact backend release source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: stoasystem/stoa-backend
+          ref: ${{ inputs.backend_sha }}
+          path: stoa-backend
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Download immutable backend artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: backend-lambda-artifact
+          path: release-artifact
+      - name: Require protected staging receipt controller
+        working-directory: stoa-backend
+        env:
+          BACKEND_ARTIFACT_SHA256: ${{ needs.immutable_build.outputs.backend_artifact_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f scripts/release_environment.py
+          sha256sum scripts/release_environment.py > /dev/null
+          test -f "$GITHUB_WORKSPACE/release-artifact/stoa-lambda.zip"
+          test "$(sha256sum "$GITHUB_WORKSPACE/release-artifact/stoa-lambda.zip" | cut -d ' ' -f 1)" = "$BACKEND_ARTIFACT_SHA256"
+          python scripts/release_environment.py --help > /dev/null
+
+  staging_deploy:
+    name: Protected staging deployment eligibility
+    needs: [staging_substrate]
+    environment: staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out exact backend release source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: stoasystem/stoa-backend
+          ref: ${{ inputs.backend_sha }}
+          path: stoa-backend
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Download immutable backend artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: backend-lambda-artifact
+          path: release-artifact
+      - name: Require immutable staging controller receipt
+        working-directory: stoa-backend
+        env:
+          BACKEND_ARTIFACT_SHA256: ${{ needs.immutable_build.outputs.backend_artifact_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f scripts/release_environment.py
+          sha256sum scripts/release_environment.py > /dev/null
+          test -f "$GITHUB_WORKSPACE/release-artifact/stoa-lambda.zip"
+          test "$(sha256sum "$GITHUB_WORKSPACE/release-artifact/stoa-lambda.zip" | cut -d ' ' -f 1)" = "$BACKEND_ARTIFACT_SHA256"
+          python scripts/release_environment.py --help > /dev/null
+
+  staging_smoke:
+    name: Protected staging smoke eligibility
+    needs: [staging_deploy]
+    environment: staging-smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out exact backend release source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: stoasystem/stoa-backend
+          ref: ${{ inputs.backend_sha }}
+          path: stoa-backend
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Download immutable backend artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: backend-lambda-artifact
+          path: release-artifact
+      - name: Require staging smoke controller receipt
+        working-directory: stoa-backend
+        env:
+          BACKEND_ARTIFACT_SHA256: ${{ needs.immutable_build.outputs.backend_artifact_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f scripts/release_environment.py
+          sha256sum scripts/release_environment.py > /dev/null
+          test -f "$GITHUB_WORKSPACE/release-artifact/stoa-lambda.zip"
+          test "$(sha256sum "$GITHUB_WORKSPACE/release-artifact/stoa-lambda.zip" | cut -d ' ' -f 1)" = "$BACKEND_ARTIFACT_SHA256"
+          python scripts/release_environment.py --help > /dev/null
+
+  production_eligibility:
+    name: Protected owner production eligibility
+    needs: [staging_smoke]
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Record protected owner approval eligibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' 'sole-owner-self-approval=true' 'production-mutation=NOT RUN'
+
+  production_not_run:
+    name: Record production operations as not run
+    needs: [production_eligibility]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Emit exact production obligations
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            'production-infrastructure=NOT RUN' \
+            'production-deploy=NOT RUN' \
+            'production-smoke=NOT RUN' \
+            'production-rollback=NOT RUN'

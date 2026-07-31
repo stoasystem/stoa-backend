@@ -1,0 +1,34 @@
+{
+  "authority_repository": "stoasystem/stoa-backend",
+  "build_once": true,
+  "forbidden": [
+    "continue-on-error",
+    "always()",
+    "configure-aws-credentials",
+    "secrets."
+  ],
+  "github_environments": [
+    "staging",
+    "staging-smoke",
+    "staging-rollback",
+    "production",
+    "production-smoke",
+    "production-rollback"
+  ],
+  "production_mutation": "NOT RUN",
+  "required_jobs": [
+    "formal",
+    "immutable_build",
+    "staging_substrate",
+    "staging_deploy",
+    "staging_smoke",
+    "production_eligibility",
+    "production_not_run"
+  ],
+  "schema": "stoa.release.workflow-policy.v1",
+  "sole_owner_self_approval": true,
+  "staging_environments": [
+    "staging",
+    "staging-smoke"
+  ]
+}

@@ -29,6 +29,20 @@ def _policy() -> dict[str, Any]:
     return value
 
 
+def _controller_step(job: dict[str, Any]) -> dict[str, Any]:
+    steps = job["steps"]
+    assert isinstance(steps, list)
+    matches = [
+        step
+        for step in steps
+        if isinstance(step, dict)
+        and isinstance(step.get("run"), str)
+        and "release_environment.py" in step["run"]
+    ]
+    assert len(matches) == 1
+    return matches[0]
+
+
 def test_backend_is_the_single_dependency_closed_delivery_authority() -> None:
     _, workflow = _workflow()
     jobs = workflow["jobs"]
@@ -70,7 +84,7 @@ def test_failure_tamper_or_missing_receipt_cuts_all_delivery_edges() -> None:
         assert "always()" not in serialized
         assert "continue-on-error" not in serialized
     for name in ("staging_substrate", "staging_deploy", "staging_smoke"):
-        run = jobs[name]["steps"][0]["run"]
+        run = _controller_step(jobs[name])["run"]
         assert "test -f" in run
         assert "sha256sum" in run
         assert "release_environment.py" in run
@@ -105,9 +119,16 @@ def test_workflow_policy_is_closed_and_matches_the_delivery_dag() -> None:
             "production_not_run",
         ],
         "staging_environments": ["staging", "staging-smoke"],
+        "github_environments": [
+            "staging",
+            "staging-smoke",
+            "staging-rollback",
+            "production",
+            "production-smoke",
+            "production-rollback",
+        ],
         "sole_owner_self_approval": True,
         "build_once": True,
         "production_mutation": "NOT RUN",
         "forbidden": ["continue-on-error", "always()", "configure-aws-credentials", "secrets."],
     }
-
