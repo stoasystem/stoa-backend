@@ -1,0 +1,40 @@
+{
+  "schema": "stoa.release.source-ref-resolution.v1",
+  "status": "RESOLVED",
+  "resolved_at": "2026-07-31T11:56:56Z",
+  "resolves": {
+    "path": "evidence/phase-474/474-76-source-ref-issuance-blocked.json",
+    "status": "BLOCKED",
+    "reason_code": "INFRA_WORKTREE_NOT_CLEAN"
+  },
+  "owner_policy": {
+    "provenance": "project-owner explicit Codex instruction",
+    "scope": "only the exact infrastructure root .DS_Store is non-source macOS metadata; no other tracked or untracked worktree drift is allowed",
+    "source_ref_issuance": "LOCAL_AUDITABLE_ONLY"
+  },
+  "cleanliness": {
+    "frontend": "CLEAN",
+    "infra": {
+      "status": "ALLOWLISTED_ROOT_METADATA_ONLY",
+      "path": ".DS_Store"
+    },
+    "other_tracked_or_untracked_drift": "FAIL_CLOSED"
+  },
+  "source_refs": {
+    "frontend": {
+      "path": "evidence/phase-474/frontend-source-ref.json",
+      "sha256": "f2cd0da55bee40a9b7b2c467c6bd63670949be552eb686278040c690baed23bd"
+    },
+    "infra": {
+      "path": "evidence/phase-474/infra-source-ref.json",
+      "sha256": "8a7350ecbd90b13eb906e7951dc5ba86056e374ac7fcc8b37591d2d974bebe64"
+    }
+  },
+  "external_operations": {
+    "push": "NOT RUN",
+    "workflow_dispatch": "NOT RUN",
+    "provider_or_aws_mutation": "NOT RUN",
+    "deploy_or_staging_mutation": "NOT RUN",
+    "production": "NOT RUN"
+  }
+}

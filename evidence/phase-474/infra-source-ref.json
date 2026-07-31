@@ -1,0 +1,18 @@
+{
+  "approval": {
+    "approved_at": "2026-07-31T11:56:56Z",
+    "provenance": "project-owner-explicit-codex-instruction",
+    "scope": [
+      "local-auditable-source-ref-receipts-only",
+      "retain-infra-root-ds-store-metadata",
+      "no-push-workflow-dispatch-or-provider-mutation",
+      "no-deploy-staging-or-production-operation"
+    ]
+  },
+  "commit": "56fc1b1f33cf74fa4d66bfb61aa74dc4404e412b",
+  "lock_path": "uv.lock",
+  "lock_sha256": "8c84a57b55b663b315f7d1b689e4f8ef6eba2c10c5b357d8914932731778bfd9",
+  "name": "infra",
+  "schema": "stoa.release.source-ref.v1",
+  "tree": "df1ec9fbda8506b86d7853d3d8de5faa59d23cf8"
+}
