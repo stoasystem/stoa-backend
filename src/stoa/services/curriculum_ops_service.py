@@ -98,7 +98,7 @@ def create_lesson_draft(payload: dict[str, Any], user: dict[str, Any]) -> dict[s
 
     now = _now()
     version_id = f"lessonv_{uuid4().hex}"
-    version = {
+    version: curriculum_ops_repo.CurriculumItem = {
         "public_id": public_id,
         "version_id": version_id,
         "content_type": "lesson_bundle",
@@ -322,7 +322,10 @@ def rollback(
         raise HTTPException(status_code=409, detail="stale_pointer") from exc
     curriculum_ops_repo.put_published_projection(version, manifest)
     curriculum_analytics_service.record_publish_event(version, operation="publish")
-    _audit(public_id, user, "rollback", pointer.get("published_version_id"), version_id, version_id, reason)
+    published_version_id = pointer.get("published_version_id")
+    if not isinstance(published_version_id, str):
+        raise RuntimeError("invalid curriculum published pointer")
+    _audit(public_id, user, "rollback", published_version_id, version_id, version_id, reason)
     return {
         "status": "rolled_back",
         "manifest": _manifest_response(manifest),
@@ -493,7 +496,8 @@ def _coerce_capabilities(value: Any) -> set[str]:
 def _patch_lesson(public_id: str, current: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     lesson = dict(current)
     lesson["lesson_id"] = public_id
-    patch = payload.get("lesson") if isinstance(payload.get("lesson"), dict) else payload
+    raw_patch = payload.get("lesson")
+    patch: dict[str, Any] = raw_patch if isinstance(raw_patch, dict) else payload
     for source, target in LESSON_FIELD_ALIASES.items():
         if source in patch and patch[source] is not None:
             lesson[target] = patch[source]
@@ -610,8 +614,8 @@ def _diff_dicts(prefix: str, before: dict[str, Any], after: dict[str, Any]) -> l
 
 
 def _diff_exercises(before: list[dict[str, Any]], after: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    before_by_id = {item.get("exercise_id"): item for item in before}
-    after_by_id = {item.get("exercise_id"): item for item in after}
+    before_by_id = {_exercise_id(item): item for item in before}
+    after_by_id = {_exercise_id(item): item for item in after}
     changes = []
     for exercise_id in sorted(set(before_by_id) | set(after_by_id)):
         if exercise_id not in before_by_id:
@@ -621,6 +625,13 @@ def _diff_exercises(before: list[dict[str, Any]], after: list[dict[str, Any]]) -
         else:
             changes.extend(_diff_dicts(f"exercises.{exercise_id}", before_by_id[exercise_id], after_by_id[exercise_id]))
     return changes
+
+
+def _exercise_id(item: dict[str, Any]) -> str:
+    exercise_id = item.get("exercise_id")
+    if not isinstance(exercise_id, str) or not exercise_id:
+        raise RuntimeError("invalid curriculum exercise")
+    return exercise_id
 
 
 def _manifest(

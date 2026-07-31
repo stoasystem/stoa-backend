@@ -225,7 +225,7 @@ def _safe_record(
 ) -> None:
     if not public_id or signal_type not in QUALITY_SIGNALS:
         return
-    item = {
+    item: curriculum_analytics_repo.CurriculumSignalItem = {
         "signal_id": f"signal_{uuid4().hex}",
         "signal_type": signal_type,
         "public_id": public_id,

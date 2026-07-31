@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 import json
 from typing import Any
 
@@ -171,7 +171,7 @@ def build_exercise_preview(raw: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def build_curriculum_lesson_preview(
-    raw: Mapping[str, Any], exercises: list[Mapping[str, Any]]
+    raw: Mapping[str, Any], exercises: Sequence[Mapping[str, Any]]
 ) -> dict[str, Any]:
     """Build answer-free curriculum detail, including all nested exercises."""
     return _dump(

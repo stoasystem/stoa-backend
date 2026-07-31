@@ -109,7 +109,8 @@ def _normalize_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
 
 def _normalize_row(row: dict[str, Any], index: int) -> dict[str, Any]:
     public_id = _clean_id(row.get("publicLessonId") or row.get("public_lesson_id"))
-    lesson_input = row.get("lesson") if isinstance(row.get("lesson"), dict) else row
+    raw_lesson = row.get("lesson")
+    lesson_input: dict[str, Any] = raw_lesson if isinstance(raw_lesson, dict) else row
     lesson = curriculum_ops_service._patch_lesson(public_id, {}, lesson_input)  # noqa: SLF001
     lesson.setdefault("subject_id", row.get("subjectId") or row.get("subject_id"))
     lesson.setdefault("topic_id", row.get("topicId") or row.get("topic_id"))
@@ -140,6 +141,8 @@ def _normalize_row(row: dict[str, Any], index: int) -> dict[str, Any]:
 def _analyze_row(row: dict[str, Any]) -> dict[str, Any]:
     pointer = curriculum_ops_repo.get_pointer(row["publicLessonId"]) or {}
     published_version_id = pointer.get("published_version_id")
+    if published_version_id is not None and not isinstance(published_version_id, str):
+        raise RuntimeError("invalid curriculum published pointer")
     current_version = (
         curriculum_ops_repo.get_version(row["publicLessonId"], published_version_id)
         if published_version_id
