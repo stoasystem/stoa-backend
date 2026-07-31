@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Mapping, Protocol, SupportsInt
+from typing import Mapping, Protocol, Sequence, SupportsInt
 
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.tokens import VerifiedAccessToken
@@ -78,7 +78,7 @@ class IdentityRepository(Protocol):
 
     async def get_account(self, user_id: str) -> Mapping[str, object] | None: ...
 
-    async def get_current_grants(self, user_id: str) -> list[dict[str, object]]: ...
+    async def get_current_grants(self, user_id: str) -> Sequence[Mapping[str, object]]: ...
 
 
 _GROUP_ROLES = {
