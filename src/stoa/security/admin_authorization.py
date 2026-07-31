@@ -286,12 +286,14 @@ def _provider_refs(
             job = report_repo.get_recovery_job(str(job_id))
             if not job:
                 raise _ResolvedTargetNotFound
-            filters = job.get("filters") or {}
+            filters_value = job.get("filters")
+            if not isinstance(filters_value, Mapping):
+                raise _ResolvedTargetNotFound
             coordinate_maps.append({
                 key: str(value) for key, value in {
                     "job_id": job_id,
-                    "parent_id": filters.get("parent_id"),
-                    "student_id": filters.get("student_id"),
+                    "parent_id": filters_value.get("parent_id"),
+                    "student_id": filters_value.get("student_id"),
                 }.items() if value not in (None, "")
             })
         fixture = _read_typed_path(body, "fixture")
@@ -615,9 +617,20 @@ async def _target(
                     detail=error.public_body(),
                     headers={"X-Correlation-ID": correlation_id},
                 )
-            filters = job.get("filters") or {}
-            values.setdefault("student_id", filters.get("student_id"))
-            values.setdefault("parent_id", filters.get("parent_id"))
+            filters_value = job.get("filters")
+            if not isinstance(filters_value, Mapping):
+                error = SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND, correlation_id)
+                raise HTTPException(
+                    error.status_code,
+                    detail=error.public_body(),
+                    headers={"X-Correlation-ID": correlation_id},
+                )
+            student_id = filters_value.get("student_id")
+            parent_id = filters_value.get("parent_id")
+            if isinstance(student_id, str):
+                values.setdefault("student_id", student_id)
+            if isinstance(parent_id, str):
+                values.setdefault("parent_id", parent_id)
         if values.get("delivery_id"):
             from stoa.db.repositories import report_repo
 
@@ -631,8 +644,12 @@ async def _target(
                     detail=error.public_body(),
                     headers={"X-Correlation-ID": correlation_id},
                 )
-            values.setdefault("student_id", delivery.get("student_id"))
-            values.setdefault("parent_id", delivery.get("parent_id"))
+            student_id = delivery.get("student_id")
+            parent_id = delivery.get("parent_id")
+            if isinstance(student_id, str):
+                values.setdefault("student_id", student_id)
+            if isinstance(parent_id, str):
+                values.setdefault("parent_id", parent_id)
     except HTTPException:
         raise
     except Exception as exc:
