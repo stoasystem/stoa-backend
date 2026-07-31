@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, Protocol, runtime_checkable
 
 from stoa.config import Settings
 from stoa.db.dynamodb import get_table
@@ -20,6 +21,17 @@ PLAN_RANK = {
     SubscriptionTier.TEACHER_SUPPORTED.value: 2,
     SubscriptionTier.FAMILY.value: 3,
 }
+
+
+@runtime_checkable
+class _GetTable(Protocol):
+    def get_item(self, **kwargs: object) -> object: ...
+
+
+def _billing_response(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise RuntimeError("billing repository response is malformed")
+    return value
 
 
 def resolve_student_entitlement(
@@ -243,17 +255,33 @@ def _active_parent_binding(parent_id: str | None, student_id: str) -> dict[str, 
 def _get_billing_item(parent_id: str | None) -> dict[str, Any] | None:
     if not parent_id:
         return None
-    response = get_table().get_item(
+    table = get_table()
+    if not isinstance(table, _GetTable):
+        raise RuntimeError("billing repository dependency is unavailable")
+    response = _billing_response(table.get_item(
         Key={"PK": f"SUBSCRIPTION_BILLING#{parent_id}", "SK": "SUMMARY"}
-    )
+    ))
     item = response.get("Item")
-    return dict(item) if item else None
+    if item is None:
+        return None
+    if not isinstance(item, Mapping):
+        raise RuntimeError("billing repository response is malformed")
+    return dict(item)
 
 
 def _get_payment_rollout_item() -> dict[str, Any] | None:
-    response = get_table().get_item(Key={"PK": "SUBSCRIPTION_PAYMENT_ROLLOUT", "SK": "SUMMARY"})
+    table = get_table()
+    if not isinstance(table, _GetTable):
+        raise RuntimeError("billing repository dependency is unavailable")
+    response = _billing_response(
+        table.get_item(Key={"PK": "SUBSCRIPTION_PAYMENT_ROLLOUT", "SK": "SUMMARY"})
+    )
     item = response.get("Item")
-    return dict(item) if item else None
+    if item is None:
+        return None
+    if not isinstance(item, Mapping):
+        raise RuntimeError("billing repository response is malformed")
+    return dict(item)
 
 
 def _rollout_summary(item: dict[str, Any] | None) -> dict[str, Any]:

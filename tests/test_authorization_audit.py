@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.testclient import TestClient
@@ -298,8 +299,8 @@ def test_production_requires_non_placeholder_audit_key():
         )
 
 
-def _production_settings(**overrides) -> Settings:
-    values = {
+def _production_settings(**overrides: Any) -> Settings:
+    values: dict[str, Any] = {
         "environment": "production",
         "cognito_allowed_issuers": ["https://identity.test"],
         "cognito_access_client_ids": ["client-1"],
