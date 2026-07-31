@@ -1790,6 +1790,7 @@ def test_resume_recovery_job_preview_and_create_persist_linked_job(monkeypatch):
         "status": "completed_with_failures",
         "reason": "source incident",
         "target_count": 3,
+        "failure_threshold": 5,
     }
     source_targets = [
         {
@@ -1910,6 +1911,88 @@ def test_resume_recovery_job_rejects_non_terminal_source(monkeypatch):
 
     assert response.status_code == 409
     assert calls == ["source_read", "authorize", "source_read"]
+
+
+@pytest.mark.parametrize("status", ["stopped_failure_threshold", "stopped_time_floor"])
+def test_resume_recovery_job_allows_historical_stopped_source_statuses(monkeypatch, status):
+    source_job = {
+        "job_id": "job-stopped",
+        "job_type": "resend_email",
+        "status": status,
+        "failure_threshold": 5,
+    }
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: source_job if job_id == "job-stopped" else None)
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda job_id, **kwargs: {"Items": []})
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/recovery-jobs/job-stopped/resume/preview",
+        json={"reason": "resume after remediation", "results": ["failed"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["job_type"] == "resend_email"
+
+
+@pytest.mark.parametrize("missing_field", ["job_type", "failure_threshold"])
+def test_resume_recovery_job_rejects_incomplete_historical_source_without_mutation(monkeypatch, missing_field):
+    source_job = {
+        "job_id": "job-incomplete",
+        "job_type": "resend_email",
+        "status": "stopped_failure_threshold",
+        "failure_threshold": 5,
+    }
+    source_job.pop(missing_field)
+    writes = []
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: source_job if job_id == "job-incomplete" else None)
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda *args, **kwargs: {"Items": []})
+    monkeypatch.setattr(report_repo, "put_recovery_job", lambda *args, **kwargs: writes.append((args, kwargs)))
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    response = client.post(
+        "/admin/reports/recovery-jobs/job-incomplete/resume/preview",
+        json={"reason": "resume after repair", "results": ["failed"]},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Source recovery job record is incomplete and needs repair"}
+    assert writes == []
+    assert missing_field not in source_job
+
+
+def test_create_resume_job_revalidates_source_record_before_mutation(monkeypatch):
+    source_job = {
+        "job_id": "job-source",
+        "job_type": "resend_email",
+        "status": "stopped_failure_threshold",
+        "failure_threshold": 5,
+    }
+    source_targets = [{"target_id": "target-1", "result": "failed"}]
+    writes = []
+    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: source_job if job_id == "job-source" else None)
+    monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda *args, **kwargs: {"Items": source_targets})
+    monkeypatch.setattr(report_repo, "put_recovery_job", lambda *args, **kwargs: writes.append((args, kwargs)))
+
+    preview = report_recovery_job_service.preview_resume_job(
+        source_job_id="job-source",
+        reason="resume after remediation",
+        operator="admin-sub",
+        results=["failed"],
+    )
+    source_job.pop("failure_threshold")
+
+    with pytest.raises(report_recovery_job_service.RecoveryJobError) as error:
+        report_recovery_job_service.create_resume_job(
+            source_job_id="job-source",
+            reason="resume after remediation",
+            operator="admin-sub",
+            results=["failed"],
+            preview_token=preview["preview_token"],
+        )
+
+    assert error.value.status_code == 422
+    assert error.value.detail == "Source recovery job record is incomplete and needs repair"
+    assert writes == []
 
 
 def test_recovery_job_list_detail_results_and_cancel(monkeypatch):

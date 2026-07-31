@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import base64
 import hashlib
 import json
-from typing import Any
+from typing import Any, TypeGuard
 from uuid import uuid4
 
 import boto3
@@ -39,6 +39,51 @@ RESUMABLE_SOURCE_STATUSES = {
 class RecoveryJobError(Exception):
     status_code: int
     detail: str
+
+
+def _is_record(value: object) -> TypeGuard[dict[str, object]]:
+    return isinstance(value, dict) and all(isinstance(key, str) for key in value)
+
+
+def _optional_record(value: object, detail: str) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if not _is_record(value):
+        raise RecoveryJobError(422, detail)
+    return value
+
+
+def _required_record_list(value: object, detail: str) -> list[dict[str, object]]:
+    if not isinstance(value, list) or not all(_is_record(item) for item in value):
+        raise RecoveryJobError(422, detail)
+    return value
+
+
+def _optional_string(value: object) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _job_type_or_none(job: dict[str, object]) -> str | None:
+    value = _optional_string(job.get("job_type"))
+    return value if value in {RESEND_JOB_TYPE, GENERATION_RETRY_JOB_TYPE} else None
+
+
+def _required_positive_int_or_none(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+
+
+def _required_positive_int(job: dict[str, object], field: str) -> int:
+    value = _required_positive_int_or_none(job.get(field))
+    if value is None:
+        raise RecoveryJobError(422, "Recovery job record is incomplete and needs repair")
+    return value
+
+
+def _required_nonnegative_int(job: dict[str, object], field: str) -> int:
+    value = job.get(field)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise RecoveryJobError(422, "Recovery job record is incomplete and needs repair")
+    return value
 
 
 def preview_resend_job(
@@ -126,13 +171,16 @@ def preview_resume_job(
     if not reason.strip():
         raise RecoveryJobError(422, "Recovery reason is required")
     source_job = _get_resumable_source_job(source_job_id)
+    job_type = _job_type_or_none(source_job)
+    if job_type is None:
+        raise RecoveryJobError(422, "Source recovery job record is incomplete and needs repair")
     result_filters = _normalized_resume_results(results)
     targets = _collect_resume_targets(source_job_id, result_filters=result_filters, max_targets=max_targets)
     token = _encode_preview_token(
         {
             "operation": RESUME_OPERATION,
             "source_job_id": source_job_id,
-            "job_type": str(source_job.get("job_type") or RESEND_JOB_TYPE),
+            "job_type": job_type,
             "reason": reason,
             "result_filters": result_filters,
             "max_targets": min(max(1, int(max_targets)), MAX_TARGETS),
@@ -143,7 +191,7 @@ def preview_resume_job(
     return {
         "operation": RESUME_OPERATION,
         "source_job_id": source_job_id,
-        "job_type": str(source_job.get("job_type") or RESEND_JOB_TYPE),
+        "job_type": job_type,
         "reason": reason,
         "requested_by": operator,
         "result_filters": result_filters,
@@ -375,7 +423,9 @@ def _execute_job(
     job = report_repo.get_recovery_job(job_id)
     if not job:
         return {"status": "not_found", "job_id": job_id}
-    actual_job_type = str(job.get("job_type") or RESEND_JOB_TYPE)
+    actual_job_type = _job_type_or_none(job)
+    if actual_job_type is None:
+        return {"status": "ignored", "job_id": job_id, "reason": "incomplete_job_record"}
     if actual_job_type != expected_job_type:
         return {
             "status": "ignored",
@@ -396,7 +446,7 @@ def _execute_job(
         job_id,
         action=run_action,
         actor="weekly-report-worker",
-        reason=job.get("reason"),
+        reason=_optional_string(job.get("reason")),
         result="started",
         source="weekly_report_lambda",
         metadata={"job_type": expected_job_type},
@@ -435,7 +485,7 @@ def _execute_job(
         counts["attempted_count"] += 1
         outcome = target_executor(job, target, attempted_at=attempted_at)
         counts[f"{outcome}_count"] += 1
-        if counts["failed_count"] >= int(job.get("failure_threshold") or FAILURE_THRESHOLD):
+        if counts["failed_count"] >= _required_positive_int(job, "failure_threshold"):
             stop_reason = "failure_threshold"
             break
 
@@ -450,7 +500,7 @@ def _execute_job(
     )
     fields = {
         **counts,
-        "pending_count": max(0, int(job.get("target_count") or 0) - completed_targets),
+        "pending_count": max(0, _required_nonnegative_int(job, "target_count") - completed_targets),
         "completed_at": completed_at,
         "updated_at": completed_at,
     }
@@ -461,7 +511,7 @@ def _execute_job(
         job_id,
         action=complete_action,
         actor="weekly-report-worker",
-        reason=job.get("reason"),
+        reason=_optional_string(job.get("reason")),
         result=final_status,
         source="weekly_report_lambda",
         metadata=fields,
@@ -486,7 +536,7 @@ def cancel_recovery_job(job_id: str, *, operator: str) -> dict[str, Any]:
         job_id,
         action="request_cancellation",
         actor=operator,
-        reason=job.get("reason"),
+        reason=_optional_string(job.get("reason")),
         result="cancellation_requested",
         source="admin_api",
     )
@@ -502,12 +552,16 @@ def _execute_resend_target(job: dict, target: dict, *, attempted_at: str) -> str
     if not report:
         _finish_target(job, target, "not_found", detail="Report not found")
         return "not_found"
+    report_id = _optional_string(report.get("report_id"))
+    if report_id is None:
+        _finish_target(job, target, "refused", detail="Report record is incomplete")
+        return "refused"
     if not report_repo.try_claim_report_resend(
-        report["report_id"],
+        report_id,
         operator=str(job.get("created_by") or "recovery-job"),
         attempted_at=attempted_at,
     ):
-        _finish_target(job, target, "refused", report_id=report.get("report_id"), detail="Report is no longer eligible")
+        _finish_target(job, target, "refused", report_id=report_id, detail="Report is no longer eligible")
         return "refused"
     try:
         result = report_recovery_service.resend_report_email(
@@ -523,7 +577,7 @@ def _execute_resend_target(job: dict, target: dict, *, attempted_at: str) -> str
             job,
             target,
             outcome,
-            report_id=report.get("report_id"),
+            report_id=report_id,
             detail=report_recovery_service.redact_private_artifact_text(exc.detail),
             error_class=exc.error_class,
         )
@@ -565,7 +619,7 @@ def _execute_generation_retry_target(job: dict, target: dict, *, attempted_at: s
             job,
             target,
             outcome,
-            report_id=report.get("report_id"),
+            report_id=_optional_string(report.get("report_id")),
             detail=report_recovery_service.redact_private_artifact_text(exc.detail),
             error_class=exc.error_class,
         )
@@ -674,12 +728,12 @@ def _collect_targets(*, job_type: str, filters: dict[str, Any], max_targets: int
             last_key=last_key,
         )
         pages += 1
-        for report in result.get("Items", []):
+        for report in _required_record_list(result.get("Items"), "Recovery report page is incomplete"):
             target = _target_preview(report, job_type=job_type)
             targets.append(target)
             if len(targets) >= max_targets:
                 break
-        last_key = result.get("LastEvaluatedKey")
+        last_key = _optional_record(result.get("LastEvaluatedKey"), "Recovery report page is incomplete")
         if not last_key:
             break
     return targets, pages
@@ -693,10 +747,14 @@ def _get_resumable_source_job(source_job_id: str) -> dict[str, Any]:
     source_job = report_repo.get_recovery_job(source_job_id)
     if not source_job:
         raise RecoveryJobError(404, "Source recovery job not found")
-    if str(source_job.get("job_type") or RESEND_JOB_TYPE) not in {RESEND_JOB_TYPE, GENERATION_RETRY_JOB_TYPE}:
-        raise RecoveryJobError(422, "Source recovery job type cannot be resumed")
-    if source_job.get("status") not in RESUMABLE_SOURCE_STATUSES:
+    status = _optional_string(source_job.get("status"))
+    if status not in RESUMABLE_SOURCE_STATUSES:
         raise RecoveryJobError(409, "Source recovery job is not terminal")
+    job_type = _optional_string(source_job.get("job_type"))
+    if job_type is None or _required_positive_int_or_none(source_job.get("failure_threshold")) is None:
+        raise RecoveryJobError(422, "Source recovery job record is incomplete and needs repair")
+    if job_type not in {RESEND_JOB_TYPE, GENERATION_RETRY_JOB_TYPE}:
+        raise RecoveryJobError(422, "Source recovery job type cannot be resumed")
     return source_job
 
 
@@ -795,8 +853,8 @@ def _list_all_job_targets(job_id: str) -> list[dict]:
     last_key = None
     while True:
         result = report_repo.list_recovery_job_targets(job_id, limit=MAX_TARGETS, last_key=last_key)
-        targets.extend(result.get("Items", []))
-        last_key = result.get("LastEvaluatedKey")
+        targets.extend(_required_record_list(result.get("Items"), "Recovery job target page is incomplete"))
+        last_key = _optional_record(result.get("LastEvaluatedKey"), "Recovery job target page is incomplete")
         if not last_key:
             return targets
 
@@ -827,7 +885,7 @@ def _cancel_job(job: dict, reason: str, cancelled_at: str, *, complete_action: s
         job["job_id"],
         action=complete_action,
         actor="weekly-report-worker",
-        reason=job.get("reason"),
+        reason=_optional_string(job.get("reason")),
         result="cancelled",
         source="weekly_report_lambda",
         metadata=fields,
