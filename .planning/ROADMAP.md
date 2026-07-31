@@ -741,12 +741,11 @@ Plans:
 **Atomic planning boundaries** *(detailed PLAN.md files are not generated yet;
 planning may split a boundary further but must not merge unrelated boundaries)*:
 
-  1. Real login-code provider flow and authoritative backend session lifecycle.
-  2. Canonical Web registration, recovery, refresh/logout, role restoration, and
-    teacher-invitation entry.
-  3. Generated or mechanically checked OpenAPI adapters, closed write fields,
+1. Real login-code provider flow and authoritative backend session lifecycle.
+2. Canonical Web registration, recovery, refresh/logout, role restoration, and
+   teacher-invitation entry.
+3. Generated or mechanically checked OpenAPI adapters, closed write fields,
    errors, enums, and idempotency.
-
 4. Reachable shared static/virtual truth removal plus adapter/component tests
    added to the existing Phase 474 gate.
 
@@ -789,13 +788,12 @@ Plans:
 
 **Atomic planning boundaries:**
 
-  1. Executable router-derived production route inventory and explicit
-    enable/disable decisions.
-  2. Real student dashboard, upload/question, AI result, and teacher-help journey.
+1. Executable router-derived production route inventory and explicit
+   enable/disable decisions.
+2. Real student dashboard, upload/question, AI result, and teacher-help journey.
 3. Real student practice, lesson result, hint, and exact mistake-answer journey.
 4. Real parent child, learning, usage, report, entitlement, and existing billing
    consumption journey.
-
 5. Real teacher queue, dispatch/takeover, conversation/reply/resolve, and
    answer-read journey using canonical `/teachers` contracts.
 
@@ -850,12 +848,11 @@ Plans:
 
 **Atomic planning boundaries:**
 
-  1. Read-only retained-route runtime inventory and exact import/definition delta;
-    create a non-WebSocket delta plan only if this inventory proves one is needed.
-  2. Real retained-route S3 multipart/version/promotion/restart and DynamoDB
+1. Read-only retained-route runtime inventory and exact import/definition delta;
+   create a non-WebSocket delta plan only if this inventory proves one is needed.
+2. Real retained-route S3 multipart/version/promotion/restart and DynamoDB
    transaction/access-pattern observation; unavailable authority produces exact
    `NOT RUN` and a phase `HOLD`, not a local-fake pass.
-
 3. WebSocket identity, channel authorization, safe credential transport, and
    direct-event isolation.
 
@@ -913,12 +910,11 @@ Plans:
 
 **Atomic planning boundaries:**
 
-  1. One backend/Web retained-route sensitive-log inventory and adversarial
-    redaction proof, including deployed log capture.
-  2. Deployed cleanup scheduler, retry, lifecycle, and alarm observation.
+1. One backend/Web retained-route sensitive-log inventory and adversarial
+   redaction proof, including deployed log capture.
+2. Deployed cleanup scheduler, retry, lifecycle, and alarm observation.
 3. Dependency readiness, global correlation, critical metrics, actionable
    alarms, and runbook links.
-
 4. Exact index and complete pagination closure for non-WebSocket practice,
    teacher, admin, and notification paths.
 
@@ -965,10 +961,10 @@ Plans:
 
 **Exactly two atomic planning boundaries:**
 
-  1. Truth reconciliation: 51 requirements, 31 immutable baseline findings,
-    documentation, architecture maps, configuration, state, waivers, debt, and
-    exact `NOT RUN` boundaries.
-  2. Evidence index and decision: validate source identities, artifact hashes,
+1. Truth reconciliation: 51 requirements, 31 immutable baseline findings,
+   documentation, architecture maps, configuration, state, waivers, debt, and
+   exact `NOT RUN` boundaries.
+2. Evidence index and decision: validate source identities, artifact hashes,
    phase verification status, route/journey/provider/staging/rollback receipts,
    then publish `481-VERIFICATION.md` and `PASS` or `HOLD`.
 
