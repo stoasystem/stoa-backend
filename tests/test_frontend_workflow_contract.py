@@ -42,6 +42,7 @@ def _resolve_frontend_root(backend_root: Path) -> Path:
 FRONTEND_ROOT = _resolve_frontend_root(BACKEND_ROOT)
 WORKFLOW_DIR = FRONTEND_ROOT / ".github" / "workflows"
 WORKFLOW_PATH = WORKFLOW_DIR / "frontend-ci.yml"
+DELIVERY_WORKFLOW_PATH = WORKFLOW_DIR / "deploy.yml"
 
 CHECKOUT_ACTION = "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd"
 PYTHON_ACTION = "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405"
@@ -266,6 +267,182 @@ def _expected_workflow() -> dict[str, Any]:
     }
 
 
+def _delivery_validation_run() -> str:
+    return (
+        "set -euo pipefail\n"
+        "sha_pattern='^[0-9a-f]{40}$'\n"
+        "digest_pattern='^[0-9a-f]{64}$'\n"
+        'for sha in "$BACKEND_SHA" "$FRONTEND_SHA" "$WORKFLOW_SHA"; do\n'
+        '  [[ "$sha" =~ $sha_pattern ]] || exit 1\n'
+        "done\n"
+        '[[ "$FRONTEND_SHA" == "$WORKFLOW_SHA" ]] || exit 1\n'
+        '[[ "$TRANSACTION_SHA256" =~ $digest_pattern ]] || exit 1\n'
+        '[[ "$TRANSACTION_PATH" =~ ^receipts/staging/[A-Za-z0-9][A-Za-z0-9._/-]{0,240}\\.json$ ]] || exit 1\n'
+        '[[ "$TRANSACTION_PATH" != *".."* ]] || exit 1\n'
+    )
+
+
+def _delivery_identity_run() -> str:
+    return (
+        "set -euo pipefail\n"
+        'test "$(git -C "$GITHUB_WORKSPACE/stoa-backend" rev-parse HEAD)" '
+        '= "$BACKEND_SHA"\n'
+        'test "$(git -C "$GITHUB_WORKSPACE/stoa-frontend" rev-parse HEAD)" '
+        '= "$FRONTEND_SHA"\n'
+    )
+
+
+def _delivery_evidence_run() -> str:
+    return (
+        "set -euo pipefail\n"
+        "umask 077\n"
+        'evidence_dir="$(mktemp -d "$RUNNER_TEMP/stoa-frontend-delivery.XXXXXX")"\n'
+        'chmod 0700 "$evidence_dir"\n'
+        'test "$(stat -c %a "$evidence_dir")" = "700"\n'
+        "printf 'EVIDENCE_DIR=%s\\n' \"$evidence_dir\" >> \"$GITHUB_ENV\"\n"
+    )
+
+
+def _delivery_run() -> str:
+    return (
+        "set -euo pipefail\n"
+        'transaction="$GITHUB_WORKSPACE/stoa-backend/$TRANSACTION_PATH"\n'
+        'test -f "$transaction"\n'
+        'test ! -L "$transaction"\n'
+        'test "$(sha256sum "$transaction" | cut -d " " -f 1)" = "$TRANSACTION_SHA256"\n'
+        "python scripts/release_gate.py delivery-validate \\\n"
+        '  --transaction "$transaction" \\\n'
+        '  --output "$EVIDENCE_DIR/delivery-validation.json"\n'
+    )
+
+
+def _not_run_run() -> str:
+    return (
+        "set -euo pipefail\n"
+        "printf '%s\\n' \\\n"
+        "  'production-infrastructure=NOT RUN' \\\n"
+        "  'production-deploy=NOT RUN' \\\n"
+        "  'production-smoke=NOT RUN' \\\n"
+        "  'production-rollback=NOT RUN'\n"
+    )
+
+
+def _expected_delivery_workflow() -> dict[str, Any]:
+    inputs = {
+        "backend_sha": {
+            "description": "Exact backend commit SHA containing the receipted transaction",
+            "required": True,
+            "type": "string",
+        },
+        "frontend_sha": {
+            "description": "Exact frontend commit SHA",
+            "required": True,
+            "type": "string",
+        },
+        "transaction_path": {
+            "description": "Exact staging transaction receipt path below receipts/staging",
+            "required": True,
+            "type": "string",
+        },
+        "transaction_sha256": {
+            "description": "SHA-256 of the exact staging transaction receipt bytes",
+            "required": True,
+            "type": "string",
+        },
+    }
+    verify_steps = [
+        {
+            "name": "Validate immutable source and receipt identities",
+            "shell": "bash",
+            "env": {
+                "BACKEND_SHA": "${{ inputs.backend_sha }}",
+                "FRONTEND_SHA": "${{ inputs.frontend_sha }}",
+                "TRANSACTION_PATH": "${{ inputs.transaction_path }}",
+                "TRANSACTION_SHA256": "${{ inputs.transaction_sha256 }}",
+                "WORKFLOW_SHA": "${{ github.sha }}",
+            },
+            "run": _delivery_validation_run(),
+        },
+        _checkout("backend", "stoasystem/stoa-backend"),
+        _checkout("frontend", "stoasystem/stoa-frontend"),
+        {
+            "name": "Set up Python",
+            "uses": PYTHON_ACTION,
+            "with": {"python-version": "3.12.13"},
+        },
+        {
+            "name": "Set up uv",
+            "uses": UV_ACTION,
+            "with": {"version": "0.11.16", "enable-cache": False},
+        },
+        {
+            "name": "Verify checkout identities",
+            "shell": "bash",
+            "env": {
+                "BACKEND_SHA": "${{ inputs.backend_sha }}",
+                "FRONTEND_SHA": "${{ inputs.frontend_sha }}",
+            },
+            "run": _delivery_identity_run(),
+        },
+        {
+            "name": "Create private delivery evidence directory",
+            "shell": "bash",
+            "run": _delivery_evidence_run(),
+        },
+        {
+            "name": "Validate the canonical staging transaction",
+            "working-directory": "stoa-backend",
+            "shell": "bash",
+            "env": {
+                "TRANSACTION_PATH": "${{ inputs.transaction_path }}",
+                "TRANSACTION_SHA256": "${{ inputs.transaction_sha256 }}",
+            },
+            "run": _delivery_run(),
+        },
+    ]
+    return {
+        "name": "Frontend Staging Eligibility",
+        "on": {"workflow_dispatch": {"inputs": inputs}},
+        "permissions": {"contents": "read"},
+        "env": {"UV_PYTHON_DOWNLOADS": "never"},
+        "jobs": {
+            "verify": {
+                "name": "Verify exact frontend release identities",
+                "runs-on": "ubuntu-24.04",
+                "timeout-minutes": 45,
+                "steps": verify_steps,
+            },
+            "staging": {
+                "name": "Protected staging eligibility boundary",
+                "needs": ["verify"],
+                "environment": "staging",
+                "runs-on": "ubuntu-24.04",
+                "timeout-minutes": 5,
+                "steps": [
+                    {
+                        "name": "Retain backend-owned staging authority boundary",
+                        "shell": "bash",
+                        "run": "set -euo pipefail\nprintf '%s\\n' 'staging-authority=backend-owned'\n",
+                    }
+                ],
+            },
+            "production_not_run": {
+                "name": "Record production operations as not run",
+                "needs": ["verify"],
+                "runs-on": "ubuntu-24.04",
+                "timeout-minutes": 5,
+                "steps": [
+                    {
+                        "name": "Emit exact production obligations",
+                        "shell": "bash",
+                        "run": _not_run_run(),
+                    }
+                ],
+            },
+        },
+    }
+
+
 def _load_workflow() -> tuple[str, dict[str, Any]]:
     raw = WORKFLOW_PATH.read_text(encoding="utf-8")
     value = yaml.load(raw, Loader=WorkflowLoader)
@@ -333,18 +510,27 @@ def test_frontend_root_resolution_rejects_zero_multiple_and_symlink_matches(
         _resolve_frontend_root(backend)
 
 
-def test_frontend_has_exactly_one_regular_workflow() -> None:
+def test_frontend_has_exactly_the_formal_and_delivery_workflows() -> None:
     assert not WORKFLOW_DIR.is_symlink()
     assert WORKFLOW_DIR.is_dir()
     entries = sorted(WORKFLOW_DIR.iterdir(), key=lambda path: path.name)
-    assert [path.name for path in entries] == ["frontend-ci.yml"]
+    assert [path.name for path in entries] == ["deploy.yml", "frontend-ci.yml"]
     assert WORKFLOW_PATH.is_file()
     assert not WORKFLOW_PATH.is_symlink()
+    assert DELIVERY_WORKFLOW_PATH.is_file()
+    assert not DELIVERY_WORKFLOW_PATH.is_symlink()
 
 
 def test_workflow_matches_the_complete_fixed_contract() -> None:
     _, workflow = _load_workflow()
     assert workflow == _expected_workflow()
+
+
+def test_delivery_workflow_matches_the_complete_fixed_contract() -> None:
+    raw = DELIVERY_WORKFLOW_PATH.read_text(encoding="utf-8")
+    workflow = yaml.load(raw, Loader=WorkflowLoader)
+    assert isinstance(workflow, dict)
+    assert workflow == _expected_delivery_workflow()
 
 
 @pytest.mark.parametrize(
