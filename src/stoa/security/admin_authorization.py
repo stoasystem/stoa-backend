@@ -287,7 +287,9 @@ def _provider_refs(
             if not job:
                 raise _ResolvedTargetNotFound
             filters_value = job.get("filters")
-            if not isinstance(filters_value, Mapping):
+            if filters_value is None:
+                filters_value = {}
+            elif not isinstance(filters_value, Mapping):
                 raise _ResolvedTargetNotFound
             coordinate_maps.append({
                 key: str(value) for key, value in {
@@ -618,7 +620,9 @@ async def _target(
                     headers={"X-Correlation-ID": correlation_id},
                 )
             filters_value = job.get("filters")
-            if not isinstance(filters_value, Mapping):
+            if filters_value is None:
+                filters_value = {}
+            elif not isinstance(filters_value, Mapping):
                 error = SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND, correlation_id)
                 raise HTTPException(
                     error.status_code,
