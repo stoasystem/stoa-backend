@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 474
 current_phase_name: deterministic-verification-and-gated-delivery
 status: executing
-stopped_at: Completed 474-28-PLAN.md
-last_updated: "2026-07-31T09:19:12.298Z"
+stopped_at: Completed 474-32-PLAN.md
+last_updated: "2026-07-31T09:45:21.460Z"
 last_activity: 2026-07-31
-last_activity_desc: Plan 474-28 made the infrastructure workflow a thin exact-receipt staging-eligibility caller; deployed-state reads remain fail-closed until the Plan 32 protected staging inventory/controller
+last_activity_desc: Plan 474-32 added the credential-free formal-to-immutable-build-to-protected-staging DAG and fail-closed controller; real provider inventory and staging operations remain unrun.
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 183
-  completed_plans: 171
+  completed_plans: 172
   percent: 30
 ---
 
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (deterministic-verification-and-gated-delivery) — EXECUTING
-Next retained plan: 474-32 (fail-closed environment inventory, configuration, and staging controls)
+Next retained plan: 474-33 (read-only provider/CDK inventory)
 Status: Executing Phase 474
-Last activity: 2026-07-31 — Plan 474-28 made the infrastructure workflow a thin exact-receipt staging-eligibility caller; deployed-state reads remain fail-closed until the Plan 32 protected staging inventory/controller
+Last activity: 2026-07-31 — Plan 474-32 added the credential-free formal-to-immutable-build-to-protected-staging DAG and fail-closed controller; real provider inventory and staging operations remain unrun.
 Phases 477-481 around exact remaining gaps
 
 ## Accumulated Context
@@ -174,9 +174,9 @@ Phases 477-481 around exact remaining gaps
 
 ## Session
 
-**Last Date:** 2026-07-31T09:19:12.276Z
-**Stopped At:** Completed 474-28-PLAN.md
-**Resume File:** None
+**Last Date:** 2026-07-31T09:45:21.435Z
+**Stopped At:** Completed 474-32-PLAN.md
+**Resume File:** 474-33-PLAN.md
 
 ## Performance Metrics
 
@@ -349,6 +349,7 @@ Phases 477-481 around exact remaining gaps
 | Phase 474 P78 | 10 min | 1 tasks | 4 infra files plus summary |
 | Phase 474 P27 | 6min | 2 tasks | 5 files |
 | Phase 474 P28 | 31m | 2 tasks | 2 files |
+| Phase 474 P32 | 55m | 2 tasks | 6 files |
 
 ## Decisions
 
@@ -722,3 +723,5 @@ Phases 477-481 around exact remaining gaps
 - [Phase 474]: Plan 474-27 keeps delivery as a durable staging-only compensating transaction: exact Lambda alias and descriptor/config/Web coordinates are persisted, read back, and restored without provider mutation through the local gate.
 - [Phase 474]: Plan 474-28 keeps verify credential-free; deployed-state reads are fail-closed until Plan 32 protected staging inventory/controller.
 - [Phase 474]: Plan 474-28 records production infrastructure, deploy, smoke, and rollback as separate exact NOT RUN obligations.
+- [Phase 474]: Plan 474-32 keeps formal verification credential-free; protected staging alone may receive OIDC after all dependencies pass.
+- [Phase 474]: Plan 474-32 source contracts keep production infrastructure, deploy, smoke, and rollback exact NOT RUN.

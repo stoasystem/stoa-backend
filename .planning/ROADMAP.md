@@ -342,7 +342,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 **Requirements:** V9QUAL-01, V9QUAL-02, V9QUAL-03, V9QUAL-04, V9QUAL-05, V9QUAL-06, V9QUAL-07.
 
-**Plans:** 37/47 plans executed; 10 retained plans remain.
+**Plans:** 38/47 plans executed; 9 retained plans remain.
 
 **Cleanup record:** `474-CLEANUP.md` removes 47 unexecuted plans that were obsolete, duplicated by the completed formal-gate rebuild, or reassigned to Phases 477–480. Completed PLAN/SUMMARY pairs were preserved and plan IDs are not reused.
 
@@ -368,7 +368,7 @@ Plans:
 - [x] 474-26-PLAN.md
 - [x] 474-27-PLAN.md
 - [x] 474-28-PLAN.md
-- [ ] 474-32-PLAN.md
+- [x] 474-32-PLAN.md
 - [ ] 474-33-PLAN.md
 - [ ] 474-34-PLAN.md
 - [ ] 474-35-PLAN.md
@@ -741,11 +741,12 @@ Plans:
 **Atomic planning boundaries** *(detailed PLAN.md files are not generated yet;
 planning may split a boundary further but must not merge unrelated boundaries)*:
 
-1. Real login-code provider flow and authoritative backend session lifecycle.
-2. Canonical Web registration, recovery, refresh/logout, role restoration, and
-   teacher-invitation entry.
-3. Generated or mechanically checked OpenAPI adapters, closed write fields,
+  1. Real login-code provider flow and authoritative backend session lifecycle.
+  2. Canonical Web registration, recovery, refresh/logout, role restoration, and
+    teacher-invitation entry.
+  3. Generated or mechanically checked OpenAPI adapters, closed write fields,
    errors, enums, and idempotency.
+
 4. Reachable shared static/virtual truth removal plus adapter/component tests
    added to the existing Phase 474 gate.
 
@@ -788,12 +789,13 @@ Plans:
 
 **Atomic planning boundaries:**
 
-1. Executable router-derived production route inventory and explicit
-   enable/disable decisions.
-2. Real student dashboard, upload/question, AI result, and teacher-help journey.
+  1. Executable router-derived production route inventory and explicit
+    enable/disable decisions.
+  2. Real student dashboard, upload/question, AI result, and teacher-help journey.
 3. Real student practice, lesson result, hint, and exact mistake-answer journey.
 4. Real parent child, learning, usage, report, entitlement, and existing billing
    consumption journey.
+
 5. Real teacher queue, dispatch/takeover, conversation/reply/resolve, and
    answer-read journey using canonical `/teachers` contracts.
 
@@ -848,11 +850,12 @@ Plans:
 
 **Atomic planning boundaries:**
 
-1. Read-only retained-route runtime inventory and exact import/definition delta;
-   create a non-WebSocket delta plan only if this inventory proves one is needed.
-2. Real retained-route S3 multipart/version/promotion/restart and DynamoDB
+  1. Read-only retained-route runtime inventory and exact import/definition delta;
+    create a non-WebSocket delta plan only if this inventory proves one is needed.
+  2. Real retained-route S3 multipart/version/promotion/restart and DynamoDB
    transaction/access-pattern observation; unavailable authority produces exact
    `NOT RUN` and a phase `HOLD`, not a local-fake pass.
+
 3. WebSocket identity, channel authorization, safe credential transport, and
    direct-event isolation.
 
@@ -910,11 +913,12 @@ Plans:
 
 **Atomic planning boundaries:**
 
-1. One backend/Web retained-route sensitive-log inventory and adversarial
-   redaction proof, including deployed log capture.
-2. Deployed cleanup scheduler, retry, lifecycle, and alarm observation.
+  1. One backend/Web retained-route sensitive-log inventory and adversarial
+    redaction proof, including deployed log capture.
+  2. Deployed cleanup scheduler, retry, lifecycle, and alarm observation.
 3. Dependency readiness, global correlation, critical metrics, actionable
    alarms, and runbook links.
+
 4. Exact index and complete pagination closure for non-WebSocket practice,
    teacher, admin, and notification paths.
 
@@ -961,10 +965,10 @@ Plans:
 
 **Exactly two atomic planning boundaries:**
 
-1. Truth reconciliation: 51 requirements, 31 immutable baseline findings,
-   documentation, architecture maps, configuration, state, waivers, debt, and
-   exact `NOT RUN` boundaries.
-2. Evidence index and decision: validate source identities, artifact hashes,
+  1. Truth reconciliation: 51 requirements, 31 immutable baseline findings,
+    documentation, architecture maps, configuration, state, waivers, debt, and
+    exact `NOT RUN` boundaries.
+  2. Evidence index and decision: validate source identities, artifact hashes,
    phase verification status, route/journey/provider/staging/rollback receipts,
    then publish `481-VERIFICATION.md` and `PASS` or `HOLD`.
 
@@ -1052,7 +1056,7 @@ were closed and independently verified by Phase 475; only
 | --- | --- | --- | --- |
 | 472. Privileged Identity And Student Resource Authorization | 22/22 | Complete | 2026-07-15 |
 | 473. Student Content Privacy And Practice Integrity | 40/40 | Complete | 2026-07-18 |
-| 474. Deterministic Verification And Gated Delivery | 37/47 | In progress — 10 retained plans; verification missing | - |
+| 474. Deterministic Verification And Gated Delivery | 38/47 | In progress — 9 retained plans; verification missing | - |
 | 475. Transactional Usage Assignment And Relationship Consistency | 45/45 | Complete — independently verified | 2026-07-23 |
 | 476. Billing Idempotency And Paid Access Recovery | 27/29 | Administratively complete — owner waiver; verification incomplete | 2026-07-30 |
 | 477. Web Authentication And Contract Convergence | 0/TBD | Reconciled scope; not planned | - |
