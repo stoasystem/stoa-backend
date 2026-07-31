@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 474
 current_phase_name: deterministic-verification-and-gated-delivery
 status: executing
-stopped_at: Blocked 474-76-PLAN.md
-last_updated: "2026-07-31T11:48:01Z"
+stopped_at: Blocked 474-33-PLAN.md
+last_updated: "2026-07-31T12:00:48.591Z"
 last_activity: 2026-07-31
-last_activity_desc: Plan 474-76 retained owner-approved current source coordinates, but refused both source refs because the infra worktree contains untracked .DS_Store; all external operations remain NOT RUN, and Plan 474-33 stays BLOCKED.
+last_activity_desc: "Plan 474-76 completed: exact-ref frontend callers and owner-approved current frontend/infra source refs are retained; the exact infra-root `.DS_Store` exception is tested and no other drift is accepted. Plan 474-33's external inventory remains BLOCKED."
 progress:
   total_phases: 10
   completed_phases: 3
   total_plans: 183
-  completed_plans: 172
+  completed_plans: 173
   percent: 30
 ---
 
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-07-14)
 ## Current Position
 
 Phase: 474 (deterministic-verification-and-gated-delivery) — EXECUTING
-Next retained plan: none — every remaining plan is blocked directly or transitively by 474-33 and/or 474-76.
+Next retained plan: 474-33 (read-only provider/CDK inventory)
 Status: Executing Phase 474
-Last activity: 2026-07-31 — Plan 474-76 retained a BLOCKED source-ref issuance receipt: approved frontend/infra coordinates match, but the retained infra worktree contains untracked `.DS_Store`, so both source refs remain `NOT ISSUED`; Plan 474-33's external inventory remains BLOCKED.
+Last activity: 2026-07-31 — Plan 474-76 completed: exact-ref frontend callers and owner-approved current frontend/infra source refs are retained; the exact infra-root `.DS_Store` exception is tested and no other drift is accepted. Plan 474-33's external inventory remains BLOCKED.
 Phases 477-481 around exact remaining gaps
 
 ## Accumulated Context
@@ -46,7 +46,7 @@ Phases 477-481 around exact remaining gaps
   - Phase 473: historically passed 3/3; real S3 and deployed scheduler/log
     observations remain later external obligations.
 
-  - Phase 474: 38/47 completed records; 9 retained plans; no `474-VERIFICATION.md`.
+  - Phase 474: 39/47 completed records; 8 retained plans; no `474-VERIFICATION.md`.
   - Phase 475: historically passed 8/8 and closed the three Phase 473 data
     follow-ups.
 
@@ -135,7 +135,7 @@ Phases 477-481 around exact remaining gaps
 
 ### Pending Todos
 
-- Execute only the 10 remaining retained Phase 474 plans and produce current-candidate
+- Execute only the 8 remaining retained Phase 474 plans and produce current-candidate
   independent verification.
 
 - Preserve all 51 requirement mappings, the Phase 476 waiver, and all 31 finding
@@ -165,11 +165,10 @@ Phases 477-481 around exact remaining gaps
 
 ## Operator Next Steps
 
-- Resolve the two retained Wave 18 blockers before any later plan:
-  make the existing AWS SSO session visible to the execution environment and configure all
-  six GitHub environments/rulesets plus main protection for Plan 474-33; then provide a
-  clean infrastructure worktree or explicitly replace the retained source policy before
-  Plan 474-76 can issue either source ref. Do not regenerate the 47 removed plans.
+- Resolve the remaining Wave 18 blocker before any later plan: make the existing AWS SSO
+  session visible to the execution environment and configure all six GitHub
+  environments/rulesets plus main protection for Plan 474-33. Current frontend/infra
+  source refs are now retained in `evidence/phase-474/`; do not regenerate the 47 removed plans.
 
 - No retained plan is presently dependency-ready: 474-34 and 474-79 directly require
   474-33; 474-80 requires both; and 474-35 through 474-38 depend transitively on them.
@@ -180,9 +179,9 @@ Phases 477-481 around exact remaining gaps
 
 ## Session
 
-**Last Date:** 2026-07-31T11:48:01Z
-**Stopped At:** Blocked 474-76-PLAN.md — approved frontend and infra coordinates match, but retained infra `.DS_Store` is untracked; both source refs remain NOT ISSUED. Plan 474-33 stays independently blocked on GitHub environment/ruleset/main-protection gaps and this execution session's unavailable AWS SSO cache.
-**Resume File:** 474-76-PLAN.md
+**Last Date:** 2026-07-31T11:59:49.041Z
+**Stopped At:** Blocked 474-33-PLAN.md — GitHub environment/ruleset/main protection remain missing and this execution session cannot access the existing AWS SSO cache. Plan 474-76 source refs are issued under the exact root-only infra `.DS_Store` metadata policy.
+**Resume File:** 474-33-PLAN.md
 
 ## Performance Metrics
 
@@ -356,6 +355,7 @@ Phases 477-481 around exact remaining gaps
 | Phase 474 P27 | 6min | 2 tasks | 5 files |
 | Phase 474 P28 | 31m | 2 tasks | 2 files |
 | Phase 474 P32 | 55m | 2 tasks | 6 files |
+| Phase 474 P76 | 31 min | 1 tasks | 9 files |
 
 ## Decisions
 
@@ -731,3 +731,4 @@ Phases 477-481 around exact remaining gaps
 - [Phase 474]: Plan 474-28 records production infrastructure, deploy, smoke, and rollback as separate exact NOT RUN obligations.
 - [Phase 474]: Plan 474-32 keeps formal verification credential-free; protected staging alone may receive OIDC after all dependencies pass.
 - [Phase 474]: Plan 474-32 source contracts keep production infrastructure, deploy, smoke, and rollback exact NOT RUN.
+- [Phase 474]: Plan 474-76 permits only the exact infra root .DS_Store regular file as non-source macOS metadata; nested or other untracked paths and every tracked modification fail closed.

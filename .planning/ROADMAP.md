@@ -342,7 +342,7 @@ v9.0 is therefore a Web product-completion milestone, not another readiness-cont
 
 **Requirements:** V9QUAL-01, V9QUAL-02, V9QUAL-03, V9QUAL-04, V9QUAL-05, V9QUAL-06, V9QUAL-07.
 
-**Plans:** 38/47 plans executed; 9 retained plans remain.
+**Plans:** 39/47 plans executed; 8 retained plans remain.
 
 **Cleanup record:** `474-CLEANUP.md` removes 47 unexecuted plans that were obsolete, duplicated by the completed formal-gate rebuild, or reassigned to Phases 477–480. Completed PLAN/SUMMARY pairs were preserved and plan IDs are not reused.
 
@@ -381,7 +381,7 @@ Plans:
 - [x] 474-42-PLAN.md
 - [x] 474-72-PLAN.md
 - [x] 474-73-PLAN.md
-- [ ] 474-76-PLAN.md
+- [x] 474-76-PLAN.md
 - [x] 474-77-PLAN.md
 - [x] 474-78-PLAN.md
 - [ ] 474-79-PLAN.md
@@ -431,7 +431,7 @@ Plans:
 **Remaining Wave 18**
 
 - [ ] `474-33` — Read-only live environment and CDK inventory. **BLOCKED:** authenticated GitHub read found zero environments/rulesets and no main protection; AWS read is unavailable only to the Codex execution session; current owner-approved source refs are not issued. See `evidence/phase-474/environment-inventory.json`.
-- [ ] `474-76` — Thin exact-ref frontend delivery workflow. **BLOCKED:** approved frontend and infra commit/tree/lock coordinates match, but the retained infra worktree has untracked `.DS_Store`; both source refs remain `NOT ISSUED` by fail-closed policy. See `evidence/phase-474/474-76-source-ref-issuance-blocked.json`.
+- [x] `474-76` — Thin exact-ref frontend delivery workflow and auditable current source refs. The sole root infra `.DS_Store` metadata exception is bounded by adversarial tests; all other drift fails closed. See `474-76-SUMMARY.md` and `evidence/phase-474/474-76-source-ref-resolution.json`.
 
 **Wave 19 — 1/3 completed**
 
@@ -853,6 +853,7 @@ Plans:
 2. Real retained-route S3 multipart/version/promotion/restart and DynamoDB
    transaction/access-pattern observation; unavailable authority produces exact
    `NOT RUN` and a phase `HOLD`, not a local-fake pass.
+
 3. WebSocket identity, channel authorization, safe credential transport, and
    direct-event isolation.
 
@@ -915,6 +916,7 @@ Plans:
 2. Deployed cleanup scheduler, retry, lifecycle, and alarm observation.
 3. Dependency readiness, global correlation, critical metrics, actionable
    alarms, and runbook links.
+
 4. Exact index and complete pagination closure for non-WebSocket practice,
    teacher, admin, and notification paths.
 
@@ -1052,7 +1054,7 @@ were closed and independently verified by Phase 475; only
 | --- | --- | --- | --- |
 | 472. Privileged Identity And Student Resource Authorization | 22/22 | Complete | 2026-07-15 |
 | 473. Student Content Privacy And Practice Integrity | 40/40 | Complete | 2026-07-18 |
-| 474. Deterministic Verification And Gated Delivery | 38/47 | In progress — 9 retained plans; verification missing | - |
+| 474. Deterministic Verification And Gated Delivery | 39/47 | In progress — 8 retained plans; verification missing | - |
 | 475. Transactional Usage Assignment And Relationship Consistency | 45/45 | Complete — independently verified | 2026-07-23 |
 | 476. Billing Idempotency And Paid Access Recovery | 27/29 | Administratively complete — owner waiver; verification incomplete | 2026-07-30 |
 | 477. Web Authentication And Contract Convergence | 0/TBD | Reconciled scope; not planned | - |
