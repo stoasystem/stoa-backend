@@ -6,6 +6,7 @@ import importlib.util
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 from typing import Any
 
 import pytest
@@ -133,3 +134,52 @@ def test_environment_policy_is_closed_and_allows_one_owner_self_approval() -> No
     assert policy["sole_owner_self_approval"] is True
     assert policy["production_mutation"] == "NOT RUN"
     assert policy["staging_substrate"]["allowed_stack"] == "StoaReleaseStaging"
+
+
+def test_cli_only_validates_local_receipts_and_fails_closed(tmp_path: Path) -> None:
+    inventory_path = tmp_path / "inventory.json"
+    plan_path = tmp_path / "plan.json"
+    receipt_path = tmp_path / "receipt.json"
+    output_path = tmp_path / "output.json"
+    inventory_path.write_text(json.dumps(_inventory()), encoding="utf-8")
+    plan_path.write_text(json.dumps(_plan()), encoding="utf-8")
+
+    planned = subprocess.run(
+        [
+            str(ROOT / ".venv" / "bin" / "python"),
+            str(MODULE_PATH),
+            "plan-staging",
+            "--inventory",
+            str(inventory_path),
+            "--plan",
+            str(plan_path),
+            "--output",
+            str(receipt_path),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert planned.returncode == 0, planned.stderr
+    applied = subprocess.run(
+        [
+            str(ROOT / ".venv" / "bin" / "python"),
+            str(MODULE_PATH),
+            "apply-staging",
+            "--receipt",
+            str(receipt_path),
+            "--inventory",
+            str(inventory_path),
+            "--plan",
+            str(plan_path),
+            "--readback",
+            str(inventory_path),
+            "--output",
+            str(output_path),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert applied.returncode == 0, applied.stderr
+    assert json.loads(output_path.read_text(encoding="utf-8"))["operation"] == "apply"

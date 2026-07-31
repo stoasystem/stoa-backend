@@ -8,10 +8,13 @@ receipts before a staging-only controller can be asked to continue.
 
 from __future__ import annotations
 
+import argparse
 from copy import deepcopy
 import hashlib
 import json
 from collections.abc import Mapping
+from pathlib import Path
+import sys
 from typing import Final
 
 
@@ -218,3 +221,67 @@ def apply_staging(
     if _canonical_sha256(confirmed) != _canonical_sha256(inventory):
         raise EnvironmentPolicyError("provider readback drift or partial success is forbidden")
     return _receipt("apply", inventory, plan)
+
+
+def _load_json(path: Path) -> object:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise EnvironmentPolicyError("controller JSON input is unavailable or malformed") from error
+
+
+def _write_json(path: Path, value: Mapping[str, object]) -> None:
+    if path.exists() and path.is_symlink():
+        raise EnvironmentPolicyError("controller output path may not be a symlink")
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    plan = commands.add_parser("plan-staging")
+    plan.add_argument("--inventory", required=True, type=Path)
+    plan.add_argument("--plan", required=True, type=Path)
+    plan.add_argument("--output", required=True, type=Path)
+    apply = commands.add_parser("apply-staging")
+    apply.add_argument("--receipt", required=True, type=Path)
+    apply.add_argument("--inventory", required=True, type=Path)
+    apply.add_argument("--plan", required=True, type=Path)
+    apply.add_argument("--readback", required=True, type=Path)
+    apply.add_argument("--output", required=True, type=Path)
+    verify = commands.add_parser("verify-staging")
+    verify.add_argument("--receipt", required=True, type=Path)
+    verify.add_argument("--inventory", required=True, type=Path)
+    verify.add_argument("--plan", required=True, type=Path)
+    verify.add_argument("--readback", required=True, type=Path)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run only local receipt validation; provider execution stays out of this module."""
+
+    args = _parser().parse_args(argv)
+    try:
+        if args.command == "plan-staging":
+            _write_json(args.output, plan_staging(_load_json(args.inventory), _load_json(args.plan)))
+            return 0
+        applied = apply_staging(
+            _load_json(args.receipt),
+            _load_json(args.inventory),
+            _load_json(args.plan),
+            readback=_load_json(args.readback),
+        )
+        if args.command == "apply-staging":
+            _write_json(args.output, applied)
+            return 0
+        if applied["production_mutation"] != "NOT RUN":
+            raise EnvironmentPolicyError("production mutation must remain not run")
+        return 0
+    except EnvironmentPolicyError as error:
+        print(f"release-environment: {error}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
