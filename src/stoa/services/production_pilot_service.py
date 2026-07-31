@@ -6305,7 +6305,7 @@ def _v66_signal_owner(signal: str) -> str:
     return owners.get(signal, "operations")
 
 
-def _v66_fix_board_row(blocker: str) -> dict[str, str]:
+def _v66_fix_board_row(blocker: str) -> dict[str, object]:
     owner = _v66_signal_owner(blocker.split(":", 1)[0])
     return {
         "blocker": blocker,
