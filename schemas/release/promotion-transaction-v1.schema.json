@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stoa.invalid/schemas/release/promotion-transaction-v1.schema.json",
+  "title": "STOA durable two-pointer promotion transaction v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "transaction_id", "idempotency_key", "release_id", "manifest_sha256", "environment", "actor_id", "run_id", "request_id", "state", "previous", "target", "actions", "smoke", "failure"],
+  "properties": {
+    "schema": {"const": "stoa.release.promotion-transaction.v1"},
+    "transaction_id": {"$ref": "#/$defs/id"},
+    "idempotency_key": {"$ref": "#/$defs/id"},
+    "release_id": {"$ref": "#/$defs/sha256"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "environment": {"const": "staging"},
+    "actor_id": {"$ref": "#/$defs/id"},
+    "run_id": {"$ref": "#/$defs/id"},
+    "request_id": {"$ref": "#/$defs/id"},
+    "state": {"enum": ["PREPARED", "APPLYING", "SMOKING", "COMMITTED", "COMPENSATING", "ROLLED_BACK", "PARTIAL_FAILURE"]},
+    "previous": {"$ref": "#/$defs/pointer"},
+    "target": {"$ref": "#/$defs/pointer"},
+    "actions": {"type": "array", "items": {"$ref": "#/$defs/action"}},
+    "smoke": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/smoke"}]},
+    "failure": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/failure"}]}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "object": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "version_id", "sha256"],
+      "properties": {"key": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,511}$"}, "version_id": {"$ref": "#/$defs/id"}, "sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "lambda": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["function", "alias", "version", "code_sha256", "revision_id"],
+      "properties": {"function": {"$ref": "#/$defs/id"}, "alias": {"const": "staging"}, "version": {"$ref": "#/$defs/id"}, "code_sha256": {"$ref": "#/$defs/sha256"}, "revision_id": {"$ref": "#/$defs/id"}}
+    },
+    "pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lambda", "descriptor", "runtime_config", "web"],
+      "properties": {"lambda": {"$ref": "#/$defs/lambda"}, "descriptor": {"$ref": "#/$defs/object"}, "runtime_config": {"$ref": "#/$defs/object"}, "web": {"$ref": "#/$defs/object"}}
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "outcome"],
+      "properties": {"kind": {"enum": ["lambda_alias_update", "served_descriptor_update", "served_descriptor_restore", "lambda_alias_restore"]}, "outcome": {"enum": ["APPLIED", "RESTORED", "ALREADY_PREVIOUS", "FAILED"]}}
+    },
+    "smoke": {"type": "object", "additionalProperties": true, "required": ["status"], "properties": {"status": {"enum": ["PASS", "FAIL"]}}},
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason_code"],
+      "properties": {"reason_code": {"enum": ["STALE_PREVIOUS_POINTER", "POINTER_MUTATION_FAILED", "POINTER_READBACK_MISMATCH", "SMOKE_FAILED", "COMPENSATION_FAILED"]}, "observed": {"$ref": "#/$defs/pointer"}}
+    }
+  }
+}

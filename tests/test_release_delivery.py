@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib.util
 import json
 from copy import deepcopy
-from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -94,6 +93,7 @@ class _Delivery:
         self.pointer = _pointer("previous", SHA256_A)
         self.fail = fail
         self.substitute = substitute
+        self.substitution_used = False
         self.calls: list[str] = []
 
     def read(self) -> dict[str, Any]:
@@ -114,8 +114,9 @@ class _Delivery:
         self.pointer["descriptor"] = deepcopy(target["descriptor"])
         self.pointer["runtime_config"] = deepcopy(target["runtime_config"])
         self.pointer["web"] = deepcopy(target["web"])
-        if self.substitute:
+        if self.substitute and not self.substitution_used:
             self.pointer["web"]["version_id"] = "substituted-web-version"
+            self.substitution_used = True
 
 
 def _passing_smoke(pointer: dict[str, Any]) -> dict[str, str]:
