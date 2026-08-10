@@ -14,6 +14,24 @@ from security.conftest import *  # noqa: F403
 pytest_plugins = ("scripts.phase474_pytest_guard",)
 
 
+@pytest.fixture
+def stub_memory_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep AI memory personalisation out of message-command tests.
+
+    `conversations._execute_message_command` enriches the AI prompt with the
+    student's weak topics, which costs three table reads. Unstubbed, that turns
+    every message-command test into a network round trip and can push a
+    concurrent duplicate past its bounded replay wait.
+    """
+    from stoa.services import adaptive_learning_service
+
+    monkeypatch.setattr(
+        adaptive_learning_service,
+        "get_memory_summary",
+        lambda **_kwargs: {"weakTopics": [], "recommendations": [], "memorySnapshots": []},
+    )
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _phase474_formal_runtime() -> object:
     """Freeze time and deny sockets for the complete formal pytest lifecycle.

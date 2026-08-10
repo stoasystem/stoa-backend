@@ -30,6 +30,12 @@ def test_message_command_remains_the_authoritative_chat_quota_path() -> None:
     assert "check_and_record_chat" not in source
 
 
+@pytest.fixture(autouse=True)
+def _no_memory_personalisation(stub_memory_summary) -> None:
+    """Message-command tests mock every other I/O dependency; do the same for
+    the adaptive-memory lookup the AI prompt enrichment performs."""
+
+
 def _actor(role=CanonicalRole.STUDENT, user_id="student-1", grants=()):
     return Actor(
         user_id,

@@ -169,7 +169,12 @@ _parent_progress = authorized_student_resource_dependency(
 )
 
 
-def _actor_projection(actor: Actor) -> dict[str, Any]:
+def actor_projection(actor: Actor) -> dict[str, Any]:
+    """Project an Actor into the dict shape the adaptive-learning service expects.
+
+    Public because conversations.py builds AI memory context through the same
+    service; keeping one implementation avoids the two drifting apart.
+    """
     projection = {
         "sub": actor.user_id,
         "user_id": actor.user_id,
@@ -317,7 +322,7 @@ async def get_my_memory(
     """Student-facing adaptive memory and next-practice recommendations."""
     return adaptive_learning_service.get_memory_summary(
         student_id=authorized_student.ref.student_id,
-        user=_actor_projection(actor),
+        user=actor_projection(actor),
         subject=subject,
     )
 
@@ -331,7 +336,7 @@ async def list_my_assignments(
     """Student-facing reviewed assignments."""
     return adaptive_learning_service.list_assignments(
         student_id=authorized_student.ref.student_id,
-        user=_actor_projection(actor),
+        user=actor_projection(actor),
         status=status,
     )
 
@@ -346,7 +351,7 @@ async def get_student_memory(
     """Role-scoped memory summary for student, parent, teacher, or admin."""
     return adaptive_learning_service.get_memory_summary(
         student_id=authorized_student.ref.student_id,
-        user=_actor_projection(actor),
+        user=actor_projection(actor),
         subject=subject,
     )
 
@@ -361,7 +366,7 @@ async def refresh_student_memory(
     """Persist a durable memory snapshot from current learning evidence."""
     return adaptive_learning_service.get_memory_summary(
         student_id=authorized_student.ref.student_id,
-        user=_actor_projection(actor),
+        user=actor_projection(actor),
         subject=subject,
         persist=True,
     )
@@ -377,7 +382,7 @@ async def get_student_recommendations(
     """Next-practice recommendations without autonomous assignment claims."""
     summary = adaptive_learning_service.get_memory_summary(
         student_id=authorized_student.ref.student_id,
-        user=_actor_projection(actor),
+        user=actor_projection(actor),
         subject=subject,
     )
     return {
@@ -386,7 +391,7 @@ async def get_student_recommendations(
         "sequencingSummary": summary["sequencingSummary"],
         "reviewRequired": True,
         "autonomousDecision": False,
-        "locale": adaptive_learning_service.locale_contract(_actor_projection(actor)),
+        "locale": adaptive_learning_service.locale_contract(actor_projection(actor)),
     }
 
 
@@ -401,7 +406,7 @@ async def list_student_assignments(
     """Role-scoped assignment list for teacher/admin review and parent progress views."""
     return adaptive_learning_service.list_assignments(
         student_id=authorized_student.ref.student_id,
-        user=_actor_projection(actor),
+        user=actor_projection(actor),
         status=status,
         include_archived=include_archived,
     )
@@ -420,7 +425,7 @@ async def preview_assignment_automation_batch(
         student_id=authorized_student.ref.student_id,
         policy=body.policy.model_dump(by_alias=True, exclude_unset=True),
         subject=body.subject,
-        user=_actor_projection(actor),
+        user=actor_projection(actor),
     )
 
 
@@ -439,7 +444,7 @@ async def execute_assignment_automation_batch(
         policy=body.policy.model_dump(by_alias=True, exclude_unset=True),
         candidates=[candidate.model_dump(by_alias=True) for candidate in body.candidates],
         subject=body.subject,
-        user=_actor_projection(actor),
+        user=actor_projection(actor),
     )
 
 
@@ -458,7 +463,7 @@ async def create_assignment(
         status=body.status,
         due_at=body.due_at,
         note=body.note,
-        user=_actor_projection(actor),
+        user=actor_projection(actor),
     )
 
 
@@ -470,7 +475,7 @@ async def get_assignment(
 ):
     return adaptive_learning_service.get_assignment(
         assignment_id,
-        _actor_projection(actor),
+        actor_projection(actor),
         item=dict(authorized_assignment.value),
     )
 
@@ -484,7 +489,7 @@ async def start_assignment(
     return adaptive_learning_service.transition_assignment(
         assignment_id=assignment_id,
         action="start",
-        user=_actor_projection(actor),
+        user=actor_projection(actor),
         item=dict(authorized_assignment.value),
     )
 
@@ -500,7 +505,7 @@ async def complete_assignment(
     return adaptive_learning_service.transition_assignment(
         assignment_id=assignment_id,
         action="complete",
-        user=_actor_projection(actor),
+        user=actor_projection(actor),
         item=dict(authorized_assignment.value),
         student_answer=body.student_answer,
         correct=body.correct,
@@ -519,7 +524,7 @@ async def skip_assignment(
     return adaptive_learning_service.transition_assignment(
         assignment_id=assignment_id,
         action="skip",
-        user=_actor_projection(actor),
+        user=actor_projection(actor),
         item=dict(authorized_assignment.value),
         note=body.note,
     )
@@ -536,7 +541,7 @@ async def archive_assignment(
     return adaptive_learning_service.transition_assignment(
         assignment_id=assignment_id,
         action="archive",
-        user=_actor_projection(actor),
+        user=actor_projection(actor),
         item=dict(authorized_assignment.value),
         note=body.note,
     )
@@ -550,5 +555,5 @@ async def get_parent_child_progress(
 ):
     """Parent-facing progress signals for adaptive memory and assignments."""
     return adaptive_learning_service.parent_progress_signal(
-        authorized_student.ref.student_id, _actor_projection(actor)
+        authorized_student.ref.student_id, actor_projection(actor)
     )

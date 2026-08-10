@@ -51,6 +51,7 @@ from stoa.security.route_authorization import (
     student_actor_dependency,
     student_create_actor_dependency,
 )
+from stoa.routers.adaptive import actor_projection
 from stoa.services import (
     adaptive_learning_service,
     ai_service,
@@ -1274,6 +1275,50 @@ _MESSAGE_POLL_SECONDS = 0.05
 _AI_LEASE_SECONDS = 120
 _AI_INVOCATION_DEADLINE_SECONDS = 90
 
+_SUBJECT_ALIASES = {
+    "Mathematics": "math", "Mathematik": "math", "math": "math",
+    "Physics": "physics", "Physik": "physics", "physics": "physics",
+    "German": "german", "Deutsch": "german", "german": "german",
+    "English": "english", "english": "english",
+    "French": "french", "Französisch": "french", "french": "french",
+}
+
+_MAX_MEMORY_TOPICS = 8
+
+
+def _memory_context_for_student(student_id: str, actor: Actor, subject: str) -> str | None:
+    """Summarise the student's weak topics for AI personalisation.
+
+    Returns None when there is nothing to personalise on, or when the lookup
+    fails — an answer without memory is far better than no answer at all.
+    """
+    try:
+        memory_summary = adaptive_learning_service.get_memory_summary(
+            student_id=student_id,
+            user=actor_projection(actor),
+            subject=_SUBJECT_ALIASES.get(subject, "math"),
+            persist=False,
+        )
+        labels: list[str] = []
+        for topic in memory_summary.get("weakTopics", []):
+            if not isinstance(topic, Mapping):
+                continue
+            label = str(topic.get("label") or topic.get("topicId") or "").strip()
+            if label:
+                labels.append(label)
+        if not labels:
+            return None
+        unique_topics = list(dict.fromkeys(labels))[:_MAX_MEMORY_TOPICS]
+        return "Known weak topics for this student: " + ", ".join(unique_topics) + "."
+    except (AttributeError, TypeError, KeyError):
+        # A bad call signature or response shape is a defect, not a runtime
+        # condition — surface it instead of silently dropping personalisation.
+        logger.exception("memory_context_contract_error")
+        return None
+    except Exception:
+        logger.warning("memory_context_fetch_failed", exc_info=True)
+        return None
+
 
 def _completed_command_response(command: dict) -> SendMessageResponse | None:
     if command.get("status") != "completed" or not command.get("result_json"):
@@ -1889,6 +1934,11 @@ def _execute_message_command(
             _conversation_allowance_command_fields(command, entitlement)
         )
 
+    # Resolved before the AI lease is claimed: the lookup spans several table
+    # reads, and holding the lease across it would push concurrent duplicates
+    # past their bounded replay wait.
+    memory_context = _memory_context_for_student(student_id, actor, subject)
+
     lease_owner = str(uuid.uuid4())
     now_epoch = int(datetime.now(timezone.utc).timestamp())
     lease_result = _coerce_command_result(
@@ -1978,40 +2028,11 @@ def _execute_message_command(
             )
             raise AttachmentDecisionError(code)
         attachment_context = context_result.context
-    normalized_subject = {
-        "Mathematics": "math", "Mathematik": "math", "math": "math",
-        "Physics": "physics", "Physik": "physics", "physics": "physics",
-        "German": "german", "Deutsch": "german", "german": "german",
-        "English": "english", "english": "english",
-        "French": "french", "Französisch": "french", "french": "french",
-    }.get(subject, "math")
+    normalized_subject = _SUBJECT_ALIASES.get(subject, "math")
     ai_deadline = time.monotonic() + _AI_INVOCATION_DEADLINE_SECONDS
     _active_conversation_generation(student_id, table)
     allowance_client = _ConversationAllowanceBedrockClient(command)
     allowance_metadata: dict[str, object] | None = None
-
-    # Build a lightweight memory context string from the student's weak concepts.
-    # Failures are non-fatal — the AI call proceeds without personalisation.
-    memory_context: str | None = None
-    try:
-        memory_summary = adaptive_learning_service.get_memory_summary(
-            student_id=student_id,
-            user=actor.user,
-            subject=normalized_subject,
-            persist=False,
-        )
-        labels: list[str] = []
-        for topic in memory_summary.get("weakTopics", []):
-            if not isinstance(topic, Mapping):
-                continue
-            label = str(topic.get("label") or topic.get("topicId") or "").strip()
-            if label:
-                labels.append(label)
-        if labels:
-            unique_topics = list(dict.fromkeys(labels))[:8]
-            memory_context = "Known weak topics for this student: " + ", ".join(unique_topics) + "."
-    except Exception:
-        logger.warning("memory_context_fetch_failed", exc_info=True)
 
     try:
         provider_result = ai_service.get_ai_answer(

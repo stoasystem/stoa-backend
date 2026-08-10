@@ -439,8 +439,14 @@ def get_ai_answer(
         grade=grade,
         language=language,
     )
+    # Memory text derives from topic labels the model extracted out of student
+    # questions, so it is untrusted and must be scrubbed before it can reach the
+    # system prompt — otherwise a crafted question becomes stored injection.
     if memory_context and memory_context.strip():
-        safe_memory = memory_context.strip()[:800]
+        safe_memory = _sanitise_input(memory_context, correlation_id=correlation_id)[:800]
+    else:
+        safe_memory = ""
+    if safe_memory:
         system_prompt = base_prompt + _MEMORY_CONTEXT_BLOCK.format(memory_context=safe_memory)
     else:
         system_prompt = base_prompt
