@@ -126,7 +126,16 @@ def _required_text(
 
 def _positive_integer(value: object, field: str, *, allow_zero: bool = False) -> int:
     minimum = 0 if allow_zero else 1
-    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+    if isinstance(value, bool):
+        raise ValueError(f"{field} is invalid")
+    # Accept Decimal (DynamoDB high-level resource returns numbers as Decimal)
+    from decimal import Decimal
+    if isinstance(value, Decimal):
+        try:
+            value = int(value)
+        except (TypeError, ValueError, OverflowError):
+            raise ValueError(f"{field} is invalid")
+    if not isinstance(value, int) or value < minimum:
         raise ValueError(f"{field} is invalid")
     return value
 

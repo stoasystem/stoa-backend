@@ -295,15 +295,21 @@ def require_active_account_fence(
     table: Any | None = None,
 ) -> dict[str, Any]:
     fence = get_account_fence(user_id, table=table)
+    raw_gen = fence.get("generation") if fence else None
+    try:
+        fence_generation = int(raw_gen) if raw_gen is not None else 0
+    except (TypeError, ValueError):
+        fence_generation = 0
     if (
         not fence
         or fence.get("status") != "active"
-        or type(fence.get("generation")) is not int
-        or int(fence["generation"]) <= 0
-        or (generation is not None and fence["generation"] != generation)
+        or fence_generation <= 0
+        or (generation is not None and fence_generation != generation)
     ):
         raise AccountDeletionConflict("account is not writable")
-    return fence
+    # Return a fence dict with a normalised int generation so callers don't
+    # receive a Decimal from DynamoDB.
+    return {**fence, "generation": fence_generation}
 
 
 def ensure_active_account_fence(
@@ -2009,15 +2015,25 @@ def create_teacher_escalation_intent(
 
 
 def transact(operations: Iterable[dict[str, Any]], *, table: Any | None = None) -> None:
+    import boto3 as _boto3
+
     target = table or get_table()
     hook = getattr(target, "transact_account_deletion", None)
     if callable(hook):
         hook(list(operations))
         return
-    client = getattr(getattr(target, "meta", None), "client", None)
     table_name = getattr(target, "name", None)
-    if client is None or not table_name:
+    if not table_name:
         raise AccountDeletionConflict("atomic lifecycle persistence unavailable")
+    # Use a fresh low-level client to avoid any request-transformation event
+    # handlers registered on the DynamoDB resource's meta client.
+    region = getattr(
+        getattr(getattr(target, "meta", None), "client", None),
+        "meta",
+        None,
+    )
+    region_name = getattr(region, "region_name", None) or "eu-central-2"
+    client = _boto3.client("dynamodb", region_name=region_name)
     serializer = TypeSerializer()
     try:
         client.transact_write_items(

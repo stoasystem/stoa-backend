@@ -52,14 +52,15 @@ from stoa.security.route_authorization import (
     student_create_actor_dependency,
 )
 from stoa.services import (
+    adaptive_learning_service,
     ai_service,
     allowance_service,
+    attachment_service,
     bedrock_token_count_service,
     entitlement_service,
     teacher_dispatch_service,
     teacher_support_allowance_service,
     usage_ledger_service,
-    attachment_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -1988,6 +1989,29 @@ def _execute_message_command(
     _active_conversation_generation(student_id, table)
     allowance_client = _ConversationAllowanceBedrockClient(command)
     allowance_metadata: dict[str, object] | None = None
+
+    # Build a lightweight memory context string from the student's weak concepts.
+    # Failures are non-fatal — the AI call proceeds without personalisation.
+    memory_context: str | None = None
+    try:
+        memory_summary = adaptive_learning_service.get_memory_summary(
+            student_id=student_id,
+            user=actor.user,
+            subject=normalized_subject,
+            persist=False,
+        )
+        weak_topics: list[str] = []
+        for snapshot in memory_summary.get("snapshots", []):
+            for kp in snapshot.get("weak_knowledge_points", []):
+                label = kp.get("label") or kp.get("topic") or ""
+                if label:
+                    weak_topics.append(label)
+        if weak_topics:
+            unique_topics = list(dict.fromkeys(weak_topics))[:8]
+            memory_context = "Known weak topics for this student: " + ", ".join(unique_topics) + "."
+    except Exception:
+        logger.warning("memory_context_fetch_failed", exc_info=True)
+
     try:
         provider_result = ai_service.get_ai_answer(
             content=body.content,
@@ -1996,6 +2020,7 @@ def _execute_message_command(
             language="de",
             history=prior_messages,
             attachment_context=attachment_context,
+            memory_context=memory_context,
             correlation_id=command_id,
             deadline_monotonic=ai_deadline,
             effect_id=allowance_client.allowance_effect_id,

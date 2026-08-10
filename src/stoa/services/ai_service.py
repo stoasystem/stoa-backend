@@ -42,9 +42,18 @@ Rules:
 - If the question is too complex or involves emotional distress, suggest teacher intervention.
 - Respond in the student's language: {language}.
 - Keep explanations concise (max 300 words).
+- Format mathematical expressions using LaTeX: inline equations with $...$ and block equations with $$...$$.
 
 IMPORTANT: Respond ONLY with valid JSON (no markdown code blocks, no extra text):
 {{"steps":["Step 1: ..."],"answer":"Final answer","hints":["Hint..."],"similar_exercises":["Exercise..."],"knowledge_points":["Topic"],"suggest_teacher":false}}"""
+
+# Memory-aware variant — appended when the caller supplies a non-empty weak-concept summary.
+# The placeholder is intentionally outside the base prompt so the base prompt can be used
+# independently in tests and non-personalised contexts.
+_MEMORY_CONTEXT_BLOCK = """
+Student learning context (use this to tailor your explanation):
+{memory_context}
+"""
 
 # ── Prompt injection defence ───────────────────────────────────────────────────
 
@@ -398,6 +407,7 @@ def get_ai_answer(
     language: str = "de",
     history: list[dict] | None = None,
     attachment_context: str = "",
+    memory_context: str | None = None,
     correlation_id: str | None = None,
     deadline_monotonic: float | None = None,
     clock: Callable[[], float] | None = None,
@@ -409,22 +419,31 @@ def get_ai_answer(
     """Invoke Bedrock Claude with a controlled educational prompt.
 
     Args:
-        content:  The student's latest message (will be sanitised).
-        subject:  Normalised subject string (e.g. "math", "german").
-        grade:    Grade/level string (e.g. "Grade 8").
-        language: ISO language hint for the response ("de", "en", "fr").
-        history:  Optional list of previous raw message dicts from DynamoDB,
-                  each with keys ``role`` and ``content``.  The most recent
-                  _MAX_HISTORY_TURNS pairs will be included.
+        content:        The student's latest message (will be sanitised).
+        subject:        Normalised subject string (e.g. "math", "german").
+        grade:          Grade/level string (e.g. "Grade 8").
+        language:       ISO language hint for the response ("de", "en", "fr").
+        history:        Optional list of previous raw message dicts from DynamoDB,
+                        each with keys ``role`` and ``content``.  The most recent
+                        _MAX_HISTORY_TURNS pairs will be included.
+        memory_context: Optional short summary of the student's weak concepts
+                        (from adaptive_learning_service).  When provided it is
+                        appended to the system prompt so the model can tailor
+                        its explanation.  Must not exceed 800 characters.
     """
     safe_content = _sanitise_input(content, correlation_id=correlation_id)
     normalized_subject = learning_profile_service.normalize_subject(subject)
-    system_prompt = SYSTEM_PROMPT.format(
+    base_prompt = SYSTEM_PROMPT.format(
         subject=normalized_subject,
         subject_context=learning_profile_service.subject_prompt_context(normalized_subject),
         grade=grade,
         language=language,
     )
+    if memory_context and memory_context.strip():
+        safe_memory = memory_context.strip()[:800]
+        system_prompt = base_prompt + _MEMORY_CONTEXT_BLOCK.format(memory_context=safe_memory)
+    else:
+        system_prompt = base_prompt
     messages = _build_messages(safe_content, history, attachment_context)
 
     clock = clock or time.monotonic

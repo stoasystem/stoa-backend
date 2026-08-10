@@ -130,11 +130,14 @@ async def resolve_actor(
             raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
 
         fence = await repository.get_account_fence(user_id)
-        fence_generation = fence.get("generation") if fence else None
+        raw_generation = fence.get("generation") if fence else None
+        try:
+            fence_generation = int(raw_generation) if raw_generation is not None else 0
+        except (TypeError, ValueError):
+            fence_generation = 0
         if (
             not fence
             or fence.get("status") != "active"
-            or type(fence_generation) is not int
             or fence_generation <= 0
         ):
             raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)

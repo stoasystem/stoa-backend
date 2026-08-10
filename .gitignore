@@ -12,3 +12,7 @@ htmlcov/
 *.egg-info/
 .DS_Store
 dist/
+
+# 规划文件和证据包（本地归档，不进入代码库）
+.planning/
+evidence/
