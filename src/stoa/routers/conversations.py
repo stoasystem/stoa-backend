@@ -2000,14 +2000,15 @@ def _execute_message_command(
             subject=normalized_subject,
             persist=False,
         )
-        weak_topics: list[str] = []
-        for snapshot in memory_summary.get("snapshots", []):
-            for kp in snapshot.get("weak_knowledge_points", []):
-                label = kp.get("label") or kp.get("topic") or ""
-                if label:
-                    weak_topics.append(label)
-        if weak_topics:
-            unique_topics = list(dict.fromkeys(weak_topics))[:8]
+        labels: list[str] = []
+        for topic in memory_summary.get("weakTopics", []):
+            if not isinstance(topic, Mapping):
+                continue
+            label = str(topic.get("label") or topic.get("topicId") or "").strip()
+            if label:
+                labels.append(label)
+        if labels:
+            unique_topics = list(dict.fromkeys(labels))[:8]
             memory_context = "Known weak topics for this student: " + ", ".join(unique_topics) + "."
     except Exception:
         logger.warning("memory_context_fetch_failed", exc_info=True)
