@@ -1,0 +1,106 @@
+{
+  "phase": "477",
+  "phase_name": "Web Authentication And Contract Convergence",
+  "timestamp": "2026-08-14T21:59:50.531Z",
+  "status": "paused",
+  "pause_reason": "The user stopped Phase 477 before OpenAPI and mock-boundary decisions so completed implementation, tests, security controls, and Phase 474 infrastructure authority can be audited first.",
+  "areas_completed": [
+    "Login and session recovery",
+    "Role registration and administrator review"
+  ],
+  "areas_remaining": [
+    "OpenAPI contract authority",
+    "Mock and real-service boundary"
+  ],
+  "decisions": {
+    "Login and session recovery": [
+      {
+        "question": "How should password and login-code authentication be presented?",
+        "answer": "Use one /login page with password as the default and login code as an alternate mode; both converge on the same authoritative session restoration flow.",
+        "options_presented": [
+          "One page, password default and login code alternate",
+          "One page, login code default and password alternate",
+          "Separate /login and /login/code pages"
+        ]
+      },
+      {
+        "question": "What should happen when an access token expires?",
+        "answer": "Coalesce concurrent failures into one bounded refresh attempt. If refresh fails, clear the entire local session, redirect to login with a safe return target, and restore that target only after successful reauthentication.",
+        "options_presented": [
+          "One automatic refresh then sign out with safe return target",
+          "No automatic refresh",
+          "Prompt the user before retry or sign-out"
+        ]
+      },
+      {
+        "question": "How should login-code request and verification failures be shown?",
+        "answer": "Always use the same anti-enumeration acknowledgement regardless of account existence. Show server-policy resend countdown and attempt state without revealing identity existence; expiry or exhausted attempts require a new request.",
+        "options_presented": [
+          "Generic acknowledgement plus server countdown and bounded attempt state",
+          "Generic acknowledgement with no countdown or attempt state",
+          "More detail for previously used devices"
+        ]
+      },
+      {
+        "question": "What should explicit logout affect?",
+        "answer": "Logout is an explicit all-device global sign-out. The UI must disclose that scope, and a provider revocation failure must not be presented as successful logout after merely clearing local state.",
+        "options_presented": [
+          "Explicit all-device logout",
+          "Current-browser-only logout",
+          "Current-browser logout plus a separate all-device action"
+        ]
+      }
+    ],
+    "Role registration and administrator review": [
+      {
+        "question": "How should public registrants select a role?",
+        "answer": "Use the existing public registration system with explicit Student, Parent, and Teacher choices. The client and backend must never infer a role from email or a fallback default.",
+        "options_presented": [
+          "Public Teacher registration followed by administrator review",
+          "Administrator directly creates Teacher accounts",
+          "Public Teacher registration with immediate Teacher authority"
+        ]
+      },
+      {
+        "question": "How should legacy tutor and other non-authoritative role values be handled?",
+        "answer": "Teacher is the only active field and role term. Remove tutor from active types, fields, routes, aliases, and fallbacks. Historical tutor values are reconciliation inputs only; ordinary login rejects them without silently mapping or changing authority.",
+        "options_presented": [
+          "Reject and route to controlled reconciliation",
+          "Automatically convert tutor to teacher",
+          "Enter a restricted Student fallback"
+        ]
+      },
+      {
+        "question": "When does a Teacher registrant receive Teacher authority?",
+        "answer": "A Teacher registrant verifies their email and enters pending_review without Teacher privileges. Only an administrator approval may activate the authoritative teacher role.",
+        "options_presented": [
+          "Email verification then pending administrator review",
+          "Administrator direct creation",
+          "Immediate activation after email verification"
+        ]
+      },
+      {
+        "question": "What remains of the invitation and candidacy flows?",
+        "answer": "Remove the independent invitation, invitation-token consumption, and /teacher-access activation model. Pending or rejected Teacher registrants may authenticate only to a review-status experience and cannot access Teacher dashboards or student resources.",
+        "options_presented": [
+          "Use existing registration plus administrator review and remove invitation activation",
+          "Keep invitation activation alongside public registration",
+          "Keep a separate Teacher candidacy page"
+        ]
+      }
+    ]
+  },
+  "deferred_ideas": [
+    "Homepage route authority and any /home-v2 to / switch-over successor belong to a separately approved switch-over governance stage, not Phase 477."
+  ],
+  "canonical_refs": [
+    ".planning/ROADMAP.md",
+    ".planning/REQUIREMENTS.md",
+    ".planning/phases/474-deterministic-verification-and-gated-delivery/474-CONTEXT.md",
+    "src/stoa/routers/auth.py",
+    "src/stoa/routers/teacher_applications.py",
+    "src/stoa/services/teacher_application_service.py",
+    "/Users/zhdeng/stoa-frontend/src/services/api/httpClient.ts",
+    "/Users/zhdeng/stoa-frontend/src/store/authStore.ts"
+  ]
+}
