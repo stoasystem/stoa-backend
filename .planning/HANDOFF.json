@@ -75,6 +75,6 @@
     }
   ],
   "uncommitted_files": [],
-  "next_action": "Complete a read-only three-repository audit of implemented behavior, executed tests, and security controls against the locked Phase 474 infrastructure documents; do not resume Phase 477 planning.",
-  "context_notes": "The user stopped the phase immediately after replacing the invitation model with public Teacher registration plus administrator review. OpenAPI and mock-boundary decisions remain intentionally unresolved."
+  "next_action": "Review .planning/v9.0-MILESTONE-AUDIT-2026-08-15.md and explicitly choose a closure boundary; do not resume Phase 477 discussion or planning automatically.",
+  "context_notes": "The user stopped the phase immediately after replacing the invitation model with public Teacher registration plus administrator review. The current-state audit returned HOLD: all five critical cross-repository flows are broken, current infra contradicts the locked Phase 474 topology, and OpenAPI/mock-boundary decisions remain intentionally unresolved."
 }
