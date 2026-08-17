@@ -68,6 +68,36 @@ def test_deployment_is_gated_behind_lint_and_the_full_test_suite() -> None:
     assert "pytest" in commands
 
 
+def test_gate_checks_out_the_siblings_the_cross_repo_tests_resolve() -> None:
+    _, workflow = _workflow()
+    checkouts = {
+        step["with"].get("repository", "stoasystem/stoa-backend"): step["with"]["path"]
+        for step in _steps(workflow["jobs"]["verify"])
+        if isinstance(step.get("uses"), str) and "actions/checkout@" in step["uses"]
+    }
+    # Without the siblings in place these tests fail at collection, not on merit.
+    assert checkouts == {
+        "stoasystem/stoa-backend": "stoa-backend",
+        "stoasystem/stoa-frontend": "stoa-frontend",
+        "stoasystem/stoa-infra": "stoa-infra",
+    }
+
+
+def test_uv_is_pinned_so_the_locked_export_stays_reproducible() -> None:
+    _, workflow = _workflow()
+    pins = [
+        step["with"]
+        for job in workflow["jobs"].values()
+        for step in _steps(job)
+        if isinstance(step.get("uses"), str) and "setup-uv@" in step["uses"]
+    ]
+    assert len(pins) == 2
+    # requirements.txt is compared against a fresh export whose bytes differ
+    # between uv releases, so an unpinned uv breaks provenance verification.
+    for pin in pins:
+        assert pin == {"version": "0.11.16", "enable-cache": False}
+
+
 def test_only_the_deploy_job_can_obtain_aws_credentials() -> None:
     raw, workflow = _workflow()
     jobs = workflow["jobs"]

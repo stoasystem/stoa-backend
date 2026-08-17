@@ -21,9 +21,27 @@ jobs:
     name: Lint and test gate
     runs-on: ubuntu-24.04
     steps:
+      # The suite carries cross-repo contract tests that resolve sibling
+      # repositories by path, so all three must be checked out side by side or
+      # collection fails outright.
       - name: Check out backend
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
+          path: stoa-backend
+          persist-credentials: false
+
+      - name: Check out frontend
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: stoasystem/stoa-frontend
+          path: stoa-frontend
+          persist-credentials: false
+
+      - name: Check out infra
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: stoasystem/stoa-infra
+          path: stoa-infra
           persist-credentials: false
 
       - name: Set up Python
@@ -33,14 +51,20 @@ jobs:
 
       - name: Set up uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version: 0.11.16
+          enable-cache: false
 
       - name: Install locked dependencies
+        working-directory: stoa-backend
         run: uv sync --frozen --extra dev
 
       - name: Lint
+        working-directory: stoa-backend
         run: uv run ruff check .
 
       - name: Run test suite
+        working-directory: stoa-backend
         run: uv run pytest -q
 
   deploy:
@@ -64,8 +88,13 @@ jobs:
         with:
           python-version: 3.12.13
 
+      # Pinned: the provenance guard compares requirements.txt against a fresh
+      # locked export, and that output is not identical across uv releases.
       - name: Set up uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+        with:
+          version: 0.11.16
+          enable-cache: false
 
       - name: Build Lambda deployment package (linux arm64 wheels)
         run: python scripts/build_lambda_dist.py --zip lambda.zip

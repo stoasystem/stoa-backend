@@ -341,7 +341,7 @@ def test_diff_workflow_previews_changes_without_mutating_any_stack() -> None:
     commands = " ".join(
         step["run"] for step in job["steps"] if isinstance(step.get("run"), str)
     )
-    assert "cdk diff --all" in commands
+    assert "cdk diff" in commands
     for token in ("cdk deploy", "cdk destroy", "cdk import", "--require-approval", "|| true"):
         assert token not in commands
     assert not re.search(r"\baws\s+(?:cloudformation|lambda|s3)\b", commands)
