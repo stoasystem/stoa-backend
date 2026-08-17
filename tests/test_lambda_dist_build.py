@@ -145,6 +145,48 @@ def test_locked_export_accepts_only_uv_output_destination_header_drift(tmp_path,
         builder.verify_locked_requirements(tmp_path)
 
 
+def test_locked_export_mismatch_reports_the_offending_lines(tmp_path, monkeypatch):
+    # This verifier also runs inside CDK synth, where nothing but the exception
+    # text survives, so the message has to carry the drift itself.
+    builder = _load_builder()
+    _write_minimal_repo(tmp_path)
+    header = builder.UV_HEADER + next(iter(builder.UV_EXPORT_COMMANDS))
+    (tmp_path / "requirements.txt").write_bytes(header + b"fastapi==0.115.0\n")
+    monkeypatch.setattr(
+        builder,
+        "export_locked_requirements",
+        lambda repo_root: header + b"fastapi==0.136.3\n",
+    )
+
+    with pytest.raises(builder.DistVerificationError) as failure:
+        builder.verify_locked_requirements(tmp_path)
+
+    detail = str(failure.value)
+    assert "-fastapi==0.136.3" in detail
+    assert "+fastapi==0.115.0" in detail
+
+
+def test_locked_export_mismatch_detail_is_bounded(tmp_path, monkeypatch):
+    # A full 400-line requirements diff would bury the CDK traceback that
+    # follows it.
+    builder = _load_builder()
+    _write_minimal_repo(tmp_path)
+    (tmp_path / "requirements.txt").write_bytes(
+        b"".join(f"pkg{index}==1.0.0\n".encode() for index in range(400))
+    )
+    monkeypatch.setattr(
+        builder,
+        "export_locked_requirements",
+        lambda repo_root: b"".join(f"pkg{index}==2.0.0\n".encode() for index in range(400)),
+    )
+
+    with pytest.raises(builder.DistVerificationError) as failure:
+        builder.verify_locked_requirements(tmp_path)
+
+    assert len(str(failure.value).splitlines()) <= 26
+    assert "truncated" in str(failure.value)
+
+
 def test_locked_export_uses_closed_uv_command(tmp_path, monkeypatch):
     builder = _load_builder()
     _write_minimal_repo(tmp_path)

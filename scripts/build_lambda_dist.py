@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import hashlib
+import itertools
 import json
 import os
 from pathlib import Path
@@ -198,8 +200,30 @@ def verify_locked_requirements(repo_root: Path) -> bytes:
     committed_header, committed_payload = _requirements_payload(requirements_path.read_bytes())
     exported_header, exported_payload = _requirements_payload(exported)
     if committed_header != exported_header or committed_payload != exported_payload:
-        raise DistVerificationError("requirements.txt differs from the fresh locked export")
+        raise DistVerificationError(
+            "requirements.txt differs from the fresh locked export\n"
+            + _requirements_drift(requirements_path.read_bytes(), exported)
+        )
     return exported
+
+
+def _requirements_drift(committed: bytes, exported: bytes, *, max_lines: int = 24) -> str:
+    """Name the drift inline: this check runs inside CDK synth, where a bare
+    'differs' message leaves no artifact to inspect afterwards."""
+    diff = difflib.unified_diff(
+        exported.decode("utf-8", "replace").splitlines(),
+        committed.decode("utf-8", "replace").splitlines(),
+        fromfile="fresh locked export",
+        tofile="committed requirements.txt",
+        lineterm="",
+        n=1,
+    )
+    shown = list(itertools.islice(diff, max_lines + 1))
+    if not shown:
+        return "(no textual difference; the exporter emitted different bytes)"
+    if len(shown) > max_lines:
+        shown[max_lines] = f"... diff truncated at {max_lines} lines"
+    return "\n".join(shown)
 
 
 def _requirements_payload(value: bytes) -> tuple[bool, bytes]:
