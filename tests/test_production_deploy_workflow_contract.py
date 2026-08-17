@@ -160,6 +160,8 @@ def test_mutation_is_bounded_to_the_two_known_functions() -> None:
     commands = " ".join(_run_steps(workflow["jobs"]["deploy"]))
     assert "--dry-run" in commands
     assert "aws lambda wait function-updated" in commands
+    assert "aws lambda publish-version" in commands
+    assert "aws lambda update-alias" in commands
     referenced = set(re.findall(r"stoa-(?:api|weekly-report)", commands))
     assert referenced == set(FUNCTIONS)
     assert not re.search(r"\b(?:aws\s+cloudformation|cdk)\s+(?:deploy|destroy)", commands)

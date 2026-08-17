@@ -48,7 +48,7 @@ def _resolve_infra_root(backend_root: Path) -> Path:
 INFRA_ROOT = _resolve_infra_root(BACKEND_ROOT)
 WORKFLOW_DIR = INFRA_ROOT / ".github" / "workflows"
 WORKFLOW_PATH = WORKFLOW_DIR / "deploy.yml"
-DIFF_WORKFLOW_PATH = WORKFLOW_DIR / "cdk-diff.yml"
+DEPLOY_WORKFLOW_PATH = WORKFLOW_DIR / "deploy-production.yml"
 
 
 def _validation_run() -> str:
@@ -317,34 +317,54 @@ def test_infra_root_resolution_rejects_zero_multiple_and_symlink_matches(tmp_pat
         _resolve_infra_root(backend)
 
 
-def test_infra_has_exactly_the_gate_and_diff_workflows() -> None:
+def test_infra_has_exactly_the_gate_and_production_deploy_workflows() -> None:
     assert not WORKFLOW_DIR.is_symlink()
     assert WORKFLOW_DIR.is_dir()
     entries = sorted(WORKFLOW_DIR.iterdir(), key=lambda path: path.name)
-    assert [path.name for path in entries] == ["cdk-diff.yml", "deploy.yml"]
+    assert [path.name for path in entries] == ["deploy-production.yml", "deploy.yml"]
     for path in entries:
         assert path.is_file()
         assert not path.is_symlink()
 
 
-def test_diff_workflow_previews_changes_without_mutating_any_stack() -> None:
-    raw = DIFF_WORKFLOW_PATH.read_text(encoding="utf-8")
+PRODUCTION_STACKS = (
+    "StoaAuthStack",
+    "StoaDatabaseStack",
+    "StoaStorageStack",
+    "StoaNotificationStack",
+    "StoaAiStack",
+    "StoaApiStack",
+    "StoaMonitoringStack",
+    "StoaFrontendStack",
+    "StoaReleaseDeliveryStack",
+)
+
+
+def test_production_deploy_workflow_deploys_named_stacks_after_a_diff() -> None:
+    raw = DEPLOY_WORKFLOW_PATH.read_text(encoding="utf-8")
     workflow = yaml.load(raw, Loader=shared.WorkflowLoader)
     assert isinstance(workflow, dict)
     assert workflow["on"] == {"push": {"branches": ["main"]}, "workflow_dispatch": None}
     assert workflow["permissions"] == {"contents": "read", "id-token": "write"}
-    assert list(workflow["jobs"]) == ["diff"]
+    assert list(workflow["jobs"]) == ["deploy"]
+    assert workflow["concurrency"] == {
+        "group": "infra-production-deploy",
+        "cancel-in-progress": False,
+    }
 
-    job = workflow["jobs"]["diff"]
-    # Native arm64 keeps the asset the diff hashes identical to the deployed runtime.
+    job = workflow["jobs"]["deploy"]
     assert job["runs-on"] == "ubuntu-24.04-arm"
     commands = " ".join(
         step["run"] for step in job["steps"] if isinstance(step.get("run"), str)
     )
     assert "cdk diff" in commands
-    for token in ("cdk deploy", "cdk destroy", "cdk import", "--require-approval", "|| true"):
+    assert "cdk deploy" in commands
+    assert "--require-approval never" in commands
+    for stack in PRODUCTION_STACKS:
+        assert stack in commands
+    for token in ("cdk destroy", "cdk import", "|| true", "StoaSandbox"):
         assert token not in commands
-    assert not re.search(r"\baws\s+(?:cloudformation|lambda|s3)\b", commands)
+    assert "snapshot_lambda_environment.py" in commands
     assert "secrets." not in raw
 
     for step in job["steps"]:

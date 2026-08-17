@@ -514,7 +514,7 @@ def test_frontend_has_exactly_the_formal_and_delivery_workflows() -> None:
     assert not WORKFLOW_DIR.is_symlink()
     assert WORKFLOW_DIR.is_dir()
     entries = sorted(WORKFLOW_DIR.iterdir(), key=lambda path: path.name)
-    assert [path.name for path in entries] == ["deploy.yml", "frontend-ci.yml"]
+    assert [path.name for path in entries] == ["deploy-production.yml", "deploy.yml", "frontend-ci.yml"]
     assert WORKFLOW_PATH.is_file()
     assert not WORKFLOW_PATH.is_symlink()
     assert DELIVERY_WORKFLOW_PATH.is_file()

@@ -154,3 +154,34 @@ jobs:
               --region eu-central-2
           done
           echo "Lambda functions updated successfully"
+
+      - name: Point production aliases at the new versions
+        run: |
+          set -euo pipefail
+          # API Gateway and the weekly-report schedule bind aliases once infra
+          # has created them. Until then GetAlias fails closed here and $LATEST
+          # remains the invoked target, which is the current production shape.
+          for function_name in stoa-api stoa-weekly-report; do
+            if ! aws lambda get-alias \
+              --function-name "$function_name" \
+              --name production \
+              --region eu-central-2 \
+              >/dev/null; then
+              echo "$function_name has no production alias yet"
+              continue
+            fi
+            version="$(
+              aws lambda publish-version \
+                --function-name "$function_name" \
+                --region eu-central-2 \
+                --query Version \
+                --output text
+            )"
+            aws lambda update-alias \
+              --function-name "$function_name" \
+              --name production \
+              --function-version "$version" \
+              --region eu-central-2 \
+              --query AliasArn \
+              --output text
+          done
