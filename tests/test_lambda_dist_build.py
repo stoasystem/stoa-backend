@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import stat
 import zipfile
@@ -211,6 +212,58 @@ def test_locked_export_uses_closed_uv_command(tmp_path, monkeypatch):
     ]
     assert observed["kwargs"]["cwd"] == tmp_path
     assert observed["kwargs"]["check"] is True
+
+
+def test_locked_export_survives_a_colourising_exporter(tmp_path, monkeypatch):
+    # Under CDK synth the exporter wrapped its comment lines in ANSI escapes,
+    # which made an unchanged requirements.txt look drifted. Colour is a display
+    # concern, so it must not decide provenance.
+    builder = _load_builder()
+    _write_minimal_repo(tmp_path)
+    plain = (
+        builder.UV_HEADER
+        + next(iter(builder.UV_EXPORT_COMMANDS))
+        + b"fastapi==0.115.0 \\\n    --hash=sha256:abc\n    # via stoa\n"
+    )
+    (tmp_path / "requirements.txt").write_bytes(plain)
+    coloured = b"".join(
+        b"\x1b[32m" + line.rstrip(b"\n") + b"\x1b[39m\n" if line.lstrip().startswith(b"#") else line
+        for line in plain.splitlines(keepends=True)
+    )
+    assert coloured != plain
+    monkeypatch.setattr(
+        builder.subprocess,
+        "run",
+        lambda argv, **kwargs: builder.subprocess.CompletedProcess(argv, 0, stdout=coloured, stderr=b""),
+    )
+
+    assert builder.verify_locked_requirements(tmp_path) == plain
+
+
+def test_locked_export_strips_inherited_colour_forcing(tmp_path, monkeypatch):
+    # The CDK CLI exports FORCE_COLOR to the interpreter it spawns for synth. uv
+    # honours it by wrapping exported comment lines in ANSI escapes, which made
+    # the committed file look drifted only when the check ran under CDK.
+    builder = _load_builder()
+    _write_minimal_repo(tmp_path)
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    monkeypatch.setenv("CLICOLOR_FORCE", "1")
+    monkeypatch.setenv("PATH", os.environ.get("PATH", ""))
+    observed = {}
+
+    def fake_run(argv, **kwargs):
+        observed["env"] = kwargs["env"]
+        return builder.subprocess.CompletedProcess(argv, 0, stdout=b"fastapi==0.115.0\n", stderr=b"")
+
+    monkeypatch.setattr(builder.subprocess, "run", fake_run)
+    builder.export_locked_requirements(tmp_path)
+
+    env = observed["env"]
+    assert "FORCE_COLOR" not in env
+    assert "CLICOLOR_FORCE" not in env
+    assert env["NO_COLOR"] == "1"
+    # uv still has to be locatable, so the rest of the environment is preserved.
+    assert env["PATH"] == os.environ["PATH"]
 
 
 def test_dependency_install_uses_closed_al2023_arm64_compatibility_ladder(
