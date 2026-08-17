@@ -4,7 +4,9 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import stat
+import subprocess
 import zipfile
 
 import pytest
@@ -58,6 +60,42 @@ def test_build_dist_skip_install_writes_verifiable_manifest(tmp_path, monkeypatc
     assert len(verified["cdk_asset_hash"]) == 64
     assert verified["handler_inventory"]["stoa.main.handler"]["has_attr"] is True
     assert verified["handler_inventory"]["stoa.jobs.weekly_reports.handler"]["has_attr"] is True
+
+
+def _commit_everything(root: Path) -> None:
+    run = lambda *args: subprocess.run(args, cwd=root, check=True, capture_output=True)  # noqa: E731
+    run("git", "init", "-q")
+    run("git", "add", "-A")
+    run(
+        "git",
+        "-c",
+        "user.email=test@stoa.invalid",
+        "-c",
+        "user.name=test",
+        "commit",
+        "-q",
+        "-m",
+        "initial",
+    )
+
+
+def test_zip_written_beside_the_repo_keeps_the_tree_provenance_clean(tmp_path, monkeypatch):
+    # The deploy job builds with `--zip lambda.zip` at the repo root, then
+    # re-verifies. An unignored archive makes git call the tree dirty, so the
+    # freshly computed manifest disagrees with the one written seconds earlier.
+    # The shipped ignore rules are copied in so removing the entry fails here.
+    builder = _load_builder()
+    _write_minimal_repo(tmp_path)
+    _stub_locked_export(builder, monkeypatch, tmp_path)
+    shutil.copyfile(Path(__file__).resolve().parents[1] / ".gitignore", tmp_path / ".gitignore")
+    _commit_everything(tmp_path)
+    dist_dir = tmp_path / "dist"
+
+    manifest = builder.build_dist(tmp_path, dist_dir, skip_install=True)
+    builder.zip_dist(dist_dir, tmp_path / "lambda.zip")
+
+    assert manifest["source_git_dirty"] is False
+    assert builder.validate_manifest(tmp_path, dist_dir)["source_git_dirty"] is False
 
 
 def test_validate_manifest_rejects_stale_source(tmp_path, monkeypatch):

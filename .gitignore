@@ -5,10 +5,12 @@ __pycache__/
 .env.*
 !.env.example
 dist/
+# Build output of scripts/build_lambda_dist.py --zip. Provenance records whether
+# the tree was dirty, so the build must not perturb what it measures.
+lambda.zip
 .ruff_cache/
 .mypy_cache/
 .pytest_cache/
 htmlcov/
 *.egg-info/
 .DS_Store
-dist/
