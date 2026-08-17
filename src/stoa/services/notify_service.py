@@ -1,6 +1,8 @@
 """SQS + SES — teacher queue and email notifications."""
 import json
 from datetime import UTC, datetime
+from html import escape
+from urllib.parse import quote
 from uuid import uuid4
 import boto3
 from stoa.config import settings
@@ -43,6 +45,46 @@ def enqueue_teacher_request(
         }),
         MessageGroupId=operation_id,
         MessageDeduplicationId=operation_id,
+    )
+
+
+def send_teacher_invitation_email(
+    recipient: str,
+    *,
+    activation_token: str,
+    expires_at: str,
+    full_name: str = "",
+    ses_client=None,
+) -> None:
+    """Deliver a single-use teacher activation link to the reviewed candidate.
+
+    The token is only ever readable at issue time, so this is the one path that puts it
+    in the candidate's hands. Callers must treat a raised exception as undelivered and
+    re-issue rather than assume the candidate can still activate.
+    """
+    ses = ses_client or boto3.client("ses", region_name=settings.aws_region)
+    base = settings.app_base_url.rstrip("/")
+    link = f"{base}/teacher-activate?token={quote(activation_token, safe='')}"
+    greeting = f"Hallo {escape(full_name)}," if full_name.strip() else "Hallo,"
+    ses.send_email(
+        Source="noreply@stoaedu.ch",
+        Destination={"ToAddresses": [recipient]},
+        Message={
+            "Subject": {"Data": "STOA - Ihre Freischaltung als Lehrperson"},
+            "Body": {
+                "Html": {
+                    "Data": (
+                        f"<p>{greeting}</p>"
+                        "<p>Ihre Bewerbung als Lehrperson bei STOA wurde geprüft und "
+                        "freigegeben. Über den folgenden Link können Sie Ihr Konto "
+                        "einrichten und freischalten:</p>"
+                        f'<p><a href="{escape(link, quote=True)}">Konto freischalten</a></p>'
+                        f"<p>Der Link ist einmalig verwendbar und gültig bis "
+                        f"{escape(expires_at)}.</p>"
+                    )
+                }
+            },
+        },
     )
 
 

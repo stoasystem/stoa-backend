@@ -18,6 +18,7 @@ from stoa.db.repositories import (
     teacher_application_repo,
     user_repo,
 )
+from stoa.services import notify_service, teacher_identity_provider
 
 
 FORBIDDEN_APPLICATION_FIELDS = frozenset(
@@ -113,6 +114,9 @@ def review_application(
         evidence_reference=evidence,
         created_at=timestamp,
     )
+    teacher_application_repo.set_application_review_state(
+        application_id, int(version), review_state=decision, decided_at=timestamp
+    )
     response: dict[str, Any] = {
         "applicationId": application_id,
         "version": version,
@@ -120,41 +124,171 @@ def review_application(
         "evidenceReference": evidence,
     }
     if decision == "approved":
-        token = secrets.token_urlsafe(32)
-        digest = _token_digest(token)
-        invitation_id = f"invitation_{uuid4().hex}"
-        expires_at = timestamp_dt + timedelta(seconds=max(60, invitation_expiry_seconds))
-        teacher_application_repo.create_invitation(
-            {
-                "invitation_id": invitation_id,
-                "token_digest": digest,
-                "application_id": application_id,
-                "application_version": int(version),
-                "verified_email": application["verified_email"],
-                "status": "issued",
-                "version": 1,
-                "issued_by": reviewer_id,
-                "issued_at": timestamp,
-                "expires_at": expires_at.isoformat(),
-                "reason": clean_reason,
-            }
+        response.update(
+            _issue_invitation(
+                application=application,
+                application_id=application_id,
+                version=int(version),
+                reviewer_id=reviewer_id,
+                reason=clean_reason,
+                invitation_expiry_seconds=invitation_expiry_seconds,
+                timestamp_dt=timestamp_dt,
+            )
         )
+    return response
+
+
+def reissue_invitation(
+    *,
+    actor: dict[str, Any],
+    application_id: str,
+    version: int,
+    invitation_expiry_seconds: int = 259200,
+    now: Callable[[], datetime] | None = None,
+) -> dict[str, Any]:
+    """Issue a replacement invitation for an already approved version.
+
+    A token is readable only at issue time, so an undelivered or expired invitation
+    cannot be recovered — it has to be replaced. Requires an existing approval so this
+    never becomes a second path to grant a teacher identity.
+    """
+    _require_capability(actor, capability_repo.TEACHER_IDENTITY_REVIEWER)
+    application = teacher_application_repo.get_application_version(application_id, version)
+    if not application:
+        raise HTTPException(status_code=404, detail={"code": "application_version_not_found"})
+    review = teacher_application_repo.get_review(application_id, version)
+    if not review or review.get("decision") != "approved":
+        raise HTTPException(status_code=409, detail={"code": "application_not_approved"})
+    timestamp_dt = (now or (lambda: datetime.now(UTC)))()
+    return {
+        "applicationId": application_id,
+        "version": int(version),
+        "decision": "approved",
+        **_issue_invitation(
+            application=application,
+            application_id=application_id,
+            version=int(version),
+            reviewer_id=_actor_id(actor),
+            reason=str(review.get("internal_reason") or "reissued invitation"),
+            invitation_expiry_seconds=invitation_expiry_seconds,
+            timestamp_dt=timestamp_dt,
+        ),
+    }
+
+
+def _issue_invitation(
+    *,
+    application: dict[str, Any],
+    application_id: str,
+    version: int,
+    reviewer_id: str,
+    reason: str,
+    invitation_expiry_seconds: int,
+    timestamp_dt: datetime,
+) -> dict[str, Any]:
+    """Create one single-use invitation and hand the token to the candidate by email."""
+    timestamp = timestamp_dt.isoformat()
+    token = secrets.token_urlsafe(32)
+    digest = _token_digest(token)
+    invitation_id = f"invitation_{uuid4().hex}"
+    expires_at = timestamp_dt + timedelta(seconds=max(60, invitation_expiry_seconds))
+    recipient = str(application["verified_email"])
+    teacher_application_repo.create_invitation(
+        {
+            "invitation_id": invitation_id,
+            "token_digest": digest,
+            "application_id": application_id,
+            "application_version": version,
+            "verified_email": recipient,
+            "status": "issued",
+            "version": 1,
+            "issued_by": reviewer_id,
+            "issued_at": timestamp,
+            "expires_at": expires_at.isoformat(),
+            "reason": reason,
+        }
+    )
+    _audit(
+        stream_id=application_id,
+        event_type="teacher_invitation_issued",
+        actor_id=reviewer_id,
+        target_id=application_id,
+        version=version,
+        reason_code="approved_version",
+        evidence_reference=f"teacher-invitation:{invitation_id}",
+        created_at=timestamp,
+    )
+    # The reviewer never receives the token: delivery goes straight to the address the
+    # invitation is bound to, so an approval cannot be turned into a usable credential
+    # by whoever performed the review.
+    delivered = True
+    try:
+        notify_service.send_teacher_invitation_email(
+            recipient,
+            activation_token=token,
+            expires_at=expires_at.isoformat(),
+            full_name=str(application.get("full_name") or ""),
+        )
+    except Exception:
+        delivered = False
         _audit(
             stream_id=application_id,
-            event_type="teacher_invitation_issued",
+            event_type="teacher_invitation_delivery_failed",
             actor_id=reviewer_id,
             target_id=application_id,
             version=version,
-            reason_code="approved_version",
+            reason_code="delivery_unavailable",
             evidence_reference=f"teacher-invitation:{invitation_id}",
             created_at=timestamp,
         )
-        response.update(
-            invitationToken=token,
-            invitationId=invitation_id,
-            expiresAt=expires_at.isoformat(),
-        )
-    return response
+    return {
+        "invitationId": invitation_id,
+        "expiresAt": expires_at.isoformat(),
+        "invitationDelivered": delivered,
+    }
+
+
+def applications_for_reviewer(
+    actor: dict[str, Any], *, review_state: str = "pending_review", limit: int = 50
+) -> dict[str, Any]:
+    """List candidacy versions in one review state without exposing statements."""
+    _require_capability(actor, capability_repo.TEACHER_IDENTITY_REVIEWER)
+    if review_state not in {"pending_review", "approved", "rejected"}:
+        raise HTTPException(status_code=422, detail={"code": "invalid_review_state"})
+    items = teacher_application_repo.list_applications_by_review_state(review_state, limit=limit)
+    return {
+        "reviewState": review_state,
+        "items": [
+            {
+                **_application_metadata(item),
+                "reviewState": item.get("review_state"),
+                "verifiedEmail": item.get("verified_email"),
+                "fullName": item.get("full_name"),
+                "subjects": item.get("subjects") or [],
+            }
+            for item in items
+        ],
+        "count": len(items),
+    }
+
+
+def application_status(application_id: str) -> dict[str, Any]:
+    """Return decision-free progress for a candidate holding the opaque application id.
+
+    Deliberately excludes the reviewer's reason and every submitted field, so an
+    enumerated id leaks nothing beyond how far the application has moved.
+    """
+    versions = teacher_application_repo.list_application_versions(application_id)
+    if not versions:
+        raise HTTPException(status_code=404, detail={"code": "application_not_found"})
+    latest = max(versions, key=lambda item: int(item.get("version") or 0))
+    return {
+        "applicationId": application_id,
+        "version": int(latest.get("version") or 0),
+        "reviewState": str(latest.get("review_state") or "pending_review"),
+        "createdAt": latest.get("created_at"),
+        "decidedAt": latest.get("decided_at"),
+    }
 
 
 def activate_from_invitation(
@@ -222,6 +356,61 @@ def activate_from_invitation(
         created_at=instant.isoformat(),
     )
     return _resume_activation(command, provider=provider, now=instant)
+
+
+def claim_and_activate(
+    *,
+    token: str,
+    password: str,
+    issuer: str,
+    provider: Any,
+    now: Callable[[], datetime] | None = None,
+) -> dict[str, Any]:
+    """Exchange a single-use invitation for one account and one active teacher identity.
+
+    This is the only path that creates a teacher account, and it cannot be reached
+    without a reviewer-issued token. The account address is taken from the invitation,
+    never from the caller, so holding a token grants exactly the identity that was
+    approved and nothing else.
+    """
+    digest = _token_digest(token)
+    invitation = teacher_application_repo.get_invitation(digest)
+    if not invitation:
+        raise HTTPException(status_code=409, detail={"code": "invitation_invalid"})
+    instant = (now or (lambda: datetime.now(UTC)))()
+    if _parse_timestamp(invitation.get("expires_at")) <= instant:
+        raise HTTPException(status_code=409, detail={"code": "invitation_expired"})
+    if invitation.get("status") != "issued":
+        command_id = str(invitation.get("command_id") or "")
+        existing = (
+            teacher_application_repo.get_activation_command(command_id) if command_id else None
+        )
+        if existing and existing.get("status") in {"provider_failed", "reconciling"}:
+            # The account was already created by an earlier attempt, so the candidate can
+            # finish through the signed-in activation path instead of creating a second one.
+            raise HTTPException(status_code=409, detail={"code": "activation_resume_required"})
+        raise HTTPException(status_code=409, detail={"code": "invitation_already_used"})
+
+    email = _email(invitation.get("verified_email"))
+    try:
+        subject = provider.create_teacher_account(email=email, password=password)
+    except teacher_identity_provider.TeacherAccountExists as exc:
+        raise HTTPException(status_code=409, detail={"code": "account_exists"}) from exc
+    except teacher_identity_provider.TeacherAccountPasswordRejected as exc:
+        raise HTTPException(status_code=422, detail={"code": "password_rejected"}) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503, detail={"code": "activation_temporarily_unavailable"}
+        ) from exc
+
+    return activate_from_invitation(
+        token=token,
+        verified_email=email,
+        issuer=issuer,
+        subject=subject,
+        provider=provider,
+        now=lambda: instant,
+    )
 
 
 def full_application_for_reviewer(

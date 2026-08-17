@@ -1915,6 +1915,35 @@
       "application_id"
     ],
     "method": "GET",
+    "path": "/teacher-applications",
+    "sensitive": true
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "teacher-applications",
+    "identifiers": [
+      "application_id"
+    ],
+    "method": "GET",
+    "path": "/teacher-applications/{application_id}/status",
+    "sensitive": false
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": "teacher_identity_reviewer",
+        "purpose": "identity_management",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teacher-applications",
+    "identifiers": [
+      "application_id"
+    ],
+    "method": "GET",
     "path": "/teacher-applications/{application_id}/versions/{version}",
     "sensitive": true
   },
@@ -4442,8 +4471,35 @@
     "family": "teacher-applications",
     "identifiers": [],
     "method": "POST",
+    "path": "/teacher-applications/activation/claim",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "teacher-applications",
+    "identifiers": [],
+    "method": "POST",
     "path": "/teacher-applications/activation/consume",
     "sensitive": false
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "teacher_identity_reviewer",
+        "purpose": "identity_management",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teacher-applications",
+    "identifiers": [
+      "application_id"
+    ],
+    "method": "POST",
+    "path": "/teacher-applications/{application_id}/invitations",
+    "sensitive": true
   },
   {
     "authorization": [

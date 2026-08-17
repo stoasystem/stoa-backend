@@ -96,6 +96,10 @@ def _optional_item(value: object) -> TeacherApplicationItem | None:
     return item or None
 
 
+REVIEW_STATE_INDEX = "GSI-ReviewState"
+PENDING_REVIEW_STATE = "pending_review"
+
+
 def create_application_version(item: TeacherApplicationItem) -> TeacherApplicationItem:
     application_id = _required_text(item, "application_id")
     version = _required_version(item)
@@ -103,10 +107,64 @@ def create_application_version(item: TeacherApplicationItem) -> TeacherApplicati
         "PK": f"TEACHER_APPLICATION#{application_id}",
         "SK": f"VERSION#{version:08d}",
         "entity_type": "teacher_application_version",
+        # `status` records what was submitted and never changes. `review_state` is the
+        # mutable lifecycle attribute that partitions GSI-ReviewState, so a decided
+        # application leaves the pending partition instead of growing it forever.
+        "review_state": PENDING_REVIEW_STATE,
         **item,
     }
     _conditional_put(row)
     return row
+
+
+def list_applications_by_review_state(
+    review_state: str, *, limit: int = 50
+) -> list[TeacherApplicationItem]:
+    """List candidacy versions in one review state, oldest first for FIFO review."""
+    response = _query(
+        get_table(),
+        IndexName=REVIEW_STATE_INDEX,
+        KeyConditionExpression=Key("review_state").eq(review_state),
+        ScanIndexForward=True,
+        Limit=max(1, min(int(limit), 200)),
+    )
+    items = response.get("Items", [])
+    if not isinstance(items, list):
+        raise TeacherApplicationConflict("malformed teacher application dependency response")
+    return [_mapping(item) for item in items]
+
+
+def set_application_review_state(
+    application_id: str, version: int, *, review_state: str, decided_at: str
+) -> None:
+    """Move a decided version out of the pending index partition.
+
+    Only the index attribute and decision timestamp change; the submitted candidacy
+    fields stay immutable. Requires the version row to exist so a lost review cannot
+    silently create a phantom row.
+    """
+    try:
+        _update_item(
+            get_table(),
+            Key={
+                "PK": f"TEACHER_APPLICATION#{application_id}",
+                "SK": f"VERSION#{int(version):08d}",
+            },
+            UpdateExpression="SET #review_state = :review_state, #decided_at = :decided_at",
+            ConditionExpression="attribute_exists(PK) AND attribute_exists(SK)",
+            ExpressionAttributeNames={
+                "#review_state": "review_state",
+                "#decided_at": "decided_at",
+            },
+            ExpressionAttributeValues={
+                ":review_state": review_state,
+                ":decided_at": decided_at,
+            },
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            raise TeacherApplicationConflict("application version missing") from exc
+        raise
 
 
 def get_application_version(
@@ -150,6 +208,19 @@ def create_review(item: TeacherApplicationItem) -> TeacherApplicationItem:
     }
     _conditional_put(row)
     return row
+
+
+def get_review(application_id: str, version: int) -> TeacherApplicationItem | None:
+    response = _get_item(
+        get_table(),
+        Key={
+            "PK": f"TEACHER_APPLICATION#{application_id}",
+            "SK": f"REVIEW#{int(version):08d}",
+        },
+        ConsistentRead=True,
+    )
+    item = response.get("Item")
+    return _optional_item(item)
 
 
 def create_invitation(item: TeacherApplicationItem) -> TeacherApplicationItem:

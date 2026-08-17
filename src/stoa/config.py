@@ -127,6 +127,9 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "https://app.stoaedu.ch",
     ]
+    # Origin used to build links inside outbound email. Must be an exact origin so a
+    # misconfigured value cannot redirect an activation link to an attacker host.
+    app_base_url: str = "https://app.stoaedu.ch"
 
     # AWS
     aws_region: str = "eu-central-2"
@@ -163,7 +166,9 @@ class Settings(BaseSettings):
     cognito_jwks_read_timeout_seconds: float = 3.0
     cognito_jwks_ttl_seconds: int = 300
     cognito_jwks_max_stale_seconds: int = 900
-    teacher_activation_invitation_expiry_seconds: int = 900
+    # 72 hours: the invitation is delivered by email, so it must survive a human
+    # round-trip. It stays single-use and same-email bound regardless of lifetime.
+    teacher_activation_invitation_expiry_seconds: int = 259200
 
     # Authorization evidence. Production must replace the local-only key.
     authorization_audit_active_key_id: str = "development-v1"
