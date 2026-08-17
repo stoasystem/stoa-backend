@@ -243,6 +243,27 @@ def test_repeated_normalized_zip_is_byte_identical(tmp_path):
             assert stat.S_IMODE(info.external_attr >> 16) == 0o644
 
 
+def test_zip_orders_entries_the_way_the_archive_validator_reads_them(tmp_path):
+    builder = _load_builder()
+    dist = tmp_path / "dist"
+    # Every pip install produces this shape: a package directory beside a longer
+    # sibling. "pkg/mod.py" precedes "pkg-1.0.dist-info/RECORD" when Path objects
+    # are compared by parts, but follows it in byte order, which is what
+    # validate_archive_identity requires.
+    (dist / "pkg").mkdir(parents=True)
+    (dist / "pkg" / "mod.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (dist / "pkg-1.0.dist-info").mkdir()
+    (dist / "pkg-1.0.dist-info" / "RECORD").write_text("pkg/mod.py,,\n", encoding="utf-8")
+    archive_path = tmp_path / "lambda.zip"
+
+    builder.zip_dist(dist, archive_path)
+
+    with zipfile.ZipFile(archive_path) as archive:
+        names = archive.namelist()
+    assert names == ["pkg-1.0.dist-info/RECORD", "pkg/mod.py"]
+    assert names == sorted(names)
+
+
 def test_repeated_builds_from_same_source_and_lock_are_byte_identical(tmp_path, monkeypatch):
     builder = _load_builder()
     _write_minimal_repo(tmp_path)

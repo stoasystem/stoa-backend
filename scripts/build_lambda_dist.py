@@ -442,11 +442,16 @@ def zip_dist(dist_dir: Path, zip_path: Path) -> dict[str, Any]:
     if zip_path.exists():
         zip_path.unlink()
     paths: list[Path] = []
-    for path in sorted(dist_dir.rglob("*")):
+    for path in dist_dir.rglob("*"):
         if path.is_symlink():
             raise DistVerificationError("Lambda dist archive cannot contain a symlink")
         if path.is_file() and _should_hash(path):
             paths.append(path)
+    # Order by the archive name validate_archive_identity checks. Sorting Path
+    # objects compares parts, which disagrees with byte order wherever a package
+    # directory sits beside a longer sibling: "pkg/mod.py" sorts before
+    # "pkg-1.0.dist-info/RECORD" by parts but after it by bytes.
+    paths.sort(key=lambda path: path.relative_to(dist_dir).as_posix())
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for path in paths:
             relative = path.relative_to(dist_dir).as_posix()
