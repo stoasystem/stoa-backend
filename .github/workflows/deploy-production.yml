@@ -24,10 +24,13 @@ jobs:
       # The suite carries cross-repo contract tests that resolve sibling
       # repositories by path, so all three must be checked out side by side or
       # collection fails outright.
+      # Full history: the phase-474 evidence suites resolve commit objects that
+      # are pinned to fixed historical SHAs, which a shallow clone lacks.
       - name: Check out backend
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           path: stoa-backend
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Check out frontend

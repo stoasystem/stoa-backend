@@ -71,16 +71,18 @@ def test_deployment_is_gated_behind_lint_and_the_full_test_suite() -> None:
 def test_gate_checks_out_the_siblings_the_cross_repo_tests_resolve() -> None:
     _, workflow = _workflow()
     checkouts = {
-        step["with"].get("repository", "stoasystem/stoa-backend"): step["with"]["path"]
+        step["with"].get("repository", "stoasystem/stoa-backend"): step["with"]
         for step in _steps(workflow["jobs"]["verify"])
         if isinstance(step.get("uses"), str) and "actions/checkout@" in step["uses"]
     }
     # Without the siblings in place these tests fail at collection, not on merit.
-    assert checkouts == {
+    assert {name: value["path"] for name, value in checkouts.items()} == {
         "stoasystem/stoa-backend": "stoa-backend",
         "stoasystem/stoa-frontend": "stoa-frontend",
         "stoasystem/stoa-infra": "stoa-infra",
     }
+    # The phase-474 evidence suites resolve pinned historical commit objects.
+    assert checkouts["stoasystem/stoa-backend"]["fetch-depth"] == 0
 
 
 def test_uv_is_pinned_so_the_locked_export_stays_reproducible() -> None:
