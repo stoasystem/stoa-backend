@@ -26,7 +26,6 @@ import argparse
 import json
 import os
 import sys
-import uuid
 from datetime import datetime, timezone
 from hashlib import sha256
 from typing import Any
@@ -273,7 +272,7 @@ def dynamo_put_full_identity(
     log(f"  Wrote PROFILE: PK=USER#{user_id[:8]}... role={role} account_status=active")
 
     table.put_item(Item=fence_item)
-    log(f"  Wrote ACCOUNT_FENCE: generation=1 status=active")
+    log("  Wrote ACCOUNT_FENCE: generation=1 status=active")
 
     table.put_item(Item=binding_item)
     log(f"  Wrote IDENTITY BINDING: {binding_pk[:32]}...")

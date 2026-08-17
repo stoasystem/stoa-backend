@@ -7,6 +7,7 @@ from io import BytesIO
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 import pytest
@@ -406,14 +407,22 @@ def _client(
 
 
 def test_owner_route_matrix_is_reachable_through_real_router(monkeypatch) -> None:
-    response = _client(monkeypatch).get("/files/attachments")
-    assert response.status_code != 404
+    # Asserted against the mounted route table rather than response codes: an
+    # unstubbed owner lookup answers 404 for a route that is present, which is
+    # indistinguishable from an unmounted path.
+    mounted = {
+        (route.path, method)
+        for route in _client(monkeypatch).app.routes
+        if isinstance(route, APIRoute)
+        for method in route.methods
+    }
     for method, path in (
-        ("get", "/files/attachments/attachment-1"),
-        ("get", "/files/attachments/attachment-1/content"),
-        ("delete", "/files/attachments/attachment-1"),
+        ("GET", "/files/attachments"),
+        ("GET", "/files/attachments/{attachment_id}"),
+        ("GET", "/files/attachments/{attachment_id}/content"),
+        ("DELETE", "/files/attachments/{attachment_id}"),
     ):
-        assert getattr(_client(monkeypatch), method)(path).status_code != 404
+        assert (path, method) in mounted
 
 
 def test_owner_routes_use_one_loaded_record_and_exact_private_content(monkeypatch) -> None:

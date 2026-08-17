@@ -81,7 +81,15 @@ def _active_student(**overrides: object) -> dict[str, object]:
     return profile
 
 
-def _install_store(monkeypatch: pytest.MonkeyPatch, store: _ProfileStore) -> None:
+def _install_store(
+    monkeypatch: pytest.MonkeyPatch,
+    store: _ProfileStore,
+    *,
+    observed_at: datetime = START + timedelta(days=1),
+) -> None:
+    # Activation projects status against the wall clock, so pin it inside the trial
+    # window. Left unpinned these cases pass only until EXPIRY passes in real time.
+    monkeypatch.setattr(free_trial_service, "utc_now", lambda: observed_at)
     monkeypatch.setattr(free_trial_service.user_repo, "get_user", store.get)
     monkeypatch.setattr(
         free_trial_service.account_deletion_repo,
