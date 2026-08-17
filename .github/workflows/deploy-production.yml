@@ -1,0 +1,122 @@
+name: Deploy Backend to Production
+
+# Direct production delivery for pushes to main. This is deliberately separate
+# from deploy.yml: that workflow is the credential-free formal verification DAG
+# and must stay non-mutating, so deployment lives here instead of being bolted
+# onto it. See docs/security/phase-474-workflow-policy.json.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Lint and test gate
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out backend
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: 3.12.13
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+
+      - name: Install locked dependencies
+        run: uv sync --frozen --extra dev
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Run test suite
+        run: uv run pytest -q
+
+  deploy:
+    name: Build package and update Lambda
+    needs: verify
+    # arm64 matches the Lambda runtime, so the packaged aarch64 wheels are
+    # natively importable and the handler boot smoke test actually executes.
+    runs-on: ubuntu-24.04-arm
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out backend
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
+        with:
+          python-version: 3.12.13
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
+
+      - name: Build Lambda deployment package (linux arm64 wheels)
+        run: python scripts/build_lambda_dist.py --zip lambda.zip
+
+      - name: Verify Lambda dist provenance
+        run: python scripts/build_lambda_dist.py --verify-only
+
+      - name: Package summary
+        run: |
+          echo "Package size: $(du -sh lambda.zip | cut -f1)"
+          python -m json.tool dist/.stoa-build-manifest.json
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: arn:aws:iam::562923011260:role/stoa-github-backend-deploy
+          aws-region: eu-central-2
+
+      - name: Preflight Lambda update permissions
+        run: |
+          set -euo pipefail
+          for function_name in stoa-api stoa-weekly-report; do
+            aws lambda update-function-code \
+              --function-name "$function_name" \
+              --zip-file fileb://lambda.zip \
+              --region eu-central-2 \
+              --dry-run
+            aws lambda get-function-configuration \
+              --function-name "$function_name" \
+              --region eu-central-2 \
+              >/dev/null
+          done
+
+      - name: Update Lambda function code
+        run: |
+          set -euo pipefail
+          for function_name in stoa-api stoa-weekly-report; do
+            aws lambda update-function-code \
+              --function-name "$function_name" \
+              --zip-file fileb://lambda.zip \
+              --region eu-central-2 \
+              --output text \
+              --query 'LastModified'
+          done
+
+      - name: Wait for update to complete
+        run: |
+          set -euo pipefail
+          for function_name in stoa-api stoa-weekly-report; do
+            aws lambda wait function-updated \
+              --function-name "$function_name" \
+              --region eu-central-2
+          done
+          echo "Lambda functions updated successfully"
