@@ -167,6 +167,15 @@ def test_mutation_is_bounded_to_the_two_known_functions() -> None:
     assert not re.search(r"\b(?:aws\s+cloudformation|cdk)\s+(?:deploy|destroy)", commands)
 
 
+def test_preflight_does_not_print_lambda_configuration() -> None:
+    _, workflow = _workflow()
+    commands = " ".join(_run_steps(workflow["jobs"]["deploy"]))
+    # Dry-run UpdateFunctionCode returns Environment.Variables, including
+    # AUTHORIZATION_AUDIT_ACTIVE_KEY. Keep CI logs to function names only.
+    assert "--dry-run" in commands
+    assert "--query FunctionName" in commands
+
+
 def test_every_run_step_is_valid_bash() -> None:
     _, workflow = _workflow()
     for job in workflow["jobs"].values():

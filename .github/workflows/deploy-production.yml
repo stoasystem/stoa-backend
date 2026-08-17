@@ -126,10 +126,14 @@ jobs:
               --function-name "$function_name" \
               --zip-file fileb://lambda.zip \
               --region eu-central-2 \
-              --dry-run
+              --dry-run \
+              --query FunctionName \
+              --output text
             aws lambda get-function-configuration \
               --function-name "$function_name" \
               --region eu-central-2 \
+              --query FunctionName \
+              --output text \
               >/dev/null
           done
 
