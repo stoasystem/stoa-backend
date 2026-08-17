@@ -76,7 +76,9 @@ jobs:
     # arm64 matches the Lambda runtime, so the packaged aarch64 wheels are
     # natively importable and the handler boot smoke test actually executes.
     runs-on: ubuntu-24.04-arm
-    environment: production
+    # Deliberately no `environment:`. The deploy role trusts the subject
+    # repo:stoasystem/*:ref:refs/heads/main; naming an environment rewrites the
+    # OIDC subject to :environment:<name> and AssumeRoleWithWebIdentity is denied.
     permissions:
       contents: read
       id-token: write
