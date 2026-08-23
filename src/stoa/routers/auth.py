@@ -611,7 +611,7 @@ async def login(
     access_token = resp["AuthenticationResult"]["AccessToken"]
 
     try:
-        _, profile = await public_identity_service.resolve_public_access_token(
+        _, profile = await public_identity_service.resolve_account_access_token(
             access_token,
             allowed_issuers=settings.allowed_cognito_issuers,
             allowed_client_ids=settings.allowed_cognito_access_clients,
@@ -1036,7 +1036,7 @@ async def refresh(
     result = resp["AuthenticationResult"]
     access_token = result["AccessToken"]
     try:
-        _, profile = await public_identity_service.resolve_public_access_token(
+        _, profile = await public_identity_service.resolve_account_access_token(
             access_token,
             allowed_issuers=settings.allowed_cognito_issuers,
             allowed_client_ids=settings.allowed_cognito_access_clients,

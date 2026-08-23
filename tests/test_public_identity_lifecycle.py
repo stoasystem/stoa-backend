@@ -422,6 +422,140 @@ async def test_verified_token_binding_ignores_duplicate_email_decoy(
     ]
 
 
+def _identity_repository(profile: dict):
+    class Repository:
+        async def get_binding(self, issuer, subject):
+            return {"status": "active", "user_id": profile["user_id"]}
+
+        async def get_account_fence(self, user_id):
+            return {"status": "active", "generation": 1}
+
+        async def get_account(self, user_id):
+            return dict(profile)
+
+        async def get_current_grants(self, user_id):
+            return []
+
+    return Repository()
+
+
+def _jwks_provider(keyset):
+    return JwksKeyProvider(
+        FakeAsyncJwksTransport({keyset.issuer: keyset.jwks}),
+        ttl_seconds=60,
+        max_stale_seconds=120,
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("role", "group"),
+    [("teacher", "teachers"), ("admin", "admins")],
+)
+async def test_account_token_admits_privileged_roles_without_public_provenance(
+    rsa_jwks_keysets, role, group
+):
+    from stoa.services import public_identity_service
+
+    keyset, _ = rsa_jwks_keysets
+    profile = {
+        "user_id": f"{role}-1",
+        "email": f"{role}@example.test",
+        "role": role,
+        "account_status": "active",
+    }
+
+    actor, resolved = await public_identity_service.resolve_account_access_token(
+        _signed_public_token(keyset, groups=(group,), email=f"{role}@example.test"),
+        allowed_issuers=(keyset.issuer,),
+        allowed_client_ids=("student-client",),
+        key_provider=_jwks_provider(keyset),
+        identity_repository=_identity_repository(profile),
+    )
+
+    assert actor.role.value == role
+    assert resolved["user_id"] == f"{role}-1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("role", "group"),
+    [("teacher", "teachers"), ("admin", "admins")],
+)
+async def test_public_token_still_denies_privileged_roles(rsa_jwks_keysets, role, group):
+    from stoa.services import public_identity_service
+
+    keyset, _ = rsa_jwks_keysets
+    profile = {
+        "user_id": f"{role}-1",
+        "email": f"{role}@example.test",
+        "role": role,
+        "account_status": "active",
+    }
+
+    with pytest.raises(SecurityDecisionError) as denied:
+        await public_identity_service.resolve_public_access_token(
+            _signed_public_token(keyset, groups=(group,), email=f"{role}@example.test"),
+            allowed_issuers=(keyset.issuer,),
+            allowed_client_ids=("student-client",),
+            key_provider=_jwks_provider(keyset),
+            identity_repository=_identity_repository(profile),
+        )
+    assert denied.value.code is SecurityErrorCode.IDENTITY_CONFLICT
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("missing", ["registration_command", "registration_role"])
+async def test_account_token_keeps_public_provenance_for_public_roles(
+    rsa_jwks_keysets, missing
+):
+    from stoa.services import public_identity_service
+
+    keyset, _ = rsa_jwks_keysets
+    profile = {
+        "user_id": "student-1",
+        "email": "student@example.test",
+        "role": "student",
+        "account_status": "active",
+        "registration_command": "public_self_service",
+        "registration_role": "student",
+    }
+    profile.pop(missing)
+
+    with pytest.raises(SecurityDecisionError) as denied:
+        await public_identity_service.resolve_account_access_token(
+            _signed_public_token(keyset, email="student@example.test"),
+            allowed_issuers=(keyset.issuer,),
+            allowed_client_ids=("student-client",),
+            key_provider=_jwks_provider(keyset),
+            identity_repository=_identity_repository(profile),
+        )
+    assert denied.value.code is SecurityErrorCode.IDENTITY_CONFLICT
+
+
+@pytest.mark.asyncio
+async def test_account_token_denies_inactive_privileged_account(rsa_jwks_keysets):
+    from stoa.services import public_identity_service
+
+    keyset, _ = rsa_jwks_keysets
+    profile = {
+        "user_id": "admin-1",
+        "email": "admin@example.test",
+        "role": "admin",
+        "account_status": "revoked",
+    }
+
+    with pytest.raises(SecurityDecisionError) as denied:
+        await public_identity_service.resolve_account_access_token(
+            _signed_public_token(keyset, groups=("admins",), email="admin@example.test"),
+            allowed_issuers=(keyset.issuer,),
+            allowed_client_ids=("student-client",),
+            key_provider=_jwks_provider(keyset),
+            identity_repository=_identity_repository(profile),
+        )
+    assert denied.value.code is SecurityErrorCode.IDENTITY_CONFLICT
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("case", ["missing_binding", "subject_mismatch", "revoked"])
 async def test_token_response_denies_identity_conflicts(rsa_jwks_keysets, case):

@@ -178,6 +178,9 @@ def _legacy_public_identity_service_adapter(monkeypatch):
     monkeypatch.setattr(
         auth.public_identity_service, "resolve_public_access_token", resolve_token
     )
+    monkeypatch.setattr(
+        auth.public_identity_service, "resolve_account_access_token", resolve_token
+    )
 
 
 def test_register_username_exists_without_command_returns_safe_action_before_lookup(monkeypatch):

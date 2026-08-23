@@ -21,6 +21,10 @@ from stoa.security.tokens import verify_access_token
 
 PUBLIC_GROUPS = {"student": "students", "parent": "parents"}
 
+# Invited teachers and provisioned admins never pass through public self-service, so
+# their profiles carry no public registration provenance to revalidate.
+PRIVILEGED_ROLES = frozenset({"teacher", "admin"})
+
 
 class PublicIdentityDependencyError(RuntimeError):
     """A retryable provider or repository step interrupted convergence."""
@@ -94,6 +98,50 @@ async def resolve_public_access_token(
 ) -> tuple[Actor, dict[str, Any]]:
     """Resolve a token response through the same verified identity path as requests."""
 
+    return await _resolve_account_access_token(
+        access_token,
+        allowed_issuers=allowed_issuers,
+        allowed_client_ids=allowed_client_ids,
+        key_provider=key_provider,
+        identity_repository=identity_repository,
+        allowed_roles=PUBLIC_ROLES,
+    )
+
+
+async def resolve_account_access_token(
+    access_token: str,
+    *,
+    allowed_issuers: tuple[str, ...],
+    allowed_client_ids: tuple[str, ...],
+    key_provider: JwksKeyProvider,
+    identity_repository: IdentityRepository,
+) -> tuple[Actor, dict[str, Any]]:
+    """Resolve any active account, including invited teachers and provisioned admins.
+
+    The role is taken only from the verified token groups and the stored profile, so a
+    caller still cannot select privilege. Public self-service provenance is enforced for
+    public roles and skipped for privileged roles that were never created that way.
+    """
+
+    return await _resolve_account_access_token(
+        access_token,
+        allowed_issuers=allowed_issuers,
+        allowed_client_ids=allowed_client_ids,
+        key_provider=key_provider,
+        identity_repository=identity_repository,
+        allowed_roles=PUBLIC_ROLES | PRIVILEGED_ROLES,
+    )
+
+
+async def _resolve_account_access_token(
+    access_token: str,
+    *,
+    allowed_issuers: tuple[str, ...],
+    allowed_client_ids: tuple[str, ...],
+    key_provider: JwksKeyProvider,
+    identity_repository: IdentityRepository,
+    allowed_roles: frozenset[str] | set[str],
+) -> tuple[Actor, dict[str, Any]]:
     verified = await verify_access_token(
         access_token,
         allowed_issuers=allowed_issuers,
@@ -111,13 +159,17 @@ async def resolve_public_access_token(
     if not profile:
         raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
     profile = dict(profile)
+    role = actor.role.value
     if (
         profile.get("user_id") != actor.user_id
-        or profile.get("role") != actor.role.value
+        or profile.get("role") != role
         or profile.get("account_status") != "active"
-        or profile.get("registration_command") != PUBLIC_REGISTRATION_COMMAND
-        or profile.get("registration_role") != actor.role.value
-        or actor.role.value not in PUBLIC_ROLES
+        or role not in allowed_roles
+    ):
+        raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
+    if role in PUBLIC_ROLES and (
+        profile.get("registration_command") != PUBLIC_REGISTRATION_COMMAND
+        or profile.get("registration_role") != role
     ):
         raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
     if verified.verified_email is not None:
@@ -383,6 +435,7 @@ def _timestamp(now: Callable[[], datetime] | None) -> str:
     return (now or (lambda: datetime.now(UTC)))().isoformat()
 
 __all__ = [
+    "PRIVILEGED_ROLES",
     "PUBLIC_REGISTRATION_COMMAND",
     "PUBLIC_ROLES",
     "PublicIdentityCommandConflict",
@@ -395,6 +448,7 @@ __all__ = [
     "get_public_profile_for_command",
     "require_public_identity_command",
     "resume_public_registration",
+    "resolve_account_access_token",
     "resolve_public_access_token",
     "start_or_resume_public_registration",
 ]
