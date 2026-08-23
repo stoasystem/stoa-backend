@@ -163,16 +163,23 @@ jobs:
         run: |
           set -euo pipefail
           # API Gateway and the weekly-report schedule bind aliases once infra
-          # has created them. Until then GetAlias fails closed here and $LATEST
-          # remains the invoked target, which is the current production shape.
+          # has created them. Only a genuine ResourceNotFoundException means the
+          # alias is still absent; any other failure must stop the deploy rather
+          # than silently leave the alias on the previous version.
           for function_name in stoa-api stoa-weekly-report; do
-            if ! aws lambda get-alias \
-              --function-name "$function_name" \
-              --name production \
-              --region eu-central-2 \
-              >/dev/null; then
-              echo "$function_name has no production alias yet"
-              continue
+            if ! alias_lookup="$(
+              aws lambda get-alias \
+                --function-name "$function_name" \
+                --name production \
+                --region eu-central-2 2>&1
+            )"; then
+              if [[ "$alias_lookup" == *ResourceNotFoundException* ]]; then
+                echo "$function_name has no production alias yet"
+                continue
+              fi
+              echo "$alias_lookup" >&2
+              echo "::error::Could not read the production alias for $function_name" >&2
+              exit 1
             fi
             version="$(
               aws lambda publish-version \
