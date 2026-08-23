@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "timestamp": "2026-08-14T22:01:02.068Z",
+  "timestamp": "2026-08-15T07:30:29Z",
   "phase": "477",
   "phase_name": "Web Authentication And Contract Convergence",
   "phase_dir": ".planning/phases/477-web-authentication-and-contract-convergence",
@@ -52,8 +52,8 @@
   "async_jobs": [],
   "human_actions_pending": [
     {
-      "action": "Review the completed-work, test-coverage, and security-gap audit before authorizing any Phase 474 or Phase 477 implementation.",
-      "context": "The user explicitly stopped Phase 477 to establish the real gap inventory first.",
+      "action": "Review docs/audit/full-project-work-audit-2026-08-15.md and explicitly accept or amend its closure boundary before authorizing any Phase 474 or Phase 477 implementation.",
+      "context": "The user explicitly stopped Phase 477 and requested a full backend, Web, infrastructure, mobile, planning, test, security, and integration audit first.",
       "blocking": true
     }
   ],
@@ -75,6 +75,6 @@
     }
   ],
   "uncommitted_files": [],
-  "next_action": "Review .planning/v9.0-MILESTONE-AUDIT-2026-08-15.md and explicitly choose a closure boundary; do not resume Phase 477 discussion or planning automatically.",
-  "context_notes": "The user stopped the phase immediately after replacing the invitation model with public Teacher registration plus administrator review. The current-state audit returned HOLD: all five critical cross-repository flows are broken, current infra contradicts the locked Phase 474 topology, and OpenAPI/mock-boundary decisions remain intentionally unresolved."
+  "next_action": "Review docs/audit/full-project-work-audit-2026-08-15.md and explicitly accept or amend the proposed closure sequence; do not resume Phase 477 discussion or planning automatically.",
+  "context_notes": "The user stopped the phase immediately after replacing the invitation model with public Teacher registration plus administrator review. The full project work audit returned HOLD: 17/51 requirements remain historically verified and latest-policy aligned, 0/9 critical current-tuple flows are complete, current infra contradicts the locked Phase 474 topology, and OpenAPI/mock-boundary decisions remain intentionally unresolved."
 }
