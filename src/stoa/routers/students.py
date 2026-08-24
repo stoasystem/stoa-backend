@@ -33,9 +33,12 @@ class StudentProfileResponse(BaseModel):
     id: str
     userId: str
     name: str
+    email: str
     grade: str
     primarySubjects: list[str]
     schoolSystem: str | None = None
+    preferredAnswerLanguage: str | None = None
+    guardianStatus: str
     createdAt: str
     updatedAt: str
 
@@ -84,6 +87,13 @@ def _optional_profile_text(
     return value
 
 
+def _guardian_status(profile: Mapping[str, object]) -> str:
+    """Report whether a guardian account is linked, not the guardian's details."""
+    if profile.get("parent_binding_status") == "active" and profile.get("parent_id"):
+        return "linked"
+    return "not_linked"
+
+
 def _student_profile_response(
     profile: Mapping[str, object], *, fallback_user_id: str, correlation_id: str, updated_at: str | None = None
 ) -> StudentProfileResponse:
@@ -94,9 +104,14 @@ def _student_profile_response(
         id=user_id,
         userId=user_id,
         name=_required_profile_text(profile, "name", correlation_id),
+        email=_optional_profile_text(profile, "email", correlation_id) or "",
         grade=_required_profile_text(profile, "grade", correlation_id),
         primarySubjects=_profile_subjects(profile, correlation_id),
         schoolSystem=_optional_profile_text(profile, "school_system", correlation_id),
+        preferredAnswerLanguage=_optional_profile_text(
+            profile, "preferred_locale", correlation_id
+        ),
+        guardianStatus=_guardian_status(profile),
         createdAt=_required_profile_text(profile, "created_at", correlation_id),
         updatedAt=updated_at or _required_profile_text(profile, "updated_at", correlation_id),
     )
@@ -120,9 +135,101 @@ def _knowledge_points(row: Mapping[str, object], correlation_id: str) -> list[st
     return value
 
 
+class LearningHistoryItem(BaseModel):
+    id: str
+    subject: str
+    title: str
+    summary: str
+    createdAt: str
+    sourceLabel: str
+
+
+class LearningHistoryResponse(BaseModel):
+    items: list[LearningHistoryItem] = Field(default_factory=list)
+
+
+def _history_text(value: object) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _question_history_items(student_id: str) -> list[LearningHistoryItem]:
+    result = question_repo.list_by_student(student_id, limit=100)
+    items = []
+    for row in result.get("Items", []):
+        if not isinstance(row, Mapping):
+            continue
+        created_at = _history_text(row.get("created_at")) or _history_text(row.get("createdAt"))
+        if not created_at:
+            continue
+        status = _history_text(row.get("status"))
+        items.append(
+            LearningHistoryItem(
+                id=_history_text(row.get("question_id")) or f"question-{created_at}",
+                subject=_history_text(row.get("subject")) or "General",
+                title=(
+                    "Teacher help requested"
+                    if status in ("escalated", "teacher_requested")
+                    else "Question answered"
+                    if status == "ai_answered"
+                    else "Question asked"
+                ),
+                summary=(
+                    _history_text(row.get("summary"))
+                    or _history_text(row.get("prompt"))
+                    or _history_text(row.get("question"))
+                ),
+                createdAt=created_at,
+                sourceLabel="Questions",
+            )
+        )
+    return items
+
+
+def _practice_history_items(student_id: str) -> list[LearningHistoryItem]:
+    items = []
+    for row in practice_repo.get_progress(student_id):
+        if not isinstance(row, Mapping):
+            continue
+        created_at = (
+            _history_text(row.get("completed_at"))
+            or _history_text(row.get("updated_at"))
+            or _history_text(row.get("created_at"))
+        )
+        if not created_at:
+            continue
+        items.append(
+            LearningHistoryItem(
+                id=_history_text(row.get("lesson_id")) or f"practice-{created_at}",
+                subject=_history_text(row.get("subject_id")) or "Practice",
+                title="Practice Path lesson",
+                summary=(
+                    _history_text(row.get("lesson_title")) or _history_text(row.get("topic_id"))
+                ),
+                createdAt=created_at,
+                sourceLabel="Practice Path",
+            )
+        )
+    return items
+
+
 # ---------------------------------------------------------------------------
 # Profile endpoints
 # ---------------------------------------------------------------------------
+
+@router.get("/me/learning-history", response_model=LearningHistoryResponse)
+async def get_my_learning_history(
+    authorized: AuthorizedResource = Depends(
+        authorized_student_dependency(
+            action=AuthorizationAction.READ, purposes=STUDENT_SELF, self_route=True
+        )
+    ),
+):
+    """Return the student's own questions and practice lessons, newest first."""
+    student_id = authorized.ref.student_id
+    items = _question_history_items(student_id) + _practice_history_items(student_id)
+    items.sort(key=lambda item: item.createdAt, reverse=True)
+    return LearningHistoryResponse(items=items)
+
 
 @router.get("/me/profile", response_model=StudentProfileResponse)
 async def get_my_profile(
