@@ -3409,22 +3409,6 @@
   {
     "authorization": [
       {
-        "action": "update",
-        "capability": null,
-        "purpose": "self_service",
-        "resource_type": "practice"
-      }
-    ],
-    "classification": "authorized",
-    "family": "practice",
-    "identifiers": [],
-    "method": "POST",
-    "path": "/practice/teacher-help",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
         "action": "read",
         "capability": null,
         "purpose": "self_service",

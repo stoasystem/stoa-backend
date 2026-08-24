@@ -234,50 +234,6 @@ def test_hint_request_records_counter_backed_usage_ledger(monkeypatch):
     assert "Try subtracting" not in str(ledger_calls[0])
 
 
-def test_practice_teacher_help_records_usage_ledger_without_raw_context(monkeypatch):
-    ledger_calls = []
-    challenge = {
-        "challenge_id": "exercise-1",
-        "lesson_id": "lesson-1",
-        "subject_id": "math",
-        "topic_id": "algebra",
-        "prompt": "private prompt",
-        "correct_answer": "private answer",
-    }
-    monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda challenge_id: dict(challenge))
-    monkeypatch.setattr(
-        practice.usage_ledger_service,
-        "record_usage_event",
-        lambda **kwargs: ledger_calls.append(kwargs) or {"idempotency_status": "created"},
-    )
-
-    response = TestClient(_app_for_user({"sub": "student-1", "role": "student"})).post(
-        "/practice/teacher-help",
-        json={
-            "subjectId": "math",
-            "topicId": "algebra",
-            "lessonId": "lesson-1",
-            "challengeId": "exercise-1",
-            "message": "raw help request",
-            "practiceContext": {
-                "challengePrompt": "private prompt",
-                "studentAnswer": "raw answer",
-                "correctAnswer": "private answer",
-            },
-        },
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-    assert ledger_calls[0]["action"] == "practice_teacher_help_request"
-    assert ledger_calls[0]["student_id"] == "student-1"
-    assert ledger_calls[0]["request_correlation_id"] is None
-    assert ledger_calls[0]["metadata"] == {"status": "ready"}
-    assert body["requestId"] not in str(ledger_calls[0])
-    assert "raw help request" not in str(ledger_calls[0])
-    assert "private prompt" not in str(ledger_calls[0])
-    assert "private answer" not in str(ledger_calls[0])
-    assert "raw answer" not in str(ledger_calls[0])
 
 
 def test_practice_teacher_help_skips_usage_when_challenge_missing(monkeypatch):

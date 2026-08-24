@@ -967,27 +967,6 @@ async def get_hint(
     )
 
 
-@router.post("/teacher-help")
-async def request_teacher_help(
-    body: dict,
-    actor: Actor = Depends(_practice_update),
-    authorized_challenge: AuthorizedResource = Depends(_authorized_body_challenge_update),
-):
-    import uuid
-    challenge_id = str(body.get("challengeId") or "").strip()
-
-    request_id = str(uuid.uuid4())
-    _record_practice_usage(
-        student_id=actor.user_id,
-        action=usage_ledger_service.PRACTICE_TEACHER_HELP_ACTION,
-        resource_id=challenge_id,
-        metadata={"status": "ready"},
-    )
-    return {
-        "requestId": request_id,
-        "status": "ready",
-        "message": "Ein Lehrer wird sich deine Aufgabe ansehen.",
-    }
 
 
 def _record_practice_usage(
