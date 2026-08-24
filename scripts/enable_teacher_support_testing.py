@@ -44,6 +44,7 @@ PLAN_CHOICES = ("teacher_supported", "family")
 GRANT_SCHEMA_VERSION = "paid_beneficiary_grant.v1"
 
 TEACHER_SUBJECTS = ["mathematics", "physics"]
+STUDENT_SUBJECTS = ["mathematics"]
 TEACHER_MAX_ACTIVE_SESSIONS = 3
 
 
@@ -103,6 +104,40 @@ def binding(table: Any, pk_user: str, sk: str, label: str) -> dict[str, Any]:
     version = int(item.get("version") or 0)
     require(version > 0, f"{label} binding version is not positive")
     return item
+
+
+def complete_student_profile(table: Any, student: dict[str, Any], *, dry_run: bool) -> None:
+    """Give the test student the fields public registration would have written.
+
+    A profile without primary_subjects makes GET /students/me/profile answer 503,
+    because the response builder rejects a stored profile it cannot project.
+    """
+    student_id = str(student["user_id"])
+    missing = {
+        key: value
+        for key, value in {
+            "primary_subjects": STUDENT_SUBJECTS,
+            "subjects": STUDENT_SUBJECTS,
+        }.items()
+        if not isinstance(student.get(key), list)
+    }
+    if not missing:
+        log("  student profile already projectable")
+        return
+    if dry_run:
+        log(f"  [DRY-RUN] would set {sorted(missing)} on {student_id[:8]}...")
+        return
+    table.update_item(
+        Key={"PK": f"USER#{student_id}", "SK": "PROFILE"},
+        UpdateExpression="SET "
+        + ", ".join(f"{key} = :{key}" for key in missing)
+        + ", updated_at = :now",
+        ExpressionAttributeValues={
+            **{f":{key}": value for key, value in missing.items()},
+            ":now": now_iso(),
+        },
+    )
+    log(f"  set {sorted(missing)} on student {student_id[:8]}...")
 
 
 def enable_teacher_dispatch(table: Any, teacher: dict[str, Any], *, dry_run: bool) -> None:
@@ -223,10 +258,13 @@ def main() -> int:
     log(f"resolved student={student['user_id']}")
     log(f"resolved teacher={teacher['user_id']}")
 
-    log("\n[1/2] paid entitlement grant")
+    log("\n[1/3] paid entitlement grant")
     grant_paid_entitlement(table, parent, student, plan_id=args.plan, dry_run=args.dry_run)
 
-    log("\n[2/2] teacher dispatch eligibility")
+    log("\n[2/3] student profile completeness")
+    complete_student_profile(table, student, dry_run=args.dry_run)
+
+    log("\n[3/3] teacher dispatch eligibility")
     enable_teacher_dispatch(table, teacher, dry_run=args.dry_run)
 
     log("\ndone")
