@@ -1276,14 +1276,11 @@ def claim_upload_part(
         intent = get_upload_intent(upload_id, table=target)
         if intent is None:
             raise AttachmentRepositoryConflict("conditional_conflict")
-        raw_expires_at = intent.get("expires_at")
-        if (
-            isinstance(raw_expires_at, bool)
-            or not isinstance(raw_expires_at, int)
-            or raw_expires_at <= now_epoch
-        ):
+        # DynamoDB returns stored numbers as Decimal, so this has to go through the
+        # same normalizer as every other stored integer in this repository.
+        intent_expires_at = _required_integer(intent.get("expires_at"))
+        if intent_expires_at <= now_epoch:
             raise AttachmentRepositoryConflict("conditional_conflict")
-        intent_expires_at = raw_expires_at
     item = {
         **upload_part_key(upload_id, part_number),
         "upload_id": upload_id,
