@@ -37,7 +37,10 @@ PARENT_EMAIL = "parent@test.stoaedu.ch"
 STUDENT_EMAIL = "student@test.stoaedu.ch"
 TEACHER_EMAIL = "teacher@test.stoaedu.ch"
 
-PLAN_ID = "teacher_supported"
+# teacher_supported allows 2 cases per week per beneficiary; family allows 10
+# shared across the family. Repeated end-to-end testing exhausts 2 quickly.
+DEFAULT_PLAN_ID = "family"
+PLAN_CHOICES = ("teacher_supported", "family")
 GRANT_SCHEMA_VERSION = "paid_beneficiary_grant.v1"
 
 TEACHER_SUBJECTS = ["mathematics", "physics"]
@@ -130,6 +133,7 @@ def grant_paid_entitlement(
     parent: dict[str, Any],
     student: dict[str, Any],
     *,
+    plan_id: str,
     dry_run: bool,
 ) -> None:
     parent_id = str(parent["user_id"])
@@ -173,7 +177,7 @@ def grant_paid_entitlement(
         "command_id": f"manual-test-{subscription_digest[:16]}",
         "subscription_id_digest": subscription_digest,
         "grant_version": 1,
-        "plan_id": PLAN_ID,
+        "plan_id": plan_id,
         "plan_version": 1,
         "allowance_version": 1,
         "activation_version": 1,
@@ -187,29 +191,30 @@ def grant_paid_entitlement(
     }
 
     if dry_run:
-        log(f"  [DRY-RUN] would grant {PLAN_ID} to {student_id[:8]}... under {parent_id[:8]}...")
+        log(f"  [DRY-RUN] would grant {plan_id} to {student_id[:8]}... under {parent_id[:8]}...")
         return
 
     table.put_item(Item=grant)
-    log(f"  wrote PAID_GRANT {PLAN_ID}: parent {parent_id[:8]}... -> student {student_id[:8]}...")
+    log(f"  wrote PAID_GRANT {plan_id}: parent {parent_id[:8]}... -> student {student_id[:8]}...")
 
     for user_id, label in ((parent_id, "parent"), (student_id, "student")):
         table.update_item(
             Key={"PK": f"USER#{user_id}", "SK": "PROFILE"},
             UpdateExpression="SET subscription_tier = :tier, updated_at = :now",
-            ExpressionAttributeValues={":tier": PLAN_ID, ":now": now_iso()},
+            ExpressionAttributeValues={":tier": plan_id, ":now": now_iso()},
         )
-        log(f"  set {label} subscription_tier = {PLAN_ID}")
+        log(f"  set {label} subscription_tier = {plan_id}")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--plan", choices=PLAN_CHOICES, default=DEFAULT_PLAN_ID)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     table = boto3.resource("dynamodb", region_name=REGION).Table(TABLE_NAME)
     cognito = boto3.client("cognito-idp", region_name=REGION)
-    log(f"table={TABLE_NAME} plan={PLAN_ID} dry_run={args.dry_run}")
+    log(f"table={TABLE_NAME} plan={args.plan} dry_run={args.dry_run}")
 
     parent = find_profile(table, cognito, PARENT_EMAIL)
     student = find_profile(table, cognito, STUDENT_EMAIL)
@@ -219,7 +224,7 @@ def main() -> int:
     log(f"resolved teacher={teacher['user_id']}")
 
     log("\n[1/2] paid entitlement grant")
-    grant_paid_entitlement(table, parent, student, dry_run=args.dry_run)
+    grant_paid_entitlement(table, parent, student, plan_id=args.plan, dry_run=args.dry_run)
 
     log("\n[2/2] teacher dispatch eligibility")
     enable_teacher_dispatch(table, teacher, dry_run=args.dry_run)
