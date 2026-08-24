@@ -174,9 +174,9 @@ def upload_probe_image(base_url: str, token: str) -> dict:
 
 def await_queued(base_url: str, teacher_token: str, conversation_id: str) -> dict:
     """The teacher queue is a scan, so a fresh escalation needs a moment to appear."""
-    for attempt in range(6):
+    for attempt in range(10):
         if attempt:
-            time.sleep(1.5)
+            time.sleep(3)
         items = request(
             base_url, "GET", "/teachers/me/help-requests", token=teacher_token
         ).get("items", [])

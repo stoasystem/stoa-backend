@@ -2494,7 +2494,7 @@ async def get_teacher_help_status(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="This conversation was never escalated to a teacher",
         )
-    teacher_name = _teacher_name(conv.get("current_teacher"))
+    teacher_name = _teacher_name(conv.get("dispatched_teacher_id"))
     escalation_status = str(conv.get("escalation_status") or "pending")
     # A bound teacher outranks the stored label, which stays 'pending' until the
     # teacher opens the case, so the student would otherwise never see progress.

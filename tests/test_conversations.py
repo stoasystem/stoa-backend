@@ -56,6 +56,50 @@ def _client(router, prefix: str = "/conversations", actor=None) -> TestClient:
     return TestClient(app)
 
 
+def test_teacher_help_status_names_the_teacher_dispatch_actually_bound(monkeypatch):
+    """Dispatch records the teacher on dispatched_teacher_id, not current_teacher."""
+    monkeypatch.setattr(
+        conversations,
+        "_get_conversation",
+        lambda conv_id: {
+            "conversation_id": conv_id,
+            "student_id": "student-1",
+            "escalation_request_id": "req-1",
+            "escalation_status": "pending",
+            "dispatch_status": "dispatched",
+            "dispatched_teacher_id": "teacher-1",
+            "escalated_at": "2026-08-24T08:00:00+00:00",
+            "updated_at": "2026-08-24T08:00:00+00:00",
+        },
+    )
+    monkeypatch.setattr(
+        conversations.user_repo, "get_user", lambda _id: {"name": "Test Teacher"}
+    )
+
+    response = _client(conversations.teacher_help_router, "/teacher-help").get(
+        "/teacher-help/conversations/conv-1/request"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["teacherName"] == "Test Teacher"
+    assert body["status"] == "assigned"
+
+
+def test_teacher_help_status_is_absent_before_any_escalation(monkeypatch):
+    monkeypatch.setattr(
+        conversations,
+        "_get_conversation",
+        lambda conv_id: {"conversation_id": conv_id, "student_id": "student-1"},
+    )
+
+    response = _client(conversations.teacher_help_router, "/teacher-help").get(
+        "/teacher-help/conversations/conv-1/request"
+    )
+
+    assert response.status_code == 404
+
+
 def test_conversation_teacher_help_records_support_visible_usage(monkeypatch):
     ledger_calls = []
     monkeypatch.setattr(
