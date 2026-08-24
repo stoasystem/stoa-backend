@@ -29,7 +29,12 @@ from stoa.config import settings
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.db.dynamodb import get_table
-from stoa.db.repositories import account_deletion_repo, allowance_repo, attachment_repo
+from stoa.db.repositories import (
+    account_deletion_repo,
+    allowance_repo,
+    attachment_repo,
+    user_repo,
+)
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationPurpose,
@@ -776,6 +781,45 @@ class TeacherHelpRequest(BaseModel):
 
     conversationId: str
     message: str | None = None
+
+
+def _dispatch_escalated_conversation(
+    *,
+    conversation_id: str,
+    conversation: dict[str, Any],
+    student_id: str,
+    subject: object,
+    now: str,
+    table: Any,
+) -> str | None:
+    """Assign a teacher to a fresh escalation and return that teacher's name.
+
+    Dispatch is best effort so a transient planner failure never rejects an
+    escalation that has already consumed the student's weekly allowance. An
+    unassigned escalation stays visible to the reassignment path.
+    """
+    try:
+        result = teacher_dispatch_service.dispatch_conversation(
+            conversation_id,
+            conversation={
+                **conversation,
+                "conversation_id": conversation_id,
+                "student_id": student_id,
+                "subject": subject,
+                "escalation_status": "pending",
+            },
+            now=now,
+            table=table,
+        )
+    except Exception:
+        logger.exception("conversation teacher dispatch failed")
+        return None
+    teacher_id = str(result.get("teacherId") or "")
+    if result.get("status") != "dispatched" or not teacher_id:
+        return None
+    profile = user_repo.get_user(teacher_id)
+    name = (profile or {}).get("name") or (profile or {}).get("email")
+    return str(name) if name else None
 
 
 class TeacherHelpResponse(BaseModel):
@@ -2382,6 +2426,15 @@ async def request_teacher_help(
             updatedAt=str(conv.get("updated_at") or now),
         )
 
+    dispatch = _dispatch_escalated_conversation(
+        conversation_id=body.conversationId,
+        conversation=conv,
+        student_id=student_id,
+        subject=conv.get("subject"),
+        now=now,
+        table=table,
+    )
+
     usage_ledger_service.record_usage_event(
         student_id=student_id,
         action=usage_ledger_service.CONVERSATION_TEACHER_HELP_ACTION,
@@ -2407,6 +2460,7 @@ async def request_teacher_help(
         requestId=request_id,
         conversationId=body.conversationId,
         status="pending",
+        teacherName=dispatch,
         createdAt=now,
         updatedAt=now,
     )

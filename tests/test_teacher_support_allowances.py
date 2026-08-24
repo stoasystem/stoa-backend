@@ -442,6 +442,25 @@ def test_routes_admit_only_at_first_case_and_later_actions_do_not_mutate_allowan
     assert question_source.index("admit_teacher_support_case") < question_source.index(
         "enqueue_teacher_request"
     )
+
+
+def test_both_escalation_lanes_dispatch_to_a_teacher() -> None:
+    """An escalation that never dispatches is invisible to every teacher.
+
+    The chat lane used to set escalation flags and stop, so the teacher queue
+    stayed empty no matter how many students asked for help.
+    """
+    question_source = inspect.getsource(questions.request_teacher)
+    conversation_source = inspect.getsource(conversations.request_teacher_help)
+
+    assert "dispatch_question" in question_source
+    assert "_dispatch_escalated_conversation" in conversation_source
+    assert "dispatch_conversation" in inspect.getsource(
+        conversations._dispatch_escalated_conversation
+    )
+    assert conversation_source.index("admit_teacher_support_case") < conversation_source.index(
+        "_dispatch_escalated_conversation"
+    )
     assert question_source.index("admit_teacher_support_case") < question_source.index(
         "emit_teacher_requested"
     )

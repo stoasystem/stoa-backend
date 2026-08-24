@@ -394,6 +394,91 @@ def build_dispatch_dashboard(
     }
 
 
+def dispatch_conversation(
+    conversation_id: str,
+    *,
+    conversation: dict[str, Any],
+    now: str | None = None,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Claim an escalated conversation for the best available teacher.
+
+    The question lane records dispatch on the question item. A chat escalation has
+    no question item, so the same ranking and the same teacher-binding conditions
+    are applied to the conversation itself. Without this the escalation only sets
+    flags and no teacher is ever able to see the request.
+    """
+    timestamp = now or _now()
+    target = table or get_table()
+
+    if str(conversation.get("escalation_status") or "") not in {"", "pending"}:
+        return {"conversationId": conversation_id, "status": "not_dispatchable"}
+    current_teacher = str(conversation.get("dispatched_teacher_id") or "")
+    if (
+        current_teacher
+        and conversation.get("dispatch_status") == "dispatched"
+        and not _deadline_expired(conversation.get("dispatch_deadline_at"), timestamp)
+    ):
+        return {
+            "conversationId": conversation_id,
+            "status": "already_dispatched",
+            "teacherId": current_teacher,
+        }
+
+    plan = plan_dispatch(conversation, now=timestamp)
+    if not plan["selected"]:
+        return {
+            "conversationId": conversation_id,
+            "status": "no_candidate",
+            "reason": plan["summary"]["noCandidateReason"] or "no_eligible_teacher",
+        }
+
+    candidate = plan["selected"][0]
+    dispatch_id = str(uuid.uuid4())
+    deadline = _deadline(timestamp)
+    attempt_count = int(_int(conversation.get("dispatch_attempt_count"), 0)) + 1
+
+    try:
+        account_deletion_repo.transact(
+            [
+                *_teacher_assignment_conditions(candidate),
+                {
+                    "Update": {
+                        "Key": {"PK": f"CONV#{conversation_id}", "SK": "CONV"},
+                        "UpdateExpression": (
+                            "SET dispatched_teacher_id=:teacher, dispatch_status=:dispatched, "
+                            "dispatch_id=:dispatch_id, dispatch_deadline_at=:deadline, "
+                            "dispatch_attempt_count=:attempts, dispatch_updated_at=:now"
+                        ),
+                        "ConditionExpression": (
+                            "attribute_exists(PK) AND escalation_status=:pending"
+                        ),
+                        "ExpressionAttributeValues": {
+                            ":teacher": str(candidate["teacherId"]),
+                            ":dispatched": "dispatched",
+                            ":dispatch_id": dispatch_id,
+                            ":deadline": deadline,
+                            ":attempts": attempt_count,
+                            ":now": timestamp,
+                            ":pending": "pending",
+                        },
+                    }
+                },
+            ],
+            table=target,
+        )
+    except Exception:
+        return {"conversationId": conversation_id, "status": "claim_conflict"}
+
+    return {
+        "conversationId": conversation_id,
+        "status": "dispatched",
+        "teacherId": str(candidate["teacherId"]),
+        "dispatchId": dispatch_id,
+        "deadlineAt": deadline,
+    }
+
+
 def teacher_availability_summary(
     teacher_profiles: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
