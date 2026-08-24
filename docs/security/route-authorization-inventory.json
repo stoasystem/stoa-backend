@@ -258,86 +258,6 @@
     "authorization": [
       {
         "action": "read",
-        "capability": "bi_operations_reader",
-        "purpose": "global_operations",
-        "resource_type": "operator_resource"
-      }
-    ],
-    "classification": "admin-capability",
-    "family": "admin",
-    "identifiers": [],
-    "method": "GET",
-    "path": "/admin/bi/alert-routing",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "read",
-        "capability": "bi_operations_reader",
-        "purpose": "global_operations",
-        "resource_type": "operator_resource"
-      }
-    ],
-    "classification": "admin-capability",
-    "family": "admin",
-    "identifiers": [],
-    "method": "GET",
-    "path": "/admin/bi/dashboard",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "read",
-        "capability": "bi_operations_reader",
-        "purpose": "global_operations",
-        "resource_type": "operator_resource"
-      }
-    ],
-    "classification": "admin-capability",
-    "family": "admin",
-    "identifiers": [],
-    "method": "GET",
-    "path": "/admin/bi/taxonomy",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "export",
-        "capability": "bi_exporter",
-        "purpose": "global_operations",
-        "resource_type": "operator_resource"
-      }
-    ],
-    "classification": "admin-capability",
-    "family": "admin",
-    "identifiers": [],
-    "method": "GET",
-    "path": "/admin/bi/warehouse-export",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "read",
-        "capability": "bi_operations_reader",
-        "purpose": "global_operations",
-        "resource_type": "operator_resource"
-      }
-    ],
-    "classification": "admin-capability",
-    "family": "admin",
-    "identifiers": [],
-    "method": "GET",
-    "path": "/admin/bi/warehouse-readiness",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "read",
         "capability": "billing_operations_reader",
         "purpose": "billing_operations",
         "resource_type": "operator_resource"
@@ -350,22 +270,6 @@
     ],
     "method": "GET",
     "path": "/admin/billing/checkouts/{checkout_ref}",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "read",
-        "capability": "platform_operations_reader",
-        "purpose": "global_operations",
-        "resource_type": "operator_resource"
-      }
-    ],
-    "classification": "admin-capability",
-    "family": "admin",
-    "identifiers": [],
-    "method": "GET",
-    "path": "/admin/core-smoke",
     "sensitive": true
   },
   {
@@ -510,54 +414,6 @@
     "identifiers": [],
     "method": "GET",
     "path": "/admin/curriculum/worklist",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "read",
-        "capability": "production_readiness_reader",
-        "purpose": "global_operations",
-        "resource_type": "operator_resource"
-      }
-    ],
-    "classification": "admin-capability",
-    "family": "admin",
-    "identifiers": [],
-    "method": "GET",
-    "path": "/admin/external-activation/notification-support-smoke",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "read",
-        "capability": "production_readiness_reader",
-        "purpose": "global_operations",
-        "resource_type": "operator_resource"
-      }
-    ],
-    "classification": "admin-capability",
-    "family": "admin",
-    "identifiers": [],
-    "method": "GET",
-    "path": "/admin/external-activation/payment-auth-smoke",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "read",
-        "capability": "production_readiness_reader",
-        "purpose": "global_operations",
-        "resource_type": "operator_resource"
-      }
-    ],
-    "classification": "admin-capability",
-    "family": "admin",
-    "identifiers": [],
-    "method": "GET",
-    "path": "/admin/external-activation/production-readiness-smoke",
     "sensitive": true
   },
   {

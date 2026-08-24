@@ -42,9 +42,7 @@ from stoa.services import (
     report_recovery_service,
     account_operations_service,
     privileged_identity_service,
-    bi_observability_service,
     billing_reconciliation_service,
-    external_activation_service,
     curriculum_analytics_service,
     curriculum_migration_service,
     curriculum_ops_service,
@@ -55,7 +53,6 @@ from stoa.services import (
     subscription_service,
     teacher_reply_service,
     account_verification_service,
-    core_smoke_service,
     usage_ledger_service,
 )
 
@@ -534,114 +531,6 @@ class UsageReconciliationResponse(BaseModel):
     repairMode: str
     repaired: bool
     partial: bool
-
-
-class CoreSmokeResponse(BaseModel):
-    status: str
-    summary: dict[str, Any] = Field(default_factory=dict)
-    checks: list[dict[str, Any]] = Field(default_factory=list)
-    privacy: dict[str, Any] = Field(default_factory=dict)
-
-
-class ExternalActivationSmokeResponse(BaseModel):
-    generatedAt: str
-    taxonomy: list[str]
-    overallState: str
-    safeToMutate: bool
-    payment: dict[str, Any] = Field(default_factory=dict)
-    cognitoEmail: dict[str, Any] = Field(default_factory=dict)
-    blockers: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
-    privacy: dict[str, Any] = Field(default_factory=dict)
-
-
-class ExternalNotificationSupportSmokeResponse(BaseModel):
-    generatedAt: str
-    taxonomy: list[str]
-    overallState: str
-    safeToMutate: bool
-    notification: dict[str, Any] = Field(default_factory=dict)
-    support: dict[str, Any] = Field(default_factory=dict)
-    blockers: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
-    privacy: dict[str, Any] = Field(default_factory=dict)
-
-
-class ExternalProductionReadinessSmokeResponse(BaseModel):
-    generatedAt: str
-    taxonomy: list[str]
-    overallState: str
-    safeToMutate: bool
-    environment: dict[str, Any] = Field(default_factory=dict)
-    deployEvidenceRequired: dict[str, Any] = Field(default_factory=dict)
-    adminSession: dict[str, Any] = Field(default_factory=dict)
-    readOnlyApiSmoke: list[dict[str, Any]] = Field(default_factory=list)
-    readOnlyBrowserSmoke: list[dict[str, Any]] = Field(default_factory=list)
-    requestIdPolicy: dict[str, Any] = Field(default_factory=dict)
-    noMutationPolicy: dict[str, Any] = Field(default_factory=dict)
-    releaseBundle: dict[str, Any] = Field(default_factory=dict)
-    blockers: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
-    privacy: dict[str, Any] = Field(default_factory=dict)
-
-
-class BiTaxonomyContractResponse(BaseModel):
-    schemaVersion: str
-    taxonomy: list[str]
-    states: dict[str, Any] = Field(default_factory=dict)
-    privacy: dict[str, Any] = Field(default_factory=dict)
-
-
-class BiWarehouseReadinessResponse(BaseModel):
-    generatedAt: str
-    schemaVersion: str
-    taxonomy: list[str]
-    overallState: str
-    exportAllowed: bool
-    liveWarehouseConfigured: bool
-    sources: list[dict[str, Any]] = Field(default_factory=list)
-    blockers: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
-    privacy: dict[str, Any] = Field(default_factory=dict)
-    operations: dict[str, Any] = Field(default_factory=dict)
-
-
-class BiWarehouseExportResponse(BaseModel):
-    generatedAt: str
-    schemaVersion: str
-    exportId: str
-    idempotencyKey: str
-    period: str
-    count: int
-    bounded: bool
-    limit: int
-    rows: list[dict[str, Any]] = Field(default_factory=list)
-    sources: list[dict[str, Any]] = Field(default_factory=list)
-    privacy: dict[str, Any] = Field(default_factory=dict)
-    operations: dict[str, Any] = Field(default_factory=dict)
-
-
-class BiOperatorDashboardResponse(BaseModel):
-    generatedAt: str
-    schemaVersion: str
-    taxonomy: list[str]
-    sections: list[dict[str, Any]] = Field(default_factory=list)
-    summary: dict[str, Any] = Field(default_factory=dict)
-    emptyState: str | None = None
-    privacy: dict[str, Any] = Field(default_factory=dict)
-
-
-class BiAlertRoutingResponse(BaseModel):
-    generatedAt: str
-    schemaVersion: str
-    taxonomy: list[str]
-    overallState: str
-    liveAlertingConfigured: bool
-    apmProvider: str
-    routes: list[dict[str, Any]] = Field(default_factory=list)
-    blockers: list[str] = Field(default_factory=list)
-    privacy: dict[str, Any] = Field(default_factory=dict)
-    runbook: dict[str, Any] = Field(default_factory=dict)
 
 
 class SubscriptionProviderReadinessResponse(BaseModel):
@@ -2152,93 +2041,6 @@ async def get_subscription_provider_readiness(
     return subscription_service.get_provider_readiness(settings)
 
 
-@router.get(
-    "/external-activation/payment-auth-smoke",
-    response_model=ExternalActivationSmokeResponse,
-)
-async def get_payment_auth_activation_smoke(
-    settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
-):
-    """Inspect payment and Cognito/email activation smoke readiness."""
-    return external_activation_service.build_payment_auth_smoke_report(settings)
-
-
-@router.get(
-    "/external-activation/notification-support-smoke",
-    response_model=ExternalNotificationSupportSmokeResponse,
-)
-async def get_notification_support_activation_smoke(
-    settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
-):
-    """Inspect notification and support-provider activation smoke readiness."""
-    return external_activation_service.build_notification_support_smoke_report(settings)
-
-
-@router.get(
-    "/external-activation/production-readiness-smoke",
-    response_model=ExternalProductionReadinessSmokeResponse,
-)
-async def get_production_readiness_activation_smoke(
-    settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
-):
-    """Inspect production deploy and read-only smoke requirements."""
-    return external_activation_service.build_production_readiness_smoke_report(settings)
-
-
-@router.get("/bi/taxonomy", response_model=BiTaxonomyContractResponse)
-async def get_bi_taxonomy_contract(
-    user: dict = Depends(require_role("admin")),
-):
-    """Return BI readiness taxonomy and privacy boundaries."""
-    return bi_observability_service.build_taxonomy_contract()
-
-
-@router.get("/bi/warehouse-readiness", response_model=BiWarehouseReadinessResponse)
-async def get_bi_warehouse_readiness(
-    settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
-):
-    """Return cross-product aggregate warehouse readiness."""
-    return bi_observability_service.build_warehouse_readiness(settings)
-
-
-@router.get("/bi/warehouse-export", response_model=BiWarehouseExportResponse)
-async def get_bi_warehouse_export(
-    period: str = Query(default="latest", min_length=1, max_length=80),
-    limit: int = Query(default=100, ge=1, le=250),
-    settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
-):
-    """Return bounded support-safe aggregate warehouse rows."""
-    return bi_observability_service.build_warehouse_export(
-        settings=settings,
-        period=period,
-        limit=limit,
-    )
-
-
-@router.get("/bi/dashboard", response_model=BiOperatorDashboardResponse)
-async def get_bi_operator_dashboard(
-    limit: int = Query(default=100, ge=1, le=250),
-    settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
-):
-    """Return aggregate operator analytics sections."""
-    return bi_observability_service.build_operator_dashboard(settings=settings, limit=limit)
-
-
-@router.get("/bi/alert-routing", response_model=BiAlertRoutingResponse)
-async def get_bi_alert_routing(
-    settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
-):
-    """Return low-cardinality alert routing and runbook metadata."""
-    return bi_observability_service.build_alert_routing(settings)
-
-
 @router.get("/subscriptions/billing/rollout-controls", response_model=SubscriptionRolloutControlsResponse)
 async def get_subscription_rollout_controls(
     settings: Settings = Depends(get_settings),
@@ -2322,14 +2124,6 @@ async def preview_usage_reconciliation(
         action=action,
         repair=repair,
     )
-
-
-@router.get("/core-smoke", response_model=CoreSmokeResponse)
-async def get_core_smoke(
-    user: dict = Depends(require_role("admin")),
-):
-    """Return deterministic local product-flow smoke readiness."""
-    return core_smoke_service.build_core_smoke_report()
 
 
 @router.get("/account-verification/{user_id}", response_model=AccountVerificationSupportResponse)
