@@ -7,6 +7,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
@@ -96,9 +97,19 @@ def _required_text(value: object, field: str, *, maximum: int = 200) -> str:
 
 
 def _positive_integer(value: object, field: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+    # The DynamoDB resource API returns every number as Decimal, so stored
+    # versions and generations arrive as Decimal rather than int.
+    if isinstance(value, bool):
         raise ValueError(f"{field} is invalid")
-    return value
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, Decimal) and value == value.to_integral_value():
+        parsed = int(value)
+    else:
+        raise ValueError(f"{field} is invalid")
+    if parsed <= 0:
+        raise ValueError(f"{field} is invalid")
+    return parsed
 
 
 def _digest(value: object, field: str) -> str:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import datetime, timezone
+from decimal import Decimal
 import asyncio
 import inspect
 import threading
@@ -254,6 +255,26 @@ def test_teacher_supported_limit_is_two_per_beneficiary(
         "limit_exceeded",
     ]
     assert other.disposition.value == "admitted"
+
+
+def test_grant_numbers_stored_as_decimal_still_admit(
+    grants: dict[str, dict[str, object]],
+) -> None:
+    """The DynamoDB resource API returns every stored number as Decimal.
+
+    Fixtures that use int hid this: the grant resolved locally but never against
+    a real table, so teacher support was denied for every paying beneficiary.
+    """
+    grant = _grant("student-1")
+    grants["student-1"] = {
+        key: Decimal(value) if type(value) is int else value
+        for key, value in grant.items()
+    }
+    table = AtomicSupportTable()
+
+    result = _admit(table, case_id="q-decimal", student_id="student-1")
+
+    assert result.disposition.value == "admitted"
 
 
 def test_family_limit_is_ten_shared_across_three_beneficiaries(

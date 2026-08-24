@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 from enum import StrEnum
 import hashlib
 import struct
@@ -84,16 +85,29 @@ def _required_text(value: object, field: str, *, maximum: int = 200) -> str:
     return value
 
 
+def _stored_integer(value: object) -> int | None:
+    """Normalize a stored number; DynamoDB returns every number as Decimal."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, Decimal) and value == value.to_integral_value():
+        return int(value)
+    return None
+
+
 def _positive_integer(value: object, field: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+    parsed = _stored_integer(value)
+    if parsed is None or parsed <= 0:
         raise ValueError(f"{field} is invalid")
-    return value
+    return parsed
 
 
 def _stored_nonnegative_integer(value: object, field: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+    parsed = _stored_integer(value)
+    if parsed is None or parsed < 0:
         raise _DependencyFailure(f"{field} is malformed")
-    return value
+    return parsed
 
 
 def _digest(value: object, field: str) -> str:
