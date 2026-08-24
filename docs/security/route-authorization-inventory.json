@@ -1823,6 +1823,22 @@
       {
         "action": "read",
         "capability": null,
+        "purpose": "self_service",
+        "resource_type": "teacher_portal"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/teachers/me/profile",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
         "purpose": "teacher_help",
         "resource_type": "teacher_help_request"
       },

@@ -3,6 +3,7 @@ import uuid
 
 from collections.abc import Mapping
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
@@ -729,6 +730,20 @@ class TeacherAvailability(BaseModel):
     subjects: list[str] = Field(default_factory=list)
 
 
+class TeacherProfile(BaseModel):
+    id: str
+    userId: str
+    name: str
+    email: str
+    accountStatus: str
+    availabilityStatus: str
+    subjects: list[str] = Field(default_factory=list)
+    weeklyAvailability: list[TeacherAvailabilitySlot] = Field(default_factory=list)
+    maxActiveSessions: int | None = None
+    createdAt: str
+    updatedAt: str
+
+
 class TeacherStats(BaseModel):
     pendingRequests: int
     resolvedToday: int
@@ -1000,6 +1015,43 @@ def _availability_response(profile: dict[str, Any] | None) -> TeacherAvailabilit
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+def _stored_session_limit(value: object) -> int | None:
+    """The stored limit comes back from DynamoDB as Decimal."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, Decimal) and value == value.to_integral_value():
+        return int(value)
+    return None
+
+
+@router.get("/me/profile", response_model=TeacherProfile)
+async def get_my_profile(
+    actor: Actor = Depends(teacher_portal_self_dependency()),
+):
+    """Return the teacher's own profile as it is actually stored."""
+    profile = user_repo.get_user(actor.user_id) or {}
+    availability = _availability_response(profile)
+    return TeacherProfile(
+        id=actor.user_id,
+        userId=actor.user_id,
+        name=_text(profile.get("name")),
+        email=_text(profile.get("email")),
+        accountStatus=_text(profile.get("account_status")) or "active",
+        availabilityStatus=(
+            _text(profile.get("availability_status"))
+            or _text(profile.get("availability"))
+            or "unavailable"
+        ),
+        subjects=availability.subjects,
+        weeklyAvailability=availability.weeklyAvailability,
+        maxActiveSessions=_stored_session_limit(profile.get("max_active_sessions")),
+        createdAt=_text(profile.get("created_at")),
+        updatedAt=_text(profile.get("updated_at")),
+    )
+
 
 @router.get("/me/availability", response_model=TeacherAvailability)
 async def get_my_availability(
