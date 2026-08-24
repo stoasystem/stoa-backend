@@ -18,9 +18,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -130,6 +132,60 @@ def privileged_login(base_url: str, email: str, password: str, client_id: str, e
     return token
 
 
+# A one pixel PNG; the point is to exercise intent, chunk and complete, not the image.
+PROBE_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+
+
+def upload_probe_image(base_url: str, token: str) -> dict:
+    """Drive the three upload steps; each one failed independently in production."""
+    intent = request(
+        base_url, "POST", "/files/intents",
+        token=token,
+        body={
+            "purpose": "conversation_attachment",
+            "filename": "smoke-probe.png",
+            "contentType": "image/png",
+            "sizeBytes": len(PROBE_PNG),
+        },
+    )
+    upload_id = intent["uploadId"]
+
+    chunk = urllib.request.Request(
+        f"{base_url}/files/{upload_id}/chunks/1", data=PROBE_PNG, method="PUT"
+    )
+    chunk.add_header("Content-Type", "application/octet-stream")
+    chunk.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(chunk, timeout=40) as response:
+            if response.status != 200:
+                raise SmokeFailure(f"chunk upload returned {response.status}")
+    except urllib.error.HTTPError as exc:
+        raise SmokeFailure(f"chunk upload returned {exc.code}: {exc.read().decode()[:160]}") from None
+
+    completed = request(
+        base_url, "POST", f"/files/{upload_id}/complete", token=token, body={"partCount": 1}
+    )
+    if completed.get("status") != "validated":
+        raise SmokeFailure(f"upload finished as {completed.get('status')}, expected validated")
+    return completed
+
+
+def await_queued(base_url: str, teacher_token: str, conversation_id: str) -> dict:
+    """The teacher queue is a scan, so a fresh escalation needs a moment to appear."""
+    for attempt in range(6):
+        if attempt:
+            time.sleep(1.5)
+        items = request(
+            base_url, "GET", "/teachers/me/help-requests", token=teacher_token
+        ).get("items", [])
+        for item in items:
+            if item.get("conversationId") == conversation_id:
+                return item
+    raise SmokeFailure("request never appeared in the teacher queue")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default=os.environ.get("STOA_SMOKE_BASE_URL", DEFAULT_BASE_URL))
@@ -192,6 +248,12 @@ def main() -> int:
         conversation = None
         report.skip("student journey", "sign-in failed")
 
+    print("\nupload")
+    if student:
+        report.check("photographs an exercise end to end", lambda: upload_probe_image(base, student))
+    else:
+        report.skip("upload journey", "sign-in failed")
+
     print("\nparent")
     if parent:
         report.check(
@@ -228,11 +290,7 @@ def main() -> int:
         if escalation:
             report.check(
                 "the assigned teacher sees it queued",
-                lambda: (
-                    lambda items: items
-                    if any(item.get("conversationId") == conversation["id"] for item in items)
-                    else (_ for _ in ()).throw(SmokeFailure("request is not in the teacher queue"))
-                )(request(base, "GET", "/teachers/me/help-requests", token=teacher).get("items", [])),
+                lambda: await_queued(base, teacher, conversation["id"]),
             )
     else:
         report.skip("student reaches a human teacher", "a prerequisite failed")
