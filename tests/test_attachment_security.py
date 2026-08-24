@@ -720,6 +720,9 @@ def test_gateway_completion_uses_only_contiguous_server_etags() -> None:
                 "status": "completed",
                 "part_number": 1,
                 "provider_etag": "server-private-etag",
+                # A completed part always carries the checksum the provider
+                # acknowledged, and completion has to send it back.
+                "provider_checksum": "c2VydmVyLXByaXZhdGUtY2hlY2tzdW0tdmFsdWU=",
             }
 
         def list_upload_parts(self, upload_id):
@@ -777,7 +780,11 @@ def test_gateway_completion_uses_only_contiguous_server_etags() -> None:
     )
     assert result == {"uploadId": "upload-1", "status": "validated", "attachment": None}
     assert s3.complete["MultipartUpload"]["Parts"] == [
-        {"PartNumber": 1, "ETag": "server-private-etag"}
+        {
+            "PartNumber": 1,
+            "ETag": "server-private-etag",
+            "ChecksumSHA256": "c2VydmVyLXByaXZhdGUtY2hlY2tzdW0tdmFsdWU=",
+        }
     ]
 
 

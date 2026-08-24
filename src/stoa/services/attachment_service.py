@@ -1258,13 +1258,19 @@ def complete_upload(
     if not claimed:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     try:
+        # The multipart upload is created with ChecksumAlgorithm SHA256, so S3
+        # rejects a completion whose parts omit the checksum it acknowledged.
         result = _provider_mapping(lambda: s3.complete_multipart_upload(
             Bucket=settings.s3_images_bucket,
             Key=item["staging_object_key"],
             UploadId=item["multipart_upload_id"],
             MultipartUpload={
                 "Parts": [
-                    {"PartNumber": int(part["part_number"]), "ETag": part["provider_etag"]}
+                    {
+                        "PartNumber": int(part["part_number"]),
+                        "ETag": part["provider_etag"],
+                        "ChecksumSHA256": part["provider_checksum"],
+                    }
                     for part in parts
                 ]
             },
