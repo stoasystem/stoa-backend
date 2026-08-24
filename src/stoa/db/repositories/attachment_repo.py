@@ -1152,9 +1152,19 @@ def _require_provider_coordinate(value: object) -> str:
 
 
 def _require_positive_integer(value: object) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+    # Applied to stored part numbers and lengths as well as caller-supplied ones,
+    # and DynamoDB returns every stored number as Decimal.
+    if isinstance(value, bool):
         raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
-    return value
+    if isinstance(value, int):
+        result = value
+    elif isinstance(value, Decimal) and value == value.to_integral_value():
+        result = int(value)
+    else:
+        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
+    if result <= 0:
+        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
+    return result
 
 
 def _require_canonical_sha256(value: object) -> str:
