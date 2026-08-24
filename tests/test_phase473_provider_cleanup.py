@@ -460,6 +460,42 @@ def test_part_rows_receive_lifecycle_ttl() -> None:
     assert table.item["expires_at"] == parent_expiry
 
 
+class _DecimalFenceTable:
+    def __init__(self, generation: object) -> None:
+        self.generation = generation
+
+    def update_item(self, **kwargs):
+        del kwargs
+        return {}
+
+    def get_item(self, **kwargs):
+        del kwargs
+        return {
+            "Item": {
+                "owner_id": "owner-1",
+                "status": "active",
+                "generation": self.generation,
+            }
+        }
+
+
+def test_retention_fence_accepts_the_decimal_a_real_table_returns() -> None:
+    """The stored fence generation always arrives as Decimal."""
+    fence = attachment_repo.activate_retention_fence(
+        "owner-1",
+        now_iso="2026-08-24T00:00:00+00:00",
+        table=_DecimalFenceTable(Decimal(1)),
+    )
+
+    assert fence["status"] == "active"
+
+
+def test_stored_lease_attempt_accepts_decimal() -> None:
+    assert attachment_repo._optional_positive_int(Decimal(3)) == 3
+    assert attachment_repo._optional_positive_int(Decimal("3.5")) is None
+    assert attachment_repo._optional_positive_int(True) is None
+
+
 class _ExpressionValidatingTable:
     """Reject an unused placeholder the way DynamoDB does.
 

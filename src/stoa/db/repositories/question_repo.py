@@ -600,7 +600,10 @@ def get_teacher_curriculum_assignment(teacher_id: str) -> QuestionItem | None:
     item = response.get("Item")
     if not isinstance(item, dict):
         return None
+    # DynamoDB returns the stored version as Decimal.
     version = item.get("version")
+    if isinstance(version, Decimal) and version == version.to_integral_value():
+        version = int(version)
     if (
         item.get("PK") != f"TEACHER_ASSIGNMENT#{teacher_id}"
         or item.get("SK") != "CURRICULUM#CURRENT"

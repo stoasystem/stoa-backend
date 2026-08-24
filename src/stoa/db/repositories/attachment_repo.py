@@ -899,9 +899,15 @@ def read_message_command_result(
 
 
 def _optional_positive_int(value: object) -> int | None:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+    # Reads a stored counter, and DynamoDB returns stored numbers as Decimal.
+    if isinstance(value, bool):
         return None
-    return value
+    if isinstance(value, int):
+        return value if value >= 0 else None
+    if isinstance(value, Decimal) and value == value.to_integral_value():
+        parsed = int(value)
+        return parsed if parsed >= 0 else None
+    return None
 
 
 def build_message_command_claim_transaction(
@@ -3431,16 +3437,14 @@ def activate_retention_fence(
     except Exception:
         raise AttachmentRepositoryConflict("dependency_failure") from None
     item = _optional_mapping(response.get("Item"))
-    generation = item.get("generation") if item is not None else None
     if (
         not isinstance(item, dict)
         or item.get("owner_id") != owner_id
         or item.get("status") != "active"
-        or isinstance(generation, bool)
-        or not isinstance(generation, int)
-        or generation <= 0
     ):
         raise AttachmentRepositoryConflict("conditional_conflict")
+    # The stored generation arrives as Decimal, so it goes through the normalizer.
+    _required_integer(item.get("generation"), minimum=1)
     return item
 
 
