@@ -152,36 +152,56 @@ def _history_text(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
+def _is_question_record(row: Mapping[str, object]) -> bool:
+    """The student index carries every record with a student_id, not just questions."""
+    return row.get("SK") == "META" and str(row.get("PK", "")).startswith("QUESTION#")
+
+
 def _question_history_items(student_id: str) -> list[LearningHistoryItem]:
-    result = question_repo.list_by_student(student_id, limit=100)
+    """Build history from the student's conversations.
+
+    The student index is shared by every record carrying a student_id, so rows
+    are selected by entity type rather than taken wholesale.
+    """
+    result = question_repo.list_by_student(student_id, limit=200)
     items = []
     for row in result.get("Items", []):
         if not isinstance(row, Mapping):
             continue
-        created_at = _history_text(row.get("created_at")) or _history_text(row.get("createdAt"))
+        created_at = _history_text(row.get("created_at"))
         if not created_at:
             continue
-        status = _history_text(row.get("status"))
-        items.append(
-            LearningHistoryItem(
-                id=_history_text(row.get("question_id")) or f"question-{created_at}",
-                subject=_history_text(row.get("subject")) or "General",
-                title=(
-                    "Teacher help requested"
-                    if status in ("escalated", "teacher_requested")
-                    else "Question answered"
-                    if status == "ai_answered"
-                    else "Question asked"
-                ),
-                summary=(
-                    _history_text(row.get("summary"))
-                    or _history_text(row.get("prompt"))
-                    or _history_text(row.get("question"))
-                ),
-                createdAt=created_at,
-                sourceLabel="Questions",
+        if row.get("entity_type") == "conversation":
+            escalated = bool(row.get("escalated"))
+            items.append(
+                LearningHistoryItem(
+                    id=_history_text(row.get("conversation_id")) or f"conversation-{created_at}",
+                    subject=_history_text(row.get("subject")) or "General",
+                    title="Teacher help requested" if escalated else "Question asked",
+                    summary=(
+                        _history_text(row.get("escalation_message"))
+                        or _history_text(row.get("title"))
+                    ),
+                    createdAt=created_at,
+                    sourceLabel="Questions",
+                )
             )
-        )
+        elif _is_question_record(row):
+            status = _history_text(row.get("status"))
+            items.append(
+                LearningHistoryItem(
+                    id=_history_text(row.get("question_id")) or f"question-{created_at}",
+                    subject=_history_text(row.get("subject")) or "General",
+                    title=(
+                        "Question answered" if status == "ai_answered" else "Question asked"
+                    ),
+                    summary=(
+                        _history_text(row.get("summary")) or _history_text(row.get("prompt"))
+                    ),
+                    createdAt=created_at,
+                    sourceLabel="Questions",
+                )
+            )
     return items
 
 
@@ -358,7 +378,11 @@ async def get_summary(
     student_id = authorized.ref.student_id
 
     result = question_repo.list_by_student(student_id, limit=500)
-    questions = _question_rows(result.get("Items", []), correlation_id)
+    questions = [
+        row
+        for row in _question_rows(result.get("Items", []), correlation_id)
+        if _is_question_record(row)
+    ]
 
     ai_resolved = sum(1 for q in questions if q.get("status") == "ai_answered")
     teacher_resolved = sum(1 for q in questions if q.get("status") == "resolved")

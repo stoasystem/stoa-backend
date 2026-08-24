@@ -65,6 +65,88 @@ def _profiles(monkeypatch):
     return profiles
 
 
+# The student index is keyed on student_id, which every one of these carries.
+MIXED_STUDENT_INDEX_ROWS = [
+    {
+        "PK": "QUESTION#q-1",
+        "SK": "META",
+        "question_id": "q-1",
+        "student_id": "student-1",
+        "status": "ai_answered",
+        "subject": "math",
+        "prompt": "Why does this factor?",
+        "created_at": "2026-08-20T10:00:00+00:00",
+    },
+    {
+        "PK": "CONV#c-1",
+        "SK": "CONV",
+        "entity_type": "conversation",
+        "conversation_id": "c-1",
+        "student_id": "student-1",
+        "subject": "physics",
+        "title": "Physics - 9",
+        "created_at": "2026-08-21T10:00:00+00:00",
+    },
+    {
+        "PK": "USAGE_LEDGER#student-1",
+        "SK": "EVENT#question#2026-08-21",
+        "entity_type": "usage_ledger_event",
+        "student_id": "student-1",
+        "created_at": "2026-08-21T10:00:01+00:00",
+    },
+    {
+        "PK": "CONV#c-1",
+        "SK": "MSG#m-1",
+        "entity_type": "conversation_message",
+        "student_id": "student-1",
+        "created_at": "2026-08-21T10:00:02+00:00",
+    },
+    {
+        "PK": "REPORT#weekly-1",
+        "SK": "SUMMARY",
+        "student_id": "student-1",
+        "created_at": "2026-08-22T04:00:00+00:00",
+    },
+]
+
+
+def test_summary_counts_questions_not_every_row_sharing_the_student_index(monkeypatch):
+    _profiles(monkeypatch)
+    monkeypatch.setattr(
+        students.question_repo,
+        "list_by_student",
+        lambda *_args, **_kwargs: {"Items": MIXED_STUDENT_INDEX_ROWS},
+    )
+
+    response = _client(_actor(CanonicalRole.STUDENT, "student-1")).get(
+        "/students/student-1/summary"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_questions"] == 1
+    assert body["ai_resolved"] == 1
+
+
+def test_learning_history_reports_questions_and_conversations_only(monkeypatch):
+    _profiles(monkeypatch)
+    monkeypatch.setattr(
+        students.question_repo,
+        "list_by_student",
+        lambda *_args, **_kwargs: {"Items": MIXED_STUDENT_INDEX_ROWS},
+    )
+    monkeypatch.setattr(students.practice_repo, "get_progress", lambda *_args: [])
+
+    response = _client(_actor(CanonicalRole.STUDENT, "student-1")).get(
+        "/students/me/learning-history"
+    )
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert [item["id"] for item in items] == ["c-1", "q-1"]
+    assert items[0]["summary"] == "Physics - 9"
+
+
 def test_student_profile_uses_canonical_actor_user_id_without_email_fallback(monkeypatch):
     _profiles(monkeypatch)
     response = _client(_actor(CanonicalRole.STUDENT, "student-1")).get(
