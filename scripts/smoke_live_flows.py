@@ -292,6 +292,23 @@ def main() -> int:
                 "the assigned teacher sees it queued",
                 lambda: await_queued(base, teacher, conversation["id"]),
             )
+            report.check(
+                "the student sees the request was picked up",
+                lambda: (
+                    lambda seen: seen
+                    if seen.get("status") in {"assigned", "in_progress", "resolved"}
+                    else (_ for _ in ()).throw(
+                        SmokeFailure(f"student still sees status {seen.get('status')!r}")
+                    )
+                )(
+                    request(
+                        base,
+                        "GET",
+                        f"/teacher-help/conversations/{conversation['id']}/request",
+                        token=student,
+                    )
+                ),
+            )
     else:
         report.skip("student reaches a human teacher", "a prerequisite failed")
 

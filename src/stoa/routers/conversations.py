@@ -2459,8 +2459,52 @@ async def request_teacher_help(
     return TeacherHelpResponse(
         requestId=request_id,
         conversationId=body.conversationId,
-        status="pending",
+        status="assigned" if dispatch else "pending",
         teacherName=dispatch,
         createdAt=now,
         updatedAt=now,
+    )
+
+
+def _teacher_name(teacher_id: object) -> str | None:
+    if not isinstance(teacher_id, str) or not teacher_id:
+        return None
+    profile = user_repo.get_user(teacher_id) or {}
+    name = profile.get("name") or profile.get("email")
+    return str(name) if name else None
+
+
+@teacher_help_router.get(
+    "/conversations/{conv_id}/request", response_model=TeacherHelpResponse
+)
+async def get_teacher_help_status(
+    authorized: AuthorizedResource = Depends(
+        authorized_conversation_dependency(
+            action=AuthorizationAction.READ,
+            purposes=CONVERSATION_CONTENT_READ,
+            resolver=lambda conversation_id: _get_conversation(conversation_id),
+        )
+    ),
+):
+    """Report where a student's escalation stands, for the waiting indicator."""
+    conv = authorized.value
+    request_id = conv.get("escalation_request_id")
+    if not isinstance(request_id, str) or not request_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This conversation was never escalated to a teacher",
+        )
+    teacher_name = _teacher_name(conv.get("current_teacher"))
+    escalation_status = str(conv.get("escalation_status") or "pending")
+    # A bound teacher outranks the stored label, which stays 'pending' until the
+    # teacher opens the case, so the student would otherwise never see progress.
+    if teacher_name and escalation_status == "pending":
+        escalation_status = "assigned"
+    return TeacherHelpResponse(
+        requestId=request_id,
+        conversationId=authorized.ref.resource_id,
+        status=escalation_status,
+        teacherName=teacher_name,
+        createdAt=str(conv.get("escalated_at") or conv.get("created_at") or ""),
+        updatedAt=str(conv.get("updated_at") or ""),
     )
