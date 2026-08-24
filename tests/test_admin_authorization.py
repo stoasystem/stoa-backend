@@ -77,7 +77,7 @@ def test_registered_admin_router_has_exact_executable_policy_and_controls(method
 
 def test_registered_admin_router_table_is_complete_across_main_registrations():
     keys = [(method, path) for method, path, _route in REGISTERED_ADMIN_ROUTES]
-    assert len(keys) == len(set(keys)) == 104
+    assert len(keys) == len(set(keys)) == 76
     assert ("GET", "/admin/notifications") in keys
     assert ("GET", "/admin/notifications/delivery-status") in keys
     assert all(classify_admin_route(method, path) for method, path in keys)
@@ -161,18 +161,6 @@ def test_support_lookup_projection_is_d15_only():
     )
     assert set(projection) == {"accountState", "bindingState", "denialCode", "correlationId", "supportId"}
     assert "secret" not in repr(projection)
-
-
-def test_report_metadata_content_recovery_export_and_send_capabilities_are_distinct():
-    expected = {
-        ("GET", "/admin/reports/{parent_id}/{student_id}/{week_start}/ops"): "report_metadata_reader",
-        ("GET", "/admin/reports/{parent_id}/{student_id}/{week_start}/artifact-edit-previews/{draft_id}"): "report_recovery_reader",
-        ("POST", "/admin/reports/{parent_id}/{student_id}/{week_start}/resend"): "report_recovery_operator",
-        ("GET", "/admin/reports/recovery-evidence"): "report_evidence_exporter",
-        ("POST", "/admin/reports/support-handoff-delivery"): "report_external_handoff_sender",
-        ("POST", "/admin/reports/legal-holds"): "report_governance_manager",
-    }
-    assert {key: classify_admin_route(*key).capability for key in expected} == expected
 
 
 def test_report_target_scope_denies_before_lookup_or_mutation(monkeypatch):
@@ -472,81 +460,6 @@ def test_recovery_resolver_later_denial_prevents_preview_effect(monkeypatch):
     assert effects == []
 
 
-@pytest.mark.parametrize("reverse_job_ids", [False, True])
-def test_support_handoff_later_denial_prevents_package_effect(monkeypatch, reverse_job_ids):
-    effects = []
-    jobs = {
-        "job-1": {"job_id": "job-1", "filters": {"student_id": "student-1", "parent_id": "parent-1"}},
-        "job-2": {"job_id": "job-2", "filters": {"student_id": "student-2", "parent_id": "parent-2"}},
-    }
-    monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: jobs[job_id])
-    monkeypatch.setattr(
-        admin.support_handoff_service,
-        "build_package",
-        lambda **kwargs: effects.append(kwargs),
-    )
-    app = FastAPI()
-    app.include_router(admin.router, prefix="/admin")
-    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
-    app.dependency_overrides[get_actor] = lambda: _actor_with_grants(
-        "report_evidence_exporter", "student:student-1"
-    )
-    job_ids = ["job-1", "job-2"]
-    if reverse_job_ids:
-        job_ids.reverse()
-    response = TestClient(app).post(
-        "/admin/reports/support-handoff-package",
-        json={"reason": "safe handoff", "recovery_job_ids": job_ids},
-    )
-    assert response.status_code == 403
-    assert effects == []
-
-
-@pytest.mark.parametrize("reverse_references", [False, True])
-def test_governance_later_audit_failure_blocks_effect_and_ignores_reference_only_fields(
-    monkeypatch, reverse_references
-):
-    class FailSecondSink(MemoryAuthorizationAuditSink):
-        def persist_authorization_decision(self, **values):
-            if len(self.events) == 1:
-                raise RuntimeError("later-governance-audit-outage")
-            return super().persist_authorization_decision(**values)
-
-    effects = []
-    monkeypatch.setattr(
-        admin.report_audit_retention_service,
-        "build_legal_hold_status_response",
-        lambda **kwargs: effects.append(kwargs),
-    )
-    app = FastAPI()
-    app.include_router(admin.router, prefix="/admin")
-    app.dependency_overrides[get_authorization_audit_sink] = FailSecondSink
-    app.dependency_overrides[get_actor] = lambda: _actor("report_governance_reader")
-    references = [
-        {
-            "scope": "job",
-            "job_id": "job:one",
-            "student_id": "student-1",
-            "release_evidence": {"target_canary": "must-not-authorize"},
-        },
-        {
-            "scope": "job",
-            "job_id": "job",
-            "student_id": "student-2",
-            "week_start": "one:student-1",
-            "release_evidence": {"target_canary": "must-not-authorize-either"},
-        },
-    ]
-    if reverse_references:
-        references.reverse()
-    response = TestClient(app).post(
-        "/admin/reports/legal-holds/status", json={"references": references}
-    )
-    assert response.status_code == 503
-    assert effects == []
-    assert "target_canary" not in response.text
-
-
 def test_recovery_job_identifier_is_resolved_and_outage_fails_before_cancel(monkeypatch):
     mutations = []
     monkeypatch.setattr(
@@ -569,28 +482,6 @@ def test_recovery_job_identifier_is_resolved_and_outage_fails_before_cancel(monk
     response = TestClient(app).post("/admin/reports/recovery-jobs/job-1/cancel")
     assert response.status_code == 503
     assert mutations == []
-
-
-@pytest.mark.parametrize(
-    "method,path",
-    [
-        ("POST", "/admin/reports/bulk-resend"),
-        ("GET", "/admin/reports/recovery-evidence"),
-        ("POST", "/admin/reports/support-handoff-delivery"),
-        ("POST", "/admin/reports/immutable-evidence/persist"),
-        ("POST", "/admin/reports/legal-holds"),
-    ],
-)
-def test_report_bulk_export_send_persist_and_hold_reject_break_glass(method, path):
-    policy = classify_admin_route(method, path)
-    ref = ResourceRef(policy.resource_type, "global", "admin-1", relationship_known=True)
-    assert not operator_capability_permits(
-        _actor("student_data_break_glass"),
-        capability=policy.capability,
-        resource=ref,
-        action=policy.action,
-        purpose=policy.purpose,
-    )
 
 
 def test_admin_role_and_break_glass_cannot_provision_privilege(monkeypatch):

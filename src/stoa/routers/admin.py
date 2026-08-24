@@ -33,11 +33,7 @@ from stoa.models.moderation import (
 from stoa.models.user import SubscriptionTier
 from stoa.services import (
     moderation_service,
-    report_audit_retention_service,
-    report_artifact_edit_service,
-    report_edit_service,
     release_evidence_service,
-    report_recovery_evidence_service,
     report_recovery_job_service,
     report_recovery_service,
     account_operations_service,
@@ -46,9 +42,6 @@ from stoa.services import (
     curriculum_analytics_service,
     curriculum_migration_service,
     curriculum_ops_service,
-    support_destination_service,
-    support_handoff_service,
-    support_sla_service,
     teacher_dispatch_service,
     subscription_service,
     teacher_reply_service,
@@ -65,6 +58,10 @@ type AdminItem = dict[str, object]
 @runtime_checkable
 class _ScanTable(Protocol):
     def scan(self, **kwargs: object) -> object: ...
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
 def _admin_mapping(value: object) -> AdminItem:
@@ -2367,7 +2364,7 @@ async def repair_parent_binding(
     user: dict = Depends(require_role("admin")),
 ):
     """Apply one unchanged repair preview through the atomic relationship writer."""
-    now = report_audit_retention_service.now_iso()
+    now = _now_iso()
     result = user_repo.apply_parent_binding_repair(
         parent_id=body.parent_id,
         student_id=body.student_id,
@@ -2389,23 +2386,6 @@ async def repair_parent_binding(
             content=response.model_dump(mode="json"),
         )
     return response
-
-
-def _relationship_status_error(
-    *, code: str, message: str, correlation_id: str | None, status_code: int
-) -> JSONResponse:
-    safe_correlation_id = normalize_correlation_id(correlation_id)
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "code": code,
-            "message": message,
-            "correlationId": safe_correlation_id,
-        },
-        headers={"X-Correlation-ID": safe_correlation_id},
-    )
-
-
 @router.post(
     "/parent-bindings/status",
     response_model=ParentBindingStatusTransitionResponse,
@@ -2441,7 +2421,7 @@ async def transition_parent_binding_status(
         status=body.status,
         source="admin_lifecycle",
         actor=str(user.get("sub") or user.get("user_id") or "admin"),
-        updated_at=report_audit_retention_service.now_iso(),
+        updated_at=_now_iso(),
     )
     if result.disposition is user_repo.ParentBindingStatusDisposition.CONFLICT:
         return _relationship_status_error(
@@ -2463,6 +2443,25 @@ async def transition_parent_binding_status(
         status=result.status,
         version=result.version,
     )
+
+
+
+
+def _relationship_status_error(
+    *, code: str, message: str, correlation_id: str | None, status_code: int
+) -> JSONResponse:
+    safe_correlation_id = normalize_correlation_id(correlation_id)
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "code": code,
+            "message": message,
+            "correlationId": safe_correlation_id,
+        },
+        headers={"X-Correlation-ID": safe_correlation_id},
+    )
+
+
 
 
 @router.get("/reports/ops", response_model=ReportOperationListResponse)
@@ -2702,640 +2701,42 @@ async def create_resume_recovery_job(
     return _recovery_job_response(job)
 
 
-@router.get("/reports/recovery-evidence")
-async def export_recovery_evidence(
-    request: Request,
-    job_id: Optional[str] = Query(default=None),
-    status: Optional[str] = Query(default=None),
-    limit: int = Query(default=25, ge=1, le=100),
-    next_token: Optional[str] = Query(default=None),
-    include_targets: bool = Query(default=True),
-    include_job_audit: bool = Query(default=True),
-    target_limit: int = Query(default=50, ge=1, le=100),
-    audit_limit: int = Query(default=50, ge=1, le=100),
-    next_target_token: Optional[str] = Query(default=None),
-    next_audit_token: Optional[str] = Query(default=None),
-    user: dict = Depends(require_role("admin")),
-):
-    """Export metadata-only report recovery evidence for release/support review."""
-    request_id = _request_id(request)
-    operator = _operator_id(user)
-    try:
-        if job_id:
-            response = _export_recovery_job_evidence(
-                job_id=job_id,
-                request_id=request_id,
-                include_targets=include_targets,
-                include_job_audit=include_job_audit,
-                target_limit=target_limit,
-                audit_limit=audit_limit,
-                next_target_token=next_target_token,
-                next_audit_token=next_audit_token,
-            )
-        else:
-            response = _export_recent_recovery_jobs(
-                request_id=request_id,
-                status=status,
-                limit=limit,
-                next_token=next_token,
-            )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
-
-    report_recovery_evidence_service.log_export_access(
-        actor=operator,
-        request_id=request_id,
-        scope=response["scope"],
-        filters=response["filters"],
-        result_counts={
-            "jobs": len(response["jobs"]),
-            "targets": len(response["targets"]),
-            "job_audit": len(response["job_audit"]),
-            "report_audit": len(response["report_audit"]),
-        },
-        status="success",
-    )
-    return response
 
 
-@router.get("/reports/recovery-jobs/{job_id}/support-package")
-async def export_recovery_job_support_package(
-    request: Request,
-    job_id: str,
-    include_targets: bool = Query(default=True),
-    include_job_audit: bool = Query(default=True),
-    include_report_audit: bool = Query(default=False),
-    target_limit: int = Query(default=50, ge=1, le=100),
-    audit_limit: int = Query(default=50, ge=1, le=100),
-    next_target_token: Optional[str] = Query(default=None),
-    next_audit_token: Optional[str] = Query(default=None),
-    note: Optional[str] = Query(default=None, max_length=500),
-    user: dict = Depends(require_role("admin")),
-):
-    """Export a support-safe metadata package for one recovery job."""
-    request_id = _request_id(request)
-    operator = _operator_id(user)
-    try:
-        response = _export_recovery_job_support_package(
-            job_id=job_id,
-            request_id=request_id,
-            include_targets=include_targets,
-            include_job_audit=include_job_audit,
-            include_report_audit=include_report_audit,
-            target_limit=target_limit,
-            audit_limit=audit_limit,
-            next_target_token=next_target_token,
-            next_audit_token=next_audit_token,
-            operator_note=note,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
-
-    report_recovery_evidence_service.log_export_access(
-        actor=operator,
-        request_id=request_id,
-        scope=response["scope"],
-        filters={"job_id": job_id, "source_job_id": response.get("source_job", {}).get("job_id") if response.get("source_job") else None},
-        result_counts={
-            "targets": len(response["targets"]),
-            "job_audit": len(response["job_audit"]),
-            "report_audit": len(response["report_audit"]),
-        },
-        status="success",
-    )
-    return response
 
 
-@router.post("/reports/support-handoff-package")
-@admin_target_provider(HANDOFF_FIXTURE_TARGET)
-async def create_support_handoff_package(
-    request: Request,
-    body: SupportHandoffPackageRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Generate a support-safe handoff package without direct external writes."""
-    request_id = _request_id(request)
-    operator = _operator_id(user)
-    destination = body.destination_mode.strip()
-    if destination not in support_handoff_service.ALLOWED_DESTINATIONS | support_handoff_service.REFUSED_DESTINATIONS:
-        raise HTTPException(status_code=422, detail=f"Unsupported destination mode: {destination or 'missing'}")
-
-    recovery_sections: list[dict[str, Any]] = []
-    fixture_response: dict[str, Any] | None = None
-
-    if destination not in support_handoff_service.REFUSED_DESTINATIONS:
-        try:
-            recovery_sections = [
-                _support_handoff_recovery_section(
-                    job_id=job_id,
-                    request_id=request_id,
-                    include_targets=body.include_targets,
-                    include_job_audit=body.include_job_audit,
-                    include_report_audit=body.include_report_audit,
-                    target_limit=body.target_limit,
-                    audit_limit=body.audit_limit,
-                )
-                for job_id in body.recovery_job_ids
-            ]
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
-
-        if body.fixture:
-            fixture_response = _support_handoff_fixture_response(body.fixture)
-
-    try:
-        package = support_handoff_service.build_package(
-            reason=body.reason,
-            destination_mode=destination,
-            generated_by=operator,
-            request_id=request_id,
-            recovery_sections=recovery_sections,
-            release_evidence=body.release_evidence,
-            fixture=fixture_response,
-            operator_note=body.operator_note,
-        )
-    except support_handoff_service.SupportHandoffError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-
-    support_handoff_service.write_audit_event(
-        package,
-        actor=operator,
-        reason=body.reason,
-        request_id=request_id,
-    )
-    return package
 
 
-@router.post("/reports/support-handoff-delivery")
-@admin_target_provider(HANDOFF_FIXTURE_TARGET)
-async def create_support_handoff_delivery(
-    request: Request,
-    body: SupportHandoffPackageRequest,
-    settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
-):
-    """Deliver or refuse a support-safe handoff package for an approved destination."""
-    request_id = _request_id(request)
-    operator = _operator_id(user)
-    destination = body.destination_mode.strip()
-    contract_defined_destinations = (
-        {
-            support_destination_service.INTERNAL_QUEUE_DESTINATION,
-            support_destination_service.THIRD_PARTY_SUPPORT_DESTINATION,
-        }
-        | support_destination_service.CONTRACT_DEFINED_REFUSED_DESTINATIONS
-    )
-    if destination not in contract_defined_destinations:
-        raise HTTPException(status_code=422, detail=f"Unsupported destination mode: {destination or 'missing'}")
-
-    if destination in support_destination_service.CONTRACT_DEFINED_REFUSED_DESTINATIONS:
-        delivery = support_destination_service.refuse_destination(
-            destination_mode=destination,
-            actor=operator,
-            reason=body.reason,
-            request_id=request_id,
-            refusal_reason="destination is contract-defined but not approved for Phase 149 delivery",
-        )
-        return {"package": None, "delivery": delivery}
-
-    if (
-        destination == support_destination_service.INTERNAL_QUEUE_DESTINATION
-        and not settings.support_internal_queue_approved
-    ):
-        delivery = support_destination_service.refuse_destination(
-            destination_mode=destination,
-            actor=operator,
-            reason=body.reason,
-            request_id=request_id,
-            refusal_reason="support internal queue delivery is not approved",
-        )
-        return {"package": None, "delivery": delivery}
-
-    if destination == support_destination_service.THIRD_PARTY_SUPPORT_DESTINATION and (
-        not settings.support_third_party_provider_approved
-        or not settings.support_third_party_provider_api_key.strip()
-    ):
-        delivery = support_destination_service.refuse_destination(
-            destination_mode=destination,
-            actor=operator,
-            reason=body.reason,
-            request_id=request_id,
-            refusal_reason="third-party support provider is not approved or credentials are missing",
-        )
-        return {"package": None, "delivery": delivery}
-
-    recovery_sections: list[dict[str, Any]] = []
-    fixture_response: dict[str, Any] | None = None
-    try:
-        recovery_sections = [
-            _support_handoff_recovery_section(
-                job_id=job_id,
-                request_id=request_id,
-                include_targets=body.include_targets,
-                include_job_audit=body.include_job_audit,
-                include_report_audit=body.include_report_audit,
-                target_limit=body.target_limit,
-                audit_limit=body.audit_limit,
-            )
-            for job_id in body.recovery_job_ids
-        ]
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
-
-    if body.fixture:
-        fixture_response = _support_handoff_fixture_response(body.fixture)
-
-    try:
-        package = support_handoff_service.build_package(
-            reason=body.reason,
-            destination_mode=destination,
-            generated_by=operator,
-            request_id=request_id,
-            recovery_sections=recovery_sections,
-            release_evidence=body.release_evidence,
-            fixture=fixture_response,
-            operator_note=body.operator_note,
-        )
-    except support_handoff_service.SupportHandoffError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-
-    support_handoff_service.write_audit_event(
-        package,
-        actor=operator,
-        reason=body.reason,
-        request_id=request_id,
-    )
-    if destination == support_destination_service.THIRD_PARTY_SUPPORT_DESTINATION:
-        delivery = support_destination_service.deliver_third_party_support(
-            package=package,
-            actor=operator,
-            reason=body.reason,
-            request_id=request_id,
-            settings=settings,
-        )
-    else:
-        delivery = support_destination_service.deliver_internal_queue(
-            package=package,
-            actor=operator,
-            reason=body.reason,
-            request_id=request_id,
-            settings=settings,
-        )
-    return {"package": package, "delivery": delivery}
 
 
-@router.get("/reports/support-handoff-deliveries")
-async def list_support_handoff_deliveries(
-    status: str | None = Query(default=None),
-    destination_mode: str | None = Query(default=None),
-    package_id: str | None = Query(default=None),
-    date_from: str | None = Query(default=None),
-    date_to: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=100),
-    next_token: str | None = Query(default=None),
-    user: dict = Depends(require_role("admin")),
-):
-    """List recent support handoff delivery lifecycle records for operators."""
-    if status and status not in support_destination_service.DELIVERY_STATUSES:
-        raise HTTPException(status_code=400, detail="Unsupported delivery status")
-    allowed_destinations = (
-        {
-            support_destination_service.INTERNAL_QUEUE_DESTINATION,
-            support_destination_service.THIRD_PARTY_SUPPORT_DESTINATION,
-        }
-        | support_destination_service.CONTRACT_DEFINED_REFUSED_DESTINATIONS
-    )
-    if destination_mode and destination_mode not in allowed_destinations:
-        raise HTTPException(status_code=400, detail="Unsupported destination mode")
-    try:
-        last_key = report_repo.decode_support_handoff_delivery_page_token(next_token)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
-    result = report_repo.list_support_handoff_delivery_summaries(
-        status=status,
-        destination_mode=destination_mode,
-        package_id=package_id,
-        date_from=date_from,
-        date_to=date_to,
-        limit=limit,
-        last_key=last_key,
-    )
-    items = [
-        support_destination_service.support_handoff_delivery_response(item)
-        for item in _admin_items(result)
-    ]
-    return {
-        "items": items,
-        "count": len(items),
-        "next_token": report_repo.encode_support_handoff_delivery_page_token(
-            _admin_cursor(result)
-        ),
-        "filters": {
-            "status": status,
-            "destination_mode": destination_mode,
-            "package_id": package_id,
-            "date_from": date_from,
-            "date_to": date_to,
-        },
-    }
 
 
-@router.get("/reports/support-handoff-sla")
-async def get_support_handoff_sla(
-    date_from: str | None = Query(default=None),
-    date_to: str | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=200),
-    settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
-):
-    """Return metadata-only support handoff SLA and messaging analytics."""
-    return support_sla_service.build_support_sla_analytics(
-        settings=settings,
-        limit=limit,
-        date_from=date_from,
-        date_to=date_to,
-    )
 
 
-@router.get("/reports/support-handoff-deliveries/{delivery_id}")
-async def get_support_handoff_delivery_detail(
-    delivery_id: str,
-    audit_limit: int = Query(default=25, ge=1, le=100),
-    audit_next_token: str | None = Query(default=None),
-    user: dict = Depends(require_role("admin")),
-):
-    """Inspect one support handoff delivery summary plus bounded lifecycle audit events."""
-    try:
-        last_key = report_repo.decode_support_handoff_delivery_page_token(audit_next_token)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
-    record = report_repo.get_support_handoff_delivery_record(delivery_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Support handoff delivery not found")
-    audit_result = report_repo.list_support_handoff_delivery_audit_events(
-        delivery_id,
-        limit=audit_limit,
-        last_key=last_key,
-    )
-    audit_events = [
-        support_destination_service.support_handoff_delivery_audit_response(event)
-        for event in _admin_items(audit_result)
-    ]
-    return {
-        "delivery": support_destination_service.support_handoff_delivery_response(record),
-        "audit_events": audit_events,
-        "audit_count": len(audit_events),
-        "audit_next_token": report_repo.encode_support_handoff_delivery_page_token(
-            _admin_cursor(audit_result)
-        ),
-    }
 
 
-@router.post("/reports/support-handoff-deliveries/{delivery_id}/retry")
-async def retry_support_handoff_delivery(
-    delivery_id: str,
-    request: Request,
-    body: SupportHandoffRetryRequest | None = Body(default=None),
-    settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
-):
-    """Retry one failed third-party support delivery without duplicating tickets."""
-    retry_request = body or SupportHandoffRetryRequest()
-    delivery = support_destination_service.retry_provider_delivery(
-        delivery_id=delivery_id,
-        actor=_operator_id(user),
-        request_id=_request_id(request),
-        settings=settings,
-    )
-    if not delivery:
-        raise HTTPException(status_code=404, detail="Support handoff delivery not found")
-    return {"delivery": delivery, "reason": retry_request.reason}
 
 
-@router.post("/reports/support-handoff-deliveries/{delivery_id}/provider-sync")
-async def sync_support_handoff_delivery_provider_status(
-    delivery_id: str,
-    request: Request,
-    body: SupportHandoffProviderSyncRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Normalize one provider ticket update without storing raw provider payloads."""
-    delivery = support_destination_service.sync_provider_ticket(
-        delivery_id=delivery_id,
-        provider_event_id=body.provider_event_id,
-        provider_status=body.provider_status,
-        provider_updated_at=body.provider_updated_at,
-        provider_assignee=body.provider_assignee,
-        provider_priority=body.provider_priority,
-        actor=_operator_id(user),
-        request_id=_request_id(request),
-    )
-    if not delivery:
-        raise HTTPException(status_code=404, detail="Support handoff delivery not found")
-    return {"delivery": delivery}
 
 
-@router.post("/reports/support-handoff-deliveries/{delivery_id}/messages")
-async def send_support_handoff_message(
-    delivery_id: str,
-    request: Request,
-    body: SupportHandoffMessageRequest,
-    settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
-):
-    """Persist one controlled support/customer message outcome."""
-    message = support_sla_service.send_support_message(
-        delivery_id=delivery_id,
-        template=body.template,
-        destination=body.destination,
-        trigger=body.trigger,
-        actor=_operator_id(user),
-        request_id=_request_id(request),
-        settings=settings,
-        customer_opted_out=body.customer_opted_out,
-    )
-    if not message:
-        raise HTTPException(status_code=404, detail="Support handoff delivery not found")
-    return {"message": message}
 
 
-@router.post("/reports/audit-retention/status")
-@admin_target_provider(GOVERNANCE_REFERENCE_TARGETS)
-async def get_audit_retention_status(
-    request: Request,
-    body: AuditRetentionStatusRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Inspect metadata-only audit retention status for allowlisted scopes."""
-    return report_audit_retention_service.build_status_response(
-        references=[ref.model_dump(exclude_none=True) for ref in body.references],
-        request_id=_request_id(request),
-        limit=body.limit,
-    )
 
 
-@router.post("/reports/audit-retention/manifest")
-@admin_target_provider(GOVERNANCE_REFERENCE_TARGETS)
-async def create_audit_retention_manifest(
-    request: Request,
-    body: AuditRetentionManifestRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Generate a metadata-only sealed audit retention manifest."""
-    try:
-        return report_audit_retention_service.build_manifest(
-            reason=body.reason,
-            generated_by=_operator_id(user),
-            request_id=_request_id(request),
-            references=[ref.model_dump(exclude_none=True) for ref in body.references],
-            retention_category=body.retention_category,
-            retention_action=body.retention_action,
-            target_limit=body.target_limit,
-            audit_limit=body.audit_limit,
-        )
-    except report_audit_retention_service.AuditRetentionError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
-@router.post("/reports/immutable-evidence/status")
-@admin_target_provider(GOVERNANCE_REFERENCE_TARGETS)
-async def get_immutable_evidence_status(
-    request: Request,
-    body: AuditRetentionStatusRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Inspect immutable evidence and legal hold metadata status for allowlisted scopes."""
-    return report_audit_retention_service.build_immutable_status_response(
-        references=[ref.model_dump(exclude_none=True) for ref in body.references],
-        request_id=_request_id(request),
-        limit=body.limit,
-    )
 
 
-@router.post("/reports/immutable-evidence/persist")
-@admin_target_provider(GOVERNANCE_REFERENCE_TARGETS)
-async def persist_immutable_evidence_manifest(
-    request: Request,
-    body: ImmutableEvidencePersistRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Persist a metadata-only manifest reference when CDK-managed immutable storage is configured."""
-    try:
-        return report_audit_retention_service.persist_immutable_manifest(
-            reason=body.reason,
-            generated_by=_operator_id(user),
-            request_id=_request_id(request),
-            references=[ref.model_dump(exclude_none=True) for ref in body.references],
-            retention_category=body.retention_category,
-            target_limit=body.target_limit,
-            audit_limit=body.audit_limit,
-        )
-    except report_audit_retention_service.ImmutableEvidenceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
-@router.post("/reports/retention-governance/status")
-@admin_target_provider(GOVERNANCE_REFERENCE_TARGETS)
-async def get_retention_governance_status(
-    request: Request,
-    body: RetentionGovernanceStatusRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Inspect metadata-only retention approval and legal-hold review status."""
-    return report_audit_retention_service.build_governance_status_response(
-        policy_version=body.policy_version,
-        references=[ref.model_dump(exclude_none=True) for ref in body.references],
-        request_id=_request_id(request),
-        limit=body.limit,
-    )
 
 
-@router.post("/reports/retention-governance/approval")
-async def record_retention_governance_approval(
-    request: Request,
-    body: RetentionApprovalMetadataRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Record metadata-only retention approval or refusal evidence."""
-    try:
-        return report_audit_retention_service.record_retention_approval_metadata(
-            policy_version=body.policy_version,
-            retention_mode=body.retention_mode,
-            retention_days=body.retention_days,
-            policy_owner=body.policy_owner,
-            legal_compliance_approver=body.legal_compliance_approver,
-            approval_state=body.approval_state,
-            reason=body.reason,
-            actor=_operator_id(user),
-            request_id=_request_id(request),
-            evidence_references=body.evidence_references,
-            next_review_due_at=body.next_review_due_at,
-        )
-    except report_audit_retention_service.ImmutableEvidenceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
-@router.post("/reports/legal-holds/status")
-@admin_target_provider(GOVERNANCE_REFERENCE_TARGETS)
-async def get_legal_hold_status(
-    request: Request,
-    body: AuditRetentionStatusRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Inspect metadata-only legal hold state for allowlisted evidence scopes."""
-    return report_audit_retention_service.build_legal_hold_status_response(
-        references=[ref.model_dump(exclude_none=True) for ref in body.references],
-        request_id=_request_id(request),
-        limit=body.limit,
-    )
 
 
-@router.post("/reports/legal-holds")
-@admin_target_provider(GOVERNANCE_REFERENCE_TARGETS)
-async def apply_legal_hold_metadata(
-    request: Request,
-    body: LegalHoldMetadataRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Apply or release metadata-only legal hold state without deleting audit evidence."""
-    try:
-        return report_audit_retention_service.apply_legal_hold_metadata(
-            references=[ref.model_dump(exclude_none=True) for ref in body.references],
-            action=body.action,
-            reason=body.reason,
-            actor=_operator_id(user),
-            request_id=_request_id(request),
-            policy_id=body.policy_id,
-            limit=10,
-        )
-    except report_audit_retention_service.ImmutableEvidenceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
-@router.post("/reports/legal-holds/review")
-@admin_target_provider(GOVERNANCE_REFERENCE_TARGETS)
-async def record_legal_hold_review_metadata(
-    request: Request,
-    body: LegalHoldReviewMetadataRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Record metadata-only legal-hold review evidence without deleting audit rows."""
-    try:
-        return report_audit_retention_service.record_legal_hold_review_metadata(
-            references=[ref.model_dump(exclude_none=True) for ref in body.references],
-            owner=body.owner,
-            reviewer=body.reviewer,
-            review_cadence=body.review_cadence,
-            outcome=body.outcome,
-            reason=body.reason,
-            actor=_operator_id(user),
-            request_id=_request_id(request),
-            next_review_due_at=body.next_review_due_at,
-            break_glass=body.break_glass,
-            limit=10,
-        )
-    except report_audit_retention_service.ImmutableEvidenceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 @router.post("/reports/release-evidence/validate")
@@ -3536,241 +2937,22 @@ async def retry_report_generation(
     )
 
 
-@router.post(
-    "/reports/{parent_id}/{student_id}/{week_start}/edit-drafts",
-    response_model=ReportEditDraftResponse,
-)
-async def create_report_edit_draft(
-    request: Request,
-    parent_id: str,
-    student_id: str,
-    week_start: str,
-    body: ReportEditDraftRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Create a bounded metadata-only report edit draft."""
-    report = _get_report_or_404(parent_id, student_id, week_start)
-    try:
-        draft = report_edit_service.create_edit_draft(
-            report,
-            operator=_operator_id(user),
-            reason=body.reason,
-            proposed_fields=body.proposed_fields,
-            correlation_id=_request_id(request),
-        )
-    except report_edit_service.ReportEditError as exc:
-        raise _report_edit_http_error(exc) from exc
-    return ReportEditDraftResponse(**draft)
 
 
-@router.get(
-    "/reports/{parent_id}/{student_id}/{week_start}/edit-drafts/{draft_id}",
-    response_model=ReportEditDraftResponse,
-)
-async def get_report_edit_draft(
-    parent_id: str,
-    student_id: str,
-    week_start: str,
-    draft_id: str,
-    user: dict = Depends(require_role("admin")),
-):
-    """Read a metadata-only report edit draft."""
-    report = _get_report_or_404(parent_id, student_id, week_start)
-    try:
-        draft = report_edit_service.get_edit_draft(report, draft_id)
-    except report_edit_service.ReportEditError as exc:
-        raise _report_edit_http_error(exc) from exc
-    return ReportEditDraftResponse(**draft)
 
 
-@router.post(
-    "/reports/{parent_id}/{student_id}/{week_start}/edit-drafts/{draft_id}/apply",
-    response_model=ReportEditApplyResponse,
-)
-async def apply_report_edit_draft(
-    request: Request,
-    parent_id: str,
-    student_id: str,
-    week_start: str,
-    draft_id: str,
-    user: dict = Depends(require_role("admin")),
-):
-    """Apply one valid metadata-only report edit draft."""
-    report = _get_report_or_404(parent_id, student_id, week_start)
-    try:
-        result = report_edit_service.apply_edit_draft(
-            report,
-            draft_id=draft_id,
-            operator=_operator_id(user),
-            correlation_id=_request_id(request),
-        )
-    except report_edit_service.ReportEditError as exc:
-        raise _report_edit_http_error(exc) from exc
-    return ReportEditApplyResponse(
-        operation="edit_report",
-        operation_result="success",
-        draft=ReportEditDraftResponse(**result["draft"]),
-        report=result["report"],
-    )
 
 
-@router.post(
-    "/reports/{parent_id}/{student_id}/{week_start}/artifact-edit-previews",
-    response_model=ReportArtifactEditPreviewResponse,
-)
-async def create_report_artifact_edit_preview(
-    request: Request,
-    parent_id: str,
-    student_id: str,
-    week_start: str,
-    body: ReportArtifactEditPreviewRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Create a bounded report artifact edit preview."""
-    report = _get_report_or_404(parent_id, student_id, week_start)
-    try:
-        preview = report_artifact_edit_service.create_artifact_edit_preview(
-            report,
-            operator=_operator_id(user),
-            reason=body.reason,
-            proposed_fields=body.proposed_fields,
-            correlation_id=_request_id(request),
-        )
-    except report_artifact_edit_service.ReportArtifactEditError as exc:
-        raise _report_artifact_edit_http_error(exc) from exc
-    return ReportArtifactEditPreviewResponse(**preview)
 
 
-@router.get(
-    "/reports/{parent_id}/{student_id}/{week_start}/artifact-edit-previews/{draft_id}",
-    response_model=ReportArtifactEditPreviewResponse,
-)
-async def get_report_artifact_edit_preview(
-    parent_id: str,
-    student_id: str,
-    week_start: str,
-    draft_id: str,
-    user: dict = Depends(require_role("admin")),
-):
-    """Read a bounded report artifact edit preview."""
-    report = _get_report_or_404(parent_id, student_id, week_start)
-    try:
-        preview = report_artifact_edit_service.get_artifact_edit_preview(report, draft_id)
-    except report_artifact_edit_service.ReportArtifactEditError as exc:
-        raise _report_artifact_edit_http_error(exc) from exc
-    return ReportArtifactEditPreviewResponse(**preview)
 
 
-@router.post(
-    "/reports/{parent_id}/{student_id}/{week_start}/artifact-edit-previews/{draft_id}/apply",
-    response_model=ReportArtifactEditApplyResponse,
-)
-async def apply_report_artifact_edit_preview(
-    request: Request,
-    parent_id: str,
-    student_id: str,
-    week_start: str,
-    draft_id: str,
-    body: ReportArtifactEditApplyRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Apply one bounded report artifact edit preview."""
-    report = _get_report_or_404(parent_id, student_id, week_start)
-    try:
-        result = report_artifact_edit_service.apply_artifact_edit_preview(
-            report,
-            draft_id=draft_id,
-            operator=_operator_id(user),
-            reason=body.reason,
-            correlation_id=_request_id(request),
-        )
-    except report_artifact_edit_service.ReportArtifactEditError as exc:
-        raise _report_artifact_edit_http_error(exc) from exc
-    return ReportArtifactEditApplyResponse(
-        operation="edit_report_artifact",
-        operation_result="success",
-        draft=ReportArtifactEditPreviewResponse(**result["draft"]),
-        report=result["report"],
-    )
 
 
-@router.post(
-    "/reports/{parent_id}/{student_id}/{week_start}/artifact-rollback-previews",
-    response_model=ReportArtifactRollbackPreviewResponse,
-)
-async def create_report_artifact_rollback_preview(
-    request: Request,
-    parent_id: str,
-    student_id: str,
-    week_start: str,
-    body: ReportArtifactRollbackPreviewRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Create a bounded report artifact rollback preview."""
-    report = _get_report_or_404(parent_id, student_id, week_start)
-    try:
-        preview = report_artifact_edit_service.create_artifact_rollback_preview(
-            report,
-            operator=_operator_id(user),
-            reason=body.reason,
-            correlation_id=_request_id(request),
-        )
-    except report_artifact_edit_service.ReportArtifactEditError as exc:
-        raise _report_artifact_edit_http_error(exc) from exc
-    return ReportArtifactRollbackPreviewResponse(**preview)
 
 
-@router.get(
-    "/reports/{parent_id}/{student_id}/{week_start}/artifact-rollback-previews/{preview_id}",
-    response_model=ReportArtifactRollbackPreviewResponse,
-)
-async def get_report_artifact_rollback_preview(
-    parent_id: str,
-    student_id: str,
-    week_start: str,
-    preview_id: str,
-    user: dict = Depends(require_role("admin")),
-):
-    """Read a bounded report artifact rollback preview."""
-    report = _get_report_or_404(parent_id, student_id, week_start)
-    try:
-        preview = report_artifact_edit_service.get_artifact_rollback_preview(report, preview_id)
-    except report_artifact_edit_service.ReportArtifactEditError as exc:
-        raise _report_artifact_edit_http_error(exc) from exc
-    return ReportArtifactRollbackPreviewResponse(**preview)
 
 
-@router.post(
-    "/reports/{parent_id}/{student_id}/{week_start}/artifact-rollback-previews/{preview_id}/apply",
-    response_model=ReportArtifactRollbackApplyResponse,
-)
-async def apply_report_artifact_rollback_preview(
-    request: Request,
-    parent_id: str,
-    student_id: str,
-    week_start: str,
-    preview_id: str,
-    body: ReportArtifactRollbackApplyRequest,
-    user: dict = Depends(require_role("admin")),
-):
-    """Apply one bounded report artifact rollback preview."""
-    report = _get_report_or_404(parent_id, student_id, week_start)
-    try:
-        result = report_artifact_edit_service.apply_artifact_rollback_preview(
-            report,
-            preview_id=preview_id,
-            operator=_operator_id(user),
-            reason=body.reason,
-            correlation_id=_request_id(request),
-        )
-    except report_artifact_edit_service.ReportArtifactEditError as exc:
-        raise _report_artifact_edit_http_error(exc) from exc
-    return ReportArtifactRollbackApplyResponse(
-        operation="rollback_report_artifact",
-        operation_result="success",
-        preview=ReportArtifactRollbackPreviewResponse(**result["preview"]),
-        report=result["report"],
-    )
 
 
 @router.get(
@@ -3836,176 +3018,10 @@ def _get_report_or_404(parent_id: str, student_id: str, week_start: str) -> dict
     return report
 
 
-def _export_recovery_job_evidence(
-    *,
-    job_id: str,
-    request_id: str | None,
-    include_targets: bool,
-    include_job_audit: bool,
-    target_limit: int,
-    audit_limit: int,
-    next_target_token: str | None,
-    next_audit_token: str | None,
-) -> dict[str, Any]:
-    job = report_repo.get_recovery_job(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Recovery job not found")
-
-    targets: list[dict] = []
-    target_next_token = None
-    if include_targets:
-        target_last_key = report_repo.decode_recovery_job_page_token(next_target_token)
-        target_result = report_repo.list_recovery_job_targets(
-            job_id,
-            limit=target_limit,
-            last_key=target_last_key,
-        )
-        targets = _admin_items(target_result)
-        target_next_token = report_repo.encode_recovery_job_page_token(
-            _admin_cursor(target_result)
-        )
-
-    job_audit: list[dict] = []
-    audit_next_token = None
-    if include_job_audit:
-        audit_last_key = report_repo.decode_audit_page_token(next_audit_token)
-        audit_result = report_repo.list_recovery_job_audit_events(
-            job_id,
-            limit=audit_limit,
-            last_key=audit_last_key,
-        )
-        job_audit = _admin_items(audit_result)
-        audit_next_token = report_repo.encode_audit_page_token(
-            _admin_cursor(audit_result)
-        )
-
-    return report_recovery_evidence_service.build_export_response(
-        scope="recovery_job",
-        request_id=request_id,
-        filters={
-            "job_id": job_id,
-            "include_targets": include_targets,
-            "include_job_audit": include_job_audit,
-            "target_limit": target_limit,
-            "audit_limit": audit_limit,
-        },
-        jobs=[job],
-        targets=targets,
-        job_audit=job_audit,
-        next_tokens={
-            "targets": target_next_token,
-            "job_audit": audit_next_token,
-        },
-    )
 
 
-def _export_recovery_job_support_package(
-    *,
-    job_id: str,
-    request_id: str | None,
-    include_targets: bool,
-    include_job_audit: bool,
-    include_report_audit: bool,
-    target_limit: int,
-    audit_limit: int,
-    next_target_token: str | None,
-    next_audit_token: str | None,
-    operator_note: str | None,
-) -> dict[str, Any]:
-    job = report_repo.get_recovery_job(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Recovery job not found")
-    source_job = None
-    source_job_id = job.get("source_job_id")
-    if source_job_id:
-        source_job = report_repo.get_recovery_job(str(source_job_id))
-
-    targets: list[dict] = []
-    target_next_token = None
-    if include_targets or include_report_audit:
-        target_last_key = report_repo.decode_recovery_job_page_token(next_target_token)
-        target_result = report_repo.list_recovery_job_targets(
-            job_id,
-            limit=target_limit,
-            last_key=target_last_key,
-        )
-        targets = _admin_items(target_result)
-        target_next_token = report_repo.encode_recovery_job_page_token(
-            _admin_cursor(target_result)
-        )
-
-    job_audit: list[dict] = []
-    audit_next_token = None
-    if include_job_audit:
-        audit_last_key = report_repo.decode_audit_page_token(next_audit_token)
-        audit_result = report_repo.list_recovery_job_audit_events(
-            job_id,
-            limit=audit_limit,
-            last_key=audit_last_key,
-        )
-        job_audit = _admin_items(audit_result)
-        audit_next_token = report_repo.encode_audit_page_token(
-            _admin_cursor(audit_result)
-        )
-
-    report_audit: list[dict] = []
-    if include_report_audit:
-        remaining = audit_limit
-        for target in targets:
-            if remaining <= 0:
-                break
-            report_id = target.get("report_id")
-            if not report_id:
-                continue
-            audit_result = report_repo.list_report_audit_events(str(report_id), limit=remaining)
-            events = _admin_items(audit_result)
-            report_audit.extend(events)
-            remaining -= len(events)
-
-    return report_recovery_evidence_service.build_support_package_response(
-        request_id=request_id,
-        job=job,
-        source_job=source_job,
-        targets=targets if include_targets else [],
-        job_audit=job_audit,
-        report_audit=report_audit,
-        operator_note=operator_note,
-        next_tokens={
-            "targets": target_next_token if include_targets else None,
-            "job_audit": audit_next_token,
-            "report_audit": None,
-        },
-    )
 
 
-def _support_handoff_recovery_section(
-    *,
-    job_id: str,
-    request_id: str | None,
-    include_targets: bool,
-    include_job_audit: bool,
-    include_report_audit: bool,
-    target_limit: int,
-    audit_limit: int,
-) -> dict[str, Any]:
-    try:
-        data = _export_recovery_job_support_package(
-            job_id=job_id,
-            request_id=request_id,
-            include_targets=include_targets,
-            include_job_audit=include_job_audit,
-            include_report_audit=include_report_audit,
-            target_limit=target_limit,
-            audit_limit=audit_limit,
-            next_target_token=None,
-            next_audit_token=None,
-            operator_note=None,
-        )
-    except HTTPException as exc:
-        if exc.status_code == 404:
-            return {"job_id": job_id, "missing": True}
-        raise
-    return {"job_id": job_id, "data": data}
 
 
 def _support_handoff_fixture_response(fixture: SupportHandoffFixtureReference) -> dict[str, Any]:
@@ -4033,37 +3049,21 @@ def _support_handoff_fixture_response(fixture: SupportHandoffFixtureReference) -
     )
 
 
-def _export_recent_recovery_jobs(
-    *,
-    request_id: str | None,
-    status: str | None,
-    limit: int,
-    next_token: str | None,
-) -> dict[str, Any]:
-    last_key = report_repo.decode_recovery_job_page_token(next_token)
-    result = report_repo.list_recovery_jobs(limit=limit, last_key=last_key)
-    jobs = _admin_items(result)
-    if status:
-        jobs = [job for job in jobs if job.get("status") == status]
-    return report_recovery_evidence_service.build_export_response(
-        scope="recent_recovery_jobs",
-        request_id=request_id,
-        filters={
-            "status": status,
-            "limit": limit,
-        },
-        jobs=jobs,
-        next_tokens={
-            "jobs": report_repo.encode_recovery_job_page_token(_admin_cursor(result)),
-        },
-    )
+
+
+def _sanitize_request_id(value: object) -> str | None:
+    """Bound and redact a caller-supplied correlation header before it is stored."""
+    text = report_recovery_service.redact_private_artifact_text(value) or ""
+    if release_evidence_service.private_marker_hits(text):
+        return "[REDACTED]"
+    return text[:240] or None
 
 
 def _request_id(request: Request) -> str | None:
     for header in ("x-request-id", "x-amzn-requestid", "x-amzn-trace-id", "x-correlation-id"):
         value = request.headers.get(header)
         if value:
-            return report_audit_retention_service.sanitize_request_id(value)
+            return _sanitize_request_id(value)
     return None
 
 
@@ -4173,19 +3173,8 @@ def _recovery_job_http_error(exc: report_recovery_job_service.RecoveryJobError) 
     return HTTPException(status_code=exc.status_code, detail=detail)
 
 
-def _report_edit_http_error(exc: report_edit_service.ReportEditError) -> HTTPException:
-    detail = report_recovery_service.redact_private_artifact_text(exc.detail) or "Report edit operation failed"
-    return HTTPException(status_code=exc.status_code, detail=detail)
 
 
-def _report_artifact_edit_http_error(
-    exc: report_artifact_edit_service.ReportArtifactEditError,
-) -> HTTPException:
-    detail = (
-        report_recovery_service.redact_private_artifact_text(exc.detail)
-        or "Report artifact edit operation failed"
-    )
-    return HTTPException(status_code=exc.status_code, detail=detail)
 
 
 def _recovery_job_response(job: dict) -> RecoveryJobResponse:
