@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 import hashlib
 import json
+import logging
 from tempfile import SpooledTemporaryFile
 from typing import Any, Sequence
 from urllib.parse import quote
@@ -42,6 +44,8 @@ from stoa.services.document_extraction_service import (
     DocumentExtractionFailure,
 )
 from stoa.services.document_parser_worker import parse_document_isolated
+
+logger = logging.getLogger(__name__)
 
 
 UPLOAD_CHUNK_BYTES = 5 * 1024 * 1024
@@ -230,8 +234,25 @@ def _gateway_call(
                 AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT
             ) from None
         raise AttachmentDecisionError(conflict_code) from None
-    except Exception:
+    except Exception as exc:
+        # The caller only ever sees "temporarily unavailable", so without this the
+        # operator has no way to tell a provider outage from a contract error.
+        logger.error(
+            "upload_gateway_failed error_class=%s message=%s",
+            type(exc).__name__,
+            _safe_gateway_detail(exc),
+        )
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+
+
+def _safe_gateway_detail(exc: Exception) -> str:
+    """Report the provider's own error code without echoing private coordinates."""
+    response = getattr(exc, "response", None)
+    if isinstance(response, Mapping):
+        error = response.get("Error")
+        if isinstance(error, Mapping):
+            return str(error.get("Code") or "unknown")
+    return type(exc).__name__
 
 
 def _provider_mapping(operation) -> dict[str, Any]:
