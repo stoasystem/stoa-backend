@@ -3852,13 +3852,14 @@ def _transition(
     table: object | None = None,
 ) -> bool:
     names = {"#owner": "owner_id", "#status": "status", "#version": "version"}
+    # The next version is precomputed, so an increment placeholder would be left
+    # unused and DynamoDB rejects the whole request when that happens.
     values: dict[str, object] = {
         ":owner": owner_id,
         ":source": source,
         ":target": target,
         ":version": version,
         ":next": version + 1,
-        ":one": 1,
     }
     condition = "#owner = :owner AND #status = :source AND #version = :version"
     if now_epoch is not None:

@@ -460,6 +460,55 @@ def test_part_rows_receive_lifecycle_ttl() -> None:
     assert table.item["expires_at"] == parent_expiry
 
 
+class _ExpressionValidatingTable:
+    """Reject an unused placeholder the way DynamoDB does.
+
+    Fakes that ignore ExpressionAttributeValues let a request through that the
+    real service refuses, so an upload transition can look correct in every test
+    and fail for every user.
+    """
+
+    def __init__(self) -> None:
+        self.updates: list[dict[str, Any]] = []
+
+    def get_item(self, **kwargs):
+        del kwargs
+        return {"Item": {"expires_at": NOW_EPOCH + 600}}
+
+    def update_item(self, **kwargs):
+        expression = " ".join(
+            str(kwargs.get(key, "")) for key in ("UpdateExpression", "ConditionExpression")
+        )
+        unused = [
+            placeholder
+            for placeholder in kwargs.get("ExpressionAttributeValues", {})
+            if placeholder not in expression
+        ]
+        if unused:
+            raise AssertionError(f"unused ExpressionAttributeValues: {sorted(unused)}")
+        self.updates.append(kwargs)
+        return {}
+
+
+def test_upload_transition_declares_no_unused_placeholder() -> None:
+    table = _ExpressionValidatingTable()
+
+    claimed = attachment_repo.claim_staging_assembly(
+        "opaque-upload",
+        "owner-1",
+        3,
+        NOW_EPOCH,
+        operation_fence="fence-1",
+        multipart_upload_id="multipart-1",
+        ordered_part_count=1,
+        part_ledger_digest="b" * 64,
+        table=table,
+    )
+
+    assert claimed is True
+    assert len(table.updates) == 1
+
+
 def test_part_claim_accepts_the_decimal_a_real_table_returns() -> None:
     """DynamoDB hands back every stored number as Decimal.
 
