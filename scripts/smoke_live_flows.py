@@ -172,6 +172,25 @@ def upload_probe_image(base_url: str, token: str) -> dict:
     return completed
 
 
+class AllowanceExhausted(Exception):
+    """The student has spent every teacher-support case this week."""
+
+
+def escalate(base_url: str, student_token: str, conversation_id: str, marker: str) -> dict:
+    try:
+        return request(
+            base_url,
+            "POST",
+            "/teacher-help/request",
+            token=student_token,
+            body={"conversationId": conversation_id, "message": f"smoke {marker}"},
+        )
+    except SmokeFailure as exc:
+        if "teacher_support_allowance_exhausted" in str(exc):
+            raise AllowanceExhausted from None
+        raise
+
+
 def await_queued(base_url: str, teacher_token: str, conversation_id: str) -> dict:
     """The teacher queue is a scan, so a fresh escalation needs a moment to appear."""
     for attempt in range(10):
@@ -283,19 +302,25 @@ def main() -> int:
         report.skip("student reaches a human teacher", "pass --include-escalation; consumes weekly allowance")
     elif student and teacher and conversation:
         marker = uuid.uuid4().hex[:8]
-        escalation = report.check(
-            "escalation is accepted and assigned",
-            lambda: (
-                lambda data: data
-                if data.get("teacherName")
-                else (_ for _ in ()).throw(SmokeFailure("no teacher was assigned"))
-            )(
-                request(
-                    base, "POST", "/teacher-help/request",
-                    token=student,
-                    body={"conversationId": conversation["id"], "message": f"smoke {marker}"},
-                )
-            ),
+        try:
+            accepted = escalate(base, student, conversation["id"], marker)
+        except AllowanceExhausted:
+            # Every run spends one weekly case, so a used-up allowance is the
+            # quota working, not the journey breaking.
+            accepted = None
+            report.skip(
+                "student reaches a human teacher", "weekly teacher-support allowance is used"
+            )
+
+        escalation = (
+            report.check(
+                "escalation is accepted and assigned",
+                lambda: accepted
+                if accepted.get("teacherName")
+                else (_ for _ in ()).throw(SmokeFailure("no teacher was assigned")),
+            )
+            if accepted
+            else None
         )
         if escalation:
             report.check(
