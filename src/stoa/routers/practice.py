@@ -377,10 +377,12 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
     progress_records = practice_repo.get_progress(user_id)
     completed_ids = {p["lesson_id"] for p in progress_records if p.get("status") == "completed"}
 
-    today = datetime.now(timezone.utc).date().isoformat()
+    # The streak counts Zurich days, so "today" must mean the same day here.
+    today = datetime.now(curriculum_service.ZURICH).date()
     completed_today = sum(
-        1 for p in progress_records
-        if p.get("status") == "completed" and str(p.get("completed_at", ""))[:10] == today
+        1
+        for record in progress_records
+        if curriculum_service.completed_days([record]) == {today}
     )
     daily_target = 3
 
@@ -492,7 +494,7 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
             "target": daily_target,
             "label": f"{completed_today}/{daily_target} lessons today",
         },
-        "studyStreak": 1 if completed_today > 0 else 0,
+        "studyStreak": curriculum_service.study_streak(progress_records),
         "progressPoints": len(completed_ids) * 10,
         "recentMistakes": recent_mistakes,
         "weakTopics": weak_topics,
@@ -777,7 +779,9 @@ async def complete_lesson(
         "completed": True,
         "nextLessonId": next_lesson["lesson_id"] if next_lesson else None,
         "progressPoints": len(completed_ids) * 10,
-        "studyStreak": 1,
+        "studyStreak": curriculum_service.study_streak(
+            practice_repo.get_progress(actor.user_id)
+        ),
         "dailyGoalCompleted": False,
     }
 

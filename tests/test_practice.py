@@ -377,3 +377,60 @@ def test_versioning_a_seeded_challenge_makes_it_readable():
 
     assert repo._valid_versioned_challenge(backfilled) is True
     assert backfilled["challenge_version"] == f"sha256:{backfilled['challenge_content_hash']}"
+
+
+def _completed_on(day: str) -> dict:
+    return {"status": "completed", "completed_at": f"{day}T18:00:00+00:00"}
+
+
+def test_a_streak_counts_consecutive_days_of_practice():
+    from datetime import date
+
+    from stoa.services import curriculum_service
+
+    progress = [_completed_on("2026-08-23"), _completed_on("2026-08-24"), _completed_on("2026-08-25")]
+
+    assert curriculum_service.study_streak(progress, today=date(2026, 8, 25)) == 3
+
+
+def test_a_streak_survives_a_day_not_practised_yet():
+    """Not having practised yet today has not broken anything."""
+    from datetime import date
+
+    from stoa.services import curriculum_service
+
+    progress = [_completed_on("2026-08-23"), _completed_on("2026-08-24")]
+
+    assert curriculum_service.study_streak(progress, today=date(2026, 8, 25)) == 2
+    assert curriculum_service.study_streak(progress, today=date(2026, 8, 26)) == 0
+
+
+def test_a_streak_stops_at_the_first_missed_day():
+    from datetime import date
+
+    from stoa.services import curriculum_service
+
+    progress = [_completed_on("2026-08-20"), _completed_on("2026-08-24"), _completed_on("2026-08-25")]
+
+    assert curriculum_service.study_streak(progress, today=date(2026, 8, 25)) == 2
+
+
+def test_several_lessons_in_one_day_are_one_day_of_streak():
+    from datetime import date
+
+    from stoa.services import curriculum_service
+
+    progress = [_completed_on("2026-08-25"), _completed_on("2026-08-25"), _completed_on("2026-08-25")]
+
+    assert curriculum_service.study_streak(progress, today=date(2026, 8, 25)) == 1
+
+
+def test_a_late_evening_completion_counts_as_the_zurich_day():
+    """23:30 UTC is already the next day in Zurich, and the student is there."""
+    from datetime import date
+
+    from stoa.services import curriculum_service
+
+    progress = [{"status": "completed", "completed_at": "2026-08-24T23:30:00+00:00"}]
+
+    assert curriculum_service.completed_days(progress) == {date(2026, 8, 25)}

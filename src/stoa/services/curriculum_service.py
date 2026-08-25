@@ -2,11 +2,15 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from stoa.db.repositories import practice_repo
 from stoa.services import practice_projection_service
+
+ZURICH = ZoneInfo("Europe/Zurich")
 
 SUPPORTED_SUBJECTS = {"math", "physics", "german", "english"}
 VISIBLE_STATES = {"active"}
@@ -89,6 +93,47 @@ def list_exercises(
     return {"items": items, "count": len(items)}
 
 
+def completed_days(progress: list[dict[str, Any]]) -> set[date]:
+    """Return the Zurich calendar days on which a lesson was completed."""
+    days: set[date] = set()
+    for item in progress:
+        if item.get("status") != "completed":
+            continue
+        raw = item.get("completed_at")
+        if not isinstance(raw, str) or not raw:
+            continue
+        try:
+            moment = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=UTC)
+        days.add(moment.astimezone(ZURICH).date())
+    return days
+
+
+def study_streak(progress: list[dict[str, Any]], *, today: date | None = None) -> int:
+    """Count consecutive days of practice ending today.
+
+    A streak survives the day after the last one, because a student who has not
+    practised yet today has not broken anything. It is only lost once a day
+    passes with nothing completed.
+    """
+    days = completed_days(progress)
+    if not days:
+        return 0
+    current = today or datetime.now(ZURICH).date()
+    if current not in days:
+        current -= timedelta(days=1)
+        if current not in days:
+            return 0
+    streak = 0
+    while current in days:
+        streak += 1
+        current -= timedelta(days=1)
+    return streak
+
+
 def get_progress_summary(
     student_id: str,
     *,
@@ -107,6 +152,8 @@ def get_progress_summary(
         "completedLessons": len(completed),
         "completedLessonIds": [item.get("lesson_id", "") for item in completed if item.get("lesson_id")],
         "mistakeCount": len(mistakes),
+        "studyStreak": study_streak(progress),
+        "practisedToday": datetime.now(ZURICH).date() in completed_days(progress),
         "weakTopics": [
             {"topicId": topic_id, "count": count}
             for topic_id, count in weak_topic_counts.most_common(5)
