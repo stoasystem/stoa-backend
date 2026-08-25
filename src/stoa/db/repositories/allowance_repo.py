@@ -462,6 +462,10 @@ def _validated_effect(
         "account_fence_generation",
         positive=True,
     )
+    # The week is rebuilt from these into a model that accepts only int, and
+    # DynamoDB returns every stored number as Decimal.
+    for field in ("iso_year", "iso_week"):
+        normalized[field] = _stored_count(item.get(field), field, positive=True)
     _sha256(item.get("reservation_payload_digest"), "reservation_payload_digest")
     _reservation_from_effect(normalized)
     return normalized

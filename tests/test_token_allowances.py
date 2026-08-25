@@ -40,6 +40,24 @@ class AtomicAllowanceTable:
         self._counter_barrier = counter_barrier
         self._initial_counter_reads = 0
 
+    @staticmethod
+    def _as_stored(value: object) -> object:
+        """Return numbers the way DynamoDB does, so reads look like production.
+
+        A fake that hands back the Python int it was given hides every check
+        that accepts int but not Decimal, which is how token accounting came to
+        fail for every message while these tests passed.
+        """
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return Decimal(value)
+        if isinstance(value, dict):
+            return {key: AtomicAllowanceTable._as_stored(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [AtomicAllowanceTable._as_stored(item) for item in value]
+        return value
+
     def get_item(self, *, Key: dict[str, str], ConsistentRead: bool) -> dict[str, object]:
         assert ConsistentRead is True
         key = (Key["PK"], Key["SK"])
@@ -56,7 +74,7 @@ class AtomicAllowanceTable:
         if wait:
             assert self._counter_barrier is not None
             self._counter_barrier.wait(timeout=3)
-        return {"Item": item} if item is not None else {}
+        return {"Item": self._as_stored(item)} if item is not None else {}
 
     def query(self, **kwargs: object) -> dict[str, object]:
         assert kwargs["ConsistentRead"] is True
