@@ -26,6 +26,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -172,6 +173,12 @@ def upload_probe_image(base_url: str, token: str) -> dict:
     return completed
 
 
+def report_week() -> str:
+    """Weekly reports are keyed on the Monday that starts the week."""
+    today = datetime.now(timezone.utc).date()
+    return (today - timedelta(days=today.weekday())).isoformat()
+
+
 class AllowanceExhausted(Exception):
     """The student has spent every teacher-support case this week."""
 
@@ -284,16 +291,36 @@ def main() -> int:
         report.skip("upload journey", "sign-in failed")
 
     print("\nparent")
+    child = None
     if parent:
-        report.check(
+        children = report.check(
             "sees the linked child",
             lambda: (
-                request(base, "GET", "/parents/me/children", token=parent)
-                if request(base, "GET", "/parents/me/children", token=parent).get("items")
+                lambda seen: seen
+                if seen.get("items")
                 else (_ for _ in ()).throw(SmokeFailure("child list is empty"))
+            )(request(base, "GET", "/parents/me/children", token=parent)),
+        )
+        child = (children or {}).get("items", [None])[0]
+        report.check("reads its subscription", lambda: request(base, "GET", "/parents/me/subscription", token=parent))
+    if parent and child:
+        report.check(
+            "reads the weekly report for its child",
+            lambda: (
+                lambda seen: seen
+                if seen.get("status") == "available"
+                else (_ for _ in ()).throw(
+                    SmokeFailure(f"weekly report is {seen.get('status')!r}")
+                )
+            )(
+                request(
+                    base,
+                    "GET",
+                    f"/parents/me/children/{child['id']}/reports/{report_week()}",
+                    token=parent,
+                )
             ),
         )
-        report.check("reads its subscription", lambda: request(base, "GET", "/parents/me/subscription", token=parent))
     else:
         report.skip("parent journey", "sign-in failed")
 
