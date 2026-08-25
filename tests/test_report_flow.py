@@ -363,3 +363,95 @@ def _generated_report_content():
         "recommendations": ["Continue the next practice activity."],
         "teacherNote": None,
     }
+
+
+class _ConditionEvaluatingStore:
+    """Applies the subset of condition syntax these two writes use.
+
+    The existing tests replace put_report wholesale, so its condition never ran
+    against anything that enforces it, which is how a claim and the write that
+    completes it came to demand the same key be absent.
+    """
+
+    def __init__(self):
+        self.items = {}
+
+    def _resolve(self, token, item, values):
+        token = token.strip()
+        if token.startswith(":"):
+            return values[token]
+        return item.get(token)
+
+    def _evaluate(self, expression, item, values):
+        expression = expression.strip()
+        if expression.startswith("(") and expression.endswith(")"):
+            return self._evaluate(expression[1:-1], item, values)
+        for operator, combine in ((" OR ", any), (" AND ", all)):
+            parts = self._split(expression, operator)
+            if len(parts) > 1:
+                return combine(self._evaluate(part, item, values) for part in parts)
+        if expression.startswith("attribute_not_exists("):
+            return expression[len("attribute_not_exists("):-1].strip() not in item
+        if expression.startswith("attribute_exists("):
+            return expression[len("attribute_exists("):-1].strip() in item
+        left, right = expression.split("=", 1)
+        return self._resolve(left, item, values) == self._resolve(right, item, values)
+
+    def _split(self, expression, operator):
+        parts, depth, current = [], 0, ""
+        index = 0
+        while index < len(expression):
+            character = expression[index]
+            if character == "(":
+                depth += 1
+            elif character == ")":
+                depth -= 1
+            if depth == 0 and expression[index:index + len(operator)] == operator:
+                parts.append(current)
+                current = ""
+                index += len(operator)
+                continue
+            current += character
+            index += 1
+        parts.append(current)
+        return parts
+
+    def put(self, operation):
+        put = operation["Put"]
+        item = put["Item"]
+        key = (item["PK"], item["SK"])
+        existing = self.items.get(key, {})
+        condition = put.get("ConditionExpression")
+        values = put.get("ExpressionAttributeValues", {})
+        if condition and not self._evaluate(condition, existing, values):
+            raise AssertionError(f"condition rejected the write: {condition}")
+        self.items[key] = item
+
+
+def test_storing_a_report_completes_the_row_its_claim_created(monkeypatch):
+    from stoa.db.repositories import account_deletion_repo, report_repo
+
+    store = _ConditionEvaluatingStore()
+    monkeypatch.setattr(report_repo, "get_table", lambda: object())
+    monkeypatch.setattr(
+        account_deletion_repo,
+        "transact",
+        lambda operations, table=None: [
+            store.put(operation) for operation in operations if "Put" in operation
+        ],
+    )
+    monkeypatch.setattr(
+        account_deletion_repo, "active_fence_condition", lambda *_args, **_kwargs: {}
+    )
+
+    claim = {
+        "report_id": "report-1",
+        "student_id": "student-1",
+        "account_fence_generation": 1,
+        "status": "generating",
+    }
+    assert report_repo.try_claim_report_generation(claim) is True
+
+    report_repo.put_report({**claim, "status": "generated"})
+
+    assert store.items[("REPORT#report-1", "SUMMARY")]["status"] == "generated"

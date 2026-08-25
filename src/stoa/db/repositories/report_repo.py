@@ -344,7 +344,19 @@ def put_report(item: ReportItem) -> None:
                 {
                     "Put": {
                         "Item": {"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item},
-                        "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+                        # This completes the row try_claim_report_generation wrote,
+                        # so the row already exists. Demanding its absence would
+                        # reject every generation the claim just authorized. What
+                        # must hold is that the row still belongs to this student
+                        # at this fence generation.
+                        "ConditionExpression": (
+                            "attribute_not_exists(PK) OR "
+                            "(student_id = :student AND account_fence_generation = :generation)"
+                        ),
+                        "ExpressionAttributeValues": {
+                            ":student": owner_id,
+                            ":generation": generation,
+                        },
                     }
                 },
             ],

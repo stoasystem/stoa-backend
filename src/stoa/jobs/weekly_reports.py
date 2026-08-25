@@ -117,12 +117,15 @@ def run_weekly_report_job(event: dict[str, Any] | None = None, *, now: datetime 
                 generation_error_message=str(exc)[:240],
                 updated_at=failed_at,
             )
+            # Without the traceback the stored error class names a repository
+            # conflict without saying which write raised it.
             logger.warning(
                 "Weekly report pair failed parent_id=%s student_id=%s week_start=%s error_class=%s",
                 parent_id,
                 student_id,
                 week_start,
                 type(exc).__name__,
+                exc_info=exc,
             )
 
     return counts
