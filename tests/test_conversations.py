@@ -1495,3 +1495,40 @@ def test_conversation_dependency_cancellation_stable_error_has_zero_message_ai_e
     )
     assert effects == []
     assert "private-message-canary" not in response.text
+
+
+def test_a_conversation_is_named_after_the_question_that_started_it():
+    assert conversations._title_from_question("  Wie loese ich 2x + 3 = 11?  ") == (
+        "Wie loese ich 2x + 3 = 11?"
+    )
+    assert conversations._title_from_question("Was ist\neine Primzahl?") == (
+        "Was ist eine Primzahl?"
+    )
+    long_title = conversations._title_from_question("word " * 40)
+    assert len(long_title) <= 49 and long_title.endswith("…")
+
+
+def test_only_the_placeholder_title_is_replaced(monkeypatch):
+    """A student who renamed a conversation keeps that name."""
+    updates = []
+
+    class _Table:
+        def update_item(self, **kwargs):
+            updates.append(kwargs)
+            return {}
+
+    monkeypatch.setattr(conversations, "get_table", lambda: _Table())
+
+    conversations._adopt_question_as_title(
+        "conv-1",
+        {"title": "Mathematics – 9", "subject": "Mathematics", "grade": "9"},
+        "Wie loese ich 2x + 3 = 11?",
+    )
+    assert updates[0]["ExpressionAttributeValues"][":title"] == "Wie loese ich 2x + 3 = 11?"
+
+    conversations._adopt_question_as_title(
+        "conv-1",
+        {"title": "My fractions notes", "subject": "Mathematics", "grade": "9"},
+        "Another question",
+    )
+    assert len(updates) == 1

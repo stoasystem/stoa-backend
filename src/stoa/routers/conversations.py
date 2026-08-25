@@ -1090,6 +1090,51 @@ async def list_conversations(
     return ConversationListResponse(items=summaries)
 
 
+def _default_conversation_title(subject: object, grade: object) -> str:
+    return f"{subject} – {grade}"
+
+
+def _title_from_question(question: str, *, limit: int = 48) -> str:
+    """Name a conversation after the question that started it."""
+    condensed = " ".join(question.split())
+    if len(condensed) <= limit:
+        return condensed
+    cut = condensed[:limit].rsplit(" ", 1)[0] or condensed[:limit]
+    return f"{cut}…"
+
+
+def _adopt_question_as_title(
+    conv_id: str, conversation: Mapping[str, object], question: str
+) -> None:
+    """Retitle a conversation still carrying its subject-and-grade placeholder.
+
+    Every conversation opened the same way was listed under the same name, so a
+    student could not tell one from another. Best effort: a title is worth less
+    than the answer that was just delivered.
+    """
+    title = _title_from_question(question)
+    if not title:
+        return
+    placeholder = _default_conversation_title(
+        conversation.get("subject"), conversation.get("grade")
+    )
+    if conversation.get("title") != placeholder:
+        return
+    try:
+        get_table().update_item(
+            Key={"PK": _conv_pk(conv_id), "SK": "CONV"},
+            UpdateExpression="SET title=:title, updated_at=:now",
+            ConditionExpression="title=:placeholder",
+            ExpressionAttributeValues={
+                ":title": title,
+                ":placeholder": placeholder,
+                ":now": _now(),
+            },
+        )
+    except Exception:
+        logger.debug("conversation title was not adopted", exc_info=True)
+
+
 @router.post("", response_model=ConversationDetail, status_code=status.HTTP_201_CREATED)
 async def create_conversation(
     body: CreateConversationRequest,
@@ -1099,7 +1144,11 @@ async def create_conversation(
     student_id = actor.user_id
     conv_id = str(uuid.uuid4())
     now = _now()
-    title = f"{body.subject} – {body.grade}"
+    title = (
+        _title_from_question(body.initialMessage)
+        if body.initialMessage
+        else _default_conversation_title(body.subject, body.grade)
+    )
 
     table = get_table()
     conv_item: dict[str, object] = {
@@ -1235,6 +1284,7 @@ async def send_message(
         )
     except AttachmentDecisionError as error:
         _raise_attachment(error, correlation_id)
+    _adopt_question_as_title(conv_id, conv, body.content)
     return result
 
 
