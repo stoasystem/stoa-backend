@@ -53,23 +53,28 @@ def main() -> int:
     table = boto3.resource("dynamodb", region_name=args.region).Table(args.table)
     rows = stored_challenges(table)
 
+    pointer_ids = {
+        str(dict(row).get("challenge_id"))
+        for row in rows
+        if dict(row).get("entity_type") == practice_repo.CHALLENGE_POINTER_ENTITY
+    }
     already_versioned = 0
-    pointers = 0
+    pointers = len(pointer_ids)
     to_write: list[tuple[dict, dict]] = []
     for row in rows:
         item = dict(row)
         if item.get("entity_type") == practice_repo.CHALLENGE_POINTER_ENTITY:
-            pointers += 1
             continue
-        if practice_repo._valid_versioned_challenge(item):
+        versioned = practice_repo._valid_versioned_challenge(item)
+        if versioned and str(item.get("challenge_id")) in pointer_ids:
             already_versioned += 1
             continue
         to_write.append((item, practice_repo.version_challenge(item)))
 
     print(f"scanned {len(rows)} rows below CHALLENGE#")
-    print(f"  {pointers} pointer rows, skipped")
-    print(f"  {already_versioned} already versioned")
-    print(f"  {len(to_write)} need a version")
+    print(f"  {pointers} pointer rows already present")
+    print(f"  {already_versioned} already versioned and answerable")
+    print(f"  {len(to_write)} need a version, a pointer, or both")
 
     if not to_write:
         return 0
@@ -82,17 +87,29 @@ def main() -> int:
     written = 0
     for _item, versioned in to_write:
         table.put_item(Item=versioned)
+        # Answering resolves the challenge through an answer-free pointer, so a
+        # challenge without one cannot be answered at all.
+        table.put_item(Item=practice_repo.challenge_pointer(versioned))
         written += 1
-    print(f"\nwrote {written} versions")
+    print(f"\nwrote {written} versions and their pointers")
 
-    remaining = [
-        row
-        for row in stored_challenges(table)
+    after = stored_challenges(table)
+    pointers_now = {
+        str(dict(row).get("challenge_id"))
+        for row in after
+        if dict(row).get("entity_type") == practice_repo.CHALLENGE_POINTER_ENTITY
+    }
+    unresolvable = [
+        dict(row).get("challenge_id")
+        for row in after
         if dict(row).get("entity_type") != practice_repo.CHALLENGE_POINTER_ENTITY
-        and not practice_repo._valid_versioned_challenge(dict(row))
+        and (
+            not practice_repo._valid_versioned_challenge(dict(row))
+            or str(dict(row).get("challenge_id")) not in pointers_now
+        )
     ]
-    print(f"unversioned rows remaining: {len(remaining)}")
-    return 1 if remaining else 0
+    print(f"challenges still unreadable or unanswerable: {len(unresolvable)}")
+    return 1 if unresolvable else 0
 
 
 if __name__ == "__main__":
