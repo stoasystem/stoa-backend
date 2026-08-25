@@ -518,6 +518,39 @@ def create_conversation_record(
     )
 
 
+def retitle_conversation(
+    conversation_id: str,
+    *,
+    title: str,
+    expected_title: str,
+    now_iso: str,
+    table: object | None = None,
+) -> bool:
+    """Replace a conversation's placeholder title with the question it holds.
+
+    Conditional on the placeholder still being present, so a title a student
+    chose is never overwritten. Returns whether the title was adopted.
+    """
+    target = table or get_table()
+    update_item = getattr(target, "update_item", None)
+    if not callable(update_item):
+        return False
+    try:
+        update_item(
+            Key={"PK": f"CONV#{conversation_id}", "SK": "CONV"},
+            UpdateExpression="SET title=:title, updated_at=:now",
+            ConditionExpression="title=:expected",
+            ExpressionAttributeValues={
+                ":title": title,
+                ":expected": expected_title,
+                ":now": now_iso,
+            },
+        )
+    except Exception:
+        return False
+    return True
+
+
 def record_teacher_help_request(
     *,
     conversation: dict[str, object],

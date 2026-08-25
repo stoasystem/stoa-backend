@@ -1120,19 +1120,9 @@ def _adopt_question_as_title(
     )
     if conversation.get("title") != placeholder:
         return
-    try:
-        get_table().update_item(
-            Key={"PK": _conv_pk(conv_id), "SK": "CONV"},
-            UpdateExpression="SET title=:title, updated_at=:now",
-            ConditionExpression="title=:placeholder",
-            ExpressionAttributeValues={
-                ":title": title,
-                ":placeholder": placeholder,
-                ":now": _now(),
-            },
-        )
-    except Exception:
-        logger.debug("conversation title was not adopted", exc_info=True)
+    attachment_repo.retitle_conversation(
+        conv_id, title=title, expected_title=placeholder, now_iso=_now()
+    )
 
 
 @router.post("", response_model=ConversationDetail, status_code=status.HTTP_201_CREATED)

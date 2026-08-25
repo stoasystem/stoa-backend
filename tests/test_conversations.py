@@ -1512,19 +1512,18 @@ def test_only_the_placeholder_title_is_replaced(monkeypatch):
     """A student who renamed a conversation keeps that name."""
     updates = []
 
-    class _Table:
-        def update_item(self, **kwargs):
-            updates.append(kwargs)
-            return {}
-
-    monkeypatch.setattr(conversations, "get_table", lambda: _Table())
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "retitle_conversation",
+        lambda conversation_id, **kwargs: updates.append(kwargs) or True,
+    )
 
     conversations._adopt_question_as_title(
         "conv-1",
         {"title": "Mathematics – 9", "subject": "Mathematics", "grade": "9"},
         "Wie loese ich 2x + 3 = 11?",
     )
-    assert updates[0]["ExpressionAttributeValues"][":title"] == "Wie loese ich 2x + 3 = 11?"
+    assert updates[0]["title"] == "Wie loese ich 2x + 3 = 11?"
 
     conversations._adopt_question_as_title(
         "conv-1",
