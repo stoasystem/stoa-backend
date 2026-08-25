@@ -1226,6 +1226,8 @@ def test_parent_child_summary_aggregates_real_data(monkeypatch):
         lambda child_id, limit=20, last_key=None: {
             "Items": [
                 {
+                    "PK": "QUESTION#q-1",
+                    "SK": "META",
                     "question_id": "q-1",
                     "status": "ai_answered",
                     "prompt": "How do fractions work?",
@@ -1234,6 +1236,8 @@ def test_parent_child_summary_aggregates_real_data(monkeypatch):
                     "created_at": "2026-06-02T10:00:00+00:00",
                 },
                 {
+                    "PK": "QUESTION#q-2",
+                    "SK": "META",
                     "question_id": "q-2",
                     "status": "escalated",
                     "prompt": "Need help",
@@ -1242,6 +1246,8 @@ def test_parent_child_summary_aggregates_real_data(monkeypatch):
                     "created_at": "2026-06-02T11:00:00+00:00",
                 },
                 {
+                    "PK": "QUESTION#q-old",
+                    "SK": "META",
                     "question_id": "q-old",
                     "status": "ai_answered",
                     "prompt": "Old question",
@@ -1369,6 +1375,8 @@ def test_parent_child_history_returns_newest_first_with_limit(monkeypatch):
         lambda child_id, limit=20, last_key=None: {
             "Items": [
                 {
+                    "PK": "QUESTION#q-1",
+                    "SK": "META",
                     "question_id": "q-1",
                     "status": "ai_answered",
                     "prompt": "Question",

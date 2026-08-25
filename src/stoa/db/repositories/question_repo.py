@@ -617,6 +617,18 @@ def get_teacher_curriculum_assignment(teacher_id: str) -> QuestionItem | None:
     return _response(item)
 
 
+def is_question_record(row: object) -> bool:
+    """Tell a question apart from the other records sharing the student index.
+
+    GSI-StudentId carries every record holding a student_id, including
+    conversations, messages, usage ledger events, upload intents and weekly
+    reports. Counting a page of it as questions overstates them severalfold.
+    """
+    if not isinstance(row, Mapping):
+        return False
+    return row.get("SK") == "META" and str(row.get("PK", "")).startswith("QUESTION#")
+
+
 def list_by_student(
     student_id: str, limit: int = 20, last_key: QuestionItem | None = None
 ) -> QuestionItem:

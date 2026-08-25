@@ -213,6 +213,8 @@ def test_mixed_weekly_activity_aggregates_metrics_and_topics(monkeypatch):
         ],
         questions=[
             {
+                "PK": "QUESTION#q1",
+                "SK": "META",
                 "question_id": "q1",
                 "student_id": "student-1",
                 "status": "ai_answered",
@@ -222,6 +224,8 @@ def test_mixed_weekly_activity_aggregates_metrics_and_topics(monkeypatch):
                 "summary": "Fractions question",
             },
             {
+                "PK": "QUESTION#q2",
+                "SK": "META",
                 "question_id": "q2",
                 "student_id": "student-1",
                 "status": "teacher_requested",
@@ -230,6 +234,8 @@ def test_mixed_weekly_activity_aggregates_metrics_and_topics(monkeypatch):
                 "created_at": "2026-06-03T10:00:00Z",
             },
             {
+                "PK": "QUESTION#old",
+                "SK": "META",
                 "question_id": "old",
                 "student_id": "student-1",
                 "status": "ai_answered",

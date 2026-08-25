@@ -666,7 +666,11 @@ def _list_all_questions(student_id: str) -> list[dict[str, Any]]:
     last_key: dict[str, object] | None = None
     while True:
         result = question_repo.list_by_student(student_id, limit=500, last_key=last_key)
-        questions.extend(_repository_items(result, label="student questions"))
+        questions.extend(
+            row
+            for row in _repository_items(result, label="student questions")
+            if question_repo.is_question_record(row)
+        )
         raw_last_key = result.get("LastEvaluatedKey")
         if raw_last_key is None:
             return questions

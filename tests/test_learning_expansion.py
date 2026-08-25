@@ -254,6 +254,8 @@ def test_ai_prompt_context_differs_for_language_subject(monkeypatch):
 def test_learning_profile_aggregates_subject_activity_and_topic_seeds(monkeypatch):
     questions_for_student = [
         {
+            "PK": "QUESTION#q1",
+            "SK": "META",
             "question_id": "q1",
             "student_id": "student-1",
             "subject": "physics",
@@ -272,6 +274,8 @@ def test_learning_profile_aggregates_subject_activity_and_topic_seeds(monkeypatc
             "created_at": "2026-06-08T08:00:00+00:00",
         },
         {
+            "PK": "QUESTION#q2",
+            "SK": "META",
             "question_id": "q2",
             "student_id": "student-1",
             "subject": "german",
@@ -332,6 +336,8 @@ def test_parent_child_learning_profile_requires_owned_child(monkeypatch):
         lambda student_id, limit=500: {
             "Items": [
                 {
+                    "PK": "QUESTION#q1",
+                    "SK": "META",
                     "question_id": "q1",
                     "student_id": student_id,
                     "subject": "math",

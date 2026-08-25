@@ -152,11 +152,6 @@ def _history_text(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
-def _is_question_record(row: Mapping[str, object]) -> bool:
-    """The student index carries every record with a student_id, not just questions."""
-    return row.get("SK") == "META" and str(row.get("PK", "")).startswith("QUESTION#")
-
-
 def _question_history_items(student_id: str) -> list[LearningHistoryItem]:
     """Build history from the student's conversations.
 
@@ -186,7 +181,7 @@ def _question_history_items(student_id: str) -> list[LearningHistoryItem]:
                     sourceLabel="Questions",
                 )
             )
-        elif _is_question_record(row):
+        elif question_repo.is_question_record(row):
             status = _history_text(row.get("status"))
             items.append(
                 LearningHistoryItem(
@@ -381,7 +376,7 @@ async def get_summary(
     questions = [
         row
         for row in _question_rows(result.get("Items", []), correlation_id)
-        if _is_question_record(row)
+        if question_repo.is_question_record(row)
     ]
 
     ai_resolved = sum(1 for q in questions if q.get("status") == "ai_answered")

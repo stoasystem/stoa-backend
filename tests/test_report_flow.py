@@ -148,6 +148,8 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
         {
             "Items": [
                 {
+                    "PK": "QUESTION#q1",
+                    "SK": "META",
                     "question_id": "q1",
                     "student_id": "student-1",
                     "status": "ai_answered",
@@ -162,6 +164,8 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
         {
             "Items": [
                 {
+                    "PK": "QUESTION#q2",
+                    "SK": "META",
                     "question_id": "q2",
                     "student_id": "student-1",
                     "status": "teacher_requested",
