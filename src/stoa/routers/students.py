@@ -200,8 +200,22 @@ def _question_history_items(student_id: str) -> list[LearningHistoryItem]:
     return items
 
 
+def _lesson_titles() -> dict[str, str]:
+    """Progress rows record which lesson, not what it was called."""
+    try:
+        lessons = practice_repo.get_lessons()
+    except Exception:
+        return {}
+    return {
+        _history_text(lesson.get("lesson_id")): _history_text(lesson.get("title"))
+        for lesson in lessons
+        if isinstance(lesson, Mapping)
+    }
+
+
 def _practice_history_items(student_id: str) -> list[LearningHistoryItem]:
     items = []
+    titles = _lesson_titles()
     for row in practice_repo.get_progress(student_id):
         if not isinstance(row, Mapping):
             continue
@@ -218,7 +232,9 @@ def _practice_history_items(student_id: str) -> list[LearningHistoryItem]:
                 subject=_history_text(row.get("subject_id")) or "Practice",
                 title="Practice Path lesson",
                 summary=(
-                    _history_text(row.get("lesson_title")) or _history_text(row.get("topic_id"))
+                    _history_text(row.get("lesson_title"))
+                    or titles.get(_history_text(row.get("lesson_id")), "")
+                    or _history_text(row.get("topic_id"))
                 ),
                 createdAt=created_at,
                 sourceLabel="Practice Path",

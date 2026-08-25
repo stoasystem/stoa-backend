@@ -237,3 +237,36 @@ def test_admin_role_only_is_known_403_and_outage_precedes_profile_mutation(monke
     assert outage.status_code == 503
     assert outage.json()["detail"]["code"] == "authorization_temporarily_unavailable"
     assert writes == []
+
+
+def test_practice_history_names_the_lesson_not_its_topic(monkeypatch):
+    """Progress rows record which lesson, not what it was called."""
+    _profiles(monkeypatch)
+    monkeypatch.setattr(
+        students.question_repo, "list_by_student", lambda *_a, **_k: {"Items": []}
+    )
+    monkeypatch.setattr(
+        students.practice_repo,
+        "get_progress",
+        lambda *_a: [
+            {
+                "status": "completed",
+                "lesson_id": "brueche-l1",
+                "topic_id": "brueche",
+                "subject_id": "mathematics",
+                "completed_at": "2026-08-25T10:00:00+00:00",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        students.practice_repo,
+        "get_lessons",
+        lambda *_a, **_k: [{"lesson_id": "brueche-l1", "title": "Brüche lesen und kürzen"}],
+    )
+
+    response = _client(_actor(CanonicalRole.STUDENT, "student-1")).get(
+        "/students/me/learning-history"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["summary"] == "Brüche lesen und kürzen"
