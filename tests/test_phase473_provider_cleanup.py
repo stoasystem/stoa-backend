@@ -650,3 +650,89 @@ def test_job_continuation_wraparound_visits_every_candidate(monkeypatch) -> None
     )
     assert wrapped.scanned == 2
     assert visited[-2:] == ["opaque-0", "opaque-1"]
+
+
+def _comparison_operands(expression: str) -> list[tuple[str, str]]:
+    import re
+
+    return re.findall(r"(\S+?)\s*(?:<=|>=|<|>)\s*(\S+)", expression or "")
+
+
+def test_claim_conditions_compare_a_path_not_two_placeholders() -> None:
+    """DynamoDB needs a document path on the left of a comparator.
+
+    Comparing two placeholders is rejected before the condition is ever
+    evaluated, so a claim built this way fails for every student. Fakes accept
+    it because they never parse the expression.
+    """
+    for expected_counter in (0, 7):
+        operations = attachment_repo.build_message_command_claim_transaction(
+            command={
+                "command_id": "command-1",
+                "conversation_id": "conversation-1",
+                "idempotency_key": "idempotency-1",
+                "created_at": "2026-08-25T00:00:00+00:00",
+            },
+            owner_id="student-1",
+            quota_period="2026-08-25",
+            expected_counter=expected_counter,
+            limit=50,
+            expires_at=NOW_EPOCH + 172800,
+            account_fence_generation=1,
+        )
+        for operation in operations:
+            body = next(iter(operation.item.values()))
+            condition = body.get("ConditionExpression", "")
+            for left, right in _comparison_operands(condition):
+                assert not (left.startswith(":") and right.startswith(":")), (
+                    f"comparison between two placeholders: {left} vs {right}"
+                )
+
+
+class _WireFormatRejectingClient:
+    """Reject items already in wire format, as the resource client does.
+
+    The resource table's client re-serializes what it is given, so wire-format
+    items arrive with every key wrapped in a map and the write is refused for
+    not matching the schema.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[Any] = []
+
+    def transact_write_items(self, **kwargs):
+        for operation in kwargs.get("TransactItems", []):
+            body = next(iter(operation.values()))
+            for value in (body.get("Key") or body.get("Item") or {}).values():
+                if not (isinstance(value, dict) and len(value) == 1):
+                    raise AssertionError(f"item is not in wire format: {value!r}")
+        self.calls.append(kwargs)
+        return {}
+
+
+def test_transactions_bypass_the_client_that_would_serialize_them_twice(monkeypatch) -> None:
+    class _Meta:
+        def __init__(self, client):
+            self.client = client
+
+    resource_client = _WireFormatRejectingClient()
+
+    class _Table:
+        name = "stoa-main"
+        meta = _Meta(resource_client)
+
+        def update_item(self, **kwargs):
+            raise AssertionError("unused")
+
+    fresh = _WireFormatRejectingClient()
+    monkeypatch.setattr(
+        attachment_repo, "_transaction_client", lambda _target: fresh
+    )
+
+    attachment_repo.transact(
+        [{"Put": {"Item": {"PK": "USER#student-1", "SK": "PROBE"}}}],
+        table=_Table(),
+    )
+
+    assert len(fresh.calls) == 1
+    assert resource_client.calls == []

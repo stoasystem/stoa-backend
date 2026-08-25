@@ -2066,7 +2066,7 @@ def _cancellation_table(error: ClientError, *, low_level: bool):
     ],
 )
 def test_transaction_operation_index_classification_is_closed_and_redacted(
-    low_level, failed_kind, expected
+    low_level, failed_kind, expected, monkeypatch
 ) -> None:
     operations = [
         attachment_repo.TransactionOperation(kind, {"Put": {"Item": {"PK": kind.value}}})
@@ -2076,6 +2076,12 @@ def test_transaction_operation_index_classification_is_closed_and_redacted(
     codes = ["None"] * len(operations)
     codes[failed_index] = "ConditionalCheckFailed"
     table = _cancellation_table(_transaction_cancel_error(codes), low_level=low_level)
+    if low_level:
+        # Transactions go through a client built for the purpose, so the double
+        # is supplied the same way rather than through the table's own client.
+        monkeypatch.setattr(
+            attachment_repo, "_transaction_client", lambda _target: table.client
+        )
     with pytest.raises(attachment_repo.AttachmentTransactionError) as error:
         attachment_repo.transact(operations, table=table)
     assert error.value.outcome is expected

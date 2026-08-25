@@ -922,14 +922,16 @@ def build_message_command_claim_transaction(
 ) -> list[TransactionOperation]:
     command_id = str(command["command_id"])
     expected_exists = expected_counter > 0
+    # The daily limit is compared in the caller, which reads the counter before
+    # building this. DynamoDB cannot compare two placeholders: the left operand
+    # of a comparator must be a document path, so asking it to check the limit
+    # here made every claim fail validation. What this must enforce is that no
+    # concurrent claim moved the counter, which is the compare-and-set below.
     counter_condition = (
-        "#count=:expected AND :next<=:limit"
-        if expected_exists
-        else "attribute_not_exists(#count) AND :next<=:limit"
+        "#count=:expected" if expected_exists else "attribute_not_exists(#count)"
     )
     values: dict[str, object] = {
         ":next": expected_counter + 1,
-        ":limit": limit,
         ":expires": expires_at,
     }
     if expected_exists:
@@ -4051,7 +4053,7 @@ def transact(
         else:
             if not isinstance(target, _DynamoTable):
                 raise AttachmentRepositoryConflict("dependency_failure")
-            target.meta.client.transact_write_items(
+            _transaction_client(target).transact_write_items(
                 TransactItems=_serialize_transactions(transact_items, target.name)
             )
     except ClientError as exc:
@@ -4123,6 +4125,20 @@ def _conditional(exc: ClientError) -> bool:
         "ConditionalCheckFailedException",
         "TransactionCanceledException",
     }
+
+
+def _transaction_client(target: object) -> object:
+    """Return a client that will not serialize these items a second time.
+
+    The resource table's own client carries request-transformation handlers, so
+    handing it items already in wire format turns every key into a map and the
+    write is rejected for not matching the schema.
+    """
+    import boto3 as _boto3
+
+    meta = getattr(getattr(target, "meta", None), "client", None)
+    region_name = getattr(getattr(meta, "meta", None), "region_name", None)
+    return _boto3.client("dynamodb", region_name=region_name or "eu-central-2")
 
 
 def _serialize_transactions(

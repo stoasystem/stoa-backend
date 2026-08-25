@@ -274,6 +274,27 @@ def main() -> int:
         conversation = None
         report.skip("student journey", "sign-in failed")
 
+    if student and conversation:
+        report.check(
+            "asks the assistant a question",
+            lambda: (
+                lambda sent: sent
+                if sent.get("assistantMessage", {}).get("content")
+                else (_ for _ in ()).throw(SmokeFailure("no assistant reply came back"))
+            )(
+                request(
+                    base,
+                    "POST",
+                    f"/conversations/{conversation['id']}/messages",
+                    token=student,
+                    body={
+                        "content": "Wie loese ich 2x + 3 = 11?",
+                        "idempotencyKey": str(uuid.uuid4()),
+                    },
+                )
+            ),
+        )
+
     if student:
         report.check(
             "reads own learning history",
