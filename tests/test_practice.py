@@ -357,3 +357,23 @@ def test_hint_requires_explicit_idempotency_key_before_rate_admission(monkeypatc
 
     assert response.status_code == 422
     assert calls == []
+
+
+def test_versioning_a_seeded_challenge_makes_it_readable():
+    """Challenges seeded before content versioning carry neither field.
+
+    Every catalog read validates both and raises, so unversioned rows took the
+    whole practice surface down with a 500. Tests never saw this because they
+    version a challenge before storing it, which stored content never was.
+    """
+    repo = practice.practice_repo
+    seeded = _challenge()
+    seeded.pop("challenge_version", None)
+    seeded.pop("challenge_content_hash", None)
+
+    assert repo._valid_versioned_challenge(seeded) is False
+
+    backfilled = repo.version_challenge(seeded)
+
+    assert repo._valid_versioned_challenge(backfilled) is True
+    assert backfilled["challenge_version"] == f"sha256:{backfilled['challenge_content_hash']}"
