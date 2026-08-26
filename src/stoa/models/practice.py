@@ -192,6 +192,33 @@ class PracticeMistakesResponse(_PracticeContract):
     items: list[PracticeMistake]
 
 
+class ReviewCard(_PracticeContract):
+    """A question due to be attempted again, without its answer."""
+
+    challenge_id: NonEmptyText = Field(alias="challengeId")
+    lesson_id: str = Field(default="", alias="lessonId")
+    subject_id: str = Field(default="", alias="subjectId")
+    topic_id: str = Field(default="", alias="topicId")
+    prompt: str = ""
+    options: list[str] = Field(default_factory=list)
+    type: str = "multiple_choice"
+    due_at: str = Field(default="", alias="dueAt")
+    lapses: int = 0
+    reps: int = 0
+
+
+class ReviewDueResponse(_PracticeContract):
+    items: list[ReviewCard]
+    due_count: int = Field(default=0, alias="dueCount")
+    generated_at: str = Field(default="", alias="generatedAt")
+
+
+class ReviewSummaryResponse(_PracticeContract):
+    due_count: int = Field(default=0, alias="dueCount")
+    scheduled_count: int = Field(default=0, alias="scheduledCount")
+    next_due_at: str = Field(default="", alias="nextDueAt")
+
+
 class PrivilegedPracticeAnswer(_PracticeContract):
     """Explicit answer projection for separately authorized teacher/admin reads."""
 

@@ -1444,6 +1444,38 @@
         "resource_type": "practice"
       }
     ],
+    "classification": "authorized",
+    "family": "practice",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/practice/review/due",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
+    "classification": "authorized",
+    "family": "practice",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/practice/review/summary",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
     "classification": "safe-public",
     "family": "practice",
     "identifiers": [],

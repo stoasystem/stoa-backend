@@ -798,6 +798,7 @@ def _practice_owned(item: Mapping[str, Any], owner_id: str) -> bool:
         f"PROGRESS#{owner_id}",
         f"ATTEMPTS#{owner_id}",
         f"MISTAKES#{owner_id}",
+        f"REVIEW#{owner_id}",
         f"USAGE#{owner_id}",
         f"USAGE_LEDGER#{owner_id}",
     }

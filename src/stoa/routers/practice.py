@@ -33,6 +33,8 @@ from stoa.models.practice import (
     PracticeAnswerSubmission,
     PracticeAttemptResult,
     PracticeMistakesResponse,
+    ReviewDueResponse,
+    ReviewSummaryResponse,
     PracticeHintResponse,
     PrivilegedPracticeAnswer,
 )
@@ -46,7 +48,7 @@ from stoa.security.route_authorization import (
     student_actor_dependency,
 )
 from stoa.services import curriculum_analytics_service, curriculum_service, entitlement_service, usage_ledger_service
-from stoa.services import practice_projection_service
+from stoa.services import practice_projection_service, review_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -891,6 +893,13 @@ async def submit_answer(
         correct=correct,
     )
 
+    review_service.record_answer(
+        student_id=actor.user_id,
+        challenge=challenge,
+        correct=correct,
+        answered_at=datetime.fromisoformat(created_at),
+    )
+
     user_id = actor.user_id
     _record_practice_usage(
         student_id=user_id,
@@ -935,6 +944,22 @@ async def get_mistakes(actor: Actor = Depends(_practice_read)):
         except (KeyError, TypeError, ValueError):
             continue
     return PracticeMistakesResponse(items=mistakes)
+
+
+@router.get("/review/due", response_model=ReviewDueResponse)
+async def get_due_review(actor: Actor = Depends(_practice_read)):
+    """The questions this student is due to see again."""
+    return ReviewDueResponse.model_validate(
+        review_service.due_review(student_id=actor.user_id)
+    )
+
+
+@router.get("/review/summary", response_model=ReviewSummaryResponse)
+async def get_review_summary(actor: Actor = Depends(_practice_read)):
+    """How much review is waiting, for badges and prompts."""
+    return ReviewSummaryResponse.model_validate(
+        review_service.review_summary(student_id=actor.user_id)
+    )
 
 
 @router.post("/hints", response_model=PracticeHintResponse)
