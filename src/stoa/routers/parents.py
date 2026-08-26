@@ -1,4 +1,5 @@
 """Parent routes - child list and weekly learning reports."""
+import logging
 import re
 from collections import Counter
 from collections.abc import Mapping
@@ -47,6 +48,8 @@ from stoa.services import (
     subscription_service,
     teacher_support_allowance_service,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -1299,6 +1302,9 @@ async def get_my_subscription_billing(
             billing_lifecycle=billing_lifecycle,
         )
     except (KeyError, TypeError, ValueError) as exc:
+        # Swallowing this silently left the billing page unavailable with
+        # nothing anywhere to say why.
+        logger.warning("Parent billing projection failed", exc_info=True)
         raise HTTPException(
             status_code=503,
             detail={
