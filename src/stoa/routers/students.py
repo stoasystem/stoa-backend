@@ -3,6 +3,7 @@ import base64
 import json
 from collections import Counter
 from collections.abc import Mapping
+from decimal import Decimal
 from datetime import datetime, timezone
 import logging
 from typing import NoReturn, Optional
@@ -19,7 +20,8 @@ from stoa.security.route_authorization import (
     STUDENT_SELF,
     authorized_student_dependency,
 )
-from stoa.services import learning_profile_service
+from stoa.config import settings
+from stoa.services import allowance_service, entitlement_service, learning_profile_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -148,6 +150,39 @@ class LearningHistoryResponse(BaseModel):
     items: list[LearningHistoryItem] = Field(default_factory=list)
 
 
+def _plan_includes_teacher_support(plan: str) -> bool:
+    """Whether this plan carries any teacher-support cases at all."""
+    try:
+        budget = allowance_service.plan_allowance_budget(plan, allowance_version=1)
+    except ValueError:
+        return False
+    return budget.teacher_support_cases > 0
+
+
+class StudentEntitlementResponse(BaseModel):
+    effectivePlan: str
+    newUsageAllowed: bool
+    teacherSupportIncluded: bool = False
+    dailyAiQuestionLimit: int | None = None
+    dailyChatMessageLimit: int | None = None
+    freeTrialActive: bool = False
+    freeTrialEndsAt: str | None = None
+
+
+def _stored_limit(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, Decimal) and value == value.to_integral_value():
+        return int(value)
+    return None
+
+
+def _optional_text(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
 def _history_text(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
 
@@ -246,6 +281,38 @@ def _practice_history_items(student_id: str) -> list[LearningHistoryItem]:
 # ---------------------------------------------------------------------------
 # Profile endpoints
 # ---------------------------------------------------------------------------
+
+@router.get("/me/entitlement", response_model=StudentEntitlementResponse)
+async def get_my_entitlement(
+    authorized: AuthorizedResource = Depends(
+        authorized_student_dependency(
+            action=AuthorizationAction.READ, purposes=STUDENT_SELF, self_route=True
+        )
+    ),
+):
+    """Tell a student which plan covers them and what it allows today.
+
+    Their plan is decided by a parent's billing, which only a parent may read,
+    so a student had no way to learn their own limits.
+    """
+    entitlement = entitlement_service.resolve_student_entitlement(
+        authorized.ref.student_id,
+        settings=settings,
+        student_profile=dict(authorized.value or {}),
+    )
+    limits = entitlement.get("limits") or {}
+    free_trial = entitlement.get("freeTrial") or {}
+    plan = str(entitlement.get("effectivePlan") or "free_trial")
+    return StudentEntitlementResponse(
+        effectivePlan=plan,
+        newUsageAllowed=bool(entitlement.get("newUsageAllowed")),
+        teacherSupportIncluded=_plan_includes_teacher_support(plan),
+        dailyAiQuestionLimit=_stored_limit(limits.get("dailyAiQuestionLimit")),
+        dailyChatMessageLimit=_stored_limit(limits.get("dailyChatMessageLimit")),
+        freeTrialActive=bool(free_trial.get("active")),
+        freeTrialEndsAt=_optional_text(free_trial.get("endsAt")),
+    )
+
 
 @router.get("/me/learning-history", response_model=LearningHistoryResponse)
 async def get_my_learning_history(

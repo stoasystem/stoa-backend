@@ -270,3 +270,52 @@ def test_practice_history_names_the_lesson_not_its_topic(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["items"][0]["summary"] == "Brüche lesen und kürzen"
+
+
+def test_a_student_can_read_their_own_plan(monkeypatch):
+    """A student's plan is decided by a parent's billing, which they cannot read."""
+    _profiles(monkeypatch)
+    monkeypatch.setattr(
+        students.entitlement_service,
+        "resolve_student_entitlement",
+        lambda *_a, **_k: {
+            "effectivePlan": "family",
+            "newUsageAllowed": True,
+            "limits": {"dailyAiQuestionLimit": 30, "dailyChatMessageLimit": 60},
+            "freeTrial": {"active": False},
+        },
+    )
+
+    response = _client(_actor(CanonicalRole.STUDENT, "student-1")).get(
+        "/students/me/entitlement"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["effectivePlan"] == "family"
+    assert body["dailyChatMessageLimit"] == 60
+    assert body["teacherSupportIncluded"] is True
+    # Nothing about the parent's billing leaks through.
+    assert "parentId" not in body and "billingState" not in body
+
+
+def test_a_plan_without_teacher_support_says_so(monkeypatch):
+    _profiles(monkeypatch)
+    monkeypatch.setattr(
+        students.entitlement_service,
+        "resolve_student_entitlement",
+        lambda *_a, **_k: {
+            "effectivePlan": "free_trial",
+            "newUsageAllowed": True,
+            "limits": {},
+            "freeTrial": {"active": True, "endsAt": "2026-09-01T00:00:00+00:00"},
+        },
+    )
+
+    response = _client(_actor(CanonicalRole.STUDENT, "student-1")).get(
+        "/students/me/entitlement"
+    )
+
+    body = response.json()
+    assert body["teacherSupportIncluded"] is False
+    assert body["freeTrialActive"] is True

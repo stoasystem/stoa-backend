@@ -1500,6 +1500,24 @@
       "student_id"
     ],
     "method": "GET",
+    "path": "/students/me/entitlement",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "student"
+      }
+    ],
+    "classification": "authorized",
+    "family": "students",
+    "identifiers": [
+      "student_id"
+    ],
+    "method": "GET",
     "path": "/students/me/learning-history",
     "sensitive": true
   },
