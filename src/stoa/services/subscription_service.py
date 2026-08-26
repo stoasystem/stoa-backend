@@ -889,7 +889,14 @@ def _billing_required_text(
 
 
 def _billing_exact_count(value: object, field: str, *, positive: bool = False) -> int:
+    """A count or version, however DynamoDB chose to hand it back.
+
+    Numbers come out of the table as Decimal, so an int check alone rejects
+    values that are perfectly whole.
+    """
     minimum = 1 if positive else 0
+    if isinstance(value, Decimal) and value.is_finite() and value == value.to_integral_value():
+        value = int(value)
     if (
         isinstance(value, bool)
         or not isinstance(value, int)

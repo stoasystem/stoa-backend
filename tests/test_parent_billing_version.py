@@ -39,3 +39,19 @@ def test_a_plain_integer_is_still_accepted():
 def test_anything_that_is_not_a_whole_positive_number_is_refused(value):
     with pytest.raises(ValueError):
         _required_positive_int(value, "allowance version")
+
+
+def test_billing_counts_accept_what_the_table_returns():
+    """The same comparison, one layer down, broke the same page."""
+    from stoa.services.subscription_service import _billing_exact_count
+
+    assert _billing_exact_count(Decimal("3"), "grant version", positive=True) == 3
+    assert _billing_exact_count(Decimal("0"), "case count") == 0
+    assert _billing_exact_count(5, "case count") == 5
+
+    for bad in (Decimal("0"), Decimal("-1")):
+        with pytest.raises(ValueError):
+            _billing_exact_count(bad, "grant version", positive=True)
+    for bad in (Decimal("1.5"), Decimal("NaN"), True, "2", None):
+        with pytest.raises(ValueError):
+            _billing_exact_count(bad, "case count")
