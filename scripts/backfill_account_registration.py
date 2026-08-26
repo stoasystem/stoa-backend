@@ -33,14 +33,31 @@ PUBLIC_REGISTRATION_COMMAND = "public_self_service"
 ACTIVE = "active"
 
 
+def recorded_activation(profile: dict) -> str | None:
+    """Whether this account was ever activated, under either field name.
+
+    Older rows recorded it as account_activation_status, which almost nothing
+    reads any more; a row saying pending there is pending, not unwritten.
+    """
+    for field in ("account_status", "account_activation_status"):
+        value = profile.get(field)
+        if value:
+            return str(value)
+    return None
+
+
 def missing_fields(profile: dict) -> dict[str, str]:
-    """What this profile lacks before sign-in will accept it."""
+    """What this profile lacks before sign-in will accept it.
+
+    An account still waiting on its email is meant to be refused, so it is not
+    something this repairs.
+    """
     role = str(profile.get("role") or "")
+    activation = recorded_activation(profile)
+    if activation is not None and activation != ACTIVE:
+        return {}
     wanted: dict[str, str] = {}
     if profile.get("account_status") != ACTIVE:
-        if "account_status" in profile and profile["account_status"]:
-            # Something deliberate is stored here; leave it alone.
-            return {}
         wanted["account_status"] = ACTIVE
     if role in PUBLIC_ROLES:
         if not profile.get("registration_command"):
