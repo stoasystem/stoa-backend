@@ -5,6 +5,7 @@ from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Annotated, Any, Literal, Protocol, cast
 from uuid import uuid4
 
@@ -92,7 +93,16 @@ def _response_string_list(value: object) -> list[str]:
 
 
 def _required_positive_int(value: object, field: str) -> int:
-    if type(value) is not int or value < 1:
+    """Accept a whole number, however DynamoDB chose to hand it back.
+
+    Everything numeric comes out of the table as Decimal, so an exact int
+    check rejects a version that is perfectly valid.
+    """
+    if isinstance(value, bool):
+        raise ValueError(f"malformed {field}")
+    if isinstance(value, Decimal) and value.is_finite() and value == value.to_integral_value():
+        value = int(value)
+    if not isinstance(value, int) or value < 1:
         raise ValueError(f"malformed {field}")
     return value
 
