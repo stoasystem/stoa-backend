@@ -1,6 +1,7 @@
 """Curriculum catalog projections built from existing practice content."""
 from __future__ import annotations
 
+import logging
 from collections import Counter
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -11,6 +12,8 @@ from stoa.db.repositories import practice_repo
 from stoa.services import practice_projection_service
 
 ZURICH = ZoneInfo("Europe/Zurich")
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED_SUBJECTS = {"math", "physics", "german", "english"}
 VISIBLE_STATES = {"active"}
@@ -112,6 +115,19 @@ def completed_days(progress: list[dict[str, Any]]) -> set[date]:
     return days
 
 
+def recorded_study_days(student_id: str) -> list[str]:
+    """Days this student did work, or nothing if that record cannot be read.
+
+    Losing it falls back to counting lesson completions, which is what the
+    streak was before, rather than failing the whole progress response.
+    """
+    try:
+        return practice_repo.list_study_days(student_id)
+    except Exception:  # noqa: BLE001
+        logger.warning("Study days unavailable; streak falls back to lessons")
+        return []
+
+
 def _studied_today(progress: list[dict[str, Any]], study_days: list[str]) -> bool:
     today = datetime.now(ZURICH).date()
     return today in completed_days(progress) or today.isoformat() in study_days
@@ -168,7 +184,7 @@ def get_progress_summary(
 ) -> dict[str, Any]:
     progress = practice_repo.get_progress(student_id, subject_id)
     completed = [item for item in progress if item.get("status") == "completed"]
-    study_days = practice_repo.list_study_days(student_id)
+    study_days = recorded_study_days(student_id)
     mistakes = practice_repo.get_mistakes(student_id)
     if subject_id:
         mistakes = [item for item in mistakes if _normal_subject_id(item.get("subject_id", "")) == _normal_subject_id(subject_id)]

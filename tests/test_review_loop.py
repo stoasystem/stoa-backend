@@ -249,3 +249,16 @@ def test_a_streak_earned_before_this_existed_still_stands(monkeypatch):
     )
 
     assert streak == 3
+
+
+def test_the_streak_falls_back_to_lessons_when_study_days_cannot_be_read(monkeypatch):
+    """A missing streak record must not take the progress response down."""
+    from stoa.db.repositories import practice_repo
+    from stoa.services import curriculum_service
+
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("no credentials")
+
+    monkeypatch.setattr(practice_repo, "list_study_days", unavailable)
+
+    assert curriculum_service.recorded_study_days("student-1") == []
