@@ -239,6 +239,33 @@ def await_queued(base_url: str, teacher_token: str, conversation_id: str) -> dic
     raise SmokeFailure("request never appeared in the teacher queue")
 
 
+def review_loop_closes(base: str, token: str) -> dict:
+    """Answer a question wrongly and confirm it comes back due."""
+    exercises = request(base, "GET", "/practice/curriculum/exercises", token=token)
+    items = exercises.get("items") or exercises.get("exercises") or []
+    if not items:
+        raise SmokeFailure("no exercises to review")
+    challenge_id = items[0].get("id") or items[0].get("challengeId")
+    if not challenge_id:
+        raise SmokeFailure("exercise has no id")
+
+    request(
+        base,
+        "POST",
+        f"/practice/challenges/{challenge_id}/answer",
+        token=token,
+        body={"answer": "definitely-not-the-answer"},
+    )
+
+    due = request(base, "GET", "/practice/review/due", token=token)
+    waiting = {item.get("challengeId") for item in due.get("items", [])}
+    if challenge_id not in waiting:
+        raise SmokeFailure(f"{challenge_id} was missed but is not due for review")
+    if any("correctAnswer" in item or "correct_answer" in item for item in due.get("items", [])):
+        raise SmokeFailure("review cards are leaking answers")
+    return due
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default=os.environ.get("STOA_SMOKE_BASE_URL", DEFAULT_BASE_URL))
@@ -326,6 +353,12 @@ def main() -> int:
         report.check(
             "asks through the stream the chat uses",
             lambda: stream_a_question(base, student, conversation["id"]),
+        )
+
+    if student:
+        report.check(
+            "a missed question comes back for review",
+            lambda: review_loop_closes(base, student),
         )
 
     if student:

@@ -61,14 +61,24 @@ def test_each_success_waits_longer_than_the_last():
     assert gaps[-1] > gaps[0] * 2, f"five correct answers should more than double the gap: {gaps}"
 
 
-def test_a_missed_question_returns_within_the_same_sitting():
+def test_a_missed_question_is_due_again_at_once():
     card = answer_correctly(new_card(now=NOW), at=NOW)
     later = card.due_at
 
     lapsed = review(card, AGAIN, now=later)
 
-    assert lapsed.due_at - later < timedelta(hours=1)
+    assert lapsed.due_at <= later
     assert lapsed.lapses == 1
+
+
+def test_the_question_just_missed_comes_last_in_the_round():
+    """Ordering, not a delay, is what stops a question following itself."""
+    missed_earlier = review(answer_correctly(new_card(now=NOW), at=NOW), AGAIN, now=NOW)
+    missed_now = review(
+        answer_correctly(new_card(now=NOW), at=NOW), AGAIN, now=NOW + timedelta(minutes=3)
+    )
+
+    assert missed_earlier.due_at < missed_now.due_at
 
 
 def test_forgetting_undoes_the_progress_that_was_earned():

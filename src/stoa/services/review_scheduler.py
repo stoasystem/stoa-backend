@@ -31,9 +31,12 @@ MAX_DIFFICULTY = 10.0
 MIN_STABILITY = 0.01
 MAX_INTERVAL_DAYS = 365
 
-# A student who has just got a question wrong should see it again in the same
-# sitting, not tomorrow.
-RELEARNING_DELAY = timedelta(minutes=10)
+# A missed question is due again at once. A student answering three questions
+# in two minutes would never reach a delayed one, and the due list is ordered
+# oldest-first, so the question just missed arrives at the end of the round
+# rather than immediately after itself. Answering it again the same day earns
+# little, which is what keeps the second look from inflating the schedule.
+RELEARNING_DELAY = timedelta(0)
 
 AGAIN = 1
 HARD = 2
