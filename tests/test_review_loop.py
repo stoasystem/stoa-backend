@@ -194,3 +194,58 @@ def test_a_card_carries_where_the_question_came_from(monkeypatch):
     assert card["subject_id"] == "mathematics"
     assert card["topic_id"] == "brueche"
     assert card["lesson_id"] == "brueche-l1"
+
+
+def test_answering_counts_towards_the_streak(monkeypatch):
+    """Clearing a review has to keep a streak alive, or there is no reason to."""
+    from stoa.db.repositories import practice_repo
+    from stoa.services import curriculum_service
+
+    table = use_table(monkeypatch)
+    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    monkeypatch.setattr(practice_repo, "_write_generation", lambda *a, **k: 1)
+
+    review_service.record_answer(
+        student_id="student-1", challenge=CHALLENGE, correct=True, answered_at=NOW
+    )
+
+    days = practice_repo.list_study_days("student-1")
+    assert days == ["2026-03-02"]
+    # No lesson was completed, which was the only thing that used to count.
+    assert curriculum_service.study_streak([], today=NOW.date(), study_days=days) == 1
+
+
+def test_a_day_is_recorded_once_however_many_questions(monkeypatch):
+    from stoa.db.repositories import practice_repo
+
+    table = use_table(monkeypatch)
+    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    monkeypatch.setattr(practice_repo, "_write_generation", lambda *a, **k: 1)
+
+    for index in range(3):
+        review_service.record_answer(
+            student_id="student-1",
+            challenge={**CHALLENGE, "challenge_id": f"brueche-l1-c{index}"},
+            correct=True,
+            answered_at=NOW,
+        )
+
+    assert practice_repo.list_study_days("student-1") == ["2026-03-02"]
+
+
+def test_a_streak_earned_before_this_existed_still_stands(monkeypatch):
+    """Lesson completions were the only record; they must keep counting."""
+    from datetime import date
+
+    from stoa.services import curriculum_service
+
+    progress = [
+        {"status": "completed", "completed_at": "2026-03-01T10:00:00+00:00"},
+        {"status": "completed", "completed_at": "2026-02-28T10:00:00+00:00"},
+    ]
+
+    streak = curriculum_service.study_streak(
+        progress, today=date(2026, 3, 2), study_days=["2026-03-02"]
+    )
+
+    assert streak == 3

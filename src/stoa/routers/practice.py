@@ -496,7 +496,9 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
             "target": daily_target,
             "label": f"{completed_today}/{daily_target} lessons today",
         },
-        "studyStreak": curriculum_service.study_streak(progress_records),
+        "studyStreak": curriculum_service.study_streak(
+            progress_records, study_days=practice_repo.list_study_days(actor.user_id)
+        ),
         "progressPoints": len(completed_ids) * 10,
         "recentMistakes": recent_mistakes,
         "weakTopics": weak_topics,
@@ -782,7 +784,8 @@ async def complete_lesson(
         "nextLessonId": next_lesson["lesson_id"] if next_lesson else None,
         "progressPoints": len(completed_ids) * 10,
         "studyStreak": curriculum_service.study_streak(
-            practice_repo.get_progress(actor.user_id)
+            practice_repo.get_progress(actor.user_id),
+            study_days=practice_repo.list_study_days(actor.user_id),
         ),
         "dailyGoalCompleted": False,
     }

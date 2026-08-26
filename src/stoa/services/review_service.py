@@ -14,6 +14,7 @@ from typing import Any
 
 from stoa.db.repositories import practice_repo, review_repo
 from stoa.services import review_scheduler
+from stoa.services.curriculum_service import ZURICH
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,18 @@ def record_answer(
     now = answered_at or datetime.now(timezone.utc)
     if now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
+
+    try:
+        # Answering is study, whatever the answer was, and the streak is the
+        # reason a student comes back to clear a review.
+        practice_repo.record_study_day(
+            student_id,
+            now.astimezone(ZURICH).date().isoformat(),
+            kind="practice",
+            at=now.isoformat(),
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("Study day not recorded", exc_info=True)
 
     try:
         stored = review_repo.get_card(student_id, challenge_id)

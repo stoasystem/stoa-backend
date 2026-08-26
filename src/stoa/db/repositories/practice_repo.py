@@ -799,6 +799,80 @@ def _practice_owned(item: Mapping[str, Any], owner_id: str) -> bool:
         f"ATTEMPTS#{owner_id}",
         f"MISTAKES#{owner_id}",
         f"REVIEW#{owner_id}",
+        f"ACTIVITY#{owner_id}",
         f"USAGE#{owner_id}",
         f"USAGE_LEDGER#{owner_id}",
     }
+
+
+STUDY_DAY_PREFIX = "DAY#"
+
+
+def study_day_partition(student_id: str) -> str:
+    return f"ACTIVITY#{student_id}"
+
+
+def record_study_day(
+    student_id: str,
+    day: str,
+    *,
+    kind: str = "practice",
+    at: str | None = None,
+    account_fence_generation: int | None = None,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Mark that this student studied on this Zurich day.
+
+    A day is written once and then only touched, so the streak does not depend
+    on which kind of work was done - finishing a lesson and clearing a review
+    both count.
+    """
+    target = table or get_table()
+    generation = _write_generation(student_id, account_fence_generation, target)
+    item = {
+        "PK": study_day_partition(student_id),
+        "SK": f"{STUDY_DAY_PREFIX}{day}",
+        "entity_type": "study_day",
+        "student_id": student_id,
+        "user_id": student_id,
+        "day": day,
+        "last_kind": kind,
+        "last_seen_at": at or datetime.now(timezone.utc).isoformat(),
+    }
+    existing = None
+    if _atomic_table(target):
+        existing = _get_item(
+            target, Key={"PK": item["PK"], "SK": item["SK"]}, ConsistentRead=True
+        ).get("Item")
+    operations = build_practice_write_transaction(
+        item=item,
+        owner_id=student_id,
+        generation=generation,
+        mode="update" if existing else "put",
+        updates={key: value for key, value in item.items() if key not in {"PK", "SK"}}
+        if existing
+        else None,
+    )
+    if _atomic_table(target):
+        account_deletion_repo.transact(operations, table=target)
+    else:
+        _put_item(target, Item=operations[1]["Put"]["Item"])
+    item.update(owner_id=student_id, account_fence_generation=generation)
+    return item
+
+
+def list_study_days(student_id: str, *, table: Any | None = None) -> list[str]:
+    """Every Zurich day this student did some work, unordered."""
+    target = table or get_table()
+    response = _query(
+        target,
+        KeyConditionExpression=(
+            Key("PK").eq(study_day_partition(student_id))
+            & Key("SK").begins_with(STUDY_DAY_PREFIX)
+        ),
+    )
+    return [
+        str(item.get("day"))
+        for item in _response_items(response.get("Items", []))
+        if item.get("day")
+    ]

@@ -112,14 +112,41 @@ def completed_days(progress: list[dict[str, Any]]) -> set[date]:
     return days
 
 
-def study_streak(progress: list[dict[str, Any]], *, today: date | None = None) -> int:
-    """Count consecutive days of practice ending today.
+def _studied_today(progress: list[dict[str, Any]], study_days: list[str]) -> bool:
+    today = datetime.now(ZURICH).date()
+    return today in completed_days(progress) or today.isoformat() in study_days
+
+
+def _parse_day(value: Any) -> date | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def study_streak(
+    progress: list[dict[str, Any]],
+    *,
+    today: date | None = None,
+    study_days: list[str] | None = None,
+) -> int:
+    """Count consecutive days of study ending today.
 
     A streak survives the day after the last one, because a student who has not
     practised yet today has not broken anything. It is only lost once a day
-    passes with nothing completed.
+    passes with nothing done.
+
+    Recorded study days carry any work that counts - clearing a review as much
+    as finishing a lesson - and are joined with the lesson completions that
+    were the only record before, so streaks earned then still stand.
     """
     days = completed_days(progress)
+    for raw in study_days or []:
+        parsed = _parse_day(raw)
+        if parsed:
+            days.add(parsed)
     if not days:
         return 0
     current = today or datetime.now(ZURICH).date()
@@ -141,6 +168,7 @@ def get_progress_summary(
 ) -> dict[str, Any]:
     progress = practice_repo.get_progress(student_id, subject_id)
     completed = [item for item in progress if item.get("status") == "completed"]
+    study_days = practice_repo.list_study_days(student_id)
     mistakes = practice_repo.get_mistakes(student_id)
     if subject_id:
         mistakes = [item for item in mistakes if _normal_subject_id(item.get("subject_id", "")) == _normal_subject_id(subject_id)]
@@ -152,8 +180,8 @@ def get_progress_summary(
         "completedLessons": len(completed),
         "completedLessonIds": [item.get("lesson_id", "") for item in completed if item.get("lesson_id")],
         "mistakeCount": len(mistakes),
-        "studyStreak": study_streak(progress),
-        "practisedToday": datetime.now(ZURICH).date() in completed_days(progress),
+        "studyStreak": study_streak(progress, study_days=study_days),
+        "practisedToday": _studied_today(progress, study_days),
         "weakTopics": [
             {"topicId": topic_id, "count": count}
             for topic_id, count in weak_topic_counts.most_common(5)
