@@ -928,6 +928,40 @@
     "sensitive": true
   },
   {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "parent_oversight",
+        "resource_type": "conversation"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "conversation"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "support",
+        "resource_type": "conversation"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "conversation"
+      }
+    ],
+    "classification": "authorized",
+    "family": "conversations",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/conversations/{conv_id}/generation",
+    "sensitive": true
+  },
+  {
     "authorization": [],
     "classification": "authenticated-global",
     "family": "files",

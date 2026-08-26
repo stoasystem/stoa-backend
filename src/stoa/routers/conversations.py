@@ -521,6 +521,7 @@ class _ConversationAllowanceBedrockClient:
         if self._observed_at.tzinfo is None:
             raise _allowance_recoverable_failure()
         self._runtime_client: object | None = None
+        self._invocation_method = "invoke_model"
 
     def invoke_model(self, **kwargs: object) -> object:
         model_id = kwargs.get("modelId")
@@ -593,10 +594,19 @@ class _ConversationAllowanceBedrockClient:
         }:
             raise _allowance_recoverable_failure()
 
-        invoke_model = getattr(runtime_client, "invoke_model", None)
-        if not callable(invoke_model):
+        invoke = getattr(runtime_client, self._invocation_method, None)
+        if not callable(invoke):
             raise RuntimeError("Bedrock invocation dependency unavailable")
-        return invoke_model(**kwargs)
+        return invoke(**kwargs)
+
+    def invoke_model_with_response_stream(self, **kwargs: object) -> object:
+        """Admit the same way, then stream. Admission does not depend on how
+        the answer is delivered."""
+        self._invocation_method = "invoke_model_with_response_stream"
+        try:
+            return self.invoke_model(**kwargs)
+        finally:
+            self._invocation_method = "invoke_model"
 
 
 # ── Request / Response models ──────────────────────────────────────────────────
@@ -1090,6 +1100,28 @@ async def list_conversations(
     return ConversationListResponse(items=summaries)
 
 
+GENERATION_PROGRESS_TTL_SECONDS = 3600
+
+
+def _publish_generation_step(conv_id: str, student_id: str):
+    """Publish each finished step so the student can read the answer forming."""
+    delivered: list[str] = []
+
+    def publish(index: int, step: str) -> None:
+        if index != len(delivered):
+            return
+        delivered.append(step)
+        attachment_repo.record_generation_progress(
+            conv_id,
+            owner_id=student_id,
+            steps=list(delivered),
+            expires_at=int(datetime.now(timezone.utc).timestamp())
+            + GENERATION_PROGRESS_TTL_SECONDS,
+        )
+
+    return publish
+
+
 def _default_conversation_title(subject: object, grade: object) -> str:
     return f"{subject} – {grade}"
 
@@ -1238,6 +1270,31 @@ async def get_conversation(
         grade=_required_conversation_text(conv, "grade"),
         updatedAt=_required_conversation_text(conv, "updated_at"),
         messages=messages,
+    )
+
+
+class GenerationProgressResponse(BaseModel):
+    conversationId: str
+    steps: list[str] = Field(default_factory=list)
+
+
+@router.get("/{conv_id}/generation", response_model=GenerationProgressResponse)
+async def get_generation_progress(
+    authorized: AuthorizedResource = Depends(
+        authorized_conversation_dependency(
+            action=AuthorizationAction.READ,
+            purposes=CONVERSATION_CONTENT_READ,
+            resolver=lambda conversation_id: _get_conversation(conversation_id),
+        )
+    ),
+):
+    """Return the steps of an answer still being written."""
+    conv_id = authorized.ref.resource_id
+    return GenerationProgressResponse(
+        conversationId=conv_id,
+        steps=attachment_repo.read_generation_progress(
+            conv_id, owner_id=authorized.ref.student_id
+        ),
     )
 
 
@@ -2132,6 +2189,7 @@ def _execute_message_command(
             effect_id=allowance_client.allowance_effect_id,
             client=allowance_client,
             invocation_class=ai_service.AIInvocationClass.USER_ALLOWANCE,
+            on_step=_publish_generation_step(conv_id, student_id),
         )
         if isinstance(provider_result, ai_service.AIProviderResult):
             allowance_metadata = _message_allowance_metadata_from_provider(

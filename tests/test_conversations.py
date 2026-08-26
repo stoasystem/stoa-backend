@@ -1531,3 +1531,90 @@ def test_only_the_placeholder_title_is_replaced(monkeypatch):
         "Another question",
     )
     assert len(updates) == 1
+
+
+def test_only_whole_steps_are_published(monkeypatch):
+    """A student is shown a step once it is whole, never a fragment of JSON."""
+    published = []
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "record_generation_progress",
+        lambda conv_id, **kwargs: published.append(list(kwargs["steps"])) or True,
+    )
+
+    publish = conversations._publish_generation_step("conv-1", "student-1")
+    publish(0, "Schritt 1")
+    publish(1, "Schritt 2")
+
+    assert published == [["Schritt 1"], ["Schritt 1", "Schritt 2"]]
+
+
+def test_a_step_out_of_order_is_ignored(monkeypatch):
+    published = []
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "record_generation_progress",
+        lambda conv_id, **kwargs: published.append(list(kwargs["steps"])) or True,
+    )
+
+    publish = conversations._publish_generation_step("conv-1", "student-1")
+    publish(3, "out of order")
+
+    assert published == []
+
+
+def test_progress_is_only_readable_by_the_student_who_asked():
+    from stoa.db.repositories import attachment_repo
+
+    class _Table:
+        def get_item(self, **kwargs):
+            del kwargs
+            return {"Item": {"owner_id": "student-1", "steps": ["Schritt 1"]}}
+
+    assert attachment_repo.read_generation_progress(
+        "conv-1", owner_id="student-1", table=_Table()
+    ) == ["Schritt 1"]
+    assert (
+        attachment_repo.read_generation_progress(
+            "conv-1", owner_id="another-student", table=_Table()
+        )
+        == []
+    )
+
+
+def test_streaming_reports_steps_and_still_returns_the_whole_answer(monkeypatch):
+    """Streaming must not change what the caller finally receives."""
+    import json as _json
+
+    from stoa.services import ai_service
+
+    answer = {
+        "steps": ["Schritt 1: erst dies", "Schritt 2: dann das"],
+        "answer": "x = 4",
+        "hints": [],
+    }
+    text = _json.dumps(answer, ensure_ascii=False)
+
+    def _events():
+        yield {"chunk": {"bytes": _json.dumps({"type": "message_start", "message": {"id": "msg-1", "model": "anthropic.claude-sonnet-4-6", "usage": {"input_tokens": 11}}}).encode()}}
+        for piece in (text[i : i + 7] for i in range(0, len(text), 7)):
+            yield {"chunk": {"bytes": _json.dumps({"type": "content_block_delta", "delta": {"text": piece}}).encode()}}
+        yield {"chunk": {"bytes": _json.dumps({"type": "message_delta", "usage": {"output_tokens": 22}, "delta": {"stop_reason": "end_turn"}}).encode()}}
+
+    class _Client:
+        def invoke_model_with_response_stream(self, **kwargs):
+            del kwargs
+            return {"body": _events(), "ResponseMetadata": {"RequestId": "req-1"}}
+
+    seen = []
+    result = ai_service.get_ai_answer(
+        content="Wie loese ich 2x = 8?",
+        subject="math",
+        grade="9",
+        language="de",
+        client=_Client(),
+        on_step=lambda index, step: seen.append((index, step)),
+    )
+
+    assert [step for _index, step in seen] == answer["steps"]
+    assert result.content["answer"] == "x = 4"

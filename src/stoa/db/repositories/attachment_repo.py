@@ -518,6 +518,72 @@ def create_conversation_record(
     )
 
 
+def generation_progress_key(conversation_id: str) -> dict[str, str]:
+    return {"PK": f"CONV#{conversation_id}", "SK": "GENERATION"}
+
+
+def record_generation_progress(
+    conversation_id: str,
+    *,
+    owner_id: str,
+    steps: list[str],
+    expires_at: int,
+    table: object | None = None,
+) -> bool:
+    """Publish the steps of an answer still being written.
+
+    The request that generates an answer holds its connection until the answer
+    is whole, so a student sees nothing meanwhile. This row lets them read the
+    steps as they land. Best effort: a lost update costs a moment of progress,
+    never the answer.
+    """
+    target = table or get_table()
+    update_item = getattr(target, "update_item", None)
+    if not callable(update_item):
+        return False
+    try:
+        update_item(
+            Key=generation_progress_key(conversation_id),
+            UpdateExpression=(
+                "SET steps=:steps, owner_id=:owner, entity_type=:entity, "
+                "expires_at=:expires"
+            ),
+            ExpressionAttributeValues={
+                ":steps": steps,
+                ":owner": owner_id,
+                ":entity": "conversation_generation_progress",
+                ":expires": expires_at,
+            },
+        )
+    except Exception:
+        return False
+    return True
+
+
+def read_generation_progress(
+    conversation_id: str,
+    *,
+    owner_id: str,
+    table: object | None = None,
+) -> list[str]:
+    """Return the steps published so far, only to the student who asked."""
+    target = table or get_table()
+    try:
+        item = _optional_mapping(
+            _get_item(
+                target, Key=generation_progress_key(conversation_id), ConsistentRead=True
+            ).get("Item")
+        )
+    except Exception:
+        return []
+    if item is None or item.get("owner_id") != owner_id:
+        return []
+    steps = item.get("steps")
+    if not isinstance(steps, list):
+        return []
+    return [step for step in steps if isinstance(step, str)]
+
+
 def retitle_conversation(
     conversation_id: str,
     *,

@@ -122,6 +122,11 @@ def inventory_ai_invocation_classes() -> dict[str, AIInvocationClass]:
         "src/stoa/routers/conversations.py:_generate_title": (
             AIInvocationClass.PROVIDER_COST_ONLY
         ),
+        # Streaming delivers the same answer under the same admission, so it
+        # is charged to the student's allowance exactly as the buffered call is.
+        "src/stoa/routers/conversations.py:invoke_model_with_response_stream": (
+            AIInvocationClass.USER_ALLOWANCE
+        ),
         "src/stoa/services/ai_service.py:get_ai_answer": (
             AIInvocationClass.USER_ALLOWANCE
         ),
@@ -327,6 +332,119 @@ def _validate_output(parsed: dict, raw_text: str) -> dict:
 
 # ── JSON parsing ───────────────────────────────────────────────────────────────
 
+_STEP_PATTERN = re.compile(r'"((?:[^"\\]|\\.)*)"\s*(?:,|\])')
+
+
+def completed_steps(partial_json: str) -> list[str]:
+    """Return the steps already closed in a partly received JSON answer.
+
+    The model answers with one JSON object, so a student cannot be shown raw
+    tokens. Each step is whole the moment its closing quote arrives, which is
+    the smallest piece worth showing.
+    """
+    if '"steps"' not in partial_json:
+        return []
+    tail = partial_json.split('"steps"', 1)[1]
+    opening = tail.find("[")
+    if opening == -1:
+        return []
+    steps: list[str] = []
+    for match in _STEP_PATTERN.finditer(tail[opening + 1 :]):
+        try:
+            steps.append(json.loads(f'"{match.group(1)}"'))
+        except json.JSONDecodeError:
+            break
+        if match.group(0).rstrip().endswith("]"):
+            break
+    return steps
+
+
+def _stream_ai_answer(
+    *,
+    client: Any,
+    body: str,
+    on_step: Callable[[int, str], None],
+    correlation_id: str | None,
+    deadline_monotonic: float | None,
+    clock: Callable[[], float],
+    effect_id: str | None,
+    observed_at: datetime | None,
+    invocation_class: AIInvocationClass,
+) -> AIProviderResult[dict]:
+    """Invoke the model as a stream, reporting each step as it completes."""
+    response = client.invoke_model_with_response_stream(
+        modelId=settings.bedrock_model_id, body=body
+    )
+    stream = response.get("body") if isinstance(response, dict) else None
+    if stream is None:
+        raise AIInvocationFailure("malformed_response")
+
+    raw_text = ""
+    reported = 0
+    usage: dict[str, Any] = {}
+    stop_reason = None
+    # The streaming protocol splits across events what one buffered response
+    # carries together, and accounting needs all of it.
+    message_id = None
+    model_id = None
+    for event in stream:
+        if deadline_monotonic is not None and clock() >= deadline_monotonic:
+            raise AIInvocationFailure("deadline_exceeded")
+        chunk = event.get("chunk") if isinstance(event, dict) else None
+        if not chunk:
+            continue
+        try:
+            payload = json.loads(chunk["bytes"])
+        except (KeyError, TypeError, json.JSONDecodeError):
+            raise AIInvocationFailure("malformed_response") from None
+        kind = payload.get("type")
+        if kind == "content_block_delta":
+            raw_text += payload.get("delta", {}).get("text", "")
+            steps = completed_steps(raw_text)
+            while reported < len(steps):
+                # A step that cannot be delivered is not worth losing the
+                # answer over; the full result still arrives at the end.
+                try:
+                    on_step(reported, steps[reported])
+                except Exception:
+                    logger.warning("streamed step was not delivered", exc_info=True)
+                reported += 1
+        elif kind == "message_delta":
+            usage.update(payload.get("usage") or {})
+            stop_reason = (payload.get("delta") or {}).get("stop_reason", stop_reason)
+        elif kind == "message_start":
+            message = payload.get("message") or {}
+            usage.update(message.get("usage") or {})
+            message_id = message.get("id", message_id)
+            model_id = message.get("model", model_id)
+
+    if not raw_text:
+        raise AIInvocationFailure("malformed_response")
+    emit_private_event(
+        "ai_response_received",
+        output_size=len(raw_text),
+        correlation_id=correlation_id,
+    )
+    parsed = _parse_ai_response(raw_text)
+    validated = _validate_output(parsed, raw_text)
+    result = {
+        "id": message_id,
+        "model": model_id,
+        "content": [{"text": raw_text}],
+        "usage": usage,
+        "stop_reason": stop_reason,
+    }
+    return _provider_result(
+        validated,
+        result,
+        response=response,
+        inference_profile_id=settings.bedrock_model_id,
+        effect_id=effect_id or correlation_id or "unbound-user-allowance-effect",
+        observed_at=observed_at,
+        invocation_class=invocation_class,
+    )
+
+
 def _parse_ai_response(text: str) -> dict:
     """Parse AI response, handling possible markdown code block wrappers."""
     try:
@@ -415,6 +533,7 @@ def get_ai_answer(
     effect_id: str | None = None,
     observed_at: datetime | None = None,
     invocation_class: AIInvocationClass = AIInvocationClass.USER_ALLOWANCE,
+    on_step: Callable[[int, str], None] | None = None,
 ) -> AIProviderResult[dict]:
     """Invoke Bedrock Claude with a controlled educational prompt.
 
@@ -485,6 +604,18 @@ def get_ai_answer(
     )
     if deadline_monotonic is not None and clock() >= deadline_monotonic:
         raise AIInvocationFailure("deadline_exceeded")
+    if on_step is not None:
+        return _stream_ai_answer(
+            client=client,
+            body=body,
+            on_step=on_step,
+            correlation_id=correlation_id,
+            deadline_monotonic=deadline_monotonic,
+            clock=clock,
+            effect_id=effect_id,
+            observed_at=observed_at,
+            invocation_class=invocation_class,
+        )
     response = client.invoke_model(modelId=settings.bedrock_model_id, body=body)
     if deadline_monotonic is not None and clock() >= deadline_monotonic:
         raise AIInvocationFailure("deadline_exceeded")

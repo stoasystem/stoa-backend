@@ -443,6 +443,9 @@ def test_inventory_classifies_every_source_invoke_model_call() -> None:
         "src/stoa/routers/conversations.py:_generate_title": (
             ai_service.AIInvocationClass.PROVIDER_COST_ONLY
         ),
+        "src/stoa/routers/conversations.py:invoke_model_with_response_stream": (
+            ai_service.AIInvocationClass.USER_ALLOWANCE
+        ),
         "src/stoa/services/ai_service.py:get_ai_answer": (
             ai_service.AIInvocationClass.USER_ALLOWANCE
         ),
