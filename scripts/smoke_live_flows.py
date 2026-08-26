@@ -173,6 +173,33 @@ def upload_probe_image(base_url: str, token: str) -> dict:
     return completed
 
 
+def stream_a_question(base_url: str, student_token: str, conversation_id: str) -> dict:
+    """Send a question the way the chat does, over the streaming route.
+
+    The chat sends every message here, so a suite that only exercises the
+    buffered route can pass while chat is broken for every student.
+    """
+    request = urllib.request.Request(
+        f"{base_url}/conversations/{conversation_id}/messages/stream",
+        method="POST",
+        data=json.dumps(
+            {"content": "Was ist eine Primzahl?", "idempotencyKey": str(uuid.uuid4())}
+        ).encode(),
+    )
+    request.add_header("Content-Type", "application/json")
+    request.add_header("Authorization", f"Bearer {student_token}")
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            body = response.read().decode()
+    except urllib.error.HTTPError as exc:
+        raise SmokeFailure(
+            f"stream returned {exc.code}: {exc.read().decode()[:160]}"
+        ) from None
+    if "event: message_done" not in body:
+        raise SmokeFailure("stream ended without completing the answer")
+    return {"events": body.count("event: ")}
+
+
 def report_week() -> str:
     """Weekly reports are keyed on the Monday that starts the week."""
     today = datetime.now(timezone.utc).date()
@@ -293,6 +320,12 @@ def main() -> int:
                     },
                 )
             ),
+        )
+
+    if student and conversation:
+        report.check(
+            "asks through the stream the chat uses",
+            lambda: stream_a_question(base, student, conversation["id"]),
         )
 
     if student:
