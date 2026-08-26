@@ -1104,7 +1104,11 @@ GENERATION_PROGRESS_TTL_SECONDS = 3600
 
 
 def _publish_generation_step(conv_id: str, student_id: str):
-    """Publish each finished step so the student can read the answer forming."""
+    """Publish each finished step so the student can read the answer forming.
+
+    Progress is held per conversation and carries when it was written, so a
+    reader can tell this answer's steps from the previous answer's.
+    """
     delivered: list[str] = []
 
     def publish(index: int, step: str) -> None:
@@ -1115,6 +1119,7 @@ def _publish_generation_step(conv_id: str, student_id: str):
             conv_id,
             owner_id=student_id,
             steps=list(delivered),
+            now_iso=_now(),
             expires_at=int(datetime.now(timezone.utc).timestamp())
             + GENERATION_PROGRESS_TTL_SECONDS,
         )
@@ -1276,6 +1281,9 @@ async def get_conversation(
 class GenerationProgressResponse(BaseModel):
     conversationId: str
     steps: list[str] = Field(default_factory=list)
+    # When these steps were written, so a reader can tell them from the steps
+    # of a previous answer in the same conversation.
+    updatedAt: str = ""
 
 
 @router.get("/{conv_id}/generation", response_model=GenerationProgressResponse)
@@ -1290,11 +1298,11 @@ async def get_generation_progress(
 ):
     """Return the steps of an answer still being written."""
     conv_id = authorized.ref.resource_id
+    steps, updated_at = attachment_repo.read_generation_progress(
+        conv_id, owner_id=authorized.ref.student_id
+    )
     return GenerationProgressResponse(
-        conversationId=conv_id,
-        steps=attachment_repo.read_generation_progress(
-            conv_id, owner_id=authorized.ref.student_id
-        ),
+        conversationId=conv_id, steps=steps, updatedAt=updated_at
     )
 
 

@@ -1571,15 +1571,14 @@ def test_progress_is_only_readable_by_the_student_who_asked():
             del kwargs
             return {"Item": {"owner_id": "student-1", "steps": ["Schritt 1"]}}
 
-    assert attachment_repo.read_generation_progress(
+    steps, _updated_at = attachment_repo.read_generation_progress(
         "conv-1", owner_id="student-1", table=_Table()
-    ) == ["Schritt 1"]
-    assert (
-        attachment_repo.read_generation_progress(
-            "conv-1", owner_id="another-student", table=_Table()
-        )
-        == []
     )
+    assert steps == ["Schritt 1"]
+    hidden, _ = attachment_repo.read_generation_progress(
+        "conv-1", owner_id="another-student", table=_Table()
+    )
+    assert hidden == []
 
 
 def test_streaming_reports_steps_and_still_returns_the_whole_answer(monkeypatch):
@@ -1618,3 +1617,4 @@ def test_streaming_reports_steps_and_still_returns_the_whole_answer(monkeypatch)
 
     assert [step for _index, step in seen] == answer["steps"]
     assert result.content["answer"] == "x = 4"
+

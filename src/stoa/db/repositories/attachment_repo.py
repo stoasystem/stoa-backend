@@ -527,6 +527,7 @@ def record_generation_progress(
     *,
     owner_id: str,
     steps: list[str],
+    now_iso: str,
     expires_at: int,
     table: object | None = None,
 ) -> bool:
@@ -546,12 +547,13 @@ def record_generation_progress(
             Key=generation_progress_key(conversation_id),
             UpdateExpression=(
                 "SET steps=:steps, owner_id=:owner, entity_type=:entity, "
-                "expires_at=:expires"
+                "updated_at=:now, expires_at=:expires"
             ),
             ExpressionAttributeValues={
                 ":steps": steps,
                 ":owner": owner_id,
                 ":entity": "conversation_generation_progress",
+                ":now": now_iso,
                 ":expires": expires_at,
             },
         )
@@ -565,7 +567,7 @@ def read_generation_progress(
     *,
     owner_id: str,
     table: object | None = None,
-) -> list[str]:
+) -> tuple[list[str], str]:
     """Return the steps published so far, only to the student who asked."""
     target = table or get_table()
     try:
@@ -575,13 +577,17 @@ def read_generation_progress(
             ).get("Item")
         )
     except Exception:
-        return []
+        return [], ""
     if item is None or item.get("owner_id") != owner_id:
-        return []
+        return [], ""
     steps = item.get("steps")
     if not isinstance(steps, list):
-        return []
-    return [step for step in steps if isinstance(step, str)]
+        return [], ""
+    updated_at = item.get("updated_at")
+    return (
+        [step for step in steps if isinstance(step, str)],
+        updated_at if isinstance(updated_at, str) else "",
+    )
 
 
 def retitle_conversation(
