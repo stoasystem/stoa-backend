@@ -266,6 +266,26 @@ def review_loop_closes(base: str, token: str) -> dict:
     return due
 
 
+def every_account_can_sign_in() -> dict:
+    """No account should be holding a profile sign-in will refuse.
+
+    A change once added fields to this gate without backfilling them, and every
+    account older than the change was locked out with nothing to say why.
+    """
+    import subprocess
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    result = subprocess.run(
+        [sys.executable, os.path.join(root, "scripts", "backfill_account_registration.py"), "--verify"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if result.returncode != 0:
+        raise SmokeFailure(result.stdout.strip().splitlines()[0] if result.stdout else "accounts are blocked")
+    return {"status": "ok"}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default=os.environ.get("STOA_SMOKE_BASE_URL", DEFAULT_BASE_URL))
@@ -293,6 +313,10 @@ def main() -> int:
     ))
 
     print("\nidentity")
+    report.check(
+        "every account still satisfies the sign-in gate",
+        lambda: every_account_can_sign_in(),
+    )
     student = report.check("student signs in", lambda: public_login(base, STUDENT_EMAIL, password, "student"))
     parent = report.check("parent signs in", lambda: public_login(base, PARENT_EMAIL, password, "parent"))
     teacher = report.check(
