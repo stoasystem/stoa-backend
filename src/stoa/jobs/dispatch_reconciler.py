@@ -40,6 +40,7 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         "reassigned": outcome["reassigned"],
         "waiting": outcome["waiting"],
         "dispatched": len(outcome["dispatched"]),
+        "conversationSweep": outcome.get("conversationSweep", "completed"),
         "conversationsWaiting": outcome.get("conversationsWaiting", 0),
         "conversationsDispatched": len(outcome.get("conversationsDispatched", [])),
         "generatedAt": outcome["generatedAt"],

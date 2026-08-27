@@ -158,7 +158,8 @@ def test_the_scheduled_job_reports_what_it_did(monkeypatch):
     monkeypatch.setattr(
         dispatch_reconciler.teacher_dispatch_service, "reconcile_dispatches",
         lambda: {"reassigned": 2, "waiting": 3, "dispatched": [{"questionId": "q-1"}],
-                 "reassignments": [], "conversationsWaiting": 1,
+                 "reassignments": [], "conversationSweep": "completed",
+                 "conversationsWaiting": 1,
                  "conversationsDispatched": [{"conversationId": "c-1"}],
                  "generatedAt": stamp()},
     )
@@ -167,6 +168,7 @@ def test_the_scheduled_job_reports_what_it_did(monkeypatch):
 
     assert result == {
         "status": "completed", "reassigned": 2, "waiting": 3, "dispatched": 1,
+        "conversationSweep": "completed",
         "conversationsWaiting": 1, "conversationsDispatched": 1,
         "generatedAt": stamp(),
     }
@@ -248,3 +250,47 @@ def test_a_failing_chat_sweep_does_not_lose_the_question_sweep(monkeypatch, disp
 
     assert dispatched == ["q-1"]
     assert result["conversationsWaiting"] == 0
+
+
+def test_a_failed_chat_sweep_says_so_rather_than_reporting_nobody_waiting(monkeypatch, dispatched):
+    """Reporting zero for a sweep that never ran is how a broken sweep hides."""
+    def explode(limit=200):
+        raise RuntimeError("scan is having a day")
+
+    monkeypatch.setattr(dispatch, "list_escalated_conversations", explode)
+
+    result = dispatch.reconcile_dispatches([question(dispatch_status="unassigned")], now=stamp())
+
+    assert result["conversationSweep"] == "failed"
+    assert result["conversationsWaiting"] == 0
+
+
+def test_a_healthy_chat_sweep_says_it_completed(monkeypatch, dispatched):
+    monkeypatch.setattr(dispatch, "list_escalated_conversations", lambda limit=200: [])
+
+    result = dispatch.reconcile_dispatches([], now=stamp())
+
+    assert result["conversationSweep"] == "completed"
+
+
+def test_the_conversation_lister_asks_for_conversations_that_were_escalated(monkeypatch):
+    """It was called with the wrong arguments and the failure was swallowed."""
+    seen: dict[str, object] = {}
+
+    def fake_scan(table, **kwargs):
+        seen.update(kwargs)
+        return [{"conversation_id": "c-1"}, {"no_id": True}]
+
+    monkeypatch.setattr(dispatch, "_scan_filtered_items", fake_scan)
+    monkeypatch.setattr(dispatch, "get_table", lambda: object())
+
+    rows = dispatch.list_escalated_conversations()
+
+    assert rows == [{"conversation_id": "c-1"}, {"no_id": True}]
+    assert seen["expression_attribute_values"] == {
+        ":conversation": "conversation",
+        ":yes": True,
+    }
+    assert callable(seen["accept_item"])
+    assert seen["accept_item"]({"conversation_id": "c-1"}) == {"conversation_id": "c-1"}
+    assert seen["accept_item"]({"no_id": True}) is None

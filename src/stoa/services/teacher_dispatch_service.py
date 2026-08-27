@@ -808,6 +808,7 @@ def list_escalated_conversations(limit: int = 200) -> list[dict[str, Any]]:
         table,
         filter_expression="entity_type = :conversation AND escalated = :yes",
         expression_attribute_values={":conversation": "conversation", ":yes": True},
+        accept_item=lambda item: item if item.get("conversation_id") else None,
         limit=limit,
     )
 
@@ -855,6 +856,7 @@ def reconcile_dispatches(
     # dispatch on the conversation rather than on a question.
     conversations_waiting = 0
     conversations_dispatched: list[dict[str, Any]] = []
+    conversation_sweep = "completed"
     try:
         for conversation in list_escalated_conversations():
             if str(conversation.get("escalation_status") or "") not in {"", "pending"}:
@@ -880,12 +882,14 @@ def reconcile_dispatches(
                 )
     except Exception:  # noqa: BLE001
         logger.warning("Conversation sweep failed", exc_info=True)
+        conversation_sweep = "failed"
 
     return {
         "reassigned": reassigned["processed"],
         "reassignments": reassigned["results"],
         "waiting": len(waiting),
         "dispatched": dispatched,
+        "conversationSweep": conversation_sweep,
         "conversationsWaiting": conversations_waiting,
         "conversationsDispatched": conversations_dispatched,
         "generatedAt": timestamp,
