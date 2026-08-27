@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
@@ -11,6 +13,9 @@ from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo, question_repo
 from stoa.models.question import QuestionStatus
 from stoa.services import teacher_reply_service
+
+
+logger = logging.getLogger(__name__)
 
 DISPATCH_ACCEPT_TIMEOUT_SECONDS = 10 * 60
 DISPATCH_SLA_RISK_SECONDS = teacher_reply_service.TAKEOVER_TARGET_SECONDS
@@ -796,6 +801,17 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def list_escalated_conversations(limit: int = 200) -> list[dict[str, Any]]:
+    """Conversations a student escalated to a teacher."""
+    table = cast(_ScanTable, get_table())
+    return _scan_filtered_items(
+        table,
+        filter_expression="entity_type = :conversation AND escalated = :yes",
+        expression_attribute_values={":conversation": "conversation", ":yes": True},
+        limit=limit,
+    )
+
+
 def reconcile_dispatches(
     questions: list[dict[str, Any]] | None = None,
     *,
@@ -835,10 +851,42 @@ def reconcile_dispatches(
         if result.get("status") in {"dispatched", "no_candidate"}:
             dispatched.append({"questionId": question_id, "status": result["status"]})
 
+    # The chat lane is what a student actually uses, and it records its
+    # dispatch on the conversation rather than on a question.
+    conversations_waiting = 0
+    conversations_dispatched: list[dict[str, Any]] = []
+    try:
+        for conversation in list_escalated_conversations():
+            if str(conversation.get("escalation_status") or "") not in {"", "pending"}:
+                continue
+            if (
+                conversation.get("dispatch_status") == "dispatched"
+                and conversation.get("dispatched_teacher_id")
+                and not _deadline_expired(
+                    conversation.get("dispatch_deadline_at"), timestamp
+                )
+            ):
+                continue
+            conversation_id = str(conversation.get("conversation_id") or "")
+            if not conversation_id:
+                continue
+            conversations_waiting += 1
+            result = dispatch_conversation(
+                conversation_id, conversation=dict(conversation), now=timestamp
+            )
+            if result.get("status") in {"dispatched", "no_candidate"}:
+                conversations_dispatched.append(
+                    {"conversationId": conversation_id, "status": result["status"]}
+                )
+    except Exception:  # noqa: BLE001
+        logger.warning("Conversation sweep failed", exc_info=True)
+
     return {
         "reassigned": reassigned["processed"],
         "reassignments": reassigned["results"],
         "waiting": len(waiting),
         "dispatched": dispatched,
+        "conversationsWaiting": conversations_waiting,
+        "conversationsDispatched": conversations_dispatched,
         "generatedAt": timestamp,
     }
