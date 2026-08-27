@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
@@ -16,6 +18,9 @@ from stoa.db.dynamodb import get_table
 
 
 type AccountDeletionItem = dict[str, object]
+
+
+logger = logging.getLogger(__name__)
 
 
 @runtime_checkable
@@ -2043,6 +2048,18 @@ def transact(operations: Iterable[dict[str, Any]], *, table: Any | None = None) 
             ]
         )
     except ClientError as exc:
+        # DynamoDB reports which item in the transaction refused, and losing it
+        # leaves callers with a conflict they cannot act on or diagnose.
+        reasons = exc.response.get("CancellationReasons") or []
+        logger.warning(
+            "Transaction refused: %s",
+            [
+                f"{index}:{reason.get('Code')}"
+                for index, reason in enumerate(reasons)
+                if reason.get("Code") not in (None, "None")
+            ]
+            or exc.response.get("Error", {}).get("Code"),
+        )
         if _conditional(exc):
             raise AccountDeletionConflict("conditional account lifecycle conflict") from exc
         raise AccountDeletionConflict("account lifecycle dependency unavailable") from exc
