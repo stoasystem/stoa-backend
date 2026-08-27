@@ -121,7 +121,7 @@ jobs:
       - name: Preflight Lambda update permissions
         run: |
           set -euo pipefail
-          for function_name in stoa-api stoa-weekly-report; do
+          for function_name in stoa-api stoa-weekly-report stoa-dispatch-reconciler; do
             aws lambda update-function-code \
               --function-name "$function_name" \
               --zip-file fileb://lambda.zip \
@@ -140,7 +140,7 @@ jobs:
       - name: Update Lambda function code
         run: |
           set -euo pipefail
-          for function_name in stoa-api stoa-weekly-report; do
+          for function_name in stoa-api stoa-weekly-report stoa-dispatch-reconciler; do
             aws lambda update-function-code \
               --function-name "$function_name" \
               --zip-file fileb://lambda.zip \
@@ -152,7 +152,7 @@ jobs:
       - name: Wait for update to complete
         run: |
           set -euo pipefail
-          for function_name in stoa-api stoa-weekly-report; do
+          for function_name in stoa-api stoa-weekly-report stoa-dispatch-reconciler; do
             aws lambda wait function-updated \
               --function-name "$function_name" \
               --region eu-central-2
@@ -166,7 +166,7 @@ jobs:
           # has created them. Only a genuine ResourceNotFoundException means the
           # alias is still absent; any other failure must stop the deploy rather
           # than silently leave the alias on the previous version.
-          for function_name in stoa-api stoa-weekly-report; do
+          for function_name in stoa-api stoa-weekly-report stoa-dispatch-reconciler; do
             if ! alias_lookup="$(
               aws lambda get-alias \
                 --function-name "$function_name" \

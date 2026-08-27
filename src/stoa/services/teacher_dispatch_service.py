@@ -794,3 +794,51 @@ def _int(value: Any, default: int) -> int:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def reconcile_dispatches(
+    questions: list[dict[str, Any]] | None = None,
+    *,
+    now: str | None = None,
+) -> dict[str, Any]:
+    """Give every waiting student a teacher who is still expected to answer.
+
+    Dispatch happens inside the request that asks for a teacher, which leaves
+    two ways for a student to end up waiting on nobody: the dispatch failed or
+    found no free teacher at that moment, and nothing tried again; or a teacher
+    was offered the question and let the deadline pass, and nothing offered it
+    to anyone else. Both are invisible to the student, who simply waits.
+
+    This is the sweep that closes them. It is safe to run repeatedly:
+    dispatching a question that already has a live offer is a no-op.
+    """
+    timestamp = now or _now()
+    items = questions if questions is not None else list_teacher_dispatch_questions()
+
+    reassigned = reassign_timed_out_dispatches(items, now=timestamp)
+
+    # Re-read, because reassignment has moved some of them on.
+    refreshed = questions if questions is not None else list_teacher_dispatch_questions()
+    waiting = [
+        item
+        for item in refreshed
+        if item.get("status") == QuestionStatus.ESCALATED.value
+        and not _has_current_dispatch(item, timestamp)
+    ]
+
+    dispatched: list[dict[str, Any]] = []
+    for item in waiting:
+        question_id = str(item.get("question_id") or "")
+        if not question_id:
+            continue
+        result = dispatch_question(question_id, question=dict(item), now=timestamp)
+        if result.get("status") in {"dispatched", "no_candidate"}:
+            dispatched.append({"questionId": question_id, "status": result["status"]})
+
+    return {
+        "reassigned": reassigned["processed"],
+        "reassignments": reassigned["results"],
+        "waiting": len(waiting),
+        "dispatched": dispatched,
+        "generatedAt": timestamp,
+    }
