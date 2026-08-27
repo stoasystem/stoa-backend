@@ -2512,6 +2512,11 @@ async def request_teacher_help(
         admission.disposition
         is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.RETRYABLE
     ):
+        logger.warning(
+            "teacher_help_admission_retryable student=%s conversation=%s",
+            student_id,
+            body.conversationId,
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
