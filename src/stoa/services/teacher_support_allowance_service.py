@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -70,6 +72,9 @@ class _ResolvedScope:
     limit: int
     grant: dict[str, object]
 
+
+
+logger = logging.getLogger(__name__)
 
 class _DependencyFailure(RuntimeError):
     pass
@@ -478,6 +483,7 @@ def _classify_existing(
             and item.get("case_kind") == case_kind
         )
     except _DependencyFailure:
+        logger.warning("Teacher-support admission deferred", exc_info=True)
         return TeacherSupportAdmissionResult(
             TeacherSupportAdmissionDisposition.RETRYABLE
         )
@@ -549,6 +555,7 @@ def admit_teacher_support_case(
     try:
         existing = _strong_get(target, receipt_key)
     except _DependencyFailure:
+        logger.warning("Teacher-support admission deferred", exc_info=True)
         return TeacherSupportAdmissionResult(
             TeacherSupportAdmissionDisposition.RETRYABLE
         )
@@ -562,6 +569,7 @@ def admit_teacher_support_case(
     try:
         scope = _resolve_scope(beneficiary, table=target)
     except _DependencyFailure:
+        logger.warning("Teacher-support admission deferred", exc_info=True)
         return TeacherSupportAdmissionResult(
             TeacherSupportAdmissionDisposition.RETRYABLE
         )
@@ -596,6 +604,7 @@ def admit_teacher_support_case(
                 )
                 counter_exists = True
         except _DependencyFailure:
+            logger.warning("Teacher-support admission deferred", exc_info=True)
             return TeacherSupportAdmissionResult(
                 TeacherSupportAdmissionDisposition.RETRYABLE
             )
