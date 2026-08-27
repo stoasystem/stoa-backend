@@ -697,6 +697,9 @@ def admit_teacher_support_case(
         try:
             committed = bool(persist_case(tuple(operations)))
         except Exception:
+            # A contended transaction is expected and the loop retries it, but
+            # swallowing the reason left the student a 503 and nobody a cause.
+            logger.warning("Teacher-support case did not commit", exc_info=True)
             committed = False
         if committed:
             return TeacherSupportAdmissionResult(
