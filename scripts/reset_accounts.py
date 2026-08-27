@@ -21,7 +21,6 @@ import argparse
 import os
 import sys
 from datetime import datetime, timezone
-from hashlib import sha256
 from typing import Any
 
 import boto3
