@@ -2428,6 +2428,18 @@ async def request_teacher_help(
     now = _now()
     observed_at = datetime.fromisoformat(now.replace("Z", "+00:00"))
 
+    # A conversation that already carries an escalation is answered with that
+    # escalation. Sending a repeat request back through admission made
+    # ``persist_case`` decline every attempt, so the retry loop ran out and the
+    # student was shown a 503 instead of the request they already have.
+    if isinstance(existing_request_id, str) and existing_request_id:
+        return _teacher_help_response(
+            conv,
+            request_id=existing_request_id,
+            conversation_id=body.conversationId,
+            fallback_created_at=now,
+        )
+
     table = get_table()
 
     generation = _active_conversation_generation(student_id, table)
@@ -2521,7 +2533,7 @@ async def request_teacher_help(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
                 "code": "teacher_support_admission_recoverable",
-                "message": "Teacher support admission is safely recoverable.",
+                "message": "Teacher support is briefly unavailable. Please try again.",
                 "action": "retry_same_case",
             },
         )
@@ -2529,12 +2541,11 @@ async def request_teacher_help(
         admission.disposition
         is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.REPLAYED
     ):
-        return TeacherHelpResponse(
-            requestId=request_id,
-            conversationId=body.conversationId,
-            status=str(conv.get("escalation_status") or "pending"),
-            createdAt=str(conv.get("escalated_at") or now),
-            updatedAt=str(conv.get("updated_at") or now),
+        return _teacher_help_response(
+            conv,
+            request_id=request_id,
+            conversation_id=body.conversationId,
+            fallback_created_at=now,
         )
 
     dispatch = _dispatch_escalated_conversation(
@@ -2577,6 +2588,32 @@ async def request_teacher_help(
     )
 
 
+def _teacher_help_response(
+    conv: dict[str, Any],
+    *,
+    request_id: str,
+    conversation_id: str,
+    fallback_created_at: str,
+) -> TeacherHelpResponse:
+    """Describe an escalation the way the waiting student should read it."""
+    teacher_name = _teacher_name(conv.get("dispatched_teacher_id"))
+    escalation_status = str(conv.get("escalation_status") or "pending")
+    # A bound teacher outranks the stored label, which stays 'pending' until the
+    # teacher opens the case, so the student would otherwise never see progress.
+    if teacher_name and escalation_status == "pending":
+        escalation_status = "assigned"
+    return TeacherHelpResponse(
+        requestId=request_id,
+        conversationId=conversation_id,
+        status=escalation_status,
+        teacherName=teacher_name,
+        createdAt=str(
+            conv.get("escalated_at") or conv.get("created_at") or fallback_created_at
+        ),
+        updatedAt=str(conv.get("updated_at") or fallback_created_at),
+    )
+
+
 def _teacher_name(teacher_id: object) -> str | None:
     if not isinstance(teacher_id, str) or not teacher_id:
         return None
@@ -2605,17 +2642,9 @@ async def get_teacher_help_status(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="This conversation was never escalated to a teacher",
         )
-    teacher_name = _teacher_name(conv.get("dispatched_teacher_id"))
-    escalation_status = str(conv.get("escalation_status") or "pending")
-    # A bound teacher outranks the stored label, which stays 'pending' until the
-    # teacher opens the case, so the student would otherwise never see progress.
-    if teacher_name and escalation_status == "pending":
-        escalation_status = "assigned"
-    return TeacherHelpResponse(
-        requestId=request_id,
-        conversationId=authorized.ref.resource_id,
-        status=escalation_status,
-        teacherName=teacher_name,
-        createdAt=str(conv.get("escalated_at") or conv.get("created_at") or ""),
-        updatedAt=str(conv.get("updated_at") or ""),
+    return _teacher_help_response(
+        conv,
+        request_id=request_id,
+        conversation_id=authorized.ref.resource_id,
+        fallback_created_at="",
     )

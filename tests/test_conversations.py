@@ -153,6 +153,85 @@ def test_conversation_teacher_help_records_support_visible_usage(monkeypatch):
     assert "please help" not in str(ledger_calls[0])
 
 
+def test_repeat_teacher_help_replays_the_existing_escalation(monkeypatch):
+    """A second request answers with the escalation already on the conversation.
+
+    It used to run admission again, where persist_case declined every attempt
+    and the exhausted retry loop reached the student as a 503.
+    """
+    admissions = []
+
+    def _record_admission(*, persist_case, **kwargs):
+        admissions.append(kwargs)
+        persist_case(())
+        return conversations.teacher_support_allowance_service.TeacherSupportAdmissionResult(
+            conversations.teacher_support_allowance_service.TeacherSupportAdmissionDisposition.RETRYABLE
+        )
+
+    monkeypatch.setattr(
+        conversations.teacher_support_allowance_service,
+        "admit_teacher_support_case",
+        _record_admission,
+    )
+    monkeypatch.setattr(conversations, "get_table", lambda: object())
+    monkeypatch.setattr(
+        conversations,
+        "_get_conversation",
+        lambda conv_id: {
+            "conversation_id": conv_id,
+            "student_id": "student-1",
+            "escalation_request_id": "req-1",
+            "escalation_status": "pending",
+            "dispatched_teacher_id": "teacher-1",
+            "escalated_at": "2026-08-24T08:00:00+00:00",
+            "updated_at": "2026-08-24T08:05:00+00:00",
+        },
+    )
+    monkeypatch.setattr(
+        conversations.user_repo, "get_user", lambda _id: {"name": "Test Teacher"}
+    )
+
+    response = _client(conversations.teacher_help_router, "/teacher-help").post(
+        "/teacher-help/request",
+        json={"conversationId": "conv-1", "message": "please help"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["requestId"] == "req-1"
+    assert body["teacherName"] == "Test Teacher"
+    assert body["status"] == "assigned"
+    assert admissions == []
+
+
+def test_teacher_help_retryable_admission_stays_out_of_student_words(monkeypatch):
+    monkeypatch.setattr(
+        conversations.teacher_support_allowance_service,
+        "admit_teacher_support_case",
+        lambda **_kwargs: (
+            conversations.teacher_support_allowance_service.TeacherSupportAdmissionResult(
+                conversations.teacher_support_allowance_service.TeacherSupportAdmissionDisposition.RETRYABLE
+            )
+        ),
+    )
+    monkeypatch.setattr(conversations, "get_table", lambda: object())
+    monkeypatch.setattr(
+        conversations,
+        "_get_conversation",
+        lambda conv_id: {"conversation_id": conv_id, "student_id": "student-1"},
+    )
+
+    response = _client(conversations.teacher_help_router, "/teacher-help").post(
+        "/teacher-help/request",
+        json={"conversationId": "conv-1"},
+    )
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail["code"] == "teacher_support_admission_recoverable"
+    assert "admission" not in detail["message"].lower()
+
+
 def test_conversation_list_and_create_derive_owner_from_actor(monkeypatch):
     listed = []
     stored = []
