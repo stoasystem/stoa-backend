@@ -320,7 +320,17 @@ def _lesson_status(lesson_id: str, completed_ids: set[str],
 
 
 def _actor_locale(actor: Actor) -> str:
-    profile = user_repo.get_user(actor.user_id) or {}
+    """Resolve which language to show curriculum titles in.
+
+    Falls back to German (the stored content language, so nothing looks
+    broken) if the profile read fails, the same way recorded_study_days()
+    treats a non-critical lookup as best-effort rather than fatal.
+    """
+    try:
+        profile = user_repo.get_user(actor.user_id) or {}
+    except Exception:  # noqa: BLE001
+        logger.warning("User profile unavailable; curriculum titles fall back to German")
+        return locale_service.DEFAULT_LOCALE
     return locale_service.effective_locale(profile)
 
 
