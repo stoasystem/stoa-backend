@@ -10,6 +10,7 @@ from typing import Any
 
 from stoa.db.repositories import practice_repo
 from stoa.services import practice_projection_service
+from stoa.services.curriculum_translations import translated_title
 
 ZURICH = ZoneInfo("Europe/Zurich")
 
@@ -26,26 +27,27 @@ def list_catalog(
     grade_level: str | None = None,
     rollout_state: str | None = None,
     include_preview: bool = False,
+    locale: str = "de",
 ) -> dict[str, Any]:
     subjects = [
-        _build_subject(subject)
+        _build_subject(subject, locale)
         for subject in sorted(practice_repo.get_subjects(), key=lambda item: _as_int(item.get("order", 0)))
         if _subject_matches(subject, subject_id, grade_level)
         and _matches_state(subject, rollout_state, include_preview)
         and _normal_subject_id(subject.get("subject_id", "")) in SUPPORTED_SUBJECTS
     ]
     topics = [
-        _build_topic(topic)
+        _build_topic(topic, locale)
         for topic in sorted(practice_repo.get_topics(subject_id), key=lambda item: _as_int(item.get("order", 0)))
         if _topic_matches(topic, subject_id, grade_level) and _matches_state(topic, rollout_state, include_preview)
     ]
     units = [
-        _build_unit(unit)
+        _build_unit(unit, locale)
         for unit in sorted(_all_units(topics), key=lambda item: (_normal_subject_id(item.get("subject_id", "")), item.get("topic_id", ""), _as_int(item.get("order", 0))))
         if _matches_state(unit, rollout_state, include_preview)
     ]
     lessons = [
-        _build_lesson(lesson, exercise_count=len(_active_exercises_for_lesson(lesson["lesson_id"], include_preview)))
+        _build_lesson(lesson, exercise_count=len(_active_exercises_for_lesson(lesson["lesson_id"], include_preview)), locale=locale)
         for lesson in sorted(practice_repo.get_lessons(), key=lambda item: (item.get("topic_id", ""), item.get("unit_id", ""), _as_int(item.get("order", 0))))
         if _lesson_matches(lesson, subject_id, grade_level) and _matches_state(lesson, rollout_state, include_preview)
     ]
@@ -65,6 +67,7 @@ def get_lesson_detail(
     lesson_id: str,
     *,
     include_preview: bool = False,
+    locale: str = "de",
 ) -> dict[str, Any] | None:
     lesson = practice_repo.get_lesson(lesson_id)
     if not lesson or not _is_visible(lesson, include_preview):
@@ -74,7 +77,7 @@ def get_lesson_detail(
         practice_projection_service.build_exercise_preview(exercise)
         for exercise in _active_exercises_for_lesson(lesson_id, include_preview)
     ]
-    return practice_projection_service.build_curriculum_lesson_preview(lesson, exercises)
+    return practice_projection_service.build_curriculum_lesson_preview(lesson, exercises, locale=locale)
 
 
 def list_exercises(
@@ -225,10 +228,11 @@ def _active_exercises_for_lesson(lesson_id: str, include_preview: bool) -> list[
     ]
 
 
-def _build_subject(raw: dict[str, Any]) -> dict[str, Any]:
+def _build_subject(raw: dict[str, Any], locale: str = "de") -> dict[str, Any]:
+    name = raw.get("name", raw["subject_id"].title())
     return {
         "id": _normal_subject_id(raw["subject_id"]),
-        "name": raw.get("name", raw["subject_id"].title()),
+        "name": translated_title(raw["subject_id"], name, locale),
         "description": raw.get("description", ""),
         "gradeLevels": raw.get("grade_levels", []),
         "language": raw.get("language", _subject_language(raw["subject_id"])),
@@ -237,39 +241,42 @@ def _build_subject(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _build_topic(raw: dict[str, Any]) -> dict[str, Any]:
+def _build_topic(raw: dict[str, Any], locale: str = "de") -> dict[str, Any]:
+    title = raw.get("title", raw["topic_id"])
     return {
         "id": raw["topic_id"],
         "subjectId": _normal_subject_id(raw["subject_id"]),
         "gradeLevel": raw.get("grade_level", raw.get("grade_band", "")),
-        "title": raw.get("title", raw["topic_id"]),
+        "title": translated_title(raw["topic_id"], title, locale),
         "description": raw.get("description", ""),
         "rolloutState": _content_state(raw),
         "order": _as_int(raw.get("order", 0)),
     }
 
 
-def _build_unit(raw: dict[str, Any]) -> dict[str, Any]:
+def _build_unit(raw: dict[str, Any], locale: str = "de") -> dict[str, Any]:
+    title = raw.get("title", raw["unit_id"])
     return {
         "id": raw["unit_id"],
         "subjectId": _normal_subject_id(raw["subject_id"]),
         "gradeLevel": raw.get("grade_level", raw.get("grade_band", "")),
         "topicId": raw["topic_id"],
-        "title": raw.get("title", raw["unit_id"]),
+        "title": translated_title(raw["unit_id"], title, locale),
         "description": raw.get("description", ""),
         "rolloutState": _content_state(raw),
         "order": _as_int(raw.get("order", 0)),
     }
 
 
-def _build_lesson(raw: dict[str, Any], *, exercise_count: int) -> dict[str, Any]:
+def _build_lesson(raw: dict[str, Any], *, exercise_count: int, locale: str = "de") -> dict[str, Any]:
+    title = raw.get("title", raw["lesson_id"])
     return {
         "id": raw["lesson_id"],
         "subjectId": _normal_subject_id(raw["subject_id"]),
         "gradeLevel": raw.get("grade_level", raw.get("grade_band", "")),
         "unitId": raw.get("unit_id", ""),
         "topicId": raw["topic_id"],
-        "title": raw.get("title", raw["lesson_id"]),
+        "title": translated_title(raw["lesson_id"], title, locale),
         "objective": raw.get("objective", raw.get("description", "")),
         "difficulty": raw.get("difficulty", "practice"),
         "estimatedMinutes": _as_int(raw.get("estimated_minutes", 10)),

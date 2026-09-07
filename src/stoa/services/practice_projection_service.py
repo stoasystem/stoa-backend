@@ -19,6 +19,7 @@ from stoa.models.practice import (
     PrivilegedPracticeAnswer,
 )
 from stoa.db.repositories import practice_repo
+from stoa.services.curriculum_translations import translated_title
 
 
 DIRECTIONAL_HINT_POLICY_VERSION = "practice-directional-hints-v1"
@@ -131,6 +132,7 @@ def build_lesson_preview(
     raw: Mapping[str, Any],
     challenges: list[Mapping[str, Any]],
     status: str = "available",
+    locale: str = "de",
 ) -> dict[str, Any]:
     """Build a lesson from answer-free challenge projections only."""
     return _dump(
@@ -140,7 +142,7 @@ def build_lesson_preview(
             subjectId=raw["subject_id"],
             gradeLevel=raw.get("grade_level", ""),
             topicId=raw["topic_id"],
-            title=raw["title"],
+            title=translated_title(raw["lesson_id"], raw["title"], locale),
             topic=raw.get("topic_title", ""),
             difficulty=raw.get("difficulty", "practice"),
             status=status,
@@ -171,7 +173,7 @@ def build_exercise_preview(raw: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def build_curriculum_lesson_preview(
-    raw: Mapping[str, Any], exercises: Sequence[Mapping[str, Any]]
+    raw: Mapping[str, Any], exercises: Sequence[Mapping[str, Any]], locale: str = "de"
 ) -> dict[str, Any]:
     """Build answer-free curriculum detail, including all nested exercises."""
     return _dump(
@@ -181,7 +183,7 @@ def build_curriculum_lesson_preview(
             gradeLevel=raw.get("grade_level", raw.get("grade_band", "")),
             unitId=raw.get("unit_id", ""),
             topicId=raw["topic_id"],
-            title=raw.get("title", raw["lesson_id"]),
+            title=translated_title(raw["lesson_id"], raw.get("title", raw["lesson_id"]), locale),
             objective=raw.get("objective", raw.get("description", "")),
             difficulty=raw.get("difficulty", "practice"),
             estimatedMinutes=_as_int(raw.get("estimated_minutes", 10)),

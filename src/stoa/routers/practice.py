@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.config import settings
-from stoa.db.repositories import practice_repo
+from stoa.db.repositories import practice_repo, user_repo
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.security.authorization import (
@@ -47,8 +47,15 @@ from stoa.security.route_authorization import (
     safe_public_dependency,
     student_actor_dependency,
 )
-from stoa.services import curriculum_analytics_service, curriculum_service, entitlement_service, usage_ledger_service
+from stoa.services import (
+    curriculum_analytics_service,
+    curriculum_service,
+    entitlement_service,
+    locale_service,
+    usage_ledger_service,
+)
 from stoa.services import practice_projection_service, review_service
+from stoa.services.curriculum_translations import translated_title
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -312,13 +319,18 @@ def _lesson_status(lesson_id: str, completed_ids: set[str],
     return "available"
 
 
-def _build_unit(raw: dict, lessons: list[dict]) -> dict:
+def _actor_locale(actor: Actor) -> str:
+    profile = user_repo.get_user(actor.user_id) or {}
+    return locale_service.effective_locale(profile)
+
+
+def _build_unit(raw: dict, lessons: list[dict], locale: str = "de") -> dict:
     return {
         "id": raw["unit_id"],
         "subjectId": raw["subject_id"],
         "gradeLevel": raw.get("grade_level", ""),
         "topicId": raw["topic_id"],
-        "title": raw["title"],
+        "title": translated_title(raw["unit_id"], raw["title"], locale),
         "description": raw.get("description", ""),
         "order": raw.get("order", 1),
         "status": "available",
@@ -358,12 +370,13 @@ def _resolve_curriculum_student_id(user: dict, requested_student_id: str | None)
 
 @router.get("/subjects")
 async def list_subjects(_actor: Actor = Depends(_catalog_access)):
+    locale = _actor_locale(_actor)
     subjects = practice_repo.get_subjects()
     items = []
     for s in sorted(subjects, key=lambda x: x.get("order", 0)):
         items.append({
             "id": s["subject_id"],
-            "name": s["name"],
+            "name": translated_title(s["subject_id"], s["name"], locale),
             "description": s.get("description", ""),
             "gradeLevels": s.get("grade_levels", []),
             "progress": 0,
@@ -375,6 +388,7 @@ async def list_subjects(_actor: Actor = Depends(_catalog_access)):
 @router.get("/overview")
 async def get_overview(actor: Actor = Depends(_practice_read)):
     """Return a full practice overview for the student dashboard."""
+    locale = _actor_locale(actor)
     user_id = actor.user_id
     progress_records = practice_repo.get_progress(user_id)
     completed_ids = {p["lesson_id"] for p in progress_records if p.get("status") == "completed"}
@@ -411,7 +425,7 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
     for s in sorted(subjects_raw, key=lambda x: _as_int(x.get("order", 0))):
         subjects_out.append({
             "id": s["subject_id"],
-            "name": s["name"],
+            "name": translated_title(s["subject_id"], s["name"], locale),
             "description": s.get("description", ""),
             "gradeLevels": s.get("grade_levels", []),
             "progress": int(
@@ -429,7 +443,7 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
             "id": t["topic_id"],
             "subjectId": t["subject_id"],
             "gradeLevel": t.get("grade_level", ""),
-            "title": t["title"],
+            "title": translated_title(t["topic_id"], t["title"], locale),
             "description": t.get("description", ""),
             "order": _as_int(t.get("order", 0)),
             "status": "available",
@@ -454,7 +468,8 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
     ]
     recommended = practice_projection_service.build_lesson_preview(recommended_raw, challenges,
                                 _lesson_status(recommended_raw["lesson_id"], completed_ids,
-                                               topic_progress.get(recommended_raw.get("topic_id", ""), {}).get("current_lesson_id")))
+                                               topic_progress.get(recommended_raw.get("topic_id", ""), {}).get("current_lesson_id")),
+                                locale=locale)
 
     # -- Mistakes --
     mistakes_raw = practice_repo.get_mistakes(user_id)[:5]
@@ -480,7 +495,11 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
         {
             "id": tid,
             "subject": "mathematics",
-            "topic": next((t["title"] for t in all_topics_raw if t["topic_id"] == tid), tid),
+            "topic": translated_title(
+                tid,
+                next((t["title"] for t in all_topics_raw if t["topic_id"] == tid), tid),
+                locale,
+            ),
             "note": f"{count} incorrect answer{'s' if count != 1 else ''}",
         }
         for tid, count in sorted(topic_mistake_counts.items(), key=lambda x: -x[1])
@@ -519,6 +538,7 @@ async def get_curriculum_catalog(
         grade_level=grade_level,
         rollout_state=rollout_state,
         include_preview=include_preview,
+        locale=_actor_locale(user),
     )
 
 
@@ -532,6 +552,7 @@ async def get_curriculum_lesson(
     lesson = curriculum_service.get_lesson_detail(
         lesson_id,
         include_preview=include_preview,
+        locale=_actor_locale(user),
     )
     if not lesson:
         raise HTTPException(status_code=404, detail="Curriculum lesson not found")
@@ -590,6 +611,7 @@ async def get_roadmap(
     actor: Actor = Depends(_practice_read),
 ):
     """Return the lesson roadmap for a topic."""
+    locale = _actor_locale(actor)
     topic = practice_repo.get_topic(topic_id)
     if not topic or topic.get("subject_id") != subject_id:
         raise HTTPException(status_code=404, detail="Topic not found")
@@ -620,7 +642,7 @@ async def get_roadmap(
             st = _lesson_status(lesson["lesson_id"], completed_ids, current_lesson_id)
             roadmap_lessons.append({
                 "id": lesson["lesson_id"],
-                "title": lesson["title"],
+                "title": translated_title(lesson["lesson_id"], lesson["title"], locale),
                 "description": lesson.get("description", ""),
                 "order": lesson.get("order", 1),
                 "status": st,
@@ -633,7 +655,7 @@ async def get_roadmap(
             })
         roadmap_units.append({
             "id": unit_raw["unit_id"],
-            "title": unit_raw["title"],
+            "title": translated_title(unit_raw["unit_id"], unit_raw["title"], locale),
             "description": unit_raw.get("description", ""),
             "order": unit_raw.get("order", 1),
             "lessons": roadmap_lessons,
@@ -647,7 +669,7 @@ async def get_roadmap(
             "id": topic["topic_id"],
             "subjectId": subject_id,
             "gradeLevel": topic.get("grade_level", ""),
-            "title": topic["title"],
+            "title": translated_title(topic["topic_id"], topic["title"], locale),
             "description": topic.get("description", ""),
             "progress": progress_pct,
             "currentLessonId": current_lesson_id,
@@ -665,6 +687,7 @@ async def get_path(
     actor: Actor = Depends(_practice_read),
 ):
     """Return the practice path (units + lessons) for a subject/topic."""
+    locale = _actor_locale(actor)
     topics: list[dict]
     if topic_id:
         topic = practice_repo.get_topic(topic_id)
@@ -705,15 +728,15 @@ async def get_path(
             ]
             st = _lesson_status(lesson["lesson_id"], completed_ids, current_lesson_id)
             unit_lessons.append(
-                practice_projection_service.build_lesson_preview(lesson, challenges, st)
+                practice_projection_service.build_lesson_preview(lesson, challenges, st, locale=locale)
             )
-        path_units.append(_build_unit(unit_raw, unit_lessons))
+        path_units.append(_build_unit(unit_raw, unit_lessons, locale))
 
     return {
         "subjectId": subject_id,
         "gradeLevel": topics[0].get("grade_level", "") if topics else "",
         "topicId": topics[0]["topic_id"] if topics else "",
-        "topicTitle": topics[0]["title"] if topics else "",
+        "topicTitle": translated_title(topics[0]["topic_id"], topics[0]["title"], locale) if topics else "",
         "units": path_units,
     }
 
@@ -743,7 +766,7 @@ async def get_lesson(
         practice_projection_service.build_challenge_preview(c)
         for c in practice_repo.get_challenges(lesson_id)
     ]
-    return practice_projection_service.build_lesson_preview(lesson, challenges, st)
+    return practice_projection_service.build_lesson_preview(lesson, challenges, st, locale=_actor_locale(actor))
 
 
 @router.post("/lessons/{lesson_id}/complete")
