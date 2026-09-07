@@ -64,6 +64,7 @@ from stoa.services import (
     attachment_service,
     bedrock_token_count_service,
     entitlement_service,
+    locale_service,
     teacher_dispatch_service,
     teacher_support_allowance_service,
     usage_ledger_service,
@@ -2178,6 +2179,7 @@ def _execute_message_command(
             raise AttachmentDecisionError(code)
         attachment_context = context_result.context
     normalized_subject = _SUBJECT_ALIASES.get(subject, "math")
+    student_locale = locale_service.effective_locale(user_repo.get_user(student_id))
     ai_deadline = time.monotonic() + _AI_INVOCATION_DEADLINE_SECONDS
     _active_conversation_generation(student_id, table)
     allowance_client = _ConversationAllowanceBedrockClient(command)
@@ -2188,7 +2190,7 @@ def _execute_message_command(
             content=body.content,
             subject=normalized_subject,
             grade=grade,
-            language="de",
+            language=student_locale,
             history=prior_messages,
             attachment_context=attachment_context,
             memory_context=memory_context,

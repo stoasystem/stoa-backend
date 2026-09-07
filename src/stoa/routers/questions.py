@@ -50,6 +50,7 @@ from stoa.services import (
     allowance_service,
     bedrock_token_count_service,
     learning_profile_service,
+    locale_service,
     moderation_service,
     entitlement_service,
     notification_service,
@@ -1239,7 +1240,7 @@ async def submit_question(
         settings=settings,
         student_profile=student_profile,
     )
-    language = str(student_profile.get("language") or "de")
+    language = locale_service.effective_locale(student_profile)
     grade = str(student_profile.get("grade") or "Sek1")
     subject = learning_profile_service.normalize_subject(body.subject)
     question_id = str(uuid.uuid4())

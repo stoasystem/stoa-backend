@@ -674,6 +674,7 @@ def get_hint_answer(
     subject: str = "Mathematik",
     grade: str = "6. Klasse",
     *,
+    language: str = "de",
     correlation_id: str | None = None,
     effect_id: str | None = None,
     observed_at: datetime | None = None,
@@ -684,8 +685,8 @@ def get_hint_answer(
     safe_prompt = _sanitise_input(prompt, correlation_id=correlation_id)
     system = (
         "You are a helpful Swiss maths teacher. "
-        "Give a concise hint (1-2 sentences, in German) that guides the student "
-        "without revealing the answer. No JSON, just plain text."
+        f"Give a concise hint (1-2 sentences) in the student's language: {language}. "
+        "Guide the student without revealing the answer. No JSON, just plain text."
     )
     client = client or boto3.client("bedrock-runtime", region_name=settings.aws_region)
     body = json.dumps({
