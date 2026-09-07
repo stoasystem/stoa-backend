@@ -30,13 +30,15 @@ def test_locale_service_resolves_supported_and_missing_values():
     assert locale_service.normalize_locale("de") == "de"
     assert locale_service.normalize_locale("en-US") == "en"
     assert locale_service.normalize_locale("de_CH") == "de"
+    assert locale_service.normalize_locale("fr") == "fr"
+    assert locale_service.normalize_locale("it") == "it"
     assert locale_service.effective_locale({}) == "de"
     assert locale_service.effective_locale({"language": "en"}) == "en"
-    assert locale_service.effective_locale({"preferred_locale": "fr", "language": "de"}) == "de"
+    assert locale_service.effective_locale({"preferred_locale": "fr", "language": "de"}) == "fr"
 
 
 def test_locale_service_rejects_unsupported_and_malformed_values():
-    for value in ("fr", "x", "de<script>", ""):
+    for value in ("es", "zh", "x", "de<script>", ""):
         try:
             locale_service.normalize_locale(value)
         except ValueError:
@@ -116,9 +118,43 @@ def test_update_locale_preference_persists_supported_locale(monkeypatch):
     assert response.status_code == 200
     assert response.json()["preferredLocale"] == "en"
     assert response.json()["effectiveLocale"] == "en"
-    assert response.json()["supportedLocales"] == ["de", "en"]
+    assert response.json()["supportedLocales"] == ["de", "en", "fr", "it"]
     assert updates[0][0] == "student-1"
     assert updates[0][1] == "en"
+
+
+def test_update_locale_preference_persists_newly_supported_locale(monkeypatch):
+    updates = []
+    monkeypatch.setattr(
+        auth.user_repo,
+        "get_user",
+        lambda user_id: {
+            "user_id": user_id,
+            "email": "student@example.com",
+            "name": "Ada",
+            "role": "student",
+            "language": "de",
+        },
+    )
+
+    def update_locale(user_id: str, locale: str, updated_at: str):
+        updates.append((user_id, locale, updated_at))
+        return {
+            "user_id": user_id,
+            "preferred_locale": locale,
+            "preferredLocale": locale,
+            "language": locale,
+            "locale_updated_at": updated_at,
+        }
+
+    monkeypatch.setattr(auth.user_repo, "update_locale_preference", update_locale)
+
+    response = _client().patch("/auth/me/preferences/locale", json={"preferredLocale": "fr"})
+
+    assert response.status_code == 200
+    assert response.json()["preferredLocale"] == "fr"
+    assert response.json()["effectiveLocale"] == "fr"
+    assert updates[0][1] == "fr"
 
 
 def test_update_locale_preference_rejects_unsupported_locale(monkeypatch):
@@ -128,7 +164,7 @@ def test_update_locale_preference_rejects_unsupported_locale(monkeypatch):
         lambda user_id: {"user_id": user_id, "email": "student@example.com", "role": "student"},
     )
 
-    response = _client().patch("/auth/me/preferences/locale", json={"preferredLocale": "fr"})
+    response = _client().patch("/auth/me/preferences/locale", json={"preferredLocale": "es"})
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Unsupported locale"

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-SUPPORTED_LOCALES = frozenset({"de", "en"})
+SUPPORTED_LOCALES = frozenset({"de", "en", "fr", "it"})
 DEFAULT_LOCALE = "de"
 
 _LOCALE_RE = re.compile(r"^[a-zA-Z]{2,3}(?:[-_][a-zA-Z0-9]{2,8})*$")
