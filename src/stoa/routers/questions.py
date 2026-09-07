@@ -1240,7 +1240,7 @@ async def submit_question(
         settings=settings,
         student_profile=student_profile,
     )
-    language = locale_service.effective_locale(student_profile)
+    language = locale_service.resolve_locale(student_profile)
     grade = str(student_profile.get("grade") or "Sek1")
     subject = learning_profile_service.normalize_subject(body.subject)
     question_id = str(uuid.uuid4())

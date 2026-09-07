@@ -1471,7 +1471,15 @@ def _memory_context_for_student(student_id: str, actor: Actor, subject: str) -> 
 
 
 def _student_locale(student_id: str) -> str:
-    """Resolve the student's answer language, defaulting to German on lookup failure."""
+    """Resolve the student's answer language, defaulting to German on lookup failure.
+
+    The language the student is reading the app in right now arrives on the
+    request, so it wins over the stored preference — an answer should come back
+    in the language the question was asked in.
+    """
+    requested = locale_service.request_locale()
+    if requested:
+        return requested
     try:
         profile = user_repo.get_user(student_id)
     except Exception:

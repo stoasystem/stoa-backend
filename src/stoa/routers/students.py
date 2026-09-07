@@ -21,7 +21,13 @@ from stoa.security.route_authorization import (
     authorized_student_dependency,
 )
 from stoa.config import settings
-from stoa.services import allowance_service, entitlement_service, learning_profile_service
+from stoa.services import (
+    allowance_service,
+    entitlement_service,
+    learning_profile_service,
+    locale_service,
+)
+from stoa.services.curriculum_translations import translated_title
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -144,6 +150,10 @@ class LearningHistoryItem(BaseModel):
     summary: str
     createdAt: str
     sourceLabel: str
+    # The labels above are English fallbacks. The client renders these two in
+    # the reader's language, so a translated screen never shows an English row.
+    kind: str
+    source: str
 
 
 class LearningHistoryResponse(BaseModel):
@@ -214,22 +224,25 @@ def _question_history_items(student_id: str) -> list[LearningHistoryItem]:
                     ),
                     createdAt=created_at,
                     sourceLabel="Questions",
+                    kind="teacher_help" if escalated else "question_asked",
+                    source="questions",
                 )
             )
         elif question_repo.is_question_record(row):
             status = _history_text(row.get("status"))
+            answered = status == "ai_answered"
             items.append(
                 LearningHistoryItem(
                     id=_history_text(row.get("question_id")) or f"question-{created_at}",
                     subject=_history_text(row.get("subject")) or "General",
-                    title=(
-                        "Question answered" if status == "ai_answered" else "Question asked"
-                    ),
+                    title="Question answered" if answered else "Question asked",
                     summary=(
                         _history_text(row.get("summary")) or _history_text(row.get("prompt"))
                     ),
                     createdAt=created_at,
                     sourceLabel="Questions",
+                    kind="question_answered" if answered else "question_asked",
+                    source="questions",
                 )
             )
     return items
@@ -251,6 +264,7 @@ def _lesson_titles() -> dict[str, str]:
 def _practice_history_items(student_id: str) -> list[LearningHistoryItem]:
     items = []
     titles = _lesson_titles()
+    locale = locale_service.resolve_locale(None)
     for row in practice_repo.get_progress(student_id):
         if not isinstance(row, Mapping):
             continue
@@ -261,18 +275,29 @@ def _practice_history_items(student_id: str) -> list[LearningHistoryItem]:
         )
         if not created_at:
             continue
+        lesson_id = _history_text(row.get("lesson_id"))
+        subject_id = _history_text(row.get("subject_id"))
+        stored_title = (
+            _history_text(row.get("lesson_title"))
+            or titles.get(lesson_id, "")
+            or _history_text(row.get("topic_id"))
+        )
         items.append(
             LearningHistoryItem(
-                id=_history_text(row.get("lesson_id")) or f"practice-{created_at}",
-                subject=_history_text(row.get("subject_id")) or "Practice",
-                title="Practice Path lesson",
-                summary=(
-                    _history_text(row.get("lesson_title"))
-                    or titles.get(_history_text(row.get("lesson_id")), "")
-                    or _history_text(row.get("topic_id"))
+                id=lesson_id or f"practice-{created_at}",
+                subject=(
+                    translated_title(subject_id, subject_id, locale)
+                    if subject_id
+                    else "Practice"
                 ),
+                title="Practice Path lesson",
+                # The lesson name is curriculum content, so it gets the same
+                # title translation the roadmap and the lesson header use.
+                summary=translated_title(lesson_id, stored_title, locale),
                 createdAt=created_at,
                 sourceLabel="Practice Path",
+                kind="practice_lesson",
+                source="practice_path",
             )
         )
     return items

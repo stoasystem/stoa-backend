@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 
 from stoa.config import settings
+from stoa.services import locale_service
 from stoa.security.route_inventory import (
     explicit_route_classification,
     install_authorization_openapi,
@@ -29,6 +30,41 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/docs" if settings.environment != "production" else None,
 )
+
+
+class RequestLocaleMiddleware:
+    """Bind the language the client is reading in, for the length of a request.
+
+    Content projections (curriculum titles, question history, assistant answers)
+    read it from locale_service instead of taking the language as a parameter on
+    every route.
+
+    Plain ASGI rather than a FastAPI dependency: an app-wide dependency lands in
+    every route's signature, and the authorization route inventory checks those
+    exactly. Rather than BaseHTTPMiddleware because the context set here has to
+    be the one the endpoint runs in.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            header = next(
+                (
+                    value.decode("latin-1")
+                    for key, value in scope.get("headers", ())
+                    if key == b"accept-language"
+                ),
+                None,
+            )
+            locale_service.set_request_locale(
+                locale_service.locale_from_accept_language(header)
+            )
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(RequestLocaleMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

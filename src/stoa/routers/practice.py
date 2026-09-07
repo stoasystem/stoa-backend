@@ -322,10 +322,18 @@ def _lesson_status(lesson_id: str, completed_ids: set[str],
 def _actor_locale(actor: Actor) -> str:
     """Resolve which language to show curriculum titles in.
 
+    The language the client is rendering right now arrives on the request, so
+    it answers this without a profile read at all — that also means a language
+    switch in the UI is reflected by the very next response, instead of only
+    after the preference write has landed.
+
     Falls back to German (the stored content language, so nothing looks
     broken) if the profile read fails, the same way recorded_study_days()
     treats a non-critical lookup as best-effort rather than fatal.
     """
+    requested = locale_service.request_locale()
+    if requested:
+        return requested
     try:
         profile = user_repo.get_user(actor.user_id) or {}
     except Exception:  # noqa: BLE001
