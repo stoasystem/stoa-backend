@@ -1470,6 +1470,16 @@ def _memory_context_for_student(student_id: str, actor: Actor, subject: str) -> 
         return None
 
 
+def _student_locale(student_id: str) -> str:
+    """Resolve the student's answer language, defaulting to German on lookup failure."""
+    try:
+        profile = user_repo.get_user(student_id)
+    except Exception:
+        logger.warning("student_locale_fetch_failed", exc_info=True)
+        return locale_service.DEFAULT_LOCALE
+    return locale_service.effective_locale(profile)
+
+
 def _completed_command_response(command: dict) -> SendMessageResponse | None:
     if command.get("status") != "completed" or not command.get("result_json"):
         return None
@@ -2179,7 +2189,7 @@ def _execute_message_command(
             raise AttachmentDecisionError(code)
         attachment_context = context_result.context
     normalized_subject = _SUBJECT_ALIASES.get(subject, "math")
-    student_locale = locale_service.effective_locale(user_repo.get_user(student_id))
+    student_locale = _student_locale(student_id)
     ai_deadline = time.monotonic() + _AI_INVOCATION_DEADLINE_SECONDS
     _active_conversation_generation(student_id, table)
     allowance_client = _ConversationAllowanceBedrockClient(command)

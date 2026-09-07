@@ -676,6 +676,7 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
     monkeypatch.setattr(conversations.time, "sleep", lambda *_: threading.Event().wait(0.01))
     monkeypatch.setattr(conversations.boto3, "client", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(conversations.user_repo, "get_user", lambda _id: {})
     monkeypatch.setattr(
         conversations.attachment_service,
         "prepare_message_attachments",
