@@ -534,7 +534,10 @@ async def register(
         "created_at": _utc_now_iso(),
     }
     if age is not None:
-        profile["age"] = int(age)
+        # Already normalised to an int by RegisterRequest; converting again here
+        # is what turned a bad value into an unhandled 500 after the account
+        # had been created.
+        profile["age"] = age
     relationship_intent = None
     if role == "student" and resume_command is None:
         relationship_intent = _prepare_parent_student_relationship(parent_email, profile)

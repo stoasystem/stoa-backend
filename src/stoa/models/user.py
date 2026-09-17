@@ -33,6 +33,35 @@ class Grade(str, Enum):
     MATURA = "Matura"
 
 
+MIN_REGISTRATION_AGE = 1
+MAX_REGISTRATION_AGE = 120
+# Single source of truth for the minor/adult split used by registration rules.
+ADULT_AGE = 18
+
+_AGE_MESSAGE = (
+    f"Age must be a whole number between {MIN_REGISTRATION_AGE} and {MAX_REGISTRATION_AGE}."
+)
+_PARENT_CONTACT_MESSAGE = (
+    f"Parent name and parent email are required for students under {ADULT_AGE}."
+)
+
+
+def normalize_registration_age(raw: Any) -> int:
+    """Accept only a plain in-range integer, rejecting leading zeros and oversized input."""
+
+    if isinstance(raw, bool) or not isinstance(raw, (int, str)):
+        raise ValueError(_AGE_MESSAGE)
+    text = str(raw).strip()
+    if not text.isdigit() or len(text) > 3:
+        raise ValueError(_AGE_MESSAGE)
+    if len(text) > 1 and text.startswith("0"):
+        raise ValueError(_AGE_MESSAGE)
+    age = int(text)
+    if age < MIN_REGISTRATION_AGE or age > MAX_REGISTRATION_AGE:
+        raise ValueError(_AGE_MESSAGE)
+    return age
+
+
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
@@ -46,8 +75,44 @@ class RegisterRequest(BaseModel):
     profile: Optional[dict[str, Any]] = None
     studentProfile: Optional[dict[str, Any]] = None
     parentProfile: Optional[dict[str, Any]] = None
+    acceptedTerms: Optional[bool] = None
+    termsVersion: Optional[str] = None
+    acceptedAt: Optional[str] = None
+    referralCode: Optional[str] = None
+    utm: Optional[dict[str, Any]] = None
 
     model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def validate_onboarding_profile(self) -> "RegisterRequest":
+        """Normalize the declared age and require parent contact for minors."""
+
+        if self.role is PublicRegistrationRole.STUDENT:
+            profile = self.profile if self.profile is not None else self.studentProfile
+            age_key = "age"
+        else:
+            profile = self.profile if self.profile is not None else self.parentProfile
+            age_key = "childAge"
+        if not isinstance(profile, dict):
+            return self
+
+        raw_age = profile.get(age_key)
+        age = None
+        if isinstance(raw_age, str) and not raw_age.strip():
+            # A blank field means the age was left empty, not that it is "".
+            # Carrying the empty string through reached int() in the route and
+            # raised there, after the account had already been created.
+            profile.pop(age_key, None)
+        elif raw_age is not None:
+            age = normalize_registration_age(raw_age)
+            profile[age_key] = age
+
+        if self.role is PublicRegistrationRole.STUDENT and age is not None and age < ADULT_AGE:
+            parent_name = str(profile.get("parentName") or "").strip()
+            parent_email = str(profile.get("parentEmail") or "").strip()
+            if not parent_name or not parent_email:
+                raise ValueError(_PARENT_CONTACT_MESSAGE)
+        return self
 
     @model_validator(mode="before")
     @classmethod

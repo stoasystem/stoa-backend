@@ -138,3 +138,37 @@ def test_memory_context_is_also_sanitised_against_injection():
     assert "ignore previous instructions" not in prompt.lower(), (
         "Memory context must be sanitised before entering the system prompt"
     )
+
+
+# ── The answer language actually reaches the wire ────────────────────────────
+
+@pytest.mark.parametrize(
+    ("language", "expected"),
+    [
+        ("de", "German"),
+        ("en", "English"),
+        ("fr", "French"),
+        ("it", "Italian"),
+        ("de-CH", "German"),
+        ("DE", "German"),
+    ],
+)
+def test_answer_language_is_named_in_the_system_prompt(language, expected):
+    """The prompt carries the language by name.
+
+    A bare ISO code is what the model was given while it answered German
+    questions in English.
+    """
+    prompt = _system_prompt(language=language)
+    assert f"OUTPUT LANGUAGE: {expected}" in prompt
+
+
+@pytest.mark.parametrize("subject", ["math", "physics", "german", "english"])
+def test_answer_language_does_not_vary_by_subject(subject):
+    """No subject gets a different answer language.
+
+    Physics came back in English while maths came back in German, so the
+    instruction is asserted to be identical for every subject.
+    """
+    prompt = _system_prompt(subject=subject, language="de")
+    assert "OUTPUT LANGUAGE: German" in prompt

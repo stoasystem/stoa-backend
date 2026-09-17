@@ -1,8 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from mangum import Mangum
 
 from stoa.config import settings
+from stoa.security.errors import redacted_validation_errors
 from stoa.services import locale_service
 from stoa.security.route_inventory import (
     explicit_route_classification,
@@ -65,6 +68,19 @@ class RequestLocaleMiddleware:
 
 
 app.add_middleware(RequestLocaleMiddleware)
+
+
+@app.exception_handler(RequestValidationError)
+async def handle_validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Answer a 422 without echoing what was sent.
+
+    FastAPI's default body repeats the offending input, which on the
+    registration route meant returning the user's plaintext password to them.
+    """
+    return JSONResponse(
+        status_code=422,
+        content={"detail": redacted_validation_errors(exc.errors())},
+    )
 
 app.add_middleware(
     CORSMiddleware,

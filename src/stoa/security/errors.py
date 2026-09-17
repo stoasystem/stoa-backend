@@ -147,3 +147,45 @@ def safe_error_response(
         body=safe_error_body(code, correlation_id, **sensitive_detail),
         headers=headers,
     )
+
+
+def redacted_validation_errors(errors: list[Any]) -> list[dict[str, Any]]:
+    """Strip the echoed request body out of a 422 response.
+
+    FastAPI puts the offending input in `input` and `ctx`, so a request that
+    fails validation comes back carrying whatever was sent — including the
+    plaintext password on the registration route. Only the field location and
+    the message survive, which is all a client needs to point at the field.
+    """
+    safe = []
+    for error in errors:
+        if not isinstance(error, dict):
+            continue
+        message = str(error.get("msg", ""))
+        entry = {
+            "type": str(error.get("type", "value_error")),
+            "loc": list(error.get("loc", ())),
+            "msg": message,
+        }
+        code = validation_message_code(message)
+        if code:
+            entry["code"] = code
+        safe.append(entry)
+    return safe
+
+
+# The prose above is English. A client that ships other languages needs
+# something stable to translate from, so the messages it is expected to show a
+# person carry a code beside them.
+_VALIDATION_MESSAGE_CODES: tuple[tuple[str, str], ...] = (
+    ("Age must be a whole number", "age_out_of_range"),
+    ("Parent name and parent email are required", "parent_contact_required"),
+)
+
+
+def validation_message_code(message: str) -> str | None:
+    """A stable code for a message a client is expected to render."""
+    for marker, code in _VALIDATION_MESSAGE_CODES:
+        if marker in message:
+            return code
+    return None

@@ -7,6 +7,7 @@ import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from jose import jwt
+from pydantic import ValidationError
 
 from security.conftest import (
     FailingSecurityRepository,
@@ -21,6 +22,7 @@ from stoa.deps import (
     get_verified_token,
     require_role,
 )
+from stoa.models.user import RegisterRequest
 from stoa.routers import auth
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.jwks import JwksKeyProvider
@@ -443,3 +445,92 @@ def test_t472_02_sec004_token_validation_cases_are_executable(claim_case):
         "token_expired",
         "identity_provider_unavailable",
     }
+
+
+@pytest.mark.parametrize(
+    "raw_age",
+    ["026", "0222222", 0, -1, 121, 222222, 1.5, "abc", True, 10**100],
+)
+def test_registration_refuses_every_bad_age(raw_age):
+    """A bad age is refused by the model, so it never reaches the route."""
+    with pytest.raises(ValidationError):
+        RegisterRequest.model_validate(
+            {
+                "role": "student",
+                "name": "Probe",
+                "email": "probe@example.com",
+                "password": "ValidPass123!",
+                "profile": {
+                    "age": raw_age,
+                    "school": "X",
+                    "grade": "8",
+                    "parentName": "Parent",
+                    "parentEmail": "parent@example.com",
+                },
+            }
+        )
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_registration_reads_a_blank_age_as_unanswered(blank):
+    """Blank means the field was left empty, and the key is dropped.
+
+    Carrying the empty string through reached int() in the route and raised
+    there, after the Cognito account had already been created.
+    """
+    request = RegisterRequest.model_validate(
+        {
+            "role": "student",
+            "name": "Probe",
+            "email": "probe@example.com",
+            "password": "ValidPass123!",
+            "profile": {
+                "age": blank,
+                "school": "X",
+                "grade": "8",
+                "parentName": "Parent",
+                "parentEmail": "parent@example.com",
+            },
+        }
+    )
+
+    assert "age" not in request.profile
+
+
+def test_registration_requires_parent_contact_for_a_minor():
+    """Under 18 without a guardian is refused by the server, not just the form."""
+    with pytest.raises(ValidationError):
+        RegisterRequest.model_validate(
+            {
+                "role": "student",
+                "name": "Probe",
+                "email": "minor@example.com",
+                "password": "ValidPass123!",
+                "profile": {"age": 17, "school": "X", "grade": "8"},
+            }
+        )
+
+
+def test_validation_failures_never_echo_the_password():
+    """The 422 body repeats what was sent unless something strips it.
+
+    Exercised against the real application, because the handler that does the
+    stripping is registered on it and every other registration test builds its
+    own app without one.
+    """
+    from stoa.main import app as real_app
+
+    secret = "PlaintextSecret123!"
+    response = TestClient(real_app).post(
+        "/auth/register",
+        json={
+            "role": "student",
+            "name": "Probe",
+            "email": "probe@example.com",
+            "password": secret,
+            "profile": {"age": 222222, "school": "X", "grade": "8"},
+        },
+    )
+
+    assert response.status_code == 422
+    assert secret not in response.text

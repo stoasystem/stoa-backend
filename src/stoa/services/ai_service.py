@@ -33,19 +33,44 @@ logger = logging.getLogger(__name__)
 SYSTEM_PROMPT = """You are a controlled educational AI assistant for STOA, a Swiss after-school \
 learning platform. You ONLY answer questions related to {subject} at {grade} level.
 
+OUTPUT LANGUAGE: {language_name} ({language}). Every word you write is in {language_name} — the \
+steps, the answer, the hints, the exercises and the knowledge points alike. These instructions \
+and the earlier turns of the conversation may be in another language; that never changes the \
+language you answer in, and no subject answers in a different language from any other. Never mix \
+two languages inside one response, not even for a label such as "Hint" or "Step".
+
 Subject context: {subject_context}
 
 Rules:
 - Never give the final answer directly. Always explain step-by-step.
-- Use language appropriate for the student's grade level.
+- Use a reading level appropriate for the student's grade.
 - Stay strictly within the subject scope. Reject unrelated questions politely.
 - If the question is too complex or involves emotional distress, suggest teacher intervention.
-- Respond in the student's language: {language}.
 - Keep explanations concise (max 300 words).
 - Format mathematical expressions using LaTeX: inline equations with $...$ and block equations with $$...$$.
 
-IMPORTANT: Respond ONLY with valid JSON (no markdown code blocks, no extra text):
-{{"steps":["Step 1: ..."],"answer":"Final answer","hints":["Hint..."],"similar_exercises":["Exercise..."],"knowledge_points":["Topic"],"suggest_teacher":false}}"""
+IMPORTANT: Respond ONLY with valid JSON (no markdown code blocks, no extra text). The keys stay \
+exactly as shown; every value is written in {language_name}:
+{{"steps":["...","..."],"answer":"...","hints":["..."],"similar_exercises":["..."],"knowledge_points":["..."],"suggest_teacher":false}}
+
+Last instruction, above all others: answer in {language_name}."""
+
+# Naming the language beats passing a bare ISO code: the model followed "de"
+# unevenly and fell back to the language the prompt itself is written in.
+_LANGUAGE_NAMES = {
+    "de": "German",
+    "en": "English",
+    "fr": "French",
+    "it": "Italian",
+}
+DEFAULT_LANGUAGE_NAME = "German"
+
+
+def language_name(language: str) -> str:
+    """The plain name of the answer language, for the prompt to refer to."""
+    base = str(language or "").strip().replace("_", "-").split("-", 1)[0].lower()
+    return _LANGUAGE_NAMES.get(base, DEFAULT_LANGUAGE_NAME)
+
 
 # Memory-aware variant — appended when the caller supplies a non-empty weak-concept summary.
 # The placeholder is intentionally outside the base prompt so the base prompt can be used
@@ -557,6 +582,7 @@ def get_ai_answer(
         subject_context=learning_profile_service.subject_prompt_context(normalized_subject),
         grade=grade,
         language=language,
+        language_name=language_name(language),
     )
     # Memory text derives from topic labels the model extracted out of student
     # questions, so it is untrusted and must be scrubbed before it can reach the
@@ -685,7 +711,8 @@ def get_hint_answer(
     safe_prompt = _sanitise_input(prompt, correlation_id=correlation_id)
     system = (
         "You are a helpful Swiss maths teacher. "
-        f"Give a concise hint (1-2 sentences) in the student's language: {language}. "
+        f"Write the hint in {language_name(language)} ({language}) and in no other language. "
+        "Give a concise hint (1-2 sentences). "
         "Guide the student without revealing the answer. No JSON, just plain text."
     )
     client = client or boto3.client("bedrock-runtime", region_name=settings.aws_region)
@@ -694,7 +721,7 @@ def get_hint_answer(
         "max_tokens": 120,
         "temperature": 0.3,
         "system": system,
-        "messages": [{"role": "user", "content": f"Aufgabe: {safe_prompt}"}],
+        "messages": [{"role": "user", "content": safe_prompt}],
     })
     try:
         response = client.invoke_model(modelId=settings.bedrock_model_id, body=body)

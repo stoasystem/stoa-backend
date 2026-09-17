@@ -64,6 +64,7 @@ from stoa.services import (
     attachment_service,
     bedrock_token_count_service,
     entitlement_service,
+    learning_profile_service,
     locale_service,
     teacher_dispatch_service,
     teacher_support_allowance_service,
@@ -1128,8 +1129,34 @@ def _publish_generation_step(conv_id: str, student_id: str):
     return publish
 
 
+def _subject_display_label(subject: object) -> str:
+    """The subject named the way students see it, not the id it is stored under."""
+    try:
+        return learning_profile_service.subject_metadata(str(subject))["label"]
+    except (ValueError, KeyError):
+        return str(subject)
+
+
 def _default_conversation_title(subject: object, grade: object) -> str:
+    """The placeholder keeps the stored subject id; the client localises it.
+
+    Writing the display label here left the client matching on the id form and
+    finding nothing, so the placeholder survived untranslated. Only `math`
+    showed it — the other subjects' labels happen to lowercase into their ids.
+    """
     return f"{subject} – {grade}"
+
+
+def _placeholder_conversation_titles(subject: object, grade: object) -> tuple[str, ...]:
+    """Every shape the generated placeholder has had, so older rows stay claimable."""
+    return tuple(
+        dict.fromkeys(
+            (
+                _default_conversation_title(subject, grade),
+                f"{subject} – {grade}",
+            )
+        )
+    )
 
 
 def _title_from_question(question: str, *, limit: int = 48) -> str:
@@ -1153,13 +1180,14 @@ def _adopt_question_as_title(
     title = _title_from_question(question)
     if not title:
         return
-    placeholder = _default_conversation_title(
+    placeholders = _placeholder_conversation_titles(
         conversation.get("subject"), conversation.get("grade")
     )
-    if conversation.get("title") != placeholder:
+    current = conversation.get("title")
+    if not isinstance(current, str) or current not in placeholders:
         return
     attachment_repo.retitle_conversation(
-        conv_id, title=title, expected_title=placeholder, now_iso=_now()
+        conv_id, title=title, expected_title=current, now_iso=_now()
     )
 
 
@@ -1434,6 +1462,15 @@ _SUBJECT_ALIASES = {
 }
 
 _MAX_MEMORY_TOPICS = 8
+
+# The hint label is added around the model output, so it has to be translated here
+# or the answer comes back with one German word in it.
+_HINT_LABELS = {
+    "de": "Hinweis",
+    "en": "Hint",
+    "fr": "Indice",
+    "it": "Indizio",
+}
 
 
 def _memory_context_for_student(student_id: str, actor: Actor, subject: str) -> str | None:
@@ -2244,7 +2281,8 @@ def _execute_message_command(
         )
         answer = ai_result.get("answer", "")
         hints = ai_result.get("hints", [])
-        hint = ("\n\n**Hinweis:** " + hints[0]) if hints else ""
+        hint_label = _HINT_LABELS.get(student_locale, _HINT_LABELS[locale_service.DEFAULT_LOCALE])
+        hint = (f"\n\n**{hint_label}:** " + hints[0]) if hints else ""
         ai_content = f"{steps}\n\n{answer}{hint}".strip()
         if not ai_content:
             raise ai_service.AIInvocationFailure("malformed_response")
