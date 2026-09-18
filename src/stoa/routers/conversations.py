@@ -1411,6 +1411,10 @@ async def stream_message(
         )
     except AttachmentDecisionError as error:
         _raise_attachment(error, correlation_id)
+    # Same as the non-streaming route. Only that one adopted the question, while
+    # the client only ever calls this one, so every conversation it opened stayed
+    # listed under the subject-and-grade placeholder.
+    _adopt_question_as_title(conv_id, conv, body.content)
     student_msg = result.studentMessage
     assistant_msg = result.assistantMessage
 

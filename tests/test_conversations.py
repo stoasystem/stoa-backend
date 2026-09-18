@@ -1698,3 +1698,16 @@ def test_streaming_reports_steps_and_still_returns_the_whole_answer(monkeypatch)
     assert [step for _index, step in seen] == answer["steps"]
     assert result.content["answer"] == "x = 4"
 
+
+
+def test_every_message_route_adopts_the_question_as_title():
+    """Both routes retitle, not just the one that happened to have the call.
+
+    The adoption itself was covered, while the streaming route — the only one
+    the client calls — never invoked it, so every conversation the client
+    opened stayed listed under its subject-and-grade placeholder.
+    """
+    import inspect
+
+    for route in (conversations.send_message, conversations.stream_message):
+        assert "_adopt_question_as_title" in inspect.getsource(route), route.__name__
