@@ -236,6 +236,17 @@ CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY: Mapping[
         frozenset(),
         frozenset(),
     ),
+    # The forward link row is PK=PARENT#<parent> / SK=CHILD#<student>, so the
+    # student is found by student_id and the SK, but the parent is found by
+    # neither. Without this the row survives its own parent's deletion while
+    # the reverse row is tombstoned, leaving the half link the pairing exists
+    # to prevent. created_by is deliberately absent: it is usually an admin,
+    # and their deletion must not sweep links they merely issued.
+    "parent_student_link": (
+        frozenset({"parent_id"}),
+        frozenset(),
+        frozenset(),
+    ),
     "question": (
         frozenset({"teacher_id", "dispatched_teacher_id"}),
         frozenset({"previous_dispatch_teacher_ids"}),

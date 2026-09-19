@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 
+from botocore.exceptions import ClientError
 from fastapi import HTTPException
 import pytest
 
@@ -711,3 +712,46 @@ def test_reissue_is_denied_without_capability_or_an_approval(monkeypatch):
 
     assert state["delivered"] == []
     assert state["invitations"] == {}
+
+
+class _RecordingCognito:
+    """Stands in for the Cognito client, recording the calls the adapter makes."""
+
+    def __init__(self, error_code: str | None = None) -> None:
+        self.deleted: list[dict[str, str]] = []
+        self.error_code = error_code
+
+    def admin_delete_user(self, **kwargs):
+        if self.error_code:
+            raise ClientError({"Error": {"Code": self.error_code}}, "AdminDeleteUser")
+        self.deleted.append(kwargs)
+
+
+def _adapter(client):
+    return teacher_identity_provider.CognitoTeacherIdentityProvider(
+        client, user_pool_id="pool-1"
+    )
+
+
+def test_撤回身份时按邮箱删掉用户池里的账号():
+    """002-C 的补偿靠这个方法；没有它，认领失败留下的孤儿会挡住重试。"""
+    client = _RecordingCognito()
+
+    _adapter(client).delete_account(email="invitee@stoa.test")
+
+    assert client.deleted == [{"UserPoolId": "pool-1", "Username": "invitee@stoa.test"}]
+
+
+def test_撤回一个已经不存在的身份算成功():
+    """补偿会重跑，而『用户已经没了』正是它要的结果。"""
+    client = _RecordingCognito(error_code="UserNotFoundException")
+
+    _adapter(client).delete_account(email="gone@stoa.test")
+
+
+def test_撤回失败时不假装成功():
+    """吞掉这里的错误会让补偿静默失效，而调用方以为孤儿已经清掉了。"""
+    client = _RecordingCognito(error_code="TooManyRequestsException")
+
+    with pytest.raises(teacher_identity_provider.TeacherAccountUnavailable):
+        _adapter(client).delete_account(email="busy@stoa.test")

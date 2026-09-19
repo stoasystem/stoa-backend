@@ -558,7 +558,12 @@ def test_registration_and_admin_repair_have_one_logical_relationship_writer() ->
     auth_source = inspect.getsource(auth)
     admin_source = inspect.getsource(admin.repair_parent_binding)
 
-    assert "put_parent_student_relationship" in auth_source
+    # Public registration is decommissioned (card 002-A), so the auth router is
+    # no longer a relationship writer at all. That is stricter than the previous
+    # "it must use the one canonical helper": it must not write one by any route.
+    # The name is kept because docs/security/phase-475-evidence-results.json
+    # records this node id.
+    assert "put_parent_student_relationship" not in auth_source
     assert "put_parent_student_binding(" not in auth_source
     assert "update_student_parent_link(" not in auth_source
     assert "apply_parent_binding_repair" in admin_source

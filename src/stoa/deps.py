@@ -4,7 +4,7 @@ from functools import lru_cache
 from typing import Any
 
 import boto3
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from stoa.config import (
@@ -156,14 +156,51 @@ def get_identity_repository() -> IdentityRepository:
     return DynamoIdentityRepository()
 
 
+# The only routes an account carrying must_change_password may still reach.  A
+# closed allowlist keyed on method and registered path, so a route added
+# anywhere else is refused by default rather than let through by omission.
+#
+# GET /auth/me is in here because the change-password screen is the only screen
+# such an account can open and it has to be able to render: the browser keeps
+# the token but not the account, so after a reload this read is the only way the
+# client learns it owes a password change. It is a self-only projection that
+# returns strictly less than the sign-in it follows.
+FORCED_PASSWORD_CHANGE_EXEMPT_ROUTES = frozenset(
+    {
+        ("GET", "/auth/me"),
+        ("POST", "/auth/password-change/request"),
+        ("POST", "/auth/password-change/confirm"),
+    }
+)
+
+
+def _forced_password_change_exempt(request: Request) -> bool:
+    """Match the registered route path, not the received URL.
+
+    Behind API Gateway the received URL carries a stage prefix, so comparing
+    `request.url.path` would silently stop matching in production and open every
+    route. An unresolved route is treated as not exempt.
+    """
+    route = request.scope.get("route")
+    path = getattr(route, "path", None)
+    if not isinstance(path, str):
+        return False
+    return (request.method.upper(), path) in FORCED_PASSWORD_CHANGE_EXEMPT_ROUTES
+
+
 async def get_actor(
+    request: Request,
     verified: VerifiedAccessToken = Depends(get_verified_token),
     repository: IdentityRepository = Depends(get_identity_repository),
 ) -> Actor:
     try:
-        return await resolve_actor(verified, repository)
+        actor = await resolve_actor(verified, repository)
     except SecurityDecisionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.public_body()) from exc
+    if actor.must_change_password and not _forced_password_change_exempt(request):
+        error = SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
+        raise HTTPException(status_code=error.status_code, detail=error.public_body())
+    return actor
 
 
 async def get_deletion_command(
@@ -226,6 +263,7 @@ async def get_current_user(actor: Actor = Depends(get_actor)) -> dict[str, Any]:
         "role": actor.role.value,
         "account_status": actor.account_status.value,
         "capabilities": capabilities,
+        "must_change_password": actor.must_change_password,
     }
 
 

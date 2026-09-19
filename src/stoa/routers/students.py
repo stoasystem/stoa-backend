@@ -9,16 +9,21 @@ import logging
 from typing import NoReturn, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.db.repositories import practice_repo, question_repo, user_repo
-from stoa.security.authorization import AuthorizationAction, AuthorizedResource
+from stoa.security.authorization import (
+    AuthorizationAction,
+    AuthorizedResource,
+    ResourceType,
+)
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
     STUDENT_CONTENT_READ,
     STUDENT_SELF,
     authorized_student_dependency,
+    student_actor_dependency,
 )
 from stoa.config import settings
 from stoa.services import (
@@ -26,7 +31,10 @@ from stoa.services import (
     entitlement_service,
     learning_profile_service,
     locale_service,
+    parent_link_service,
 )
+from stoa.routers.parents import admit_parent_link_request, parent_link_http_error
+from stoa.security.identity import Actor
 from stoa.services.curriculum_translations import translated_title
 
 router = APIRouter()
@@ -558,3 +566,104 @@ async def list_questions(
         new_token = base64.b64encode(json.dumps(result["LastEvaluatedKey"]).encode()).decode()
 
     return QuestionListResponse(items=items, next_token=new_token)
+
+
+# ---------------------------------------------------------------------------
+# Parent links raised from the student side
+# ---------------------------------------------------------------------------
+
+class ParentRequestCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    parentNumber: str = Field(min_length=3, max_length=40)
+    relationship: str = Field(default="child", min_length=1, max_length=40)
+
+
+class ParentRequestItem(BaseModel):
+    parentId: str
+    studentId: str
+    status: str
+    initiatorRole: str
+    relationship: str
+
+
+class ParentRequestListResponse(BaseModel):
+    items: list[ParentRequestItem] = Field(default_factory=list)
+
+
+def _parent_request_item(link: Mapping[str, object]) -> ParentRequestItem:
+    return ParentRequestItem(
+        parentId=str(link.get("parent_id") or ""),
+        studentId=str(link.get("student_id") or ""),
+        status=str(link.get("status") or ""),
+        initiatorRole=str(link.get("initiator_role") or ""),
+        relationship=str(link.get("relationship") or ""),
+    )
+
+
+@router.get("/me/parent-requests", response_model=ParentRequestListResponse)
+async def list_my_parent_requests(
+    actor: Actor = Depends(
+        student_actor_dependency(ResourceType.PARENT_BINDING, AuthorizationAction.READ)
+    ),
+) -> ParentRequestListResponse:
+    """Link requests awaiting this student's answer; pending grants no visibility."""
+    return ParentRequestListResponse(
+        items=[
+            _parent_request_item(link)
+            for link in parent_link_service.pending_requests_for_student(actor.user_id)
+        ]
+    )
+
+
+@router.post("/me/parent-requests/{parent_id}/confirm", response_model=ParentRequestItem)
+async def confirm_my_parent_request(
+    parent_id: str,
+    actor: Actor = Depends(
+        student_actor_dependency(ResourceType.PARENT_BINDING, AuthorizationAction.UPDATE)
+    ),
+) -> ParentRequestItem:
+    """Only the side that did not ask can turn a request into visibility."""
+    try:
+        link = parent_link_service.confirm_link(
+            parent_id=parent_id, student_id=actor.user_id, actor_id=actor.user_id
+        )
+    except parent_link_service.ParentLinkError as exc:
+        raise parent_link_http_error(exc) from exc
+    return _parent_request_item(link)
+
+
+@router.post("/me/parent-requests/{parent_id}/reject", response_model=ParentRequestItem)
+async def reject_my_parent_request(
+    parent_id: str,
+    actor: Actor = Depends(
+        student_actor_dependency(ResourceType.PARENT_BINDING, AuthorizationAction.UPDATE)
+    ),
+) -> ParentRequestItem:
+    try:
+        link = parent_link_service.reject_link(
+            parent_id=parent_id, student_id=actor.user_id, actor_id=actor.user_id
+        )
+    except parent_link_service.ParentLinkError as exc:
+        raise parent_link_http_error(exc) from exc
+    return _parent_request_item(link)
+
+
+@router.post("/me/parent-requests", response_model=ParentRequestItem)
+async def request_parent_link(
+    body: ParentRequestCommand,
+    actor: Actor = Depends(
+        student_actor_dependency(ResourceType.PARENT_BINDING, AuthorizationAction.CREATE)
+    ),
+) -> ParentRequestItem:
+    """Propose a link by parent number. It stops at `pending` and grants nothing."""
+    admit_parent_link_request(actor.user_id)
+    try:
+        link = parent_link_service.request_link(
+            requester_id=actor.user_id,
+            counterpart_number=body.parentNumber,
+            relationship=body.relationship,
+        )
+    except parent_link_service.ParentLinkError as exc:
+        raise parent_link_http_error(exc) from exc
+    return _parent_request_item(link)

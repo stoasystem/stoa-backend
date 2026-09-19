@@ -10,6 +10,11 @@ from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.tokens import VerifiedAccessToken
 
 
+# The profile attribute an administrator password reset raises and a completed
+# self-service password change lowers. Authority is local, not the provider's.
+MUST_CHANGE_PASSWORD_FIELD = "must_change_password"
+
+
 class CanonicalRole(StrEnum):
     STUDENT = "student"
     PARENT = "parent"
@@ -46,6 +51,7 @@ class Actor:
     cognito_group: str
     current_grants: tuple[CapabilityGrant, ...] = ()
     auth_context: tuple[tuple[str, str], ...] = ()
+    must_change_password: bool = False
 
     def __post_init__(self) -> None:
         for name in ("user_id", "issuer", "subject", "cognito_group"):
@@ -65,6 +71,8 @@ class Actor:
                 "auth_context",
                 tuple(sorted((str(key), str(value)) for key, value in self.auth_context.items())),
             )
+        if not isinstance(self.must_change_password, bool):
+            object.__setattr__(self, "must_change_password", bool(self.must_change_password))
 
     @property
     def can_authorize(self) -> bool:
@@ -170,6 +178,7 @@ async def resolve_actor(
             cognito_group=local_role.value,
             current_grants=grants,
             auth_context=(("token_use", "access"), ("client_id", token.client_id)),
+            must_change_password=bool(account.get(MUST_CHANGE_PASSWORD_FIELD)),
         )
     except SecurityDecisionError:
         raise

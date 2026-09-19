@@ -114,15 +114,15 @@ def _settings() -> Settings:
     )
 
 
+# /auth/register, /auth/forgot-password and /auth/reset-password are gone from
+# this list because they are decommissioned: they answer 410 without reaching a
+# provider at all, which tests/test_account_access_decommission.py asserts.
 @pytest.mark.parametrize(
     ("operation", "path", "payload", "provider_method"),
     [
-        ("register", "/auth/register", {"email": "student@example.com", "password": "ValidPass123!", "role": "student"}, "sign_up"),
         ("login", "/auth/login", {"email": "student@example.com", "password": "ValidPass123!"}, "initiate_auth"),
         ("verification_resend", "/auth/email-verification/resend", {"email": "student@example.com"}, "resend_confirmation_code"),
         ("verification_confirm", "/auth/email-verification/confirm", {"email": "student@example.com", "confirmationCode": "123456"}, "confirm_sign_up"),
-        ("forgot_password", "/auth/forgot-password", {"email": "student@example.com"}, "forgot_password"),
-        ("reset_password", "/auth/reset-password", {"email": "student@example.com", "confirmationCode": "123456", "newPassword": "NewValidPass123!"}, "confirm_forgot_password"),
         ("refresh", "/auth/refresh", {"refresh_token": "secret-refresh"}, "initiate_auth"),
         ("logout", "/auth/logout", {"access_token": "secret-access"}, "global_sign_out"),
     ],

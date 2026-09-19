@@ -14,6 +14,7 @@ from stoa.security.route_inventory import (
 from stoa.routers import (
     adaptive,
     admin,
+    analytics,
     auth,
     billing,
     conversations,
@@ -91,6 +92,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 app.include_router(conversations.router, prefix="/conversations", tags=["conversations"])
 app.include_router(conversations.teacher_help_router, prefix="/teacher-help", tags=["teacher-help"])
 app.include_router(practice.router, prefix="/practice", tags=["practice"])

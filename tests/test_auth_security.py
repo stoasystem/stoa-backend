@@ -277,6 +277,7 @@ async def test_t472_02_legacy_adapter_projects_only_resolved_actor_authority():
         "role": "admin",
         "account_status": "active",
         "capabilities": {"student_support_lookup": "granted"},
+        "must_change_password": False,
     }
 
 

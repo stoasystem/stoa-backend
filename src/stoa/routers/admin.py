@@ -1,18 +1,29 @@
 """Admin routes — user management, report operations, and platform statistics."""
+import base64
+import json
 from collections.abc import Mapping
 from datetime import datetime, timezone
-from functools import lru_cache
+from functools import lru_cache, partial
 from typing import Any, Literal, Optional, Protocol, runtime_checkable
 from uuid import uuid4
 
 import boto3
+from boto3.dynamodb.conditions import Attr, Key
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import JSONResponse
 
 from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
-from stoa.db.repositories import checkout_command_repo, report_repo, user_repo
+from stoa.db.repositories import (
+    account_deletion_repo,
+    account_invitation_repo,
+    checkout_command_repo,
+    parent_link_repo,
+    report_repo,
+    security_audit_repo,
+    user_repo,
+)
 from stoa.routers.parents import get_billing_reconciliation_provider
 from stoa.security.admin_authorization import (
     AdminTargetProvider,
@@ -20,6 +31,7 @@ from stoa.security.admin_authorization import (
     admin_target_provider,
 )
 from stoa.security.errors import normalize_correlation_id
+from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD
 from stoa.models.question import QuestionStatus
 from stoa.models.moderation import (
     ModerationCaseListResponse,
@@ -32,6 +44,11 @@ from stoa.models.moderation import (
 )
 from stoa.models.user import SubscriptionTier
 from stoa.services import (
+    account_provisioning_service,
+    locale_service,
+    notify_service,
+    parent_link_service,
+    public_identity_service,
     moderation_service,
     release_evidence_service,
     report_recovery_job_service,
@@ -48,6 +65,7 @@ from stoa.services import (
     account_verification_service,
     usage_ledger_service,
 )
+from stoa.services.teacher_identity_provider import CognitoTeacherIdentityProvider
 
 router = APIRouter()
 
@@ -58,6 +76,11 @@ type AdminItem = dict[str, object]
 @runtime_checkable
 class _ScanTable(Protocol):
     def scan(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
+class _QueryTable(Protocol):
+    def query(self, **kwargs: object) -> object: ...
 
 
 def _now_iso() -> str:
@@ -79,6 +102,12 @@ def _admin_scan(table: object, **kwargs: object) -> AdminItem:
     if not isinstance(table, _ScanTable):
         raise RuntimeError("admin data dependency unavailable")
     return _admin_mapping(table.scan(**kwargs))
+
+
+def _admin_query(table: object, **kwargs: object) -> AdminItem:
+    if not isinstance(table, _QueryTable):
+        raise RuntimeError("admin data dependency unavailable")
+    return _admin_mapping(table.query(**kwargs))
 
 
 def _admin_items(response: Mapping[str, object]) -> list[AdminItem]:
@@ -308,6 +337,69 @@ def restore_privileged_capability(
 class UserUpdateRequest(BaseModel):
     subscription_tier: Optional[SubscriptionTier] = None
     is_active: Optional[bool] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    grade: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    school: Optional[str] = Field(default=None, min_length=1, max_length=160)
+
+
+ACCOUNT_STATUS_INVITED = "invited"
+ACCOUNT_STATUS_ACTIVE = "active"
+ACCOUNT_STATUS_SUSPENDED = "suspended"
+ACCOUNT_STATUS_ARCHIVED = "archived"
+
+# No physical delete: an archived account keeps its number and its history.
+ACCOUNT_STATUS_TRANSITIONS = {
+    ACCOUNT_STATUS_ACTIVE: (ACCOUNT_STATUS_SUSPENDED, ACCOUNT_STATUS_ARCHIVED),
+    ACCOUNT_STATUS_SUSPENDED: (ACCOUNT_STATUS_ACTIVE, ACCOUNT_STATUS_ARCHIVED),
+    ACCOUNT_STATUS_INVITED: (ACCOUNT_STATUS_ARCHIVED,),
+    ACCOUNT_STATUS_ARCHIVED: (),
+}
+
+
+class AccountInvitationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: str = Field(min_length=1, max_length=20)
+    email: str = Field(min_length=3, max_length=320)
+    fullName: str = Field(default="", max_length=120)
+    expirySeconds: Optional[int] = Field(default=None, ge=60, le=1209600)
+    locale: Optional[str] = Field(default=None, min_length=2, max_length=8)
+
+
+class AccountAssignmentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: str = Field(min_length=1, max_length=20)
+    email: str = Field(min_length=3, max_length=320)
+    fullName: str = Field(default="", max_length=120)
+
+
+class AccountInvitationReissueRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expirySeconds: Optional[int] = Field(default=None, ge=60, le=1209600)
+    locale: Optional[str] = Field(default=None, min_length=2, max_length=8)
+
+
+class AccountPasswordResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class AccountStatusChangeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["active", "suspended", "archived"]
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class AdminParentLinkRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    parent_id: str = Field(min_length=1, max_length=120)
+    student_id: str = Field(min_length=1, max_length=120)
+    relationship: str = Field(default="child", min_length=1, max_length=40)
 
 
 class SubscriptionRequestResponse(BaseModel):
@@ -1686,38 +1778,209 @@ class LegalHoldReviewMetadataRequest(BaseModel):
     break_glass: dict[str, Any] | None = None
 
 
+def _account_status_of(profile: Mapping[str, object]) -> str:
+    stored = str(profile.get("account_status") or "").strip()
+    if stored:
+        return stored
+    # Rows written before the status machine existed carry only `is_active`.
+    return ACCOUNT_STATUS_ACTIVE if profile.get("is_active", True) else ACCOUNT_STATUS_SUSPENDED
+
+
+def _account_number_of(user_id: str) -> str:
+    profile = user_repo.get_user(user_id)
+    return str((profile or {}).get("account_number") or "")
+
+
+def _linked_counterparts(profile: Mapping[str, object]) -> list[dict[str, str]]:
+    """Confirmed links only; a pending request must never read as a binding."""
+    role = str(profile.get("role") or "")
+    user_id = str(profile.get("user_id") or "")
+    if not user_id:
+        return []
+    if role == "parent":
+        pairs = [
+            (str(link.get("student_id") or ""), link)
+            for link in parent_link_service.active_children(user_id)
+        ]
+    elif role == "student":
+        pairs = [
+            (str(link.get("parent_id") or ""), link)
+            for link in parent_link_repo.list_links_for_student(user_id)
+            if link.get("status") == parent_link_repo.STATUS_ACTIVE
+        ]
+    else:
+        return []
+    return [
+        {
+            "userId": counterpart_id,
+            "accountNumber": _account_number_of(counterpart_id),
+            "status": str(link.get("status") or ""),
+        }
+        for counterpart_id, link in pairs
+        if counterpart_id
+    ]
+
+
+# Card 002-D / B2: this list answers `student_support_lookup`, the support desk
+# capability, one rung below the identity manager. The listed account is therefore
+# built from the fields named here rather than from the stored row minus whatever
+# looked secret, so a field a later card adds to the PROFILE row stays unpublished
+# until somebody puts it on this list on purpose.
+ACCOUNT_LIST_FIELDS: tuple[tuple[str, str], ...] = (
+    ("userId", "user_id"),
+    ("accountNumber", "account_number"),
+    ("name", "name"),
+    ("email", "email"),
+    ("role", "role"),
+    ("createdAt", "created_at"),
+    ("lastLoginAt", "last_login_at"),
+)
+
+
+def _project_account_row(
+    profile: Mapping[str, object], *, account_status: str
+) -> dict[str, object]:
+    """Construct one listed account from named scalars, never by redacting a row."""
+    projected: dict[str, object] = {}
+    for exposed, stored in ACCOUNT_LIST_FIELDS:
+        value = profile.get(stored)
+        if value is None:
+            projected[exposed] = ""
+            continue
+        if not isinstance(value, (str, int, bool)):
+            raise RuntimeError("admin data dependency unavailable")
+        projected[exposed] = value if isinstance(value, str) else str(value)
+    projected["accountStatus"] = account_status
+    return projected
+
+
+def _issued_invitation_id(profile: Mapping[str, object]) -> str:
+    """The live invitation an `invited` account can actually be reissued from.
+
+    Card 002-D / B5: the console used to resend against the account id, which the
+    reissue command resolves through a pointer row keyed by invitation id, so the
+    button could only ever answer 404. Both rows already carry the address, so the
+    id is read back through the address index. The invitation id is a handle, not a
+    credential - the token and its digest stay where they are.
+    """
+    email = str(profile.get("email") or "").strip()
+    account_id = str(profile.get("user_id") or "").strip()
+    if not email or not account_id:
+        return ""
+    response = _admin_query(
+        get_table(),
+        IndexName="GSI-Email",
+        KeyConditionExpression=Key("email").eq(email),
+        FilterExpression=(
+            Attr("entity_type").eq("account_invitation")
+            & Attr("status").eq(account_invitation_repo.ISSUED_STATUS)
+            & Attr("account_id").eq(account_id)
+        ),
+    )
+    live = sorted(
+        _admin_items(response),
+        key=lambda row: str(row.get("issued_at") or ""),
+    )
+    return str(live[-1].get("invitation_id") or "") if live else ""
+
+
+def _keyword_matches(profile: Mapping[str, object], keyword: str) -> bool:
+    needle = keyword.strip().casefold()
+    if not needle:
+        return True
+    return any(
+        needle in str(profile.get(field) or "").casefold()
+        for field in ("name", "email", "account_number", "user_id")
+    )
+
+
+def _within_created_range(
+    profile: Mapping[str, object], created_from: str | None, created_to: str | None
+) -> bool:
+    created_at = str(profile.get("created_at") or "")
+    if created_from and created_at < created_from:
+        return False
+    if created_to and created_at > created_to:
+        return False
+    return True
+
+
 @router.get("/users")
 async def list_users(
     limit: int = Query(default=50, ge=1, le=200),
     role: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default=None),
+    q: Optional[str] = Query(default=None, max_length=120),
+    created_from: Optional[str] = Query(default=None, max_length=40),
+    created_to: Optional[str] = Query(default=None, max_length=40),
+    cursor: Optional[str] = Query(default=None, max_length=2000),
     user: dict = Depends(require_role("admin")),
 ):
-    """Paginated list of all platform users."""
+    """One page of accounts, grouped by role, with their confirmed parent links."""
     table = get_table()
 
     filter_expr = "#entity = :profile"
     attr_names = {"#entity": "SK"}
-    attr_values = {":profile": "PROFILE"}
+    attr_values: dict[str, object] = {":profile": "PROFILE"}
 
     if role:
         filter_expr += " AND #role = :role"
         attr_names["#role"] = "role"
         attr_values[":role"] = role
 
-    result = _admin_scan(
-        table,
-        FilterExpression=filter_expr,
-        ExpressionAttributeNames=attr_names,
-        ExpressionAttributeValues=attr_values,
-        Limit=limit,
-    )
-    users = _admin_items(result)
-    # Strip PK/SK from response
-    for u in users:
-        u.pop("PK", None)
-        u.pop("SK", None)
+    scan_kwargs: dict[str, object] = {
+        "FilterExpression": filter_expr,
+        "ExpressionAttributeNames": attr_names,
+        "ExpressionAttributeValues": attr_values,
+        "Limit": limit,
+    }
+    if cursor:
+        try:
+            decoded = json.loads(base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(status_code=422, detail={"code": "cursor_invalid"}) from exc
+        if not isinstance(decoded, dict):
+            raise HTTPException(status_code=422, detail={"code": "cursor_invalid"})
+        scan_kwargs["ExclusiveStartKey"] = decoded
 
-    return {"items": users, "count": len(users)}
+    result = _admin_scan(table, **scan_kwargs)
+    rows = _admin_items(result)
+
+    items: list[dict[str, object]] = []
+    groups: dict[str, int] = {}
+    for row in rows:
+        row.pop("PK", None)
+        row.pop("SK", None)
+        account_status = _account_status_of(row)
+        if status and account_status != status:
+            continue
+        if q and not _keyword_matches(row, q):
+            continue
+        if not _within_created_range(row, created_from, created_to):
+            continue
+        row_role = str(row.get("role") or "unknown")
+        groups[row_role] = groups.get(row_role, 0) + 1
+        item = _project_account_row(row, account_status=account_status)
+        item["role"] = row_role
+        item["linkedAccounts"] = _linked_counterparts(row)
+        if account_status == ACCOUNT_STATUS_INVITED:
+            invitation_id = _issued_invitation_id(row)
+            if invitation_id:
+                item["invitationId"] = invitation_id
+        items.append(item)
+
+    next_key = _admin_cursor(result)
+    next_cursor = (
+        base64.urlsafe_b64encode(json.dumps(next_key, default=str).encode("utf-8")).decode("ascii")
+        if next_key
+        else None
+    )
+    return {
+        "items": items,
+        "count": len(items),
+        "groups": groups,
+        "nextCursor": next_cursor,
+    }
 
 
 @router.patch("/users/{user_id}")
@@ -1734,30 +1997,454 @@ async def update_user(
     update_parts = []
     attr_values: dict = {}
 
+    attr_names: dict[str, str] = {}
+
     if body.subscription_tier is not None:
         update_parts.append("subscription_tier = :tier")
         attr_values[":tier"] = body.subscription_tier.value
     if body.is_active is not None:
         update_parts.append("is_active = :active")
         attr_values[":active"] = body.is_active
+    if body.name is not None:
+        update_parts.append("#name = :name")
+        attr_names["#name"] = "name"
+        attr_values[":name"] = body.name
+    if body.grade is not None:
+        update_parts.append("grade = :grade")
+        attr_values[":grade"] = body.grade
+    if body.school is not None:
+        update_parts.append("school = :school")
+        attr_values[":school"] = body.school
 
     if not update_parts:
         return {"user_id": user_id, "message": "Nothing to update"}
 
+    changed = {
+        field: present
+        for field, present in (
+            ("subscription_tier", body.subscription_tier is not None),
+            ("is_active", body.is_active is not None),
+            ("name", body.name is not None),
+            ("grade", body.grade is not None),
+            ("school", body.school is not None),
+        )
+        if present
+    }
     user_repo.update_profile_fields(
         user_id,
         update_expression="SET " + ", ".join(update_parts),
         expression_attribute_values=attr_values,
-        owned_fields=frozenset(
-            field
-            for field, present in (
-                ("subscription_tier", body.subscription_tier is not None),
-                ("is_active", body.is_active is not None),
-            )
-            if present
-        ),
+        expression_attribute_names=attr_names or None,
+        owned_fields=frozenset(changed),
+    )
+    _record_account_admin_event(
+        actor=user,
+        target_id=user_id,
+        event_type="account_profile_edited",
+        action="update_account_profile",
+        reason_code=",".join(sorted(changed)),
+        evidence_reference=_account_change_evidence(profile, attr_values, attr_names),
     )
     return {"user_id": user_id, "updated": {k.lstrip(":"): v for k, v in attr_values.items()}}
+
+
+# ---------------------------------------------------------------------------
+# Account provisioning, password reset, status machine and parent links
+# ---------------------------------------------------------------------------
+
+
+def get_account_identity_provider(settings: Settings = Depends(get_settings)) -> Any:
+    """Role-neutral account creator; the teacher adapter already speaks this shape."""
+    return CognitoTeacherIdentityProvider(
+        boto3.client("cognito-idp", region_name=settings.aws_region),
+        user_pool_id=settings.cognito_user_pool_id,
+    )
+
+
+def get_account_password_administrator(settings: Settings = Depends(get_settings)) -> Any:
+    return boto3.client("cognito-idp", region_name=settings.aws_region)
+
+
+def _account_issuer(settings: Settings) -> str:
+    return public_identity_service.canonical_public_issuer(settings.allowed_cognito_issuers)
+
+
+def _invitation_delivery(locale: str | None):
+    candidate = locale or locale_service.request_locale() or locale_service.DEFAULT_LOCALE
+    try:
+        resolved = locale_service.normalize_locale(candidate)
+    except ValueError:
+        resolved = locale_service.DEFAULT_LOCALE
+    return partial(notify_service.send_account_invitation_email, locale=resolved)
+
+
+def _record_account_admin_event(
+    *,
+    actor: Mapping[str, object],
+    target_id: str,
+    event_type: str,
+    action: str,
+    reason_code: str = "",
+    evidence_reference: str = "",
+) -> None:
+    """One durable row per administrator write against an account."""
+    event: dict[str, object] = {
+        "event_id": f"event_{uuid4().hex}",
+        "event_type": event_type,
+        "actor_id": str(actor.get("user_id") or actor.get("sub") or ""),
+        "actor_role": str(actor.get("role") or ""),
+        "target_id": target_id,
+        "target_type": "account",
+        "action": action,
+        "created_at": _now_iso(),
+    }
+    if reason_code:
+        event["reason_code"] = reason_code[:200]
+    if evidence_reference:
+        event["evidence_reference"] = evidence_reference[:400]
+    security_audit_repo.append_event(target_id, event)
+
+
+def _account_change_evidence(
+    profile: Mapping[str, object],
+    attr_values: Mapping[str, object],
+    attr_names: Mapping[str, str],
+) -> str:
+    """Before and after for every field this command actually writes."""
+    parts: list[str] = []
+    for alias, value in attr_values.items():
+        field = attr_names.get(f"#{alias.lstrip(':')}", alias.lstrip(":"))
+        parts.append(f"{field}:{profile.get(field)!s}->{value!s}")
+    return ";".join(sorted(parts))
+
+
+def _account_profile_or_404(user_id: str) -> dict[str, Any]:
+    profile = user_repo.get_user(user_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail={"code": "account_not_found"})
+    return dict(profile)
+
+
+def _account_email_or_409(profile: Mapping[str, object]) -> str:
+    email = str(profile.get("email") or "").strip()
+    if not email:
+        raise HTTPException(status_code=409, detail={"code": "account_email_missing"})
+    return email
+
+
+# One census page is one scan call; the answer short-circuits on the first other
+# active administrator, so the usual table never reaches the second page.
+ADMIN_CENSUS_PAGE_SIZE = 200
+ADMIN_CENSUS_MAX_PAGES = 25
+
+
+def _another_active_admin_exists(target_id: str) -> bool:
+    """True only when some administrator other than `target_id` is still active."""
+    table = get_table()
+    scan_kwargs: dict[str, object] = {
+        "FilterExpression": "#entity = :profile AND #role = :role",
+        "ExpressionAttributeNames": {"#entity": "SK", "#role": "role"},
+        "ExpressionAttributeValues": {":profile": "PROFILE", ":role": "admin"},
+        "Limit": ADMIN_CENSUS_PAGE_SIZE,
+    }
+    for _page in range(ADMIN_CENSUS_MAX_PAGES):
+        result = _admin_scan(table, **scan_kwargs)
+        for row in _admin_items(result):
+            if str(row.get("user_id") or "") == target_id:
+                continue
+            if _account_status_of(row) == ACCOUNT_STATUS_ACTIVE:
+                return True
+        cursor = _admin_cursor(result)
+        if not cursor:
+            return False
+        scan_kwargs["ExclusiveStartKey"] = cursor
+    # A census that ran out of pages is not evidence that anyone else is active.
+    return False
+
+
+def _refuse_status_change(
+    *, actor: Mapping[str, object], target_id: str, reason_code: str
+) -> None:
+    """A refused command is still a command somebody issued, so it is recorded."""
+    _record_account_admin_event(
+        actor=actor,
+        target_id=target_id,
+        event_type="account_status_change_denied",
+        action="change_account_status",
+        reason_code=reason_code,
+        evidence_reference=f"account_status_denied:{reason_code}",
+    )
+    raise HTTPException(status_code=409, detail={"code": reason_code})
+
+
+def _guard_admin_console_survives(
+    *, actor: Mapping[str, object], target_id: str, profile: Mapping[str, object]
+) -> None:
+    """Card 002-D / B7: one administrator may not close the admin console down.
+
+    `admin_identity_manager` is not an escalation - it already governs privileged
+    identities - but without this judgement its holder can suspend every other
+    administrator and then itself, and nobody is left who can undo it. There is no
+    break-glass path here, so the refusal has to come before the write.
+    """
+    actor_id = str(actor.get("user_id") or actor.get("sub") or "")
+    if actor_id and actor_id == target_id:
+        _refuse_status_change(
+            actor=actor, target_id=target_id, reason_code="account_self_deactivation_forbidden"
+        )
+    if str(profile.get("role") or "") != "admin":
+        return
+    if _another_active_admin_exists(target_id):
+        return
+    _refuse_status_change(
+        actor=actor, target_id=target_id, reason_code="account_last_active_admin"
+    )
+
+
+@router.post("/users/invitations")
+def invite_account(
+    payload: AccountInvitationRequest,
+    user: dict = Depends(require_role("admin")),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    """Open one account in `invited` state and mail its single-use activation link."""
+    expiry = (
+        payload.expirySeconds
+        if payload.expirySeconds is not None
+        else account_provisioning_service.DEFAULT_INVITATION_SECONDS
+    )
+    return account_provisioning_service.invite_account(
+        actor=user,
+        role=payload.role,
+        email=payload.email,
+        full_name=payload.fullName,
+        invitation_expiry_seconds=expiry,
+        deliver=_invitation_delivery(payload.locale),
+    )
+
+
+@router.post("/users")
+def assign_account(
+    payload: AccountAssignmentRequest,
+    user: dict = Depends(require_role("admin")),
+    settings: Settings = Depends(get_settings),
+    provider: Any = Depends(get_account_identity_provider),
+) -> dict[str, Any]:
+    """Open one active account and hand its initial password back exactly once."""
+    return account_provisioning_service.assign_account(
+        actor=user,
+        role=payload.role,
+        email=payload.email,
+        full_name=payload.fullName,
+        provider=provider,
+        issuer=_account_issuer(settings),
+    )
+
+
+@router.post("/users/invitations/{invitation_id}/reissue")
+def reissue_account_invitation(
+    invitation_id: str,
+    payload: AccountInvitationReissueRequest,
+    user: dict = Depends(require_role("admin")),
+) -> dict[str, Any]:
+    """Replace one undelivered invitation, reusing the number already allocated."""
+    expiry = (
+        payload.expirySeconds
+        if payload.expirySeconds is not None
+        else account_provisioning_service.DEFAULT_INVITATION_SECONDS
+    )
+    return account_provisioning_service.reissue_invitation(
+        actor=user,
+        invitation_id=invitation_id,
+        invitation_expiry_seconds=expiry,
+        deliver=_invitation_delivery(payload.locale),
+    )
+
+
+@router.delete("/users/invitations/{invitation_id}")
+def revoke_account_invitation(
+    invitation_id: str,
+    user: dict = Depends(require_role("admin")),
+) -> dict[str, Any]:
+    return account_provisioning_service.revoke_invitation(
+        actor=user, invitation_id=invitation_id
+    )
+
+
+def _require_password_change_at_next_sign_in(
+    user_id: str, profile: Mapping[str, object]
+) -> None:
+    """Raise the local flag that forces this account through a password change.
+
+    The flag is raised before the provider password is replaced, and the order is
+    deliberate. A raised flag over a still-valid old password only forces a change
+    the account can complete by itself; a new temporary password with no flag
+    would hand out an unforced credential, which is the failure this exists to
+    prevent.
+    """
+    operation = user_repo.profile_update_operation(
+        user_id,
+        update_expression="SET #must_change_password = :required, updated_at = :now",
+        expression_attribute_names={"#must_change_password": MUST_CHANGE_PASSWORD_FIELD},
+        expression_attribute_values={":required": True, ":now": _now_iso()},
+        expected_version=profile.get("version"),
+    )
+    try:
+        fence = account_deletion_repo.require_active_account_fence(user_id)
+        account_deletion_repo.transact(
+            [
+                account_deletion_repo.active_fence_condition(
+                    user_id, int(fence.get("generation") or 0)
+                ),
+                operation,
+            ]
+        )
+    except account_deletion_repo.AccountDeletionConflict as exc:
+        raise HTTPException(
+            status_code=409, detail={"code": "account_password_reset_conflict"}
+        ) from exc
+
+
+@router.post("/users/{user_id}/password-reset")
+def reset_account_password(
+    user_id: str,
+    payload: AccountPasswordResetRequest,
+    user: dict = Depends(require_role("admin")),
+    settings: Settings = Depends(get_settings),
+    provider: Any = Depends(get_account_password_administrator),
+) -> dict[str, Any]:
+    """Set one temporary password the account must replace at its next sign-in.
+
+    The provider password is set `Permanent=True` on purpose. `Permanent=False`
+    parks the account in the provider's own FORCE_CHANGE_PASSWORD challenge,
+    which this build has no route to answer, so the account could sign in
+    nowhere. The obligation is carried locally instead: the profile flag raised
+    here lets the account authenticate and then refuses every route but the
+    self-service password change.
+
+    An administrator can reset anyone's password, so the audit row is written
+    before the response is built and a failed write fails the command.
+    """
+    profile = _account_profile_or_404(user_id)
+    email = _account_email_or_409(profile)
+    _require_password_change_at_next_sign_in(user_id, profile)
+    temporary_password = account_provisioning_service.generate_initial_password()
+    try:
+        provider.admin_set_user_password(
+            UserPoolId=settings.cognito_user_pool_id,
+            Username=email,
+            Password=temporary_password,
+            Permanent=True,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503, detail={"code": "identity_provider_unavailable"}
+        ) from exc
+    _record_account_admin_event(
+        actor=user,
+        target_id=user_id,
+        event_type="account_password_reset",
+        action="reset_account_password",
+        reason_code=payload.reason,
+        evidence_reference=f"account-number:{profile.get('account_number') or ''}",
+    )
+    return {
+        "userId": user_id,
+        "temporaryPassword": temporary_password,
+        "mustChangePasswordAtNextSignIn": True,
+    }
+
+
+@router.post("/users/{user_id}/status")
+def change_account_status(
+    user_id: str,
+    payload: AccountStatusChangeRequest,
+    user: dict = Depends(require_role("admin")),
+) -> dict[str, Any]:
+    """Move one account along the status machine. Archive is as far as it goes."""
+    profile = _account_profile_or_404(user_id)
+    current = _account_status_of(profile)
+    if payload.status != ACCOUNT_STATUS_ACTIVE:
+        _guard_admin_console_survives(actor=user, target_id=user_id, profile=profile)
+    if payload.status == current:
+        raise HTTPException(status_code=409, detail={"code": "account_status_unchanged"})
+    if payload.status not in ACCOUNT_STATUS_TRANSITIONS.get(current, ()):
+        raise HTTPException(status_code=409, detail={"code": "account_status_transition_invalid"})
+    now = _now_iso()
+    operation = user_repo.profile_update_operation(
+        user_id,
+        update_expression=(
+            "SET #account_status = :next_status, is_active = :is_active, updated_at = :now"
+        ),
+        expression_attribute_names={"#account_status": "account_status"},
+        expression_attribute_values={
+            ":next_status": payload.status,
+            ":expected_status": current,
+            ":is_active": payload.status == ACCOUNT_STATUS_ACTIVE,
+            ":now": now,
+        },
+        expected_version=profile.get("version"),
+        additional_condition_expression=(
+            "#account_status = :expected_status OR attribute_not_exists(#account_status)"
+        ),
+    )
+    try:
+        fence = account_deletion_repo.require_active_account_fence(user_id)
+        account_deletion_repo.transact(
+            [
+                account_deletion_repo.active_fence_condition(
+                    user_id, int(fence.get("generation") or 0)
+                ),
+                operation,
+            ]
+        )
+    except account_deletion_repo.AccountDeletionConflict as exc:
+        raise HTTPException(
+            status_code=409, detail={"code": "account_status_transition_conflict"}
+        ) from exc
+    _record_account_admin_event(
+        actor=user,
+        target_id=user_id,
+        event_type="account_status_changed",
+        action="change_account_status",
+        reason_code=payload.reason,
+        evidence_reference=f"account_status:{current}->{payload.status}",
+    )
+    return {"userId": user_id, "accountStatus": payload.status, "previousStatus": current}
+
+
+def _parent_link_status(code: str) -> int:
+    return 404 if code == "link_target_not_found" else 409
+
+
+@router.post("/users/parent-links")
+def assign_parent_link(
+    body: AdminParentLinkRequest,
+    user: dict = Depends(require_role("admin")),
+) -> dict[str, Any]:
+    """Administrator assignment is trusted and audited, so it starts active."""
+    try:
+        link = parent_link_service.assign_link(
+            parent_id=body.parent_id,
+            student_id=body.student_id,
+            actor_id=str(user.get("user_id") or user.get("sub") or ""),
+            relationship=body.relationship,
+        )
+    except parent_link_service.ParentLinkError as exc:
+        raise HTTPException(
+            status_code=_parent_link_status(exc.code), detail={"code": exc.code}
+        ) from exc
+    except parent_link_repo.ParentLinkConflict as exc:
+        raise HTTPException(status_code=409, detail={"code": "link_already_exists"}) from exc
+    _record_account_admin_event(
+        actor=user,
+        target_id=body.student_id,
+        event_type="parent_link_assigned",
+        action="assign_parent_link",
+        reason_code=body.relationship,
+        evidence_reference=f"parent-link:{body.parent_id}->{body.student_id}",
+    )
+    return link
 
 
 @router.get("/subscriptions/requests", response_model=SubscriptionRequestListResponse)
@@ -2438,11 +3125,52 @@ async def transition_parent_binding_status(
             status_code=503,
         )
     assert result.status is not None and result.version is not None
+    # Visibility is the union of the legacy binding and the parent-link table, so
+    # revoking only the legacy row would leave an administrator believing access was
+    # withdrawn while the link table still grants it.
+    if body.status != parent_link_repo.STATUS_ACTIVE and not _revoke_parent_link_side(
+        parent_id=body.parent_id,
+        student_id=body.student_id,
+        actor=user,
+    ):
+        return _relationship_status_error(
+            code="relationship_status_conflict",
+            message="The relationship changed. Refresh and retry.",
+            correlation_id=correlation_id,
+            status_code=409,
+        )
     return ParentBindingStatusTransitionResponse(
         disposition=result.disposition,
         status=result.status,
         version=result.version,
     )
+
+
+def _revoke_parent_link_side(
+    *, parent_id: str, student_id: str, actor: Mapping[str, object]
+) -> bool:
+    """Retire an active parent-link pair, reporting whether visibility is now closed."""
+    if parent_link_service.active_link(parent_id, student_id) is None:
+        return True
+    try:
+        parent_link_repo.transition_link(
+            parent_id=parent_id,
+            student_id=student_id,
+            expected_status=parent_link_repo.STATUS_ACTIVE,
+            next_status=parent_link_repo.STATUS_REJECTED,
+            updated_by=str(actor.get("user_id") or actor.get("sub") or "admin"),
+            link_updated_at=_now_iso(),
+        )
+    except parent_link_repo.ParentLinkConflict:
+        return False
+    _record_account_admin_event(
+        actor=actor,
+        target_id=student_id,
+        event_type="parent_link_revoked",
+        action="revoke_parent_link",
+        evidence_reference=f"parent-link:{parent_id}->{student_id}",
+    )
+    return True
 
 
 

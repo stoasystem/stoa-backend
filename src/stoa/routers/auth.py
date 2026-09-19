@@ -1,28 +1,35 @@
 """Authentication routes — aligned with frontend API contract."""
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
+import hashlib
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr, Field
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from stoa.config import Settings, get_settings
+from stoa.db.dynamodb import get_table
 from stoa.db.repositories import user_repo
 from stoa.deps import (
     get_current_user,
     get_deletion_command,
     get_identity_repository,
     get_jwks_key_provider,
+    security,
 )
 from stoa.jobs.account_deletion import continue_deletion_command
 from stoa.models.user import PublicRegistrationRole, RegisterRequest
 from stoa.services import (
+    account_provisioning_service,
     account_verification_service,
     free_trial_service,
     locale_service,
+    password_change_code_service,
     public_identity_service,
 )
+from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD
 from stoa.security.route_inventory import explicit_route_classification
 from stoa.security.errors import SecurityDecisionError
 from stoa.security.public_auth_errors import (
@@ -32,17 +39,9 @@ from stoa.security.public_auth_errors import (
 )
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.services.account_deletion_service import DeletionReceipt
+from stoa.services.teacher_identity_provider import CognitoTeacherIdentityProvider
 
 router = APIRouter()
-
-
-@dataclass(frozen=True, slots=True)
-class _ParentRelationshipIntent:
-    parent_id: str
-    student_id: str
-    relationship: str
-    status: str
-    source: str
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +68,9 @@ class UserOut(BaseModel):
     emailVerificationStatus: str | None = None
     emailVerificationRequired: bool = False
     accountActivationStatus: str | None = None
+    # True after an administrator reset: the sign-in succeeds and every route but
+    # the password change is refused until the account picks its own password.
+    mustChangePassword: bool = False
 
 
 class AuthResponse(BaseModel):
@@ -144,6 +146,53 @@ class PasswordResetResponse(BaseModel):
     status: str
 
 
+class PasswordChangeRequest(BaseModel):
+    currentPassword: str = Field(..., min_length=1, max_length=256)
+
+    model_config = {"extra": "forbid"}
+
+
+def enforce_password_complexity(value: str) -> str:
+    """The one definition of what this service accepts as a password.
+
+    Every entry point that takes a password of the user's own choosing calls this, so
+    the rule cannot drift between them and none of them can be left relying on the
+    identity pool to do the rejecting after a single-use credential has been spent.
+    """
+    if (
+        len(value) < 8
+        or not any(character.islower() for character in value)
+        or not any(character.isupper() for character in value)
+        or not any(character.isdigit() for character in value)
+    ):
+        raise ValueError(
+            "Password must be at least 8 characters and contain an uppercase "
+            "letter, a lowercase letter and a digit."
+        )
+    return value
+
+
+class PasswordChangeConfirmRequest(PasswordChangeRequest):
+    code: str = Field(..., min_length=1, max_length=16)
+    newPassword: str = Field(..., min_length=1, max_length=256)
+
+    @field_validator("newPassword")
+    @classmethod
+    def enforce_password_policy(cls, value: str) -> str:
+        """Reject a non-compliant new password before the code is spent."""
+        return enforce_password_complexity(value)
+
+
+class PasswordChangeRequestResponse(BaseModel):
+    status: str = "sent"
+    maskedRecipient: str
+    expiresAt: int
+
+
+class PasswordChangeConfirmResponse(BaseModel):
+    status: str = "changed"
+
+
 class LocalePreferenceUpdate(BaseModel):
     preferredLocale: str = Field(..., min_length=1, max_length=32)
 
@@ -165,6 +214,12 @@ class AccountDeletionReceiptResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Public authentication helpers
 # ---------------------------------------------------------------------------
+
+# STOA is invite/assignment only. Both switches must stay in step with
+# `stoa-infra/stacks/auth_stack.py`: the user pool is `AllowAdminCreateUserOnly`
+# and its account recovery is `NONE`.
+PUBLIC_SELF_REGISTRATION_ENABLED = False
+SELF_SERVICE_PASSWORD_RECOVERY_ENABLED = False
 
 _PUBLIC_REGISTRATION_COMMAND = "public_self_service"
 _PUBLIC_GROUPS = {
@@ -203,6 +258,7 @@ def _build_user_out(profile: dict) -> UserOut:
         emailVerificationStatus=verification["emailVerificationStatus"],
         emailVerificationRequired=verification["emailVerificationRequired"],
         accountActivationStatus=verification["accountActivationStatus"],
+        mustChangePassword=bool(profile.get(MUST_CHANGE_PASSWORD_FIELD)),
     )
 
 
@@ -233,6 +289,16 @@ def _email_verification_status(profile: dict) -> str:
 
 def _is_already_confirmed_provider_error(code: str, message: str) -> bool:
     return code in {"InvalidParameterException", "NotAuthorizedException"} and "CONFIRMED" in message.upper()
+
+
+def _decommissioned(code: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "code": code,
+            "message": "This is no longer available. Ask your STOA administrator.",
+        },
+    )
 
 
 def _public_identity_conflict() -> HTTPException:
@@ -278,119 +344,11 @@ def _norm_email(value: str | None) -> str:
     return str(value or "").strip().lower()
 
 
-def _profile_child_email(profile: dict) -> str:
-    return _norm_email(
-        profile.get("child_email")
-        or profile.get("childEmail")
-        or profile.get("student_email")
-        or profile.get("studentEmail")
-    )
-
-
 def _profile_from_current_user(current_user: dict) -> dict | None:
     """Load only the authoritative business identity projected by get_current_user."""
 
     user_id = current_user.get("user_id") or current_user.get("sub", "")
     return user_repo.get_user(user_id) if user_id else None
-
-
-def _prepare_parent_student_relationship(
-    parent_email: str | None, student_profile: dict
-) -> _ParentRelationshipIntent | None:
-    if not parent_email:
-        return None
-    parent = user_repo.get_user_by_email(parent_email)
-    if not parent or parent.get("role") != "parent":
-        student_profile["parent_binding_status"] = "pending_parent_profile"
-        student_profile["parent_email"] = parent_email
-        return None
-    if _profile_child_email(parent) != _norm_email(student_profile.get("email")):
-        student_profile["parent_binding_status"] = "pending_parent_confirmation"
-        student_profile["parent_email"] = parent_email
-        return None
-    parent_id = parent.get("user_id")
-    student_id = student_profile.get("user_id")
-    if (
-        not isinstance(parent_id, str)
-        or not parent_id
-        or not isinstance(student_id, str)
-        or not student_id
-    ):
-        return None
-    binding_status = account_verification_service.binding_status_for_profiles(
-        student_profile,
-        parent,
-    )
-    student_profile["parent_binding_status"] = "pending_parent_binding"
-    student_profile["parent_email"] = parent_email
-    return _ParentRelationshipIntent(
-        parent_id=parent_id,
-        student_id=student_id,
-        relationship="child",
-        status=binding_status,
-        source="student_registration",
-    )
-
-
-def _prepare_existing_child_relationship(
-    parent_profile: dict, child_email: str | None
-) -> _ParentRelationshipIntent | None:
-    if not child_email:
-        return None
-    child = user_repo.get_user_by_email(child_email)
-    if not child or child.get("role") != "student":
-        parent_profile["child_binding_status"] = "pending_student_profile"
-        parent_profile["child_email"] = child_email
-        return None
-    child_parent_email = child.get("parent_email")
-    parent_email = parent_profile.get("email")
-    if _norm_email(
-        child_parent_email if isinstance(child_parent_email, str) else None
-    ) != _norm_email(parent_email if isinstance(parent_email, str) else None):
-        parent_profile["child_binding_status"] = "pending_student_confirmation"
-        parent_profile["child_email"] = child_email
-        return None
-    parent_id = parent_profile.get("user_id")
-    student_id = child.get("user_id")
-    if (
-        not isinstance(parent_id, str)
-        or not parent_id
-        or not isinstance(student_id, str)
-        or not student_id
-    ):
-        return None
-    binding_status = account_verification_service.binding_status_for_profiles(
-        parent_profile,
-        child,
-    )
-    parent_profile["child_binding_status"] = binding_status
-    child_relationship = child.get("relationship")
-    relationship = (
-        child_relationship
-        if isinstance(child_relationship, str) and child_relationship
-        else "child"
-    )
-    return _ParentRelationshipIntent(
-        parent_id=parent_id,
-        student_id=student_id,
-        relationship=relationship,
-        status=binding_status,
-        source="parent_registration",
-    )
-
-
-def _commit_parent_student_relationship(
-    intent: _ParentRelationshipIntent,
-) -> user_repo.ParentBindingResult:
-    return user_repo.put_parent_student_relationship(
-        parent_id=intent.parent_id,
-        student_id=intent.student_id,
-        relationship=intent.relationship,
-        status=intent.status,
-        source=intent.source,
-        actor="system",
-        created_at=_utc_now_iso(),
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -400,191 +358,26 @@ def _commit_parent_student_relationship(
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 @explicit_route_classification(
     "public",
-    "pending parent-registration correlation only",
+    "decommissioned public registration command surface",
     allowed_identifiers=("parent_id",),
     identifier_scope="command-local",
 )
-async def register(
-    body: RegisterRequest,
-    settings: Settings = Depends(get_settings),
-    correlation_id: str = Depends(get_request_correlation_id),
-):
-    """Create a Cognito user and DynamoDB profile, then require email verification."""
-    role = body.role.value
-    client_id = _public_client_id(settings)
-    cognito = _get_cognito(settings)
+async def register(body: RegisterRequest):
+    """Refuse public account creation; accounts are issued by an administrator.
 
-    issuer = public_identity_service.canonical_public_issuer(settings.allowed_cognito_issuers)
-    provider_subject = ""
-    resume_command = None
-    try:
-        signup_resp = cognito.sign_up(
-            ClientId=client_id,
-            Username=body.email,
-            Password=body.password,
-            UserAttributes=[{"Name": "email", "Value": body.email}],
+    The user pool itself is `AllowAdminCreateUserOnly`, so a SignUp would be
+    refused by the provider as well. This gate answers first so the refusal does
+    not depend on reaching Cognito.
+    """
+    if PUBLIC_SELF_REGISTRATION_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail={
+                "code": "public_registration_not_implemented",
+                "message": "Public self-registration is switched on but this build cannot serve it.",
+            },
         )
-        provider_subject = str(signup_resp.get("UserSub") or "").strip()
-        if not provider_subject:
-            raise public_identity_service.PublicIdentityDependencyError(
-                "provider signup omitted subject"
-            )
-        try:
-            cognito.admin_update_user_attributes(
-                UserPoolId=settings.cognito_user_pool_id,
-                Username=body.email,
-                UserAttributes=[
-                    {"Name": "custom:subscription_tier", "Value": "free_trial"}
-                ],
-            )
-        except ClientError as exc:
-            return public_auth_error_response(
-                normalize_cognito_failure(PublicAuthOperation.REGISTER, exc, correlation_id)
-            )
-    except ClientError as e:
-        code = e.response["Error"]["Code"]
-        if code == "UsernameExistsException":
-            try:
-                resume_command = public_identity_service.require_public_identity_command(
-                    body.email
-                )
-            except public_identity_service.PublicIdentityCommandConflict:
-                return public_auth_error_response(
-                    normalize_cognito_failure(PublicAuthOperation.REGISTER, e, correlation_id)
-                )
-            except Exception as exc:
-                raise _public_identity_dependency_error() from exc
-            if resume_command.role != role:
-                return public_auth_error_response(
-                    normalize_cognito_failure(PublicAuthOperation.REGISTER, e, correlation_id)
-                )
-            try:
-                provider_subject = public_identity_service.provider_identity(
-                    cognito,
-                    user_pool_id=settings.cognito_user_pool_id,
-                    email=body.email,
-                )["subject"]
-                if (
-                    resume_command.issuer != issuer
-                    or resume_command.subject != provider_subject
-                    or resume_command.user_id != provider_subject
-                ):
-                    return public_auth_error_response(
-                        normalize_cognito_failure(PublicAuthOperation.REGISTER, e, correlation_id)
-                    )
-            except public_identity_service.PublicIdentityCommandConflict:
-                return public_auth_error_response(
-                    normalize_cognito_failure(PublicAuthOperation.REGISTER, e, correlation_id)
-                )
-            except Exception as exc:
-                raise _public_identity_dependency_error() from exc
-        if code != "UsernameExistsException":
-            return public_auth_error_response(
-                normalize_cognito_failure(PublicAuthOperation.REGISTER, e, correlation_id)
-            )
-
-    # Extract onboarding profile fields forwarded by the frontend.
-    # Frontend sends nested data under "profile"; legacy payload may use "studentProfile"/"parentProfile".
-    nested = body.profile or {}
-    student_profile = nested if role == "student" else (body.studentProfile or {})
-    parent_profile = nested if role == "parent" else (body.parentProfile or {})
-
-    if role == "student":
-        grade = student_profile.get("grade", "")
-        subjects = student_profile.get("subjectsNeedingHelp", [])
-        school_system = student_profile.get("schoolSystem", "")
-        school = student_profile.get("school", "")
-        parent_name = student_profile.get("parentName", "")
-        parent_email = student_profile.get("parentEmail", "")
-        age = student_profile.get("age")
-    elif role == "parent":
-        grade = parent_profile.get("childGrade", "")
-        subjects = parent_profile.get("subjectsNeedingHelp", [])
-        school_system = ""
-        school = parent_profile.get("childSchool", "")
-        parent_name = ""
-        parent_email = ""
-        age = parent_profile.get("childAge")
-    else:
-        grade = ""
-        subjects = body.subjects or []
-        school_system = ""
-        school = ""
-        parent_name = ""
-        parent_email = ""
-        age = None
-
-    profile = {
-        "user_id": provider_subject,
-        "email": body.email,
-        "name": body.name or body.email.split("@")[0],
-        "role": role,
-        "registration_command": _PUBLIC_REGISTRATION_COMMAND,
-        "registration_role": role,
-        "language": body.preferredLanguage,
-        "grade": grade,
-        "school": school,
-        "school_system": school_system,
-        "primary_subjects": subjects,
-        "subjects": subjects,
-        "parent_name": parent_name,
-        "parent_email": parent_email,
-        **account_verification_service.registration_profile_fields(_utc_now_iso()),
-        "subscription_tier": "free_trial",
-        "created_at": _utc_now_iso(),
-    }
-    if age is not None:
-        # Already normalised to an int by RegisterRequest; converting again here
-        # is what turned a bad value into an unhandled 500 after the account
-        # had been created.
-        profile["age"] = age
-    relationship_intent = None
-    if role == "student" and resume_command is None:
-        relationship_intent = _prepare_parent_student_relationship(parent_email, profile)
-    if role == "parent" and resume_command is None:
-        child_email = (
-            parent_profile.get("childEmail")
-            or parent_profile.get("studentEmail")
-            or parent_profile.get("child_email")
-        )
-        relationship_intent = _prepare_existing_child_relationship(profile, child_email)
-    try:
-        if resume_command is None:
-            _, profile = public_identity_service.start_or_resume_public_registration(
-                email=body.email,
-                issuer=issuer,
-                subject=provider_subject,
-                user_id=provider_subject,
-                role=role,
-                profile=profile,
-                provider=cognito,
-                user_pool_id=settings.cognito_user_pool_id,
-            )
-        else:
-            _, profile = public_identity_service.resume_public_registration(
-                command=resume_command,
-                issuer=issuer,
-                subject=provider_subject,
-                role=role,
-                profile=profile,
-                provider=cognito,
-                user_pool_id=settings.cognito_user_pool_id,
-            )
-    except public_identity_service.PublicIdentityCommandConflict as exc:
-        raise _public_identity_conflict() from exc
-    except public_identity_service.PublicIdentityDependencyError as exc:
-        raise _public_identity_dependency_error() from exc
-
-    if relationship_intent is not None:
-        relationship_result = _commit_parent_student_relationship(relationship_intent)
-        if relationship_result.profile is not None:
-            profile = relationship_result.profile
-
-    return _auth_response_for_profile(
-        access_token="",
-        profile=profile,
-        onboarding_status="email_verification_required",
-    )
+    raise _decommissioned("public_registration_closed")
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -893,49 +686,38 @@ async def confirm_login_code(body: LoginCodeConfirmRequest):
 
 
 @router.post("/forgot-password", response_model=PasswordResetResponse)
-@explicit_route_classification("public", "password recovery entry point")
-async def forgot_password(
-    body: ForgotPasswordRequest,
-    settings: Settings = Depends(get_settings),
-    correlation_id: str = Depends(get_request_correlation_id),
-):
-    """Start Cognito's forgot-password flow without exposing account existence."""
-    cognito = _get_cognito(settings)
-    client_id = _public_client_id(settings)
-    try:
-        cognito.forgot_password(ClientId=client_id, Username=body.email)
-    except ClientError as e:
-        failure = normalize_cognito_failure(
-            PublicAuthOperation.FORGOT_PASSWORD, e, correlation_id
+@explicit_route_classification("public", "decommissioned password recovery surface")
+async def forgot_password(body: ForgotPasswordRequest):
+    """Refuse password recovery; a forgotten password is reset by an administrator.
+
+    Kept as a declared 410 rather than removed from the router so an old client
+    is told the command is gone instead of reading a 404 as a deployment fault,
+    and so the route stays in the authorization inventory.
+    """
+    if SELF_SERVICE_PASSWORD_RECOVERY_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail={
+                "code": "password_recovery_not_implemented",
+                "message": "Password recovery is switched on but this build cannot serve it.",
+            },
         )
-        if failure.publicly_accepted:
-            return PasswordResetResponse(status="accepted")
-        return public_auth_error_response(failure)
-    return PasswordResetResponse(status="accepted")
+    raise _decommissioned("password_recovery_closed")
 
 
 @router.post("/reset-password", response_model=PasswordResetResponse)
-@explicit_route_classification("public", "password recovery confirmation")
-async def reset_password(
-    body: ResetPasswordRequest,
-    settings: Settings = Depends(get_settings),
-    correlation_id: str = Depends(get_request_correlation_id),
-):
-    """Confirm a Cognito forgot-password code and set a new password."""
-    cognito = _get_cognito(settings)
-    client_id = _public_client_id(settings)
-    try:
-        cognito.confirm_forgot_password(
-            ClientId=client_id,
-            Username=body.email,
-            ConfirmationCode=body.confirmationCode,
-            Password=body.newPassword,
+@explicit_route_classification("public", "decommissioned password recovery surface")
+async def reset_password(body: ResetPasswordRequest):
+    """Refuse recovery-code password resets; see `forgot_password`."""
+    if SELF_SERVICE_PASSWORD_RECOVERY_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail={
+                "code": "password_recovery_not_implemented",
+                "message": "Password recovery is switched on but this build cannot serve it.",
+            },
         )
-    except ClientError as e:
-        return public_auth_error_response(
-            normalize_cognito_failure(PublicAuthOperation.RESET_PASSWORD, e, correlation_id)
-        )
-    return PasswordResetResponse(status="confirmed")
+    raise _decommissioned("password_recovery_closed")
 
 
 @router.get("/me", response_model=UserOut)
@@ -1012,6 +794,179 @@ async def update_my_locale_preference(
     )
 
 
+def _password_change_provider_error(exc: ClientError) -> HTTPException:
+    """Map provider failures onto fixed bodies that carry no provider detail."""
+    code = exc.response.get("Error", {}).get("Code")
+    if code in {"NotAuthorizedException", "UserNotFoundException", "UserNotConfirmedException"}:
+        # 400, not 401: the session is valid, the password in the body is not.
+        # A 401 here would read as an expired session and sign the caller out.
+        return HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "password_change_credentials_invalid",
+                "message": "Check the current password and try again.",
+            },
+        )
+    if code == "InvalidPasswordException":
+        return HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "password_requirements_not_met",
+                "message": "Choose a password that meets the listed requirements.",
+            },
+        )
+    if code in {"LimitExceededException", "TooManyRequestsException"}:
+        return HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "auth_request_rate_limited",
+                "message": "Too many attempts. Wait a few minutes before trying again.",
+            },
+        )
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "code": "identity_provider_unavailable",
+            "message": "Try again in a few minutes.",
+        },
+    )
+
+
+def _password_change_verification_failed() -> HTTPException:
+    """One body for every rejected code.
+
+    A wrong code, an expired code, a spent code and a code that was never issued
+    all answer with these exact bytes. Telling them apart would say whether a
+    guess was close, which is the whole value of guessing.
+    """
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={
+            "code": "password_change_verification_failed",
+            "message": "This code cannot be used. Request a new code and try again.",
+        },
+    )
+
+
+def _clear_forced_password_change(current_user: dict, user_id: str) -> None:
+    """Lower the administrator-reset flag, and only after the password really changed.
+
+    This cannot share a transaction with the provider call, so it is ordered
+    after it and made repeatable instead: the flag is only ever lowered on a
+    password that has already been replaced, and a write that does not land
+    answers 503 rather than reporting success. The account then signs in with
+    its new password, is sent straight back to this same command, and the write
+    is retried — it is never locked behind a flag it cannot lower.
+
+    Whether the flag is up is read from the same authoritative resolution that
+    admitted this very request, not from a second read that could disagree with
+    it, so an account the gate is holding is always one this clears.
+    """
+    if not current_user.get("must_change_password"):
+        return
+    result = user_repo.update_profile_fields_versioned(
+        user_id,
+        update_expression="SET #must_change_password = :cleared, updated_at = :now",
+        expression_attribute_names={"#must_change_password": MUST_CHANGE_PASSWORD_FIELD},
+        expression_attribute_values={":cleared": False, ":now": _utc_now_iso()},
+    )
+    if result.disposition is not user_repo.ProfileWriteDisposition.UPDATED:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "password_change_state_not_cleared",
+                "message": "Your password was changed. Sign in again to finish.",
+            },
+        )
+
+
+def _password_change_actor(current_user: dict) -> tuple[str, str]:
+    profile = _profile_from_current_user(current_user) or {}
+    user_id = str(profile.get("user_id") or "").strip()
+    email = _norm_email(profile.get("email"))
+    if not user_id or not email:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return user_id, email
+
+
+@router.post("/password-change/request", response_model=PasswordChangeRequestResponse)
+@explicit_route_classification("authenticated-global", "Actor self password change command")
+async def request_password_change(
+    body: PasswordChangeRequest,
+    current_user: dict = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+):
+    """Prove the current password, then mail a single-use code to the account."""
+    user_id, email = _password_change_actor(current_user)
+    cognito = _get_cognito(settings)
+    try:
+        cognito.initiate_auth(
+            AuthFlow="USER_PASSWORD_AUTH",
+            AuthParameters={"USERNAME": email, "PASSWORD": body.currentPassword},
+            ClientId=_public_client_id(settings),
+        )
+    except ClientError as exc:
+        raise _password_change_provider_error(exc) from exc
+
+    # The screen the caller is looking at wins, as everywhere else; the stored
+    # preference is only read when the request did not say.
+    locale = locale_service.request_locale() or locale_service.effective_locale(
+        _profile_from_current_user(current_user)
+    )
+    try:
+        issued = password_change_code_service.issue(user_id, email, locale=locale)
+    except password_change_code_service.PasswordChangeCodeRateLimited as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "password_change_code_rate_limited",
+                "message": "Too many codes requested. Try again later.",
+            },
+        ) from exc
+    except password_change_code_service.PasswordChangeCodeDeliveryFailed as exc:
+        # 503, not 500: nothing was spent and any live code still works, so the
+        # honest answer is "the mail did not go out, try again".
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "password_change_code_delivery_failed",
+                "message": "The code could not be sent. Try again in a few minutes.",
+            },
+        ) from exc
+    return PasswordChangeRequestResponse(
+        maskedRecipient=issued.masked_recipient,
+        expiresAt=issued.expires_at,
+    )
+
+
+@router.post("/password-change/confirm", response_model=PasswordChangeConfirmResponse)
+@explicit_route_classification("authenticated-global", "Actor self password change command")
+async def confirm_password_change(
+    body: PasswordChangeConfirmRequest,
+    current_user: dict = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    settings: Settings = Depends(get_settings),
+):
+    """Spend the code, then let the provider check the old password and set the new one."""
+    user_id, _ = _password_change_actor(current_user)
+    try:
+        password_change_code_service.verify_and_consume(user_id, body.code)
+    except password_change_code_service.PasswordChangeCodeRejected as exc:
+        raise _password_change_verification_failed() from exc
+
+    cognito = _get_cognito(settings)
+    try:
+        cognito.change_password(
+            AccessToken=credentials.credentials,
+            PreviousPassword=body.currentPassword,
+            ProposedPassword=body.newPassword,
+        )
+    except ClientError as exc:
+        raise _password_change_provider_error(exc) from exc
+    _clear_forced_password_change(current_user, user_id)
+    return PasswordChangeConfirmResponse()
+
+
 @router.post("/refresh", response_model=AuthResponse)
 @explicit_route_classification("public", "refresh-token authentication entry point")
 async def refresh(
@@ -1070,3 +1025,115 @@ async def logout(
         return public_auth_error_response(
             normalize_cognito_failure(PublicAuthOperation.LOGOUT, e, correlation_id)
         )
+
+
+# ---------------------------------------------------------------------------
+# Invitation activation (unauthenticated)
+# ---------------------------------------------------------------------------
+
+INVITATION_CLAIM_WINDOW_SECONDS = 900
+INVITATION_CLAIM_MAX_ATTEMPTS = 10
+INVITATION_CLAIM_THROTTLE_ENTITY = "invitation_claim_throttle"
+
+
+class InvitationClaimRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    token: str = Field(min_length=32, max_length=512)
+    password: str = Field(min_length=8, max_length=256)
+
+    @field_validator("password")
+    @classmethod
+    def enforce_password_policy(cls, value: str) -> str:
+        """Reject a weak password before the single-use token is anywhere near burned."""
+        return enforce_password_complexity(value)
+
+
+def get_account_identity_provider(settings: Settings = Depends(get_settings)) -> Any:
+    return CognitoTeacherIdentityProvider(
+        boto3.client("cognito-idp", region_name=settings.aws_region),
+        user_pool_id=settings.cognito_user_pool_id,
+    )
+
+
+def _claim_source_digest(request: Request) -> str:
+    """Bucket a caller by the address the gateway observed, never by a client header.
+
+    `X-Forwarded-For` is caller-controlled at the edge, so keying on it would let one
+    attacker mint a fresh quota per guess. Only the digest is stored.
+    """
+    source = request.client.host if request.client else ""
+    return hashlib.sha256(str(source or "unknown").encode("utf-8")).hexdigest()
+
+
+def _invitation_claim_rate_limited() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail={
+            "code": "auth_request_rate_limited",
+            "message": "Too many attempts. Wait a few minutes before trying again.",
+        },
+        headers={"Retry-After": str(INVITATION_CLAIM_WINDOW_SECONDS)},
+    )
+
+
+def admit_invitation_claim(request: Request, *, now: datetime | None = None, table=None) -> None:
+    """Charge one attempt per caller per window before the token is ever examined.
+
+    Counting first is what makes the limit a brute-force gate: a wrong token, a spent
+    token and a good token all cost the same. A counter that cannot be written refuses
+    the attempt rather than admitting it.
+    """
+    moment = int((now or datetime.now(UTC)).timestamp())
+    window_start = moment - (moment % INVITATION_CLAIM_WINDOW_SECONDS)
+    digest = _claim_source_digest(request)
+    client = table if table is not None else get_table()
+    try:
+        response = client.update_item(
+            Key={
+                "PK": f"INVITATION_CLAIM_THROTTLE#{digest}",
+                "SK": f"WINDOW#{window_start}",
+            },
+            # DynamoDB's grammar puts SET before ADD; the reverse order is refused.
+            UpdateExpression=(
+                "SET entity_type = :entity, expires_at = :expires_at ADD attempts :one"
+            ),
+            ExpressionAttributeValues={
+                ":one": 1,
+                ":entity": INVITATION_CLAIM_THROTTLE_ENTITY,
+                ":expires_at": window_start + 2 * INVITATION_CLAIM_WINDOW_SECONDS,
+            },
+            ReturnValues="UPDATED_NEW",
+        )
+    except Exception as exc:
+        raise _invitation_claim_rate_limited() from exc
+    attributes = response.get("Attributes") if isinstance(response, dict) else None
+    attempts = int((attributes or {}).get("attempts") or 0)
+    if attempts > INVITATION_CLAIM_MAX_ATTEMPTS:
+        raise _invitation_claim_rate_limited()
+
+
+@router.post("/invitations/claim")
+@explicit_route_classification(
+    "public", "invitation-gated account activation for every provisionable role"
+)
+def claim_invitation(
+    body: InvitationClaimRequest,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+    provider: Any = Depends(get_account_identity_provider),
+) -> dict[str, Any]:
+    """Exchange one single-use token for an active account with a chosen password.
+
+    Every rejection the service raises is returned unchanged. The service answers a
+    token that never existed and one already burned with identical bytes; any wording
+    added here would turn that into an oracle.
+    """
+    admit_invitation_claim(request)
+    issuer = public_identity_service.canonical_public_issuer(settings.allowed_cognito_issuers)
+    return account_provisioning_service.claim_invitation(
+        token=body.token,
+        password=body.password,
+        issuer=issuer,
+        provider=provider,
+    )

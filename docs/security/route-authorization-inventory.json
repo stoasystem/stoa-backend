@@ -1,5 +1,21 @@
 [
   {
+    "authorization": [
+      {
+        "action": "manage_privilege",
+        "capability": "admin_identity_manager",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "DELETE",
+    "path": "/admin/users/invitations/{invitation_id}",
+    "sensitive": true
+  },
+  {
     "authorization": [],
     "classification": "authenticated-global",
     "family": "auth",
@@ -1100,6 +1116,22 @@
       {
         "action": "read",
         "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/parents/me/children/requests",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
         "purpose": "parent_oversight",
         "resource_type": "student"
       }
@@ -1585,6 +1617,22 @@
     ],
     "method": "GET",
     "path": "/students/me/learning-history",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "students",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/students/me/parent-requests",
     "sensitive": true
   },
   {
@@ -3166,6 +3214,120 @@
     "sensitive": true
   },
   {
+    "authorization": [
+      {
+        "action": "manage_privilege",
+        "capability": "admin_identity_manager",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/users",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "manage_privilege",
+        "capability": "admin_identity_manager",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/users/invitations",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "manage_privilege",
+        "capability": "admin_identity_manager",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/admin/users/invitations/{invitation_id}/reissue",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "manage_privilege",
+        "capability": "admin_identity_manager",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "parent_id",
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/admin/users/parent-links",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "manage_privilege",
+        "capability": "admin_identity_manager",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "user_id"
+    ],
+    "method": "POST",
+    "path": "/admin/users/{user_id}/password-reset",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "manage_privilege",
+        "capability": "admin_identity_manager",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "user_id"
+    ],
+    "method": "POST",
+    "path": "/admin/users/{user_id}/status",
+    "sensitive": true
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "analytics",
+    "identifiers": [
+      "sessionId"
+    ],
+    "method": "POST",
+    "path": "/analytics/events",
+    "sensitive": false
+  },
+  {
     "authorization": [],
     "classification": "public",
     "family": "auth",
@@ -3190,6 +3352,15 @@
     "identifiers": [],
     "method": "POST",
     "path": "/auth/forgot-password",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "auth",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/auth/invitations/claim",
     "sensitive": false
   },
   {
@@ -3226,6 +3397,24 @@
     "identifiers": [],
     "method": "POST",
     "path": "/auth/logout",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "authenticated-global",
+    "family": "auth",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/auth/password-change/confirm",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "authenticated-global",
+    "family": "auth",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/auth/password-change/request",
     "sensitive": false
   },
   {
@@ -3455,6 +3644,58 @@
     "family": "parents",
     "identifiers": [],
     "method": "POST",
+    "path": "/parents/me/children/requests",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/parents/me/children/requests/{student_id}/confirm",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [
+      "student_id"
+    ],
+    "method": "POST",
+    "path": "/parents/me/children/requests/{student_id}/reject",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "parents",
+    "identifiers": [],
+    "method": "POST",
     "path": "/parents/me/subscription/checkout",
     "sensitive": true
   },
@@ -3659,6 +3900,58 @@
     ],
     "method": "POST",
     "path": "/questions/{question_id}/request-teacher",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "create",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "students",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/students/me/parent-requests",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "students",
+    "identifiers": [
+      "parent_id"
+    ],
+    "method": "POST",
+    "path": "/students/me/parent-requests/{parent_id}/confirm",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "parent_binding"
+      }
+    ],
+    "classification": "authorized",
+    "family": "students",
+    "identifiers": [
+      "parent_id"
+    ],
+    "method": "POST",
+    "path": "/students/me/parent-requests/{parent_id}/reject",
     "sensitive": true
   },
   {

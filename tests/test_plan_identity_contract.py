@@ -3,15 +3,12 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 import pytest
 from pydantic import ValidationError
 
-from stoa.config import FREE_STORAGE_BYTES, PAID_STORAGE_BYTES, Settings, get_settings
+from stoa.config import FREE_STORAGE_BYTES, PAID_STORAGE_BYTES, Settings
 from stoa.models.billing import BillingPlanId
 from stoa.models.user import SubscriptionTier, UserProfile
-from stoa.routers import auth
 from stoa.services import attachment_service, entitlement_service, subscription_service
 
 
@@ -229,7 +226,9 @@ def test_active_profile_writes_use_only_free_trial_semantics() -> None:
         AUTH_PATH, "subscription_tier"
     ) | _cognito_subscription_attribute_writes(AUTH_PATH)
 
-    assert active_writes == {"free_trial"}
+    # Public registration is decommissioned, so the auth router now writes no
+    # tier at all. The guard is that it can never write a non-free_trial one.
+    assert active_writes <= {"free_trial"}
     assert active_writes.isdisjoint(LEGACY_PLAN_VALUES)
 
     # Cosmetic/legacy daily counters can still contain English tier words; they
@@ -237,62 +236,6 @@ def test_active_profile_writes_use_only_free_trial_semantics() -> None:
     config_source = CONFIG_PATH.read_text(encoding="utf-8")
     assert "standard_tier_daily_question_limit" in config_source
     assert "premium_tier_daily_question_limit" in config_source
-
-
-@pytest.mark.parametrize("role", ["student", "parent"])
-def test_new_public_account_profiles_and_provider_attributes_start_free_trial(
-    monkeypatch: pytest.MonkeyPatch,
-    role: str,
-) -> None:
-    stored: dict[str, object] = {}
-    provider_calls: list[dict[str, object]] = []
-
-    class FakeCognito:
-        def sign_up(self, **kwargs):
-            return {"UserSub": f"{role}-subject"}
-
-        def admin_update_user_attributes(self, **kwargs):
-            provider_calls.append(kwargs)
-            return {}
-
-    def start_registration(**kwargs):
-        stored.update(kwargs["profile"])
-        return object(), dict(stored)
-
-    monkeypatch.setattr(auth, "_get_cognito", lambda settings: FakeCognito())
-    monkeypatch.setattr(
-        auth.public_identity_service,
-        "start_or_resume_public_registration",
-        start_registration,
-    )
-
-    app = FastAPI()
-    app.include_router(auth.router, prefix="/auth")
-    app.dependency_overrides[get_settings] = lambda: _settings(
-        cognito_user_pool_id="pool-id",
-        cognito_student_client_id="public-client-id",
-    )
-
-    response = TestClient(app).post(
-        "/auth/register",
-        json={
-            "email": f"{role}@example.com",
-            "password": "ValidPass123!",
-            "role": role,
-        },
-    )
-
-    assert response.status_code == 201
-    assert stored["subscription_tier"] == "free_trial"
-    assert provider_calls == [
-        {
-            "UserPoolId": "pool-id",
-            "Username": f"{role}@example.com",
-            "UserAttributes": [
-                {"Name": "custom:subscription_tier", "Value": "free_trial"}
-            ],
-        }
-    ]
 
 
 def test_environment_example_names_every_plan_setting_without_live_secrets() -> None:

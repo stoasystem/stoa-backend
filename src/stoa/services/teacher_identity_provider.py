@@ -30,6 +30,8 @@ class TeacherIdentityProvider(Protocol):
 
     def ensure_teacher_identity(self, *, email: str, user_id: str, group: str) -> None: ...
 
+    def delete_account(self, *, email: str) -> None: ...
+
 
 class CognitoTeacherIdentityProvider:
     def __init__(self, client: Any, *, user_pool_id: str) -> None:
@@ -87,6 +89,25 @@ class CognitoTeacherIdentityProvider:
         except ClientError as exc:
             code = exc.response.get("Error", {}).get("Code")
             raise TeacherAccountUnavailable(str(code or "admin_add_user_to_group failed")) from exc
+
+    def delete_account(self, *, email: str) -> None:
+        """Withdraw an identity whose account setup failed after it was minted.
+
+        A user already gone is the outcome this asks for, so that code is success.
+        Everything else stays an error for the caller to decide about: this runs as
+        compensation, and a compensation that hides its own failure is worse than one
+        that fails loudly.
+        """
+        try:
+            self._client.admin_delete_user(
+                UserPoolId=self._user_pool_id,
+                Username=email,
+            )
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code")
+            if code == "UserNotFoundException":
+                return
+            raise TeacherAccountUnavailable(str(code or "admin_delete_user failed")) from exc
 
 
 def _subject_of(created: Any) -> str:

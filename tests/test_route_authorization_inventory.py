@@ -607,3 +607,71 @@ def test_metadata_on_endpoint_without_dependency_is_rejected():
     )
     failures = validate_application_inventory(app)
     assert any("not attached to a dependency" in failure.reason for failure in failures)
+
+
+# Every path this service answers without an identity, as API Gateway is configured
+# to expose it in `stoa-infra/stacks/api_stack.py`. The two lists are maintained by
+# hand in their own repositories on purpose: the bug this guards against was a route
+# declared public here, never added there, which the authorizer then answered 401
+# before the handler ran. Nothing derived from this file could have caught that, and
+# neither repository can read the other's at test time.
+GATEWAY_PUBLIC_PATHS = {
+    ("GET", "/health"),
+    ("GET", "/teacher-applications/{application_id}/status"),
+    ("POST", "/analytics/events"),
+    ("POST", "/auth/email-verification/confirm"),
+    ("POST", "/auth/email-verification/resend"),
+    ("POST", "/auth/forgot-password"),
+    ("POST", "/auth/invitations/claim"),
+    ("POST", "/auth/login"),
+    ("POST", "/auth/login-code/confirm"),
+    ("POST", "/auth/login-code/request"),
+    ("POST", "/auth/logout"),
+    ("POST", "/auth/refresh"),
+    ("POST", "/auth/register"),
+    ("POST", "/auth/reset-password"),
+    ("POST", "/billing/webhooks/stripe"),
+    ("POST", "/teacher-applications"),
+    ("POST", "/teacher-applications/activation/claim"),
+}
+
+# Declared public here, but the handler takes a verified token, so the authorizer in
+# front of it is load-bearing rather than in the way. The classification is what is
+# wrong, not the gateway; opening it would remove a check that currently holds.
+PUBLIC_CLASSIFICATION_WITH_A_TOKEN_DEPENDENCY = {
+    ("POST", "/teacher-applications/activation/consume"),
+}
+
+
+def _declared_public_routes() -> set[tuple[str, str]]:
+    import json
+    from pathlib import Path
+
+    inventory = Path("docs/security/route-authorization-inventory.json")
+    return {
+        (entry["method"], entry["path"])
+        for entry in json.loads(inventory.read_text(encoding="utf-8"))
+        if entry.get("classification") == "public"
+    }
+
+
+def test_every_public_route_is_reachable_without_a_token_at_the_gateway():
+    """A route the gateway does not expose answers 401 with the handler never invoked.
+
+    Both directions are asserted: a path missing from the gateway is dead in
+    production, and a path the gateway opens without a public classification here is
+    an unauthenticated surface nobody declared.
+    """
+    declared = _declared_public_routes() - PUBLIC_CLASSIFICATION_WITH_A_TOKEN_DEPENDENCY
+
+    assert declared == GATEWAY_PUBLIC_PATHS
+
+
+def test_the_token_dependent_exceptions_really_do_depend_on_a_token():
+    """Without this the exception set above becomes a place to park inconvenient rows."""
+    import inspect
+
+    from stoa.routers import teacher_applications
+
+    source = inspect.getsource(teacher_applications.activate)
+    assert "get_verified_token" in source

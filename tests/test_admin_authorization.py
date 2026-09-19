@@ -77,9 +77,21 @@ def test_registered_admin_router_has_exact_executable_policy_and_controls(method
 
 def test_registered_admin_router_table_is_complete_across_main_registrations():
     keys = [(method, path) for method, path, _route in REGISTERED_ADMIN_ROUTES]
-    assert len(keys) == len(set(keys)) == 76
+    assert len(keys) == len(set(keys)) == 83
     assert ("GET", "/admin/notifications") in keys
     assert ("GET", "/admin/notifications/delivery-status") in keys
+    # Card 002-D: every account command is an admin-capability route, not a role check.
+    for account_route in (
+        ("POST", "/admin/users"),
+        ("POST", "/admin/users/invitations"),
+        ("POST", "/admin/users/invitations/{invitation_id}/reissue"),
+        ("DELETE", "/admin/users/invitations/{invitation_id}"),
+        ("POST", "/admin/users/{user_id}/password-reset"),
+        ("POST", "/admin/users/{user_id}/status"),
+        ("POST", "/admin/users/parent-links"),
+    ):
+        assert account_route in keys, account_route
+        assert classify_admin_route(*account_route).capability == "admin_identity_manager"
     assert all(classify_admin_route(method, path) for method, path in keys)
 
 

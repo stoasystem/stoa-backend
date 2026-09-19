@@ -42,10 +42,12 @@ from stoa.security.identity import Actor, CanonicalRole
 from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.services import (
+    account_numbering_service,
     account_operations_service,
     allowance_service,
     billing_reconciliation_service,
     learning_profile_service,
+    parent_link_service,
     subscription_service,
     teacher_support_allowance_service,
 )
@@ -506,6 +508,7 @@ def _parent_account_dependency(action: AuthorizationAction):
 
 _parent_account_read = _parent_account_dependency(AuthorizationAction.READ)
 _parent_account_create = _parent_account_dependency(AuthorizationAction.CREATE)
+_parent_account_update = _parent_account_dependency(AuthorizationAction.UPDATE)
 
 
 def _provider_value(value: object, key: str) -> object:
@@ -791,6 +794,7 @@ _parent_child_read.authorization_specs = (  # type: ignore[attr-defined]
 
 def _list_children_for_parent(parent_user_id: str) -> list[dict[str, Any]]:
     children: list[dict[str, Any]] = []
+    seen: set[str] = set()
     parent = user_repo.get_user(parent_user_id)
     for binding in user_repo.list_parent_student_bindings(parent_user_id):
         student_id = binding.get("student_id")
@@ -802,6 +806,7 @@ def _list_children_for_parent(parent_user_id: str) -> list[dict[str, Any]]:
             continue
         facts = ParentAuthorizationFacts(binding, reverse, parent, profile)
         if facts.matches(parent_user_id, str(student_id)):
+            seen.add(str(student_id))
             children.append(
                 {
                     **profile,
@@ -810,6 +815,15 @@ def _list_children_for_parent(parent_user_id: str) -> list[dict[str, Any]]:
                     ),
                 }
             )
+    for link in parent_link_service.active_children(parent_user_id):
+        student_id = str(link.get("student_id") or "")
+        if not student_id or student_id in seen:
+            continue
+        profile = user_repo.get_user(student_id)
+        if profile is None:
+            continue
+        seen.add(student_id)
+        children.append({**profile, "relationship": link.get("relationship") or "child"})
     return children
 
 
@@ -1602,3 +1616,170 @@ async def get_child_report_by_week(
     if not report or report.get("student_id") != child_id:
         return _missing_report_state()
     return _report_state_from_item(report)
+
+
+# ---------------------------------------------------------------------------
+# Parent-student links: pending requests and the confirmation that grants sight
+# ---------------------------------------------------------------------------
+
+# The account-number lookup the link service refuses to guess at. Without it a
+# self-service request raises `account_number_lookup_unavailable` rather than
+# falling back to treating a number as a user id.
+parent_link_service.set_account_number_resolver(account_numbering_service.resolve_account_id)
+
+
+PARENT_LINK_ERROR_STATUS = {
+    "link_target_not_found": 404,
+    "link_initiator_not_allowed": 403,
+    "link_not_pending": 409,
+    "link_confirmation_not_allowed": 403,
+    "link_confirmation_not_applicable": 409,
+    "account_number_lookup_unavailable": 503,
+}
+
+
+def parent_link_http_error(error: parent_link_service.ParentLinkError) -> HTTPException:
+    return HTTPException(
+        status_code=PARENT_LINK_ERROR_STATUS.get(error.code, 409),
+        detail={"code": error.code},
+    )
+
+
+PARENT_LINK_REQUEST_WINDOW_SECONDS = 86400
+PARENT_LINK_REQUEST_MAX_PER_WINDOW = 5
+PARENT_LINK_REQUEST_QUOTA_ENTITY = "parent_link_request_quota"
+
+
+def parent_link_request_rate_limited() -> HTTPException:
+    return HTTPException(
+        status_code=429,
+        detail={"code": "link_request_rate_limited"},
+        headers={"Retry-After": str(PARENT_LINK_REQUEST_WINDOW_SECONDS)},
+    )
+
+
+def admit_parent_link_request(requester_id: str, *, now: datetime | None = None, table=None) -> None:
+    """Cap how many links one account may propose inside a window.
+
+    A request writes a pending row into the counterpart's partition, and a pending
+    row blocks an administrator from assigning that pair. Uncapped, that is a
+    harassment path rather than a convenience.
+    """
+    moment = int((now or datetime.now(timezone.utc)).timestamp())
+    window_start = moment - (moment % PARENT_LINK_REQUEST_WINDOW_SECONDS)
+    client = table if table is not None else get_table()
+    try:
+        response = client.update_item(
+            Key={
+                "PK": f"PARENT_LINK_REQUEST_QUOTA#{requester_id}",
+                "SK": f"WINDOW#{window_start}",
+            },
+            # DynamoDB's grammar puts SET before ADD; the reverse order is refused.
+            UpdateExpression=(
+                "SET entity_type = :entity, expires_at = :expires_at ADD attempts :one"
+            ),
+            ExpressionAttributeValues={
+                ":one": 1,
+                ":entity": PARENT_LINK_REQUEST_QUOTA_ENTITY,
+                ":expires_at": window_start + 2 * PARENT_LINK_REQUEST_WINDOW_SECONDS,
+            },
+            ReturnValues="UPDATED_NEW",
+        )
+    except Exception as exc:
+        raise parent_link_request_rate_limited() from exc
+    attributes = response.get("Attributes") if isinstance(response, dict) else None
+    if int((attributes or {}).get("attempts") or 0) > PARENT_LINK_REQUEST_MAX_PER_WINDOW:
+        raise parent_link_request_rate_limited()
+
+
+class ParentLinkRequestCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    studentNumber: str = Field(min_length=3, max_length=40)
+    relationship: str = Field(default="child", min_length=1, max_length=40)
+
+
+class ParentLinkRequestItem(BaseModel):
+    parentId: str
+    studentId: str
+    status: str
+    initiatorRole: str
+    relationship: str
+
+
+class ParentLinkRequestListResponse(BaseModel):
+    items: list[ParentLinkRequestItem] = Field(default_factory=list)
+
+
+def parent_link_request_item(link: Mapping[str, Any]) -> ParentLinkRequestItem:
+    return ParentLinkRequestItem(
+        parentId=str(link.get("parent_id") or ""),
+        studentId=str(link.get("student_id") or ""),
+        status=str(link.get("status") or ""),
+        initiatorRole=str(link.get("initiator_role") or ""),
+        relationship=str(link.get("relationship") or ""),
+    )
+
+
+@router.get("/me/children/requests", response_model=ParentLinkRequestListResponse)
+async def list_my_child_link_requests(
+    actor: Actor = Depends(_parent_account_read),
+) -> ParentLinkRequestListResponse:
+    """Requests awaiting an answer. A pending link grants no visibility at all."""
+    return ParentLinkRequestListResponse(
+        items=[
+            parent_link_request_item(link)
+            for link in parent_link_service.pending_requests_for_parent(actor.user_id)
+        ]
+    )
+
+
+@router.post(
+    "/me/children/requests/{student_id}/confirm", response_model=ParentLinkRequestItem
+)
+async def confirm_my_child_link_request(
+    student_id: str,
+    actor: Actor = Depends(_parent_account_update),
+) -> ParentLinkRequestItem:
+    """Answer a request the student raised. Only the side that did not ask may confirm."""
+    try:
+        link = parent_link_service.confirm_link(
+            parent_id=actor.user_id, student_id=student_id, actor_id=actor.user_id
+        )
+    except parent_link_service.ParentLinkError as exc:
+        raise parent_link_http_error(exc) from exc
+    return parent_link_request_item(link)
+
+
+@router.post(
+    "/me/children/requests/{student_id}/reject", response_model=ParentLinkRequestItem
+)
+async def reject_my_child_link_request(
+    student_id: str,
+    actor: Actor = Depends(_parent_account_update),
+) -> ParentLinkRequestItem:
+    try:
+        link = parent_link_service.reject_link(
+            parent_id=actor.user_id, student_id=student_id, actor_id=actor.user_id
+        )
+    except parent_link_service.ParentLinkError as exc:
+        raise parent_link_http_error(exc) from exc
+    return parent_link_request_item(link)
+
+
+@router.post("/me/children/requests", response_model=ParentLinkRequestItem)
+async def request_child_link(
+    body: ParentLinkRequestCommand,
+    actor: Actor = Depends(_parent_account_create),
+) -> ParentLinkRequestItem:
+    """Propose a link by student number. It stops at `pending` and grants nothing."""
+    admit_parent_link_request(actor.user_id)
+    try:
+        link = parent_link_service.request_link(
+            requester_id=actor.user_id,
+            counterpart_number=body.studentNumber,
+            relationship=body.relationship,
+        )
+    except parent_link_service.ParentLinkError as exc:
+        raise parent_link_http_error(exc) from exc
+    return parent_link_request_item(link)

@@ -492,6 +492,36 @@ class AuthorizationFactRepository(Protocol):
     ) -> AuthorizationFacts: ...
 
 
+def _parent_link_facts(parent_id: str, student_id: str) -> ParentAuthorizationFacts | None:
+    """Project a many-to-many parent link onto the legacy binding fact contract.
+
+    `active_link` is the only status judgement: it demands both stored directions
+    be active and both accounts usable.  A link in any other status is still
+    reported, without `active`, so a party that already knows the relationship
+    keeps getting a refusal instead of an existence-hiding 404.
+    """
+    from stoa.db.repositories import user_repo
+    from stoa.services import parent_link_service
+
+    confirmed = parent_link_service.active_link(parent_id, student_id)
+    link = confirmed or parent_link_service.known_link(parent_id, student_id)
+    if link is None:
+        return None
+    row = {
+        "parent_id": parent_id,
+        "student_id": student_id,
+        "relationship": link.get("relationship") or "child",
+        "status": "active" if confirmed is not None else str(link.get("status") or "pending"),
+        "version": 1,
+    }
+    return ParentAuthorizationFacts(
+        row,
+        dict(row),
+        user_repo.get_user(parent_id),
+        user_repo.get_user(student_id),
+    )
+
+
 class CurrentAuthorizationFactRepository:
     """Fresh local fact loader; it intentionally keeps no cross-request cache."""
 
@@ -506,18 +536,24 @@ class CurrentAuthorizationFactRepository:
         if actor.role is CanonicalRole.PARENT:
             from stoa.db.repositories import user_repo
 
-            return AuthorizationFacts(
-                parent=ParentAuthorizationFacts(
-                    forward=user_repo.get_parent_student_binding(
-                        actor.user_id, resource.student_id
-                    ),
-                    reverse=user_repo.get_student_parent_binding(
-                        resource.student_id, actor.user_id
-                    ),
-                    parent_account=user_repo.get_user(actor.user_id),
-                    student_account=user_repo.get_user(resource.student_id),
-                )
+            parent_facts = ParentAuthorizationFacts(
+                forward=user_repo.get_parent_student_binding(
+                    actor.user_id, resource.student_id
+                ),
+                reverse=user_repo.get_student_parent_binding(
+                    resource.student_id, actor.user_id
+                ),
+                parent_account=user_repo.get_user(actor.user_id),
+                student_account=user_repo.get_user(resource.student_id),
             )
+            # The legacy binding holds one parent per student, so a second parent
+            # only ever exists in the link table.  Both key spaces feed the one
+            # decision path; neither may be the only place authorization looks.
+            if not parent_facts.matches(actor.user_id, resource.student_id):
+                linked = _parent_link_facts(actor.user_id, resource.student_id)
+                if linked is not None:
+                    parent_facts = linked
+            return AuthorizationFacts(parent=parent_facts)
         if actor.role is CanonicalRole.TEACHER:
             from stoa.db.repositories import question_repo, user_repo
 
