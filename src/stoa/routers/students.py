@@ -11,7 +11,7 @@ from typing import NoReturn, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
-from stoa.db.repositories import practice_repo, question_repo, user_repo
+from stoa.db.repositories import parent_link_repo, practice_repo, question_repo, user_repo
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizedResource,
@@ -33,7 +33,11 @@ from stoa.services import (
     locale_service,
     parent_link_service,
 )
-from stoa.routers.parents import admit_parent_link_request, parent_link_http_error
+from stoa.routers.parents import (
+    admit_parent_link_request,
+    parent_link_http_error,
+    parent_link_request_conflict,
+)
 from stoa.security.identity import Actor
 from stoa.services.curriculum_translations import translated_title
 
@@ -666,4 +670,6 @@ async def request_parent_link(
         )
     except parent_link_service.ParentLinkError as exc:
         raise parent_link_http_error(exc) from exc
+    except parent_link_repo.ParentLinkConflict as exc:
+        raise parent_link_request_conflict() from exc
     return _parent_request_item(link)

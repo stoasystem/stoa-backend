@@ -17,6 +17,7 @@ from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import (
     checkout_command_repo,
+    parent_link_repo,
     practice_repo,
     question_repo,
     report_repo,
@@ -1642,15 +1643,28 @@ PARENT_LINK_ERROR_STATUS = {
     "link_not_pending": 409,
     "link_confirmation_not_allowed": 403,
     "link_confirmation_not_applicable": 409,
+    "link_already_active": 409,
+    "link_request_pending": 409,
+    "link_request_expired": 409,
+    "link_rejected_cooldown": 409,
+    "link_request_conflict": 409,
     "account_number_lookup_unavailable": 503,
 }
 
 
 def parent_link_http_error(error: parent_link_service.ParentLinkError) -> HTTPException:
+    # `link_rejected_cooldown` carries how long is left, which is the only way the
+    # client can say "try again in N days" instead of a bare refusal.
+    detail: dict[str, Any] = {"code": error.code, **(getattr(error, "details", None) or {})}
     return HTTPException(
         status_code=PARENT_LINK_ERROR_STATUS.get(error.code, 409),
-        detail={"code": error.code},
+        detail=detail,
     )
+
+
+def parent_link_request_conflict() -> HTTPException:
+    """A concurrent writer took the pair between our read and our write."""
+    return HTTPException(status_code=409, detail={"code": "link_request_conflict"})
 
 
 PARENT_LINK_REQUEST_WINDOW_SECONDS = 86400
@@ -1790,4 +1804,6 @@ async def request_child_link(
         )
     except parent_link_service.ParentLinkError as exc:
         raise parent_link_http_error(exc) from exc
+    except parent_link_repo.ParentLinkConflict as exc:
+        raise parent_link_request_conflict() from exc
     return parent_link_request_item(link)

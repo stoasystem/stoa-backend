@@ -7,7 +7,7 @@ A link is data visibility. A self-service request therefore only ever reaches
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Final
 
 from stoa.db.repositories import parent_link_repo, user_repo
@@ -24,6 +24,13 @@ INITIATOR_STUDENT: Final = parent_link_repo.INITIATOR_STUDENT
 ROLE_PARENT: Final = "parent"
 ROLE_STUDENT: Final = "student"
 
+# A refused request may be raised again after a cooling-off period, and an
+# unanswered one stops holding the pair after this long. Both are judged from
+# the stored `link_updated_at` on every read and write path: the table's TTL
+# sweep can lag by up to 48 hours, so it can never be the thing that decides.
+REJECTED_COOLDOWN: Final = timedelta(days=7)
+PENDING_REQUEST_TTL: Final = timedelta(days=14)
+
 type LinkItem = dict[str, Any]
 
 AccountNumberResolver = Callable[[str], str | None]
@@ -34,9 +41,10 @@ _account_number_resolver: AccountNumberResolver | None = None
 class ParentLinkError(Exception):
     """A link request the caller is not allowed to make, carrying a stable code."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, **details: Any) -> None:
         super().__init__(code)
         self.code = code
+        self.details: dict[str, Any] = details
 
 
 def set_account_number_resolver(resolver: AccountNumberResolver | None) -> None:
@@ -53,6 +61,59 @@ def _resolve_account_number(account_number: str) -> str | None:
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _moment(value: object) -> datetime | None:
+    """Parse a stored or injected ISO stamp; an unreadable one is not a moment."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+def _settled_at(link: Mapping[str, Any]) -> datetime | None:
+    return _moment(link.get("link_updated_at")) or _moment(link.get("linked_at"))
+
+
+def _pending_expired(link: Mapping[str, Any], at: datetime | None) -> bool:
+    """An unanswered request stops holding the pair once the window has passed.
+
+    A stamp that cannot be read counts as expired: that refuses the confirmation
+    and only ever reopens a path to another `pending`, which grants nothing.
+    """
+    settled = _settled_at(link)
+    if settled is None:
+        return True
+    if at is None:
+        return False
+    return at - settled >= PENDING_REQUEST_TTL
+
+
+def _cooldown_remaining(link: Mapping[str, Any], at: datetime | None) -> timedelta:
+    settled = _settled_at(link)
+    if settled is None or at is None:
+        return timedelta(0)
+    remaining = (settled + REJECTED_COOLDOWN) - at
+    return remaining if remaining > timedelta(0) else timedelta(0)
+
+
+def _settled_pair(parent_id: str, student_id: str) -> LinkItem | None:
+    """Both stored rows, agreeing on status, or nothing worth reasoning about."""
+    forward = parent_link_repo.get_parent_side_link(parent_id, student_id)
+    reverse = parent_link_repo.get_student_side_link(student_id, parent_id)
+    if forward is None or reverse is None:
+        return None
+    if forward.get("status") != reverse.get("status"):
+        return None
+    if forward.get("link_updated_at") != reverse.get("link_updated_at"):
+        return None
+    if not forward.get("link_updated_at"):
+        # No stamp, no fence: a reclaim could not be made safe against a racer.
+        return None
+    return forward
 
 
 def _account(user_id: str, role: str) -> Mapping[str, Any]:
@@ -90,18 +151,43 @@ def assign_link(
     relationship: str = "child",
     now: str | None = None,
 ) -> LinkItem:
-    """Administrator assignment: trusted and audited, so it starts active."""
+    """Administrator assignment: trusted and audited, so it starts active.
+
+    Assignment is an administrative act, not a request, so neither a refusal nor
+    an abandoned request stands in its way and no cooling-off period applies.
+    """
     _account(parent_id, ROLE_PARENT)
     _account(student_id, ROLE_STUDENT)
+    moment = now or _now()
+    settled = _settled_pair(parent_id, student_id)
+    if settled is not None and _reclaimable_for_admin(settled, _moment(moment)):
+        return parent_link_repo.reclaim_link(
+            parent_id=parent_id,
+            student_id=student_id,
+            expected_status=str(settled.get("status") or ""),
+            expected_link_updated_at=str(settled.get("link_updated_at") or ""),
+            status=STATUS_ACTIVE,
+            initiator_role=INITIATOR_ADMIN,
+            created_by=actor_id,
+            linked_at=moment,
+            relationship=relationship,
+        )
     return parent_link_repo.create_link(
         parent_id=parent_id,
         student_id=student_id,
         status=STATUS_ACTIVE,
         initiator_role=INITIATOR_ADMIN,
         created_by=actor_id,
-        linked_at=now or _now(),
+        linked_at=moment,
         relationship=relationship,
     )
+
+
+def _reclaimable_for_admin(link: Mapping[str, Any], at: datetime | None) -> bool:
+    status = link.get("status")
+    if status == STATUS_REJECTED:
+        return True
+    return status == STATUS_PENDING and _pending_expired(link, at)
 
 
 def request_link(
@@ -134,15 +220,54 @@ def request_link(
     _account(parent_id, ROLE_PARENT)
     _account(student_id, ROLE_STUDENT)
 
+    moment = now or _now()
+    settled = _settled_pair(parent_id, student_id)
+    if settled is not None:
+        _refuse_unless_reclaimable(settled, _moment(moment))
+        return parent_link_repo.reclaim_link(
+            parent_id=parent_id,
+            student_id=student_id,
+            expected_status=str(settled.get("status") or ""),
+            expected_link_updated_at=str(settled.get("link_updated_at") or ""),
+            status=STATUS_PENDING,
+            initiator_role=initiator_role,
+            created_by=requester_id,
+            linked_at=moment,
+            relationship=relationship,
+        )
+
     return parent_link_repo.create_link(
         parent_id=parent_id,
         student_id=student_id,
         status=STATUS_PENDING,
         initiator_role=initiator_role,
         created_by=requester_id,
-        linked_at=now or _now(),
+        linked_at=moment,
         relationship=relationship,
     )
+
+
+def _refuse_unless_reclaimable(link: Mapping[str, Any], at: datetime | None) -> None:
+    """Raise unless this settled pair may be proposed again right now."""
+    status = link.get("status")
+    if status == STATUS_ACTIVE:
+        raise ParentLinkError("link_already_active")
+    if status == STATUS_PENDING:
+        if not _pending_expired(link, at):
+            raise ParentLinkError("link_request_pending")
+        return
+    if status == STATUS_REJECTED:
+        remaining = _cooldown_remaining(link, at)
+        if remaining > timedelta(0):
+            settled = _settled_at(link)
+            assert settled is not None
+            raise ParentLinkError(
+                "link_rejected_cooldown",
+                retryAfterSeconds=int(remaining.total_seconds()),
+                retryAt=(settled + REJECTED_COOLDOWN).isoformat(),
+            )
+        return
+    raise ParentLinkError("link_request_pending")
 
 
 def _confirmer_side(link: Mapping[str, Any]) -> str:
@@ -154,17 +279,21 @@ def _confirmer_side(link: Mapping[str, Any]) -> str:
     raise ParentLinkError("link_confirmation_not_applicable")
 
 
-def _pending_link(parent_id: str, student_id: str) -> LinkItem:
+def _pending_link(parent_id: str, student_id: str, at: datetime | None) -> LinkItem:
     link = parent_link_repo.get_parent_side_link(parent_id, student_id)
     if link is None or link.get("status") != STATUS_PENDING:
         raise ParentLinkError("link_not_pending")
+    if _pending_expired(link, at):
+        # An abandoned request must not still be convertible into visibility.
+        raise ParentLinkError("link_request_expired")
     return link
 
 
 def _answer_pending(
     *, parent_id: str, student_id: str, actor_id: str, next_status: str, now: str | None
 ) -> LinkItem:
-    link = _pending_link(parent_id, student_id)
+    moment = now or _now()
+    link = _pending_link(parent_id, student_id, _moment(moment))
     if actor_id != _confirmer_side(link) or actor_id == link.get("created_by"):
         raise ParentLinkError("link_confirmation_not_allowed")
     return parent_link_repo.transition_link(
@@ -173,7 +302,7 @@ def _answer_pending(
         expected_status=STATUS_PENDING,
         next_status=next_status,
         updated_by=actor_id,
-        link_updated_at=now or _now(),
+        link_updated_at=moment,
     )
 
 
@@ -257,17 +386,23 @@ def active_children(parent_id: str) -> list[LinkItem]:
     return children
 
 
-def pending_requests_for_parent(parent_id: str) -> list[LinkItem]:
+def _live_pending(link: Mapping[str, Any], at: datetime | None) -> bool:
+    return link.get("status") == STATUS_PENDING and not _pending_expired(link, at)
+
+
+def pending_requests_for_parent(parent_id: str, *, now: str | None = None) -> list[LinkItem]:
+    at = _moment(now or _now())
     return [
         parent_link_repo.link_fields(link)
         for link in parent_link_repo.list_links_for_parent(parent_id)
-        if link.get("status") == STATUS_PENDING
+        if _live_pending(link, at)
     ]
 
 
-def pending_requests_for_student(student_id: str) -> list[LinkItem]:
+def pending_requests_for_student(student_id: str, *, now: str | None = None) -> list[LinkItem]:
+    at = _moment(now or _now())
     return [
         parent_link_repo.link_fields(link)
         for link in parent_link_repo.list_links_for_student(student_id)
-        if link.get("status") == STATUS_PENDING
+        if _live_pending(link, at)
     ]

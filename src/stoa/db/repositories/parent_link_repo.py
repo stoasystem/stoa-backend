@@ -197,6 +197,43 @@ def create_link(
     return dict(body)
 
 
+def _both_sides_stored(
+    parent_id: str, student_id: str, target: Any
+) -> tuple[LinkItem, LinkItem]:
+    current = get_parent_side_link(parent_id, student_id, table=target)
+    mirror = get_student_side_link(student_id, parent_id, table=target)
+    if current is None or mirror is None:
+        raise ParentLinkConflict("parent link is not fully stored")
+    return current, mirror
+
+
+def _conditional_rewrite(
+    *,
+    body: Mapping[str, Any],
+    condition: str,
+    values: Mapping[str, Any],
+    target: Any,
+    refusal: str,
+) -> LinkItem:
+    forward, reverse = _both_sides(body)
+    operations = [
+        {
+            "Put": {
+                "Item": item,
+                "ConditionExpression": condition,
+                "ExpressionAttributeNames": {"#status": "status"},
+                "ExpressionAttributeValues": dict(values),
+            }
+        }
+        for item in (forward, reverse)
+    ]
+    try:
+        account_deletion_repo.transact(operations, table=target)
+    except account_deletion_repo.AccountDeletionConflict as exc:
+        raise ParentLinkConflict(refusal) from exc
+    return dict(body)
+
+
 def transition_link(
     *,
     parent_id: str,
@@ -216,10 +253,7 @@ def transition_link(
         raise ValueError("link transition must change the status")
 
     target = table or get_table()
-    current = get_parent_side_link(parent_id, student_id, table=target)
-    mirror = get_student_side_link(student_id, parent_id, table=target)
-    if current is None or mirror is None:
-        raise ParentLinkConflict("parent link is not fully stored")
+    current, mirror = _both_sides_stored(parent_id, student_id, target)
     if current.get("status") != expected_status or mirror.get("status") != expected_status:
         raise ParentLinkConflict("parent link is no longer in the expected status")
 
@@ -234,23 +268,76 @@ def transition_link(
         updated_by=_required(updated_by, "updated_by"),
         link_updated_at=_required(link_updated_at, "link_updated_at"),
     )
-    forward, reverse = _both_sides(body)
-    operations = [
-        {
-            "Put": {
-                "Item": item,
-                "ConditionExpression": "attribute_exists(PK) AND #status = :expected_status",
-                "ExpressionAttributeNames": {"#status": "status"},
-                "ExpressionAttributeValues": {":expected_status": expected_status},
-            }
-        }
-        for item in (forward, reverse)
-    ]
-    try:
-        account_deletion_repo.transact(operations, table=target)
-    except account_deletion_repo.AccountDeletionConflict as exc:
-        raise ParentLinkConflict("parent link transition refused") from exc
-    return dict(body)
+    return _conditional_rewrite(
+        body=body,
+        condition="attribute_exists(PK) AND #status = :expected_status",
+        values={":expected_status": expected_status},
+        target=target,
+        refusal="parent link transition refused",
+    )
+
+
+def reclaim_link(
+    *,
+    parent_id: str,
+    student_id: str,
+    expected_status: str,
+    expected_link_updated_at: str,
+    status: str,
+    initiator_role: str,
+    created_by: str,
+    linked_at: str,
+    relationship: str = "child",
+    table: Any | None = None,
+) -> LinkItem:
+    """Put a settled pair back into use by rewriting both rows, keys and all.
+
+    The key is never released. Releasing it would mean letting a create
+    overwrite what is stored, and `create_link`'s `attribute_not_exists` is the
+    only arbiter two concurrent first writes have. Reuse is therefore an
+    explicit rewrite fenced on the status *and* the `link_updated_at` that was
+    read, so two racers reclaiming the same settled pair cannot both win.
+    """
+    parent_id = _required(parent_id, "parent_id")
+    student_id = _required(student_id, "student_id")
+    expected_status = _checked_status(expected_status)
+    expected_link_updated_at = _required(expected_link_updated_at, "expected_link_updated_at")
+    if _required(linked_at, "linked_at") == expected_link_updated_at:
+        # The fence is the stamp changing; a reclaim that reuses it lets both racers win.
+        raise ValueError("reclaim must advance link_updated_at")
+
+    target = table or get_table()
+    current, mirror = _both_sides_stored(parent_id, student_id, target)
+    for side in (current, mirror):
+        if side.get("status") != expected_status:
+            raise ParentLinkConflict("parent link is no longer in the expected status")
+        if side.get("link_updated_at") != expected_link_updated_at:
+            raise ParentLinkConflict("parent link changed since it was read")
+
+    body = _link_body(
+        parent_id=parent_id,
+        student_id=student_id,
+        relationship=_required(relationship, "relationship"),
+        status=_checked_status(status),
+        initiator_role=_required(initiator_role, "initiator_role"),
+        created_by=_required(created_by, "created_by"),
+        linked_at=_required(linked_at, "linked_at"),
+        updated_by=_required(created_by, "created_by"),
+        link_updated_at=_required(linked_at, "linked_at"),
+    )
+    return _conditional_rewrite(
+        body=body,
+        condition=(
+            "attribute_exists(PK) AND #status = :expected_status"
+            " AND link_updated_at = :expected_link_updated_at"
+        ),
+        values={
+            ":expected_status": expected_status,
+            ":expected_link_updated_at": expected_link_updated_at,
+        },
+        target=target,
+        refusal="parent link reclaim refused",
+    )
 
 
 def link_fields(item: Mapping[str, Any]) -> dict[str, Any]:
