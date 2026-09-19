@@ -2201,6 +2201,56 @@ def _guard_admin_console_survives(
     )
 
 
+def _refuse_password_reset(
+    *, actor: Mapping[str, object], target_id: str, reason_code: str
+) -> None:
+    """A refused reset is still a command somebody issued, so it is recorded."""
+    _record_account_admin_event(
+        actor=actor,
+        target_id=target_id,
+        event_type="account_password_reset_denied",
+        action="reset_account_password",
+        reason_code=reason_code,
+        evidence_reference=f"account_password_reset_denied:{reason_code}",
+    )
+    raise HTTPException(status_code=409, detail={"code": reason_code})
+
+
+def _guard_peer_admin_credentials(
+    *, actor: Mapping[str, object], target_id: str, profile: Mapping[str, object]
+) -> None:
+    """Card 006: an administrator may not take another administrator's credential.
+
+    This is a different judgement from `_guard_admin_console_survives`, because the
+    harm is different. Resetting someone else's password does not close the console
+    down; it hands the caller a working credential for another privileged principal,
+    in plaintext, in the response body, with no consent from the target and no
+    notice to it - the target's own change-at-next-sign-in obligation only fires
+    when the target signs in, and the caller signs in first. Administrators are not
+    interchangeable either: privileged capabilities such as `admin_identity_manager`
+    are granted per account, so taking over a peer can be an escalation.
+
+    Resetting one's own password is the legitimate case and is left alone; so is
+    every non-admin target, which is what this console exists to service.
+
+    The lockout this could cause - every administrator forgetting its password with
+    no peer allowed to help - is answered outside the product, not inside it. The
+    user pool is reachable with AWS credentials (`admin-set-user-password`), a
+    separate trust domain with its own audit trail. Keeping the break-glass there
+    is the point: an attacker holding one administrator session cannot reach it.
+    """
+    actor_id = str(actor.get("user_id") or actor.get("sub") or "")
+    if actor_id and actor_id == target_id:
+        return
+    if str(profile.get("role") or "") != "admin":
+        return
+    _refuse_password_reset(
+        actor=actor,
+        target_id=target_id,
+        reason_code="account_peer_admin_password_reset_forbidden",
+    )
+
+
 @router.post("/users/invitations")
 def invite_account(
     payload: AccountInvitationRequest,
@@ -2322,10 +2372,12 @@ def reset_account_password(
     here lets the account authenticate and then refuses every route but the
     self-service password change.
 
-    An administrator can reset anyone's password, so the audit row is written
-    before the response is built and a failed write fails the command.
+    An administrator can reset any account but a peer administrator's, so the
+    audit row is written before the response is built and a failed write fails
+    the command. Refusals are recorded too, from the same helper.
     """
     profile = _account_profile_or_404(user_id)
+    _guard_peer_admin_credentials(actor=user, target_id=user_id, profile=profile)
     email = _account_email_or_409(profile)
     _require_password_change_at_next_sign_in(user_id, profile)
     temporary_password = account_provisioning_service.generate_initial_password()

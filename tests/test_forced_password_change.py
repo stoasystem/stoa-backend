@@ -12,12 +12,14 @@ leave the flag exactly where it was.
 
 from __future__ import annotations
 
+import inspect
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from botocore.exceptions import ClientError
-from fastapi import FastAPI
+from fastapi import FastAPI, params
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
@@ -37,13 +39,16 @@ from stoa.db.repositories import (
 from stoa.deps import (
     FORCED_PASSWORD_CHANGE_EXEMPT_ROUTES,
     _forced_password_change_exempt,
+    get_actor,
     get_authorization_audit_sink,
+    get_deletion_command,
     get_identity_repository,
     get_verified_token,
 )
 from stoa.routers import admin, auth, parents, students
 from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD
 from stoa.security.route_inventory import (
+    _walk_dependants,
     explicit_route_classification,
     inventory_application,
 )
@@ -392,6 +397,75 @@ def test_豁免清单恰好是这三条(table: FakeAccountTable) -> None:
             ("POST", "/auth/password-change/confirm"),
         }
     )
+
+
+# ---------------------------------------------------------------------------
+# Card 006: the one route that resolves no Actor has to earn that, every run
+# ---------------------------------------------------------------------------
+
+
+def _routes_without_actor_resolution(app: FastAPI) -> dict[tuple[str, str], frozenset[Any]]:
+    """Every authenticated route whose dependency graph never reaches `get_actor`.
+
+    Read off the graph FastAPI will actually execute, so a route cannot get on or
+    off this answer by being named anywhere.
+    """
+    authenticated = {
+        (item.method, item.path)
+        for item in inventory_application(app)
+        if item.classification not in {"public", "safe-public"}
+    }
+    bypass: dict[tuple[str, str], frozenset[Any]] = {}
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        calls = frozenset(dependant.call for dependant in _walk_dependants(route.dependant))
+        for method in route.methods:
+            if (method, route.path) in authenticated and get_actor not in calls:
+                bypass[(method, route.path)] = calls
+    return bypass
+
+
+def test_不解析Actor的路由只能是那条销户命令本身() -> None:
+    """`get_actor` carries every gate there is, so skipping it needs a reason.
+
+    The reason is not membership in a list - a list would be satisfied by adding
+    the next bypass to it. The only reason this accepts is that the route *is*
+    the deletion command: its dependency graph reaches `get_deletion_command`,
+    whose own authority is pinned by the test below. Any other route that stops
+    resolving an Actor fails here and cannot be argued out of it.
+    """
+    app = _full_app()
+    bypass = _routes_without_actor_resolution(app)
+
+    # Harness control: a route that does resolve an Actor is not reported here.
+    assert ("PATCH", "/auth/me/preferences/locale") not in bypass
+
+    unjustified = {
+        route for route, calls in bypass.items() if get_deletion_command not in calls
+    }
+    assert unjustified == set(), unjustified
+
+
+def test_销户命令的身份只能来自已验证的令牌() -> None:
+    """Why that one route may skip the Actor: nothing a caller sends reaches it.
+
+    `get_deletion_command` takes no path, query, header, cookie or body input at
+    all - only the verified token and the identity repository - so it can act on
+    exactly one account, the one the token is bound to. Give it a target
+    parameter and this goes red, and with it the justification above.
+    """
+    sources: dict[str, Any] = {}
+    for name, parameter in inspect.signature(get_deletion_command).parameters.items():
+        assert isinstance(parameter.default, params.Depends), name
+        sources[name] = parameter.default.dependency
+
+    assert set(sources.values()) == {get_verified_token, get_identity_repository}
+
+
+def test_旁路清单与依赖图推出来的一致() -> None:
+    """The hand-written naming stays honest: it is exactly what the graph says."""
+    assert set(_routes_without_actor_resolution(_full_app())) == UNGATED_AUTHENTICATED_ROUTES
 
 
 def test_路由没解析出来时不豁免() -> None:

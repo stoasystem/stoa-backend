@@ -207,7 +207,24 @@ async def get_deletion_command(
     verified: VerifiedAccessToken = Depends(get_verified_token),
     repository: IdentityRepository = Depends(get_identity_repository),
 ) -> DeletionReceipt:
-    """Resolve only the immutable DELETE /auth/me command, never an Actor."""
+    """Resolve only the immutable DELETE /auth/me command, never an Actor.
+
+    Card 006: this is the one authenticated entry point in the build that does
+    not go through the Actor resolver above, which means every gate that resolver
+    carries - today the forced password change, tomorrow whatever else is hung
+    there - is off this path by construction. Do not read that as a general
+    licence. It holds because this resolver takes nothing a caller sends: no path,
+    query, header, cookie or body parameter, only the verified token and the
+    repository, so the account it acts on is the one the token is bound to and no
+    other. It also has to answer after the binding is gone, which is what makes
+    replaying a completed deletion idempotent and is why an Actor cannot be
+    required here.
+
+    `tests/test_forced_password_change.py` holds both halves: that this is still
+    the only route resolving no Actor, and that the signature above is still what
+    justifies it. A second such route is a change to the authorization surface and
+    fails there - naming it somewhere does not settle it.
+    """
     try:
         binding = await repository.get_binding(verified.issuer, verified.subject)
         user_id = (

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -608,6 +608,109 @@ def test_重置不存在的账号是404(table: AccountAdminTable) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Card 006: an administrator may not take a peer administrator's credential
+# ---------------------------------------------------------------------------
+
+
+def test_管理员重置自己的密码是允许的(table: AccountAdminTable) -> None:
+    """The negative control that stops this becoming a rule that refuses everything.
+
+    An administrator resetting its own password is the only in-product recovery
+    there is, so it has to keep working even though the target is an admin.
+    """
+    _seed_profile(table, "admin-1", "admin", account_number="A26-0001")
+    provider = RecordingPasswordAdministrator()
+    client = TestClient(_app(_admin_user(), password_provider=provider))
+
+    response = client.post(
+        "/admin/users/admin-1/password-reset", json={"reason": "lost my own password"}
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["mustChangePasswordAtNextSignIn"] is True
+    assert len(provider.calls) == 1
+    assert response.json()["temporaryPassword"] not in table.dump()
+    assert [row["event_type"] for row in table.audit_events()] == ["account_password_reset"]
+
+
+def test_管理员不能重置另一个管理员的密码(table: AccountAdminTable) -> None:
+    _seed_profile(table, "admin-1", "admin")
+    _seed_profile(table, "admin-2", "admin")
+    provider = RecordingPasswordAdministrator()
+    client = TestClient(_app(_admin_user(), password_provider=provider))
+
+    response = client.post(
+        "/admin/users/admin-2/password-reset", json={"reason": "i want their session"}
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "account_peer_admin_password_reset_forbidden"
+    # No credential was minted and none was handed back.
+    assert provider.calls == []
+    assert "temporaryPassword" not in response.text
+    # The target account is untouched: no forced-change obligation was raised on it.
+    assert "must_change_password" not in table.rows[("USER#admin-2", "PROFILE")]
+
+
+def test_多一个active管理员也挡得住(table: AccountAdminTable) -> None:
+    """The judgement is about whose credential this is, not about console survival.
+
+    `_guard_admin_console_survives` would let this through - two other administrators
+    stay active - so a rule copied from the status endpoint would not refuse here.
+    """
+    _seed_profile(table, "admin-1", "admin")
+    _seed_profile(table, "admin-2", "admin")
+    _seed_profile(table, "admin-3", "admin")
+    client = TestClient(_app(_admin_user()))
+
+    response = client.post(
+        "/admin/users/admin-2/password-reset", json={"reason": "support"}
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "account_peer_admin_password_reset_forbidden"
+
+
+def test_被挡下的重置留痕恰好一条且内容正确(table: AccountAdminTable) -> None:
+    _seed_profile(table, "admin-1", "admin")
+    _seed_profile(table, "admin-2", "admin")
+    client = TestClient(_app(_admin_user()))
+
+    client.post("/admin/users/admin-2/password-reset", json={"reason": "support"})
+
+    denied = [
+        row
+        for row in table.audit_events()
+        if row["event_type"] == "account_password_reset_denied"
+    ]
+    assert len(denied) == 1
+    assert denied[0]["actor_id"] == "admin-1"
+    assert denied[0]["target_id"] == "admin-2"
+    assert denied[0]["action"] == "reset_account_password"
+    assert denied[0]["reason_code"] == "account_peer_admin_password_reset_forbidden"
+    assert denied[0]["evidence_reference"] == (
+        "account_password_reset_denied:account_peer_admin_password_reset_forbidden"
+    )
+    assert not [
+        row for row in table.audit_events() if row["event_type"] == "account_password_reset"
+    ]
+
+
+def test_重置非管理员账号不受这条判据影响(table: AccountAdminTable) -> None:
+    """Second negative control: the refusal is keyed on the target's role."""
+    _seed_profile(table, "admin-1", "admin")
+    for user_id, role in (("student-9", "student"), ("teacher-3", "teacher"), ("parent-2", "parent")):
+        _seed_profile(table, user_id, role)
+    client = TestClient(_app(_admin_user()))
+
+    for user_id in ("student-9", "teacher-3", "parent-2"):
+        response = client.post(
+            f"/admin/users/{user_id}/password-reset", json={"reason": "support"}
+        )
+        assert response.status_code == 200, response.text
+
+
+# ---------------------------------------------------------------------------
 # Status machine
 # ---------------------------------------------------------------------------
 
@@ -996,7 +1099,8 @@ def _pending(table: AccountAdminTable, initiator: str) -> None:
         status=parent_link_repo.STATUS_PENDING,
         initiator_role=initiator,
         created_by="parent-a" if initiator == parent_link_repo.INITIATOR_PARENT else "student-b",
-        linked_at="2026-03-01T09:00:00+00:00",
+        # 相对当下播种：请求满 14 天就会过期，写死的日期迟早会自己走出窗口。
+        linked_at=(datetime.now(UTC) - timedelta(days=1)).isoformat(),
     )
 
 
