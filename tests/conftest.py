@@ -14,6 +14,20 @@ from security.conftest import *  # noqa: F403
 pytest_plugins = ("scripts.phase474_pytest_guard",)
 
 
+# Credential discovery is a network call, and the suite was only ever quiet
+# about it because whoever ran it had credentials lying around. Without them
+# boto3 falls through to the instance metadata service at 169.254.169.254 —
+# which is what CI does, and what the socket guard then refuses. Pinning
+# throwaway credentials and switching that last resort off keeps resolution
+# entirely local, so a test that reaches AWS fails for reaching AWS rather than
+# for the machine it happens to be running on.
+os.environ.setdefault("AWS_EC2_METADATA_DISABLED", "true")
+os.environ.setdefault("AWS_ACCESS_KEY_ID", "testing")
+os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "testing")
+os.environ.setdefault("AWS_SESSION_TOKEN", "testing")
+os.environ.setdefault("AWS_DEFAULT_REGION", "eu-central-2")
+
+
 @pytest.fixture
 def stub_memory_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep AI memory personalisation out of message-command tests.
