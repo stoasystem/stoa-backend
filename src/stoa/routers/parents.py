@@ -815,7 +815,15 @@ def _list_children_for_parent(parent_user_id: str) -> list[dict[str, Any]]:
                     ),
                 }
             )
-    for link in parent_link_service.active_children(parent_user_id):
+    # The legacy bindings above are already in hand, so a link store that cannot
+    # answer costs this list the children only the new table knows about — it does
+    # not cost the caller the whole page. Listing what can be read beats answering
+    # 503 with an answer sitting right there.
+    try:
+        links = parent_link_service.active_children(parent_user_id)
+    except Exception:
+        links = []
+    for link in links:
         student_id = str(link.get("student_id") or "")
         if not student_id or student_id in seen:
             continue

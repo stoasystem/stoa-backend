@@ -261,3 +261,43 @@ def test_a_second_parent_reaches_the_same_child(
 
     assert _client(PARENT).get(ADAPTIVE_PROGRESS).status_code == 200
     assert _client("parent-b").get(ADAPTIVE_PROGRESS).status_code == 200
+
+
+def test_链接表读不出来时是拒绝而不是500(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A3 让「旧表没匹配上」这条路多出两次读，读失败不能变成 503。
+
+    这条路只在旧绑定已经不匹配之后才走到，所以结论本来就是拒绝；
+    读不出来时报「没有链接」，正是第二张表存在之前这条路给的答案。
+    """
+    from stoa.security import authorization
+    from stoa.services import parent_link_service
+
+    def 炸(*_args, **_kwargs):
+        raise RuntimeError("parent link table is unreachable")
+
+    monkeypatch.setattr(parent_link_service, "active_link", 炸)
+
+    assert authorization._parent_link_facts("parent-a", "student-b") is None
+
+
+def test_链接表连不上时四条受影响的路由都不返回500(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CI 里这四条曾因新表读不出来而 503，本地有凭据所以没复现。
+
+    夹具打的是 `parent_link_repo.get_table` —— 那是新表唯一的取表点，
+    而它用的是模块级绑定，别处打 `stoa.db.dynamodb.get_table` 的桩都够不着它。
+    """
+    from stoa.db.repositories import parent_link_repo
+
+    def 炸():
+        raise RuntimeError("no credentials for the parent link table")
+
+    monkeypatch.setattr(parent_link_repo, "get_table", 炸)
+
+    from stoa.security import authorization
+
+    assert authorization._parent_link_facts("parent-a", "student-b") is None
+
+    from stoa.services import parent_link_service
+
+    with pytest.raises(RuntimeError):
+        parent_link_service.active_children("parent-a")

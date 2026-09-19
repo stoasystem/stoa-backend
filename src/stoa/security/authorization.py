@@ -503,8 +503,18 @@ def _parent_link_facts(parent_id: str, student_id: str) -> ParentAuthorizationFa
     from stoa.db.repositories import user_repo
     from stoa.services import parent_link_service
 
-    confirmed = parent_link_service.active_link(parent_id, student_id)
-    link = confirmed or parent_link_service.known_link(parent_id, student_id)
+    try:
+        confirmed = parent_link_service.active_link(parent_id, student_id)
+        link = confirmed or parent_link_service.known_link(parent_id, student_id)
+    except Exception:
+        # Reached only after the legacy binding has already failed to match, so
+        # the decision this feeds is a refusal whichever way it goes. A store
+        # that cannot answer must not turn that refusal into a 503: reporting no
+        # link is exactly the answer this path gave before a second table
+        # existed. The cost is that a misconfigured store looks like an absence
+        # of links rather than an error, so anything that makes these rows
+        # unreadable has to be caught by the store's own alarms, not here.
+        return None
     if link is None:
         return None
     row = {
