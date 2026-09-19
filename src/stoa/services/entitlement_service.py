@@ -10,7 +10,12 @@ from stoa.config import Settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import user_repo
 from stoa.models.user import SubscriptionTier
-from stoa.services import attachment_service, free_trial_service, paid_entitlement_service
+from stoa.services import (
+    attachment_service,
+    free_trial_service,
+    paid_entitlement_service,
+    parent_link_service,
+)
 
 
 ACTIVE_BILLING_STATUSES = {"active", "manual_override"}
@@ -44,20 +49,10 @@ def resolve_student_entitlement(
     student_profile = student_profile if student_profile is not None else user_repo.get_user(student_id)
     student_profile = student_profile or {}
     student_tier = _normalize_tier(student_profile.get("subscription_tier"))
-    parent_id = _linked_parent_id(student_profile)
-    binding = _active_parent_binding(parent_id, student_id) if parent_id else None
+    parent_id, binding, paid_grant = _relationship_of_record(student_id, student_profile)
     parent_profile = user_repo.get_user(parent_id) if parent_id else None
     billing = _get_billing_item(parent_id) if parent_id else None
     rollout = _get_payment_rollout_item() if parent_id else None
-    paid_grant = (
-        paid_entitlement_service.get_active_beneficiary_grant(
-            parent_id,
-            student_id,
-            table=get_table(),
-        )
-        if parent_id and binding
-        else None
-    )
 
     decision = _billing_decision(
         billing=billing,
@@ -112,15 +107,52 @@ def resolve_student_entitlement(
 
 def list_parent_child_entitlements(parent_id: str, *, settings: Settings) -> list[dict[str, Any]]:
     """Return effective entitlement summaries for every active child binding."""
-    items = []
+    return [
+        _viewer_projection(
+            resolve_student_entitlement(student_id, settings=settings),
+            parent_id,
+        )
+        for student_id in _active_child_ids(parent_id)
+    ]
+
+
+def _viewer_projection(
+    entitlement: dict[str, Any], viewer_parent_id: str
+) -> dict[str, Any]:
+    """Strip the other parent out of a shared child's row.
+
+    A child may now be linked to several parents, and the paying one is whoever
+    holds the grant. Handing that parent's `user_id`, tier, billing state and
+    period to a different parent would leak exactly what the link rows refuse
+    to leak (see `parent_link_repo` on the omitted `created_at`). The child's
+    own effective plan stays, because it is true and it is the point of the
+    list.
+    """
+    if entitlement.get("parentId") in (None, viewer_parent_id):
+        return entitlement
+    return {
+        **entitlement,
+        "parentId": None,
+        "parentTier": _normalize_tier(None),
+        "billingState": "none",
+        "period": {"start": None, "end": None, "cancelAtPeriodEnd": False},
+    }
+
+
+def _active_child_ids(parent_id: str) -> list[str]:
+    """Union the legacy bindings with the many-to-many links, legacy order first."""
+    ordered: dict[str, None] = {}
     for binding in user_repo.list_parent_student_bindings(parent_id):
         if str(binding.get("status") or "active") != "active":
             continue
         student_id = str(binding.get("student_id") or "")
-        if not student_id:
-            continue
-        items.append(resolve_student_entitlement(student_id, settings=settings))
-    return items
+        if student_id:
+            ordered[student_id] = None
+    for link in parent_link_service.active_children(parent_id):
+        student_id = str(link.get("student_id") or "")
+        if student_id:
+            ordered[student_id] = None
+    return list(ordered)
 
 
 def _billing_decision(
@@ -135,15 +167,8 @@ def _billing_decision(
     parent_tier = _normalize_tier((parent_profile or {}).get("subscription_tier"))
     billing_tier = _normalize_tier((billing or {}).get("subscription_tier") or parent_tier)
 
-    if not has_active_binding:
-        return _decision(
-            effective_plan=student_tier,
-            source="student_profile" if _is_paid(student_tier) else "free_tier",
-            billing_state=billing_status,
-            blocking_reason="missing_parent_binding",
-            support_explanation="No active parent binding was found; student-local entitlement applies.",
-        )
-
+    # The grant is the strongest evidence there is: it was written against a
+    # proven relationship, so it answers before the row-level binding check.
     if paid_grant is not None:
         return _decision(
             effective_plan=_normalize_tier(paid_grant.get("plan_id")),
@@ -151,6 +176,15 @@ def _billing_decision(
             billing_state=billing_status,
             blocking_reason=None,
             support_explanation="An explicit active beneficiary grant determines paid access.",
+        )
+
+    if not has_active_binding:
+        return _decision(
+            effective_plan=student_tier,
+            source="student_profile" if _is_paid(student_tier) else "free_tier",
+            billing_state=billing_status,
+            blocking_reason="missing_parent_binding",
+            support_explanation="No active parent binding was found; student-local entitlement applies.",
         )
 
     if billing_status == "manual_override":
@@ -236,11 +270,42 @@ def _decision(
     }
 
 
-def _linked_parent_id(student_profile: dict[str, Any]) -> str | None:
-    parent_id = str(student_profile.get("parent_id") or "").strip()
-    if parent_id and str(student_profile.get("parent_binding_status") or "active") == "active":
-        return parent_id
-    return None
+def _relationship_of_record(
+    student_id: str, student_profile: dict[str, Any]
+) -> tuple[str | None, dict[str, Any] | None, dict[str, object] | None]:
+    """The parent of record, the row that proves it, and that parent's paid grant.
+
+    The verdict comes from the one shared judge in `paid_entitlement_service`,
+    so this resolver and the teacher-support admission cannot name different
+    parents for the same student. A student may hold several active links, so
+    prefer the parent that actually carries a paid grant and fall back to a
+    deterministic first.
+    """
+    candidates = paid_entitlement_service.authorizing_parents(
+        student_id, student=student_profile
+    )
+    if not candidates:
+        return None, None, None
+    table = get_table()
+    for parent_id, authority in candidates:
+        grant = paid_entitlement_service.get_active_beneficiary_grant(
+            parent_id, student_id, table=table
+        )
+        if grant is not None:
+            return parent_id, _authority_row(parent_id, student_id, authority), grant
+    parent_id, authority = candidates[0]
+    return parent_id, _authority_row(parent_id, student_id, authority), None
+
+
+def _authority_row(
+    parent_id: str,
+    student_id: str,
+    authority: paid_entitlement_service.RelationshipAuthority,
+) -> dict[str, Any] | None:
+    """The row behind the verdict: the link itself, or the legacy forward binding row."""
+    if authority.link is not None:
+        return dict(authority.link)
+    return _active_parent_binding(parent_id, student_id)
 
 
 def _active_parent_binding(parent_id: str | None, student_id: str) -> dict[str, Any] | None:

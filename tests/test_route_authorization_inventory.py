@@ -619,13 +619,9 @@ GATEWAY_PUBLIC_PATHS = {
     ("GET", "/health"),
     ("GET", "/teacher-applications/{application_id}/status"),
     ("POST", "/analytics/events"),
-    ("POST", "/auth/email-verification/confirm"),
-    ("POST", "/auth/email-verification/resend"),
     ("POST", "/auth/forgot-password"),
     ("POST", "/auth/invitations/claim"),
     ("POST", "/auth/login"),
-    ("POST", "/auth/login-code/confirm"),
-    ("POST", "/auth/login-code/request"),
     ("POST", "/auth/logout"),
     ("POST", "/auth/refresh"),
     ("POST", "/auth/register"),
@@ -640,6 +636,18 @@ GATEWAY_PUBLIC_PATHS = {
 # wrong, not the gateway; opening it would remove a check that currently holds.
 PUBLIC_CLASSIFICATION_WITH_A_TOKEN_DEPENDENCY = {
     ("POST", "/teacher-applications/activation/consume"),
+}
+
+# Public on the deployed API, but created outside the CDK stack's state, so the
+# infra list cannot name them without CloudFormation colliding with what is already
+# there. They are live and unauthenticated today — this entry records that the two
+# lists disagree here on purpose, and that the disagreement is drift waiting to be
+# imported rather than a route anyone forgot.
+PUBLIC_BUT_NOT_OWNED_BY_THE_STACK = {
+    ("POST", "/auth/email-verification/confirm"),
+    ("POST", "/auth/email-verification/resend"),
+    ("POST", "/auth/login-code/confirm"),
+    ("POST", "/auth/login-code/request"),
 }
 
 
@@ -662,7 +670,11 @@ def test_every_public_route_is_reachable_without_a_token_at_the_gateway():
     production, and a path the gateway opens without a public classification here is
     an unauthenticated surface nobody declared.
     """
-    declared = _declared_public_routes() - PUBLIC_CLASSIFICATION_WITH_A_TOKEN_DEPENDENCY
+    declared = (
+        _declared_public_routes()
+        - PUBLIC_CLASSIFICATION_WITH_A_TOKEN_DEPENDENCY
+        - PUBLIC_BUT_NOT_OWNED_BY_THE_STACK
+    )
 
     assert declared == GATEWAY_PUBLIC_PATHS
 

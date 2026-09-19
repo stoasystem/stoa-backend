@@ -49,3 +49,10 @@ target-version = "py312"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = [".", "src", "scripts"]
+# pytest-socket has been a dependency all along without being switched on, and
+# in that state the suite was reaching the production table: a repository whose
+# get_table is bound at import time cannot be stubbed from the modules the tests
+# do patch, so those reads went out over the network and passed. They failed in
+# CI instead, where there are no credentials. Blocking the socket makes a test
+# that needs the network fail where it is written rather than somewhere else.
+addopts = ["--disable-socket", "--allow-unix-socket"]

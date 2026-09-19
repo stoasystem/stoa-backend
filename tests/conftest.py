@@ -60,3 +60,31 @@ def _phase474_formal_runtime() -> object:
             yield
         finally:
             enable_socket()
+
+
+class _EmptyParentLinkTable:
+    """A link table holding nothing, so an unstubbed read cannot reach real DynamoDB."""
+
+    def get_item(self, **_kwargs: object) -> dict[str, object]:
+        return {}
+
+    def query(self, **_kwargs: object) -> dict[str, object]:
+        return {"Items": []}
+
+    def transact_account_deletion(self, _operations: object) -> None:
+        raise AssertionError(
+            "this test writes parent links; install its own parent_link_repo.get_table"
+        )
+
+
+@pytest.fixture(autouse=True)
+def _default_parent_link_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every downstream reader of the many-to-many links now consults them.
+
+    Without a default, a test that sets up no links falls through to the live
+    `get_table()` and issues a real DynamoDB request. Tests that need link rows
+    patch the same attribute afterwards and win.
+    """
+    from stoa.db.repositories import parent_link_repo
+
+    monkeypatch.setattr(parent_link_repo, "get_table", _EmptyParentLinkTable)
