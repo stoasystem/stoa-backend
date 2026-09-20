@@ -17,7 +17,7 @@ from typing import Any
 
 from botocore.exceptions import ClientError
 
-from stoa.db.repositories import account_deletion_repo, capability_repo
+from stoa.db.repositories import capability_repo
 from stoa.security.aws_operator_identity import (
     AwsOperatorIdentityError,
     require_sso_operator_session,
@@ -338,7 +338,14 @@ def ensure_identity_manager_grant(
     if dry_run:
         return "pending"
 
-    fence = account_deletion_repo.require_active_account_fence(user_id, table=table)
+    # Not the account fence generation: that is a different number the store
+    # refuses with the same message, which is how the first run of this failed.
+    generation = capability_repo.current_lineage_generation(
+        user_id,
+        capability_repo.ADMIN_IDENTITY_MANAGER,
+        "global",
+        table_factory=lambda: table,
+    )
     capability_repo.grant_capability(
         user_id=user_id,
         command_id=f"bootstrap-{uuid.uuid4().hex[:16]}",
@@ -348,7 +355,7 @@ def ensure_identity_manager_grant(
         grantor_id="operator:provision_production_admin",
         reason="bootstrap administrator; no in-product path issues the first one",
         effective_at=now_iso(),
-        expected_generation=int(fence.get("generation") or 1),
+        expected_generation=generation,
         table_factory=lambda: table,
     )
     return "issued"

@@ -8,12 +8,39 @@ from decimal import Decimal
 from hashlib import sha256
 from typing import Literal, NotRequired, Protocol, TypedDict, runtime_checkable
 
+import logging
+
 from boto3.dynamodb.conditions import Key
 from boto3.dynamodb.types import TypeSerializer
 from botocore.exceptions import ClientError
 
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
+
+logger = logging.getLogger(__name__)
+
+
+def _transact_client(table: object) -> object:
+    """A low-level client of its own, never the resource's.
+
+    The resource registers request transformations on its `meta.client`, and
+    items already serialized for `transact_write_items` come back out of them
+    mangled: every condition check answers `ValidationError`, so no conditional
+    capability write has ever reached a real table. In-memory doubles expose a
+    `transact_write_items` of their own and never touch this path, which is why
+    the suite stayed green. `account_deletion_repo.transact` avoids the same
+    trap and says so in a comment; this is that comment made load-bearing.
+    """
+    hook = getattr(table, "transact_write_items", None)
+    if callable(hook):
+        return table
+    import boto3 as _boto3
+
+    region = getattr(
+        getattr(getattr(table, "meta", None), "client", None), "meta", None
+    )
+    region_name = getattr(region, "region_name", None) or "eu-central-2"
+    return _boto3.client("dynamodb", region_name=region_name)
 
 
 TEACHER_IDENTITY_REVIEWER = "teacher_identity_reviewer"
@@ -333,6 +360,26 @@ def revoke_capability(
     return revoked
 
 
+def current_lineage_generation(
+    user_id: str,
+    capability: str,
+    scope: str,
+    *,
+    table_factory: Callable[[], object] | None = None,
+) -> int:
+    """The generation `grant_capability` expects for this pair, 0 when it is new.
+
+    A caller that has to guess this number guesses wrong: the fence generation
+    is a different number that happens to look like a plausible one, and the
+    store answers both with the same conflict.
+    """
+    table = (table_factory or get_table)()
+    pointer = _get(table, _pointer_key(user_id, capability, scope))
+    if pointer is None:
+        return 0
+    return _required_positive_integer(pointer, "generation")
+
+
 def get_current_grants(
     user_id: str,
     *,
@@ -615,8 +662,16 @@ def _apply(table: object, operations: list[_CapabilityOperation]) -> None:
                 put["ExpressionAttributeNames"] = put_names
                 put["ExpressionAttributeValues"] = put_values
             transact_items.append({"Put": put})
-        table.meta.client.transact_write_items(TransactItems=transact_items)
+        _transact_client(table).transact_write_items(TransactItems=transact_items)
     except ClientError as exc:
+        # DynamoDB names the item that refused, and dropping it leaves a caller
+        # with a conflict it cannot act on: every cause reads the same.
+        reasons = exc.response.get("CancellationReasons") or []
+        if reasons:
+            logger.warning(
+                "Capability transaction refused: %s",
+                [f"{index}:{reason.get('Code')}" for index, reason in enumerate(reasons)],
+            )
         if exc.response.get("Error", {}).get("Code") in {
             "ConditionalCheckFailedException", "TransactionCanceledException"
         }:

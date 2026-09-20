@@ -165,25 +165,32 @@ def test_引导脚本发得出第一个管理能力(monkeypatch):
     suite stayed green because its administrators are built already holding it.
     """
     script = _load_script()
-    from stoa.db.repositories import account_deletion_repo, capability_repo
+    from stoa.db.repositories import capability_repo
 
     issued: list[dict] = []
     monkeypatch.setattr(capability_repo, "get_current_grants", lambda *a, **k: [])
     monkeypatch.setattr(
-        account_deletion_repo,
-        "require_active_account_fence",
-        lambda *a, **k: {"generation": 3},
+        capability_repo, "current_lineage_generation", lambda *a, **k: 0
     )
-    monkeypatch.setattr(
-        capability_repo, "grant_capability", lambda **kwargs: issued.append(kwargs)
-    )
+
+    def refusing_like_the_store(**kwargs):
+        # The double refuses what the store refuses. The first run of this
+        # passed the account fence generation, which is a different number the
+        # store rejects -- and a double that accepted anything let it through.
+        if kwargs["expected_generation"] != 0:
+            raise capability_repo.CapabilityVersionConflict(
+                "stale expected capability generation"
+            )
+        issued.append(kwargs)
+
+    monkeypatch.setattr(capability_repo, "grant_capability", refusing_like_the_store)
 
     assert script.ensure_identity_manager_grant(FakeTable(), user_id="admin-1") == "issued"
     assert len(issued) == 1
     assert issued[0]["capability"] == capability_repo.ADMIN_IDENTITY_MANAGER
     assert issued[0]["scope"] == "global"
     assert issued[0]["user_id"] == "admin-1"
-    assert issued[0]["expected_generation"] == 3
+    assert issued[0]["expected_generation"] == 0
 
 
 def test_已经持有的管理员不会被重复发放(monkeypatch):
