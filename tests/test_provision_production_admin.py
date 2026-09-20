@@ -153,3 +153,94 @@ def test_bootstrap_dry_run_writes_nothing_and_evidence_is_redacted():
     assert "email" not in repr(audit).lower()
     assert "incident secret detail" not in repr(audit)
     assert "capabilities" not in audit
+
+
+def test_引导脚本发得出第一个管理能力(monkeypatch):
+    """The genesis the capability system cannot perform on itself.
+
+    Every account-opening endpoint asks for `admin_identity_manager`, and the
+    only in-product issuer asks for it too, so a fresh administrator is refused
+    everywhere with no path that would ever change it. Production ran for
+    months with zero capability rows and every opening answering 403, while the
+    suite stayed green because its administrators are built already holding it.
+    """
+    script = _load_script()
+    from stoa.db.repositories import account_deletion_repo, capability_repo
+
+    issued: list[dict] = []
+    monkeypatch.setattr(capability_repo, "get_current_grants", lambda *a, **k: [])
+    monkeypatch.setattr(
+        account_deletion_repo,
+        "require_active_account_fence",
+        lambda *a, **k: {"generation": 3},
+    )
+    monkeypatch.setattr(
+        capability_repo, "grant_capability", lambda **kwargs: issued.append(kwargs)
+    )
+
+    assert script.ensure_identity_manager_grant(FakeTable(), user_id="admin-1") == "issued"
+    assert len(issued) == 1
+    assert issued[0]["capability"] == capability_repo.ADMIN_IDENTITY_MANAGER
+    assert issued[0]["scope"] == "global"
+    assert issued[0]["user_id"] == "admin-1"
+    assert issued[0]["expected_generation"] == 3
+
+
+def test_已经持有的管理员不会被重复发放(monkeypatch):
+    """Re-running the bootstrap is how anyone checks the first run worked."""
+    script = _load_script()
+    from stoa.db.repositories import capability_repo
+
+    monkeypatch.setattr(
+        capability_repo,
+        "get_current_grants",
+        lambda *a, **k: [
+            {"capability": capability_repo.ADMIN_IDENTITY_MANAGER, "status": "active"}
+        ],
+    )
+    monkeypatch.setattr(
+        capability_repo,
+        "grant_capability",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("must not reissue")),
+    )
+
+    assert script.ensure_identity_manager_grant(FakeTable(), user_id="admin-1") == "present"
+
+
+def test_产品内的发放入口要求的正是它自己发放的那个能力():
+    """Why the step above has to exist at all, asserted rather than remembered.
+
+    If this ever stops holding, the in-product path can bootstrap itself and
+    the script's genesis becomes optional. Until then it is load-bearing.
+    """
+    import inspect
+
+    from stoa.db.repositories import capability_repo
+    from stoa.services import privileged_identity_service
+
+    source = inspect.getsource(privileged_identity_service._require_manager)
+    assert "ADMIN_IDENTITY_MANAGER" in source
+    assert "_require_manager" in inspect.getsource(
+        privileged_identity_service.grant_capability
+    )
+    assert capability_repo.ADMIN_IDENTITY_MANAGER == "admin_identity_manager"
+
+
+def test_引导流程真的走了那一步():
+    """The function existing is not the same as the bootstrap calling it.
+
+    Removing the call from `main` left every other assertion here green, which
+    is the same shape of hole this card exists to close.
+    """
+    import ast
+    import inspect
+
+    script = _load_script()
+    tree = ast.parse(inspect.getsource(script.main))
+    called = {
+        node.func.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+
+    assert "ensure_identity_manager_grant" in called

@@ -17,6 +17,7 @@ from typing import Any
 
 from botocore.exceptions import ClientError
 
+from stoa.db.repositories import account_deletion_repo, capability_repo
 from stoa.security.aws_operator_identity import (
     AwsOperatorIdentityError,
     require_sso_operator_session,
@@ -310,6 +311,49 @@ def ensure_identity_binding_and_evidence(
     return "reconciled"
 
 
+def ensure_identity_manager_grant(
+    table: Any, *, user_id: str, dry_run: bool = False
+) -> str:
+    """Close the loop the capability system opens on itself.
+
+    Every endpoint that opens an account asks the caller for
+    `admin_identity_manager`, and the only thing that issues it asks for it
+    too. Nothing else in the repository writes one, so a freshly provisioned
+    administrator is refused by all of them and no path exists that would ever
+    change that. The genesis has to happen out here, away from request-path
+    authority, which is what this script is for.
+
+    The suite never saw it: its administrators are constructed already holding
+    the capability, so the tests assert what production cannot produce.
+
+    Idempotent - an administrator already holding an active one is left alone.
+    """
+    existing = capability_repo.get_current_grants(user_id, table_factory=lambda: table)
+    if any(
+        str(item.get("capability") or "") == capability_repo.ADMIN_IDENTITY_MANAGER
+        and str(item.get("status") or "") == "active"
+        for item in existing
+    ):
+        return "present"
+    if dry_run:
+        return "pending"
+
+    fence = account_deletion_repo.require_active_account_fence(user_id, table=table)
+    capability_repo.grant_capability(
+        user_id=user_id,
+        command_id=f"bootstrap-{uuid.uuid4().hex[:16]}",
+        grant_id=f"grant-{uuid.uuid4().hex[:16]}",
+        capability=capability_repo.ADMIN_IDENTITY_MANAGER,
+        scope="global",
+        grantor_id="operator:provision_production_admin",
+        reason="bootstrap administrator; no in-product path issues the first one",
+        effective_at=now_iso(),
+        expected_generation=int(fence.get("generation") or 1),
+        table_factory=lambda: table,
+    )
+    return "issued"
+
+
 def _put_idempotent(table: Any, item: dict[str, Any]) -> None:
     existing = table.get_item(Key={"PK": item["PK"], "SK": item["SK"]}).get("Item")
     if existing:
@@ -398,6 +442,9 @@ def main() -> int:
             incident_reason=args.incident_reason,
             dry_run=args.dry_run,
         )
+        capability_status = ensure_identity_manager_grant(
+            table, user_id=user_id, dry_run=args.dry_run
+        )
     except ClientError:
         print("ERROR: provider operation failed safely.", file=sys.stderr)
         return 1
@@ -410,6 +457,7 @@ def main() -> int:
     print(f"cognito_group={group_status}")
     print(f"dynamodb_profile={profile_status}")
     print(f"identity_binding={binding_status}")
+    print(f"identity_manager_capability={capability_status}")
     print(f"purpose={args.purpose}")
     return 0
 
