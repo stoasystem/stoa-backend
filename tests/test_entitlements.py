@@ -171,7 +171,36 @@ def test_pending_checkout_does_not_grant_paid_parent_access(monkeypatch):
     assert entitlement["blockingReason"] == "checkout_pending"
 
 
-def test_manual_override_takes_precedence(monkeypatch):
+def test_manual_override_no_longer_grants_anything(monkeypatch):
+    """Card 007 froze the admin override; it was the one bypass with no billing
+    fact behind it. Pinned as the frozen state rather than deleted, because a
+    legacy `manual_override` row is still sitting in the table."""
+    table, profiles = _install(monkeypatch)
+    table.put_item(
+        Item={
+            "PK": "SUBSCRIPTION_BILLING#parent-1",
+            "SK": "SUMMARY",
+            "billing_status": "manual_override",
+            "subscription_tier": "student",
+            "manual_override_source": "subreq-1",
+        }
+    )
+
+    entitlement = entitlement_service.resolve_student_entitlement(
+        "student-1",
+        settings=_settings(),
+        student_profile=profiles["student-1"],
+    )
+
+    assert entitlement["effectivePlan"] == "free_trial"
+    assert entitlement["source"] == "free_tier"
+    assert entitlement["blockingReason"] == "billing_frozen"
+    assert entitlement["limits"]["dailyAiQuestionLimit"] == 2
+
+
+def test_manual_override_takes_precedence_once_unfrozen(monkeypatch):
+    """The behaviour was switched off, not deleted: this is what unfreezing restores."""
+    monkeypatch.setattr(entitlement_service, "MANUAL_BILLING_OVERRIDE_ENABLED", True)
     table, profiles = _install(monkeypatch)
     table.put_item(
         Item={

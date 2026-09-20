@@ -18,6 +18,20 @@ from stoa.services import (
 )
 
 
+# Card 007: `manual_override` is frozen along with the rest of the paid surface.
+#
+# It was the admin bypass that granted a parent paid access without any billing
+# fact behind it. Under assignment every entitlement has to follow the account
+# it was issued to, so leaving this branch live would leave one path that skips
+# every billing judgement -- and it is reachable from legacy rows that are
+# already in the table, not only from the frozen admin routes.
+#
+# Nothing is deleted. The branch below keeps its original decision and only
+# steps aside while this is False. To unfreeze, flip it back to True in the
+# same change that flips `billing.BILLING_AND_SUBSCRIPTION_ENABLED`, and first
+# audit the `SUBSCRIPTION_BILLING#*` rows that still carry this status.
+MANUAL_BILLING_OVERRIDE_ENABLED = False
+
 ACTIVE_BILLING_STATUSES = {"active", "manual_override"}
 BLOCKED_BILLING_STATUSES = {"checkout_pending", "payment_failed", "past_due", "canceled"}
 PLAN_RANK = {
@@ -188,6 +202,23 @@ def _billing_decision(
         )
 
     if billing_status == "manual_override":
+        if not MANUAL_BILLING_OVERRIDE_ENABLED:
+            # Frozen: an override row no longer grants anything. The student
+            # keeps whatever their own profile already carries, exactly as a
+            # canceled parent billing row is treated below.
+            return _decision(
+                effective_plan=(
+                    student_tier
+                    if _is_paid(student_tier)
+                    else SubscriptionTier.FREE_TRIAL.value
+                ),
+                source="student_profile" if _is_paid(student_tier) else "free_tier",
+                billing_state=billing_status,
+                blocking_reason="billing_frozen",
+                support_explanation=(
+                    "Billing is frozen; a manual admin override no longer grants paid access."
+                ),
+            )
         return _decision(
             effective_plan=billing_tier,
             source="manual_override",

@@ -204,6 +204,7 @@ def table(monkeypatch: pytest.MonkeyPatch) -> ConditionalTable:
             "account_status": "active",
             "version": 11,
             "subscription_tier": "free_trial",
+            "date_of_birth": "2000-01-01",
         }
     )
     fake.put(
@@ -215,6 +216,7 @@ def table(monkeypatch: pytest.MonkeyPatch) -> ConditionalTable:
             "account_status": "active",
             "version": 21,
             "subscription_tier": "free_trial",
+            "date_of_birth": "2000-01-01",
         }
     )
     for user_id, generation in ((PARENT, 4), (STUDENT, 6)):
@@ -363,6 +365,7 @@ def test_parent_child_entitlement_list_unions_bindings_and_links(
             "account_status": "active",
             "version": 31,
             "subscription_tier": "free_trial",
+            "date_of_birth": "2000-01-01",
         }
     )
     monkeypatch.setattr(
@@ -599,6 +602,7 @@ def _put_parent(fake: ConditionalTable, parent_id: str, *, generation: int = 4) 
             "account_status": "active",
             "version": 11,
             "subscription_tier": "free_trial",
+            "date_of_birth": "2000-01-01",
         }
     )
     fake.put(
@@ -881,7 +885,13 @@ def test_a_contradicting_binding_never_falls_through_to_the_link(
 def test_the_grant_holder_wins_over_the_alphabetically_first_link_parent(
     table: ConditionalTable,
 ) -> None:
-    """Pinned as-is: this rule is the one that decides whose allowance is spent."""
+    """Pinned as-is: this rule is the one that decides whose allowance is spent.
+
+    Card 007 froze every route that could mint a new beneficiary grant, so the
+    rows this exercises are legacy data from now on. The rule itself was not
+    touched and still has to answer for them, which is why the assertion is
+    unchanged rather than rewritten to a frozen state it does not have.
+    """
     _put_parent(table, FIRST_PARENT)
     _put_parent(table, OTHER_PARENT)
     _link_active_for(table, FIRST_PARENT)
@@ -916,9 +926,16 @@ def test_without_any_grant_the_first_link_parent_is_chosen_deterministically(
 
 def test_manual_override_reaches_a_link_only_child_without_a_grant(
     table: ConditionalTable,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Pinned as observed. Whether an override may enrol children this way is a
-    product decision: it bypasses the grant fence and the 1-3 beneficiary cap."""
+    """The product decision this used to flag was taken: card 007 froze it.
+
+    The override bypassed the grant fence and the 1-3 beneficiary cap, so it
+    handed out paid access with no billing fact and no cap behind it. Pinned as
+    the frozen state rather than deleted -- `manual_override` rows already
+    exist in the table, so this path stays reachable from data even with every
+    paid route refusing -- and the second half records what unfreezing restores.
+    """
     _link_active(table)
     table.put(
         {
@@ -929,12 +946,21 @@ def test_manual_override_reaches_a_link_only_child_without_a_grant(
         }
     )
 
-    resolved = entitlement_service.resolve_student_entitlement(
+    frozen = entitlement_service.resolve_student_entitlement(
         STUDENT, settings=_settings()
     )
 
-    assert resolved["effectivePlan"] == "family"
-    assert resolved["source"] == "manual_override"
+    assert frozen["effectivePlan"] == "free_trial"
+    assert frozen["source"] == "free_tier"
+    assert frozen["blockingReason"] == "billing_frozen"
+
+    monkeypatch.setattr(entitlement_service, "MANUAL_BILLING_OVERRIDE_ENABLED", True)
+    unfrozen = entitlement_service.resolve_student_entitlement(
+        STUDENT, settings=_settings()
+    )
+
+    assert unfrozen["effectivePlan"] == "family"
+    assert unfrozen["source"] == "manual_override"
 
 
 # --- B4: a link is only a paid relationship when it is a child link --------

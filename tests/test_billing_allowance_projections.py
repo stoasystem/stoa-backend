@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from stoa.config import get_settings
 from stoa.deps import get_actor
 from stoa.models.billing import BillingFact, BillingFactKind
-from stoa.routers import admin, parents
+from stoa.routers import admin, billing as billing_router, parents
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import subscription_service
 
@@ -36,6 +36,17 @@ SECRET_CANARIES = (
     "student-unselected",
 )
 
+
+@pytest.fixture(autouse=True)
+def _billing_unfrozen(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Card 007 froze every paid route; this file pins what they do unfrozen.
+
+    The handlers were switched off, not deleted, so their tests are not deleted
+    either: they are what an unfreeze would have to be checked against. That
+    the routes refuse by default is pinned in `tests/test_billing_freeze.py`,
+    which reads the switch rather than this fixture.
+    """
+    monkeypatch.setattr(billing_router, "BILLING_AND_SUBSCRIPTION_ENABLED", True)
 
 def _grant(
     beneficiary_id: str,

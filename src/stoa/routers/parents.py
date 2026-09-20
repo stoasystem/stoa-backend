@@ -27,6 +27,9 @@ from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.models.billing import PurchasablePlanId
 from stoa.models.user import SubscriptionTier
+# Card 007: one switch and one refusal for the whole paid surface; see
+# `stoa.routers.billing` for why it is frozen and what unfreezing takes.
+from stoa.routers.billing import refuse_if_frozen
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationPurpose,
@@ -1149,7 +1152,11 @@ async def get_my_subscription(
     actor: Actor = Depends(_parent_account_read),
     settings: Settings = Depends(get_settings),
 ):
-    """Return the authenticated parent's current plan and MVP plan options."""
+    """Return the authenticated parent's current plan and MVP plan options.
+
+    Frozen by card 007: plan and price options are not offered any more.
+    """
+    refuse_if_frozen()
     return subscription_service.get_parent_subscription(actor.user_id, settings=settings)
 
 
@@ -1172,7 +1179,11 @@ async def create_my_subscription_checkout(
     actor: Actor = Depends(_parent_account_create),
     settings: Settings = Depends(get_settings),
 ):
-    """Create or resume one durable sandbox checkout command."""
+    """Create or resume one durable sandbox checkout command.
+
+    Frozen by card 007: nothing may start or resume a payment.
+    """
+    refuse_if_frozen()
     return subscription_service.create_or_resume_checkout_command(
         parent_id=actor.user_id,
         idempotency_key=idempotency_key,
@@ -1193,7 +1204,11 @@ async def get_my_subscription_checkout_status(
         get_billing_reconciliation_provider
     ),
 ):
-    """Return one owner-authorized checkout command's authoritative status."""
+    """Return one owner-authorized checkout command's authoritative status.
+
+    Frozen by card 007: no checkout can exist to inspect.
+    """
+    refuse_if_frozen()
     command = _load_owned_checkout_command(
         checkout_ref,
         parent_id=actor.user_id,
@@ -1222,7 +1237,11 @@ async def recheck_my_subscription_checkout(
         get_billing_reconciliation_provider
     ),
 ):
-    """Reconcile only the authenticated parent's original checkout command."""
+    """Reconcile only the authenticated parent's original checkout command.
+
+    Frozen by card 007: reconciliation calls the payment provider.
+    """
+    refuse_if_frozen()
     del body
     command = _load_owned_checkout_command(
         checkout_ref,
@@ -1260,7 +1279,11 @@ async def supersede_my_subscription_checkout(
     actor: Actor = Depends(_parent_account_create),
     settings: Settings = Depends(get_settings),
 ):
-    """Confirm one plan change before invoking the guarded supersession flow."""
+    """Confirm one plan change before invoking the guarded supersession flow.
+
+    Frozen by card 007: a plan change is a new payment.
+    """
+    refuse_if_frozen()
     return subscription_service.confirm_checkout_plan_change(
         parent_id=actor.user_id,
         checkout_ref=checkout_ref,
@@ -1278,7 +1301,11 @@ async def supersede_my_subscription_checkout(
 async def get_my_subscription_billing(
     actor: Actor = Depends(_parent_account_read),
 ):
-    """Return current selected-grant allowance and masked reminder state."""
+    """Return current selected-grant allowance and masked reminder state.
+
+    Frozen by card 007: the parent billing page is gone from the frontend.
+    """
+    refuse_if_frozen()
     observed_at = datetime.now(timezone.utc)
     try:
         grants = subscription_service.get_parent_active_billing_grants(
@@ -1371,7 +1398,11 @@ async def create_my_subscription_request(
     actor: Actor = Depends(_parent_account_create),
     settings: Settings = Depends(get_settings),
 ):
-    """Submit a manual subscription request for internal admin processing."""
+    """Submit a manual subscription request for internal admin processing.
+
+    Frozen by card 007: assignment replaces the request-and-approve flow.
+    """
+    refuse_if_frozen()
     return subscription_service.create_parent_request(
         parent_id=actor.user_id,
         request_type=body.request_type,
@@ -1385,7 +1416,11 @@ async def list_my_subscription_requests(
     limit: int = Query(default=25, ge=1, le=50),
     actor: Actor = Depends(_parent_account_read),
 ):
-    """Return the authenticated parent's recent manual subscription requests."""
+    """Return the authenticated parent's recent manual subscription requests.
+
+    Frozen by card 007: no request can be submitted any more.
+    """
+    refuse_if_frozen()
     items = subscription_service.list_parent_requests(actor.user_id, limit=limit)
     return ParentSubscriptionRequestListResponse(
         items=[ParentSubscriptionRequestResponse.model_validate(item) for item in items],

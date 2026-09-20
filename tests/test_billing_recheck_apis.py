@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 from typing import Any
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -13,7 +14,7 @@ from stoa.config import Settings, get_settings
 from stoa.db.repositories import checkout_command_repo
 from stoa.main import app as main_app
 from stoa.models.billing import CheckoutCommandState
-from stoa.routers import admin, parents
+from stoa.routers import admin, billing as billing_router, parents
 from stoa.services import billing_reconciliation_service, subscription_service
 
 
@@ -23,6 +24,17 @@ PARENT_ID = "parent-private-canary"
 OTHER_PARENT_ID = "other-parent-private-canary"
 SESSION_ID = "cs_test_parent_recheck_123456789"
 
+
+@pytest.fixture(autouse=True)
+def _billing_unfrozen(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Card 007 froze every paid route; this file pins what they do unfrozen.
+
+    The handlers were switched off, not deleted, so their tests are not deleted
+    either: they are what an unfreeze would have to be checked against. That
+    the routes refuse by default is pinned in `tests/test_billing_freeze.py`,
+    which reads the switch rather than this fixture.
+    """
+    monkeypatch.setattr(billing_router, "BILLING_AND_SUBSCRIPTION_ENABLED", True)
 
 def _settings() -> Settings:
     return Settings(

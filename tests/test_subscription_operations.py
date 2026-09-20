@@ -3,6 +3,7 @@ import hmac
 import json
 import time
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from botocore.exceptions import ClientError
@@ -18,6 +19,17 @@ from stoa.services import (
 )
 from actor_helpers import install_actor_overrides
 
+
+@pytest.fixture(autouse=True)
+def _billing_unfrozen(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Card 007 froze every paid route; this file pins what they do unfrozen.
+
+    The handlers were switched off, not deleted, so their tests are not deleted
+    either: they are what an unfreeze would have to be checked against. That
+    the routes refuse by default is pinned in `tests/test_billing_freeze.py`,
+    which reads the switch rather than this fixture.
+    """
+    monkeypatch.setattr(billing, "BILLING_AND_SUBSCRIPTION_ENABLED", True)
 
 class FakeTable:
     def __init__(self):
@@ -1839,6 +1851,13 @@ def test_stripe_webhook_requires_signing_secret_by_default(monkeypatch):
 
 
 def test_manual_subscription_apply_sets_manual_override_billing(monkeypatch):
+    """The write still records the override; card 007 stops it granting anything.
+
+    Kept rather than deleted so the two halves of the freeze stay visible: the
+    unfrozen route may still stamp `manual_override` on the billing row, and
+    the entitlement resolver refuses to read it as paid access. Unfreezing only
+    the routes would therefore hand out nothing.
+    """
     _install_fakes(monkeypatch)
     parent_client = TestClient(_app_for_user({"sub": "parent-1", "role": "parent"}))
     admin_client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}))
@@ -1861,5 +1880,11 @@ def test_manual_subscription_apply_sets_manual_override_billing(monkeypatch):
     assert billing_status["status"] == "manual_override"
     assert billing_status["subscriptionTier"] == "student"
     assert billing_status["manualOverrideSource"] == created["requestId"]
-    assert billing_status["effectiveEntitlements"][0]["effectivePlan"] == "student"
-    assert billing_status["effectiveEntitlements"][0]["source"] == "manual_override"
+    assert billing_status["effectiveEntitlements"][0]["effectivePlan"] == "free_trial"
+    assert billing_status["effectiveEntitlements"][0]["source"] == "free_tier"
+
+    monkeypatch.setattr(entitlement_service, "MANUAL_BILLING_OVERRIDE_ENABLED", True)
+    unfrozen = admin_client.get("/admin/subscriptions/billing/parent-1").json()
+
+    assert unfrozen["effectiveEntitlements"][0]["effectivePlan"] == "student"
+    assert unfrozen["effectiveEntitlements"][0]["source"] == "manual_override"

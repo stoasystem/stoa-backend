@@ -18,7 +18,7 @@ from stoa.db.repositories.checkout_command_repo import (
     ProviderCreateClaim,
 )
 from stoa.models.billing import CheckoutCommandState
-from stoa.routers import parents
+from stoa.routers import billing as billing_router, parents
 from stoa.services import subscription_service
 
 
@@ -31,6 +31,17 @@ CHECKOUT_REF = "co_" + "R" * 32
 SESSION_ID = "cs_test_checkout_command"
 SESSION_URL = f"https://checkout.stripe.com/c/pay/{SESSION_ID}"
 
+
+@pytest.fixture(autouse=True)
+def _billing_unfrozen(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Card 007 froze every paid route; this file pins what they do unfrozen.
+
+    The handlers were switched off, not deleted, so their tests are not deleted
+    either: they are what an unfreeze would have to be checked against. That
+    the routes refuse by default is pinned in `tests/test_billing_freeze.py`,
+    which reads the switch rather than this fixture.
+    """
+    monkeypatch.setattr(billing_router, "BILLING_AND_SUBSCRIPTION_ENABLED", True)
 
 def _settings() -> Settings:
     return Settings(

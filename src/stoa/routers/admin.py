@@ -24,6 +24,9 @@ from stoa.db.repositories import (
     security_audit_repo,
     user_repo,
 )
+# Card 007: one switch and one refusal for the whole paid surface; see
+# `stoa.routers.billing` for why it is frozen and what unfreezing takes.
+from stoa.routers.billing import refuse_if_frozen
 from stoa.routers.parents import get_billing_reconciliation_provider
 from stoa.security.admin_authorization import (
     AdminTargetProvider,
@@ -2523,7 +2526,11 @@ async def list_subscription_requests(
     date_to: Optional[str] = Query(default=None),
     user: dict = Depends(require_role("admin")),
 ):
-    """List manual subscription requests for admin processing."""
+    """List manual subscription requests for admin processing.
+
+    Frozen by card 007: parents can no longer submit a request.
+    """
+    refuse_if_frozen()
     items = subscription_service.list_admin_requests(
         limit=limit,
         status=status,
@@ -2541,7 +2548,11 @@ async def get_subscription_request(
     request_id: str,
     user: dict = Depends(require_role("admin")),
 ):
-    """Open one manual subscription request with lifecycle history."""
+    """Open one manual subscription request with lifecycle history.
+
+    Frozen by card 007: the manual request flow is closed.
+    """
+    refuse_if_frozen()
     return subscription_service.get_request(request_id)
 
 
@@ -2678,7 +2689,11 @@ async def get_billing_checkout_support(
         get_billing_reconciliation_provider
     ),
 ):
-    """Inspect one checkout through the billing-support capability."""
+    """Inspect one checkout through the billing-support capability.
+
+    Frozen by card 007: no checkout can exist to support.
+    """
+    refuse_if_frozen()
     del user
     command = _load_admin_checkout_command(
         checkout_ref,
@@ -2726,7 +2741,11 @@ async def recheck_billing_checkout_support(
         get_billing_reconciliation_provider
     ),
 ):
-    """Reconcile one original checkout without payment-creation authority."""
+    """Reconcile one original checkout without payment-creation authority.
+
+    Frozen by card 007: reconciliation calls the payment provider.
+    """
+    refuse_if_frozen()
     del body, user
     command = _load_admin_checkout_command(
         checkout_ref,
@@ -2754,7 +2773,11 @@ async def list_subscription_billing(
     settings: Settings = Depends(get_settings),
     user: dict = Depends(require_role("admin")),
 ):
-    """List provider billing records for admin visibility."""
+    """List provider billing records for admin visibility.
+
+    Frozen by card 007: the admin billing view is gone from the frontend.
+    """
+    refuse_if_frozen()
     items = subscription_service.list_admin_billing(
         limit=limit,
         parent_id=parent_id,
@@ -2773,7 +2796,11 @@ async def list_subscription_accounting_export(
     settings: Settings = Depends(get_settings),
     user: dict = Depends(require_role("admin")),
 ):
-    """List redacted provider billing rows for Swiss accounting handoff."""
+    """List redacted provider billing rows for Swiss accounting handoff.
+
+    Frozen by card 007: there is no revenue to hand off.
+    """
+    refuse_if_frozen()
     items = subscription_service.list_admin_accounting_handoff(
         limit=limit,
         parent_id=parent_id,
@@ -2787,7 +2814,11 @@ async def get_subscription_provider_readiness(
     settings: Settings = Depends(get_settings),
     user: dict = Depends(require_role("admin")),
 ):
-    """Inspect redacted live provider readiness without creating provider mutations."""
+    """Inspect redacted live provider readiness without creating provider mutations.
+
+    Frozen by card 007: the provider is deliberately not provisioned.
+    """
+    refuse_if_frozen()
     return subscription_service.get_provider_readiness(settings)
 
 
@@ -2796,7 +2827,11 @@ async def get_subscription_rollout_controls(
     settings: Settings = Depends(get_settings),
     user: dict = Depends(require_role("admin")),
 ):
-    """Inspect effective checkout/refund rollout controls."""
+    """Inspect effective checkout/refund rollout controls.
+
+    Frozen by card 007: there is no rollout left to control.
+    """
+    refuse_if_frozen()
     return subscription_service.get_payment_rollout_controls(settings)
 
 
@@ -2806,7 +2841,11 @@ async def update_subscription_rollout_controls(
     settings: Settings = Depends(get_settings),
     user: dict = Depends(require_role("admin")),
 ):
-    """Update checkout/refund rollout controls for new live-changing operations."""
+    """Update checkout/refund rollout controls for new live-changing operations.
+
+    Frozen by card 007: this switch could otherwise re-open checkout or refunds.
+    """
+    refuse_if_frozen()
     return subscription_service.update_payment_rollout_controls(
         checkout_state=body.checkout_state,
         refunds_state=body.refunds_state,
@@ -2822,7 +2861,11 @@ async def get_subscription_billing(
     settings: Settings = Depends(get_settings),
     user: dict = Depends(require_role("admin")),
 ):
-    """Open one parent provider billing record with recent event history."""
+    """Open one parent provider billing record with recent event history.
+
+    Frozen by card 007: the parent billing record is legacy data only.
+    """
+    refuse_if_frozen()
     return subscription_service.get_admin_billing(parent_id, settings=settings)
 
 
@@ -2918,7 +2961,11 @@ async def execute_subscription_refund(
     settings: Settings = Depends(get_settings),
     user: dict = Depends(require_role("admin")),
 ):
-    """Execute a gated provider refund for an eligible billing record."""
+    """Execute a gated provider refund for an eligible billing record.
+
+    Frozen by card 007: a refund is a live provider mutation.
+    """
+    refuse_if_frozen()
     return subscription_service.execute_billing_refund(
         parent_id=parent_id,
         amount=body.amount,
@@ -2935,7 +2982,11 @@ async def update_subscription_request(
     body: SubscriptionRequestUpdateRequest,
     user: dict = Depends(require_role("admin")),
 ):
-    """Move a subscription request through review lifecycle states."""
+    """Move a subscription request through review lifecycle states.
+
+    Frozen by card 007: the manual request flow is closed.
+    """
+    refuse_if_frozen()
     return subscription_service.update_request_status(
         request_id=request_id,
         status=body.status,
@@ -2951,7 +3002,11 @@ async def apply_subscription_request(
     body: SubscriptionRequestApplyRequest = Body(default_factory=SubscriptionRequestApplyRequest),
     user: dict = Depends(require_role("admin")),
 ):
-    """Apply an approved manual request and update the parent's subscription tier."""
+    """Apply an approved manual request and update the parent's subscription tier.
+
+    Frozen by card 007: assignment, not an approved request, sets a tier.
+    """
+    refuse_if_frozen()
     return subscription_service.apply_request(
         request_id=request_id,
         admin_note=body.admin_note,
