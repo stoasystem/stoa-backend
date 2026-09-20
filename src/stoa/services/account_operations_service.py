@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from stoa import config
 from stoa.config import Settings
 from stoa.db.repositories import user_repo
 from stoa.services import (
@@ -155,6 +156,21 @@ def _profile_summary(profile: dict[str, Any]) -> dict[str, Any]:
 
 
 def _billing_summary(billing: dict[str, Any], *, include_events: bool = False) -> dict[str, Any]:
+    """Project the billing facts these two screens are allowed to show.
+
+    While the paid surface is frozen there is nothing here anyone may act on, so
+    the projection collapses to the freeze itself rather than the tier, the
+    provider, the period or the override that opened it. The routes that reach
+    this are about child access and usage; freezing them whole would take those
+    away too, so the refusal belongs to the section, not the page.
+
+    This is also why the freeze cannot be judged by what a route is called.
+    Neither of the two that land here says anything about money in its path or
+    its handler name, and both were handing out the same facts the frozen routes
+    refuse -- one of them the very same function's answer.
+    """
+    if not config.BILLING_AND_SUBSCRIPTION_ENABLED:
+        return {"status": "billing_frozen", "mode": None, "provider": None}
     summary = {
         "status": billing.get("status"),
         "mode": billing.get("mode"),

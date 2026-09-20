@@ -523,3 +523,77 @@ def test_未成年学生在接口上确认关联收到_403(world: LinkWorld) -> 
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "link_requires_administrator"
     assert world.status("parent-a", "student-b") == "pending"
+
+
+def test_不存在的对方仍然回_link_target_not_found(world: LinkWorld) -> None:
+    """The order of the two refusals is load-bearing, and nothing else pins it.
+
+    A minor asking about an account number that belongs to nobody must learn
+    the same thing they learned before this card: that there is no such
+    account. If the minority check ran first, the refusal would change to
+    `link_requires_administrator` for every number a minor tried, which says
+    "you may not do this" where the answer is "there is nobody there" — and
+    for an adult asking, it would say the opposite of what is true.
+    """
+    world.add("student-b", "student", MINOR)
+
+    code = _refusal(
+        lambda: parent_link_service.request_link(
+            requester_id="student-b", counterpart_id="nobody-at-all", now=NOW
+        )
+    )
+
+    assert code == "link_target_not_found"
+
+
+def test_成年人问起不存在的对方也是同一个答案(world: LinkWorld) -> None:
+    """The negative control: the refusal is about the counterpart, not the asker."""
+    world.add("parent-a", "parent", ADULT)
+
+    code = _refusal(
+        lambda: parent_link_service.request_link(
+            requester_id="parent-a", counterpart_id="nobody-at-all", now=NOW
+        )
+    )
+
+    assert code == "link_target_not_found"
+
+
+def test_写生日时的冲突不会把账号推进去也不会烧掉令牌(table: FakeAccountTable) -> None:
+    """The birthday is written before the account is activated, so a refusal there
+    has to leave the whole claim where it started.
+
+    Two things would be bad and neither is obvious from reading the happy path:
+    an account marked active while nothing recorded how old its holder is, and a
+    single-use token spent on an attempt that achieved nothing. The invitee
+    would be locked out of an account an administrator already opened for them.
+    """
+    from stoa.db.repositories import account_deletion_repo
+
+    issued = _invite()
+    real = table.transact_account_deletion
+    refused: list[int] = []
+
+    def refuse_the_birthday(operations):
+        # The first transact after the token is burned is the birthday write.
+        if not refused:
+            refused.append(1)
+            raise account_deletion_repo.AccountDeletionConflict("birthday refused")
+        return real(operations)
+
+    table.transact_account_deletion = refuse_the_birthday
+
+    with pytest.raises(HTTPException) as refusal:
+        _claim(token=issued["activationToken"], date_of_birth=MINOR)
+
+    assert refusal.value.status_code == 409
+    stored = _stored(table, issued["userId"])
+    assert stored["account_status"] == "invited"
+    assert "date_of_birth" not in stored
+
+    table.transact_account_deletion = real
+    _claim(token=issued["activationToken"], date_of_birth=MINOR)
+
+    settled = _stored(table, issued["userId"])
+    assert settled["account_status"] == "active"
+    assert settled["date_of_birth"] == MINOR

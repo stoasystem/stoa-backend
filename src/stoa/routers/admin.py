@@ -1846,7 +1846,7 @@ ACCOUNT_LIST_FIELDS: tuple[tuple[str, str], ...] = (
 
 
 def _project_account_row(
-    profile: Mapping[str, object], *, account_status: str
+    profile: Mapping[str, object], *, account_status: str, at: datetime | None = None
 ) -> dict[str, object]:
     """Construct one listed account from named scalars, never by redacting a row."""
     projected: dict[str, object] = {}
@@ -1863,8 +1863,11 @@ def _project_account_row(
     # administrator. It gets the answer, never the date - a birthday is personal
     # data, and `ACCOUNT_LIST_FIELDS` above stays the only door a stored field
     # leaves by.
+    # The moment is a parameter so a test can pin one: read from the clock here,
+    # the only assertion on this value would be true until the fixture's child
+    # grew up, and then fail on a date nobody chose.
     projected["isMinor"] = user_model.account_is_minor(
-        profile, at=datetime.now(timezone.utc)
+        profile, at=at or datetime.now(timezone.utc)
     )
     return projected
 

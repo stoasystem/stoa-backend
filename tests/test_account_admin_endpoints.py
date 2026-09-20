@@ -978,7 +978,9 @@ def test_列表只发名单上的字段_后加的字段不会自动发布给客�
     row["cognito_sub"] = "sub-SECRET"
     row["password_change_code_hash"] = "HASH-SECRET"
     row["field_a_later_card_added"] = "NOT-REVIEWED-BY-THIS-CARD"
-    row["date_of_birth"] = "2011-04-05"
+    # A child born the day this test runs stays a child for as long as the rule
+    # says so. A fixed birthday would have made this assertion expire.
+    row["date_of_birth"] = datetime.now(UTC).date().isoformat()
     client = TestClient(_app(_admin_user()))
 
     response = client.get("/admin/users")
@@ -1003,7 +1005,7 @@ def test_列表只发名单上的字段_后加的字段不会自动发布给客�
         "NOT-REVIEWED-BY-THIS-CARD",
         "field_a_later_card_added",
         # Card 008: the console is answered with the judgement, never the date.
-        "2011-04-05",
+        row["date_of_birth"],
         "date_of_birth",
     ):
         assert leaked not in response.text, leaked

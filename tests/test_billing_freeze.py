@@ -14,11 +14,14 @@ from __future__ import annotations
 import asyncio
 import inspect
 import re
+import sys
 from typing import Any
 
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.routing import APIRoute
+
+from stoa.routers import billing as billing_routes
 from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
@@ -414,3 +417,87 @@ def test_the_override_branch_is_still_there_to_unfreeze(
 
     assert decision["effective_plan"] == "family"
     assert decision["source"] == "manual_override"
+
+
+def _reaches_billing_facts(endpoint: object) -> bool:
+    """Whether this handler can get to the services that answer with money.
+
+    Names are not enough and this card proved it: two routes called
+    `account_operations` handed out the tier, the provider, the period and the
+    override that opened it, one of them by calling the very function a frozen
+    route calls. Neither says anything about money in its path or its name, so
+    the word list could not see them, and nothing else was looking.
+    """
+    seen: set[str] = set()
+    pending = [getattr(endpoint, "__module__", "")]
+    while pending:
+        name = pending.pop()
+        if not name or name in seen or not name.startswith("stoa."):
+            continue
+        seen.add(name)
+        module = sys.modules.get(name)
+        if module is None:
+            continue
+        for value in vars(module).values():
+            found = inspect.getmodule(value)
+            if found is not None and getattr(found, "__name__", "").startswith("stoa."):
+                pending.append(found.__name__)
+    return "stoa.services.subscription_service" in seen
+
+
+def routes_that_can_answer_with_money(app: FastAPI) -> list[tuple[str, str]]:
+    reachable: list[tuple[str, str]] = []
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        if _reaches_billing_facts(route.endpoint):
+            for method in sorted(route.methods - {"HEAD", "OPTIONS"}):
+                reachable.append((method, route.path))
+    return sorted(set(reachable))
+
+
+def test_a_route_that_can_reach_the_billing_facts_says_nothing_about_them() -> None:
+    """The word list judges what a route is called; this judges what it can do.
+
+    Every route that can reach `subscription_service` either refuses outright or
+    answers with the freeze. A route added later that quietly grows a path to
+    those facts is caught by the path, not by whether somebody named it well.
+    """
+    from stoa.services import account_operations_service
+
+    app = _full_app()
+    reachable = routes_that_can_answer_with_money(app)
+    assert reachable, "the judge found nothing to judge, which means it stopped working"
+
+    frozen = set(unfrozen_paid_routes(app))
+    assert frozen == set(), frozen
+
+    # The ones that stay open answer with the freeze rather than the facts.
+    summary = account_operations_service._billing_summary(
+        {
+            "status": "manual_override",
+            "subscriptionTier": "family",
+            "provider": "stripe",
+            "currentPeriodEnd": "2026-02-01",
+            "manualOverrideSource": "subreq-1",
+        },
+        include_events=True,
+    )
+    assert summary == {"status": "billing_frozen", "mode": None, "provider": None}
+    assert "family" not in str(summary)
+    assert "stripe" not in str(summary)
+
+
+def test_the_router_reads_the_freeze_rather_than_restating_it() -> None:
+    """Two spellings agree today and that is not the same as being one switch.
+
+    Asserting the two values match would pass whichever way somebody wrote the
+    second one down, because both are False. What has to hold is that the router
+    has no answer of its own: it names the one in config.
+    """
+    source = inspect.getsource(billing_routes)
+    assignment = re.search(
+        r"^BILLING_AND_SUBSCRIPTION_ENABLED\s*=\s*(.+)$", source, re.M
+    )
+    assert assignment is not None
+    assert assignment.group(1).strip().startswith("config.BILLING_AND_SUBSCRIPTION_ENABLED")

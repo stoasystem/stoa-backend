@@ -21,6 +21,12 @@ PAID_STORAGE_BYTES = 15 * 1024 * 1024 * 1024
 FREE_TRIAL_DAYS = 14
 # Switzerland puts majority at 18. Another jurisdiction may put it elsewhere, so
 # every decision reads this setting instead of writing the number down again.
+# STOA assigns accounts; it does not sell them, and for now it will not. One
+# name for the freeze, read by the routers that refuse and by the services that
+# must not answer with facts those routes refuse -- a service importing a router
+# to find out would be the dependency running backwards.
+BILLING_AND_SUBSCRIPTION_ENABLED = False
+
 ADULT_AGE_YEARS = 18
 DEVELOPMENT_AUDIT_KEY = "stoa-development-authorization-audit-key-change-me"
 AUDIT_KEY_MINIMUM_BYTES = 32

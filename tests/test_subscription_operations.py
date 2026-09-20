@@ -538,7 +538,12 @@ def test_parent_account_operations_combines_billing_entitlement_usage_and_verifi
     assert response.status_code == 200
     body = response.json()
     assert body["parentId"] == "parent-1"
-    assert body["billing"]["status"] == "active"
+    # Card 007 froze the paid surface, and this page is where it was still
+    # leaking out: the tier, the provider and the period reached a parent here
+    # while every route named after billing refused. The rest of the page --
+    # child access, usage, verification -- is what it is actually for, so the
+    # refusal is the section rather than the page.
+    assert body["billing"] == {"status": "billing_frozen", "mode": None, "provider": None}
     assert body["children"][0]["studentId"] == "student-1"
     assert body["children"][0]["entitlement"]["effectivePlan"] == "family"
     assert body["children"][0]["usage"]["consumed"] == 2
@@ -572,7 +577,9 @@ def test_admin_account_operations_surfaces_attention_state(monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["parentId"] == "parent-1"
-    assert body["billing"]["events"] == []
+    # Same freeze, admin side. This one answered with provider event history
+    # from the same function the frozen admin route calls.
+    assert body["billing"] == {"status": "billing_frozen", "mode": None, "provider": None}
     assert body["parent"]["verification"]["resendAllowed"] is True
     assert body["parent"]["verification"]["supportRecoveryState"] == "resend_available"
     assert body["parent"]["verification"]["supportAction"] == "resend_verification_code"

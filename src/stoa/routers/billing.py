@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
+from stoa import config
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import billing_fact_repo
 from stoa.services import subscription_service
@@ -40,7 +41,7 @@ router = APIRouter()
 #   4. re-point the tests that now pin the frozen state
 #      (`tests/test_billing_freeze.py` is the closure judge -- keep it, it is
 #      what stops a newly added paid route from quietly escaping the freeze).
-BILLING_AND_SUBSCRIPTION_ENABLED = False
+BILLING_AND_SUBSCRIPTION_ENABLED = config.BILLING_AND_SUBSCRIPTION_ENABLED
 
 _BILLING_FROZEN_CODE = "billing_frozen"
 
