@@ -111,14 +111,25 @@ class FakeLinkTable:
             raise account_deletion_repo.AccountDeletionConflict("injected write failure")
 
 
-def _profile(user_id: str, role: str) -> dict[str, Any]:
-    return {
+# Card 008: self-service needs both sides to be adults, and an account with no
+# recorded birthday reads as a minor. Every account here is an adult unless a
+# test says otherwise.
+ADULT_BIRTHDAY = "2000-01-01"
+
+
+def _profile(
+    user_id: str, role: str, date_of_birth: str | None = ADULT_BIRTHDAY
+) -> dict[str, Any]:
+    profile = {
         "user_id": user_id,
         "role": role,
         "account_status": "active",
         "email": f"{user_id}@stoa.test",
         "name": user_id,
     }
+    if date_of_birth is not None:
+        profile["date_of_birth"] = date_of_birth
+    return profile
 
 
 ACCOUNTS = {

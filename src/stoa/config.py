@@ -19,6 +19,9 @@ IMAGE_MAX_EDGE = 4096
 FREE_STORAGE_BYTES = 5 * 1024 * 1024 * 1024
 PAID_STORAGE_BYTES = 15 * 1024 * 1024 * 1024
 FREE_TRIAL_DAYS = 14
+# Switzerland puts majority at 18. Another jurisdiction may put it elsewhere, so
+# every decision reads this setting instead of writing the number down again.
+ADULT_AGE_YEARS = 18
 DEVELOPMENT_AUDIT_KEY = "stoa-development-authorization-audit-key-change-me"
 AUDIT_KEY_MINIMUM_BYTES = 32
 _AUDIT_PLACEHOLDER_MARKERS = (
@@ -147,6 +150,7 @@ class Settings(BaseSettings):
     document_max_bytes: int = DOCUMENT_MAX_BYTES
     image_max_edge: int = IMAGE_MAX_EDGE
     free_trial_days: int = FREE_TRIAL_DAYS
+    adult_age_years: int = ADULT_AGE_YEARS
     free_attachment_storage_bytes: int = FREE_STORAGE_BYTES
     paid_attachment_storage_bytes: int = PAID_STORAGE_BYTES
     immutable_audit_storage_mode: str = "disabled"

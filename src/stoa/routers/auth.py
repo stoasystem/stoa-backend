@@ -1041,6 +1041,10 @@ class InvitationClaimRequest(BaseModel):
 
     token: str = Field(min_length=32, max_length=512)
     password: str = Field(min_length=8, max_length=256)
+    # Card 008: supplied only when the invitation did not already carry one. The
+    # calendar check lives in the service, which refuses by code rather than by
+    # repeating the date back.
+    dateOfBirth: str | None = Field(default=None, max_length=32)
 
     @field_validator("password")
     @classmethod
@@ -1134,6 +1138,7 @@ def claim_invitation(
     return account_provisioning_service.claim_invitation(
         token=body.token,
         password=body.password,
+        date_of_birth=body.dateOfBirth,
         issuer=issuer,
         provider=provider,
     )

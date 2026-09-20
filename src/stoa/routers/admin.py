@@ -42,6 +42,7 @@ from stoa.models.moderation import (
     ModerationSeverity,
     ModerationStatus,
 )
+from stoa.models import user as user_model
 from stoa.models.user import SubscriptionTier
 from stoa.services import (
     account_provisioning_service,
@@ -362,6 +363,9 @@ class AccountInvitationRequest(BaseModel):
     role: str = Field(min_length=1, max_length=20)
     email: str = Field(min_length=3, max_length=320)
     fullName: str = Field(default="", max_length=120)
+    # Shape-checked here only; the calendar check belongs to the service, which
+    # refuses by code so the rejected date never travels back out.
+    dateOfBirth: Optional[str] = Field(default=None, max_length=32)
     expirySeconds: Optional[int] = Field(default=None, ge=60, le=1209600)
     locale: Optional[str] = Field(default=None, min_length=2, max_length=8)
 
@@ -372,6 +376,7 @@ class AccountAssignmentRequest(BaseModel):
     role: str = Field(min_length=1, max_length=20)
     email: str = Field(min_length=3, max_length=320)
     fullName: str = Field(default="", max_length=120)
+    dateOfBirth: Optional[str] = Field(default=None, max_length=32)
 
 
 class AccountInvitationReissueRequest(BaseModel):
@@ -1851,6 +1856,13 @@ def _project_account_row(
             raise RuntimeError("admin data dependency unavailable")
         projected[exposed] = value if isinstance(value, str) else str(value)
     projected["accountStatus"] = account_status
+    # Card 008: the console needs to know which accounts must be linked by an
+    # administrator. It gets the answer, never the date - a birthday is personal
+    # data, and `ACCOUNT_LIST_FIELDS` above stays the only door a stored field
+    # leaves by.
+    projected["isMinor"] = user_model.account_is_minor(
+        profile, at=datetime.now(timezone.utc)
+    )
     return projected
 
 
@@ -2268,6 +2280,7 @@ def invite_account(
         role=payload.role,
         email=payload.email,
         full_name=payload.fullName,
+        date_of_birth=payload.dateOfBirth,
         invitation_expiry_seconds=expiry,
         deliver=_invitation_delivery(payload.locale),
     )
@@ -2286,6 +2299,7 @@ def assign_account(
         role=payload.role,
         email=payload.email,
         full_name=payload.fullName,
+        date_of_birth=payload.dateOfBirth,
         provider=provider,
         issuer=_account_issuer(settings),
     )

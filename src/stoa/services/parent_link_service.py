@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Final
 
 from stoa.db.repositories import parent_link_repo, user_repo
+from stoa.models import user as user_model
 
 
 STATUS_PENDING: Final = parent_link_repo.STATUS_PENDING
@@ -135,6 +136,26 @@ def _usable_account(profile: Mapping[str, Any] | None, user_id: str, role: str) 
     )
 
 
+def _refuse_self_service_when_minor(
+    *profiles: Mapping[str, Any] | None, at: datetime | None
+) -> None:
+    """Card 008: a link with a minor on either side is the administrator's to make.
+
+    Self-service is "one side proposes, the other confirms", and the whole
+    justification for it is that both parties can consent. A minor student
+    clicking confirm to establish a supervision relationship that binds them is
+    not a consent that stands up, so the self-service path is closed and
+    `assign_link` - an administrative act that starts active and asks nobody to
+    confirm - is the only way in.
+
+    A birthday that is not known counts as a minor. The rule exists to protect
+    minors, and "not known" is precisely the case to be conservative about.
+    """
+    for profile in profiles:
+        if user_model.account_is_minor(profile, at=at):
+            raise ParentLinkError("link_requires_administrator")
+
+
 def _role_of(user_id: str) -> str:
     profile = user_repo.get_user(user_id)
     role = profile.get("role") if profile else None
@@ -217,10 +238,15 @@ def request_link(
     else:
         parent_id, student_id = target_id, requester_id
         initiator_role = INITIATOR_STUDENT
-    _account(parent_id, ROLE_PARENT)
-    _account(student_id, ROLE_STUDENT)
+    parent_profile = _account(parent_id, ROLE_PARENT)
+    student_profile = _account(student_id, ROLE_STUDENT)
 
     moment = now or _now()
+    # After the existence checks above, so the refusal says nothing about an
+    # account number that resolves to nothing.
+    _refuse_self_service_when_minor(
+        parent_profile, student_profile, at=_moment(moment)
+    )
     settled = _settled_pair(parent_id, student_id)
     if settled is not None:
         _refuse_unless_reclaimable(settled, _moment(moment))
@@ -290,12 +316,25 @@ def _pending_link(parent_id: str, student_id: str, at: datetime | None) -> LinkI
 
 
 def _answer_pending(
-    *, parent_id: str, student_id: str, actor_id: str, next_status: str, now: str | None
+    *,
+    parent_id: str,
+    student_id: str,
+    actor_id: str,
+    next_status: str,
+    now: str | None,
+    needs_capable_consent: bool = False,
 ) -> LinkItem:
     moment = now or _now()
     link = _pending_link(parent_id, student_id, _moment(moment))
     if actor_id != _confirmer_side(link) or actor_id == link.get("created_by"):
         raise ParentLinkError("link_confirmation_not_allowed")
+    if needs_capable_consent:
+        # After the party check, so a stranger learns nothing about either side.
+        _refuse_self_service_when_minor(
+            user_repo.get_user(parent_id),
+            user_repo.get_user(student_id),
+            at=_moment(moment),
+        )
     return parent_link_repo.transition_link(
         parent_id=parent_id,
         student_id=student_id,
@@ -316,12 +355,18 @@ def confirm_link(
         actor_id=actor_id,
         next_status=STATUS_ACTIVE,
         now=now,
+        needs_capable_consent=True,
     )
 
 
 def reject_link(
     *, parent_id: str, student_id: str, actor_id: str, now: str | None = None
 ) -> LinkItem:
+    """Refusing is not consenting, so a minor is left able to refuse.
+
+    Blocking this would only trap a minor under a request they cannot answer,
+    and the refusal grants nothing that needs protecting.
+    """
     return _answer_pending(
         parent_id=parent_id,
         student_id=student_id,

@@ -1,7 +1,11 @@
+from collections.abc import Mapping
 from enum import Enum
+import re
 from typing import Any, List, Optional
 from pydantic import BaseModel, EmailStr, model_validator
-from datetime import datetime
+from datetime import date, datetime
+
+from stoa.config import get_settings
 
 
 class UserRole(str, Enum):
@@ -60,6 +64,90 @@ def normalize_registration_age(raw: Any) -> int:
     if age < MIN_REGISTRATION_AGE or age > MAX_REGISTRATION_AGE:
         raise ValueError(_AGE_MESSAGE)
     return age
+
+
+# Card 008: the account carries a date of birth, never an age. An age is a
+# number that goes stale - a student recorded as 17 is silently wrong a year
+# later - while "is this account a minor today" has to be answerable at every
+# decision point. The date does not move, so it is the only thing worth storing.
+DATE_OF_BIRTH_FIELD = "date_of_birth"
+
+_DATE_OF_BIRTH_PATTERN = re.compile(r"\A\d{4}-\d{2}-\d{2}\Z")
+# Constant on purpose: a date of birth is sensitive, so it must never travel out
+# inside an error message, an exception chain or a log line.
+_DATE_OF_BIRTH_MESSAGE = "Date of birth must be a real past calendar date in YYYY-MM-DD form."
+
+
+def normalize_date_of_birth(raw: Any, *, today: date | None = None) -> str:
+    """Accept one plain `YYYY-MM-DD` calendar date that is in the past."""
+
+    if not isinstance(raw, str):
+        raise ValueError(_DATE_OF_BIRTH_MESSAGE)
+    text = raw.strip()
+    # `date.fromisoformat` also accepts `20080131` and week dates, which would let
+    # two spellings of the same day into the store.
+    if not _DATE_OF_BIRTH_PATTERN.fullmatch(text):
+        raise ValueError(_DATE_OF_BIRTH_MESSAGE)
+    try:
+        born = date.fromisoformat(text)
+    except ValueError:
+        # Unchained: `fromisoformat` quotes the input, which must not reach a traceback.
+        raise ValueError(_DATE_OF_BIRTH_MESSAGE) from None
+    reference = today or datetime.now().date()
+    if born > reference:
+        raise ValueError(_DATE_OF_BIRTH_MESSAGE)
+    if completed_years(born, reference) > MAX_REGISTRATION_AGE:
+        raise ValueError(_DATE_OF_BIRTH_MESSAGE)
+    return text
+
+
+def completed_years(born: date, at: date) -> int:
+    """Whole years lived, so the birthday itself already counts as the new year."""
+
+    return at.year - born.year - ((at.month, at.day) < (born.month, born.day))
+
+
+def _as_date(value: Any) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
+        except ValueError:
+            return None
+    return None
+
+
+def is_minor(date_of_birth: Any, *, at: Any, adult_age_years: int) -> bool:
+    """Fail closed: an unreadable birthday and an unreadable clock are both minors.
+
+    This rule exists to protect minors, so "not known" is exactly the case that
+    has to be handled conservatively rather than waved through.
+    """
+
+    day = _as_date(at)
+    if day is None:
+        return True
+    try:
+        born = date.fromisoformat(normalize_date_of_birth(date_of_birth, today=day))
+    except ValueError:
+        return True
+    return completed_years(born, day) < adult_age_years
+
+
+def account_is_minor(
+    profile: Mapping[str, Any] | None, *, at: Any, adult_age_years: int | None = None
+) -> bool:
+    """Judge one stored account row. A row that is not there is a minor."""
+
+    threshold = (
+        get_settings().adult_age_years if adult_age_years is None else adult_age_years
+    )
+    if not isinstance(profile, Mapping):
+        return True
+    return is_minor(profile.get(DATE_OF_BIRTH_FIELD), at=at, adult_age_years=threshold)
 
 
 class RegisterRequest(BaseModel):

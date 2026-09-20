@@ -303,6 +303,7 @@ def _seed_profile(
     status: str = "active",
     account_number: str = "",
     email: str | None = None,
+    date_of_birth: str = "2000-01-01",
 ) -> None:
     table.rows[(f"USER#{user_id}", "PROFILE")] = {
         "PK": f"USER#{user_id}",
@@ -313,6 +314,9 @@ def _seed_profile(
         "email": email or f"{user_id}@stoa.test",
         "name": user_id,
         "account_number": account_number,
+        # Card 008: an adult unless the test says otherwise, because a row with
+        # no birthday reads as a minor and is kept off the self-service path.
+        **({"date_of_birth": date_of_birth} if date_of_birth else {}),
         "created_at": "2026-03-01T09:00:00+00:00",
         "version": 1,
     }
@@ -974,6 +978,7 @@ def test_列表只发名单上的字段_后加的字段不会自动发布给客�
     row["cognito_sub"] = "sub-SECRET"
     row["password_change_code_hash"] = "HASH-SECRET"
     row["field_a_later_card_added"] = "NOT-REVIEWED-BY-THIS-CARD"
+    row["date_of_birth"] = "2011-04-05"
     client = TestClient(_app(_admin_user()))
 
     response = client.get("/admin/users")
@@ -989,6 +994,7 @@ def test_列表只发名单上的字段_后加的字段不会自动发布给客�
         "createdAt",
         "lastLoginAt",
         "linkedAccounts",
+        "isMinor",
     }
     for leaked in (
         "cus_SECRET",
@@ -996,8 +1002,12 @@ def test_列表只发名单上的字段_后加的字段不会自动发布给客�
         "HASH-SECRET",
         "NOT-REVIEWED-BY-THIS-CARD",
         "field_a_later_card_added",
+        # Card 008: the console is answered with the judgement, never the date.
+        "2011-04-05",
+        "date_of_birth",
     ):
         assert leaked not in response.text, leaked
+    assert response.json()["items"][0]["isMinor"] is True
 
 
 def test_分页按limit切页_下一页不重不漏(table: AccountAdminTable) -> None:

@@ -30,6 +30,7 @@ from stoa.db.repositories import (
     security_audit_repo,
     user_repo,
 )
+from stoa.models.user import DATE_OF_BIRTH_FIELD, normalize_date_of_birth
 from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD
 from stoa.services import account_numbering_service
 
@@ -69,6 +70,7 @@ def invite_account(
     role: str,
     email: str,
     full_name: str = "",
+    date_of_birth: str | None = None,
     invitation_expiry_seconds: int = DEFAULT_INVITATION_SECONDS,
     deliver: Callable[..., None] | None = None,
     now: Callable[[], datetime] | None = None,
@@ -78,6 +80,7 @@ def invite_account(
     clean_role = _role(role)
     address = _email(email)
     instant = _instant(now)
+    birthday = _date_of_birth(date_of_birth, now=instant)
     account_id = _new_account_id(clean_role)
     _create_account_row(
         account_id=account_id,
@@ -85,6 +88,7 @@ def invite_account(
         email=address,
         full_name=full_name,
         account_status="invited",
+        date_of_birth=birthday,
         created_by=_actor_id(actor),
         now=instant,
     )
@@ -125,6 +129,7 @@ def assign_account(
     email: str,
     provider: Any,
     full_name: str = "",
+    date_of_birth: str | None = None,
     issuer: str,
     now: Callable[[], datetime] | None = None,
 ) -> dict[str, Any]:
@@ -137,6 +142,7 @@ def assign_account(
     clean_role = _role(role)
     address = _email(email)
     instant = _instant(now)
+    birthday = _date_of_birth(date_of_birth, now=instant)
     account_id = _new_account_id(clean_role)
     password = generate_initial_password()
     _create_account_row(
@@ -145,6 +151,7 @@ def assign_account(
         email=address,
         full_name=full_name,
         account_status="active",
+        date_of_birth=birthday,
         must_change_password=True,
         created_by=_actor_id(actor),
         now=instant,
@@ -199,6 +206,7 @@ def claim_invitation(
     password: str,
     issuer: str,
     provider: Any,
+    date_of_birth: str | None = None,
     now: Callable[[], datetime] | None = None,
 ) -> dict[str, Any]:
     """Exchange one single-use token for an active account with a chosen password.
@@ -207,6 +215,9 @@ def claim_invitation(
     from the caller, so holding a token grants exactly the account that was opened.
     """
     instant = _instant(now)
+    # Validated before the burn, for the same reason the password policy is: a
+    # malformed field must not cost the invitee their single-use token.
+    birthday = _date_of_birth(date_of_birth, now=instant)
     invitation = _consume_invitation(token=token, now=instant)
     digest = str(invitation.get("token_digest") or "")
     role = str(invitation.get("role") or "")
@@ -232,6 +243,12 @@ def claim_invitation(
             created_by=str(invitation.get("invitation_id") or account_id),
             now=instant,
         )
+        # Written while the row is still `invited`: a failure here is compensated by
+        # giving the token back, and the retry resumes from exactly this state.
+        if birthday:
+            _record_date_of_birth(
+                account_id=account_id, date_of_birth=birthday, now=instant
+            )
         _transition_account_status(
             account_id=account_id,
             expected_status="invited",
@@ -467,6 +484,7 @@ def _create_account_row(
     email: str,
     full_name: str,
     account_status: str,
+    date_of_birth: str = "",
     must_change_password: bool = False,
     created_by: str,
     now: datetime,
@@ -478,6 +496,9 @@ def _create_account_row(
             "user_id": account_id,
             "role": role,
             "account_status": account_status,
+            # Absent rather than empty when it was not supplied: "" would read as a
+            # stored answer, and the minor rule has to be able to see "not known".
+            **({DATE_OF_BIRTH_FIELD: date_of_birth} if date_of_birth else {}),
             # An account the administrator opened carries a password the
             # administrator knows, so it owes the same change a reset does. An
             # invited account sets its own password at claim time and owes nothing.
@@ -545,6 +566,61 @@ def _attach_account_number(*, account_id: str, role: str, now: datetime) -> str:
             status_code=409, detail={"code": "account_number_already_assigned"}
         ) from exc
     return account_number
+
+
+def _record_date_of_birth(*, account_id: str, date_of_birth: str, now: datetime) -> None:
+    """Fill in a birthday the invitation did not carry, once and only once.
+
+    The conditional write is the guard, not the read above it. An administrator who
+    recorded the date when they opened the account has the authoritative answer, so
+    a self-declared one can only ever fill a gap - it can never overwrite.
+    """
+    profile = user_repo.get_user(account_id)
+    if not profile:
+        raise HTTPException(status_code=409, detail={"code": "account_profile_missing"})
+    if str(profile.get(DATE_OF_BIRTH_FIELD) or "").strip():
+        return
+    operation = user_repo.profile_update_operation(
+        account_id,
+        update_expression="SET #date_of_birth = :date_of_birth, updated_at = :now",
+        expression_attribute_names={"#date_of_birth": DATE_OF_BIRTH_FIELD},
+        expression_attribute_values={
+            ":date_of_birth": date_of_birth,
+            ":now": now.isoformat(),
+        },
+        expected_version=_profile_version(profile),
+        additional_condition_expression="attribute_not_exists(#date_of_birth)",
+    )
+    try:
+        fence = account_deletion_repo.require_active_account_fence(account_id)
+        account_deletion_repo.transact(
+            [
+                account_deletion_repo.active_fence_condition(
+                    account_id, _profile_version(fence, field="generation")
+                ),
+                operation,
+            ]
+        )
+    except account_deletion_repo.AccountDeletionConflict as exc:
+        raise HTTPException(
+            status_code=409, detail={"code": "account_state_invalid"}
+        ) from exc
+
+
+def _date_of_birth(value: Any, *, now: datetime) -> str:
+    """Normalize one optional birthday, refusing it by code and never by value."""
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    try:
+        return normalize_date_of_birth(text, today=now.date())
+    except ValueError:
+        # Deliberately unchained: the rejected value must not survive in a traceback.
+        raise HTTPException(
+            status_code=422, detail={"code": "date_of_birth_invalid"}
+        ) from None
 
 
 def _transition_account_status(

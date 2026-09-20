@@ -42,6 +42,9 @@ def _profile(user_id: str, role: str, status: str = "active") -> dict[str, Any]:
         "account_status": status,
         "email": f"{user_id}@stoa.test",
         "name": user_id,
+        # Card 008: an account with no birthday reads as a minor and is refused
+        # the self-service path, which is not what these routes are probing.
+        "date_of_birth": "2000-01-01",
     }
 
 

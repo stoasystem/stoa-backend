@@ -1642,6 +1642,9 @@ PARENT_LINK_ERROR_STATUS = {
     "link_initiator_not_allowed": 403,
     "link_not_pending": 409,
     "link_confirmation_not_allowed": 403,
+    # Card 008: a link with a minor on either side is refused to self-service and
+    # left to the administrator. It is a refusal to act, not a state conflict.
+    "link_requires_administrator": 403,
     "link_confirmation_not_applicable": 409,
     "link_already_active": 409,
     "link_request_pending": 409,
