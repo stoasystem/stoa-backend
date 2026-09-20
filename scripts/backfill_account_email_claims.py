@@ -64,6 +64,11 @@ def holds_an_address(profile: dict) -> bool:
 def _scan_family(table, *, sk: str, pk_prefix: str) -> list[dict]:
     rows: list[dict] = []
     kwargs = {
+        # The invariant is read off the base table, so it is read strongly. An
+        # eventually consistent page can report a row written moments ago as
+        # missing, and both directions of this check would call that a defect in
+        # the data rather than in the reading.
+        "ConsistentRead": True,
         "FilterExpression": "SK = :sk AND begins_with(PK, :pk)",
         "ExpressionAttributeValues": {":sk": sk, ":pk": pk_prefix},
     }

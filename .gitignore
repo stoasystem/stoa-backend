@@ -14,3 +14,6 @@ lambda.zip
 htmlcov/
 *.egg-info/
 .DS_Store
+
+# agent 工作树，不入库
+.claude/

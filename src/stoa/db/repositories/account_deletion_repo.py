@@ -695,9 +695,13 @@ def _email_claim_release(
     email = str(item.get("email") or "")
     role = str(item.get("role") or "")
     try:
-        claim = account_email_claim_repo.get_claim(email=email, role=role, table=table)
+        account_email_claim_repo.claim_key(email=email, role=role)
     except ValueError:
+        # The pair cannot be spelled, so it was never claimable. A claim store
+        # that is merely unavailable must not land here: that would read as
+        # "nothing to give back" and leave the address taken for good.
         return []
+    claim = account_email_claim_repo.get_claim(email=email, role=role, table=table)
     if claim is None or claim.get("account_id") != user_id:
         return []
     return [
@@ -739,6 +743,9 @@ def replace_with_deletion_tombstone(
         raise AccountDeletionConflict("private tombstone allowlist violation")
     hook = getattr(target, "replace_with_deletion_tombstone", None)
     if callable(hook):
+        # A table that emulates this write owns the whole of it, including the
+        # claim release below. Production never takes this path - a boto3 Table
+        # has no such attribute - but a fake that grows one stops testing it.
         hook(dict(item), tombstone, user_id, generation)
         return
     transact(

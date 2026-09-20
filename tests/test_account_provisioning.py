@@ -29,7 +29,11 @@ from stoa.db.repositories import (
     security_audit_repo,
     user_repo,
 )
-from stoa.services import account_numbering_service, account_provisioning_service
+from stoa.services import (
+    account_deletion_service,
+    account_numbering_service,
+    account_provisioning_service,
+)
 
 
 SERVICE_PATH = (
@@ -320,6 +324,29 @@ class FakeAccountTable:
                 return
             self.email_gated.add(threading.get_ident())
         self.email_gate.wait(timeout=5)
+
+    def scan(self, **kwargs: Any) -> dict[str, Any]:
+        """Whole-table paging, the shape `scan_owned_private_rows` walks.
+
+        No filter is sent, so this hands back rows as they sort and leaves the
+        caller to decide which of them belong to the account being deleted -
+        which is where that rule actually lives.
+        """
+        with self.lock:
+            ordered = [deepcopy(row) for _, row in sorted(self.rows.items())]
+        start = kwargs.get("ExclusiveStartKey")
+        if start:
+            after = (str(start["PK"]), str(start["SK"]))
+            ordered = [row for row in ordered if (str(row["PK"]), str(row["SK"])) > after]
+        limit = int(kwargs.get("Limit") or 0) or len(ordered) or 1
+        page, rest = ordered[:limit], ordered[limit:]
+        response: dict[str, Any] = {"Items": page}
+        if rest and page:
+            response["LastEvaluatedKey"] = {
+                "PK": str(page[-1]["PK"]),
+                "SK": str(page[-1]["SK"]),
+            }
+        return response
 
     def put_profile_with_fence(
         self, profile: dict[str, Any], fence: dict[str, Any]
@@ -1613,7 +1640,7 @@ def test_删号把地址还回去_同一对可以重开(table: FakeAccountTable)
 def test_删号不会带走别人名下的同一对占位行(table: FakeAccountTable) -> None:
     """The pair can stand in another account's name, and deletion is not the arbiter.
 
-    Three creation paths still write a profile without taking the claim, so a profile
+    Six functions still write a profile without taking the claim, so a profile
     can carry an address whose placeholder belongs to somebody else. Deleting it must
     leave that placeholder where it is - and must still finish, because a deletion
     that refuses forever is its own defect.
@@ -1696,3 +1723,78 @@ def test_还有哪些路径在不取占位行的情况下建号() -> None:
 
     assert found == PROFILE_WRITERS_WITHOUT_A_CLAIM
     assert claimed == {("account_provisioning_service.py", "_create_account_row")}
+
+
+def test_销户分支自己跑到底才算把地址还回去(table: FakeAccountTable) -> None:
+    """The other tests here call the repository; production calls the branch.
+
+    That gap is how A-1 got in: card 009 added the claim, and nothing on the
+    deletion side was asked about it. Putting a `raise` on the branch's profile
+    arm and running the whole suite was green, so this drives the branch itself
+    -- and requires it to reach `complete`, because a release that refuses turns
+    into a retry that never ends rather than into a failure anyone would see.
+    """
+    _invite(table, email="branch@example.ch")
+    profile = _profile_for(table, "branch@example.ch")
+    user_id = str(profile["user_id"])
+    fence = table.rows[(f"USER#{user_id}", "ACCOUNT_FENCE")]
+    fence["status"] = "deletion_pending"
+    fence["generation"] = 1
+
+    command = {"user_id": user_id, "generation": 1}
+    previous: dict[str, Any] = {}
+    statuses: list[str] = []
+    for _ in range(12):
+        result = account_deletion_service._account_profile_branch(
+            command=command, previous=previous
+        )
+        statuses.append(result.status)
+        previous = result.persisted(_moment(60).isoformat())
+        if result.status == "complete":
+            break
+
+    assert statuses[-1] == "complete", statuses
+    assert table.claims() == []
+    assert (
+        account_email_claim_repo.get_claim(email="branch@example.ch", role="student")
+        is None
+    )
+    assert _invite(table, email="branch@example.ch", at=_moment(120))["accountNumber"]
+
+
+def test_占位行读不出来时销户必须失败而不是当成没有(table: FakeAccountTable) -> None:
+    """"Cannot reach the claim" and "there is no claim" are not the same answer.
+
+    Treating the first as the second writes the tombstone, drops the address and
+    leaves the pair taken forever - the exact shape of the defect this release
+    exists to close, reached by a store that was merely unavailable.
+    """
+    _invite(table, email="unreadable@example.ch")
+    profile = _profile_for(table, "unreadable@example.ch")
+    user_id = str(profile["user_id"])
+    fence = table.rows[(f"USER#{user_id}", "ACCOUNT_FENCE")]
+    fence["status"] = "deletion_pending"
+    fence["generation"] = 1
+
+    real_get_item = table.get_item
+
+    def refusing_get_item(*, Key: dict[str, str], ConsistentRead: bool = False):  # noqa: N803
+        if Key["SK"] == account_email_claim_repo.CLAIM_SK:
+            return "not a mapping at all"
+        return real_get_item(Key=Key, ConsistentRead=ConsistentRead)
+
+    table.get_item = refusing_get_item  # type: ignore[method-assign]
+
+    with pytest.raises(ValueError):
+        account_deletion_repo.replace_with_deletion_tombstone(
+            profile,
+            user_id=user_id,
+            generation=1,
+            now_iso=_moment(60).isoformat(),
+        )
+
+    table.get_item = real_get_item  # type: ignore[method-assign]
+    assert table.rows[(f"USER#{user_id}", "PROFILE")].get("email") == "unreadable@example.ch"
+    assert [str(row["PK"]) for row in table.claims()] == [
+        "EMAIL#unreadable@example.ch#student"
+    ]
