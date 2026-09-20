@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 from copy import deepcopy
+from decimal import Decimal
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 import json
@@ -186,6 +187,27 @@ def _filter_holds(condition: Any, item: dict[str, Any]) -> bool:
     raise AssertionError(f"unsupported filter: {operator}")
 
 
+def _as_stored(value: Any) -> Any:
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`. A double
+    that hands back the `int` it was given makes every guard written against `int`
+    pass here and fail in production - which is exactly what happened to the version
+    checks on the opening path.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
+    return value
+
+
 class FakeAccountTable:
     """In-memory single table honouring the conditions the production code sends."""
 
@@ -245,7 +267,7 @@ class FakeAccountTable:
             self._record("put_item", {"PK": key[0], "SK": key[1]})
             if not evaluator.holds(ConditionExpression, self.rows.get(key)):
                 raise _conditional_error("PutItem")
-            self.rows[key] = deepcopy(Item)
+            self.rows[key] = _as_stored(deepcopy(Item))
         return {}
 
     def update_item(
@@ -268,7 +290,7 @@ class FakeAccountTable:
                 raise _conditional_error("UpdateItem")
             updated = deepcopy(current) if current else dict(Key)
             self._apply(updated, UpdateExpression, evaluator)
-            self.rows[key] = updated
+            self.rows[key] = _as_stored(updated)
         return {"Attributes": deepcopy(updated)}
 
     @staticmethod
@@ -356,7 +378,7 @@ class FakeAccountTable:
             if key in self.rows:
                 raise account_deletion_repo.AccountDeletionConflict("profile exists")
         for row in (profile, fence):
-            self.rows[(str(row["PK"]), str(row["SK"]))] = deepcopy(row)
+            self.rows[(str(row["PK"]), str(row["SK"]))] = _as_stored(deepcopy(row))
 
     def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
         """All conditions, then all effects, under one lock.
@@ -386,7 +408,7 @@ class FakeAccountTable:
                     if kind == "ConditionCheck":
                         continue
                     if kind == "Put":
-                        staged.append((key, deepcopy(body["Item"])))
+                        staged.append((key, _as_stored(deepcopy(body["Item"]))))
                         continue
                     if kind == "Delete":
                         staged.append((key, None))
@@ -394,7 +416,7 @@ class FakeAccountTable:
                     assert kind == "Update", f"unsupported operation: {kind}"
                     updated = deepcopy(current) if current else dict(body["Key"])
                     self._apply(updated, body["UpdateExpression"], evaluator)
-                    staged.append((key, updated))
+                    staged.append((key, _as_stored(updated)))
             for key, row in staged:
                 if row is None:
                     self.rows.pop(key, None)
@@ -562,8 +584,9 @@ def test_邀请落库含角色过期时间使用标记邀请人与预分配编�
     assert "used_at" not in invitation
     # The table's time-to-live attribute is `expires_at`, and DynamoDB only expires a
     # numeric epoch, so an ISO string there would never be collected.
-    assert isinstance(invitation["expires_at"], int)
-    assert invitation["expires_at"] == int(_moment(3600).timestamp())
+    stored_expiry = invitation["expires_at"]
+    assert not isinstance(stored_expiry, (str, bool))
+    assert int(stored_expiry) == stored_expiry == int(_moment(3600).timestamp())
     assert invitation["expires_at_iso"] == _moment(3600).isoformat()
 
 
@@ -1819,3 +1842,63 @@ def test_占位行易主时半开账号仍然会被停放(table: FakeAccountTabl
     assert parked["account_status"] == account_provisioning_service.FAILED_ACCOUNT_STATUS
     assert "@" not in str(parked["email"])
     assert table.rows[claim_key]["account_id"] == "another-account"
+
+
+def test_销户入口认得表里存回来的代次(table: FakeAccountTable) -> None:
+    """The fence generation is read back from the table, so it is not an `int`.
+
+    A guard that insists on one refuses every real account: `DELETE /auth/me` is
+    self-service, and the refusal reads as "account is not deletable".
+    """
+    _invite(table, email="deletable@example.ch")
+    user_id = str(_profile_for(table, "deletable@example.ch")["user_id"])
+
+    fence, command = account_deletion_repo.begin_account_deletion(
+        user_id=user_id,
+        command={"command_id": "command-1", "fingerprint": "fingerprint-1"},
+        now_iso=_moment(60).isoformat(),
+    )
+
+    assert int(fence["generation"]) >= 1
+    assert command["command_id"] == "command-1"
+    assert int(command["generation"]) == int(fence["generation"])
+
+
+def test_发号的末号提示能从表里读回来(table: FakeAccountTable) -> None:
+    """Losing the hint is not a slow path, it is a cliff.
+
+    The allocator probes forward from the hint under a fixed attempt budget, so a
+    hint that always reads as zero turns every opening into a walk over every number
+    already issued -- and stops issuing at all once that walk exceeds the budget.
+    """
+    account_number_repo.advance_allocation_hint(role="student", year=2026, sequence=7)
+
+    assert account_number_repo.read_allocation_hint(role="student", year=2026) == 7
+
+
+def test_占位行读不出来时仍然要把半开账号停放(
+    table: FakeAccountTable, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Parking is the half that must not depend on the claim store being reachable.
+
+    The caller swallows whatever this raises, so a throttled read would take the
+    parking with it and leave a `provisioning` row that reads like a live account
+    with nobody raising anything - the state the release was added to end.
+    """
+    _invite(table, email="hiccup@example.ch")
+    user_id = str(_profile_for(table, "hiccup@example.ch")["user_id"])
+
+    def unreachable(**_kwargs: Any) -> None:
+        raise ClientError(
+            {"Error": {"Code": "ProvisionedThroughputExceededException"}}, "GetItem"
+        )
+
+    monkeypatch.setattr(account_email_claim_repo, "get_claim", unreachable)
+
+    account_provisioning_service._release_failed_account(
+        account_id=user_id, now=_moment(60)
+    )
+
+    parked = table.rows[(f"USER#{user_id}", "PROFILE")]
+    assert parked["account_status"] == account_provisioning_service.FAILED_ACCOUNT_STATUS
+    assert "@" not in str(parked["email"])

@@ -12,7 +12,7 @@ from typing import Protocol, runtime_checkable
 from botocore.exceptions import ClientError
 
 from stoa.config import ValidatedAuthorizationAuditKey, validate_authorization_audit_keyring
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 
 
 AUTHORIZATION_EVENT_TYPES = frozenset(
@@ -506,6 +506,12 @@ def project_audit_event(event: Mapping[str, object]) -> AuditItem:
         value = event.get(key)
         if value is None:
             continue
+        # A number read back from the table arrives as `Decimal`; the same whole
+        # number written as an `int` is the value this row is meant to carry, and
+        # refusing it would only ever fail against the real store.
+        number = None if isinstance(value, (str, bool)) else stored_int(value)
+        if number is not None:
+            value = number
         if not isinstance(value, (str, int, bool)):
             raise ValueError("unsupported security audit field value")
         projected[key] = value

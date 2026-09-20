@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
     capability_repo,
     identity_repo,
@@ -454,11 +455,15 @@ def _resume_activation(command: dict[str, Any], *, provider: Any, now: datetime)
             now=lambda: now,
         )
     except HTTPException as exc:
-        # A refusal the store will repeat forever is not a step to come back to: the
-        # pair already belongs to a teacher account, and deferring it would leave a
-        # resumable command that can never finish. Contention and an unavailable
-        # number are the opposite, and defer like every other partial failure.
-        if exc.status_code == 409:
+        # A refusal the store will repeat forever is not a step to come back to, and
+        # deferring it would leave a resumable command that can never finish. The
+        # status code cannot tell the two apart: losing a race for an account number
+        # also answers 409, and that one happens *after* the row has landed, so
+        # refusing to defer it strands the account half-opened with its address held.
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        if str(detail.get("code") or "") in (
+            account_provisioning_service.TERMINAL_OPEN_ACCOUNT_CODES
+        ):
             raise
         raise _defer_activation(command, user_id=user_id, now=now) from exc
 
@@ -631,6 +636,7 @@ def _invitation_expiry(invitation: dict[str, Any]) -> datetime:
 
 
 def _positive_version(value: object, label: str) -> int:
-    if type(value) is not int or value <= 0:
+    number = stored_int(value)
+    if number is None or number <= 0:
         raise HTTPException(status_code=409, detail={"code": f"{label}_state_invalid"})
-    return value
+    return number

@@ -22,6 +22,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
     account_deletion_repo,
     account_email_claim_repo,
@@ -69,6 +70,14 @@ RESERVED_PROFILE_FIELDS = frozenset(
         DATE_OF_BIRTH_FIELD,
         MUST_CHANGE_PASSWORD_FIELD,
     }
+)
+
+# Refusals an opening will meet again on every retry: the pair belongs to another
+# account, the row being resumed is not this account's, or the role cannot be opened
+# at all. Everything else `open_account` raises is contention or a dependency that is
+# briefly unavailable, and those are what a resumable command exists to come back to.
+TERMINAL_OPEN_ACCOUNT_CODES = frozenset(
+    {"account_exists", "account_state_invalid", "role_not_provisionable"}
 )
 
 INITIAL_PASSWORD_LENGTH = 16
@@ -840,7 +849,14 @@ def _claim_release_operation(
         account_email_claim_repo.claim_key(email=email, role=role)
     except ValueError:
         return None
-    claim = account_email_claim_repo.get_claim(email=email, role=role)
+    try:
+        claim = account_email_claim_repo.get_claim(email=email, role=role)
+    except Exception:
+        # The parking is the half that matters: it is what stops a half-opened
+        # account being read as a live one. A claim that cannot be read right now is
+        # left where it is rather than taking the parking down with it - an address
+        # still held by a parked account is what the backfill's reverse sweep finds.
+        return None
     if claim is None or claim.get("account_id") != account_id:
         return None
     return account_email_claim_repo.release_operation(
@@ -1004,10 +1020,7 @@ def _parse_timestamp(value: Any) -> datetime:
 
 
 def _profile_version(item: dict[str, Any], field: str = "version") -> int:
-    value = item.get(field)
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise HTTPException(status_code=409, detail={"code": "account_state_invalid"})
-    number = int(value)
-    if number <= 0:
+    number = stored_int(item.get(field))
+    if number is None or number <= 0:
         raise HTTPException(status_code=409, detail={"code": "account_state_invalid"})
     return number

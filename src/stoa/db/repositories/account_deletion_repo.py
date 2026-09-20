@@ -14,7 +14,7 @@ from typing import Any, Iterable, Mapping, Protocol, runtime_checkable
 from boto3.dynamodb.types import TypeSerializer
 from botocore.exceptions import ClientError
 
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_email_claim_repo
 
 
@@ -476,7 +476,7 @@ def begin_account_deletion(
         if persisted and persisted.get("fingerprint") == command.get("fingerprint"):
             return current, persisted
         raise AccountDeletionConflict("deletion replay conflict")
-    if current.get("status") != "active" or type(current.get("generation")) is not int:
+    if current.get("status") != "active" or stored_int(current.get("generation")) is None:
         raise AccountDeletionConflict("account is not deletable")
     generation = int(current["generation"])
     command = {

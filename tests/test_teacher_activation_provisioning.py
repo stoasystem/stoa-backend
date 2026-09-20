@@ -287,9 +287,9 @@ def test_教师邀请行的过期时间是整数epoch(
     _approve(delivered)
 
     invitation = _invitation_row(table)
-    assert isinstance(invitation["expires_at"], int)
-    assert not isinstance(invitation["expires_at"], bool)
-    assert invitation["expires_at"] == int(_moment(3600).timestamp())
+    stored_expiry = invitation["expires_at"]
+    assert not isinstance(stored_expiry, (str, bool))
+    assert int(stored_expiry) == stored_expiry == int(_moment(3600).timestamp())
     assert invitation["expires_at_iso"] == _moment(3600).isoformat()
     assert delivered[-1]["expires_at"] == _moment(3600).isoformat()
 
@@ -537,3 +537,126 @@ def test_删掉教师账号后地址还回去且同一对可以重开(
     )
     # A number is never recycled, an address always is.
     assert reopened["accountNumber"] == f"T{MOMENT.year % 100:02d}-0002"
+
+
+# ---------------------------------------------------------------------------
+# 010 独立审计的 A-2 / A-3 / B-3
+# ---------------------------------------------------------------------------
+
+
+def test_争用导致的编号失败要能续做而不是把命令钉死(
+    table: TeacherTable, delivered: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Losing a race for a number answers 409, and it happens after the row lands.
+
+    Deciding by status code puts that refusal in the same basket as "the pair belongs
+    to somebody else", which is the one basket it must not be in: the account is
+    already open and holding its address, the number is already burnt, and refusing
+    to defer leaves the command sitting in `pending` with both entry points replying
+    `invitation_already_used`. Nobody can finish it and nobody can start again.
+    """
+    token = _approve(delivered)
+    attempts: list[str] = []
+    real_attach = account_provisioning_service._attach_account_number
+
+    def contended(*, account_id: str, role: str, now: datetime) -> str:
+        attempts.append(account_id)
+        if len(attempts) == 1:
+            raise HTTPException(
+                status_code=409, detail={"code": "account_number_already_assigned"}
+            )
+        return real_attach(account_id=account_id, role=role, now=now)
+
+    monkeypatch.setattr(
+        account_provisioning_service, "_attach_account_number", contended
+    )
+
+    with pytest.raises(HTTPException) as deferred:
+        _activate(token)
+    assert deferred.value.status_code == 503
+    assert deferred.value.detail == {"code": "activation_temporarily_unavailable"}
+
+    resumed = teacher_application_service.activate_from_invitation(
+        token=token,
+        verified_email=CANDIDATE,
+        issuer=ISSUER,
+        subject="sub-resumed",
+        provider=TeacherProvider(),
+        now=lambda: _moment(120),
+    )
+    assert resumed["status"] == "active"
+    assert TEACHER_NUMBER.match(str(_profile(table, resumed["userId"])["account_number"]))
+
+
+def test_一个地址已经属于别人时激活直接拒绝而不是停在可续做(
+    table: TeacherTable, delivered: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The negative control for the rule above: some refusals really are forever."""
+    token = _approve(delivered)
+    monkeypatch.setattr(
+        account_provisioning_service,
+        "_attach_account_number",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            HTTPException(status_code=409, detail={"code": "account_exists"})
+        ),
+    )
+
+    with pytest.raises(HTTPException) as refused:
+        _activate(token)
+
+    assert refused.value.status_code == 409
+    assert refused.value.detail == {"code": "account_exists"}
+
+
+def test_续做只续做本账号_地址对不上就拒绝(table: TeacherTable) -> None:
+    """`open_account` resumes by id, and an id alone does not say whose row it is.
+
+    Without the check a caller finishes an account it never opened - including one
+    already replaced by a deletion tombstone, which carries no address at all.
+    """
+    account_provisioning_service.open_account(
+        account_id="shared-id",
+        role="teacher",
+        email="first@example.ch",
+        account_status="pending_review",
+        created_by="test",
+        now=lambda: MOMENT,
+    )
+
+    with pytest.raises(HTTPException) as refused:
+        account_provisioning_service.open_account(
+            account_id="shared-id",
+            role="teacher",
+            email="second@example.ch",
+            account_status="pending_review",
+            created_by="test",
+            now=lambda: MOMENT,
+        )
+
+    assert refused.value.detail == {"code": "account_state_invalid"}
+
+
+def test_调用方的附加字段改不动身份(table: TeacherTable) -> None:
+    """`open_account` is a public entry point now, so what a caller may set is fenced."""
+    account_provisioning_service.open_account(
+        account_id="fenced-id",
+        role="teacher",
+        email="fenced@example.ch",
+        account_status="pending_review",
+        created_by="test",
+        extra_fields={
+            "role": "admin",
+            "email": "attacker@example.ch",
+            "account_status": "active",
+            "account_number": "A26-9999",
+            "activation_command_id": "kept",
+        },
+        now=lambda: MOMENT,
+    )
+
+    profile = _profile(table, "fenced-id")
+    assert profile["role"] == "teacher"
+    assert profile["email"] == "fenced@example.ch"
+    assert profile["account_status"] == "pending_review"
+    assert TEACHER_NUMBER.match(str(profile["account_number"]))
+    assert profile["activation_command_id"] == "kept"

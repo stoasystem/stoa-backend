@@ -6,7 +6,7 @@ from typing import Protocol, runtime_checkable
 
 from botocore.exceptions import ClientError
 
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 
 
 CLAIM_SK = "ACCOUNT_NUMBER"
@@ -120,10 +120,10 @@ def read_allocation_hint(*, role: str, year: int, table: object | None = None) -
     item = response.get("Item")
     if not isinstance(item, dict):
         return 0
-    last = item.get("last_sequence")
-    if isinstance(last, bool) or not isinstance(last, (int, float)):
+    last = stored_int(item.get("last_sequence"))
+    if last is None:
         return 0
-    return max(int(last), 0)
+    return max(last, 0)
 
 
 def advance_allocation_hint(
