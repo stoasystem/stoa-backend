@@ -244,3 +244,37 @@ def test_checked_inventory_bytes_are_valid_json_and_have_no_private_coordinates(
     _seal_api()
     encoded = json.dumps(json.loads(INVENTORY_PATH.read_text()), sort_keys=True).lower()
     assert "student-1" not in encoded and "versionid=" not in encoded and "s3://" not in encoded
+
+
+def test_封印里的分支契约与生成器的源头逐字一致():
+    """The sealed JSON is generated; nothing checks it against its own source table.
+
+    Byte-determinism is checked against the tree at `candidate_sha`, which pins the
+    generator too, so a contract edited here alone reads clean until someone re-pins.
+    This compares the two directly.
+    """
+    import importlib.util
+    import sys
+
+    path = ROOT / "scripts" / "generate_phase473_private_store_inventory.py"
+    name = "phase473_inventory_generator"
+    spec = importlib.util.spec_from_file_location(name, path)
+    generator = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    # Its dataclasses resolve their own annotations by module name, which only works
+    # once the module is registered.
+    sys.modules[name] = generator
+    try:
+        spec.loader.exec_module(generator)
+    finally:
+        sys.modules.pop(name, None)
+
+    sealed = json.loads(INVENTORY_PATH.read_bytes())["branch_registry"]
+    assert tuple(branch["branch_id"] for branch in sealed) == generator.BRANCH_IDS
+    for branch in sealed:
+        contract = generator.BRANCH_CONTRACTS[branch["branch_id"]]
+        assert branch["required_roots"] == contract["roots"]
+        assert branch["subfamilies"] == contract["subfamilies"]
+        assert branch["handler_version"] == contract.get(
+            "handler_version", "473-35.v1"
+        )

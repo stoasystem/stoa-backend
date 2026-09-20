@@ -106,7 +106,12 @@ def test_apply_给缺占位行的账号补上(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_已经有占位行的账号不会被重写(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Rerunning is how anyone checks the first run worked."""
+    """Rerunning is how anyone checks the first run worked.
+
+    The placeholder here stands in a third account's name over a pair this profile
+    carries, so the run also has something to say: it leaves the row exactly where it
+    is and exits nonzero rather than reporting a table it did not put right.
+    """
     table = FakeTable(
         [
             _profile("student_1", "a@example.ch", "student"),
@@ -118,7 +123,7 @@ def test_已经有占位行的账号不会被重写(monkeypatch: pytest.MonkeyPa
         ]
     )
 
-    assert _run(table, monkeypatch, "--apply") == 0
+    assert _run(table, monkeypatch, "--apply") == 1
     assert table.puts == []
     assert table.items[("EMAIL#a@example.ch#student", "EMAIL_CLAIM")]["account_id"] == "someone_else"
 
@@ -213,3 +218,45 @@ def test_占位行的键与仓储层逐字一致() -> None:
         email="A@Example.CH", role="student"
     )
     assert backfill.CLAIM_CONDITION == account_email_claim_repo.CLAIM_CONDITION
+
+
+def test_verify_报出没有活账号站在后面的占位行(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The other direction: a deleted account's placeholder outliving it.
+
+    The tombstone carries no address, so nothing in the table names the pair any
+    more. Only a sweep from the placeholder side can see it.
+    """
+    table = FakeTable(
+        [
+            {
+                "PK": "USER#gone_1",
+                "SK": "PROFILE",
+                "entity_type": "user_profile_deletion_tombstone",
+                "status": "deleted",
+            },
+            {
+                "PK": "EMAIL#gone@example.ch#student",
+                "SK": "EMAIL_CLAIM",
+                "account_id": "gone_1",
+            },
+        ]
+    )
+
+    assert _run(table, monkeypatch, "--verify") == 1
+    assert table.puts == []
+
+
+def test_verify_不会把活账号自己的占位行当成孤儿(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The negative control for the sweep above: the ordinary table must read clean."""
+    table = FakeTable(
+        [
+            _profile("student_1", "A@Example.CH", "student"),
+            {
+                "PK": "EMAIL#a@example.ch#student",
+                "SK": "EMAIL_CLAIM",
+                "account_id": "student_1",
+            },
+        ]
+    )
+
+    assert _run(table, monkeypatch, "--verify") == 0

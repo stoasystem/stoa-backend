@@ -1565,3 +1565,134 @@ def test_大小写不同的邮箱落在同一个占位行(table: FakeAccountTabl
     assert [str(row["PK"]) for row in table.claims()] == [
         "EMAIL#case2@example.ch#student"
     ]
+
+
+def _profile_for(table: FakeAccountTable, email: str) -> dict[str, Any]:
+    return next(row for row in table.profiles() if row.get("email") == email)
+
+
+def _delete_account(table: FakeAccountTable, email: str, *, generation: int = 1) -> str:
+    """Take one account through the step of its deletion that ends the profile row."""
+    profile = _profile_for(table, email)
+    user_id = str(profile["user_id"])
+    fence = table.rows[(f"USER#{user_id}", "ACCOUNT_FENCE")]
+    fence["status"] = "deletion_pending"
+    fence["generation"] = generation
+    account_deletion_repo.replace_with_deletion_tombstone(
+        profile,
+        user_id=user_id,
+        generation=generation,
+        now_iso=_moment(60).isoformat(),
+    )
+    return user_id
+
+
+def test_删号把地址还回去_同一对可以重开(table: FakeAccountTable) -> None:
+    """A number is never recycled, an address always is.
+
+    The tombstone drops `email`, so if the placeholder outlives the account nothing
+    left in the table can name the pair again: the address reads free to the
+    administrator and is refused by the store, with no account anywhere to point at.
+    """
+    _invite(table, email="leaver@example.ch")
+    assert [str(row["PK"]) for row in table.claims()] == [
+        "EMAIL#leaver@example.ch#student"
+    ]
+
+    _delete_account(table, "leaver@example.ch")
+
+    assert table.claims() == []
+    assert (
+        account_email_claim_repo.get_claim(email="leaver@example.ch", role="student")
+        is None
+    )
+    reopened = _invite(table, email="leaver@example.ch", at=_moment(120))
+    assert reopened["accountNumber"]
+
+
+def test_删号不会带走别人名下的同一对占位行(table: FakeAccountTable) -> None:
+    """The pair can stand in another account's name, and deletion is not the arbiter.
+
+    Three creation paths still write a profile without taking the claim, so a profile
+    can carry an address whose placeholder belongs to somebody else. Deleting it must
+    leave that placeholder where it is - and must still finish, because a deletion
+    that refuses forever is its own defect.
+    """
+    _invite(table, email="shared@example.ch")
+    claim_key = ("EMAIL#shared@example.ch#student", account_email_claim_repo.CLAIM_SK)
+    table.rows[claim_key]["account_id"] = "another-account"
+
+    user_id = _delete_account(table, "shared@example.ch")
+
+    assert table.rows[claim_key]["account_id"] == "another-account"
+    tombstone = table.rows[(f"USER#{user_id}", "PROFILE")]
+    assert tombstone["status"] == "deleted" and "email" not in tombstone
+
+
+def test_释放占位行的条件不接受别人的账号(table: FakeAccountTable) -> None:
+    """The ownership clause is the whole guard; without it any release takes any pair."""
+    _invite(table, email="owned@example.ch")
+    claim_key = ("EMAIL#owned@example.ch#student", account_email_claim_repo.CLAIM_SK)
+    owner = str(table.rows[claim_key]["account_id"])
+
+    stranger = account_email_claim_repo.release_operation(
+        email="owned@example.ch", role="student", account_id="not-the-owner"
+    )
+    with pytest.raises(account_deletion_repo.AccountDeletionConflict):
+        account_deletion_repo.transact([stranger], table=table)
+    assert claim_key in table.rows
+
+    account_deletion_repo.transact(
+        [
+            account_email_claim_repo.release_operation(
+                email="owned@example.ch", role="student", account_id=owner
+            )
+        ],
+        table=table,
+    )
+    assert claim_key not in table.rows
+
+
+# Written out by hand from a sweep of the services, so a path that quietly starts
+# opening accounts cannot join the list by being added to it.
+PROFILE_WRITERS_WITHOUT_A_CLAIM = {
+    ("privileged_identity_service.py", "change_admin_status"),
+    ("privileged_identity_service.py", "_reconcile_admin"),
+    ("privileged_identity_service.py", "_restore_admin"),
+    ("public_identity_service.py", "start_or_resume_public_registration"),
+    ("public_identity_service.py", "_resume_public_registration"),
+    ("teacher_application_service.py", "_resume_activation"),
+}
+
+
+def test_还有哪些路径在不取占位行的情况下建号() -> None:
+    """`put_user` writes under attribute_not_exists, so every caller opens an account.
+
+    Only the invitation path takes the claim; these six open a profile carrying an
+    address without one, and for those addresses uniqueness is still a read of an
+    eventually consistent index. Pinned rather than fixed here: teacher activation is
+    card 010's subject and shares the same seam, and splitting it across two cards
+    would leave neither able to say what the rule is. What this must not allow is a
+    seventh appearing unnoticed.
+    """
+    services = SERVICE_PATH.parent
+    found: set[tuple[str, str]] = set()
+    claimed: set[tuple[str, str]] = set()
+    for path in sorted(services.glob("*.py")):
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for call in ast.walk(node):
+                if not (
+                    isinstance(call, ast.Call)
+                    and isinstance(call.func, ast.Attribute)
+                ):
+                    continue
+                if call.func.attr == "put_user":
+                    found.add((path.name, node.name))
+                elif call.func.attr == "put_user_with_email_claim":
+                    claimed.add((path.name, node.name))
+
+    assert found == PROFILE_WRITERS_WITHOUT_A_CLAIM
+    assert claimed == {("account_provisioning_service.py", "_create_account_row")}

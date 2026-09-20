@@ -15,6 +15,7 @@ from boto3.dynamodb.types import TypeSerializer
 from botocore.exceptions import ClientError
 
 from stoa.db.dynamodb import get_table
+from stoa.db.repositories import account_email_claim_repo
 
 
 type AccountDeletionItem = dict[str, object]
@@ -674,6 +675,38 @@ def _scan_commands(
     raise AccountDeletionConflict("deletion command scan bound exceeded")
 
 
+def _email_claim_release(
+    item: Mapping[str, Any], user_id: str, *, table: Any
+) -> list[dict[str, Any]]:
+    """Give the address back in the same commit that ends the account holding it.
+
+    The tombstone drops `email`, so once it lands nothing in the table can derive the
+    claim key again and the pair stays taken by an account that no longer exists. A
+    pair the claim repository refuses to spell was never claimable, so there is
+    nothing to release.
+
+    A claim standing in another account's name is read out here rather than left for
+    the condition to refuse: inside a transaction a refusal cancels the tombstone too,
+    and the branch would retry the same commit forever. Skipping it converges, and the
+    condition still decides the gap between this read and the commit.
+    """
+    if item.get("SK") != "PROFILE" or item.get("user_id") != user_id:
+        return []
+    email = str(item.get("email") or "")
+    role = str(item.get("role") or "")
+    try:
+        claim = account_email_claim_repo.get_claim(email=email, role=role, table=table)
+    except ValueError:
+        return []
+    if claim is None or claim.get("account_id") != user_id:
+        return []
+    return [
+        account_email_claim_repo.release_operation(
+            email=email, role=role, account_id=user_id
+        )
+    ]
+
+
 def replace_with_deletion_tombstone(
     item: Mapping[str, Any],
     *,
@@ -721,6 +754,7 @@ def replace_with_deletion_tombstone(
                     "ExpressionAttributeValues": {":owner": user_id},
                 }
             },
+            *_email_claim_release(item, user_id, table=target),
         ],
         table=target,
     )

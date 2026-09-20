@@ -61,19 +61,51 @@ def holds_an_address(profile: dict) -> bool:
     return "@" in email and bool(str(profile.get("role") or "").strip())
 
 
-def scan_profiles(table) -> list[dict]:
-    profiles: list[dict] = []
+def _scan_family(table, *, sk: str, pk_prefix: str) -> list[dict]:
+    rows: list[dict] = []
     kwargs = {
         "FilterExpression": "SK = :sk AND begins_with(PK, :pk)",
-        "ExpressionAttributeValues": {":sk": "PROFILE", ":pk": "USER#"},
+        "ExpressionAttributeValues": {":sk": sk, ":pk": pk_prefix},
     }
     while True:
         response = table.scan(**kwargs)
-        profiles.extend(response.get("Items", []))
+        rows.extend(response.get("Items", []))
         cursor = response.get("LastEvaluatedKey")
         if not cursor:
-            return profiles
+            return rows
         kwargs["ExclusiveStartKey"] = cursor
+
+
+def scan_profiles(table) -> list[dict]:
+    return _scan_family(table, sk="PROFILE", pk_prefix="USER#")
+
+
+def scan_claims(table) -> list[dict]:
+    return _scan_family(table, sk=account_email_claim_repo.CLAIM_SK, pk_prefix="EMAIL#")
+
+
+def orphan_claims(profiles: list[dict], claims: list[dict]) -> list[dict]:
+    """Placeholders no live account stands behind.
+
+    The other direction of the same invariant. An account is deleted by replacing its
+    profile with a tombstone that carries no address, so a placeholder left behind
+    names a pair that reads free and is refused by the store, with nothing left to
+    point at. Reported, never written: which rows to remove is a judgement about real
+    accounts, and this script does not make those.
+    """
+    held: dict[str, set[str]] = defaultdict(set)
+    for profile in profiles:
+        if not holds_an_address(profile):
+            continue
+        key = claim_key(str(profile["email"]), str(profile["role"]))["PK"]
+        held[key].add(str(profile.get("user_id") or profile["PK"]).removeprefix("USER#"))
+
+    orphans = []
+    for claim in claims:
+        owners = held.get(str(claim.get("PK") or ""), set())
+        if str(claim.get("account_id") or "") not in owners:
+            orphans.append(claim)
+    return orphans
 
 
 def pairs_to_claim(profiles: list[dict]) -> tuple[list[dict], list[tuple[str, list[dict]]]]:
@@ -106,6 +138,7 @@ def main() -> int:
     table = boto3.resource("dynamodb", region_name=args.region).Table(args.table)
     profiles = scan_profiles(table)
     claimable, collisions = pairs_to_claim(profiles)
+    orphans = orphan_claims(profiles, scan_claims(table))
 
     missing = []
     for profile in claimable:
@@ -124,12 +157,18 @@ def main() -> int:
         print("  no claim written for these; deciding which account keeps the address")
         print("  is not something a backfill can answer")
 
+    if orphans:
+        print(f"\n{len(orphans)} claim rows no live account stands behind:")
+        for claim in sorted(orphans, key=lambda row: str(row.get("PK", ""))):
+            print(f"  {str(claim.get('PK')):48} account_id={claim.get('account_id')}")
+        print("  deciding whether to free these is a judgement about real accounts")
+
     if args.verify:
-        return 1 if missing or collisions else 0
+        return 1 if missing or collisions or orphans else 0
 
     if not missing:
         print("\nnothing to do")
-        return 1 if collisions else 0
+        return 1 if collisions or orphans else 0
 
     if not args.apply:
         print(f"\nreport only; pass --apply to write {len(missing)} claim rows")
@@ -161,7 +200,7 @@ def main() -> int:
             print(f"  skipped {email} as {role}: claimed while this ran")
 
     print(f"\nwrote {written} claim rows")
-    return 1 if collisions else 0
+    return 1 if collisions or orphans else 0
 
 
 if __name__ == "__main__":
