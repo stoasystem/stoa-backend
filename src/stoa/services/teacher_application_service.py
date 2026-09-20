@@ -16,10 +16,15 @@ from stoa.db.repositories import (
     identity_repo,
     security_audit_repo,
     teacher_application_repo,
-    user_repo,
 )
-from stoa.services import notify_service, teacher_identity_provider
+from stoa.services import (
+    account_provisioning_service,
+    notify_service,
+    teacher_identity_provider,
+)
 
+
+TEACHER_ROLE = "teacher"
 
 FORBIDDEN_APPLICATION_FIELDS = frozenset(
     {"document", "documents", "credential", "credentials", "file", "files", "blob", "upload"}
@@ -204,7 +209,10 @@ def _issue_invitation(
             "version": 1,
             "issued_by": reviewer_id,
             "issued_at": timestamp,
-            "expires_at": expires_at.isoformat(),
+            # Numeric epoch so the table's time-to-live attribute actually expires the
+            # row; the readable copy is kept beside it for responses and audits.
+            "expires_at": int(expires_at.timestamp()),
+            "expires_at_iso": expires_at.isoformat(),
             "reason": reason,
         }
     )
@@ -309,7 +317,7 @@ def activate_from_invitation(
     if not hmac.compare_digest(str(invitation.get("verified_email") or ""), email):
         raise HTTPException(status_code=409, detail={"code": "invitation_email_mismatch"})
     instant = (now or (lambda: datetime.now(UTC)))()
-    if _parse_timestamp(invitation.get("expires_at")) <= instant:
+    if _invitation_expiry(invitation) <= instant:
         raise HTTPException(status_code=409, detail={"code": "invitation_expired"})
 
     command_id = str(invitation.get("command_id") or f"teacheractivate_{digest[:24]}")
@@ -378,7 +386,7 @@ def claim_and_activate(
     if not invitation:
         raise HTTPException(status_code=409, detail={"code": "invitation_invalid"})
     instant = (now or (lambda: datetime.now(UTC)))()
-    if _parse_timestamp(invitation.get("expires_at")) <= instant:
+    if _invitation_expiry(invitation) <= instant:
         raise HTTPException(status_code=409, detail={"code": "invitation_expired"})
     if invitation.get("status") != "issued":
         command_id = str(invitation.get("command_id") or "")
@@ -432,15 +440,28 @@ def _resume_activation(command: dict[str, Any], *, provider: Any, now: datetime)
     if command.get("status") == "active":
         raise HTTPException(status_code=409, detail={"code": "invitation_already_used"})
     user_id = command["user_id"]
-    pending_profile = {
-        "user_id": user_id,
-        "role": "teacher",
-        "account_status": "pending_review",
-        "email": command["verified_email"],
-        "activation_command_id": command["command_id"],
-        "updated_at": now.isoformat(),
-    }
-    user_repo.put_user(pending_profile)
+    # The review decided who may hold a teacher account; the opening itself is the same
+    # one every other role gets, so the number, the birthday, the change-password flag
+    # and the `(address, role)` claim all come from there.
+    try:
+        account_provisioning_service.open_account(
+            account_id=user_id,
+            role=TEACHER_ROLE,
+            email=command["verified_email"],
+            account_status="pending_review",
+            created_by=command["command_id"],
+            extra_fields={"activation_command_id": command["command_id"]},
+            now=lambda: now,
+        )
+    except HTTPException as exc:
+        # A refusal the store will repeat forever is not a step to come back to: the
+        # pair already belongs to a teacher account, and deferring it would leave a
+        # resumable command that can never finish. Contention and an unavailable
+        # number are the opposite, and defer like every other partial failure.
+        if exc.status_code == 409:
+            raise
+        raise _defer_activation(command, user_id=user_id, now=now) from exc
+
     try:
         if hasattr(provider, "ensure_teacher_identity"):
             provider.ensure_teacher_identity(
@@ -456,28 +477,14 @@ def _resume_activation(command: dict[str, Any], *, provider: Any, now: datetime)
             created_by=command["command_id"],
         )
     except Exception as exc:
-        latest = teacher_application_repo.get_activation_command(command["command_id"]) or command
-        teacher_application_repo.update_activation_command(
-            command["command_id"],
-            expected_version=_positive_version(latest.get("version"), "activation command"),
-            status="provider_failed",
-            updated_at=now.isoformat(),
-            evidence_reference=f"teacher-activation:{command['command_id']}",
-        )
-        _audit(
-            stream_id=command["application_id"],
-            event_type="teacher_activation_deferred",
-            actor_id=user_id,
-            target_id=user_id,
-            version=command["application_version"],
-            reason_code="provider_step_incomplete",
-            command_id=command["command_id"],
-            created_at=now.isoformat(),
-        )
-        raise HTTPException(status_code=503, detail={"code": "activation_temporarily_unavailable"}) from exc
+        raise _defer_activation(command, user_id=user_id, now=now) from exc
 
-    active_profile = {**pending_profile, "account_status": "active", "updated_at": now.isoformat()}
-    user_repo.put_user(active_profile)
+    account_provisioning_service.transition_account_status(
+        account_id=user_id,
+        expected_status="pending_review",
+        next_status="active",
+        now=lambda: now,
+    )
     latest = teacher_application_repo.get_activation_command(command["command_id"]) or command
     completed = teacher_application_repo.update_activation_command(
         command["command_id"],
@@ -504,6 +511,33 @@ def _resume_activation(command: dict[str, Any], *, provider: Any, now: datetime)
         "applicationVersion": command["application_version"],
         "evidenceReference": completed.get("evidence_reference"),
     }
+
+
+def _defer_activation(
+    command: dict[str, Any], *, user_id: str, now: datetime
+) -> HTTPException:
+    """Park one activation where a retry can pick it up, and say so once."""
+    latest = teacher_application_repo.get_activation_command(command["command_id"]) or command
+    teacher_application_repo.update_activation_command(
+        command["command_id"],
+        expected_version=_positive_version(latest.get("version"), "activation command"),
+        status="provider_failed",
+        updated_at=now.isoformat(),
+        evidence_reference=f"teacher-activation:{command['command_id']}",
+    )
+    _audit(
+        stream_id=command["application_id"],
+        event_type="teacher_activation_deferred",
+        actor_id=user_id,
+        target_id=user_id,
+        version=command["application_version"],
+        reason_code="provider_step_incomplete",
+        command_id=command["command_id"],
+        created_at=now.isoformat(),
+    )
+    return HTTPException(
+        status_code=503, detail={"code": "activation_temporarily_unavailable"}
+    )
 
 
 def _require_capability(actor: dict[str, Any], required: str) -> None:
@@ -583,6 +617,17 @@ def _timestamp(now: Callable[[], datetime] | None) -> str:
 def _parse_timestamp(value: Any) -> datetime:
     parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def _invitation_expiry(invitation: dict[str, Any]) -> datetime:
+    """When this invitation stops being usable, whichever way the row spells it.
+
+    `expires_at` is the table's time-to-live attribute, so it now holds a numeric
+    epoch and the readable copy moved beside it. A row issued before that carries the
+    readable value under `expires_at` and must keep being honoured.
+    """
+    readable = invitation.get("expires_at_iso")
+    return _parse_timestamp(readable if readable is not None else invitation.get("expires_at"))
 
 
 def _positive_version(value: object, label: str) -> int:

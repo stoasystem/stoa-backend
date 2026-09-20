@@ -54,6 +54,23 @@ MAX_INVITATION_SECONDS = 1209600
 # person can be opened again instead of being locked out by a half-written attempt.
 FAILED_ACCOUNT_STATUS = "provisioning_failed"
 
+# Fields the account row owns. A caller passing extra profile fields cannot rewrite
+# the address, the role or the identity the claim row was taken for.
+RESERVED_PROFILE_FIELDS = frozenset(
+    {
+        "PK",
+        "SK",
+        "user_id",
+        "role",
+        "email",
+        "account_status",
+        "account_number",
+        "version",
+        DATE_OF_BIRTH_FIELD,
+        MUST_CHANGE_PASSWORD_FIELD,
+    }
+)
+
 INITIAL_PASSWORD_LENGTH = 16
 PASSWORD_UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ"
 PASSWORD_LOWER = "abcdefghijkmnopqrstuvwxyz"
@@ -365,6 +382,76 @@ def reissue_invitation(
     }
 
 
+def open_account(
+    *,
+    account_id: str,
+    role: str,
+    email: str,
+    account_status: str,
+    full_name: str = "",
+    date_of_birth: str | None = None,
+    must_change_password: bool = False,
+    created_by: str,
+    extra_fields: dict[str, Any] | None = None,
+    now: Callable[[], datetime] | None = None,
+) -> str:
+    """Open one account at an id its own flow already decided, and return its number.
+
+    The entry point for a flow that owns its admission rule - teacher review is the
+    one that does - and needs only the opening itself. Everything the invitation path
+    gets comes from here too: the `(address, role)` claim, the birthday, the
+    change-password flag and exactly one account number.
+
+    Resumable rather than idempotent: an opening that died after the row landed is
+    finished by calling again, because the row and the number are two commits and the
+    gap between them is a state a retry has to be able to stand in.
+    """
+    clean_role = _role(role)
+    address = _email(email)
+    instant = _instant(now)
+    birthday = _date_of_birth(date_of_birth, now=instant)
+    profile = user_repo.get_user(account_id)
+    if profile is None:
+        _create_account_row(
+            account_id=account_id,
+            role=clean_role,
+            email=address,
+            full_name=full_name,
+            account_status=account_status,
+            date_of_birth=birthday,
+            must_change_password=must_change_password,
+            created_by=created_by,
+            extra_fields=extra_fields,
+            now=instant,
+        )
+    else:
+        # Resuming is only ever resuming this account. A row that carries a different
+        # address or role is somebody else's, and finishing it here would hand the
+        # caller an account it never opened.
+        if str(profile.get("email") or "") != address or str(profile.get("role") or "") != clean_role:
+            raise HTTPException(status_code=409, detail={"code": "account_state_invalid"})
+        existing = str(profile.get("account_number") or "").strip()
+        if existing:
+            return existing
+    return _attach_account_number(account_id=account_id, role=clean_role, now=instant)
+
+
+def transition_account_status(
+    *,
+    account_id: str,
+    expected_status: str,
+    next_status: str,
+    now: Callable[[], datetime] | None = None,
+) -> None:
+    """Move one account row between two states, refusing a stale expectation."""
+    _transition_account_status(
+        account_id=account_id,
+        expected_status=expected_status,
+        next_status=next_status,
+        now=_instant(now),
+    )
+
+
 def generate_initial_password() -> str:
     """Mint one password that satisfies the pool policy without confusable glyphs."""
     alphabet = PASSWORD_UPPER + PASSWORD_LOWER + PASSWORD_DIGITS
@@ -488,6 +575,7 @@ def _create_account_row(
     date_of_birth: str = "",
     must_change_password: bool = False,
     created_by: str,
+    extra_fields: dict[str, Any] | None = None,
     now: datetime,
 ) -> None:
     # A courtesy, not the guard. GSI-Email is eventually consistent, so two
@@ -517,6 +605,13 @@ def _create_account_row(
                 "created_by": created_by,
                 "created_at": now.isoformat(),
                 "updated_at": now.isoformat(),
+                # Last so a caller's own fields can never displace the identity the
+                # claim above was taken for.
+                **{
+                    key: value
+                    for key, value in (extra_fields or {}).items()
+                    if key not in RESERVED_PROFILE_FIELDS
+                },
             },
             claim_operation=claim,
         )
@@ -733,15 +828,24 @@ def _claim_release_operation(
 
     A row parked by an earlier release carries an address with no `@` and owns no
     claim any more, so there is nothing to give back and no operation to append.
+
+    A pair standing in another account's name is read out rather than left for the
+    condition: this operation travels in the same commit as the parking, so a refusal
+    would cancel that too and the half-opened account would keep both its address and
+    its `provisioning` status - the state this release exists to end.
     """
+    email = str(profile.get("email") or "")
+    role = str(profile.get("role") or "")
     try:
-        return account_email_claim_repo.release_operation(
-            email=str(profile.get("email") or ""),
-            role=str(profile.get("role") or ""),
-            account_id=account_id,
-        )
+        account_email_claim_repo.claim_key(email=email, role=role)
     except ValueError:
         return None
+    claim = account_email_claim_repo.get_claim(email=email, role=role)
+    if claim is None or claim.get("account_id") != account_id:
+        return None
+    return account_email_claim_repo.release_operation(
+        email=email, role=role, account_id=account_id
+    )
 
 
 def _delete_provider_account(provider: Any, *, email: str) -> None:

@@ -31,6 +31,7 @@ def _install_teacher_repositories(monkeypatch):
     invitations = {}
     commands = {}
     profiles = {}
+    numbers: list[str] = []
     bindings = {}
     audits = []
     repo = teacher_application_service.teacher_application_repo
@@ -157,11 +158,61 @@ def _install_teacher_repositories(monkeypatch):
         return dict(item)
 
     monkeypatch.setattr(repo, "update_activation_command", update_command)
-    monkeypatch.setattr(
-        teacher_application_service.user_repo,
-        "put_user",
-        lambda item: profiles.__setitem__(item["user_id"], dict(item)),
-    )
+    # Activation opens its account through the role-neutral provisioning path now, so
+    # the double stands in for that rather than for a raw profile write. What the
+    # opening actually produces - a `T` number, an `(address, role)` claim, a profile
+    # the deletion path can give back - is read out against the real repositories in
+    # `test_teacher_activation_provisioning.py`; these cases are about review and
+    # token semantics, so a stub is enough here.
+    provisioning = teacher_application_service.account_provisioning_service
+
+    def open_account(
+        *,
+        account_id,
+        role,
+        email,
+        account_status,
+        full_name="",
+        date_of_birth=None,
+        must_change_password=False,
+        created_by,
+        extra_fields=None,
+        now=None,
+    ):
+        del date_of_birth, must_change_password, now
+        profile = profiles.get(account_id)
+        if profile is None:
+            taken = any(
+                row["email"] == email and row["role"] == role for row in profiles.values()
+            )
+            if taken:
+                raise HTTPException(status_code=409, detail={"code": "account_exists"})
+            profile = {
+                "user_id": account_id,
+                "role": role,
+                "email": email,
+                "account_status": account_status,
+                "name": full_name,
+                "created_by": created_by,
+                **(extra_fields or {}),
+            }
+            profiles[account_id] = profile
+        if not profile.get("account_number"):
+            numbers.append(account_id)
+            profile["account_number"] = f"{role[:1].upper()}26-{len(numbers):04d}"
+        return profile["account_number"]
+
+    def transition_account_status(*, account_id, expected_status, next_status, now=None):
+        del now
+        profile = profiles.get(account_id)
+        if profile is None or profile["account_status"] != expected_status:
+            raise HTTPException(
+                status_code=409, detail={"code": "account_status_unexpected"}
+            )
+        profile["account_status"] = next_status
+
+    monkeypatch.setattr(provisioning, "open_account", open_account)
+    monkeypatch.setattr(provisioning, "transition_account_status", transition_account_status)
 
     def create_binding(**kwargs):
         key = (kwargs["issuer"], kwargs["subject"])

@@ -1688,19 +1688,17 @@ PROFILE_WRITERS_WITHOUT_A_CLAIM = {
     ("privileged_identity_service.py", "_restore_admin"),
     ("public_identity_service.py", "start_or_resume_public_registration"),
     ("public_identity_service.py", "_resume_public_registration"),
-    ("teacher_application_service.py", "_resume_activation"),
 }
 
 
 def test_还有哪些路径在不取占位行的情况下建号() -> None:
     """`put_user` writes under attribute_not_exists, so every caller opens an account.
 
-    Only the invitation path takes the claim; these six open a profile carrying an
+    Only the provisioning path takes the claim; these five open a profile carrying an
     address without one, and for those addresses uniqueness is still a read of an
-    eventually consistent index. Pinned rather than fixed here: teacher activation is
-    card 010's subject and shares the same seam, and splitting it across two cards
-    would leave neither able to say what the rule is. What this must not allow is a
-    seventh appearing unnoticed.
+    eventually consistent index. Teacher activation was the sixth and is gone from the
+    list: card 010 moved its opening onto `open_account`, so it takes the claim like
+    every other role. What this must not allow is a new one appearing unnoticed.
     """
     services = SERVICE_PATH.parent
     found: set[tuple[str, str]] = set()
@@ -1798,3 +1796,26 @@ def test_占位行读不出来时销户必须失败而不是当成没有(table: 
     assert [str(row["PK"]) for row in table.claims()] == [
         "EMAIL#unreadable@example.ch#student"
     ]
+
+
+def test_占位行易主时半开账号仍然会被停放(table: FakeAccountTable) -> None:
+    """Card 009's A-1, in the other place that gives an address back.
+
+    The release travels in the same commit as the parking, so a claim standing in
+    another account's name would cancel both -- and the caller swallows that, leaving
+    a `provisioning` row still holding the address with nobody raising anything.
+    """
+    _invite(table, email="stranded@example.ch")
+    profile = _profile_for(table, "stranded@example.ch")
+    user_id = str(profile["user_id"])
+    claim_key = ("EMAIL#stranded@example.ch#student", account_email_claim_repo.CLAIM_SK)
+    table.rows[claim_key]["account_id"] = "another-account"
+
+    account_provisioning_service._release_failed_account(
+        account_id=user_id, now=_moment(60)
+    )
+
+    parked = table.rows[(f"USER#{user_id}", "PROFILE")]
+    assert parked["account_status"] == account_provisioning_service.FAILED_ACCOUNT_STATUS
+    assert "@" not in str(parked["email"])
+    assert table.rows[claim_key]["account_id"] == "another-account"
