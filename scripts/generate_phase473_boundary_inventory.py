@@ -481,10 +481,23 @@ def validate_taint_semantics(root: Path | str) -> None:
         functions = _symbol_nodes(ast.parse(source, filename=deletion.as_posix()))
         claim_node = functions.get("_claim_from_command")
         claim = ast.get_source_segment(source, claim_node) if claim_node is not None else None
+        # The coercion this forbids is a bare `int(...)`, matched as a call to the
+        # builtin rather than as text: `stored_int(` ends in `int(` and read as a
+        # substring it fails a reader that is doing the right thing.
+        bare_int_coercion = claim_node is not None and any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "int"
+            and any(
+                "command_version" in (ast.get_source_segment(source, arg) or "")
+                for arg in node.args
+            )
+            for node in ast.walk(claim_node)
+        )
         if (
             not claim
             or 'command.get("command_version") or command.get("version")' not in claim
-            or 'int(command.get("command_version")' in claim
+            or bare_int_coercion
         ):
             raise BoundaryViolation(
                 "unsafe authority-bearing read: deletion command version"
