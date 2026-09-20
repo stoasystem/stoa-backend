@@ -15,6 +15,7 @@ import boto3
 from fastapi import HTTPException
 
 from stoa.config import settings
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, notification_repo
 from stoa.services import websocket_service
 from stoa.security.identity import Actor
@@ -162,11 +163,12 @@ def _owner_generation(
         )
         if (value := row.get(field)) is not None
     }
-    if any(type(value) is not int or value <= 0 for value in raw_generations):
+    generations = {stored_int(value) for value in raw_generations}
+    if any(value is None or value <= 0 for value in generations):
         return None
-    if len(raw_generations) > 1:
+    if len(generations) > 1:
         return None
-    return owner, next(iter(raw_generations), None)
+    return owner, next(iter(generations), None)
 
 
 def _resolve_question_target(
@@ -336,14 +338,14 @@ def resolve_delivery_ownership(
     classification = event.get("owner_classification")
     if classification == "private_owner":
         owner_id = event.get("owner_id")
-        generation = event.get("account_fence_generation")
-        version = event.get("event_version")
+        generation = stored_int(event.get("account_fence_generation"))
+        version = stored_int(event.get("event_version"))
         if (
             not isinstance(owner_id, str)
             or not owner_id.strip()
-            or type(generation) is not int
+            or generation is None
             or generation <= 0
-            or type(version) is not int
+            or version is None
             or version <= 0
         ):
             raise DeliveryOwnershipError("delivery_scope_mismatch")
@@ -653,7 +655,8 @@ def create_event(
         else raw_metadata.get("privacy_generation")
         or raw_metadata.get("account_fence_generation")
     )
-    generation = raw_generation if type(raw_generation) is int and raw_generation > 0 else None
+    stored_generation = stored_int(raw_generation)
+    generation = stored_generation if stored_generation is not None and stored_generation > 0 else None
     if inferred_owner and generation is not None:
         ownership = classify_notification_owner(
             recipient_id=recipient_id,
@@ -847,8 +850,8 @@ def ensure_teacher_takeover_notification(
         or not claim_id
         or not session_id
         or persisted_session != session_id
-        or type(generation) is not int
-        or generation <= 0
+        or stored_int(generation) is None
+        or int(generation) <= 0
         or not claimed_at
     ):
         return {"effect_id": "", "status": "retryable_dependency"}

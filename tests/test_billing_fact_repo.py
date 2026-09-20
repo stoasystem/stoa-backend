@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 from copy import deepcopy
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -14,6 +15,27 @@ from stoa.models.billing import BillingFact, BillingFactKind, BillingPlanId
 
 
 NOW = "2026-07-24T09:00:00+00:00"
+
+
+def _as_stored(value: Any) -> Any:
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`. A double
+    that hands back the `int` it was given makes every guard written against `int`
+    pass here and fail in production.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
+    return value
+
 
 
 class AtomicBillingTable:
@@ -55,7 +77,7 @@ class AtomicBillingTable:
         for operation in operations:
             if "Put" in operation:
                 put = operation["Put"]
-                item = deepcopy(put["Item"])
+                item = _as_stored(deepcopy(put["Item"]))
                 key = (str(item["PK"]), str(item["SK"]))
                 if "attribute_not_exists" in put.get("ConditionExpression", "") and key in snapshot:
                     raise RuntimeError("conditional conflict")
@@ -72,10 +94,12 @@ class AtomicBillingTable:
                 if ":expected_object_version" in values:
                     if current.get("object_version") != values[":expected_object_version"]:
                         raise RuntimeError("conditional conflict")
-                    current = deepcopy(values[":next_item"])
+                    current = _as_stored(deepcopy(values[":next_item"]))
                 elif ":now_epoch" in values:
                     lease_expires_at = current.get("lease_expires_at")
-                    if isinstance(lease_expires_at, bool) or not isinstance(lease_expires_at, int):
+                    if isinstance(lease_expires_at, bool) or not isinstance(
+                        lease_expires_at, (int, Decimal)
+                    ):
                         raise AssertionError("lease fixture must retain an integer expiration")
                     if lease_expires_at > values[":now_epoch"]:
                         raise RuntimeError("conditional conflict")
@@ -112,7 +136,7 @@ class AtomicBillingTable:
                     )
                 else:
                     raise AssertionError(f"unexpected update: {operation}")
-                snapshot[key] = current
+                snapshot[key] = _as_stored(current)
                 continue
 
             raise AssertionError(f"unexpected operation: {operation}")

@@ -2,13 +2,15 @@ from botocore.exceptions import ClientError
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
+from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Mapping, cast
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.config import Settings, get_settings
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import questions
-from stoa.db.repositories import question_submission_repo
+from stoa.db.repositories import account_deletion_repo, question_submission_repo
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.services.ocr_service import OcrAttachmentFailure
@@ -550,6 +552,40 @@ def test_record_daily_question_usage_returns_none_on_condition_failure(monkeypat
     assert (
         questions.question_repo.record_daily_question_usage("student-1", "2026-06-07", 2, 1) is None
     )
+
+
+def test_record_daily_question_usage_accepts_the_decimal_the_table_returns(monkeypatch):
+    class FakeTable:
+        def update_item(self, **kwargs):
+            return {"Attributes": {"count": Decimal("3")}}
+
+    monkeypatch.setattr(questions.question_repo, "get_table", lambda: FakeTable())
+
+    assert (
+        questions.question_repo.record_daily_question_usage("student-1", "2026-06-07", 5, 1) == 3
+    )
+
+
+def test_record_daily_question_usage_refuses_a_fractional_count(monkeypatch):
+    class FakeTable:
+        def update_item(self, **kwargs):
+            return {"Attributes": {"count": Decimal("3.5")}}
+
+    monkeypatch.setattr(questions.question_repo, "get_table", lambda: FakeTable())
+
+    with pytest.raises(account_deletion_repo.AccountDeletionConflict):
+        questions.question_repo.record_daily_question_usage("student-1", "2026-06-07", 5, 1)
+
+
+def test_record_daily_question_usage_refuses_a_boolean_count(monkeypatch):
+    class FakeTable:
+        def update_item(self, **kwargs):
+            return {"Attributes": {"count": True}}
+
+    monkeypatch.setattr(questions.question_repo, "get_table", lambda: FakeTable())
+
+    with pytest.raises(account_deletion_repo.AccountDeletionConflict):
+        questions.question_repo.record_daily_question_usage("student-1", "2026-06-07", 5, 1)
 
 
 def test_submit_question_records_privacy_safe_usage_ledger_event(monkeypatch):
@@ -1244,3 +1280,108 @@ def test_question_repository_outage_returns_503_before_feedback_mutation(monkeyp
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "authorization_temporarily_unavailable"
     assert writes == []
+
+
+def _stored_question_for_allowance() -> dict[str, object]:
+    """One question row shaped as the resource interface hands it back."""
+    return {
+        "question_id": "question-1",
+        "student_id": "student-1",
+        "version": Decimal("3"),
+        "entitlement": {
+            "effectivePlan": "standard",
+            "allowanceVersion": Decimal("2"),
+            "grantId": "grant-1",
+        },
+    }
+
+
+def _allowance_command(generation: object) -> dict[str, object]:
+    command = _question_command(caller_key="allowance", fingerprint="f" * 64)
+    command["account_fence_generation"] = generation
+    return command
+
+
+def test_allowance_coordinates_accept_the_decimals_the_table_returns():
+    command = _allowance_command(Decimal("4"))
+    (
+        _effect_id,
+        plan_id,
+        allowance_version,
+        generation,
+    ) = questions._question_allowance_coordinates(
+        command,
+        _stored_question_for_allowance(),
+        observed_at=datetime(2026, 7, 24, 8, 20, tzinfo=timezone.utc),
+    )
+    assert plan_id == "standard"
+    assert allowance_version == 2
+    assert generation == 4
+
+
+def test_allowance_coordinates_still_refuse_a_fractional_generation():
+    command = _allowance_command(Decimal("4.5"))
+    with pytest.raises(Exception):
+        questions._question_allowance_coordinates(
+            command,
+            _stored_question_for_allowance(),
+            observed_at=datetime(2026, 7, 24, 8, 20, tzinfo=timezone.utc),
+        )
+
+
+def test_allowance_coordinates_still_refuse_a_boolean_generation():
+    command = _allowance_command(True)
+    with pytest.raises(Exception):
+        questions._question_allowance_coordinates(
+            command,
+            _stored_question_for_allowance(),
+            observed_at=datetime(2026, 7, 24, 8, 20, tzinfo=timezone.utc),
+        )
+
+
+def test_legacy_question_initialization_skipped_for_a_decimal_version():
+    question = {"question_id": "question-1", "version": Decimal("3")}
+    assert (
+        questions._initialize_legacy_question_for_mutation(
+            question, allowed_source_statuses=frozenset({"ai_answered"})
+        )
+        == question
+    )
+
+
+def _allowance_metadata(**overrides: object) -> dict[str, object]:
+    metadata = {
+        "allowance_effect_id": "effect-1",
+        "provider_usage_evidence_id": "evidence-1",
+        "allowance_finalization_status": "finalized",
+        "provider_request_id_digest": "a" * 64,
+        "provider_model_id_digest": "b" * 64,
+        "provider_input_tokens": Decimal("120"),
+        "provider_output_tokens": Decimal("340"),
+    }
+    metadata.update(overrides)
+    return metadata
+
+
+def test_allowance_metadata_accepts_decimal_token_counts():
+    metadata = questions._question_allowance_metadata(_allowance_metadata())
+    assert metadata is not None
+    assert metadata["provider_input_tokens"] == 120
+
+
+def test_allowance_metadata_still_refuses_fractional_token_counts():
+    assert (
+        questions._question_allowance_metadata(
+            _allowance_metadata(provider_input_tokens=Decimal("120.5"))
+        )
+        is None
+    )
+
+
+def test_allowance_metadata_still_refuses_boolean_token_counts():
+    assert (
+        questions._question_allowance_metadata(
+            _allowance_metadata(provider_output_tokens=True)
+        )
+        is None
+    )

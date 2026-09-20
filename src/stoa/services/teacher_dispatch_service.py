@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol, cast
 
 from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, question_repo
 from stoa.models.question import QuestionStatus
 from stoa.services import teacher_reply_service
@@ -32,8 +33,8 @@ class _ScanTable(Protocol):
 def _versioned_dispatch_question(
     question: dict[str, Any],
 ) -> dict[str, Any] | None:
-    version = question.get("version")
-    if isinstance(version, int) and not isinstance(version, bool) and version > 0:
+    version = stored_int(question.get("version"))
+    if version is not None and version > 0:
         return question
     result = question_repo.initialize_legacy_question_version(
         question,

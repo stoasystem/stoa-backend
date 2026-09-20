@@ -10,7 +10,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo
 from stoa.models.billing import BillingFact, BillingFactKind, BillingPlanId
 
@@ -438,7 +438,7 @@ def billing_fact_from_item(item: Mapping[str, object]) -> BillingFact:
         ),
         signatureVerified=True,
         providerLivemode=False,
-        factVersion=_positive_integer(item.get("object_version"), "object_version"),
+        factVersion=_positive_integer(stored_int(item.get("object_version")), "object_version"),
         observedAt=observed_at_value,
     )
 
@@ -578,10 +578,10 @@ def _claim_from_item(item: Mapping[str, object]) -> ReconciliationClaim:
         command_id=_required_text(item.get("command_id"), "command_id"),
         lease_owner=_required_text(item.get("lease_owner"), "lease_owner"),
         lease_generation=_positive_integer(
-            item.get("lease_generation"), "lease_generation"
+            stored_int(item.get("lease_generation")), "lease_generation"
         ),
         lease_expires_at=_positive_integer(
-            item.get("lease_expires_at"), "lease_expires_at", allow_zero=True
+            stored_int(item.get("lease_expires_at")), "lease_expires_at", allow_zero=True
         ),
     )
 

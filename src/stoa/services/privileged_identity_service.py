@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
     capability_repo,
     identity_repo,
@@ -90,8 +91,8 @@ def change_admin_status(
         return _command_response(command, idempotent=True)
     if operation == "restore":
         return _restore_admin(command, provider, user_pool_id=user_pool_id, now=timestamp)
-    expected_version = command.get("version")
-    if type(expected_version) is not int or expected_version < 1:
+    expected_version = stored_int(command.get("version"))
+    if expected_version is None or expected_version < 1:
         raise HTTPException(status_code=409, detail={"code": "invalid_privileged_identity_command"})
 
     profile = user_repo.get_user(target_id)

@@ -13,6 +13,7 @@ from uuid import uuid4
 import boto3
 
 from stoa.config import get_settings
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
     account_deletion_repo,
     adaptive_learning_repo,
@@ -236,9 +237,10 @@ def _result_debt_is_zero(result: Mapping[str, Any]) -> bool:
         "pass_dirty",
     }
     for key, value in debt.items():
-        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        count = stored_int(value)
+        if count is None or count < 0:
             return False
-        if key not in allowed_nonblocking and value != 0:
+        if key not in allowed_nonblocking and count != 0:
             return False
         if key == "pass_dirty" and value != 0:
             return False
@@ -258,9 +260,8 @@ def validate_deletion_seal(
     except (KeyError, TypeError):
         return False
     if (
-        isinstance(generation, bool)
-        or not isinstance(generation, int)
-        or generation <= 0
+        stored_int(generation) is None
+        or int(generation) <= 0
         or command.get("status") not in {"running", "pending"}
         or command.get("inventory_sha256") != seal.get("inventory_sha256")
         or command.get("branch_ids") != list(ACCOUNT_DELETION_BRANCH_IDS)
@@ -285,7 +286,7 @@ def validate_deletion_seal(
             not isinstance(result, Mapping)
             or result.get("status") != "complete"
             or result.get("quiescent") is not True
-            or type(result.get("epoch")) is not int
+            or stored_int(result.get("epoch")) is None
             or int(result["epoch"]) < 2
             or result.get("generation") != generation
             or result.get("handler_version") != contract["handler_version"]
@@ -353,7 +354,7 @@ def begin_or_replay_deletion(
     """Create or replay one immutable command without constructing an Actor."""
     seal = load_private_store_seal()
     fence = account_deletion_repo.get_account_fence(user_id, table=table)
-    if not fence or type(fence.get("generation")) is not int:
+    if not fence or stored_int(fence.get("generation")) is None:
         raise account_deletion_repo.AccountDeletionConflict("missing account fence")
     fingerprint = deletion_command_fingerprint(
         verified=verified,
@@ -869,8 +870,8 @@ def _report_artifacts_branch(
         try:
             candidate = dict(item)
             if not candidate.get("version_id"):
-                body_length = candidate.get("body_length")
-                if type(body_length) is not int:
+                body_length = stored_int(candidate.get("body_length"))
+                if body_length is None:
                     raise ValueError("invalid report body length")
                 coordinate = report_repo.reconcile_report_object_version(
                     s3_client=s3,
@@ -1320,8 +1321,9 @@ def _external_delivery_debt_branch(
                 "pass_dirty",
             }:
                 continue
-            if isinstance(value, int) and not isinstance(value, bool) and value > 0:
-                pending += value
+            count = stored_int(value)
+            if count is not None and count > 0:
+                pending += count
     if pending:
         return BranchResult("retryable", debt_counts={"pending": pending})
     receipts = tuple(

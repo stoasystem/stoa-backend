@@ -13,7 +13,7 @@ from uuid import uuid4
 from boto3.dynamodb.conditions import Attr, ConditionBase
 from botocore.exceptions import ClientError
 
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -680,8 +680,9 @@ def build_notification_write_transaction(
 
 
 def _generation(owner_id: str, generation: object, table: object) -> int:
-    if type(generation) is int and generation > 0:
-        return generation
+    supplied = stored_int(generation)
+    if supplied is not None and supplied > 0:
+        return supplied
     atomic = callable(getattr(table, "transact_account_deletion", None)) or bool(
         getattr(getattr(table, "meta", None), "client", None)
         and getattr(table, "name", None)
@@ -803,12 +804,12 @@ def validate_global_nonprivate_event(
 ) -> bool:
     contract_id = item.get("classification_contract")
     contract = GLOBAL_NONPRIVATE_DELIVERY_CONTRACTS.get(str(contract_id or ""))
-    version = item.get("event_version")
+    version = stored_int(item.get("event_version"))
     metadata = item.get("metadata")
     if (
         contract is None
         or item.get("owner_classification") != "global_nonprivate"
-        or type(version) is not int
+        or version is None
         or version <= 0
         or item.get("event_type") not in contract["event_types"]
         or item.get("target_type") not in contract["target_types"]
@@ -1803,8 +1804,8 @@ def scrub_notification_identity_references(
     entity = _required_identity_coordinate(item.get("entity_type"), "entity type")
     schema = _required_identity_coordinate(item.get("schema_version"), "schema version")
     status = _required_identity_coordinate(item.get("status"), "status")
-    version = item.get("event_version")
-    if type(version) is not int or version <= 0:
+    version = stored_int(item.get("event_version"))
+    if version is None or version <= 0:
         raise account_deletion_repo.AccountDeletionConflict(
             "notification version is malformed"
         )

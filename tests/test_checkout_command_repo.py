@@ -6,6 +6,7 @@ import inspect
 import threading
 from collections import Counter
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -15,6 +16,27 @@ from stoa.models.billing import CheckoutCommandState, CheckoutIntent, Purchasabl
 
 
 NOW = "2026-07-24T08:20:00+00:00"
+
+
+def _as_stored(value: Any) -> Any:
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`. A double
+    that hands back the `int` it was given makes every guard written against `int`
+    pass here and fail in production.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
+    return value
+
 
 
 class AtomicCheckoutTable:
@@ -30,12 +52,14 @@ class AtomicCheckoutTable:
         self.commit_then_timeout_create = False
 
     def add_active_fence(self, parent_id: str, generation: int = 1) -> None:
-        self.rows[(f"USER#{parent_id}", "ACCOUNT_FENCE")] = {
-            "PK": f"USER#{parent_id}",
-            "SK": "ACCOUNT_FENCE",
-            "status": "active",
-            "generation": generation,
-        }
+        self.rows[(f"USER#{parent_id}", "ACCOUNT_FENCE")] = _as_stored(
+            {
+                "PK": f"USER#{parent_id}",
+                "SK": "ACCOUNT_FENCE",
+                "status": "active",
+                "generation": generation,
+            }
+        )
 
     def get_item(self, *, Key: dict[str, str], ConsistentRead: bool) -> dict[str, object]:
         assert ConsistentRead is True
@@ -80,7 +104,7 @@ class AtomicCheckoutTable:
 
                 if "Put" in operation:
                     put = operation["Put"]
-                    item = dict(put["Item"])
+                    item = _as_stored(dict(put["Item"]))
                     key = (str(item["PK"]), str(item["SK"]))
                     if key in snapshot:
                         raise RuntimeError("conditional conflict")
@@ -111,7 +135,8 @@ class AtomicCheckoutTable:
                         expiry = current.get("lease_expires_at")
                         claimable = status == "not_started" or (
                             status in {"create_claimed", "provider_outcome_unknown"}
-                            and isinstance(expiry, int)
+                            and isinstance(expiry, (int, Decimal))
+                            and not isinstance(expiry, bool)
                             and expiry <= values[":now_epoch"]
                         )
                         if not claimable:
@@ -147,7 +172,7 @@ class AtomicCheckoutTable:
                             command_version=values[":next_version"],
                             updated_at=values[":updated_at"],
                         )
-                    snapshot[key] = current
+                    snapshot[key] = _as_stored(current)
                     continue
 
                 if "Delete" in operation:

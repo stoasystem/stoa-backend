@@ -139,17 +139,15 @@ def _claim_from_command(command: Mapping[str, Any]) -> DeletionCommandClaim:
     digest = _required(command.get("branch_results_digest"), "branch_results_digest")
     if len(digest) != 64:
         raise AccountDeletionConflict("invalid branch results digest")
+    raw_version = command.get("command_version") or command.get("version")
     return DeletionCommandClaim(
         command_id=_required(command.get("command_id"), "command_id"),
-        generation=_positive_int(command.get("generation"), "generation"),
+        generation=_positive_int(stored_int(command.get("generation")), "generation"),
         lease_owner=owner,
         lease_expires_at=_positive_int(
-            command.get("lease_expires_at"), "lease expiry"
+            stored_int(command.get("lease_expires_at")), "lease expiry"
         ),
-        command_version=_positive_int(
-            command.get("command_version") or command.get("version"),
-            "command version",
-        ),
+        command_version=_positive_int(stored_int(raw_version), "command version"),
         branch_results_digest=digest,
     )
 
@@ -974,9 +972,10 @@ def replace_teacher_session_with_tombstone(
 
 
 def _teacher_reference_version(value: object, field: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+    parsed = stored_int(value)
+    if parsed is None or parsed <= 0:
         raise AccountDeletionRowConflict(f"invalid {field}")
-    return value
+    return parsed
 
 
 def _teacher_reference_coordinate(value: object, field: str) -> str:
@@ -1066,7 +1065,7 @@ def scrub_parent_profile_child(
         expected_version = current.get("version")
         if expected_version is not None:
             expected_version = _positive_int(
-                expected_version, "parent profile version"
+                stored_int(expected_version), "parent profile version"
             )
         scrubbed = deepcopy(current)
         for field in removed:
@@ -1227,9 +1226,10 @@ def _relationship_coordinate(value: object, field: str) -> str:
 
 
 def _relationship_version(value: object) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+    parsed = stored_int(value)
+    if parsed is None or parsed <= 0:
         raise AccountDeletionRowConflict("invalid relationship version")
-    return value
+    return parsed
 
 
 def _parent_profile_child_scrub_changes(
@@ -1558,7 +1558,8 @@ def claim_deletion_command(
             return _claim_from_command(claimed)
         raise AccountDeletionConflict("malformed deletion claim")
     initial_version = _positive_int(
-        command.get("command_version") or command.get("version"), "command version"
+        stored_int(command.get("command_version") or command.get("version")),
+        "command version",
     )
     empty_digest = branch_results_digest({})
     try:
@@ -1853,7 +1854,7 @@ def finalize_account_deletion(
         or command.get("generation") != claim.generation
         or command.get("lease_owner") != claim.lease_owner
         or command.get("command_version") != claim.command_version
-        or not isinstance(command.get("lease_expires_at"), int)
+        or stored_int(command.get("lease_expires_at")) is None
         or int(command["lease_expires_at"]) < now_epoch
     ):
         raise DeletionCommandClaimLost("terminal deletion claim lost")
@@ -1868,22 +1869,18 @@ def finalize_account_deletion(
         raise AccountDeletionConflict("account deletion seal is incomplete")
     user_id = _required(command.get("user_id"), "user_id")
     command_id = _required(command.get("command_id"), "command_id")
-    generation = command.get("generation")
-    command_version = command.get("command_version")
-    storage_version = command.get("version")
-    fence_version = fence.get("version")
+    generation = stored_int(command.get("generation"))
+    command_version = stored_int(command.get("command_version"))
+    storage_version = stored_int(command.get("version"))
+    fence_version = stored_int(fence.get("version"))
     if (
-        isinstance(generation, bool)
-        or not isinstance(generation, int)
+        generation is None
         or generation <= 0
-        or isinstance(command_version, bool)
-        or not isinstance(command_version, int)
+        or command_version is None
         or command_version <= 0
-        or isinstance(storage_version, bool)
-        or not isinstance(storage_version, int)
+        or storage_version is None
         or storage_version <= 0
-        or isinstance(fence_version, bool)
-        or not isinstance(fence_version, int)
+        or fence_version is None
         or fence_version <= 0
     ):
         raise AccountDeletionConflict("invalid terminal lifecycle version")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import asdict
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -17,6 +18,27 @@ GENERATION = 9
 NOW = "2026-07-22T09:30:00+00:00"
 
 
+def _as_stored(value: Any) -> Any:
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`. A double
+    that hands back the `int` it was given makes every guard written against `int`
+    pass here and fail in production.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
+    return value
+
+
+
 def _event(
     event_id: str,
     *,
@@ -25,7 +47,7 @@ def _event(
     version: int = 1,
     status: str = "provider_acceptance_unknown",
 ) -> dict[str, object]:
-    return {
+    return _as_stored({
         "PK": f"NOTIFICATION#{event_id}",
         "SK": "META",
         "entity_type": notification_repo.NOTIFICATION_ENTITY,
@@ -51,7 +73,7 @@ def _event(
             if metadata is None
             else metadata
         ),
-    }
+    })
 
 
 class _NotificationTable:
@@ -103,9 +125,9 @@ class _NotificationTable:
             self.cas_raced = True
             event_version = current["event_version"]
             metadata_value = current["metadata"]
-            assert isinstance(event_version, int)
+            assert isinstance(event_version, Decimal)
             assert isinstance(metadata_value, dict)
-            current["event_version"] = event_version + 1
+            current["event_version"] = _as_stored(int(event_version) + 1)
             metadata = dict(metadata_value)
             metadata["concurrent_note"] = "preserve this write"
             current["metadata"] = metadata
@@ -121,8 +143,8 @@ class _NotificationTable:
         if ":identity" in values:
             assert current.get("actor_id") == values[":identity"]
 
-        current["metadata"] = deepcopy(values[":clean_metadata"])
-        current["event_version"] = values[":next_version"]
+        current["metadata"] = _as_stored(deepcopy(values[":clean_metadata"]))
+        current["event_version"] = _as_stored(values[":next_version"])
         if "REMOVE actor_id" in update["UpdateExpression"]:
             current.pop("actor_id", None)
 

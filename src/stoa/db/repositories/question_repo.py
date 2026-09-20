@@ -13,7 +13,7 @@ from typing import Protocol, runtime_checkable
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key
 from stoa.db.repositories import account_deletion_repo
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 
 
 type QuestionItem = dict[str, object]
@@ -670,9 +670,11 @@ def record_daily_question_usage(student_id: str, day: str, limit: int, expires_a
         raise
     attributes = resp.get("Attributes")
     count = _response(attributes).get("count", 1) if isinstance(attributes, dict) else 1
-    if isinstance(count, bool) or not isinstance(count, int):
+    # The table returns the incremented counter as Decimal.
+    parsed = stored_int(count)
+    if parsed is None:
         raise account_deletion_repo.AccountDeletionConflict("question dependency unavailable")
-    return count
+    return parsed
 
 
 def build_question_update_transaction(

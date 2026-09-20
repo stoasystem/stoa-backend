@@ -24,6 +24,7 @@ from stoa.config import (
     UPLOAD_INTENT_TTL_SECONDS,
     Settings,
 )
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, attachment_repo
 from stoa.models.attachment import (
     AttachmentReference,
@@ -1468,7 +1469,7 @@ def _recover_staging_assembly(
             s3,
             settings,
             key,
-            expected_length=_positive_provider_integer(item.get("expected_size")),
+            expected_length=_positive_provider_integer(stored_int(item.get("expected_size"))),
             metadata_name="upload-id",
             metadata_value=_required_provider_coordinate(item, "upload_id"),
         )
@@ -1520,7 +1521,7 @@ def _recover_immutable_promotion(
     )
     fence = str(item["operation_fence"])
     try:
-        expected_length = _positive_provider_integer(item.get("content_length"))
+        expected_length = _positive_provider_integer(stored_int(item.get("content_length")))
         expected_checksum = _canonical_sha256(expected_checksum)
         matched = _matching_exact_version(
             s3,

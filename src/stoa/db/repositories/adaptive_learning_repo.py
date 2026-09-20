@@ -8,7 +8,7 @@ from typing import Any, Mapping, Protocol, runtime_checkable
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Attr, Key
 
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -157,9 +157,9 @@ def _generation(item: Mapping[str, Any], table: Any) -> tuple[str, int]:
         raise account_deletion_repo.AccountDeletionConflict(
             "adaptive learning owner is required"
         )
-    supplied = item.get("account_fence_generation")
-    if type(supplied) is int and supplied > 0:
-        return owner, int(supplied)
+    supplied = stored_int(item.get("account_fence_generation"))
+    if supplied is not None and supplied > 0:
+        return owner, supplied
     if _atomic_table(table):
         fence = account_deletion_repo.require_active_account_fence(owner, table=table)
         return owner, int(fence["generation"])

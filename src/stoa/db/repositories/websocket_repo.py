@@ -8,7 +8,7 @@ from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr
 
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -181,8 +181,9 @@ def build_connection_write_transaction(
 
 
 def _generation(owner_id: str, generation: object, table: object) -> int:
-    if type(generation) is int and generation > 0:
-        return generation
+    supplied = stored_int(generation)
+    if supplied is not None and supplied > 0:
+        return supplied
     atomic = callable(getattr(table, "transact_account_deletion", None)) or bool(
         getattr(getattr(table, "meta", None), "client", None)
         and getattr(table, "name", None)

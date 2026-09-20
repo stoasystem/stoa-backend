@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import moderation_repo, question_repo
 from stoa.models.moderation import (
     ModerationCaseNoteRequest,
@@ -44,12 +45,11 @@ def create_case(
     _validate_surface(question, body.surface.value)
 
     student_id = question.get("student_id")
-    privacy_generation = question.get("account_fence_generation")
+    privacy_generation = stored_int(question.get("account_fence_generation"))
     if (
         not isinstance(student_id, str)
         or not student_id
-        or isinstance(privacy_generation, bool)
-        or not isinstance(privacy_generation, int)
+        or privacy_generation is None
         or privacy_generation <= 0
     ):
         raise HTTPException(status_code=409, detail="Question is not writable")

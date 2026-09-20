@@ -11,7 +11,7 @@ import hashlib
 import json
 from typing import Any
 
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo
 from stoa.models.allowance import (
     MAX_EXACT_COUNT,
@@ -556,7 +556,9 @@ def reserve_allowance(
                 beneficiary, table=target
             )
             generation = _exact_count(
-                fence.get("generation"), "account_fence_generation", positive=True
+                stored_int(fence.get("generation")),
+                "account_fence_generation",
+                positive=True,
             )
         else:
             generation = _exact_count(

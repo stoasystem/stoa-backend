@@ -22,7 +22,7 @@ from botocore.exceptions import ClientError
 from fastapi import HTTPException
 
 from stoa.config import Settings
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import (
     account_deletion_repo,
     billing_fact_repo,
@@ -2541,11 +2541,9 @@ def process_signed_billing_event(
         return response
 
     plan_version = _billing_exact_count(command.get("plan_version"), "plan version", positive=True)
-    allowance_value = command.get("allowance_version")
+    allowance_value = stored_int(command.get("allowance_version"))
     allowance_version = (
-        allowance_value
-        if type(allowance_value) is int and allowance_value > 0
-        else plan_version
+        allowance_value if allowance_value is not None and allowance_value > 0 else plan_version
     )
     activation_version = max(
         invoice_fact.fact_version,

@@ -12,7 +12,7 @@ from datetime import timezone
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo
 from stoa.models.billing import CheckoutCommandState, CheckoutIntent
 
@@ -635,11 +635,12 @@ def get_checkout_command_by_public_ref(
 
 
 def _active_lease(item: Mapping[str, object], now_epoch: int) -> bool:
-    expiry = item.get("lease_expires_at")
+    # The table returns the stored expiry as Decimal.
+    expiry = stored_int(item.get("lease_expires_at"))
     return (
         item.get("provider_effect_status")
         in {"create_claimed", "provider_outcome_unknown"}
-        and type(expiry) is int
+        and expiry is not None
         and expiry > now_epoch
     )
 

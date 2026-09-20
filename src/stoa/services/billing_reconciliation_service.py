@@ -15,6 +15,7 @@ from typing import Protocol, runtime_checkable
 from urllib.parse import urlsplit
 
 from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import checkout_command_repo
 from stoa.models.billing import CheckoutCommandState
 
@@ -255,8 +256,8 @@ def bind_webhook_provider_identity(
     """Conditionally bind verified provider objects to one immutable command."""
     command_id = _required_text(command.get("command_id"), "command_id")
     parent_id = _required_text(command.get("parent_id"), "parent_id")
-    command_version = command.get("command_version")
-    if type(command_version) is not int or command_version < 1:
+    command_version = stored_int(command.get("command_version"))
+    if command_version is None or command_version < 1:
         raise ValueError("command_version is invalid")
     digests = {
         "provider_customer_id_digest": _required_text(
@@ -349,8 +350,8 @@ def bind_webhook_provider_identity(
 
 
 def _generation(command: Mapping[str, object]) -> int:
-    value = command.get("lease_generation")
-    return value if type(value) is int and value >= 0 else 0
+    value = stored_int(command.get("lease_generation"))
+    return value if value is not None and value >= 0 else 0
 
 
 def _command_id(command: Mapping[str, object]) -> str | None:

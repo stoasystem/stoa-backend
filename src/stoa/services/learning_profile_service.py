@@ -7,6 +7,8 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
+from stoa.db.dynamodb import stored_int
+
 
 SUPPORTED_SUBJECTS: dict[str, dict[str, str]] = {
     "math": {
@@ -131,8 +133,8 @@ def build_learning_profile(
             "teacher_help_requested"
         ):
             item["teacherEscalationCount"] += 1
-        feedback = question.get("student_feedback")
-        if isinstance(feedback, int):
+        feedback = stored_int(question.get("student_feedback"))
+        if feedback is not None:
             feedback_totals[subject_id].append(feedback)
 
         for seed in _question_topic_entries(question, subject_id):

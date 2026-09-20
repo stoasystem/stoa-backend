@@ -7,7 +7,7 @@ from typing import Any, Mapping, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
 
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -111,12 +111,11 @@ def _scan(table: object, **kwargs: object) -> dict[str, Any]:
 
 def _required_owner(item: Mapping[str, Any]) -> tuple[str, int]:
     student_id = item.get("student_id")
-    generation = item.get("privacy_generation")
+    generation = stored_int(item.get("privacy_generation"))
     if (
         not isinstance(student_id, str)
         or not student_id.strip()
-        or isinstance(generation, bool)
-        or not isinstance(generation, int)
+        or generation is None
         or generation <= 0
     ):
         raise account_deletion_repo.AccountDeletionConflict(
@@ -200,14 +199,8 @@ def _resolve_private_owner(
     if not question:
         return None
     owner = question.get("student_id")
-    generation = question.get("account_fence_generation")
-    if (
-        not isinstance(owner, str)
-        or not owner
-        or isinstance(generation, bool)
-        or not isinstance(generation, int)
-        or generation <= 0
-    ):
+    generation = stored_int(question.get("account_fence_generation"))
+    if not isinstance(owner, str) or not owner or generation is None or generation <= 0:
         return None
     for candidate in (summary, row):
         declared_owner = candidate.get("student_id")

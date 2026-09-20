@@ -13,6 +13,7 @@ from uuid import uuid4
 import boto3
 
 from stoa.config import settings
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import report_repo
 from stoa.services import report_recovery_service
 
@@ -69,7 +70,8 @@ def _job_type_or_none(job: dict[str, object]) -> str | None:
 
 
 def _required_positive_int_or_none(value: object) -> int | None:
-    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+    parsed = stored_int(value)
+    return parsed if parsed is not None and parsed > 0 else None
 
 
 def _required_positive_int(job: dict[str, object], field: str) -> int:
@@ -80,8 +82,8 @@ def _required_positive_int(job: dict[str, object], field: str) -> int:
 
 
 def _required_nonnegative_int(job: dict[str, object], field: str) -> int:
-    value = job.get(field)
-    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+    value = stored_int(job.get(field))
+    if value is None or value < 0:
         raise RecoveryJobError(422, "Recovery job record is incomplete and needs repair")
     return value
 

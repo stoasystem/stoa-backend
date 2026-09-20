@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Mapping
 
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, user_repo
 
 
@@ -241,9 +242,8 @@ def _required_aware_utc(value: datetime) -> datetime:
 
 
 def _positive_int(value: Any) -> int | None:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        return None
-    return value
+    parsed = stored_int(value)
+    return parsed if parsed is not None and parsed >= 1 else None
 
 
 def _review_required() -> FreeTrialState:

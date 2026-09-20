@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
     adaptive_learning_repo,
     ai_teacher_tools_repo,
@@ -477,10 +478,8 @@ def _record_assignment_generation_usage(item: dict[str, Any]) -> None:
             ),
             request_correlation_id=assignment_id,
             created_at=str(item.get("created_at") or now_iso()),
-            account_fence_generation=(
-                int(item["account_fence_generation"])
-                if type(item.get("account_fence_generation")) is int
-                else None
+            account_fence_generation=stored_int(
+                item.get("account_fence_generation")
             ),
             metadata={"status": item.get("status")},
         )
@@ -516,10 +515,8 @@ def _record_assignment_transition_usage(
             ),
             request_correlation_id=assignment_id,
             created_at=str(item.get(f"{side_effect}_at") or item.get("updated_at") or now_iso()),
-            account_fence_generation=(
-                int(item["account_fence_generation"])
-                if type(item.get("account_fence_generation")) is int
-                else None
+            account_fence_generation=stored_int(
+                item.get("account_fence_generation")
             ),
             metadata={"status": item.get("status")},
         )

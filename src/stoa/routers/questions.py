@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
 from stoa.config import Settings, get_settings
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import (
     allowance_repo,
     attachment_repo,
@@ -125,13 +125,14 @@ def _question_allowance_coordinates(
         or entitlement.get("effective_plan")
         or "free_trial"
     )
-    raw_version = (
+    # The table returns every stored number as Decimal.
+    raw_version = stored_int(
         entitlement.get("allowanceVersion")
         or entitlement.get("allowance_version")
         or entitlement.get("planVersion")
         or 1
     )
-    if type(raw_version) is not int or raw_version < 1:
+    if raw_version is None or raw_version < 1:
         raise _allowance_recoverable_failure()
     grant_id = str(
         entitlement.get("grantId")
@@ -159,8 +160,8 @@ def _question_allowance_coordinates(
     allowance_effect_id = hashlib.sha256(
         b"stoa.question.allowance-effect.v1\x00" + identity_payload
     ).hexdigest()
-    generation = command.get("account_fence_generation")
-    if type(generation) is not int or generation < 1:
+    generation = stored_int(command.get("account_fence_generation"))
+    if generation is None or generation < 1:
         raise _allowance_recoverable_failure()
     return allowance_effect_id, plan_id, raw_version, generation
 
@@ -403,8 +404,8 @@ def _initialize_legacy_question_for_mutation(
     *,
     allowed_source_statuses: frozenset[str],
 ) -> dict[str, Any]:
-    version = question.get("version")
-    if isinstance(version, int) and not isinstance(version, bool) and version > 0:
+    version = stored_int(question.get("version"))
+    if version is not None and version > 0:
         return dict(question)
     return _require_applied_question_mutation(
         question_repo.initialize_legacy_question_version(
@@ -775,12 +776,9 @@ def _question_allowance_metadata(
         for field in text_fields
     ):
         return None
-    if (
-        type(metadata["provider_input_tokens"]) is not int
-        or int(metadata["provider_input_tokens"]) < 0
-        or type(metadata["provider_output_tokens"]) is not int
-        or int(metadata["provider_output_tokens"]) < 0
-    ):
+    input_tokens = stored_int(metadata["provider_input_tokens"])
+    output_tokens = stored_int(metadata["provider_output_tokens"])
+    if input_tokens is None or input_tokens < 0 or output_tokens is None or output_tokens < 0:
         return None
     return metadata
 
@@ -1806,8 +1804,8 @@ async def request_teacher(
         # Historical question rows predate the account-fence field; absence is a
         # supported legacy state, while an explicitly malformed value is refused.
         generation = 1
-    elif type(raw_generation) is int and raw_generation > 0:
-        generation = raw_generation
+    elif (stored_generation := stored_int(raw_generation)) is not None and stored_generation > 0:
+        generation = stored_generation
     else:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

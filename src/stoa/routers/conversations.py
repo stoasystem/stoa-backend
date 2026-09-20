@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from stoa.config import settings
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import (
     account_deletion_repo,
     allowance_repo,
@@ -349,9 +349,8 @@ def _validate_replay_attachment(
         or not isinstance(checksum, str)
         or len(checksum) != 64
         or any(value not in "0123456789abcdef" for value in checksum)
-        or isinstance(item.get("content_length"), bool)
-        or not isinstance(item.get("content_length"), int)
-        or item["content_length"] <= 0
+        or (stored_length := stored_int(item.get("content_length"))) is None
+        or stored_length <= 0
         or (
             source_fingerprint is not None
             and (
@@ -480,10 +479,10 @@ def _conversation_allowance_coordinates(
         or not grant_id
         or not isinstance(week_identity, str)
         or not week_identity
-        or type(allowance_version) is not int
-        or allowance_version < 1
-        or type(generation) is not int
-        or generation < 1
+        or stored_int(allowance_version) is None
+        or int(allowance_version) < 1
+        or stored_int(generation) is None
+        or int(generation) < 1
     ):
         raise _allowance_recoverable_failure()
     expected = _conversation_allowance_command_fields(
@@ -888,9 +887,9 @@ def _validated_message_allowance_metadata(
         not isinstance(metadata["provider_usage_evidence_id"], str)
         or not metadata["provider_usage_evidence_id"]
         or metadata["allowance_finalization_status"] != "durable_result_boundary"
-        or type(metadata["provider_input_tokens"]) is not int
+        or stored_int(metadata["provider_input_tokens"]) is None
         or int(metadata["provider_input_tokens"]) < 0
-        or type(metadata["provider_output_tokens"]) is not int
+        or stored_int(metadata["provider_output_tokens"]) is None
         or int(metadata["provider_output_tokens"]) < 0
     ):
         return None
@@ -931,7 +930,7 @@ def _observe_message_provider_usage(
         return metadata is None
     input_tokens = validated["provider_input_tokens"]
     output_tokens = validated["provider_output_tokens"]
-    if type(input_tokens) is not int or type(output_tokens) is not int:
+    if stored_int(input_tokens) is None or stored_int(output_tokens) is None:
         return False
     observed = allowance_service.record_provider_usage(
         beneficiary_id=beneficiary_id,
@@ -1741,10 +1740,9 @@ def _validate_replay_command(
         or any(not isinstance(value, str) or not value for value in deterministic_ids)
         or len(set(deterministic_ids)) != len(deterministic_ids)
         or not isinstance(requested, list)
-        or not isinstance(command.get("attachment_count"), int)
-        or isinstance(command.get("attachment_count"), bool)
-        or command["attachment_count"] < 0
-        or command["attachment_count"] != len(requested)
+        or (stored_count := stored_int(command.get("attachment_count"))) is None
+        or stored_count < 0
+        or stored_count != len(requested)
         or not isinstance(command.get("created_at"), str)
         or not command["created_at"]
         or not isinstance(command.get("history_anchor_created_at"), str)
@@ -1844,8 +1842,8 @@ def _execute_message_command(
         else datetime.now(timezone.utc).strftime("%Y-%m-%d")
     )
     command_expires_at = (
-        int(existing["expires_at"])
-        if existing and isinstance(existing.get("expires_at"), int)
+        stored_expiry
+        if existing and (stored_expiry := stored_int(existing.get("expires_at"))) is not None
         else now_epoch + 172800
     )
     usage_idempotency_key = f"chat_message:{student_msg_id}"

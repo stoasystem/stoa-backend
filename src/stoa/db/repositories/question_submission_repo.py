@@ -11,7 +11,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo, attachment_repo, question_repo
 
 
@@ -438,11 +438,7 @@ def _classify_command(
     return QuestionAdmissionResult(
         QuestionAdmissionDisposition.RESUME,
         command=dict(command),
-        counter_value=(
-            counter_value
-            if isinstance(counter_value, int) and not isinstance(counter_value, bool)
-            else None
-        ),
+        counter_value=stored_int(counter_value),
     )
 
 
@@ -523,12 +519,10 @@ def classify_question_submission_replay(
         or not _valid_sha256(command.get("fingerprint"))
         or command.get("status")
         not in {"processing", "completed", "terminal_failed"}
-        or isinstance(generation, bool)
-        or not isinstance(generation, int)
-        or generation < 1
-        or isinstance(version, bool)
-        or not isinstance(version, int)
-        or version < 1
+        or (stored_generation := stored_int(generation)) is None
+        or stored_generation < 1
+        or (stored_version := stored_int(version)) is None
+        or stored_version < 1
         or not isinstance(command.get("question_id"), str)
         or not command["question_id"]
         or (
@@ -570,9 +564,8 @@ def classify_question_submission_replay(
         or question.get("question_id") != question_id
         or question.get("student_id") != student_id
         or question.get("account_fence_generation") != generation
-        or isinstance(question_version, bool)
-        or not isinstance(question_version, int)
-        or question_version < 1
+        or (stored_question_version := stored_int(question_version)) is None
+        or stored_question_version < 1
         or not _question_status_matches_command(
             command.get("status"), question.get("status")
         )
@@ -583,11 +576,7 @@ def classify_question_submission_replay(
         QuestionAdmissionDisposition.RESUME,
         command=dict(command),
         question=dict(question),
-        counter_value=(
-            counter_value
-            if isinstance(counter_value, int) and not isinstance(counter_value, bool)
-            else None
-        ),
+        counter_value=stored_int(counter_value),
     )
 
 
@@ -1149,18 +1138,15 @@ def _matching_terminal_failure_proof(
     expected_effect_version = expected_effect.get("version")
     expected_command_version = expected_effect.get("command_version")
     expected_question_version = expected_effect.get("question_version")
-    if any(
-        isinstance(value, bool) or not isinstance(value, int)
-        for value in (
-            expected_effect_version,
-            expected_command_version,
-            expected_question_version,
-        )
+    expected_effect_version = stored_int(expected_effect_version)
+    expected_command_version = stored_int(expected_command_version)
+    expected_question_version = stored_int(expected_question_version)
+    if (
+        expected_effect_version is None
+        or expected_command_version is None
+        or expected_question_version is None
     ):
         return False
-    assert isinstance(expected_effect_version, int)
-    assert isinstance(expected_command_version, int)
-    assert isinstance(expected_question_version, int)
     return bool(
         effect.get("status") == "terminal_proven"
         and effect.get("version") == expected_effect_version + 1
@@ -2065,9 +2051,8 @@ def _safe_reread(
 
 
 def _optional_positive_version(value: object) -> int | None:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        return None
-    return value
+    parsed = stored_int(value)
+    return parsed if parsed is not None and parsed >= 1 else None
 
 
 def _read_item(target: object, key: QuestionAdmissionItem) -> QuestionAdmissionItem | None:
@@ -2261,8 +2246,7 @@ def preview_question_submission_reconciliation(
         or ledger.get("question_id") != effective_question_id
         or ledger.get("event_id") != expected_ledger_identity
         or counter is None
-        or isinstance(counter.get("count"), bool)
-        or not isinstance(counter.get("count"), int)
+        or stored_int(counter.get("count")) is None
     )
     if conflicting:
         return _preview_result(
@@ -2278,8 +2262,8 @@ def preview_question_submission_reconciliation(
     assert question is not None
     assert ledger is not None
     assert counter is not None
-    counter_count = counter.get("count")
-    assert isinstance(counter_count, int) and not isinstance(counter_count, bool)
+    counter_count = stored_int(counter.get("count"))
+    assert counter_count is not None
     command_status = str(command.get("status") or "")
     ledger_status = str(ledger.get("status") or "active")
     if command_status == "completed":
