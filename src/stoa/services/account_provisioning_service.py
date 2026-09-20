@@ -24,6 +24,7 @@ from fastapi import HTTPException
 
 from stoa.db.repositories import (
     account_deletion_repo,
+    account_email_claim_repo,
     account_invitation_repo,
     capability_repo,
     identity_repo,
@@ -489,27 +490,40 @@ def _create_account_row(
     created_by: str,
     now: datetime,
 ) -> None:
-    if user_repo.get_user_by_email(email):
+    # A courtesy, not the guard. GSI-Email is eventually consistent, so two
+    # administrators opening the same person in the same second both read it free; the
+    # claim row written with the profile below is what actually breaks the tie. Kept
+    # because it answers with the right code before an account number is burned.
+    if user_repo.get_user_by_email_and_role(email, role):
         raise HTTPException(status_code=409, detail={"code": "account_exists"})
-    user_repo.put_user(
-        {
-            "user_id": account_id,
-            "role": role,
-            "account_status": account_status,
-            # Absent rather than empty when it was not supplied: "" would read as a
-            # stored answer, and the minor rule has to be able to see "not known".
-            **({DATE_OF_BIRTH_FIELD: date_of_birth} if date_of_birth else {}),
-            # An account the administrator opened carries a password the
-            # administrator knows, so it owes the same change a reset does. An
-            # invited account sets its own password at claim time and owes nothing.
-            MUST_CHANGE_PASSWORD_FIELD: must_change_password,
-            "email": email,
-            "name": full_name,
-            "created_by": created_by,
-            "created_at": now.isoformat(),
-            "updated_at": now.isoformat(),
-        }
+    claim = account_email_claim_repo.claim_operation(
+        email=email, role=role, account_id=account_id, created_at=now.isoformat()
     )
+    try:
+        user_repo.put_user_with_email_claim(
+            {
+                "user_id": account_id,
+                "role": role,
+                "account_status": account_status,
+                # Absent rather than empty when it was not supplied: "" would read as
+                # a stored answer, and the minor rule has to see "not known".
+                **({DATE_OF_BIRTH_FIELD: date_of_birth} if date_of_birth else {}),
+                # An account the administrator opened carries a password the
+                # administrator knows, so it owes the same change a reset does. An
+                # invited account sets its own password at claim time and owes nothing.
+                MUST_CHANGE_PASSWORD_FIELD: must_change_password,
+                "email": email,
+                "name": full_name,
+                "created_by": created_by,
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+            },
+            claim_operation=claim,
+        )
+    except account_deletion_repo.AccountDeletionConflict as exc:
+        # The pair was taken between the read above and this commit, or the profile
+        # row itself already exists. Nothing was written either way.
+        raise HTTPException(status_code=409, detail={"code": "account_exists"}) from exc
 
 
 def _attach_account_number(*, account_id: str, role: str, now: datetime) -> str:
@@ -663,10 +677,15 @@ def _transition_account_status(
 def _release_failed_account(*, account_id: str, now: datetime) -> None:
     """Park a half-opened account in a terminal state and give its address back.
 
-    The address is overwritten with a value that carries no `@`, so it can never match
-    a normalized email again and the uniqueness check in `_create_account_row` stays a
-    plain equality test rather than a status-aware one. The number stays where it is;
-    numbers are never recycled, and that cost is accepted.
+    Two things hold the pair, and both are released in one commit or neither is: the
+    profile row, whose address is overwritten with a value carrying no `@` so it can
+    never match a normalized email again, and the claim row, which is what a retry
+    actually collides with. Releasing them separately would either strand the pair
+    forever, or free it while a live profile still holds it. The number stays where it
+    is; numbers are never recycled, and that cost is accepted.
+
+    The invitation row is left alone. It repeats the address in GSI-Email, but
+    uniqueness reads only profile rows, so the residue cannot cancel the release.
 
     Best effort on purpose: the caller is already raising the error that explains what
     went wrong, and a failure to tidy up must not replace it with a different one.
@@ -693,16 +712,36 @@ def _release_failed_account(*, account_id: str, now: datetime) -> None:
             expected_version=_profile_version(profile),
         )
         fence = account_deletion_repo.require_active_account_fence(account_id)
-        account_deletion_repo.transact(
-            [
-                account_deletion_repo.active_fence_condition(
-                    account_id, _profile_version(fence, field="generation")
-                ),
-                operation,
-            ]
-        )
+        operations = [
+            account_deletion_repo.active_fence_condition(
+                account_id, _profile_version(fence, field="generation")
+            ),
+            operation,
+        ]
+        released = _claim_release_operation(profile, account_id=account_id)
+        if released:
+            operations.append(released)
+        account_deletion_repo.transact(operations)
     except Exception:
         return
+
+
+def _claim_release_operation(
+    profile: dict[str, Any], *, account_id: str
+) -> dict[str, Any] | None:
+    """Give back the `(address, role)` this row still holds, when it still holds one.
+
+    A row parked by an earlier release carries an address with no `@` and owns no
+    claim any more, so there is nothing to give back and no operation to append.
+    """
+    try:
+        return account_email_claim_repo.release_operation(
+            email=str(profile.get("email") or ""),
+            role=str(profile.get("role") or ""),
+            account_id=account_id,
+        )
+    except ValueError:
+        return None
 
 
 def _delete_provider_account(provider: Any, *, email: str) -> None:

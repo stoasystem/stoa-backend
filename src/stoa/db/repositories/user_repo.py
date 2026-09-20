@@ -184,16 +184,55 @@ class _ParentBindingSnapshot:
     reverse_rows: tuple[UserItem, ...]
 
 
-def put_user(item: Mapping[str, object]) -> None:
+def _profile_created_at(item: Mapping[str, object]) -> str:
     created_at = item.get("created_at")
     if created_at is None or created_at == "":
-        timestamp = datetime.now(UTC).isoformat()
-    elif isinstance(created_at, str):
-        timestamp = created_at
-    else:
-        raise ValueError("malformed user profile timestamp")
+        return datetime.now(UTC).isoformat()
+    if isinstance(created_at, str):
+        return created_at
+    raise ValueError("malformed user profile timestamp")
+
+
+class _CapturedLifecycleTransaction:
+    """Table stand-in that records the operations a lifecycle write would commit.
+
+    It exists so this module never rebuilds the profile and fence rows itself: the
+    repository that owns their shape builds them, and they are handed on unchanged to
+    a wider commit. A second copy of that shape here is the one way the fence and the
+    profile could ever drift apart.
+    """
+
+    def __init__(self) -> None:
+        self.operations: list[TransactionOperation] = []
+
+    def transact_account_deletion(self, operations: list[TransactionOperation]) -> None:
+        self.operations = list(operations)
+
+
+def put_user(item: Mapping[str, object]) -> None:
     account_deletion_repo.materialize_profile_with_fence(
-        dict(item), now_iso=timestamp, table=get_table()
+        dict(item), now_iso=_profile_created_at(item), table=get_table()
+    )
+
+
+def put_user_with_email_claim(
+    item: Mapping[str, object], *, claim_operation: TransactionOperation
+) -> None:
+    """Create one profile row and the address claim that makes it unique, atomically.
+
+    Uniqueness cannot come from a read of GSI-Email - the index is eventually
+    consistent - so it comes from the conditional claim, and the claim only means
+    anything if it is decided in the same commit as the row it protects. Either the
+    pair is taken and the profile exists, or neither happened.
+    """
+    capture = _CapturedLifecycleTransaction()
+    account_deletion_repo.materialize_profile_with_fence(
+        dict(item), now_iso=_profile_created_at(item), table=capture
+    )
+    if not capture.operations:
+        raise ValueError("profile materialization produced no operations")
+    account_deletion_repo.transact(
+        [*capture.operations, claim_operation], table=get_table()
     )
 
 
@@ -207,16 +246,47 @@ def get_user(user_id: str) -> UserItem | None:
     return _optional_item(resp.get("Item"))
 
 
-def get_user_by_email(email: str) -> UserItem | None:
+def _profiles_by_email(email: str) -> list[UserItem]:
+    """Every canonical profile row carrying this address.
+
+    GSI-Email holds whatever repeats the address, invitations included, so the profile
+    rows have to be asked for explicitly. No Limit is sent: DynamoDB applies Limit
+    before the filter, so a Limit here would drop a profile that happened to sort
+    behind an invitation and report a taken address as free.
+    """
     table = get_table()
-    resp = _query(
-        table,
-        IndexName="GSI-Email",
-        KeyConditionExpression=Key("email").eq(email),
-        Limit=1,
-    )
-    items = _items(resp.get("Items", []))
-    return items[0] if items else None
+    query_kwargs: dict[str, object] = {
+        "IndexName": "GSI-Email",
+        "KeyConditionExpression": Key("email").eq(email),
+        "FilterExpression": Attr("SK").eq("PROFILE"),
+    }
+    profiles: list[UserItem] = []
+    while True:
+        resp = _query(table, **query_kwargs)
+        profiles.extend(_items(resp.get("Items", [])))
+        last_key = resp.get("LastEvaluatedKey")
+        if not last_key:
+            return profiles
+        query_kwargs["ExclusiveStartKey"] = last_key
+
+
+def get_user_by_email(email: str) -> UserItem | None:
+    profiles = _profiles_by_email(email)
+    return profiles[0] if profiles else None
+
+
+def get_user_by_email_and_role(email: str, role: str) -> UserItem | None:
+    """The account this address holds in this role, if any.
+
+    The uniqueness key is the pair, not the address: one person holds a teacher
+    account and a parent account on the same address, so the address alone can no
+    longer answer "is this taken".
+    """
+    wanted = str(role or "").strip()
+    for profile in _profiles_by_email(email):
+        if str(profile.get("role") or "") == wanted:
+            return profile
+    return None
 
 
 def list_children_by_parent_scan(parent_id: str) -> list[UserItem]:

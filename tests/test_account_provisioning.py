@@ -22,6 +22,7 @@ from botocore.exceptions import ClientError
 
 from stoa.db.repositories import (
     account_deletion_repo,
+    account_email_claim_repo,
     account_invitation_repo,
     account_number_repo,
     identity_repo,
@@ -161,15 +162,42 @@ class ConditionEvaluator:
         return name
 
 
+def _filter_holds(condition: Any, item: dict[str, Any]) -> bool:
+    """Evaluate one boto3 `Attr` filter the way the index would."""
+    if condition is None:
+        return True
+    built = condition.get_expression()
+    operator = built["operator"]
+    values = built["values"]
+    if operator == "AND":
+        return all(_filter_holds(value, item) for value in values)
+    if operator == "OR":
+        return any(_filter_holds(value, item) for value in values)
+    name, expected = values
+    stored = item.get(name.name)
+    if operator == "=":
+        return stored == expected
+    if operator == "<>":
+        return stored != expected
+    raise AssertionError(f"unsupported filter: {operator}")
+
+
 class FakeAccountTable:
     """In-memory single table honouring the conditions the production code sends."""
 
-    def __init__(self, *, claim_gate: threading.Barrier | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        claim_gate: threading.Barrier | None = None,
+        email_gate: threading.Barrier | None = None,
+    ) -> None:
         self.rows: dict[tuple[str, str], dict[str, Any]] = {}
         self.access: list[tuple[str, str, str]] = []
         self.lock = threading.Lock()
         self.claim_gate = claim_gate
         self.gated: set[int] = set()
+        self.email_gate = email_gate
+        self.email_gated: set[int] = set()
 
     def _record(self, method: str, key: dict[str, str]) -> None:
         self.access.append((method, str(key["PK"]).split("#", 1)[0], str(key["SK"])))
@@ -252,17 +280,46 @@ class FakeAccountTable:
         *,
         IndexName: str,  # noqa: N803
         KeyConditionExpression: Any,  # noqa: N803
-        Limit: int = 1,  # noqa: N803
+        FilterExpression: Any = None,  # noqa: N803
+        Limit: int | None = None,  # noqa: N803
         **_kwargs: Any,
     ) -> dict[str, Any]:
+        """Model what the index actually holds: every row carrying the address.
+
+        The profile row has no privileged position in GSI-Email - the invitation row
+        repeats the address and sits right beside it - so only the caller's own
+        FilterExpression narrows the answer. Limit is applied before the filter,
+        exactly as DynamoDB applies it, which is why a caller that sends both gets
+        fewer rows than it asked for rather than the wrong ones.
+        """
         assert IndexName == "GSI-Email"
         expected = KeyConditionExpression.get_expression()["values"][1]
-        matches = [
-            deepcopy(item)
-            for item in self.rows.values()
-            if item.get("SK") == "PROFILE" and item.get("email") == expected
-        ]
-        return {"Items": matches[:Limit]}
+        with self.lock:
+            matches = [
+                deepcopy(item)
+                for _, item in sorted(self.rows.items())
+                if item.get("email") == expected
+            ]
+        if Limit is not None:
+            matches = matches[: int(Limit)]
+        response = {"Items": [row for row in matches if _filter_holds(FilterExpression, row)]}
+        self._await_email_gate()
+        return response
+
+    def _await_email_gate(self) -> None:
+        """Hold every reader of the address index until all of them have read it.
+
+        Same reason as `_await_gate`: without it two openings of the same address
+        serialise by luck, one of them sees the other's row through the pre-read, and
+        the conditional claim underneath is never asked to decide anything.
+        """
+        if self.email_gate is None:
+            return
+        with self.lock:
+            if threading.get_ident() in self.email_gated:
+                return
+            self.email_gated.add(threading.get_ident())
+        self.email_gate.wait(timeout=5)
 
     def put_profile_with_fence(
         self, profile: dict[str, Any], fence: dict[str, Any]
@@ -275,36 +332,57 @@ class FakeAccountTable:
             self.rows[(str(row["PK"]), str(row["SK"]))] = deepcopy(row)
 
     def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
-        staged: list[tuple[tuple[str, str], dict[str, Any]]] = []
-        for operation in operations:
-            for kind, body in operation.items():
-                key = (str(body["Key"]["PK"]), str(body["Key"]["SK"])) if "Key" in body else (
-                    str(body["Item"]["PK"]),
-                    str(body["Item"]["SK"]),
-                )
-                evaluator = ConditionEvaluator(
-                    body.get("ExpressionAttributeNames"),
-                    body.get("ExpressionAttributeValues"),
-                )
-                current = self.rows.get(key)
-                if not evaluator.holds(body.get("ConditionExpression"), current):
-                    raise account_deletion_repo.AccountDeletionConflict(
-                        f"{kind} refused for {key}"
+        """All conditions, then all effects, under one lock.
+
+        The lock is the transaction: without it two callers can both pass their
+        conditions before either writes, and a conditional claim that the real store
+        would refuse gets through the double.
+        """
+        staged: list[tuple[tuple[str, str], dict[str, Any] | None]] = []
+        with self.lock:
+            for operation in operations:
+                for kind, body in operation.items():
+                    key = (
+                        (str(body["Key"]["PK"]), str(body["Key"]["SK"]))
+                        if "Key" in body
+                        else (str(body["Item"]["PK"]), str(body["Item"]["SK"]))
                     )
-                if kind == "ConditionCheck":
-                    continue
-                if kind == "Put":
-                    staged.append((key, deepcopy(body["Item"])))
-                    continue
-                assert kind == "Update", f"unsupported operation: {kind}"
-                updated = deepcopy(current) if current else dict(body["Key"])
-                self._apply(updated, body["UpdateExpression"], evaluator)
-                staged.append((key, updated))
-        for key, row in staged:
-            self.rows[key] = row
+                    evaluator = ConditionEvaluator(
+                        body.get("ExpressionAttributeNames"),
+                        body.get("ExpressionAttributeValues"),
+                    )
+                    current = self.rows.get(key)
+                    if not evaluator.holds(body.get("ConditionExpression"), current):
+                        raise account_deletion_repo.AccountDeletionConflict(
+                            f"{kind} refused for {key}"
+                        )
+                    if kind == "ConditionCheck":
+                        continue
+                    if kind == "Put":
+                        staged.append((key, deepcopy(body["Item"])))
+                        continue
+                    if kind == "Delete":
+                        staged.append((key, None))
+                        continue
+                    assert kind == "Update", f"unsupported operation: {kind}"
+                    updated = deepcopy(current) if current else dict(body["Key"])
+                    self._apply(updated, body["UpdateExpression"], evaluator)
+                    staged.append((key, updated))
+            for key, row in staged:
+                if row is None:
+                    self.rows.pop(key, None)
+                else:
+                    self.rows[key] = row
 
     def profiles(self) -> list[dict[str, Any]]:
         return [deepcopy(row) for key, row in self.rows.items() if key[1] == "PROFILE"]
+
+    def claims(self) -> list[dict[str, Any]]:
+        return [
+            deepcopy(row)
+            for key, row in self.rows.items()
+            if key[1] == account_email_claim_repo.CLAIM_SK
+        ]
 
     def invitations(self) -> list[dict[str, Any]]:
         return [
@@ -370,6 +448,7 @@ class RecordingProvider:
 def table(monkeypatch: pytest.MonkeyPatch) -> FakeAccountTable:
     fake = FakeAccountTable()
     for module in (
+        account_email_claim_repo,
         account_invitation_repo,
         account_number_repo,
         account_deletion_repo,
@@ -770,6 +849,7 @@ def test_并发两次认领同一令牌只有一个能建号(monkeypatch: pytest
     gate = threading.Barrier(2, timeout=5)
     fake = FakeAccountTable(claim_gate=gate)
     for module in (
+        account_email_claim_repo,
         account_invitation_repo,
         account_number_repo,
         account_deletion_repo,
@@ -1225,3 +1305,263 @@ def test_受邀账号自己设密码_不欠这次改密(table: FakeAccountTable)
         row for row in table.profiles() if row.get("email") == "invited@example.ch"
     )
     assert profile["must_change_password"] is False
+
+
+# ---------------------------------------------------------------------------
+# Uniqueness: the key is the pair `(address, role)`, and it is held by a
+# conditional write rather than by a read of an eventually consistent index.
+# ---------------------------------------------------------------------------
+
+
+def test_占位行的条件写是attribute_not_exists() -> None:
+    """The claim is taken by the store, and its key is the pair, not the address."""
+    operation = account_email_claim_repo.claim_operation(
+        email="Pin@Example.CH",
+        role="student",
+        account_id="student-1",
+        created_at=_moment().isoformat(),
+    )
+    assert operation["Put"]["ConditionExpression"] == (
+        "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+    )
+    item = operation["Put"]["Item"]
+    assert item["PK"] == "EMAIL#pin@example.ch#student"
+    assert item["SK"] == account_email_claim_repo.CLAIM_SK
+    # The claim repeats the address under a name GSI-Email does not index, so it can
+    # never be mistaken for the profile that holds it.
+    assert "email" not in item
+    assert item["claimed_email"] == "pin@example.ch"
+
+
+def test_并发两次同一邮箱同一角色只有一个能建号(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Both administrators read the address free; only the store can break the tie."""
+    gate = threading.Barrier(2, timeout=5)
+    fake = FakeAccountTable(email_gate=gate)
+    for module in (
+        account_email_claim_repo,
+        account_invitation_repo,
+        account_number_repo,
+        account_deletion_repo,
+        identity_repo,
+        security_audit_repo,
+        user_repo,
+    ):
+        monkeypatch.setattr(module, "get_table", lambda fake=fake: fake)
+
+    original = user_repo.get_user_by_email_and_role
+    pre_reads: list[object] = []
+
+    def recording(email: str, role: str) -> Any:
+        answer = original(email, role)
+        pre_reads.append(answer)
+        return answer
+
+    monkeypatch.setattr(user_repo, "get_user_by_email_and_role", recording)
+
+    outcomes: list[object] = []
+
+    def attempt() -> None:
+        try:
+            outcomes.append(_invite(fake, email="twin@example.ch", role="student"))
+        except HTTPException as error:
+            outcomes.append(error)
+
+    threads = [threading.Thread(target=attempt) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    accepted = [item for item in outcomes if isinstance(item, dict)]
+    rejected = [item for item in outcomes if isinstance(item, HTTPException)]
+    assert len(accepted) == 1
+    assert len(rejected) == 1
+    assert rejected[0].detail == {"code": "account_exists"}
+    # The pre-read refused neither of them: both were told the address was free, which
+    # is exactly the state the conditional claim underneath has to survive.
+    assert pre_reads == [None, None]
+    assert len(fake.profiles()) == 1
+    assert [str(row["PK"]) for row in fake.claims()] == ["EMAIL#twin@example.ch#student"]
+    # The loser burned no account number. Numbers are never recycled, so a second one
+    # taken here would be gone for good.
+    burned = [key for key in fake.rows if key[1] == "ACCOUNT_NUMBER"]
+    assert len(burned) == 1
+    assert accepted[0]["accountNumber"] == "S26-0001"
+
+
+def test_同一邮箱不同角色各开一个账号(table: FakeAccountTable) -> None:
+    """Negative control: a teacher whose own child studies here needs both accounts."""
+    teacher = _invite(table, role="teacher", email="both@example.ch")
+    parent = _invite(table, role="parent", email="both@example.ch", at=_moment(10))
+
+    assert teacher["userId"] != parent["userId"]
+    assert teacher["accountNumber"].startswith(EXPECTED_PREFIXES["teacher"])
+    assert parent["accountNumber"].startswith(EXPECTED_PREFIXES["parent"])
+    assert sorted(str(row["role"]) for row in table.profiles()) == ["parent", "teacher"]
+    assert sorted(str(row["PK"]) for row in table.claims()) == [
+        "EMAIL#both@example.ch#parent",
+        "EMAIL#both@example.ch#teacher",
+    ]
+    # Weaker on the pair is not weaker on the duplicate it was always there to refuse.
+    with pytest.raises(HTTPException) as exc_info:
+        _invite(table, role="teacher", email="both@example.ch", at=_moment(20))
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == {"code": "account_exists"}
+
+
+def test_占位行与profile行是同一次提交(table: FakeAccountTable) -> None:
+    """A refused claim leaves no account behind: the two rows are one commit."""
+    taken = account_email_claim_repo.claim_item(
+        email="taken@example.ch",
+        role="student",
+        account_id="student-somebody-else",
+        created_at=_moment().isoformat(),
+    )
+    table.rows[(str(taken["PK"]), str(taken["SK"]))] = taken
+    # The pre-read cannot see it - a claim row is not a profile - so the commit is the
+    # only thing left that can refuse this opening.
+    assert user_repo.get_user_by_email_and_role("taken@example.ch", "student") is None
+
+    with pytest.raises(HTTPException) as exc_info:
+        _invite(table, email="taken@example.ch")
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == {"code": "account_exists"}
+    assert table.profiles() == []
+    assert [key for key in table.rows if key[1] == "ACCOUNT_FENCE"] == []
+    assert [str(row["PK"]) for row in table.claims()] == [str(taken["PK"])]
+
+
+def test_建号事务恰好写下profile围栏与占位行(
+    table: FakeAccountTable, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pinned against the claim quietly dropping out of the creation transaction."""
+    committed: list[list[dict[str, Any]]] = []
+    original = account_deletion_repo.transact
+
+    def recording(operations: Any, *, table: Any = None) -> None:
+        batch = list(operations)
+        committed.append(deepcopy(batch))
+        original(batch, table=table)
+
+    monkeypatch.setattr(account_deletion_repo, "transact", recording)
+    issued = _invite(table, email="atomic@example.ch")
+
+    with_claim = [
+        batch
+        for batch in committed
+        if any(
+            str((body.get("Item") or {}).get("SK")) == account_email_claim_repo.CLAIM_SK
+            for operation in batch
+            for body in operation.values()
+        )
+    ]
+    assert len(with_claim) == 1
+    written = {
+        (str(body["Item"]["PK"]), str(body["Item"]["SK"]))
+        for operation in with_claim[0]
+        for body in operation.values()
+    }
+    assert written == {
+        (f"USER#{issued['userId']}", "PROFILE"),
+        (f"USER#{issued['userId']}", "ACCOUNT_FENCE"),
+        ("EMAIL#atomic@example.ch#student", account_email_claim_repo.CLAIM_SK),
+    }
+
+
+def test_邀请行不会被当成已存在的账号(table: FakeAccountTable) -> None:
+    """The invitation repeats the address in GSI-Email; only the profile may answer."""
+    issued = _invite(table, email="pending@example.ch")
+    assert [
+        str(row["email"]) for row in table.invitations() if "email" in row
+    ] == ["pending@example.ch"]
+
+    found = user_repo.get_user_by_email("pending@example.ch")
+    assert found is not None
+    assert found["SK"] == "PROFILE"
+    assert found["user_id"] == issued["userId"]
+
+    # Once the profile gives the address back, nothing else may stand in for it - that
+    # is what used to cancel the compensation.
+    table.rows[(f"USER#{issued['userId']}", "PROFILE")]["email"] = (
+        f"{account_provisioning_service.FAILED_ACCOUNT_STATUS}:{issued['userId']}"
+    )
+    assert user_repo.get_user_by_email("pending@example.ch") is None
+    assert user_repo.get_user_by_email_and_role("pending@example.ch", "student") is None
+
+
+def test_邀请写下之后才失败_同一邮箱同角色仍可重开(
+    table: FakeAccountTable, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The uncovered square: the failure lands after the invitation row exists."""
+    original_append = security_audit_repo.append_event
+
+    def flaky(stream_id: str, event: Any) -> Any:
+        if event.get("event_type") == "account_invitation_issued":
+            raise RuntimeError("audit stream unavailable")
+        return original_append(stream_id, event)
+
+    monkeypatch.setattr(security_audit_repo, "append_event", flaky)
+
+    committed: list[list[dict[str, Any]]] = []
+    original_transact = account_deletion_repo.transact
+
+    def recording(operations: Any, *, table: Any = None) -> None:
+        batch = list(operations)
+        committed.append(deepcopy(batch))
+        original_transact(batch, table=table)
+
+    monkeypatch.setattr(account_deletion_repo, "transact", recording)
+
+    with pytest.raises(RuntimeError):
+        _invite(table, email="late@example.ch")
+    monkeypatch.setattr(security_audit_repo, "append_event", original_append)
+
+    # The invitation row survives with the address on it, and no longer matters.
+    assert [
+        str(row["email"]) for row in table.invitations() if "email" in row
+    ] == ["late@example.ch"]
+    assert table.claims() == []
+    # Parking the profile and giving the claim back is one commit, so the pair can
+    # never be half-released.
+    release = committed[-1]
+    assert {str(next(iter(operation))) for operation in release} == {
+        "ConditionCheck",
+        "Update",
+        "Delete",
+    }
+
+    reopened = _invite(table, email="late@example.ch", at=_moment(10))
+    assert reopened["accountStatus"] == "invited"
+    assert reopened["email"] == "late@example.ch"
+    assert [str(row["PK"]) for row in table.claims()] == [
+        "EMAIL#late@example.ch#student"
+    ]
+
+
+def test_认领失败不会把地址还给别人(table: FakeAccountTable) -> None:
+    """A failed activation gives the token back, never the address.
+
+    The account is still `invited` and still holds the pair. Releasing the claim here
+    would open a second account for a person whose first token is live again - more
+    accounts let through, which is the one direction this key may not move.
+    """
+    issued = _invite(table, email="held@example.ch")
+    with pytest.raises(HTTPException):
+        _claim(
+            token=issued["activationToken"],
+            provider=RecordingProvider(group_failures=1),
+        )
+
+    assert [str(row["PK"]) for row in table.claims()] == [
+        "EMAIL#held@example.ch#student"
+    ]
+    with pytest.raises(HTTPException) as exc_info:
+        _invite(table, email="held@example.ch", at=_moment(30))
+    assert exc_info.value.detail == {"code": "account_exists"}
+
+
+def test_大小写不同的邮箱落在同一个占位行(table: FakeAccountTable) -> None:
+    _invite(table, email="Case2@Example.CH")
+    assert [str(row["PK"]) for row in table.claims()] == [
+        "EMAIL#case2@example.ch#student"
+    ]
