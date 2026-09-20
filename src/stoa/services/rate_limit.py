@@ -20,6 +20,21 @@ from stoa.db.repositories import account_deletion_repo
 _RATE_KINDS = frozenset({"chat", "hint"})
 _OPERATION_SCHEMA_VERSION = "rate-admission-operation.v2"
 _OPERATION_TTL_SECONDS = 172800
+_SOURCE_WINDOW_ENTITY = "source_rate_window"
+
+# Nothing here reads these; the name exists so the repository sweep in
+# tests/test_source_bucket_proxy_topology.py has one declared place to point at.
+FORWARDING_HEADERS = (
+    "x-forwarded-for",
+    "x-real-ip",
+    "true-client-ip",
+    "cf-connecting-ip",
+    "forwarded",
+)
+
+
+class ProxyTopologyError(RuntimeError):
+    """The request that arrived contradicts the declared reverse-proxy depth."""
 
 
 class RateAdmissionDisposition(StrEnum):
@@ -492,6 +507,115 @@ def check_and_record_operation(
         limit=limit,
         expires_at=stored_expiry,
     )
+
+
+def _peer_host(request: Any) -> str:
+    """Return the address of whoever opened this connection, per the ASGI scope."""
+    client = getattr(request, "client", None)
+    host = getattr(client, "host", None) if client is not None else None
+    return str(host).strip() if host else ""
+
+
+def _forwarded_chain(request: Any) -> list[str]:
+    headers = getattr(request, "headers", None)
+    raw = ""
+    if headers is not None:
+        getter = getattr(headers, "get", None)
+        if callable(getter):
+            raw = getter("x-forwarded-for") or ""
+    return [part.strip() for part in str(raw).split(",") if part.strip()]
+
+
+def client_source_digest(request: Any, *, trusted_proxy_hops: int | None = None) -> str:
+    """Digest the address a rate bucket may key on, under a declared proxy depth.
+
+    At depth 0 the peer address is the caller's, because API Gateway rewrites it,
+    and every forwarding header stays caller-controlled input that is never read --
+    trusting one would hand an attacker a fresh quota per guess. Above 0 the
+    declaration is checked against the request rather than believed: a chain too
+    short, or one whose nearest entry is not the peer we observe, means the
+    topology is not the configured one, and that refuses rather than guesses.
+    """
+    hops = settings.trusted_proxy_hops if trusted_proxy_hops is None else trusted_proxy_hops
+    if isinstance(hops, bool) or not isinstance(hops, int) or hops < 0:
+        raise ProxyTopologyError("trusted proxy depth must be a non-negative integer")
+
+    peer = _peer_host(request)
+    if hops == 0:
+        source = peer
+    else:
+        chain = _forwarded_chain(request)
+        if len(chain) < hops + 1:
+            raise ProxyTopologyError("forwarded chain is shorter than the declared depth")
+        if peer and chain[-1] != peer:
+            raise ProxyTopologyError("forwarded chain does not end at the observed peer")
+        source = chain[-1 - hops]
+    return hashlib.sha256((source or "unknown").encode("utf-8")).hexdigest()
+
+
+def admit_source_window(
+    *,
+    scope: str,
+    source_digest: str,
+    limit: int,
+    window_seconds: int,
+    now: datetime | None = None,
+    table: object | None = None,
+) -> bool:
+    """Charge one unit to one source's fixed window and report whether it is admitted.
+
+    Counting happens before the work it guards, so a refused call and an admitted one
+    cost the same. A counter that cannot be written refuses: a limiter that opens when
+    its store is unreachable is an invitation to make it unreachable.
+    """
+    bucket = _required_text(scope, "scope").upper()
+    digest = _sha256_digest(source_digest, "source_digest")
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+        raise ValueError("limit must be a positive integer")
+    if (
+        isinstance(window_seconds, bool)
+        or not isinstance(window_seconds, int)
+        or window_seconds <= 0
+    ):
+        raise ValueError("window_seconds must be a positive integer")
+
+    observed_now = now or datetime.now(timezone.utc)
+    if observed_now.tzinfo is None or observed_now.utcoffset() is None:
+        raise ValueError("now must be timezone-aware")
+    moment = int(observed_now.timestamp())
+    window_start = moment - (moment % window_seconds)
+
+    target = table if table is not None else get_table()
+    updater = getattr(target, "update_item", None)
+    if not callable(updater):
+        return False
+    try:
+        response = updater(
+            Key={
+                "PK": f"SOURCEWINDOW#{bucket}#{digest}",
+                "SK": f"WINDOW#{window_start}",
+            },
+            # DynamoDB's grammar puts SET before ADD; count is reserved, so it is named.
+            UpdateExpression=(
+                "SET entity_type = :entity, expires_at = :expires ADD #count :one"
+            ),
+            ExpressionAttributeNames={"#count": "count"},
+            ExpressionAttributeValues={
+                ":one": 1,
+                ":entity": _SOURCE_WINDOW_ENTITY,
+                ":expires": window_start + 2 * window_seconds,
+            },
+            ReturnValues="UPDATED_NEW",
+        )
+    except Exception:
+        return False
+    attributes = response.get("Attributes") if isinstance(response, Mapping) else None
+    if not isinstance(attributes, Mapping):
+        return False
+    count = _stored_nonnegative_int(attributes.get("count"))
+    if count is None or count <= 0:
+        return False
+    return count <= limit
 
 
 def _counter_receipt_or_raise(result: RateAdmissionResult, label: str) -> dict[str, Any]:

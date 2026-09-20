@@ -257,6 +257,20 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def validate_source_bucket_and_analytics_limits(self) -> "Settings":
+        if self.trusted_proxy_hops < 0:
+            raise ValueError("trusted_proxy_hops must not be negative")
+        if self.analytics_ingest_window_seconds <= 0:
+            raise ValueError("analytics_ingest_window_seconds must be positive")
+        if self.analytics_ingest_max_events_per_window <= 0:
+            raise ValueError("analytics_ingest_max_events_per_window must be positive")
+        if self.analytics_payload_max_entries <= 0:
+            raise ValueError("analytics_payload_max_entries must be positive")
+        if self.analytics_payload_max_value_length <= 0:
+            raise ValueError("analytics_payload_max_value_length must be positive")
+        return self
+
+    @model_validator(mode="after")
     def validate_billing_callback_configuration(self) -> "Settings":
         from stoa.services.billing_callback_service import BillingWebOriginPolicy
 
@@ -337,6 +351,21 @@ class Settings(BaseSettings):
 
     # Legacy fallback for code paths that do not yet resolve plan entitlements.
     daily_hint_limit: int = 30
+
+    # Reverse-proxy topology, declared rather than assumed. 0 means the handler is
+    # reached straight from API Gateway, which rewrites the peer address to the real
+    # client, so every forwarding header stays caller-controlled noise. Putting a CDN
+    # or proxy in front without raising this collapses every per-source rate bucket
+    # into one shared bucket, and nothing else in the system would notice.
+    trusted_proxy_hops: int = 0
+
+    # Public analytics ingestion. Unauthenticated writes are capped per source per
+    # window; the default leaves room for a shared NAT egress while still bounding
+    # one host to a fixed write rate.
+    analytics_ingest_window_seconds: int = 60
+    analytics_ingest_max_events_per_window: int = 600
+    analytics_payload_max_entries: int = 32
+    analytics_payload_max_value_length: int = 256
 
     # SQS
     teacher_queue_url: str = ""
