@@ -797,3 +797,36 @@ def test_分支结果版本认得表里存回来的数():
         # Lease and digest races are this function's own business; the stored
         # version is what this test is about and it got past it.
         pass
+
+
+def test_练习分支不碰账号自己的生命周期行():
+    """Carrying the student's id does not make a row practice data.
+
+    The profile carries `user_id`, and an ownership attribute alone was enough
+    for this branch, so it reached the profile and wrote a practice tombstone
+    over it. That tombstone does not give the address back -- only the deletion
+    repository's does -- so after a real deletion the pair stayed claimed and
+    could never be opened again. Measured on the live table: the profile came
+    back as `practice_deletion_tombstone` and the claim was still there.
+    """
+    from stoa.db.repositories import practice_repo
+
+    owner = "student-1"
+    lifecycle_rows = [
+        {"PK": f"USER#{owner}", "SK": "PROFILE", "user_id": owner, "email": "a@b.ch"},
+        {"PK": f"USER#{owner}", "SK": "ACCOUNT_FENCE", "user_id": owner},
+        {"PK": f"USER#{owner}", "SK": "DELETE_COMMAND#c1", "user_id": owner},
+        {"PK": f"USER#{owner}", "SK": "IDENTITY#issuer#subject", "user_id": owner},
+    ]
+    for row in lifecycle_rows:
+        assert practice_repo._practice_owned(row, owner) is False, row["SK"]
+
+    # The negative control: the rows it does own are still owned.
+    practice_rows = [
+        {"PK": f"PROGRESS#{owner}", "SK": "TOPIC#x"},
+        {"PK": f"ATTEMPTS#{owner}", "SK": "ATTEMPT#1"},
+        {"PK": f"USAGE#{owner}", "SK": "DAY#2026-09-21"},
+        {"PK": "PRACTICE_ATTEMPT#a1", "SK": "META", "student_id": owner},
+    ]
+    for row in practice_rows:
+        assert practice_repo._practice_owned(row, owner) is True, row["PK"]

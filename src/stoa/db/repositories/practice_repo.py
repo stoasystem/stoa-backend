@@ -789,12 +789,17 @@ def _practice_cursor(value: Mapping[str, Any] | None) -> dict[str, str]:
 
 
 def _practice_owned(item: Mapping[str, Any], owner_id: str) -> bool:
+    """Whether this row is one of the student's practice rows.
+
+    Carrying the student's id does not make a row practice data. The account's
+    own profile carries `user_id`, and an ownership attribute on its own was
+    enough here, so this branch reached the profile and replaced it with a
+    practice tombstone of its own making -- which does not give the address
+    back, because only the deletion repository's tombstone knows how to. Every
+    deleted address stayed claimed, and the pair could never be opened again.
+    """
     pk = str(item.get("PK") or "")
-    return owner_id in {
-        item.get("student_id"),
-        item.get("user_id"),
-        item.get("owner_id"),
-    } or pk in {
+    if pk in {
         f"PROGRESS#{owner_id}",
         f"ATTEMPTS#{owner_id}",
         f"MISTAKES#{owner_id}",
@@ -802,7 +807,15 @@ def _practice_owned(item: Mapping[str, Any], owner_id: str) -> bool:
         f"ACTIVITY#{owner_id}",
         f"USAGE#{owner_id}",
         f"USAGE_LEDGER#{owner_id}",
-    }
+    }:
+        return True
+    if owner_id not in {
+        item.get("student_id"),
+        item.get("user_id"),
+        item.get("owner_id"),
+    }:
+        return False
+    return pk.startswith(("PRACTICE#", "PRACTICE_ATTEMPT#", "PRACTICE_PROGRESS#"))
 
 
 STUDY_DAY_PREFIX = "DAY#"
