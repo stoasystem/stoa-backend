@@ -247,3 +247,12 @@ def test_每个声明出来的lambda都会被后端部署更新():
             updated.update(name.removeprefix("stoa-") for name in names.split())
 
     assert declared <= updated, sorted(declared - updated)
+
+    # And the deploy role has to be allowed to update them. Three lists name
+    # the same functions -- the constructs, the workflow, and this policy --
+    # and the one that was forgotten only spoke up at deploy time.
+    granted = set(
+        re.findall(r"self\.([a-z_]+)_function\.function_arn", source)
+    )
+    constructs = set(re.findall(r"self\.([a-z_]+)_function = lambda_\.Function", source))
+    assert constructs <= granted, sorted(constructs - granted)
