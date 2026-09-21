@@ -218,3 +218,32 @@ def test_销户的续做job真的被部署并有定时驱动():
         if keyword.arg == "target"
     }
     assert any("account_deletion_production_alias" in target for target in targets), targets
+
+
+def test_每个声明出来的lambda都会被后端部署更新():
+    """A function nobody updates runs whatever it was born with.
+
+    `stoa-account-deletion` was declared in the CDK, deployed by the infra
+    pipeline, and left out of the list the backend deploy walks. So every
+    backend push updated the API and left the deletion job on the code it was
+    created with -- the fixes that make deletion advance went out and never
+    reached the thing that does the advancing.
+    """
+    import re
+
+    source = _api_stack_source()
+    declared = set(
+        re.findall(r'function_name=f"\{resource_prefix\}-([a-z0-9-]+)"', source)
+    )
+    assert declared, "no Lambda function names found in the CDK source"
+
+    workflow = (
+        BACKEND_ROOT / ".github" / "workflows" / "deploy-production.yml"
+    ).read_text(encoding="utf-8")
+    updated = set()
+    for line in workflow.splitlines():
+        if "for function_name in" in line:
+            names = line.split("for function_name in", 1)[1].split(";")[0]
+            updated.update(name.removeprefix("stoa-") for name in names.split())
+
+    assert declared <= updated, sorted(declared - updated)
