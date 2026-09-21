@@ -6,6 +6,7 @@ import logging
 
 from copy import deepcopy
 from dataclasses import dataclass
+from decimal import Decimal
 from datetime import datetime
 from hashlib import sha256
 import json
@@ -113,6 +114,23 @@ def _valid_lifecycle_timestamp(value: object) -> str:
     return value
 
 
+def _canonical_number(value: object) -> object:
+    """A stored number written the way it was before the table returned it.
+
+    The digest is computed on the way in from `int`, and checked on the way
+    back out against `Decimal`, which `json.dumps` refuses outright. So the
+    check could never pass against a real table: every continuation raised
+    "invalid deletion branch results" and no deletion ever advanced past the
+    pass the request itself made. Rendering a whole Decimal as the `int` it was
+    reproduces the digest that was stored.
+    """
+    if isinstance(value, Decimal):
+        if value.is_finite() and value == value.to_integral_value():
+            return int(value)
+        return float(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
 def branch_results_digest(results: Mapping[str, Any]) -> str:
     if not isinstance(results, Mapping):
         raise AccountDeletionConflict("invalid deletion branch results")
@@ -122,6 +140,7 @@ def branch_results_digest(results: Mapping[str, Any]) -> str:
             ensure_ascii=False,
             separators=(",", ":"),
             sort_keys=True,
+            default=_canonical_number,
         ).encode("utf-8")
     except (TypeError, ValueError) as exc:
         raise AccountDeletionConflict("invalid deletion branch results") from exc

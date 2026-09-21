@@ -31,6 +31,7 @@ def run_pending_deletions(
     commands: list[dict[str, Any]] = []
     cursor: dict[str, str] | None = None
     seen_cursors: set[tuple[str, str]] = set()
+    unfinished = False
     if repository is account_deletion_repo or callable(scan):
         pages = 0
         while len(commands) < limit and pages < 100:
@@ -60,18 +61,22 @@ def run_pending_deletions(
                     for field in ("PK", "SK")
                 )
             ):
-                return DeletionJobSummary(
-                    discovered=len(commands), retryable=1
-                )
+                unfinished = True
+                break
             identity = (next_cursor["PK"], next_cursor["SK"])
             if identity in seen_cursors:
-                return DeletionJobSummary(
-                    discovered=len(commands), retryable=1
-                )
+                unfinished = True
+                break
             seen_cursors.add(identity)
             cursor = next_cursor
+        # Running out of scan budget is not the same as having nothing to do.
+        # `Limit` is applied before the filter, so a page reads that many rows
+        # and yields the deletion commands among them - on a table of any size
+        # the budget runs out long before twenty-five of them are found. This
+        # returned early and threw the commands it had already found away, so
+        # every deletion stopped after the one pass the request itself did.
         if len(commands) < limit and cursor is not None and pages >= 100:
-            return DeletionJobSummary(discovered=len(commands), retryable=1)
+            unfinished = True
     else:
         return DeletionJobSummary(retryable=1)
     worker = (service_factory or (lambda: AccountDeletionService()))()
@@ -101,7 +106,10 @@ def run_pending_deletions(
             continued += 1
         except Exception:
             retryable += 1
-    return DeletionJobSummary(len(commands), claimed, continued, retryable)
+    # A sweep that stopped short says so, so the next run knows to come back.
+    return DeletionJobSummary(
+        len(commands), claimed, continued, retryable + (1 if unfinished else 0)
+    )
 
 
 async def continue_deletion_command(

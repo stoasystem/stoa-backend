@@ -693,3 +693,40 @@ def test_base_scan_discovers_embedded_parent_profile_child_summary() -> None:
     assert [(item["PK"], item["SK"]) for item in page.items] == [
         ("USER#parent-1", "PROFILE")
     ]
+
+
+def test_分支摘要对存储回来的数与写进去的数算出同一个值():
+    """The digest is written from `int` and checked against what the table gives back.
+
+    DynamoDB gives back `Decimal`, `json.dumps` refuses it outright, and the
+    refusal was wrapped as "invalid deletion branch results". So on a real
+    table the check could never pass: every continuation raised, and no
+    deletion advanced past the single pass the request itself made. The stored
+    digests were computed from ints, so a whole Decimal has to render as one.
+    """
+    from decimal import Decimal
+
+    repository, _service, _job = _deletion_modules()
+
+    written = repository.branch_results_digest(
+        {"account_profile": {"epoch": 2, "processed": 0, "status": "complete"}}
+    )
+    read_back = repository.branch_results_digest(
+        {
+            "account_profile": {
+                "epoch": Decimal("2"),
+                "processed": Decimal("0"),
+                "status": "complete",
+            }
+        }
+    )
+
+    assert written == read_back
+
+
+def test_分支摘要仍然拒绝它不认识的东西():
+    """The negative control: a serializer that accepts anything checks nothing."""
+    repository, _service, _job = _deletion_modules()
+
+    with pytest.raises(repository.AccountDeletionConflict):
+        repository.branch_results_digest({"account_profile": {"when": object()}})
