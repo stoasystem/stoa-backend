@@ -730,3 +730,70 @@ def test_分支摘要仍然拒绝它不认识的东西():
 
     with pytest.raises(repository.AccountDeletionConflict):
         repository.branch_results_digest({"account_profile": {"when": object()}})
+
+
+def test_分支结果版本认得表里存回来的数():
+    """One more `int` check on a value the table returns as `Decimal`.
+
+    It refused every branch result a real table had ever stored, so a claim
+    could be taken and then never persisted: the command's version climbed on
+    every run while no branch ever advanced. The digest and lease checks ahead
+    of it are exercised elsewhere; what this pins is that a stored version is
+    not the thing that stops it.
+    """
+    from decimal import Decimal
+
+    repository, _service, _job = _deletion_modules()
+    stored = {"account_profile": {"result_version": Decimal("2")}}
+    digest = repository.branch_results_digest(stored)
+
+    class _Table:
+        def get_item(self, *, Key, **_kwargs):
+            return {
+                "Item": {
+                    "PK": Key["PK"],
+                    "SK": Key["SK"],
+                    "command_id": "command-1",
+                    "generation": Decimal("1"),
+                    "version": Decimal("3"),
+                    "command_version": Decimal("3"),
+                    "lease_owner": "owner-1",
+                    "lease_expires_at": Decimal("2000000000"),
+                    "branch_results": dict(stored),
+                }
+            }
+
+        def update_item(self, **_kwargs):
+            return {"Attributes": {}}
+
+    claim = repository.DeletionCommandClaim(
+        command_id="command-1",
+        generation=1,
+        lease_owner="owner-1",
+        lease_expires_at=2_000_000_000,
+        command_version=3,
+        branch_results_digest=digest,
+    )
+
+    try:
+        repository.persist_branch_result(
+            {
+                "PK": "USER#someone",
+                "SK": "DELETE_COMMAND#command-1",
+                "user_id": "someone",
+                "branch_results": dict(stored),
+            },
+            "account_profile",
+            {"status": "retryable", "updated_at": "2026-09-21T03:00:00+00:00"},
+            claim=claim,
+            expected_branch_results_digest=digest,
+            expected_result_version=2,
+            now_epoch=1_000_000_000,
+            table=_Table(),
+        )
+    except repository.AccountDeletionConflict as exc:
+        assert "branch result version" not in str(exc), str(exc)
+    except repository.DeletionCommandClaimLost:
+        # Lease and digest races are this function's own business; the stored
+        # version is what this test is about and it got past it.
+        pass

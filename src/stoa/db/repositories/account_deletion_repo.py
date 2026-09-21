@@ -1730,10 +1730,11 @@ def persist_branch_result(
     previous = current_results.get(branch_id) or {}
     if not isinstance(previous, Mapping):
         raise AccountDeletionConflict("invalid prior branch result")
-    prior_result_version = previous.get("result_version", 0)
-    if isinstance(prior_result_version, bool) or not isinstance(
-        prior_result_version, int
-    ) or prior_result_version < 0:
+    # Read back from the command, so a `Decimal`. An `int` check here refused
+    # every branch result a real table had ever stored, which is the last of
+    # the reasons a deletion could not advance.
+    prior_result_version = stored_int(previous.get("result_version", 0))
+    if prior_result_version is None or prior_result_version < 0:
         raise AccountDeletionConflict("invalid branch result version")
     if expected_result_version is None:
         expected_result_version = prior_result_version
