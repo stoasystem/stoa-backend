@@ -171,3 +171,50 @@ def test_registration_payload_validation_still_runs_before_the_gate(monkeypatch)
 
     assert response.status_code == 422
     assert provider.calls == []
+
+
+def _api_stack_source() -> str:
+    infra_root = BACKEND_ROOT.parent / "stoa-infra"
+    source = infra_root / "stacks" / "api_stack.py"
+    if not source.is_file():
+        pytest.skip("stoa-infra is not checked out next to stoa-backend")
+    return source.read_text(encoding="utf-8")
+
+
+def test_销户的续做job真的被部署并有定时驱动():
+    """Deletion is a sweep, and something has to keep sweeping.
+
+    The API starts one in a background task and the branches page through the
+    table needing two clean passes. With nothing continuing them, a deletion
+    stopped after one lease: the profile stayed live, the address stayed
+    claimed, and the person who asked to be gone was not gone. Nothing in the
+    backend suite could see that, because what was missing was a deployment.
+    """
+    source = _api_stack_source()
+    tree = ast.parse(source)
+
+    handlers = {
+        keyword.value.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        for keyword in node.keywords
+        if keyword.arg == "handler"
+        and isinstance(keyword.value, ast.Constant)
+        and isinstance(keyword.value.value, str)
+    }
+    assert "stoa.jobs.account_deletion.handler" in handlers, sorted(handlers)
+
+    schedules = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "CfnSchedule"
+    ]
+    targets = {
+        ast.get_source_segment(source, keyword.value) or ""
+        for schedule in schedules
+        for keyword in schedule.keywords
+        if keyword.arg == "target"
+    }
+    assert any("account_deletion_production_alias" in target for target in targets), targets
