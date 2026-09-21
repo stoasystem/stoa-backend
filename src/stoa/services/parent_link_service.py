@@ -387,20 +387,32 @@ def _is_active(link: Mapping[str, Any] | None, parent_id: str, student_id: str) 
     )
 
 
-def active_link(parent_id: str, student_id: str) -> LinkItem | None:
-    """Return the link only when both directions are active and both accounts are usable."""
+def active_link(
+    parent_id: str, student_id: str, *, table: object | None = None
+) -> LinkItem | None:
+    """Return the link only when both directions are active and both accounts are usable.
+
+    Every read here takes the table it is given. This function taking the
+    ambient one instead is how `pytest` came to send reads to the live table:
+    the module-level binding in `parent_link_repo` could not be reached from
+    anywhere a test was stubbing, so nothing a test did could stop it.
+    """
     if not parent_id or not student_id:
         return None
-    forward = parent_link_repo.get_parent_side_link(parent_id, student_id)
-    reverse = parent_link_repo.get_student_side_link(student_id, parent_id)
+    forward = parent_link_repo.get_parent_side_link(parent_id, student_id, table=table)
+    reverse = parent_link_repo.get_student_side_link(student_id, parent_id, table=table)
     if not _is_active(forward, parent_id, student_id):
         return None
     if not _is_active(reverse, parent_id, student_id):
         return None
     assert forward is not None
-    if not _usable_account(user_repo.get_user(parent_id), parent_id, ROLE_PARENT):
+    if not _usable_account(
+        user_repo.get_user(parent_id, table=table), parent_id, ROLE_PARENT
+    ):
         return None
-    if not _usable_account(user_repo.get_user(student_id), student_id, ROLE_STUDENT):
+    if not _usable_account(
+        user_repo.get_user(student_id, table=table), student_id, ROLE_STUDENT
+    ):
         return None
     return parent_link_repo.link_fields(forward)
 

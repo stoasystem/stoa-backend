@@ -210,7 +210,7 @@ def test_effective_entitlement_projects_trial_without_removing_read_access(
         free_trial_expires_at=EXPIRY.isoformat(),
         free_trial_schema_version="free-trial.v1",
     )
-    monkeypatch.setattr(entitlement_service.user_repo, "get_user", lambda user_id: profile)
+    monkeypatch.setattr(entitlement_service.user_repo, "get_user", lambda user_id, **_kwargs: profile)
     monkeypatch.setattr(entitlement_service, "_get_payment_rollout_item", lambda: None)
     monkeypatch.setattr(
         entitlement_service.free_trial_service,

@@ -338,7 +338,7 @@ def test_teacher_note_accepts_rich_teacher_reply_payload(monkeypatch):
             "escalated_at": "2026-06-08T08:00:00+00:00",
         },
     )
-    monkeypatch.setattr(teachers.user_repo, "get_user", lambda user_id: {"name": "Teacher One"})
+    monkeypatch.setattr(teachers.user_repo, "get_user", lambda user_id, **_kwargs: {"name": "Teacher One"})
 
     client = _app(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"})
     response = client.post(

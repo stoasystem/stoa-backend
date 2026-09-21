@@ -91,7 +91,7 @@ def _install_active_relationships(
     monkeypatch.setattr(
         paid_entitlement_service.user_repo,
         "get_user",
-        lambda user_id: deepcopy(profiles.get(user_id)),
+        lambda user_id, **_kwargs: deepcopy(profiles.get(user_id)),
     )
 
     def forward(parent_id: str, student_id: str) -> dict[str, object] | None:
@@ -458,7 +458,7 @@ def test_entitlement_resolver_uses_exact_grant_not_parent_plan_inference(
     monkeypatch.setattr(
         entitlement_service.user_repo,
         "get_user",
-        lambda user_id: parent if user_id == "parent-1" else student,
+        lambda user_id, **_kwargs: parent if user_id == "parent-1" else student,
     )
     monkeypatch.setattr(
         entitlement_service,

@@ -47,7 +47,7 @@ def _profile_and_entitlement(monkeypatch) -> None:
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda _student_id: {
+        lambda _student_id, **_kwargs: {
             "user_id": "student-1",
             "subscription_tier": "free_trial",
             "grade": "Sek1",

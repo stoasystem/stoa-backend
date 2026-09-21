@@ -50,7 +50,7 @@ def test_auth_me_exposes_effective_locale_from_profile(monkeypatch):
     monkeypatch.setattr(
         auth.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "email": "student@example.com",
             "name": "Ada",
@@ -73,7 +73,7 @@ def test_auth_me_defaults_missing_locale_for_existing_clients(monkeypatch):
     monkeypatch.setattr(
         auth.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "email": "student@example.com",
             "name": "Ada",
@@ -92,7 +92,7 @@ def test_update_locale_preference_persists_supported_locale(monkeypatch):
     monkeypatch.setattr(
         auth.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "email": "student@example.com",
             "name": "Ada",
@@ -128,7 +128,7 @@ def test_update_locale_preference_persists_newly_supported_locale(monkeypatch):
     monkeypatch.setattr(
         auth.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "email": "student@example.com",
             "name": "Ada",
@@ -161,7 +161,7 @@ def test_update_locale_preference_rejects_unsupported_locale(monkeypatch):
     monkeypatch.setattr(
         auth.user_repo,
         "get_user",
-        lambda user_id: {"user_id": user_id, "email": "student@example.com", "role": "student"},
+        lambda user_id, **_kwargs: {"user_id": user_id, "email": "student@example.com", "role": "student"},
     )
 
     response = _client().patch("/auth/me/preferences/locale", json={"preferredLocale": "es"})

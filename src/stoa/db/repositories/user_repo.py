@@ -237,10 +237,16 @@ def put_user_with_email_claim(
     )
 
 
-def get_user(user_id: str) -> UserItem | None:
-    table = get_table()
+def get_user(user_id: str, *, table: object | None = None) -> UserItem | None:
+    """One profile, optionally from a table the caller supplies.
+
+    The injection is what lets a caller be tested without reaching the real
+    one. Without it, a service that reads a profile takes the ambient table
+    however it is called, which is how the suite ended up sending reads to the
+    live table for weeks without anyone noticing.
+    """
     resp = _get_item(
-        table,
+        table or get_table(),
         Key={"PK": f"USER#{user_id}", "SK": "PROFILE"},
         ConsistentRead=True,
     )

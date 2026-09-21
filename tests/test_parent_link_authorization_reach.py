@@ -96,7 +96,7 @@ def table(
     """Link table only: the legacy binding key space stays deliberately empty."""
     fake = FakeLinkTable()
     monkeypatch.setattr(parent_link_repo, "get_table", lambda: fake)
-    monkeypatch.setattr(user_repo, "get_user", lambda user_id: deepcopy(accounts.get(user_id)))
+    monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(accounts.get(user_id)))
     monkeypatch.setattr(
         user_repo, "get_parent_student_binding", lambda _parent_id, _student_id: None
     )
@@ -304,3 +304,55 @@ def test_链接表连不上时四条受影响的路由都不返回500(monkeypatc
 
     with pytest.raises(RuntimeError):
         parent_link_service.active_children("parent-a")
+
+
+def test_传进来的表才是它读的那张表(monkeypatch):
+    """The injection has to be used, not merely accepted.
+
+    `parent_link_repo` binds `get_table` at module level, so a stub installed
+    anywhere else cannot reach it. That is how `pytest` came to send reads to
+    the live table: nothing a test did could stop this function, and the only
+    fix available was a fixture that replaced the binding by name. A table
+    passed in is now the table every read here uses, and the ambient one is
+    not touched at all.
+    """
+    from stoa.db.dynamodb import get_table as ambient_get_table
+    from stoa.db.repositories import parent_link_repo, user_repo
+    from stoa.services import parent_link_service
+
+    reads: list[tuple[str, str]] = []
+    rows = {
+        ("PARENT#p1", "CHILD#s1"): {
+            "PK": "PARENT#p1", "SK": "CHILD#s1", "parent_id": "p1",
+            "student_id": "s1", "status": "active", "relationship": "child",
+        },
+        ("STUDENT#s1", "PARENT#p1"): {
+            "PK": "STUDENT#s1", "SK": "PARENT#p1", "parent_id": "p1",
+            "student_id": "s1", "status": "active", "relationship": "child",
+        },
+        ("USER#p1", "PROFILE"): {
+            "user_id": "p1", "role": "parent", "account_status": "active",
+        },
+        ("USER#s1", "PROFILE"): {
+            "user_id": "s1", "role": "student", "account_status": "active",
+        },
+    }
+
+    class _Injected:
+        def get_item(self, *, Key, **_kwargs):
+            reads.append((Key["PK"], Key["SK"]))
+            row = rows.get((Key["PK"], Key["SK"]))
+            return {"Item": dict(row)} if row else {}
+
+    def _refuse(*_args, **_kwargs):
+        raise AssertionError("the ambient table was reached")
+
+    monkeypatch.setattr(parent_link_repo, "get_table", _refuse)
+    monkeypatch.setattr(user_repo, "get_table", _refuse)
+
+    link = parent_link_service.active_link("p1", "s1", table=_Injected())
+
+    assert link is not None
+    assert ("USER#p1", "PROFILE") in reads and ("USER#s1", "PROFILE") in reads
+    assert ("PARENT#p1", "CHILD#s1") in reads
+    assert callable(ambient_get_table)

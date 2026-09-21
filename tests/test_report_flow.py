@@ -141,7 +141,7 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
     monkeypatch.setattr(
         report_service.user_repo,
         "get_user",
-        lambda user_id: {"user_id": user_id, "email": "parent@example.com", "name": "Parent One"},
+        lambda user_id, **_kwargs: {"user_id": user_id, "email": "parent@example.com", "name": "Parent One"},
     )
 
     question_pages = [

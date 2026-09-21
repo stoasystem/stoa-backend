@@ -245,7 +245,7 @@ def _patch_question_submit_dependencies(monkeypatch) -> None:
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "subscription_tier": "free_trial",
             "grade": "Sek1",
@@ -286,7 +286,7 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "subscription_tier": "free_trial",
             "grade": "Sek1",
@@ -368,7 +368,7 @@ def test_submit_question_appends_ocr_text_when_no_correction(monkeypatch):
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "subscription_tier": "free_trial",
             "grade": "Sek1",
@@ -595,7 +595,7 @@ def test_submit_question_records_privacy_safe_usage_ledger_event(monkeypatch):
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "subscription_tier": "free_trial",
             "grade": "Sek1",
@@ -660,7 +660,7 @@ def test_submit_question_idempotent_retry_without_question_does_not_increment_co
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "subscription_tier": "free_trial",
             "grade": "Sek1",
@@ -717,7 +717,7 @@ def test_submit_question_rejects_mismatched_idempotent_retry_without_counter(mon
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "subscription_tier": "free_trial",
             "grade": "Sek1",
@@ -972,7 +972,7 @@ def test_idempotency_key_cannot_be_rebound_to_another_attachment(monkeypatch):
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "subscription_tier": "free_trial",
             "grade": "Sek1",
@@ -1123,7 +1123,7 @@ def test_submit_question_precommit_failure_has_no_legacy_partial_writes(
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "subscription_tier": "free_trial",
             "grade": "Sek1",
@@ -1256,7 +1256,7 @@ def test_bound_parent_and_current_task_teacher_question_positive_controls(monkey
     monkeypatch.setattr(questions.question_repo, "get_question", lambda *_: item)
     monkeypatch.setattr(questions.question_repo, "get_teacher_session", lambda *_: None)
     monkeypatch.setattr(questions.question_repo, "get_teacher_assignment", lambda *_: None)
-    monkeypatch.setattr(questions.user_repo, "get_user", lambda user_id: accounts.get(user_id))
+    monkeypatch.setattr(questions.user_repo, "get_user", lambda user_id, **_kwargs: accounts.get(user_id))
     monkeypatch.setattr(questions.user_repo, "get_parent_student_binding", lambda *_: row)
     monkeypatch.setattr(questions.user_repo, "get_student_parent_binding", lambda *_: dict(row))
     parent = _client(actor=_actor(CanonicalRole.PARENT, "parent-1")).get("/questions/question-1")

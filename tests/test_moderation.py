@@ -88,7 +88,7 @@ def _stub_teacher_authorization_facts(monkeypatch):
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "role": "teacher" if user_id.startswith("teacher") else "student",
             "account_status": "active",

@@ -254,7 +254,7 @@ def world(monkeypatch: pytest.MonkeyPatch) -> LinkWorld:
     built = LinkWorld(FakeLinkTable())
     monkeypatch.setattr(parent_link_repo, "get_table", lambda: built.table)
     monkeypatch.setattr(
-        user_repo, "get_user", lambda user_id: deepcopy(built.accounts.get(user_id))
+        user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(built.accounts.get(user_id))
     )
     monkeypatch.setattr(user_repo, "list_parent_student_bindings", lambda _p: [])
     monkeypatch.setattr(

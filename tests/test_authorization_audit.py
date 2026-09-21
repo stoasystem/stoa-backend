@@ -490,7 +490,7 @@ def _generated_student_app(monkeypatch, *, sink, facts):
     monkeypatch.setattr(
         user_repo,
         "get_user",
-        lambda user_id: {"user_id": user_id, "role": "student", "account_status": "active"},
+        lambda user_id, **_kwargs: {"user_id": user_id, "role": "student", "account_status": "active"},
     )
     effects = []
     app = FastAPI()

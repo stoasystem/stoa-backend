@@ -468,7 +468,7 @@ def _patch_runtime(monkeypatch, table: EffectRecoveryTable) -> None:
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda _student_id: {
+        lambda _student_id, **_kwargs: {
             "user_id": STUDENT_ID,
             "subscription_tier": "free_trial",
             "grade": "Sek1",

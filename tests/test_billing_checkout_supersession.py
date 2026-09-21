@@ -417,7 +417,7 @@ def _install_active_scope(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         subscription_service.user_repo,
         "get_user",
-        lambda user_id: profiles.get(user_id),
+        lambda user_id, **_kwargs: profiles.get(user_id),
     )
     binding = {
         "parent_id": PARENT_ID,

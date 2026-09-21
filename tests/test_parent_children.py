@@ -223,7 +223,7 @@ def _generated_report(student_id: str = "child-1", status: str = "email_sent") -
 
 def legacy_resolve_parent_profile_direct_lookup(monkeypatch):
     profile = {"user_id": "parent-local", "email": "p@example.com", "role": "parent"}
-    monkeypatch.setattr(parents.user_repo, "get_user", lambda user_id: profile)
+    monkeypatch.setattr(parents.user_repo, "get_user", lambda user_id, **_kwargs: profile)
 
     def fail_get_user_by_email(email):
         raise AssertionError("email fallback should not run")
@@ -243,7 +243,7 @@ def legacy_resolve_parent_profile_direct_lookup(monkeypatch):
 
 def legacy_resolve_parent_profile_cognito_email_fallback(monkeypatch):
     profile = {"user_id": "parent-local", "email": "p@example.com", "role": "parent"}
-    monkeypatch.setattr(parents.user_repo, "get_user", lambda user_id: None)
+    monkeypatch.setattr(parents.user_repo, "get_user", lambda user_id, **_kwargs: None)
     monkeypatch.setattr(parents.user_repo, "get_user_by_email", lambda email: profile)
 
     class FakeCognito:
@@ -266,7 +266,7 @@ def legacy_resolve_parent_profile_cognito_email_fallback(monkeypatch):
 
 def legacy_resolve_parent_profile_non_parent_raises_403(monkeypatch):
     profile = {"user_id": "student-local", "email": "s@example.com", "role": "student"}
-    monkeypatch.setattr(parents.user_repo, "get_user", lambda user_id: profile)
+    monkeypatch.setattr(parents.user_repo, "get_user", lambda user_id, **_kwargs: profile)
 
     with pytest.raises(parents.HTTPException) as exc:
         parents._resolve_parent_profile(
@@ -318,7 +318,7 @@ def legacy_list_children_for_parent_uses_formal_bindings(monkeypatch):
     monkeypatch.setattr(
         parents.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "role": "student",
             "name": "Anna Keller",
@@ -605,7 +605,7 @@ def test_parent_children_list_ignores_legacy_profile_parent_id(monkeypatch):
     monkeypatch.setattr(
         parents.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "role": "student",
             "account_status": "active",

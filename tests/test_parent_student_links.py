@@ -144,7 +144,7 @@ ACCOUNTS = {
 def table(monkeypatch: pytest.MonkeyPatch) -> FakeLinkTable:
     fake = FakeLinkTable()
     monkeypatch.setattr(parent_link_repo, "get_table", lambda: fake)
-    monkeypatch.setattr(user_repo, "get_user", lambda user_id: deepcopy(ACCOUNTS.get(user_id)))
+    monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(ACCOUNTS.get(user_id)))
     monkeypatch.setattr(user_repo, "list_parent_student_bindings", lambda _parent_id: [])
     monkeypatch.setattr(
         user_repo, "get_parent_student_binding", lambda _parent_id, _student_id: None
@@ -320,7 +320,7 @@ def test_child_list_holds_exactly_the_active_links(table: FakeLinkTable) -> None
 def test_failed_second_write_leaves_no_half_link(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = FakeLinkTable(refuse_prefix="STUDENT#")
     monkeypatch.setattr(parent_link_repo, "get_table", lambda: fake)
-    monkeypatch.setattr(user_repo, "get_user", lambda user_id: deepcopy(ACCOUNTS.get(user_id)))
+    monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(ACCOUNTS.get(user_id)))
 
     with pytest.raises(parent_link_repo.ParentLinkConflict):
         parent_link_service.assign_link(
@@ -334,7 +334,7 @@ def test_failed_second_write_leaves_no_half_link(monkeypatch: pytest.MonkeyPatch
 def test_failed_second_write_leaves_no_half_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = FakeLinkTable()
     monkeypatch.setattr(parent_link_repo, "get_table", lambda: fake)
-    monkeypatch.setattr(user_repo, "get_user", lambda user_id: deepcopy(ACCOUNTS.get(user_id)))
+    monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(ACCOUNTS.get(user_id)))
     parent_link_service.request_link(
         requester_id="parent-a", counterpart_id="student-b", now=NOW
     )

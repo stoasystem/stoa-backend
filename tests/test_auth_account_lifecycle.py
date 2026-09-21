@@ -783,7 +783,7 @@ def test_admin_can_inspect_account_verification_status(monkeypatch):
     monkeypatch.setattr(
         admin.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "role": "student",
             "email": "student@example.com",
@@ -849,7 +849,7 @@ def test_admin_can_inspect_and_repair_parent_binding(monkeypatch):
     monkeypatch.setattr(
         admin.user_repo,
         "get_user",
-        lambda user_id: profiles.get(user_id),
+        lambda user_id, **_kwargs: profiles.get(user_id),
     )
     monkeypatch.setattr(
         admin.user_repo,

@@ -128,7 +128,7 @@ def grants(monkeypatch: pytest.MonkeyPatch) -> dict[str, dict[str, object]]:
     monkeypatch.setattr(
         teacher_support_allowance_service.user_repo,
         "get_user",
-        lambda student_id: {
+        lambda student_id, **_kwargs: {
             "user_id": student_id,
             "role": "student",
             "account_status": "active",

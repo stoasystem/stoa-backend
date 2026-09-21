@@ -86,7 +86,7 @@ def test_teacher_availability_get_and_patch_persist_profile_fields(monkeypatch):
     monkeypatch.setattr(
         teachers.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "role": "teacher",
             "subjects": ["Mathematics"],

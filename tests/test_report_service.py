@@ -114,7 +114,7 @@ def patch_sources(monkeypatch, *, children=None, questions=None, progress=None, 
     monkeypatch.setattr(
         report_service.user_repo,
         "get_user",
-        lambda user_id: {"user_id": user_id, "email": f"{user_id}@example.com", "name": "Parent"},
+        lambda user_id, **_kwargs: {"user_id": user_id, "email": f"{user_id}@example.com", "name": "Parent"},
     )
     monkeypatch.setattr(
         report_service.question_repo,

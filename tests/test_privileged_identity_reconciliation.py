@@ -698,7 +698,7 @@ def test_duplicate_grant_id_lineages_revoke_replay_restore_and_regrant_safely(
     monkeypatch.setattr(
         privileged_identity_service.user_repo,
         "get_user",
-        lambda user_id: dict(profiles[user_id]),
+        lambda user_id, **_kwargs: dict(profiles[user_id]),
     )
     monkeypatch.setattr(
         privileged_identity_service.user_repo,

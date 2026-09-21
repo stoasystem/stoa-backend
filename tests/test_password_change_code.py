@@ -437,7 +437,7 @@ def password_change_client(monkeypatch):
     monkeypatch.setattr(
         auth.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "email": "learner@example.com",
             "role": "student",
@@ -625,7 +625,7 @@ def test_the_endpoint_mails_in_the_language_stored_on_the_account(
     monkeypatch.setattr(
         auth.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "email": "learner@example.com",
             "role": "student",

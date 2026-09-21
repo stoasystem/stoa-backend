@@ -253,7 +253,7 @@ def test_curriculum_progress_uses_existing_practice_records(monkeypatch):
     monkeypatch.setattr(
         route_authorization.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "role": "student",
             "account_status": "active",

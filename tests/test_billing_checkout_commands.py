@@ -81,7 +81,7 @@ def _install_active_binding(monkeypatch, *, student_id: str = STUDENT_ID) -> Non
     monkeypatch.setattr(
         subscription_service.user_repo,
         "get_user",
-        lambda user_id: profiles.get(user_id),
+        lambda user_id, **_kwargs: profiles.get(user_id),
     )
     monkeypatch.setattr(
         subscription_service.user_repo,
@@ -430,7 +430,7 @@ def test_invalid_inactive_or_unbound_beneficiary_never_reaches_provider(
     monkeypatch.setattr(
         subscription_service.user_repo,
         "get_user",
-        lambda user_id: profiles.get(user_id),
+        lambda user_id, **_kwargs: profiles.get(user_id),
     )
     monkeypatch.setattr(
         subscription_service.user_repo,

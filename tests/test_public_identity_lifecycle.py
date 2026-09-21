@@ -154,7 +154,7 @@ async def test_register_confirm_converges_one_subject_bound_actor(monkeypatch, r
     monkeypatch.setattr(
         public_identity_service.user_repo,
         "get_user",
-        lambda user_id: dict(profiles[user_id]) if user_id in profiles else None,
+        lambda user_id, **_kwargs: dict(profiles[user_id]) if user_id in profiles else None,
     )
     monkeypatch.setattr(
         public_identity_service.user_repo,
@@ -306,7 +306,7 @@ def test_registration_resume_rejects_fingerprint_changes_before_mutation(
     monkeypatch.setattr(
         public_identity_service.user_repo,
         "get_user",
-        lambda _user_id: (_ for _ in ()).throw(AssertionError("profile read before proof")),
+        lambda _user_id, **_kwargs: (_ for _ in ()).throw(AssertionError("profile read before proof")),
     )
     mutations = []
 

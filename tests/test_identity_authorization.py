@@ -505,7 +505,7 @@ def test_routine_admin_lifecycle_requires_manager_and_revokes_locally_first(monk
     monkeypatch.setattr(
         privileged_identity_service.user_repo,
         "get_user",
-        lambda user_id: dict(profiles[user_id]) if user_id in profiles else None,
+        lambda user_id, **_kwargs: dict(profiles[user_id]) if user_id in profiles else None,
     )
     monkeypatch.setattr(
         privileged_identity_service.identity_repo,

@@ -61,7 +61,7 @@ def test_submit_question_accepts_foundation_subject_and_stores_topic_seeds(monke
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {"user_id": user_id, "subscription_tier": "free_trial", "grade": "Grade 8", "language": "en"},
+        lambda user_id, **_kwargs: {"user_id": user_id, "subscription_tier": "free_trial", "grade": "Grade 8", "language": "en"},
     )
     monkeypatch.setattr(
         questions.question_submission_repo,
@@ -298,7 +298,7 @@ def test_learning_profile_aggregates_subject_activity_and_topic_seeds(monkeypatc
     monkeypatch.setattr(
         questions.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "role": "student",
             "account_status": "active",
@@ -324,7 +324,7 @@ def test_parent_child_learning_profile_requires_owned_child(monkeypatch):
     monkeypatch.setattr(
         parents.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "role": "student",
             "account_status": "active",

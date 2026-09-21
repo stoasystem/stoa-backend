@@ -293,7 +293,7 @@ def test_reconciliation_reports_and_repairs_counter_mismatch(monkeypatch):
 def test_reconciliation_explains_no_usage_without_marking_unreconciled(monkeypatch):
     table = FakeTable()
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
-    monkeypatch.setattr(usage_ledger_service.user_repo, "get_user", lambda user_id: {"user_id": user_id})
+    monkeypatch.setattr(usage_ledger_service.user_repo, "get_user", lambda user_id, **_kwargs: {"user_id": user_id})
     monkeypatch.setattr(
         usage_ledger_service.entitlement_service,
         "resolve_student_entitlement",
@@ -323,7 +323,7 @@ def test_reconciliation_explains_no_usage_without_marking_unreconciled(monkeypat
 def test_reconciliation_explains_over_limit_counter(monkeypatch):
     table = FakeTable()
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
-    monkeypatch.setattr(usage_ledger_service.user_repo, "get_user", lambda user_id: {"user_id": user_id})
+    monkeypatch.setattr(usage_ledger_service.user_repo, "get_user", lambda user_id, **_kwargs: {"user_id": user_id})
     monkeypatch.setattr(
         usage_ledger_service.entitlement_service,
         "resolve_student_entitlement",
@@ -380,7 +380,7 @@ def test_parent_usage_summaries_use_active_child_bindings(monkeypatch):
         }
     }
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
-    monkeypatch.setattr(usage_ledger_service.user_repo, "get_user", lambda user_id: profiles.get(user_id))
+    monkeypatch.setattr(usage_ledger_service.user_repo, "get_user", lambda user_id, **_kwargs: profiles.get(user_id))
     monkeypatch.setattr(
         usage_ledger_service.user_repo,
         "list_parent_student_bindings",
@@ -425,7 +425,7 @@ def test_parent_usage_summaries_use_active_child_bindings(monkeypatch):
 def test_student_usage_summary_includes_multi_action_groups(monkeypatch):
     table = FakeTable()
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
-    monkeypatch.setattr(usage_ledger_service.user_repo, "get_user", lambda user_id: {"user_id": user_id})
+    monkeypatch.setattr(usage_ledger_service.user_repo, "get_user", lambda user_id, **_kwargs: {"user_id": user_id})
     monkeypatch.setattr(
         usage_ledger_service.entitlement_service,
         "resolve_student_entitlement",
@@ -526,7 +526,7 @@ def test_parent_child_usage_endpoint_is_privacy_safe(monkeypatch):
     monkeypatch.setattr(
         parents.user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "role": "parent" if user_id == "parent-1" else "student",
             "parent_id": "parent-1",

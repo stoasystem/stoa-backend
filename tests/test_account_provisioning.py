@@ -743,7 +743,7 @@ def test_条件写本身拦住第二个编号_即使调用方读到旧快照(
     table.rows[key]["version"] = 1
     stale = deepcopy(table.rows[key])
     stale.pop("account_number")
-    monkeypatch.setattr(user_repo, "get_user", lambda user_id: deepcopy(stale))
+    monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(stale))
 
     with pytest.raises(HTTPException) as exc_info:
         account_provisioning_service._attach_account_number(

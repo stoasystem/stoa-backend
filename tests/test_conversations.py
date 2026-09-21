@@ -73,7 +73,7 @@ def test_teacher_help_status_names_the_teacher_dispatch_actually_bound(monkeypat
         },
     )
     monkeypatch.setattr(
-        conversations.user_repo, "get_user", lambda _id: {"name": "Test Teacher"}
+        conversations.user_repo, "get_user", lambda _id, **_kwargs: {"name": "Test Teacher"}
     )
 
     response = _client(conversations.teacher_help_router, "/teacher-help").get(
@@ -188,7 +188,7 @@ def test_repeat_teacher_help_replays_the_existing_escalation(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        conversations.user_repo, "get_user", lambda _id: {"name": "Test Teacher"}
+        conversations.user_repo, "get_user", lambda _id, **_kwargs: {"name": "Test Teacher"}
     )
 
     response = _client(conversations.teacher_help_router, "/teacher-help").post(
@@ -296,7 +296,7 @@ def test_unrelated_parent_conversation_is_hidden(monkeypatch):
     monkeypatch.setattr(
         user_repo,
         "get_user",
-        lambda user_id: {
+        lambda user_id, **_kwargs: {
             "user_id": user_id,
             "role": "parent" if user_id == "parent-1" else "student",
             "account_status": "active",
@@ -338,7 +338,7 @@ def test_current_linked_teacher_can_read_but_stale_teacher_is_hidden(monkeypatch
     monkeypatch.setattr(question_repo, "get_question", lambda *_: question)
     monkeypatch.setattr(question_repo, "get_teacher_session", lambda *_: None)
     monkeypatch.setattr(question_repo, "get_teacher_assignment", lambda *_: None)
-    monkeypatch.setattr(user_repo, "get_user", lambda user_id: accounts.get(user_id))
+    monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: accounts.get(user_id))
     current = _client(conversations.router, actor=_actor(CanonicalRole.TEACHER, "teacher-1")).get(
         "/conversations/conv-1"
     )
@@ -676,7 +676,7 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
     monkeypatch.setattr(conversations.time, "sleep", lambda *_: threading.Event().wait(0.01))
     monkeypatch.setattr(conversations.boto3, "client", lambda *_args, **_kwargs: object())
-    monkeypatch.setattr(conversations.user_repo, "get_user", lambda _id: {})
+    monkeypatch.setattr(conversations.user_repo, "get_user", lambda _id, **_kwargs: {})
     monkeypatch.setattr(
         conversations.attachment_service,
         "prepare_message_attachments",

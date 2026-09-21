@@ -57,7 +57,7 @@ def _profiles(monkeypatch):
         },
     }
     monkeypatch.setattr(
-        route_authorization.user_repo, "get_user", lambda user_id: profiles.get(user_id)
+        route_authorization.user_repo, "get_user", lambda user_id, **_kwargs: profiles.get(user_id)
     )
     monkeypatch.setattr(
         students.question_repo, "list_by_student", lambda *_args, **_kwargs: {"Items": []}
@@ -224,7 +224,7 @@ def test_admin_role_only_is_known_403_and_outage_precedes_profile_mutation(monke
     monkeypatch.setattr(
         route_authorization.user_repo,
         "get_user",
-        lambda _user_id: (_ for _ in ()).throw(TimeoutError("store canary")),
+        lambda _user_id, **_kwargs: (_ for _ in ()).throw(TimeoutError("store canary")),
     )
     monkeypatch.setattr(
         students.user_repo,
