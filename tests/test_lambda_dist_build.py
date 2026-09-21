@@ -23,6 +23,14 @@ def _load_builder():
 
 def _write_minimal_repo(root: Path) -> None:
     (root / "src" / "stoa" / "jobs").mkdir(parents=True)
+    # The build carries this into the bundle; account deletion reads it before
+    # it does anything, and a repository without it cannot produce a working
+    # package, so neither can a fixture that stands in for one.
+    security = root / "docs" / "security"
+    security.mkdir(parents=True)
+    (security / "phase-473-private-store-inventory.json").write_text(
+        '{"schema_version": "phase-473-private-store-inventory.v1"}\n', encoding="utf-8"
+    )
     (root / "requirements.txt").write_text("fastapi==0.115.0\n", encoding="utf-8")
     (root / "uv.lock").write_text("version = 1\nrevision = 3\n", encoding="utf-8")
     (root / "pyproject.toml").write_text("[project]\nname = 'stoa-backend'\n", encoding="utf-8")

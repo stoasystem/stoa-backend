@@ -21,6 +21,7 @@ import zipfile
 
 
 MANIFEST_NAME = ".stoa-build-manifest.json"
+SECURITY_INVENTORY_NAME = "phase-473-private-store-inventory.json"
 RUNTIME_TARGET = "python3.12"
 PYTHON_VERSION = "3.12"
 PLATFORM = "manylinux_2_28_aarch64"
@@ -413,6 +414,23 @@ def copy_source(repo_root: Path, dist_dir: Path) -> None:
     if destination.exists():
         shutil.rmtree(destination)
     shutil.copytree(source, destination, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"))
+    copy_security_inventory(repo_root, destination)
+
+
+def copy_security_inventory(repo_root: Path, package_dir: Path) -> None:
+    """Carry the sealed inventory into the bundle beside the code that reads it.
+
+    Account deletion loads this before it does anything. Only `.py` files were
+    ever packaged, so every deletion in production failed on a missing file and
+    answered `identity_conflict` -- a message about identity, for a bundle that
+    was missing a document.
+    """
+    inventory = repo_root / "docs" / "security" / SECURITY_INVENTORY_NAME
+    if not inventory.is_file():
+        raise SystemExit(f"missing sealed inventory: {inventory}")
+    target = package_dir / "security_inventory"
+    target.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(inventory, target / SECURITY_INVENTORY_NAME)
 
 
 def write_manifest(repo_root: Path, dist_dir: Path) -> dict[str, Any]:

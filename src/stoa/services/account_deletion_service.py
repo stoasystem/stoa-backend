@@ -153,12 +153,35 @@ class BranchResult:
         return value
 
 
+INVENTORY_FILENAME = "phase-473-private-store-inventory.json"
+
+
 def _default_inventory_path() -> Path:
+    """Where the sealed inventory lives, in the repository and in the bundle.
+
+    The repository path was the only one, and it resolves above the package
+    root - which exists when the tree is checked out and does not when `stoa/`
+    is unpacked at the root of a Lambda. Deletion asks for this seal before it
+    does anything, so every deletion in production answered `identity_conflict`
+    and no test could see it: they all run from the checkout.
+    """
+    candidates = inventory_candidates(Path(__file__).resolve())
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return candidates[0]
+
+
+def inventory_candidates(here: Path) -> tuple[Path, ...]:
+    """Every place the seal is looked for, given this module's own location.
+
+    Taken apart from the lookup so a packaged layout can be asserted without a
+    packaged tree: `parents[3]` is the checkout, `stoa/security_inventory` is
+    what the build copies in beside the code.
+    """
     return (
-        Path(__file__).resolve().parents[3]
-        / "docs"
-        / "security"
-        / "phase-473-private-store-inventory.json"
+        here.parents[3] / "docs" / "security" / INVENTORY_FILENAME,
+        here.parents[1] / "security_inventory" / INVENTORY_FILENAME,
     )
 
 

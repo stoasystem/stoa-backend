@@ -18,6 +18,7 @@ from typing import Any
 from botocore.exceptions import ClientError
 
 from stoa.db.repositories import capability_repo
+from stoa.services import account_provisioning_service
 from stoa.security.aws_operator_identity import (
     AwsOperatorIdentityError,
     require_sso_operator_session,
@@ -247,9 +248,27 @@ def ensure_dynamodb_profile_record(
         return ("would_create" if not existing else "would_update"), item
     if existing:
         table.put_item(Item=item)
-    else:
-        _put_idempotent(table, item)
-    return ("created" if not existing else "updated"), item
+        return "updated", item
+
+    # Opened the way every other account is opened. Hand-writing the row here
+    # produced an administrator with no account fence, which is not a cosmetic
+    # difference: a capability cannot be issued to it, it cannot be deleted, and
+    # anything that asks whether the account is writable refuses. It also had no
+    # number and never took its address, so nothing stopped a second account on
+    # the same one.
+    account_provisioning_service.open_account(
+        account_id=str(item["user_id"]),
+        role=ADMIN_ROLE,
+        email=email,
+        account_status="active",
+        full_name=str(item["name"]),
+        created_by="operator:provision_production_admin",
+        extra_fields={
+            "language": item.get("language"),
+            "subscription_tier": item.get("subscription_tier"),
+        },
+    )
+    return "created", item
 
 
 def ensure_identity_binding_and_evidence(
@@ -409,6 +428,11 @@ def main() -> int:
             region_name=args.region,
             expected_account_id=args.account_id,
         )
+        # The opening below goes through the product's own path, which resolves
+        # its table from ambient credentials. Point those at the profile that was
+        # just verified, so the writes land in the account the guard checked.
+        os.environ["AWS_PROFILE"] = args.profile
+        os.environ.setdefault("AWS_REGION", args.region)
         cognito = session.client("cognito-idp", region_name=args.region)
         dynamodb = session.resource("dynamodb", region_name=args.region)
         table = dynamodb.Table(args.table_name)

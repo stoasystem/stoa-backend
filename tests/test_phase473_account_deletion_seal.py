@@ -278,3 +278,68 @@ def test_封印里的分支契约与生成器的源头逐字一致():
         assert branch["handler_version"] == contract.get(
             "handler_version", "473-35.v1"
         )
+
+
+def test_封印文件在部署包的布局下也找得到(tmp_path):
+    """Deletion asks for this seal first, and the bundle is not the checkout.
+
+    `parents[3]` resolves above the package root. In a checkout that is the
+    repository; in a Lambda, where `stoa/` is unpacked at the root, it is
+    somewhere outside the bundle entirely. Only `.py` files were packaged, so
+    the file was not there either - and every deletion in production answered
+    `identity_conflict`, which is a message about identity for a missing
+    document. No test could see it: they all run from the checkout.
+    """
+    import importlib.util
+    import sys
+
+    packaged = tmp_path / "var" / "task" / "stoa" / "services" / "account_deletion_service.py"
+    packaged.parent.mkdir(parents=True)
+    packaged.touch()
+
+    candidates = account_deletion_service.inventory_candidates(packaged)
+    inside_bundle = [
+        path for path in candidates if (tmp_path / "var" / "task" / "stoa") in path.parents
+    ]
+    assert inside_bundle, [str(path) for path in candidates]
+
+    # And the build puts it exactly there, computed from the builder rather
+    # than spelled a second time here.
+    builder_path = ROOT / "scripts" / "build_lambda_dist.py"
+    name = "lambda_dist_builder_for_seal"
+    spec = importlib.util.spec_from_file_location(name, builder_path)
+    builder = importlib.util.module_from_spec(spec)
+    sys.modules[name] = builder
+    try:
+        spec.loader.exec_module(builder)
+    finally:
+        sys.modules.pop(name, None)
+
+    package_dir = tmp_path / "var" / "task" / "stoa"
+    builder.copy_security_inventory(ROOT, package_dir)
+    assert inside_bundle[0].is_file()
+    assert inside_bundle[0].read_bytes() == INVENTORY_PATH.read_bytes()
+
+
+def test_打包流程真的走了复制那一步():
+    """The function existing is not the build calling it.
+
+    Removing the call from `copy_source` left the assertion above green, which
+    is the same hole in a different place.
+    """
+    import ast
+
+    source = (ROOT / "scripts" / "build_lambda_dist.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    copy_source = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "copy_source"
+    )
+    called = {
+        node.func.id
+        for node in ast.walk(copy_source)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+
+    assert "copy_security_inventory" in called

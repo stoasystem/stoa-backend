@@ -63,8 +63,22 @@ def test_validate_inputs_reads_password_from_named_env(monkeypatch):
     assert script.validate_inputs(args) == "Validpass1"
 
 
-def test_ensure_dynamodb_profile_creates_admin_profile():
+def test_ensure_dynamodb_profile_opens_the_account_the_ordinary_way(monkeypatch):
+    """The bootstrap administrator is opened, not hand-written.
+
+    Writing the row here directly produced an account with no fence, no number
+    and no claim on its address: a capability could not be issued to it, it
+    could not be deleted, and nothing stopped a second account on the same
+    address. This asserts the opening goes through the one path that does all
+    four, because a row that merely looks right is how that happened.
+    """
     script = _load_script()
+    from stoa.services import account_provisioning_service
+
+    opened: list[dict] = []
+    monkeypatch.setattr(
+        account_provisioning_service, "open_account", lambda **kw: opened.append(kw) or "A26-0001"
+    )
     table = FakeTable()
 
     status = script.ensure_dynamodb_profile(
@@ -76,14 +90,12 @@ def test_ensure_dynamodb_profile_creates_admin_profile():
     )
 
     assert status == "created"
-    assert len(table.put_items) == 1
-    item = table.put_items[0]
-    assert item["PK"] == f"USER#{item['user_id']}"
-    assert item["SK"] == "PROFILE"
-    assert item["email"] == "admin@example.com"
-    assert item["name"] == "Admin User"
-    assert item["role"] == "admin"
-    assert item["account_status"] == "active"
+    assert table.put_items == []
+    assert len(opened) == 1
+    assert opened[0]["role"] == "admin"
+    assert opened[0]["email"] == "admin@example.com"
+    assert opened[0]["account_status"] == "active"
+    assert opened[0]["full_name"] == "Admin User"
 
 
 def test_ensure_dynamodb_profile_rejects_existing_non_admin_profile():
