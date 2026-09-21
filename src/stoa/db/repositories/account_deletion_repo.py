@@ -1018,6 +1018,17 @@ def delete_owned_row(
     generation: int,
     table: Any | None = None,
 ) -> None:
+    """Remove one owned row, and never the profile.
+
+    A profile is replaced by a tombstone, never deleted: the tombstone is what
+    a replayed deletion recognises and what stops the address being handed to
+    the next account by accident. Nothing here refused that before, and the
+    only thing keeping it from happening was the order of the branches in the
+    caller's if/elif. A rearrangement there would have deleted profiles
+    silently, and no scanner that reads literals could have seen it coming.
+    """
+    if str(item.get("SK") or "") == "PROFILE":
+        raise AccountDeletionConflict("a profile row is tombstoned, never deleted")
     target = table or get_table()
     hook = getattr(target, "delete_owned_row", None)
     if callable(hook):

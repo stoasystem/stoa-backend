@@ -1934,7 +1934,15 @@ async def list_users(
     cursor: Optional[str] = Query(default=None, max_length=2000),
     user: dict = Depends(require_role("admin")),
 ):
-    """One page of accounts, grouped by role, with their confirmed parent links."""
+    """One page of accounts, grouped by role, with their confirmed parent links.
+
+    Card 002 #7: the links are resolved one account at a time, so the cost of a
+    page is the page size times the links behind it, not the page size. Measured
+    on a full page of parents with three children each: 3201 DynamoDB round trips,
+    against a 29 second API Gateway ceiling. The number is pinned by
+    tests/test_admin_user_list_read_amplification.py so it cannot grow unnoticed;
+    batching it down needs `parent_link_service.active_link`, not this file.
+    """
     table = get_table()
 
     filter_expr = "#entity = :profile"

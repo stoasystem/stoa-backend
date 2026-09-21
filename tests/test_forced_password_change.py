@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 from botocore.exceptions import ClientError
-from fastapi import FastAPI, params
+from fastapi import FastAPI, HTTPException, params
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
@@ -46,7 +46,8 @@ from stoa.deps import (
     get_verified_token,
 )
 from stoa.routers import admin, auth, parents, students
-from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD
+from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD, Actor
+from stoa.services.account_deletion_service import DeletionReceipt
 from stoa.security.route_inventory import (
     _walk_dependants,
     explicit_route_classification,
@@ -466,6 +467,80 @@ def test_销户命令的身份只能来自已验证的令牌() -> None:
 def test_旁路清单与依赖图推出来的一致() -> None:
     """The hand-written naming stays honest: it is exactly what the graph says."""
     assert set(_routes_without_actor_resolution(_full_app())) == UNGATED_AUTHENTICATED_ROUTES
+
+
+def _terminal_receipt() -> DeletionReceipt:
+    """Stand in for the deletion machinery only.
+
+    These two tests are about what gates the route, not about what it erases, so
+    the command is already terminal and the handler queues no follow-up work.
+    """
+    return DeletionReceipt(
+        command_id="command-1",
+        status="deleted",
+        accepted_at="2026-09-21T10:00:00+00:00",
+        completed_at="2026-09-21T10:00:01+00:00",
+    )
+
+
+def test_新挂到Actor上的闸不会落到销户路径上(table: FakeAccountTable) -> None:
+    """Card 002 #5: the bypass is a decision, and this is where it is held.
+
+    A future gate will be hung where every existing one is - inside `get_actor` -
+    so that is what gets hung here, and the deletion command still answers. The
+    same run carries its own negative control: the locale route does resolve an
+    Actor, so the new gate refuses it. Without that half the test would pass on a
+    gate that never fired.
+
+    Deliberate, not incidental: the account being erased may already have lost
+    the facts `get_actor` needs, so requiring it would make erasure fail exactly
+    where it matters most. A gate that must also bind erasure therefore belongs
+    on `get_deletion_command`, not on `get_actor`, and this going red is the
+    reminder.
+    """
+    _seed_profile(table)
+    app = _signed_in_app(_full_app())
+
+    async def _refusing_actor() -> Actor:
+        raise HTTPException(status_code=403, detail={"code": "gate_added_later"})
+
+    app.dependency_overrides[get_actor] = _refusing_actor
+    app.dependency_overrides[get_deletion_command] = _terminal_receipt
+    client = TestClient(app)
+
+    control = client.patch(
+        "/auth/me/preferences/locale",
+        json={"preferredLocale": "fr"},
+        headers=_auth_headers(),
+    )
+    deletion = client.delete("/auth/me", headers=_auth_headers())
+
+    assert control.status_code == 403, control.text
+    assert deletion.status_code == 202, deletion.text
+
+
+def test_欠着一次改密的账号仍然可以销户(table: FakeAccountTable) -> None:
+    """The product call on the one gate that exists today, made executable.
+
+    An account that owes a password change can still close itself. Erasure is not
+    a feature the debt withholds, and the alternative - forcing a password onto an
+    account on its way out - is a worse answer to ask of somebody leaving. The
+    control is the same flag refusing the locale route in the same run.
+    """
+    _seed_profile(table, must_change_password=True)
+    app = _signed_in_app(_full_app())
+    app.dependency_overrides[get_deletion_command] = _terminal_receipt
+    client = TestClient(app)
+
+    control = client.patch(
+        "/auth/me/preferences/locale",
+        json={"preferredLocale": "fr"},
+        headers=_auth_headers(),
+    )
+    deletion = client.delete("/auth/me", headers=_auth_headers())
+
+    assert control.status_code == 403, control.text
+    assert deletion.status_code == 202, deletion.text
 
 
 def test_路由没解析出来时不豁免() -> None:

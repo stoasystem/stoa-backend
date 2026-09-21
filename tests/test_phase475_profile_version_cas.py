@@ -262,18 +262,27 @@ def _source_profile_mutations() -> frozenset[str]:
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
+            # Named here rather than matched: these three carry the profile row in
+            # as an argument, so the key is a variable and no literal search sees
+            # them. `replace_with_deletion_tombstone` is the one that overwrites a
+            # PROFILE row on the deletion path.
             direct = node.name in {
                 "_parent_profile_scrub_operation",
                 "materialize_profile_with_fence",
+                "replace_with_deletion_tombstone",
             }
             for member in ast.walk(node):
                 if isinstance(member, ast.Dict):
                     for key, value in zip(member.keys, member.values, strict=True):
-                        if isinstance(key, ast.Constant) and key.value in {"Update", "Put"}:
+                        if isinstance(key, ast.Constant) and key.value in {
+                            "Update",
+                            "Put",
+                            "Delete",
+                        }:
                             value_source = ast.get_source_segment(text, value) or ""
                             direct = direct or '"SK": "PROFILE"' in value_source
                 elif isinstance(member, ast.Call) and isinstance(member.func, ast.Attribute):
-                    if member.func.attr == "update_item":
+                    if member.func.attr in {"update_item", "delete_item"}:
                         call_source = ast.get_source_segment(text, member) or ""
                         direct = direct or '"SK": "PROFILE"' in call_source
             if direct:
@@ -297,3 +306,44 @@ def test_profile_writer_registry_is_closed_against_direct_source_mutations() -> 
             (root / path_text).read_text(encoding="utf-8"), function
         )
         assert source is not None and "version" in source
+
+
+def test_通用删除拒绝删掉profile行():
+    """The profile is tombstoned, never deleted, and now it refuses on its own.
+
+    Before this, the only thing standing between `delete_owned_row` and a
+    profile was the order of the branches in `_account_profile_branch`: the
+    `SK == "PROFILE"` arm ran first and took the row away. Reorder those and
+    profiles disappear, with the tombstone a replay depends on gone and the
+    address free to be handed to the next account.
+    """
+    import pytest
+
+    from stoa.db.repositories import account_deletion_repo
+
+    with pytest.raises(account_deletion_repo.AccountDeletionConflict):
+        account_deletion_repo.delete_owned_row(
+            {"PK": "USER#someone", "SK": "PROFILE", "user_id": "someone"},
+            user_id="someone",
+            generation=1,
+        )
+
+
+def test_通用删除照常删掉不是profile的行():
+    """The negative control: a guard that refuses everything guards nothing."""
+    from stoa.db.repositories import account_deletion_repo
+
+    deleted: list[tuple[str, str]] = []
+
+    class _Table:
+        def delete_owned_row(self, item, user_id, generation):
+            deleted.append((item["PK"], item["SK"]))
+
+    account_deletion_repo.delete_owned_row(
+        {"PK": "USER#someone", "SK": "QUESTION#1"},
+        user_id="someone",
+        generation=1,
+        table=_Table(),
+    )
+
+    assert deleted == [("USER#someone", "QUESTION#1")]

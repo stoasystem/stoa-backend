@@ -224,6 +224,18 @@ async def get_deletion_command(
     the only route resolving no Actor, and that the signature above is still what
     justifies it. A second such route is a change to the authorization surface and
     fails there - naming it somewhere does not settle it.
+
+    Card 002 #5: what this path is therefore not subject to, measured rather than
+    assumed. From `resolve_actor`: an active account fence, a present account row,
+    exactly one recognised group, that group agreeing with the stored role, and an
+    account status of active. From the resolver above: the forced password change.
+    Every one of them is a fact about an account still in service, and the account
+    here is on its way out. The password change is settled and pinned: an account
+    owing one can still close itself, because refusing would make a password the
+    price of leaving. The account status is not settled - a suspension raised to
+    hold evidence is the case where erasure arguably should wait, and today it does
+    not. A gate that must also bind erasure belongs on this resolver, not on the one
+    above; the two tests named for this card go red if that distinction is lost.
     """
     try:
         binding = await repository.get_binding(verified.issuer, verified.subject)

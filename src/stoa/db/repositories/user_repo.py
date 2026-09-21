@@ -79,6 +79,7 @@ PROFILE_WRITER_REGISTRY = frozenset(
     {
         "src/stoa/db/repositories/account_deletion_repo.py:materialize_profile_with_fence",
         "src/stoa/db/repositories/account_deletion_repo.py:_parent_profile_scrub_operation",
+        "src/stoa/db/repositories/account_deletion_repo.py:replace_with_deletion_tombstone",
         "src/stoa/db/repositories/user_repo.py:profile_update_operation",
     }
 )
