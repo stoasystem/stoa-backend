@@ -16,7 +16,7 @@ import time
 import uuid
 from collections.abc import Mapping
 from datetime import datetime, timezone
-from typing import Any, Protocol, cast
+from typing import Any, NamedTuple, Protocol, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 import boto3
@@ -166,15 +166,56 @@ def _msg_sk(msg_id: str) -> str:
     return f"MSG#{msg_id}"
 
 
-def _list_conversations(student_id: str) -> list[dict]:
+# List budget: at most 25 index pages and 200 conversations per request.
+_CONVERSATION_LIST_LIMIT = 200
+_CONVERSATION_LIST_PAGE_BUDGET = 25
+
+
+class ConversationListPage(NamedTuple):
+    """Conversations in hand, plus whether older ones were left unread."""
+
+    items: list[dict]
+    truncated: bool
+
+
+def _list_conversations(
+    student_id: str,
+    *,
+    limit: int = _CONVERSATION_LIST_LIMIT,
+    page_budget: int = _CONVERSATION_LIST_PAGE_BUDGET,
+) -> ConversationListPage:
+    """List this student's conversations, newest first.
+
+    GSI-StudentId carries every row holding the student id - messages, usage
+    events, reports - so a page can be consumed entirely by rows the filter drops
+    and still leave conversations behind the continuation key. Follow the key
+    instead of trusting one page, but stop at an explicit budget so a heavy
+    history cannot turn the list into an unbounded table walk; descending order
+    means a truncated answer is the most recent conversations, and the caller is
+    told it was truncated.
+    """
     table = cast(_DynamoConversationTable, get_table())
-    resp = table.query(
-        IndexName="GSI-StudentId",
-        KeyConditionExpression=Key("student_id").eq(student_id),
-        FilterExpression=Attr("entity_type").eq("conversation"),
-        ScanIndexForward=False,
-    )
-    return _conversation_response_items(resp)
+    items: list[dict] = []
+    cursor: object = None
+    for _page in range(page_budget):
+        request: dict[str, object] = {
+            "IndexName": "GSI-StudentId",
+            "KeyConditionExpression": Key("student_id").eq(student_id),
+            "FilterExpression": Attr("entity_type").eq("conversation"),
+            "ScanIndexForward": False,
+        }
+        if cursor is not None:
+            request["ExclusiveStartKey"] = cursor
+        resp = table.query(**request)
+        items.extend(_conversation_response_items(resp))
+        cursor = resp.get("LastEvaluatedKey")
+        if cursor is None:
+            return ConversationListPage(items[:limit], len(items) > limit)
+        if not isinstance(cursor, dict) or not cursor:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+        if len(items) >= limit:
+            return ConversationListPage(items[:limit], True)
+    return ConversationListPage(items[:limit], True)
 
 
 def _get_conversation(conv_id: str) -> dict | None:
@@ -789,6 +830,7 @@ class ConversationDetail(ConversationSummary):
 
 class ConversationListResponse(BaseModel):
     items: list[ConversationSummary]
+    truncated: bool = False
 
 
 class TeacherHelpRequest(BaseModel):
@@ -1091,7 +1133,7 @@ async def list_conversations(
     ),
 ):
     student_id = actor.user_id
-    items = _list_conversations(student_id)
+    page = _list_conversations(student_id)
     summaries = [
         ConversationSummary(
             id=item["conversation_id"],
@@ -1101,9 +1143,9 @@ async def list_conversations(
             updatedAt=item.get("updated_at", item.get("created_at", _now())),
             lastMessagePreview=item.get("last_message_preview"),
         )
-        for item in items
+        for item in page.items
     ]
-    return ConversationListResponse(items=summaries)
+    return ConversationListResponse(items=summaries, truncated=page.truncated)
 
 
 GENERATION_PROGRESS_TTL_SECONDS = 3600

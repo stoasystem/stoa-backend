@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, NamedTuple, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -47,6 +47,11 @@ from stoa.services import (
 router = APIRouter()
 
 type TeacherItem = dict[str, object]
+
+# Queue scan budget: at most 20 pages of 1000 evaluated rows per request.
+_QUEUE_RESULT_LIMIT = 50
+_QUEUE_SCAN_PAGE_ROWS = 1000
+_QUEUE_SCAN_PAGE_BUDGET = 20
 
 _TEACHER_REPLY_SOURCE_STATES = frozenset({QuestionStatus.TEACHER_ACTIVE.value})
 _TEACHER_RESOLVE_SOURCE_STATES = frozenset({QuestionStatus.TEACHER_ACTIVE.value})
@@ -205,16 +210,49 @@ class DispatchRunRequest(BaseModel):
     question_id: str = Field(..., min_length=1)
 
 
-def _list_escalated_questions(limit: int = 50) -> list[TeacherItem]:
-    """Scan for ESCALATED questions (small scale; replace with GSI for production)."""
-    result = _teacher_scan(
-        get_table(),
-        FilterExpression="#s = :s",
-        ExpressionAttributeNames={"#s": "status"},
-        ExpressionAttributeValues={":s": QuestionStatus.ESCALATED.value},
-        Limit=limit,
-    )
-    return _teacher_items(result)
+class EscalatedQuestionPage(NamedTuple):
+    """Queue rows in hand, plus whether the scan stopped before the table ended."""
+
+    items: list[TeacherItem]
+    truncated: bool
+
+
+def _list_escalated_questions(
+    limit: int = _QUEUE_RESULT_LIMIT,
+    *,
+    page_rows: int = _QUEUE_SCAN_PAGE_ROWS,
+    page_budget: int = _QUEUE_SCAN_PAGE_BUDGET,
+) -> EscalatedQuestionPage:
+    """Scan for ESCALATED questions (small scale; replace with GSI for production).
+
+    `Limit` counts rows read, not rows matched, so a page can come back empty while
+    a student waits two pages further on. The requested match count and the scan
+    budget are therefore separate: follow the continuation key until `limit` matches
+    are in hand or the budget runs out, and report an exhausted budget as truncated
+    rather than as an empty queue.
+    """
+    table = get_table()
+    items: list[TeacherItem] = []
+    cursor: object = None
+    for _page in range(page_budget):
+        request: dict[str, object] = {
+            "FilterExpression": "#s = :s",
+            "ExpressionAttributeNames": {"#s": "status"},
+            "ExpressionAttributeValues": {":s": QuestionStatus.ESCALATED.value},
+            "Limit": page_rows,
+        }
+        if cursor is not None:
+            request["ExclusiveStartKey"] = cursor
+        result = _teacher_scan(table, **request)
+        items.extend(_teacher_items(result))
+        cursor = result.get("LastEvaluatedKey")
+        if cursor is None:
+            return EscalatedQuestionPage(items[:limit], len(items) > limit)
+        if not isinstance(cursor, dict) or not cursor:
+            raise RuntimeError("teacher data dependency unavailable")
+        if len(items) >= limit:
+            return EscalatedQuestionPage(items[:limit], True)
+    return EscalatedQuestionPage(items[:limit], True)
 
 
 def _is_dispatch_restricted_to_other_teacher(
@@ -237,7 +275,8 @@ async def get_queue(
 ):
     """Return the list of questions awaiting teacher intervention."""
     now = _now()
-    questions = _list_escalated_questions()
+    page = _list_escalated_questions()
+    questions = page.items
     viewer_id = actor.user_id
     if actor.role is not CanonicalRole.ADMIN:
         questions = [
@@ -246,7 +285,7 @@ async def get_queue(
             if not _is_dispatch_restricted_to_other_teacher(item, viewer_id, now)
         ]
     items = [teacher_dispatch_service.decorate_queue_item(item, viewer_id=viewer_id, now=now) for item in questions]
-    return {"items": items, "count": len(items)}
+    return {"items": items, "count": len(items), "truncated": page.truncated}
 
 
 @router.post("/dispatch/preview")

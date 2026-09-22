@@ -244,7 +244,8 @@ def test_conversation_list_and_create_derive_owner_from_actor(monkeypatch):
     monkeypatch.setattr(
         conversations,
         "_list_conversations",
-        lambda student_id: listed.append(student_id) or [],
+        lambda student_id: listed.append(student_id)
+        or conversations.ConversationListPage([], False),
     )
     monkeypatch.setattr(conversations, "get_table", lambda: Table())
     client = _client(conversations.router)
@@ -1732,3 +1733,147 @@ def test_every_message_route_adopts_the_question_as_title():
 
     for route in (conversations.send_message, conversations.stream_message):
         assert "_adopt_question_as_title" in inspect.getsource(route), route.__name__
+
+
+def _index_filter_holds(condition, row) -> bool:
+    """Evaluate one boto3 `Attr` filter the way the index would."""
+    if condition is None:
+        return True
+    built = condition.get_expression()
+    assert built["operator"] == "=", built["operator"]
+    name, expected = built["values"]
+    return row.get(name.name) == expected
+
+
+class _PagedIndexTable:
+    """GSI-StudentId double that cuts the page before the filter, as DynamoDB does.
+
+    The index carries every row holding the student id, so a page can be spent
+    entirely on messages and come back with no conversations at all. A double that
+    filters before cutting hides exactly that, so the cut happens here first.
+    """
+
+    def __init__(self, rows, page_rows: int = 50):
+        self.rows = rows
+        self.page_rows = page_rows
+        self.query_calls = []
+
+    def query(self, **kwargs):
+        self.query_calls.append(kwargs)
+        assert kwargs["IndexName"] == "GSI-StudentId"
+        assert kwargs["ScanIndexForward"] is False
+        student_id = kwargs["KeyConditionExpression"].get_expression()["values"][1]
+        partition = [row for row in self.rows if row["student_id"] == student_id]
+        start = 0
+        cursor = kwargs.get("ExclusiveStartKey")
+        if cursor is not None:
+            start = 1 + next(
+                index
+                for index, row in enumerate(partition)
+                if (row["PK"], row["SK"]) == (cursor["PK"], cursor["SK"])
+            )
+        evaluated = partition[start : start + self.page_rows]
+        response = {
+            "Items": [
+                dict(row)
+                for row in evaluated
+                if _index_filter_holds(kwargs.get("FilterExpression"), row)
+            ]
+        }
+        if start + len(evaluated) < len(partition):
+            last = partition[start + len(evaluated) - 1]
+            response["LastEvaluatedKey"] = {
+                "PK": last["PK"],
+                "SK": last["SK"],
+                "student_id": last["student_id"],
+                "created_at": last["created_at"],
+            }
+        return response
+
+
+def _student_index_rows(*, messages: int, conversations_count: int, student_id="student-1"):
+    """Newest first, as the descending index returns them: messages, then history."""
+    rows = [
+        {
+            "PK": f"CONV#noise-{index}",
+            "SK": f"MSG#msg-{index}",
+            "student_id": student_id,
+            "entity_type": "conversation_message",
+            "created_at": f"2026-07-20T00:{index // 60:02d}:{index % 60:02d}Z",
+        }
+        for index in range(messages)
+    ]
+    rows += [
+        {
+            "PK": f"CONV#history-{index}",
+            "SK": "CONV",
+            "conversation_id": f"history-{index}",
+            "student_id": student_id,
+            "entity_type": "conversation",
+            "subject": "math",
+            "grade": "Sek1",
+            "title": f"History {index}",
+            "created_at": f"2026-07-15T00:00:{index:02d}Z",
+            "updated_at": f"2026-07-15T00:00:{index:02d}Z",
+        }
+        for index in range(conversations_count)
+    ]
+    return rows
+
+
+def test_conversation_list_reaches_matching_row_after_filtered_gsi_page(monkeypatch):
+    """Pages spent on messages must not be reported as an empty history."""
+    table = _PagedIndexTable(_student_index_rows(messages=120, conversations_count=5))
+    monkeypatch.setattr(conversations, "get_table", lambda: table)
+
+    response = _client(conversations.router).get("/conversations")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["id"] for item in body["items"]] == [
+        "history-0",
+        "history-1",
+        "history-2",
+        "history-3",
+        "history-4",
+    ]
+    assert body["truncated"] is False
+    assert len(table.query_calls) == 3
+    assert table.query_calls[0].get("ExclusiveStartKey") is None
+
+
+def test_conversation_list_reads_one_page_at_normal_volume_without_repeats(monkeypatch):
+    table = _PagedIndexTable(_student_index_rows(messages=20, conversations_count=5))
+    monkeypatch.setattr(conversations, "get_table", lambda: table)
+
+    response = _client(conversations.router).get("/conversations")
+
+    assert response.status_code == 200
+    ids = [item["id"] for item in response.json()["items"]]
+    assert ids == ["history-0", "history-1", "history-2", "history-3", "history-4"]
+    assert len(ids) == len(set(ids))
+    assert response.json()["truncated"] is False
+    assert len(table.query_calls) == 1
+
+
+def test_conversation_list_reports_an_exhausted_page_budget_as_truncated(monkeypatch):
+    """A heavy history is bounded, and the caller is told it was cut short."""
+    table = _PagedIndexTable(_student_index_rows(messages=400, conversations_count=2))
+    monkeypatch.setattr(conversations, "get_table", lambda: table)
+
+    page = conversations._list_conversations("student-1", page_budget=2)
+
+    assert page.items == []
+    assert page.truncated is True
+    assert len(table.query_calls) == 2
+
+
+def test_conversation_list_stops_at_the_result_limit_and_says_so(monkeypatch):
+    table = _PagedIndexTable(_student_index_rows(messages=0, conversations_count=250))
+    monkeypatch.setattr(conversations, "get_table", lambda: table)
+
+    page = conversations._list_conversations("student-1")
+
+    assert len(page.items) == 200
+    assert page.truncated is True
+    assert len(table.query_calls) == 4

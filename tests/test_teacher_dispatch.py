@@ -434,7 +434,11 @@ def test_teacher_queue_filters_dispatches_owned_by_other_teachers(monkeypatch):
         {**QUESTION, "question_id": "other", "dispatch_status": "dispatched", "dispatched_teacher_id": "teacher-2"},
         {**QUESTION, "question_id": "manual", "dispatch_status": "unassigned"},
     ]
-    monkeypatch.setattr(teachers, "_list_escalated_questions", lambda: items)
+    monkeypatch.setattr(
+        teachers,
+        "_list_escalated_questions",
+        lambda: teachers.EscalatedQuestionPage(items, False),
+    )
     monkeypatch.setattr(teachers, "_now", lambda: "2026-06-15T10:05:00+00:00")
 
     response = _app(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"}).get("/teachers/queue")
@@ -490,7 +494,10 @@ def test_teacher_queue_projects_metadata_without_student_content(monkeypatch):
     monkeypatch.setattr(
         teachers,
         "_list_escalated_questions",
-        lambda: [{**QUESTION, "content": "private answer", "student_profile": {"name": "Hidden"}}],
+        lambda: teachers.EscalatedQuestionPage(
+            [{**QUESTION, "content": "private answer", "student_profile": {"name": "Hidden"}}],
+            False,
+        ),
     )
     response = _app(
         teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"}
@@ -580,3 +587,127 @@ def test_admin_dispatch_dashboard_is_aggregate_and_content_safe(monkeypatch):
     assert body["queue"]["noCandidateReasons"] == {"subject_mismatch": 1}
     serialized = str(body)
     assert "private student content" not in serialized
+
+
+class _PagedScanTable:
+    """Scan double that cuts the page before the filter runs, as DynamoDB does.
+
+    `Limit` and the 1MB page boundary both count evaluated rows, so a page can come
+    back empty while escalated questions wait two pages further on. A double that
+    filters first never shows that, which is why the cut happens here first.
+    """
+
+    def __init__(self, rows, page_rows: int = 50):
+        self.rows = rows
+        self.page_rows = page_rows
+        self.scan_calls = []
+
+    def scan(self, **kwargs):
+        self.scan_calls.append(kwargs)
+        assert kwargs["FilterExpression"] == "#s = :s"
+        attribute = kwargs["ExpressionAttributeNames"]["#s"]
+        expected = kwargs["ExpressionAttributeValues"][":s"]
+        start = 0
+        cursor = kwargs.get("ExclusiveStartKey")
+        if cursor is not None:
+            start = 1 + next(
+                index
+                for index, row in enumerate(self.rows)
+                if (row["PK"], row["SK"]) == (cursor["PK"], cursor["SK"])
+            )
+        page_rows = min(self.page_rows, int(kwargs.get("Limit", self.page_rows)))
+        evaluated = self.rows[start : start + page_rows]
+        response = {
+            "Items": [dict(row) for row in evaluated if row.get(attribute) == expected]
+        }
+        if start + len(evaluated) < len(self.rows):
+            last = self.rows[start + len(evaluated) - 1]
+            response["LastEvaluatedKey"] = {"PK": last["PK"], "SK": last["SK"]}
+        return response
+
+
+def _queue_rows(*, answered: int, escalated: int):
+    rows = [
+        {
+            **QUESTION,
+            "PK": f"QUESTION#answered-{index}",
+            "SK": "META",
+            "question_id": f"answered-{index}",
+            "status": "answered",
+        }
+        for index in range(answered)
+    ]
+    rows += [
+        {
+            **QUESTION,
+            "PK": f"QUESTION#waiting-{index}",
+            "SK": "META",
+            "question_id": f"waiting-{index}",
+        }
+        for index in range(escalated)
+    ]
+    return rows
+
+
+def _queue_response(monkeypatch, table):
+    monkeypatch.setattr(teachers, "get_table", lambda: table)
+    monkeypatch.setattr(teachers, "_now", lambda: "2026-06-15T10:05:00+00:00")
+    return _app(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"}).get(
+        "/teachers/queue"
+    )
+
+
+def test_teacher_queue_reaches_matching_question_after_empty_scan_page(monkeypatch):
+    """Two pages of other rows must not hide the students waiting on the third."""
+    table = _PagedScanTable(_queue_rows(answered=120, escalated=3))
+
+    response = _queue_response(monkeypatch, table)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["question_id"] for item in body["items"]] == [
+        "waiting-0",
+        "waiting-1",
+        "waiting-2",
+    ]
+    assert body["count"] == 3
+    assert body["truncated"] is False
+    assert len(table.scan_calls) == 3
+    assert table.scan_calls[0].get("ExclusiveStartKey") is None
+
+
+def test_teacher_queue_reads_one_page_at_normal_volume_without_repeats(monkeypatch):
+    table = _PagedScanTable(_queue_rows(answered=10, escalated=3))
+
+    response = _queue_response(monkeypatch, table)
+
+    assert response.status_code == 200
+    body = response.json()
+    ids = [item["question_id"] for item in body["items"]]
+    assert ids == ["waiting-0", "waiting-1", "waiting-2"]
+    assert len(ids) == len(set(ids))
+    assert body["truncated"] is False
+    assert len(table.scan_calls) == 1
+
+
+def test_teacher_queue_reports_an_exhausted_scan_budget_as_truncated(monkeypatch):
+    """An exhausted budget is not the same answer as an empty queue."""
+    table = _PagedScanTable(_queue_rows(answered=200, escalated=2))
+    monkeypatch.setattr(teachers, "get_table", lambda: table)
+
+    page = teachers._list_escalated_questions(page_budget=2)
+
+    assert page.items == []
+    assert page.truncated is True
+    assert len(table.scan_calls) == 2
+
+
+def test_teacher_queue_stops_at_the_requested_match_count_and_says_so(monkeypatch):
+    table = _PagedScanTable(_queue_rows(answered=0, escalated=120))
+    monkeypatch.setattr(teachers, "get_table", lambda: table)
+
+    page = teachers._list_escalated_questions()
+
+    assert len(page.items) == 50
+    assert page.truncated is True
+    assert len(table.scan_calls) == 1

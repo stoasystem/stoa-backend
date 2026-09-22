@@ -57,10 +57,41 @@ class CountingTable:
         }
 
     def scan(self, **kwargs: Any) -> dict[str, Any]:
+        """Scan the way the service does: `Limit` counts rows read, not rows kept.
+
+        The double used to filter first and cut to `Limit` afterwards, which hands
+        back a full page of profiles however the table is laid out. No real table
+        behaves that way, and the difference is the whole bug this file failed to
+        see: on a table where other rows outnumber profiles, a page can be spent
+        entirely on rows the filter drops.
+        """
         self.calls["scan"] += 1
         limit = int(kwargs.get("Limit", 50))
-        profiles = [dict(row) for (_, sk), row in self.rows.items() if sk == "PROFILE"]
-        return {"Items": profiles[:limit]}
+        keys = list(self.rows)
+        start = 0
+        resume = kwargs.get("ExclusiveStartKey")
+        if resume:
+            start = keys.index((resume["PK"], resume["SK"])) + 1
+        window = keys[start : start + limit]
+        items = [dict(self.rows[key]) for key in window if _filter_admits(self.rows[key], kwargs)]
+        response: dict[str, Any] = {"Items": items}
+        if start + limit < len(keys) and window:
+            response["LastEvaluatedKey"] = {"PK": window[-1][0], "SK": window[-1][1]}
+        return response
+
+
+def _filter_admits(row: dict[str, Any], kwargs: dict[str, Any]) -> bool:
+    """Evaluate the conjunction of `#name = :value` terms this route builds."""
+    expression = kwargs.get("FilterExpression")
+    if not expression:
+        return True
+    names = kwargs.get("ExpressionAttributeNames", {})
+    values = kwargs.get("ExpressionAttributeValues", {})
+    for term in str(expression).split(" AND "):
+        left, right = (part.strip() for part in term.split("="))
+        if row.get(names.get(left, left)) != values[right]:
+            return False
+    return True
 
 
 def _seed(table: CountingTable) -> None:
@@ -174,3 +205,111 @@ def test_默认页大小的代价是满页的四分之一(table: CountingTable) 
     assert response.status_code == 200, response.text
     assert len(response.json()["items"]) == 50
     assert dict(table.calls) == {"scan": 1, "query": 50, "get_item": 750}
+
+
+def _seed_noise_first(table: CountingTable, *, noise_rows: int) -> None:
+    """The production layout: curriculum and practice rows before any profile.
+
+    `stoa-main` holds one row per lesson, challenge and attempt against a few
+    dozen accounts, so the profiles sit far behind rows this route filters out.
+    """
+    for index in range(noise_rows):
+        table.rows[("PRACTICE", f"CHALLENGE#lesson-{index}")] = {
+            "PK": "PRACTICE",
+            "SK": f"CHALLENGE#lesson-{index}",
+            "entity_type": "challenge",
+        }
+    for index in range(4):
+        user_id = f"student-{index}"
+        table.rows[(f"USER#{user_id}", "PROFILE")] = {
+            "PK": f"USER#{user_id}",
+            "SK": "PROFILE",
+            "user_id": user_id,
+            "role": "student",
+            "account_status": "active",
+            "email": f"{user_id}@stoa.test",
+            "name": user_id,
+            "account_number": f"S26-{index:04d}",
+            "created_at": "2026-01-01T00:00:00+00:00",
+        }
+
+
+def test_账号藏在扫描页之后也要列出来(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The accounts console on a table whose other rows fill the first pages.
+
+    One scan of 50 rows reads nothing but challenges and answers with an empty
+    list and a continuation key, which is what production returned: the console
+    showed no accounts at all, so an account just created looked like a button
+    that had done nothing.
+    """
+    counting = CountingTable()
+    _seed_noise_first(counting, noise_rows=500)
+    for module in (admin, parent_link_repo, user_repo):
+        monkeypatch.setattr(module, "get_table", lambda counting=counting: counting)
+
+    response = _client().get("/admin/users")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [item["email"] for item in body["items"]] == [
+        f"student-{index}@stoa.test" for index in range(4)
+    ]
+    assert body["count"] == 4
+    assert body["groups"] == {"student": 4}
+    assert body["nextCursor"] is None
+
+
+def test_扫描额度用尽时说明还有下一页(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Negative control: the walk is bounded, and a bounded walk says so.
+
+    A table deeper than the budget must not become an unbounded scan, and the
+    caller has to be able to tell "no more accounts" from "stopped looking".
+    """
+    counting = CountingTable()
+    _seed_noise_first(
+        counting,
+        noise_rows=admin.ADMIN_USER_SCAN_PAGE_SIZE * admin.ADMIN_USER_SCAN_MAX_PAGES + 10,
+    )
+    for module in (admin, parent_link_repo, user_repo):
+        monkeypatch.setattr(module, "get_table", lambda counting=counting: counting)
+
+    response = _client().get("/admin/users")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["items"] == []
+    assert body["nextCursor"] is not None
+    assert counting.calls["scan"] == admin.ADMIN_USER_SCAN_MAX_PAGES
+
+
+def test_平台统计要读完整张表(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`/admin/stats` counted from one scan, which on any real table is a sample.
+
+    `stoa-main` passed a megabyte long ago, so the dashboard was reporting a
+    fraction of its accounts as the total and saying nothing about it.
+    """
+    counting = CountingTable()
+    _seed_noise_first(counting, noise_rows=500)
+    for module in (admin, parent_link_repo, user_repo):
+        monkeypatch.setattr(module, "get_table", lambda counting=counting: counting)
+
+    response = _client().get("/admin/stats")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["total_users"] == 4
+    assert body["total_students"] == 4
+    assert body["counts_complete"] is True
+
+
+def test_统计走不完时说明数字是下限(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Negative control: a census cut short must not pass itself off as a total."""
+    counting = CountingTable()
+    _seed_noise_first(counting, noise_rows=admin.ADMIN_STATS_MAX_PAGES * 200 + 10)
+    for module in (admin, parent_link_repo, user_repo):
+        monkeypatch.setattr(module, "get_table", lambda counting=counting: counting)
+
+    response = _client().get("/admin/stats")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["counts_complete"] is False

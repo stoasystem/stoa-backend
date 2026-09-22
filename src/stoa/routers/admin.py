@@ -128,6 +128,27 @@ def _admin_cursor(response: Mapping[str, object]) -> AdminItem | None:
     return _admin_mapping(raw_cursor)
 
 
+def _admin_scan_every_page(
+    table: object, *, page_budget: int, **kwargs: object
+) -> tuple[list[AdminItem], bool]:
+    """Every row the filter admits, and whether the walk finished.
+
+    A single scan answers from at most one megabyte of rows read, so on any table
+    past that size one call is a sample and not a census. Counting from a sample
+    produces a number that looks like an answer, which is worse than no number.
+    """
+    rows: list[AdminItem] = []
+    request = dict(kwargs)
+    for _page in range(page_budget):
+        result = _admin_scan(table, **request)
+        rows.extend(_admin_items(result))
+        cursor = _admin_cursor(result)
+        if not cursor:
+            return rows, True
+        request["ExclusiveStartKey"] = cursor
+    return rows, False
+
+
 def _admin_required_text(value: object) -> str:
     if not isinstance(value, str) or not value:
         raise RuntimeError("admin data dependency unavailable")
@@ -790,6 +811,9 @@ class StatsResponse(BaseModel):
     teacher_resolved: int
     escalated: int
     teacher_sla: dict[str, Any]
+    # False when a census stopped at its page budget, so the counts below are a
+    # floor rather than a total. Additive: absent means the walk finished.
+    counts_complete: bool = True
 
 
 class CurriculumExerciseDraftRequest(BaseModel):
@@ -1923,6 +1947,14 @@ def _within_created_range(
     return True
 
 
+# One scan page is rows read, not accounts found: `Limit` is applied before the
+# filter, so on a table whose lessons and attempts outnumber its profiles a page
+# can hold no account at all. The walk follows the continuation key until the
+# requested page is full, and stops at a budget so it cannot become a table walk.
+ADMIN_USER_SCAN_PAGE_SIZE = 200
+ADMIN_USER_SCAN_MAX_PAGES = 25
+
+
 @router.get("/users")
 async def list_users(
     limit: int = Query(default=50, ge=1, le=200),
@@ -1958,7 +1990,7 @@ async def list_users(
         "FilterExpression": filter_expr,
         "ExpressionAttributeNames": attr_names,
         "ExpressionAttributeValues": attr_values,
-        "Limit": limit,
+        "Limit": ADMIN_USER_SCAN_PAGE_SIZE,
     }
     if cursor:
         try:
@@ -1969,33 +2001,50 @@ async def list_users(
             raise HTTPException(status_code=422, detail={"code": "cursor_invalid"})
         scan_kwargs["ExclusiveStartKey"] = decoded
 
-    result = _admin_scan(table, **scan_kwargs)
-    rows = _admin_items(result)
-
     items: list[dict[str, object]] = []
     groups: dict[str, int] = {}
-    for row in rows:
-        row.pop("PK", None)
-        row.pop("SK", None)
-        account_status = _account_status_of(row)
-        if status and account_status != status:
-            continue
-        if q and not _keyword_matches(row, q):
-            continue
-        if not _within_created_range(row, created_from, created_to):
-            continue
-        row_role = str(row.get("role") or "unknown")
-        groups[row_role] = groups.get(row_role, 0) + 1
-        item = _project_account_row(row, account_status=account_status)
-        item["role"] = row_role
-        item["linkedAccounts"] = _linked_counterparts(row)
-        if account_status == ACCOUNT_STATUS_INVITED:
-            invitation_id = _issued_invitation_id(row)
-            if invitation_id:
-                item["invitationId"] = invitation_id
-        items.append(item)
+    next_key: Mapping[str, object] | None = None
+    full = False
 
-    next_key = _admin_cursor(result)
+    for _page in range(ADMIN_USER_SCAN_MAX_PAGES):
+        result = _admin_scan(table, **scan_kwargs)
+        for row in _admin_items(result):
+            row_key = {"PK": row.get("PK"), "SK": row.get("SK")}
+            row.pop("PK", None)
+            row.pop("SK", None)
+            account_status = _account_status_of(row)
+            if status and account_status != status:
+                continue
+            if q and not _keyword_matches(row, q):
+                continue
+            if not _within_created_range(row, created_from, created_to):
+                continue
+            row_role = str(row.get("role") or "unknown")
+            groups[row_role] = groups.get(row_role, 0) + 1
+            item = _project_account_row(row, account_status=account_status)
+            item["role"] = row_role
+            item["linkedAccounts"] = _linked_counterparts(row)
+            if account_status == ACCOUNT_STATUS_INVITED:
+                invitation_id = _issued_invitation_id(row)
+                if invitation_id:
+                    item["invitationId"] = invitation_id
+            items.append(item)
+            if len(items) >= limit:
+                # Resume at the row just handed out, so the next page neither
+                # repeats it nor skips the rest of the scan page it came from.
+                next_key = row_key
+                full = True
+                break
+        if full:
+            break
+        page_key = _admin_cursor(result)
+        if not page_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = page_key
+    else:
+        # The budget ran out. Say the walk stopped rather than that it finished.
+        next_key = _admin_cursor(result)
+
     next_cursor = (
         base64.urlsafe_b64encode(json.dumps(next_key, default=str).encode("utf-8")).decode("ascii")
         if next_key
@@ -3026,20 +3075,25 @@ async def apply_subscription_request(
     )
 
 
+# Each census below walks the whole table one megabyte at a time. The budget is
+# what stops a runaway table turning the dashboard into a timeout.
+ADMIN_STATS_MAX_PAGES = 50
+
+
 @router.get("/stats", response_model=StatsResponse)
 async def get_stats(user: dict = Depends(require_role("admin"))):
     """Return aggregate platform metrics (full-table scan — small scale only)."""
     table = get_table()
 
     # Count user profiles
-    user_scan = _admin_scan(
+    users, users_complete = _admin_scan_every_page(
         table,
+        page_budget=ADMIN_STATS_MAX_PAGES,
         FilterExpression="SK = :profile",
         ExpressionAttributeValues={":profile": "PROFILE"},
         ProjectionExpression="#role",
         ExpressionAttributeNames={"#role": "role"},
     )
-    users = _admin_items(user_scan)
 
     counts = {"student": 0, "parent": 0, "teacher": 0}
     for u in users:
@@ -3048,8 +3102,9 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
             counts[r] += 1
 
     # Count questions by status
-    q_scan = _admin_scan(
+    meta_rows, questions_complete = _admin_scan_every_page(
         table,
+        page_budget=ADMIN_STATS_MAX_PAGES,
         FilterExpression="SK = :meta",
         ExpressionAttributeValues={":meta": "META"},
         ProjectionExpression=", ".join(
@@ -3072,7 +3127,7 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
     question_statuses = {status.value for status in QuestionStatus}
     questions = [
         question
-        for question in _admin_items(q_scan)
+        for question in meta_rows
         if isinstance(question_status := question.get("status"), str)
         and question_status in question_statuses
     ]
@@ -3094,6 +3149,7 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
         teacher_resolved=teacher_resolved,
         escalated=escalated,
         teacher_sla=teacher_reply_service.aggregate_teacher_sla(questions),
+        counts_complete=users_complete and questions_complete,
     )
 
 
