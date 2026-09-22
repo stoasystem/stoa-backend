@@ -421,20 +421,23 @@ def test_committed_ecdsa_exception_is_exact_approved_expiring_and_source_support
             "severity": "unavailable",
             "reachability": "proven-unreachable",
             "reachability_evidence": (
-                "src/stoa/security/tokens.py enforces RS256 and algorithms RS256 only. "
-                "src/stoa/security/jwks.py accepts RSA kty and constructs RSAKey only. "
-                "Runtime code has no ecdsa signing keygen or ECDH invocation."
+                "Re-verified 2026-09-22. src/stoa/security/tokens.py rejects any alg other "
+                "than RS256 and passes algorithms RS256 only. src/stoa/security/jwks.py "
+                "accepts kty RSA alone and constructs RSAKey alone. A search of src for "
+                "ecdsa ECDH and curve names returns nothing. ecdsa arrives only through "
+                "python-jose and no runtime path signs verifies or derives with it."
             ),
             "owner": "project-owner",
             "approval_evidence": (
-                "Owner approved option 2 in Codex conversation on 2026-07-19 for exact "
-                "30-day D-11 exception"
+                "Owner approved extension in Claude Code conversation on 2026-09-22 after "
+                "the original exception lapsed unnoticed on 2026-08-18. Upstream still "
+                "publishes 0.19.2 as latest and has not yanked it so neither exit named in "
+                "the previous target had become available."
             ),
-            "expires_at": "2026-08-18T09:00:00Z",
+            "expires_at": "2026-12-21T09:00:00Z",
             "target": (
-                "remove exception immediately when an upstream fixed release exists or replace "
-                "python-jose/ecdsa through a separately reviewed auth-library/crypto-boundary "
-                "change no later than expiry"
+                "replace python-jose so ecdsa leaves the runtime tree or remove this "
+                "exception the day an upstream fixed release exists"
             ),
         },
     )
@@ -539,7 +542,7 @@ def test_committed_ecdsa_exception_accepts_only_the_exact_audit_identity():
             "installed_version": "0.19.2",
             "lock_sha256": "19910f62932829f069c21ac21c54cf6125deda55d0a63dfe6b8f0efa98e3fd7e",
             "reachability": "proven-unreachable",
-            "expires_at": "2026-08-18T09:00:00Z",
+            "expires_at": "2026-12-21T09:00:00Z",
         }
     ]
 
@@ -602,3 +605,35 @@ def test_supported_backend_advisory_fixes_are_present_in_frozen_export():
     }
     assert set(pins) == set(minimums)
     assert all(Version(pins[name]) >= Version(minimum) for name, minimum in minimums.items())
+
+
+def test_豁免在到期之前就要求续期而不是到期当天才失败():
+    """The last one lapsed on 2026-08-18 and nobody noticed for five weeks.
+
+    The policy refuses an expired exception, which is correct and also too
+    late: by then the release is already blocked and whoever is trying to ship
+    is the one who finds out. This fails while there is still time to renew it
+    or, better, to do the thing the target actually asks for.
+    """
+    import json
+    from datetime import datetime, timedelta, timezone
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    exceptions = json.loads(
+        (root / "evidence" / "phase-474" / "dependency-exceptions.json").read_text()
+    )["exceptions"]
+
+    now = datetime.now(timezone.utc)
+    soon = []
+    for exception in exceptions:
+        expires = datetime.strptime(exception["expires_at"], "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc
+        )
+        if expires - now < timedelta(days=14):
+            soon.append(f"{exception['package']} {exception['advisory']} -> {expires.date()}")
+
+    assert not soon, (
+        "dependency exception expires within fourteen days; renew it with fresh "
+        f"reachability evidence or carry out its target: {soon}"
+    )
