@@ -1893,6 +1893,14 @@ def _project_account_row(
     projected["isMinor"] = user_model.account_is_minor(
         profile, at=at or datetime.now(timezone.utc)
     )
+    # `isMinor` is fail-closed: an account with no stored birthday answers "minor"
+    # so that every protection decision errs the safe way. Shown on its own that
+    # reads as a fact about the person, and the console was labelling every
+    # account - administrators included - a minor. This says whether anybody ever
+    # told us, so the console can say "unknown" instead of guessing. Still no date.
+    projected["minorKnown"] = bool(
+        str(profile.get(user_model.DATE_OF_BIRTH_FIELD) or "").strip()
+    )
     return projected
 
 

@@ -997,6 +997,7 @@ def test_列表只发名单上的字段_后加的字段不会自动发布给客�
         "lastLoginAt",
         "linkedAccounts",
         "isMinor",
+        "minorKnown",
     }
     for leaked in (
         "cus_SECRET",
@@ -1010,6 +1011,27 @@ def test_列表只发名单上的字段_后加的字段不会自动发布给客�
     ):
         assert leaked not in response.text, leaked
     assert response.json()["items"][0]["isMinor"] is True
+    assert response.json()["items"][0]["minorKnown"] is True
+
+
+def test_没人说过生日的账号不算知道是未成年(table: AccountAdminTable) -> None:
+    """`isMinor` is fail-closed, so on its own it calls every account a minor.
+
+    The console showed that judgement as a fact about the person and labelled
+    administrators minors. The answer stays fail-closed for every protection
+    decision; `minorKnown` is what lets the console say it does not know. The
+    date itself still never leaves.
+    """
+    _seed_profile(table, "admin-no-dob", "admin", account_number="A26-0002", date_of_birth="")
+    client = TestClient(_app(_admin_user()))
+
+    response = client.get("/admin/users")
+
+    assert response.status_code == 200, response.text
+    listed = response.json()["items"][0]
+    assert listed["isMinor"] is True
+    assert listed["minorKnown"] is False
+    assert "date_of_birth" not in response.text
 
 
 def test_分页按limit切页_下一页不重不漏(table: AccountAdminTable) -> None:
