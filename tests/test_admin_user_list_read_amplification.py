@@ -14,14 +14,13 @@ surprise found in production.
 
 from __future__ import annotations
 
-from collections import Counter
-from typing import Any
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
+from fakes.dynamodb import FakeTable
 
 from stoa.db.repositories import parent_link_repo, user_repo
 from stoa.routers import admin
@@ -30,68 +29,13 @@ PARENTS = 200
 CHILDREN_PER_PARENT = 3
 
 
-class CountingTable:
-    """Enough of a single table to serve this route, counting every round trip."""
+CountingTable = FakeTable
+"""The shared double counts its own round trips, which is all this file needed.
 
-    def __init__(self) -> None:
-        self.rows: dict[tuple[str, str], dict[str, Any]] = {}
-        self.calls: Counter[str] = Counter()
-
-    def get_item(self, *, Key: dict[str, str], ConsistentRead: bool = False) -> dict[str, Any]:  # noqa: N803
-        del ConsistentRead
-        self.calls["get_item"] += 1
-        item = self.rows.get((Key["PK"], Key["SK"]))
-        return {"Item": dict(item)} if item is not None else {}
-
-    def query(self, **kwargs: Any) -> dict[str, Any]:
-        self.calls["query"] += 1
-        condition = kwargs["KeyConditionExpression"].get_expression()["values"]
-        partition = condition[0].get_expression()["values"][1]
-        prefix = condition[1].get_expression()["values"][1]
-        return {
-            "Items": [
-                dict(row)
-                for (pk, sk), row in self.rows.items()
-                if pk == partition and sk.startswith(prefix)
-            ]
-        }
-
-    def scan(self, **kwargs: Any) -> dict[str, Any]:
-        """Scan the way the service does: `Limit` counts rows read, not rows kept.
-
-        The double used to filter first and cut to `Limit` afterwards, which hands
-        back a full page of profiles however the table is laid out. No real table
-        behaves that way, and the difference is the whole bug this file failed to
-        see: on a table where other rows outnumber profiles, a page can be spent
-        entirely on rows the filter drops.
-        """
-        self.calls["scan"] += 1
-        limit = int(kwargs.get("Limit", 50))
-        keys = list(self.rows)
-        start = 0
-        resume = kwargs.get("ExclusiveStartKey")
-        if resume:
-            start = keys.index((resume["PK"], resume["SK"])) + 1
-        window = keys[start : start + limit]
-        items = [dict(self.rows[key]) for key in window if _filter_admits(self.rows[key], kwargs)]
-        response: dict[str, Any] = {"Items": items}
-        if start + limit < len(keys) and window:
-            response["LastEvaluatedKey"] = {"PK": window[-1][0], "SK": window[-1][1]}
-        return response
-
-
-def _filter_admits(row: dict[str, Any], kwargs: dict[str, Any]) -> bool:
-    """Evaluate the conjunction of `#name = :value` terms this route builds."""
-    expression = kwargs.get("FilterExpression")
-    if not expression:
-        return True
-    names = kwargs.get("ExpressionAttributeNames", {})
-    values = kwargs.get("ExpressionAttributeValues", {})
-    for term in str(expression).split(" AND "):
-        left, right = (part.strip() for part in term.split("="))
-        if row.get(names.get(left, left)) != values[right]:
-            return False
-    return True
+What it does *not* do is hand back rows in the order they were planted. A real
+table reads in key order, so a layout that puts profiles behind other rows costs
+more than one scan however the fixture was written - see the scan counts below.
+"""
 
 
 def _seed(table: CountingTable) -> None:
@@ -103,7 +47,7 @@ def _seed(table: CountingTable) -> None:
     """
     for index in range(PARENTS):
         parent_id = f"parent-{index}"
-        table.rows[(f"USER#{parent_id}", "PROFILE")] = {
+        table.seed({
             "PK": f"USER#{parent_id}",
             "SK": "PROFILE",
             "user_id": parent_id,
@@ -113,12 +57,12 @@ def _seed(table: CountingTable) -> None:
             "name": parent_id,
             "account_number": f"P26-{index:04d}",
             "created_at": "2026-01-01T00:00:00+00:00",
-        }
+        })
     for index in range(PARENTS):
         parent_id = f"parent-{index}"
         for child in range(CHILDREN_PER_PARENT):
             student_id = f"student-{index}-{child}"
-            table.rows[(f"USER#{student_id}", "PROFILE")] = {
+            table.seed({
                 "PK": f"USER#{student_id}",
                 "SK": "PROFILE",
                 "user_id": student_id,
@@ -128,7 +72,7 @@ def _seed(table: CountingTable) -> None:
                 "name": student_id,
                 "account_number": f"S26-{index:04d}{child}",
                 "created_at": "2026-01-01T00:00:00+00:00",
-            }
+            })
             link = {
                 "entity_type": "parent_student_binding",
                 "parent_id": parent_id,
@@ -136,16 +80,16 @@ def _seed(table: CountingTable) -> None:
                 "relationship": "parent",
                 "status": parent_link_repo.STATUS_ACTIVE,
             }
-            table.rows[(f"PARENT#{parent_id}", f"CHILD#{student_id}")] = {
+            table.seed({
                 "PK": f"PARENT#{parent_id}",
                 "SK": f"CHILD#{student_id}",
                 **link,
-            }
-            table.rows[(f"STUDENT#{student_id}", f"PARENT#{parent_id}")] = {
+            })
+            table.seed({
                 "PK": f"STUDENT#{student_id}",
                 "SK": f"PARENT#{parent_id}",
                 **link,
-            }
+            })
 
 
 @pytest.fixture
@@ -164,11 +108,18 @@ def _client() -> TestClient:
     return TestClient(app)
 
 
+# Six pages of link rows sort ahead of the first profile, so the scan reaches the
+# profiles on its seventh. The count used to be pinned at 1 because the double read
+# rows in the order the fixture planted them; a real table reads in key order, and
+# `PARENT#`/`STUDENT#` sort before `USER#`.
+SCANS_TO_REACH_THE_PROFILES = 7
+
+
 def test_一页两百个家长账号要打三千两百次数据库(table: CountingTable) -> None:
     """The measured cost of the largest page this route accepts.
 
-    1 scan + one link query per row + five reads per link: the two link rows, the
-    two profiles `active_link` checks, and the counterpart profile read a second
+    Seven scans + one link query per row + five reads per link: the two link rows,
+    the two profiles `active_link` checks, and the counterpart profile read a second
     time for its account number. The parent's own profile is read once per child
     although the scan already returned it.
     """
@@ -177,17 +128,22 @@ def test_一页两百个家长账号要打三千两百次数据库(table: Counti
     assert response.status_code == 200, response.text
     body = response.json()
     assert len(body["items"]) == PARENTS
-    assert dict(table.calls) == {"scan": 1, "query": PARENTS, "get_item": 3000}
-    assert sum(table.calls.values()) == 3201
+    assert dict(table.calls) == {
+        "scan": SCANS_TO_REACH_THE_PROFILES,
+        "query": PARENTS,
+        "get_item": 3000,
+    }
+    assert sum(table.calls.values()) == 3207
 
 
-def test_不取关联时同一页只要一次扫描(
+def test_不取关联时同一页只剩扫描(
     table: CountingTable, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Negative control: the count above is the link resolution, not the harness.
 
-    Without it the same page is one scan and nothing else, which is also what the
-    numbers above have to beat if this route is ever made to batch its reads.
+    Without it the same page is the walk to the profiles and nothing else, which is
+    also what the numbers above have to beat if this route is ever made to batch its
+    reads.
     """
     monkeypatch.setattr(admin, "_linked_counterparts", lambda profile: [])
 
@@ -195,16 +151,24 @@ def test_不取关联时同一页只要一次扫描(
 
     assert response.status_code == 200, response.text
     assert len(response.json()["items"]) == PARENTS
-    assert dict(table.calls) == {"scan": 1}
+    assert dict(table.calls) == {"scan": SCANS_TO_REACH_THE_PROFILES}
 
 
 def test_默认页大小的代价是满页的四分之一(table: CountingTable) -> None:
-    """The default page is what production actually serves, so hold it separately."""
+    """The default page is what production actually serves, so hold it separately.
+
+    The scan count does not fall with the page size: the walk to the first profile
+    costs the same whether 50 or 200 of them are wanted.
+    """
     response = _client().get("/admin/users")
 
     assert response.status_code == 200, response.text
     assert len(response.json()["items"]) == 50
-    assert dict(table.calls) == {"scan": 1, "query": 50, "get_item": 750}
+    assert dict(table.calls) == {
+        "scan": SCANS_TO_REACH_THE_PROFILES,
+        "query": 50,
+        "get_item": 750,
+    }
 
 
 def _seed_noise_first(table: CountingTable, *, noise_rows: int) -> None:
@@ -214,14 +178,14 @@ def _seed_noise_first(table: CountingTable, *, noise_rows: int) -> None:
     dozen accounts, so the profiles sit far behind rows this route filters out.
     """
     for index in range(noise_rows):
-        table.rows[("PRACTICE", f"CHALLENGE#lesson-{index}")] = {
+        table.seed({
             "PK": "PRACTICE",
             "SK": f"CHALLENGE#lesson-{index}",
             "entity_type": "challenge",
-        }
+        })
     for index in range(4):
         user_id = f"student-{index}"
-        table.rows[(f"USER#{user_id}", "PROFILE")] = {
+        table.seed({
             "PK": f"USER#{user_id}",
             "SK": "PROFILE",
             "user_id": user_id,
@@ -231,7 +195,7 @@ def _seed_noise_first(table: CountingTable, *, noise_rows: int) -> None:
             "name": user_id,
             "account_number": f"S26-{index:04d}",
             "created_at": "2026-01-01T00:00:00+00:00",
-        }
+        })
 
 
 def test_账号藏在扫描页之后也要列出来(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -303,9 +267,15 @@ def test_平台统计要读完整张表(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_统计走不完时说明数字是下限(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Negative control: a census cut short must not pass itself off as a total."""
-    counting = CountingTable()
-    _seed_noise_first(counting, noise_rows=admin.ADMIN_STATS_MAX_PAGES * 200 + 10)
+    """Negative control: a census cut short must not pass itself off as a total.
+
+    `/admin/stats` sends no `Limit`, so what ends its pages is the response cap, not
+    a row count. The cap is shrunk here for the same reason the budget exists: 50
+    real pages is 50 MB of rows, which is not a fixture. The old double invented a
+    `Limit` of 50 when none was sent, which is a row count no real scan applies.
+    """
+    counting = CountingTable(page_size_bytes=512)
+    _seed_noise_first(counting, noise_rows=800)
     for module in (admin, parent_link_repo, user_repo):
         monkeypatch.setattr(module, "get_table", lambda counting=counting: counting)
 

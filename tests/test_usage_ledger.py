@@ -1,9 +1,9 @@
-from botocore.exceptions import ClientError
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stoa.config import Settings
 from stoa.routers import admin, parents
+from fakes.dynamodb import FakeTable
 from stoa.services import usage_ledger_service
 from actor_helpers import install_actor_overrides
 from stoa.db.repositories import question_submission_repo, usage_ledger_repo
@@ -13,79 +13,6 @@ def _question_digest(caller_key: str) -> str:
     return question_submission_repo.question_submission_command_digest(
         "student-1", caller_key
     )
-
-
-class FakeTable:
-    def __init__(self):
-        self.items = {}
-
-    def put_item(self, Item, ConditionExpression=None):
-        key = (Item["PK"], Item["SK"])
-        if ConditionExpression == "attribute_not_exists(PK)" and key in self.items:
-            raise ClientError(
-                {"Error": {"Code": "ConditionalCheckFailedException", "Message": "duplicate"}},
-                "PutItem",
-            )
-        self.items[key] = dict(Item)
-
-    def get_item(self, Key):
-        item = self.items.get((Key["PK"], Key["SK"]))
-        return {"Item": dict(item)} if item else {}
-
-    def query(self, **kwargs):
-        pk = _condition_value(kwargs.get("KeyConditionExpression"), "PK")
-        sk_prefix = _condition_value(kwargs.get("KeyConditionExpression"), "SK")
-        items = [
-            dict(item)
-            for (item_pk, item_sk), item in self.items.items()
-            if item_pk == pk and item_sk.startswith(sk_prefix or "")
-        ]
-        return {"Items": items[: kwargs.get("Limit", len(items))]}
-
-    def update_item(self, Key, UpdateExpression, ExpressionAttributeValues, ExpressionAttributeNames=None):
-        item = self.items.setdefault((Key["PK"], Key["SK"]), {"PK": Key["PK"], "SK": Key["SK"]})
-        names = ExpressionAttributeNames or {}
-        expression = UpdateExpression.removeprefix("SET ")
-        for assignment in _split_assignments(expression):
-            field_expr, value_expr = [part.strip() for part in assignment.split("=")]
-            field = names.get(field_expr, field_expr)
-            if value_expr.startswith("if_not_exists"):
-                current = item.get(field)
-                fallback = value_expr[value_expr.rfind(",") + 1 : value_expr.rfind(")")].strip()
-                item[field] = current if current is not None else ExpressionAttributeValues[fallback]
-            else:
-                item[field] = ExpressionAttributeValues[value_expr]
-
-
-def _condition_value(condition, key_name: str):
-    if condition is None:
-        return None
-    for child in getattr(condition, "_values", ()):
-        values: object = getattr(child, "_values", ())
-        if isinstance(values, tuple) and len(values) == 2:
-            field, value = values
-            if getattr(field, "name", None) == key_name:
-                return value
-        nested = _condition_value(child, key_name)
-        if nested is not None:
-            return nested
-    return None
-
-
-def _split_assignments(expression: str) -> list[str]:
-    assignments = []
-    start = 0
-    depth = 0
-    for index, char in enumerate(expression):
-        if char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-        elif char == "," and depth == 0:
-            assignments.append(expression[start:index].strip())
-            start = index + 1
-    assignments.append(expression[start:].strip())
-    return assignments
 
 
 def _settings() -> Settings:
@@ -336,11 +263,11 @@ def test_reconciliation_explains_over_limit_counter(monkeypatch):
             "limits": {"dailyAiQuestionLimit": 2},
         },
     )
-    table.items[("USAGE#student-1", "QUESTION#2026-07-05")] = {
+    table.seed({
         "PK": "USAGE#student-1",
         "SK": "QUESTION#2026-07-05",
         "count": 3,
-    }
+    })
     for index in range(3):
         usage_ledger_service.record_question_usage_event(
             student_id="student-1",
@@ -401,11 +328,11 @@ def test_parent_usage_summaries_use_active_child_bindings(monkeypatch):
             "limits": {"dailyAiQuestionLimit": 30},
         },
     )
-    table.items[("USAGE#student-1", "QUESTION#2026-07-03")] = {
+    table.seed({
         "PK": "USAGE#student-1",
         "SK": "QUESTION#2026-07-03",
         "count": 3,
-    }
+    })
 
     summaries = usage_ledger_service.list_parent_usage_summaries(
         parent_id="parent-1",
@@ -438,16 +365,16 @@ def test_student_usage_summary_includes_multi_action_groups(monkeypatch):
             "limits": {"dailyAiQuestionLimit": 100},
         },
     )
-    table.items[("USAGE#student-1", "QUESTION#2026-07-04")] = {
+    table.seed({
         "PK": "USAGE#student-1",
         "SK": "QUESTION#2026-07-04",
         "count": 1,
-    }
-    table.items[("USAGE#student-1", "CHAT#2026-07-04")] = {
+    })
+    table.seed({
         "PK": "USAGE#student-1",
         "SK": "CHAT#2026-07-04",
         "count": 1,
-    }
+    })
     usage_ledger_service.record_question_usage_event(
         student_id="student-1",
         question_id="question-1",

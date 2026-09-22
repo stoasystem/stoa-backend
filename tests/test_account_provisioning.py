@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ast
 from copy import deepcopy
-from decimal import Decimal
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 import json
@@ -20,6 +19,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 import pytest
 from botocore.exceptions import ClientError
+from fakes.dynamodb import FakeTable
 
 from stoa.db.repositories import (
     account_deletion_repo,
@@ -57,159 +57,14 @@ TIMING_ORACLE_THRESHOLD_SECONDS = 5e-5
 PLANTED_ORACLE_DELAY_SECONDS = 1e-4
 
 
-def _conditional_error(operation: str) -> ClientError:
-    return ClientError(
-        {"Error": {"Code": "ConditionalCheckFailedException", "Message": "refused"}},
-        operation,
-    )
+class FakeAccountTable(FakeTable):
+    """The shared table double plus this card's access log and concurrency gates.
 
-
-def _split_top(expression: str, separator: str) -> list[str]:
-    parts: list[str] = []
-    depth = 0
-    current = ""
-    index = 0
-    while index < len(expression):
-        char = expression[index]
-        if char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-        if depth == 0 and expression[index : index + len(separator)] == separator:
-            parts.append(current)
-            current = ""
-            index += len(separator)
-            continue
-        current += char
-        index += 1
-    parts.append(current)
-    return parts
-
-
-def _fully_wrapped(text: str) -> bool:
-    if not text.startswith("(") or not text.endswith(")"):
-        return False
-    depth = 0
-    for index, char in enumerate(text):
-        if char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-            if depth == 0:
-                return index == len(text) - 1
-    return False
-
-
-class ConditionEvaluator:
-    """The subset of DynamoDB condition syntax this codebase actually writes."""
-
-    OPERATORS = ("<>", ">=", "<=", "=", "<", ">")
-
-    def __init__(self, names: dict[str, str] | None, values: dict[str, Any] | None) -> None:
-        self.names = names or {}
-        self.values = values or {}
-
-    def holds(self, expression: str | None, item: dict[str, Any] | None) -> bool:
-        if not expression:
-            return True
-        return self._clause(expression, item or {})
-
-    def _clause(self, expression: str, item: dict[str, Any]) -> bool:
-        text = expression.strip()
-        if _fully_wrapped(text):
-            return self._clause(text[1:-1], item)
-        for separator, combine in ((" OR ", any), (" AND ", all)):
-            parts = _split_top(text, separator)
-            if len(parts) > 1:
-                return combine(self._clause(part, item) for part in parts)
-        return self._primary(text, item)
-
-    def _primary(self, expression: str, item: dict[str, Any]) -> bool:
-        text = expression.strip()
-        if text.startswith("attribute_not_exists("):
-            return self._path(text[len("attribute_not_exists(") : -1]) not in item
-        if text.startswith("attribute_exists("):
-            return self._path(text[len("attribute_exists(") : -1]) in item
-        for operator in self.OPERATORS:
-            if operator in text:
-                left, right = text.split(operator, 1)
-                stored = item.get(self._path(left))
-                expected = self._value(right)
-                return self._compare(operator, stored, expected)
-        raise AssertionError(f"unsupported condition: {expression}")
-
-    @staticmethod
-    def _compare(operator: str, stored: Any, expected: Any) -> bool:
-        if operator == "=":
-            return stored == expected
-        if operator == "<>":
-            return stored != expected
-        if stored is None:
-            return False
-        if operator == "<":
-            return stored < expected
-        if operator == ">":
-            return stored > expected
-        if operator == "<=":
-            return stored <= expected
-        return stored >= expected
-
-    def _path(self, token: str) -> str:
-        name = token.strip()
-        return self.names.get(name, name)
-
-    def _value(self, token: str) -> Any:
-        name = token.strip()
-        if name.startswith(":"):
-            if name not in self.values:
-                raise AssertionError(f"unbound value: {name}")
-            return self.values[name]
-        return name
-
-
-def _filter_holds(condition: Any, item: dict[str, Any]) -> bool:
-    """Evaluate one boto3 `Attr` filter the way the index would."""
-    if condition is None:
-        return True
-    built = condition.get_expression()
-    operator = built["operator"]
-    values = built["values"]
-    if operator == "AND":
-        return all(_filter_holds(value, item) for value in values)
-    if operator == "OR":
-        return any(_filter_holds(value, item) for value in values)
-    name, expected = values
-    stored = item.get(name.name)
-    if operator == "=":
-        return stored == expected
-    if operator == "<>":
-        return stored != expected
-    raise AssertionError(f"unsupported filter: {operator}")
-
-
-def _as_stored(value: Any) -> Any:
-    """Numbers as the table gives them back, which is never `int`.
-
-    The resource interface deserializes every stored number to `Decimal`. A double
-    that hands back the `int` it was given makes every guard written against `int`
-    pass here and fail in production - which is exactly what happened to the version
-    checks on the opening path.
+    Everything the store itself does - conditions, `Decimal`, paging, the index -
+    now comes from `fakes.dynamodb`. What is left here is what belongs to this card:
+    which rows were touched in what order, and the barriers that force two callers to
+    collide on the same row instead of serialising by luck.
     """
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int):
-        return Decimal(value)
-    if isinstance(value, float):
-        return Decimal(str(value))
-    if isinstance(value, dict):
-        return {key: _as_stored(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_as_stored(item) for item in value]
-    return value
-
-
-class FakeAccountTable:
-    """In-memory single table honouring the conditions the production code sends."""
 
     def __init__(
         self,
@@ -217,16 +72,18 @@ class FakeAccountTable:
         claim_gate: threading.Barrier | None = None,
         email_gate: threading.Barrier | None = None,
     ) -> None:
-        self.rows: dict[tuple[str, str], dict[str, Any]] = {}
+        super().__init__()
         self.access: list[tuple[str, str, str]] = []
-        self.lock = threading.Lock()
         self.claim_gate = claim_gate
         self.gated: set[int] = set()
         self.email_gate = email_gate
         self.email_gated: set[int] = set()
 
-    def _record(self, method: str, key: dict[str, str]) -> None:
-        self.access.append((method, str(key["PK"]).split("#", 1)[0], str(key["SK"])))
+    def _record(self, operation: str, request: dict[str, Any]) -> None:
+        super()._record(operation, request)
+        key = request.get("Key") or request.get("Item")
+        if isinstance(key, dict) and "PK" in key and "SK" in key:
+            self.access.append((operation, str(key["PK"]).split("#", 1)[0], str(key["SK"])))
 
     def _await_gate(self, key: tuple[str, str]) -> None:
         """Hold every reader of the invitation row until all of them have read it.
@@ -243,92 +100,13 @@ class FakeAccountTable:
             self.gated.add(threading.get_ident())
         self.claim_gate.wait(timeout=5)
 
-    def get_item(self, *, Key: dict[str, str], ConsistentRead: bool = False) -> dict[str, Any]:  # noqa: N803
-        del ConsistentRead
-        key = (Key["PK"], Key["SK"])
-        with self.lock:
-            self._record("get_item", Key)
-            item = self.rows.get(key)
-            response = {"Item": deepcopy(item)} if item is not None else {}
-        self._await_gate(key)
+    def get_item(self, **kwargs: Any) -> dict[str, Any]:
+        response = super().get_item(**kwargs)
+        self._await_gate((str(kwargs["Key"]["PK"]), str(kwargs["Key"]["SK"])))
         return response
 
-    def put_item(
-        self,
-        *,
-        Item: dict[str, Any],  # noqa: N803
-        ConditionExpression: str | None = None,  # noqa: N803
-        ExpressionAttributeNames: dict[str, str] | None = None,  # noqa: N803
-        ExpressionAttributeValues: dict[str, Any] | None = None,  # noqa: N803
-    ) -> dict[str, Any]:
-        key = (str(Item["PK"]), str(Item["SK"]))
-        evaluator = ConditionEvaluator(ExpressionAttributeNames, ExpressionAttributeValues)
-        with self.lock:
-            self._record("put_item", {"PK": key[0], "SK": key[1]})
-            if not evaluator.holds(ConditionExpression, self.rows.get(key)):
-                raise _conditional_error("PutItem")
-            self.rows[key] = _as_stored(deepcopy(Item))
-        return {}
-
-    def update_item(
-        self,
-        *,
-        Key: dict[str, str],  # noqa: N803
-        UpdateExpression: str,  # noqa: N803
-        ConditionExpression: str | None = None,  # noqa: N803
-        ExpressionAttributeNames: dict[str, str] | None = None,  # noqa: N803
-        ExpressionAttributeValues: dict[str, Any] | None = None,  # noqa: N803
-        ReturnValues: str | None = None,  # noqa: N803
-    ) -> dict[str, Any]:
-        del ReturnValues
-        key = (Key["PK"], Key["SK"])
-        evaluator = ConditionEvaluator(ExpressionAttributeNames, ExpressionAttributeValues)
-        with self.lock:
-            self._record("update_item", Key)
-            current = self.rows.get(key)
-            if not evaluator.holds(ConditionExpression, current):
-                raise _conditional_error("UpdateItem")
-            updated = deepcopy(current) if current else dict(Key)
-            self._apply(updated, UpdateExpression, evaluator)
-            self.rows[key] = _as_stored(updated)
-        return {"Attributes": deepcopy(updated)}
-
-    @staticmethod
-    def _apply(item: dict[str, Any], expression: str, evaluator: ConditionEvaluator) -> None:
-        text = expression.strip()
-        assert text.upper().startswith("SET "), f"unsupported update: {expression}"
-        for assignment in _split_top(text[4:], ","):
-            target, source = assignment.split("=", 1)
-            item[evaluator._path(target)] = evaluator._value(source)
-
-    def query(
-        self,
-        *,
-        IndexName: str,  # noqa: N803
-        KeyConditionExpression: Any,  # noqa: N803
-        FilterExpression: Any = None,  # noqa: N803
-        Limit: int | None = None,  # noqa: N803
-        **_kwargs: Any,
-    ) -> dict[str, Any]:
-        """Model what the index actually holds: every row carrying the address.
-
-        The profile row has no privileged position in GSI-Email - the invitation row
-        repeats the address and sits right beside it - so only the caller's own
-        FilterExpression narrows the answer. Limit is applied before the filter,
-        exactly as DynamoDB applies it, which is why a caller that sends both gets
-        fewer rows than it asked for rather than the wrong ones.
-        """
-        assert IndexName == "GSI-Email"
-        expected = KeyConditionExpression.get_expression()["values"][1]
-        with self.lock:
-            matches = [
-                deepcopy(item)
-                for _, item in sorted(self.rows.items())
-                if item.get("email") == expected
-            ]
-        if Limit is not None:
-            matches = matches[: int(Limit)]
-        response = {"Items": [row for row in matches if _filter_holds(FilterExpression, row)]}
+    def query(self, **kwargs: Any) -> dict[str, Any]:
+        response = super().query(**kwargs)
         self._await_email_gate()
         return response
 
@@ -347,28 +125,6 @@ class FakeAccountTable:
             self.email_gated.add(threading.get_ident())
         self.email_gate.wait(timeout=5)
 
-    def scan(self, **kwargs: Any) -> dict[str, Any]:
-        """Whole-table paging, the shape `scan_owned_private_rows` walks.
-
-        No filter is sent, so this hands back rows as they sort and leaves the
-        caller to decide which of them belong to the account being deleted -
-        which is where that rule actually lives.
-        """
-        with self.lock:
-            ordered = [deepcopy(row) for _, row in sorted(self.rows.items())]
-        start = kwargs.get("ExclusiveStartKey")
-        if start:
-            after = (str(start["PK"]), str(start["SK"]))
-            ordered = [row for row in ordered if (str(row["PK"]), str(row["SK"])) > after]
-        limit = int(kwargs.get("Limit") or 0) or len(ordered) or 1
-        page, rest = ordered[:limit], ordered[limit:]
-        response: dict[str, Any] = {"Items": page}
-        if rest and page:
-            response["LastEvaluatedKey"] = {
-                "PK": str(page[-1]["PK"]),
-                "SK": str(page[-1]["SK"]),
-            }
-        return response
 
     def put_profile_with_fence(
         self, profile: dict[str, Any], fence: dict[str, Any]
@@ -378,50 +134,20 @@ class FakeAccountTable:
             if key in self.rows:
                 raise account_deletion_repo.AccountDeletionConflict("profile exists")
         for row in (profile, fence):
-            self.rows[(str(row["PK"]), str(row["SK"]))] = _as_stored(deepcopy(row))
+            self.seed(row)
 
     def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
-        """All conditions, then all effects, under one lock.
+        """The repository's transaction, reported the way the repository reports it.
 
-        The lock is the transaction: without it two callers can both pass their
-        conditions before either writes, and a conditional claim that the real store
-        would refuse gets through the double.
+        The shape and the all-or-nothing rule come from the shared double; only the
+        exception is this repository's own, so a caller that catches
+        `AccountDeletionConflict` still sees one.
         """
-        staged: list[tuple[tuple[str, str], dict[str, Any] | None]] = []
-        with self.lock:
-            for operation in operations:
-                for kind, body in operation.items():
-                    key = (
-                        (str(body["Key"]["PK"]), str(body["Key"]["SK"]))
-                        if "Key" in body
-                        else (str(body["Item"]["PK"]), str(body["Item"]["SK"]))
-                    )
-                    evaluator = ConditionEvaluator(
-                        body.get("ExpressionAttributeNames"),
-                        body.get("ExpressionAttributeValues"),
-                    )
-                    current = self.rows.get(key)
-                    if not evaluator.holds(body.get("ConditionExpression"), current):
-                        raise account_deletion_repo.AccountDeletionConflict(
-                            f"{kind} refused for {key}"
-                        )
-                    if kind == "ConditionCheck":
-                        continue
-                    if kind == "Put":
-                        staged.append((key, _as_stored(deepcopy(body["Item"]))))
-                        continue
-                    if kind == "Delete":
-                        staged.append((key, None))
-                        continue
-                    assert kind == "Update", f"unsupported operation: {kind}"
-                    updated = deepcopy(current) if current else dict(body["Key"])
-                    self._apply(updated, body["UpdateExpression"], evaluator)
-                    staged.append((key, _as_stored(updated)))
-            for key, row in staged:
-                if row is None:
-                    self.rows.pop(key, None)
-                else:
-                    self.rows[key] = row
+        try:
+            self.transact_write_items(operations)
+        except ClientError as error:
+            code = error.response["Error"]["Code"]
+            raise account_deletion_repo.AccountDeletionConflict(code) from error
 
     def profiles(self) -> list[dict[str, Any]]:
         return [deepcopy(row) for key, row in self.rows.items() if key[1] == "PROFILE"]

@@ -1,4 +1,3 @@
-from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -6,6 +5,7 @@ from fastapi.testclient import TestClient
 from stoa.routers import admin, teachers
 from stoa.services import teacher_dispatch_service
 from actor_helpers import install_actor_overrides
+from fakes.dynamodb import FakeTable, as_stored as _as_stored
 
 
 def _app(router, prefix: str, user: dict) -> TestClient:
@@ -13,26 +13,6 @@ def _app(router, prefix: str, user: dict) -> TestClient:
     app.include_router(router, prefix=prefix)
     install_actor_overrides(app, user)
     return TestClient(app)
-
-
-def _as_stored(value):
-    """Numbers as the table gives them back, which is never `int`.
-
-    The resource interface deserializes every stored number to `Decimal`, so a
-    double that hands back the `int` it was given lets every guard written
-    against `int` pass here and fail in production.
-    """
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int):
-        return Decimal(value)
-    if isinstance(value, float):
-        return Decimal(str(value))
-    if isinstance(value, dict):
-        return {key: _as_stored(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_as_stored(item) for item in value]
-    return value
 
 
 QUESTION = _as_stored({
@@ -223,118 +203,99 @@ def test_dispatch_assignment_atomically_observes_teacher_profile_and_fence(monke
     }
 
 
-class _SparseDispatchScanTable:
-    def __init__(self):
-        self.calls = []
+def _dispatch_table(*rows: dict) -> FakeTable:
+    """A real table for the dispatch scans, plus the account fence they consult.
 
-    def scan(self, **kwargs):
-        self.calls.append(dict(kwargs))
-        if "ExclusiveStartKey" not in kwargs:
-            return {
-                "Items": [],
-                "LastEvaluatedKey": {"PK": "UNRELATED#last", "SK": "ROW"},
-            }
-        if kwargs["ExpressionAttributeValues"] == {":profile": "PROFILE"}:
-            return {"Items": [dict(TEACHERS[0])]}
-        return {"Items": [dict(QUESTION)]}
-
-    def get_item(self, *, Key, ConsistentRead=True):  # noqa: N803
-        assert ConsistentRead is True
-        assert Key == {
+    The doubles these tests used to carry told the two scans apart by comparing
+    `ExpressionAttributeValues` to a literal and answered from a script. That is the
+    fifth incident in `fakes/dynamodb.py`: nothing evaluated `FilterExpression`, so a
+    scan that had stopped naming `PROFILE` would have got profiles back anyway.
+    """
+    table = FakeTable()
+    table.seed(
+        {
             "PK": "USER#teacher-low-load",
             "SK": "ACCOUNT_FENCE",
+            "status": "active",
+            "generation": 3,
         }
-        return {
-            "Item": {
-                **Key,
-                "status": "active",
-                "generation": 3,
-            }
-        }
+    )
+    for row in rows:
+        table.seed(row)
+    return table
+
+
+def _scans_since(table: FakeTable, already_seen: int) -> list[dict]:
+    """The scan requests of one walk, so two walks are not read as one."""
+    return [call for name, call in table.requests if name == "scan"][already_seen:]
+
+
+def _profile_row(**overrides: object) -> dict:
+    teacher = dict(TEACHERS[0])
+    teacher.update(overrides)
+    return {"PK": f"USER#{teacher['user_id']}", "SK": "PROFILE", **teacher}
+
+
+def _question_row(**overrides: object) -> dict:
+    question = dict(QUESTION)
+    question.update(overrides)
+    return {"PK": f"QUESTION#{question['question_id']}", "SK": "META", **question}
 
 
 def test_dispatch_scans_continue_after_sparse_filtered_page(monkeypatch):
-    table = _SparseDispatchScanTable()
+    """A page whose rows the filter all drops must not end the walk.
+
+    `Limit` counts rows read, so the first page here is one unrelated row and no
+    match at all - the shape that made `/admin/users` answer an empty list forever.
+    """
+    table = _dispatch_table(
+        {"PK": "PRACTICE#0", "SK": "ROW"},
+        _profile_row(),
+        _question_row(),
+    )
     monkeypatch.setattr(teacher_dispatch_service, "get_table", lambda: table)
 
     teachers = teacher_dispatch_service.list_teacher_profiles(limit=1)
+    profile_scans = _scans_since(table, 0)
     questions = teacher_dispatch_service.list_teacher_dispatch_questions(limit=1)
+    question_scans = _scans_since(table, len(profile_scans))
 
     assert [item["user_id"] for item in teachers] == ["teacher-low-load"]
     assert [item["question_id"] for item in questions] == ["question-1"]
-    assert len(table.calls) == 4
-    assert all(
-        "ExclusiveStartKey" in call
-        for call in (table.calls[1], table.calls[3])
-    )
-
-
-class _BusinessFilteredDispatchScanTable:
-    def __init__(self):
-        self.calls = []
-
-    def scan(self, **kwargs):
-        self.calls.append(dict(kwargs))
-        is_profile = kwargs["ExpressionAttributeValues"] == {":profile": "PROFILE"}
-        if "ExclusiveStartKey" not in kwargs:
-            item = (
-                {
-                    **TEACHERS[0],
-                    "user_id": "student-rejected",
-                    "role": "student",
-                }
-                if is_profile
-                else {
-                    **QUESTION,
-                    "status": "pending",
-                    "teacher_requested_at": None,
-                    "queue_visible_at": None,
-                }
-            )
-            return {
-                "Items": [item],
-                "LastEvaluatedKey": {
-                    "PK": "REJECTED#last",
-                    "SK": "PROFILE" if is_profile else "META",
-                },
-            }
-        return {
-            "Items": [
-                dict(TEACHERS[0])
-                if is_profile
-                else {**QUESTION, "question_id": "question-eligible"}
-            ]
-        }
-
-    def get_item(self, *, Key, ConsistentRead=True):  # noqa: N803
-        assert ConsistentRead is True
-        assert Key == {
-            "PK": "USER#teacher-low-load",
-            "SK": "ACCOUNT_FENCE",
-        }
-        return {
-            "Item": {
-                **Key,
-                "status": "active",
-                "generation": 3,
-            }
-        }
+    for walk in (profile_scans, question_scans):
+        assert len(walk) > 1, "a filtered-empty page has to be followed, not accepted"
+        assert all("ExclusiveStartKey" in call for call in walk[1:])
 
 
 def test_dispatch_scans_continue_after_nonempty_business_rejected_page(monkeypatch):
-    table = _BusinessFilteredDispatchScanTable()
+    """A page whose rows pass the filter but fail the business rule, likewise.
+
+    The rejected rows below match `SK = :profile` and `SK = :meta` exactly, so only
+    `accept_item` can turn them down - which is the branch this test is about.
+    """
+    table = _dispatch_table(
+        _profile_row(user_id="student-rejected", role="student"),
+        _profile_row(),
+        _question_row(
+            question_id="question-0-rejected",
+            status="pending",
+            teacher_requested_at=None,
+            queue_visible_at=None,
+        ),
+        _question_row(question_id="question-eligible"),
+    )
     monkeypatch.setattr(teacher_dispatch_service, "get_table", lambda: table)
 
     teachers = teacher_dispatch_service.list_teacher_profiles(limit=1)
+    profile_scans = _scans_since(table, 0)
     questions = teacher_dispatch_service.list_teacher_dispatch_questions(limit=1)
+    question_scans = _scans_since(table, len(profile_scans))
 
     assert [item["user_id"] for item in teachers] == ["teacher-low-load"]
     assert [item["question_id"] for item in questions] == ["question-eligible"]
-    assert len(table.calls) == 4
-    assert all(
-        "ExclusiveStartKey" in call
-        for call in (table.calls[1], table.calls[3])
-    )
+    for walk in (profile_scans, question_scans):
+        assert len(walk) > 1
+        assert all("ExclusiveStartKey" in call for call in walk[1:])
 
 
 def test_dispatch_question_uses_fresh_escalation_snapshot(monkeypatch):
@@ -589,41 +550,17 @@ def test_admin_dispatch_dashboard_is_aggregate_and_content_safe(monkeypatch):
     assert "private student content" not in serialized
 
 
-class _PagedScanTable:
-    """Scan double that cuts the page before the filter runs, as DynamoDB does.
+def _paged_scan_table(rows, page_rows: int = 50) -> FakeTable:
+    """A real table whose response cap falls after `page_rows` rows read.
 
-    `Limit` and the 1MB page boundary both count evaluated rows, so a page can come
-    back empty while escalated questions wait two pages further on. A double that
-    filters first never shows that, which is why the cut happens here first.
+    `Limit` and the response cap both count evaluated rows, so a page can come back
+    empty while escalated questions wait two pages further on. The double this
+    replaced cut the page correctly but was still hand-written; the cap now comes
+    from the shared one.
     """
-
-    def __init__(self, rows, page_rows: int = 50):
-        self.rows = rows
-        self.page_rows = page_rows
-        self.scan_calls = []
-
-    def scan(self, **kwargs):
-        self.scan_calls.append(kwargs)
-        assert kwargs["FilterExpression"] == "#s = :s"
-        attribute = kwargs["ExpressionAttributeNames"]["#s"]
-        expected = kwargs["ExpressionAttributeValues"][":s"]
-        start = 0
-        cursor = kwargs.get("ExclusiveStartKey")
-        if cursor is not None:
-            start = 1 + next(
-                index
-                for index, row in enumerate(self.rows)
-                if (row["PK"], row["SK"]) == (cursor["PK"], cursor["SK"])
-            )
-        page_rows = min(self.page_rows, int(kwargs.get("Limit", self.page_rows)))
-        evaluated = self.rows[start : start + page_rows]
-        response = {
-            "Items": [dict(row) for row in evaluated if row.get(attribute) == expected]
-        }
-        if start + len(evaluated) < len(self.rows):
-            last = self.rows[start + len(evaluated) - 1]
-            response["LastEvaluatedKey"] = {"PK": last["PK"], "SK": last["SK"]}
-        return response
+    table = FakeTable(page_item_cap=page_rows)
+    table.seed(*rows)
+    return table
 
 
 def _queue_rows(*, answered: int, escalated: int):
@@ -659,7 +596,7 @@ def _queue_response(monkeypatch, table):
 
 def test_teacher_queue_reaches_matching_question_after_empty_scan_page(monkeypatch):
     """Two pages of other rows must not hide the students waiting on the third."""
-    table = _PagedScanTable(_queue_rows(answered=120, escalated=3))
+    table = _paged_scan_table(_queue_rows(answered=120, escalated=3))
 
     response = _queue_response(monkeypatch, table)
 
@@ -672,12 +609,12 @@ def test_teacher_queue_reaches_matching_question_after_empty_scan_page(monkeypat
     ]
     assert body["count"] == 3
     assert body["truncated"] is False
-    assert len(table.scan_calls) == 3
-    assert table.scan_calls[0].get("ExclusiveStartKey") is None
+    assert len(_scans_since(table, 0)) == 3
+    assert _scans_since(table, 0)[0].get("ExclusiveStartKey") is None
 
 
 def test_teacher_queue_reads_one_page_at_normal_volume_without_repeats(monkeypatch):
-    table = _PagedScanTable(_queue_rows(answered=10, escalated=3))
+    table = _paged_scan_table(_queue_rows(answered=10, escalated=3))
 
     response = _queue_response(monkeypatch, table)
 
@@ -687,27 +624,27 @@ def test_teacher_queue_reads_one_page_at_normal_volume_without_repeats(monkeypat
     assert ids == ["waiting-0", "waiting-1", "waiting-2"]
     assert len(ids) == len(set(ids))
     assert body["truncated"] is False
-    assert len(table.scan_calls) == 1
+    assert len(_scans_since(table, 0)) == 1
 
 
 def test_teacher_queue_reports_an_exhausted_scan_budget_as_truncated(monkeypatch):
     """An exhausted budget is not the same answer as an empty queue."""
-    table = _PagedScanTable(_queue_rows(answered=200, escalated=2))
+    table = _paged_scan_table(_queue_rows(answered=200, escalated=2))
     monkeypatch.setattr(teachers, "get_table", lambda: table)
 
     page = teachers._list_escalated_questions(page_budget=2)
 
     assert page.items == []
     assert page.truncated is True
-    assert len(table.scan_calls) == 2
+    assert len(_scans_since(table, 0)) == 2
 
 
 def test_teacher_queue_stops_at_the_requested_match_count_and_says_so(monkeypatch):
-    table = _PagedScanTable(_queue_rows(answered=0, escalated=120))
+    table = _paged_scan_table(_queue_rows(answered=0, escalated=120))
     monkeypatch.setattr(teachers, "get_table", lambda: table)
 
     page = teachers._list_escalated_questions()
 
     assert len(page.items) == 50
     assert page.truncated is True
-    assert len(table.scan_calls) == 1
+    assert len(_scans_since(table, 0)) == 1

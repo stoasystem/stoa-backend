@@ -2,7 +2,6 @@ import json
 import asyncio
 import hashlib
 import inspect
-from decimal import Decimal
 import subprocess
 import sys
 import threading
@@ -15,6 +14,7 @@ import pytest
 from datetime import datetime, timezone
 
 from audit_helpers import MemoryAuthorizationAuditSink
+from fakes.dynamodb import as_stored as _as_stored
 from stoa.db.repositories import attachment_repo, question_repo, user_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.config import Settings
@@ -461,26 +461,6 @@ def test_message_fingerprint_is_versioned_typed_ordered_and_exact() -> None:
     )
     reproduced = subprocess.check_output([sys.executable, "-c", code], text=True).strip()
     assert reproduced == baseline
-
-
-def _as_stored(value: Any) -> Any:
-    """Numbers as the table gives them back, which is never `int`.
-
-    The resource interface deserializes every stored number to `Decimal`, so a
-    double that hands back the `int` it was given lets every guard written
-    against `int` pass here and fail in production.
-    """
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int):
-        return Decimal(value)
-    if isinstance(value, float):
-        return Decimal(str(value))
-    if isinstance(value, dict):
-        return {key: _as_stored(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_as_stored(item) for item in value]
-    return value
 
 
 def _completed_command(body: conversations.SendMessageRequest) -> dict:

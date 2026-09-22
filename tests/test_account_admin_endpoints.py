@@ -121,82 +121,13 @@ def build_app_without_analytics() -> FastAPI:
 
 
 class AccountAdminTable(FakeAccountTable):
-    """The provisioning fake plus the scan, prefix query and counter this card needs."""
+    """The provisioning double plus the one accessor this card's assertions read.
 
-    def scan(self, **kwargs: Any) -> dict[str, Any]:
-        """Page the way the real table does: a cursor in and a cursor back out.
-
-        Without `Limit`, `ExclusiveStartKey` and `LastEvaluatedKey` the pagination
-        this endpoint advertises could not be falsified by any test - the fake
-        returned the whole table and no cursor whatever was asked for.
-
-        `Limit` counts matched rows here. Real DynamoDB counts rows *read*, before
-        the filter, so a production page returns at most as many rows as this one;
-        that gap is its own finding and is deliberately not modelled here.
-        """
-        values = kwargs.get("ExpressionAttributeValues") or {}
-        role = values.get(":role")
-        limit = kwargs.get("Limit")
-        start = kwargs.get("ExclusiveStartKey")
-        ordered = sorted(key for key in self.rows if key[1] == "PROFILE")
-        if start:
-            after = (str(start["PK"]), str(start["SK"]))
-            ordered = [key for key in ordered if key > after]
-        items: list[dict[str, Any]] = []
-        response: dict[str, Any] = {}
-        for position, key in enumerate(ordered):
-            item = self.rows[key]
-            if role is not None and item.get("role") != role:
-                continue
-            items.append(deepcopy(item))
-            if limit is not None and len(items) >= int(limit) and position + 1 < len(ordered):
-                response["LastEvaluatedKey"] = {"PK": key[0], "SK": key[1]}
-                break
-        response["Items"] = items
-        return response
-
-    def query(self, **kwargs: Any) -> dict[str, Any]:
-        if kwargs.get("IndexName") == "GSI-Email":
-            condition = kwargs.get("FilterExpression")
-            if condition is None:
-                return super().query(**kwargs)
-            # The real index projects every row carrying the address, not only the
-            # profile, which is how an invitation is found from the account it
-            # opened. Limit is not passed on this path, so none is honoured.
-            expected = kwargs["KeyConditionExpression"].get_expression()["values"][1]
-            return {
-                "Items": [
-                    deepcopy(self.rows[key])
-                    for key in sorted(self.rows)
-                    if self.rows[key].get("email") == expected
-                    and _filter_holds(condition, self.rows[key])
-                ]
-            }
-        terms = _key_terms(kwargs["KeyConditionExpression"])
-        partition = terms[("PK", "=")]
-        prefix = terms.get(("SK", "begins_with"), "")
-        return {
-            "Items": [
-                deepcopy(item)
-                for (pk, sk), item in self.rows.items()
-                if pk == partition and sk.startswith(prefix)
-            ]
-        }
-
-    def update_item(self, **kwargs: Any) -> dict[str, Any]:
-        expression = str(kwargs.get("UpdateExpression") or "")
-        if " ADD " not in f" {expression.strip()} ":
-            return super().update_item(**kwargs)
-        # Mirror the real grammar: SET clauses first, then the atomic counter.
-        assert expression.strip().upper().startswith("SET "), expression
-        key = (kwargs["Key"]["PK"], kwargs["Key"]["SK"])
-        values = kwargs.get("ExpressionAttributeValues") or {}
-        with self.lock:
-            row = self.rows.setdefault(key, dict(kwargs["Key"]))
-            row["attempts"] = int(row.get("attempts") or 0) + int(values[":one"])
-            row["entity_type"] = values[":entity"]
-            row["expires_at"] = values[":expires_at"]
-            return {"Attributes": {"attempts": row["attempts"]}}
+    The scan, the prefix query and the atomic counter used to be written out here.
+    All three now come from the shared double, which applies `Limit` to rows read
+    rather than rows matched - the local scan said in its own docstring that it did
+    not, and that gap is the defect card 018 chased in production.
+    """
 
     def audit_events(self) -> list[dict[str, Any]]:
         return [

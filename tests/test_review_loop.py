@@ -7,6 +7,8 @@ and the questions a student is handed.
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from fakes.dynamodb import FakeTable
+
 from stoa.db.repositories import review_repo
 from stoa.services import review_scheduler, review_service
 
@@ -22,25 +24,6 @@ CHALLENGE = {
     "correct_answer": "3/4",
     "type": "multiple_choice",
 }
-
-
-class FakeTable:
-    """Enough of the table for the repository's non-transactional path."""
-
-    def __init__(self):
-        self.items: dict[tuple[str, str], dict] = {}
-
-    def put_item(self, **kwargs):
-        item = kwargs["Item"]
-        self.items[(item["PK"], item["SK"])] = item
-
-    def get_item(self, **kwargs):
-        key = kwargs["Key"]
-        found = self.items.get((key["PK"], key["SK"]))
-        return {"Item": found} if found else {}
-
-    def query(self, **kwargs):
-        return {"Items": list(self.items.values())}
 
 
 def use_table(monkeypatch) -> FakeTable:
@@ -72,7 +55,7 @@ def test_the_schedule_is_stored_as_decimal_not_float(monkeypatch):
 
     review_repo.save_card("student-1", "brueche-l1-c1", state)
 
-    stored = table.items[("REVIEW#student-1", "CARD#brueche-l1-c1")]
+    stored = table.rows[("REVIEW#student-1", "CARD#brueche-l1-c1")]
     assert isinstance(stored["stability"], Decimal)
     assert isinstance(stored["difficulty"], Decimal)
     assert not any(isinstance(value, float) for value in stored.values())

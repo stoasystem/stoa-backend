@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
+from fakes.dynamodb import as_stored as _as_stored
 
 from stoa.db.repositories import moderation_repo
 from stoa.models.moderation import (
@@ -23,26 +24,6 @@ STUDENT_ID = "student-moderation-delete"
 CASE_ID = "moderation-private-case"
 QUESTION_ID = "moderation-private-question"
 NOW = "2026-07-17T23:00:25+00:00"
-
-
-def _as_stored(value: Any) -> Any:
-    """Numbers as the table gives them back, which is never `int`.
-
-    The resource interface deserializes every stored number to `Decimal`, so a
-    double that hands back the `int` it was given lets every guard written
-    against `int` pass here and fail in production.
-    """
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int):
-        return Decimal(value)
-    if isinstance(value, float):
-        return Decimal(str(value))
-    if isinstance(value, dict):
-        return {key: _as_stored(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_as_stored(item) for item in value]
-    return value
 
 
 def _require_contract(name: str) -> Any:

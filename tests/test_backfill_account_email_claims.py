@@ -19,6 +19,8 @@ from typing import Any
 
 import pytest
 
+from fakes.dynamodb import FakeTable as SharedTable
+
 
 def _load():
     path = Path(__file__).resolve().parents[1] / "scripts" / "backfill_account_email_claims.py"
@@ -32,38 +34,24 @@ def _load():
 backfill = _load()
 
 
-class FakeTable:
-    """Enough of a table to answer scan/get/put, and to refuse a taken claim."""
+class FakeTable(SharedTable):
+    """The shared double plus the write log this script's assertions read.
+
+    The scan used to decide what to return by reading `:sk` and `:pk` straight out of
+    `ExpressionAttributeValues`, never looking at `FilterExpression`. A script that
+    stopped naming `SK = :sk` would have kept getting exactly the same rows back -
+    the fifth incident, on the one path that writes to production with `--apply`.
+    """
 
     def __init__(self, items: list[dict[str, Any]]) -> None:
-        self.items = {(row["PK"], row["SK"]): dict(row) for row in items}
+        super().__init__()
         self.puts: list[dict[str, Any]] = []
+        self.seed(*items)
 
-    def scan(self, **kwargs):
-        values = kwargs["ExpressionAttributeValues"]
-        return {
-            "Items": [
-                dict(row)
-                for (pk, sk), row in self.items.items()
-                if sk == values[":sk"] and pk.startswith(values[":pk"])
-            ]
-        }
-
-    def get_item(self, *, Key, ConsistentRead=False):  # noqa: N803
-        row = self.items.get((Key["PK"], Key["SK"]))
-        return {"Item": dict(row)} if row is not None else {}
-
-    def put_item(self, *, Item, ConditionExpression=None, **kwargs):  # noqa: N803
-        key = (Item["PK"], Item["SK"])
-        if ConditionExpression and "attribute_not_exists" in ConditionExpression:
-            if key in self.items:
-                from botocore.exceptions import ClientError
-
-                raise ClientError(
-                    {"Error": {"Code": "ConditionalCheckFailedException"}}, "PutItem"
-                )
-        self.items[key] = dict(Item)
-        self.puts.append(dict(Item))
+    def put_item(self, **kwargs: Any) -> dict[str, Any]:
+        response = super().put_item(**kwargs)
+        self.puts.append(dict(kwargs["Item"]))
+        return response
 
 
 def _profile(user_id: str, email: str, role: str) -> dict[str, Any]:
@@ -125,7 +113,7 @@ def test_已经有占位行的账号不会被重写(monkeypatch: pytest.MonkeyPa
 
     assert _run(table, monkeypatch, "--apply") == 1
     assert table.puts == []
-    assert table.items[("EMAIL#a@example.ch#student", "EMAIL_CLAIM")]["account_id"] == "someone_else"
+    assert table.rows[("EMAIL#a@example.ch#student", "EMAIL_CLAIM")]["account_id"] == "someone_else"
 
 
 def test_同一地址不同角色各得一个占位行(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -194,7 +182,7 @@ def test_运行途中被人抢走的占位行不会被覆盖(monkeypatch: pytest
     real_put = table.put_item
 
     def racing_put(*, Item, ConditionExpression=None, **kwargs):  # noqa: N803
-        table.items[("EMAIL#a@example.ch#student", "EMAIL_CLAIM")] = {
+        table.rows[("EMAIL#a@example.ch#student", "EMAIL_CLAIM")] = {
             "PK": "EMAIL#a@example.ch#student",
             "SK": "EMAIL_CLAIM",
             "account_id": "opened_while_this_ran",
@@ -205,7 +193,7 @@ def test_运行途中被人抢走的占位行不会被覆盖(monkeypatch: pytest
     table.put_item = racing_put
 
     assert _run(table, monkeypatch, "--apply") == 0
-    assert table.items[("EMAIL#a@example.ch#student", "EMAIL_CLAIM")]["account_id"] == (
+    assert table.rows[("EMAIL#a@example.ch#student", "EMAIL_CLAIM")]["account_id"] == (
         "opened_while_this_ran"
     )
 

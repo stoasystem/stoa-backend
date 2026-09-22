@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping
-from decimal import Decimal
 from typing import Any
 
 import pytest
 from fastapi import HTTPException
+from fakes.dynamodb import as_stored as _as_stored
 
 from stoa.db.repositories import notification_repo, question_repo
 from stoa.routers import teachers
@@ -23,26 +23,6 @@ from stoa.services import notification_service
 CLAIM_ID = question_repo.teacher_takeover_claim_id("question-1", "teacher-1")
 SESSION_ID = question_repo.teacher_session_id_for_claim(CLAIM_ID)
 CLAIMED_AT = "2026-07-21T10:05:00+00:00"
-
-
-def _as_stored(value: Any) -> Any:
-    """Numbers as the table gives them back, which is never `int`.
-
-    The resource interface deserializes every stored number to `Decimal`, so a
-    double that hands back the `int` it was given lets every guard written
-    against `int` pass here and fail in production.
-    """
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int):
-        return Decimal(value)
-    if isinstance(value, float):
-        return Decimal(str(value))
-    if isinstance(value, Mapping):
-        return {key: _as_stored(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_as_stored(item) for item in value]
-    return value
 
 
 def _claimed_question() -> dict[str, object]:

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from dataclasses import is_dataclass
 from datetime import datetime
-from decimal import Decimal
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
 import pytest
 from botocore.exceptions import ClientError
+from fakes.dynamodb import as_stored as _as_stored
 
 from stoa.db.repositories import account_deletion_repo
 from stoa.services import account_deletion_service
@@ -17,25 +17,6 @@ from stoa.services import account_deletion_service
 
 NOW = "2026-07-18T12:00:00+00:00"
 
-
-def _as_stored(value: Any) -> Any:
-    """Numbers as the table gives them back, which is never `int`.
-
-    The resource interface deserializes every stored number to `Decimal`. A double
-    that hands back the `int` it was given makes every guard written against `int`
-    pass here and fail in production.
-    """
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int):
-        return Decimal(value)
-    if isinstance(value, float):
-        return Decimal(str(value))
-    if isinstance(value, dict):
-        return {key: _as_stored(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_as_stored(item) for item in value]
-    return value
 
 NOW_EPOCH = 1_784_376_000
 INVENTORY_PATH = (

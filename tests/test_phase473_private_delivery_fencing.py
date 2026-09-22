@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Any, Mapping
 
 import pytest
+from fakes.dynamodb import as_stored as _as_stored
 
 from stoa.config import Settings
 from stoa.db.repositories import account_deletion_repo, notification_repo
@@ -16,26 +17,6 @@ from stoa.services import notification_service, websocket_service
 OWNER = "student-private-delivery"
 GENERATION = 7
 EVENT_ID = "event-private-delivery"
-
-
-def _as_stored(value: Any) -> Any:
-    """Numbers as the table gives them back, which is never `int`.
-
-    The resource interface deserializes every stored number to `Decimal`, so a
-    double that hands back the `int` it was given lets every guard written
-    against `int` pass here and fail in production.
-    """
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int):
-        return Decimal(value)
-    if isinstance(value, float):
-        return Decimal(str(value))
-    if isinstance(value, Mapping):
-        return {key: _as_stored(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_as_stored(item) for item in value]
-    return value
 
 
 def _private_event(*, stored: bool = True, **overrides: Any) -> dict[str, Any]:
