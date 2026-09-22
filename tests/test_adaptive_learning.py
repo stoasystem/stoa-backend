@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -145,12 +146,43 @@ def _canonical_student_profiles(monkeypatch):
     )
 
 
+ASSIGNMENT_GENERATION = 3
+
+
+def _as_stored(value):
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`, so a
+    double that hands back the `int` it was given lets every guard written
+    against `int` pass here and fail in production.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
+    return value
+
+
 def _install_memory_repo(monkeypatch):
     snapshots: list[dict] = []
     assignments: dict[str, dict] = {}
 
+    def _stored_assignment(item):
+        # The repository binds the owner fence on every write, and the table
+        # hands the number back as Decimal.
+        stored = _as_stored(dict(item))
+        stored["account_fence_generation"] = Decimal(ASSIGNMENT_GENERATION)
+        item["account_fence_generation"] = stored["account_fence_generation"]
+        return stored
+
     def put_memory_snapshot(item):
-        snapshots.append(dict(item))
+        snapshots.append(_as_stored(dict(item)))
 
     def list_memory_snapshots(student_id, subject=None):
         items = [item for item in snapshots if item["student_id"] == student_id]
@@ -159,13 +191,14 @@ def _install_memory_repo(monkeypatch):
         return [dict(item) for item in items]
 
     def put_assignment(item):
-        assignments[item["assignment_id"]] = dict(item)
+        assignments[item["assignment_id"]] = _stored_assignment(item)
 
     def put_assignment_if_absent(item):
         if item["assignment_id"] in assignments:
             return dict(assignments[item["assignment_id"]]), False
-        assignments[item["assignment_id"]] = dict(item)
-        return dict(item), True
+        stored = _stored_assignment(item)
+        assignments[item["assignment_id"]] = stored
+        return dict(stored), True
 
     def get_assignment(assignment_id):
         item = assignments.get(assignment_id)
@@ -188,7 +221,7 @@ def _install_memory_repo(monkeypatch):
             return dict(assignments[assignment_id])
         if expected_pending_state is not None and current_pending.get("state") != expected_pending_state:
             return dict(assignments[assignment_id])
-        assignments[assignment_id].update(updates)
+        assignments[assignment_id].update(_as_stored(dict(updates)))
         return dict(assignments[assignment_id])
 
     def list_assignments(student_id, status=None, include_archived=False, limit=100):
@@ -281,6 +314,8 @@ def test_assignment_generation_and_transition_record_usage_ledger(monkeypatch):
     assert ledger_calls[0]["metadata"] == {"status": "assigned"}
     assert ledger_calls[1]["action"] == "assignment_started"
     assert ledger_calls[1]["metadata"]["status"] == "started"
+    assert ledger_calls[0]["account_fence_generation"] == ASSIGNMENT_GENERATION
+    assert ledger_calls[1]["account_fence_generation"] == ASSIGNMENT_GENERATION
     assert assignment_id in assignments
     assert "private prompt" not in str(ledger_calls)
     assert "private answer" not in str(ledger_calls)

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
 from datetime import datetime
+from decimal import Decimal
 
 from botocore.exceptions import ClientError
 from fastapi import HTTPException
+
 import pytest
 
 from stoa.security.authorization import (
@@ -473,6 +475,18 @@ def test_routine_admin_lifecycle_requires_manager_and_revokes_locally_first(monk
     audits = []
     repo = privileged_identity_service.privileged_identity_repo
 
+    def as_stored(value):
+        """Numbers as the table gives them back, which is never `int`."""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return Decimal(value)
+        if isinstance(value, dict):
+            return {key: as_stored(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [as_stored(item) for item in value]
+        return value
+
     def create_command(item):
         existing = commands.get(item["command_id"])
         if existing:
@@ -480,8 +494,8 @@ def test_routine_admin_lifecycle_requires_manager_and_revokes_locally_first(monk
             if not all(existing.get(key) == item.get(key) for key in immutable):
                 raise repo.PrivilegedIdentityCommandConflict("conflict")
             return dict(existing), False
-        commands[item["command_id"]] = dict(item)
-        return dict(item), True
+        commands[item["command_id"]] = as_stored(dict(item))
+        return dict(commands[item["command_id"]]), True
 
     def update_command(command_id, *, expected_version, status, updated_at, evidence_reference):
         item = commands[command_id]
@@ -491,7 +505,7 @@ def test_routine_admin_lifecycle_requires_manager_and_revokes_locally_first(monk
             status=status,
             updated_at=updated_at,
             evidence_reference=evidence_reference,
-            version=expected_version + 1,
+            version=as_stored(expected_version + 1),
         )
         return dict(item)
 

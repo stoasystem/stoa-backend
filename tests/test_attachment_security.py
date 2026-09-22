@@ -1,6 +1,7 @@
 import asyncio
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 import hashlib
 import json
 import threading
@@ -463,8 +464,28 @@ def test_storage_quota_uses_authoritative_entitlement_tiers() -> None:
     assert storage_limit_for_entitlement("family") == PAID_STORAGE_BYTES
 
 
+def _as_stored(value):
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`, so a
+    double that hands back the `int` it was given lets every guard written
+    against `int` pass here and fail in production.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
+    return value
+
+
 def _pending_upload(owner: str = "student-1", expected_size: int = 3) -> dict:
-    return {
+    return _as_stored({
         "upload_id": "upload-1",
         "owner_id": owner,
         "staging_object_key": "staging/private/object-canary.png",
@@ -477,7 +498,7 @@ def _pending_upload(owner: str = "student-1", expected_size: int = 3) -> dict:
         "status": "pending_upload",
         "version": 2,
         "expires_at": 2_000_000_000,
-    }
+    })
 
 
 class _ChunkRepository:
@@ -1149,7 +1170,7 @@ class _CrashLifecycleRepository:
         return True
 
     def get_upload_intent(self, upload_id):
-        return dict(self.item) if self.item else None
+        return _as_stored(dict(self.item)) if self.item else None
 
     def list_upload_parts(self, upload_id):
         return [dict(self.part)]
@@ -1202,7 +1223,7 @@ class _CrashLifecycleRepository:
         self.item["operation_takeover_count"] = self.item.get("operation_takeover_count", 0) + 1
         self.item["version"] += 1
         self.takeovers += 1
-        return dict(self.item)
+        return _as_stored(dict(self.item))
 
     def begin_immutable_promotion(self, upload_id, owner_id, version, now, **operation):
         assert self.item and self.item["status"] == "validating"

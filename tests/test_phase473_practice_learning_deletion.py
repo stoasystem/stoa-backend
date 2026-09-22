@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -295,3 +296,80 @@ def test_five_restartable_branches_are_registered_and_require_later_zero_scan(
     assert first.status == "retryable" and first.epoch == 0
     assert second.status == "retryable" and second.epoch == 1
     assert third.status == "complete" and third.quiescent is True and third.epoch == 2
+
+
+def test_learning_row_updates_keep_the_generation_the_row_carries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An assignment or draft must be rewritten under its own fence generation.
+
+    The resource interface returns the stored generation as `Decimal`, so a
+    guard written against `int` misses it and falls through to the live fence -
+    which is how a row left behind by an earlier account silently adopts the
+    generation of the current one.
+    """
+    assignment = {
+        "PK": "ASSIGNMENT#assignment-private",
+        "SK": "META",
+        "entity_type": "assignment",
+        "assignment_id": "assignment-private",
+        "student_id": STUDENT_ID,
+        "account_fence_generation": Decimal(GENERATION),
+        "status": "assigned",
+    }
+    draft = {
+        "PK": "AI_TEACHER_DRAFT#draft-private",
+        "SK": "META",
+        "entity_type": "ai_teacher_draft",
+        "draft_id": "draft-private",
+        "student_id": STUDENT_ID,
+        "account_fence_generation": Decimal(GENERATION),
+        "status": "proposed",
+    }
+    transactions: list[list[dict[str, Any]]] = []
+
+    class _Table:
+        def get_item(self, *, Key: dict[str, str], **_kwargs: Any) -> dict[str, Any]:
+            if Key["SK"] == "ACCOUNT_FENCE":
+                return {
+                    "Item": {
+                        **Key,
+                        "status": "active",
+                        "generation": Decimal(GENERATION + 1),
+                    }
+                }
+            for row in (assignment, draft):
+                if Key["PK"] == row["PK"]:
+                    return {"Item": dict(row)}
+            return {}
+
+        def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+            transactions.append(operations)
+
+    monkeypatch.setattr(adaptive_learning_repo, "get_table", lambda: _Table())
+    monkeypatch.setattr(ai_teacher_tools_repo, "get_table", lambda: _Table())
+
+    adaptive_learning_repo.update_assignment(
+        "assignment-private", {"status": "in_progress"}
+    )
+    ai_teacher_tools_repo.update_draft("draft-private", {"status": "accepted"})
+
+    assert len(transactions) == 2
+    for operations in transactions:
+        _fence(operations[0])
+
+    # Negative control: widening the read to Decimal must not widen it to
+    # everything. A value the table could never have stored as a number still
+    # falls through to the live fence.
+    for malformed in ("7", True, Decimal("7.5"), None):
+        transactions.clear()
+        assignment["account_fence_generation"] = malformed
+        draft["account_fence_generation"] = malformed
+        adaptive_learning_repo.update_assignment(
+            "assignment-private", {"status": "in_progress"}
+        )
+        ai_teacher_tools_repo.update_draft("draft-private", {"status": "accepted"})
+        assert len(transactions) == 2
+        for operations in transactions:
+            check = operations[0]["ConditionCheck"]
+            assert check["ExpressionAttributeValues"][":generation"] == GENERATION + 1

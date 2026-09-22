@@ -3,6 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from threading import Lock
 
@@ -17,6 +18,26 @@ START = datetime(2026, 7, 24, 9, 15, 30, 123456, tzinfo=UTC)
 EXPIRY = START + timedelta(days=14)
 
 
+def _as_stored(value: object) -> object:
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`, so a
+    double that hands back the `int` it was given lets every guard written
+    against `int` pass here and fail in production.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
+    return value
+
+
 class _ProfileStore:
     def __init__(self, profile: dict[str, object]) -> None:
         self.profile = deepcopy(profile)
@@ -26,7 +47,9 @@ class _ProfileStore:
     def get(self, user_id: str) -> dict[str, object] | None:
         assert user_id == self.profile["user_id"]
         with self.lock:
-            return deepcopy(self.profile)
+            stored = _as_stored(deepcopy(self.profile))
+        assert isinstance(stored, dict)
+        return stored
 
     def require_active_fence(
         self, user_id: str, *, table: object | None = None

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 from datetime import UTC, datetime
+from decimal import Decimal
 import threading
 from collections.abc import Mapping, Sequence
 from typing import TypeGuard
@@ -68,8 +69,35 @@ def _required_str(value: object) -> str:
 
 
 def _required_int(value: object) -> int:
-    if type(value) is not int:
+    """One stored number, compared the way DynamoDB compares numbers.
+
+    A double that insists on `int` here models the condition expression more
+    strictly than the table does, which hides the very values the table returns.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, Decimal)):
         raise _conditional_error()
+    if Decimal(value) != Decimal(value).to_integral_value():
+        raise _conditional_error()
+    return int(value)
+
+
+def _as_stored(value: object) -> object:
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`, so a
+    double that hands back the `int` it was given lets every guard written
+    against `int` pass here and fail in production.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, Mapping):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
     return value
 
 
@@ -181,7 +209,10 @@ class _ReconciliationTable:
         fail_after_commit: bool = False,
         fail_operation_index: int | None = None,
     ) -> None:
-        self.items = copy.deepcopy(items)
+        self.items = {
+            key: dict(_required_mapping(_as_stored(item)))
+            for key, item in copy.deepcopy(items).items()
+        }
         self.transactions: list[list[dict[str, object]]] = []
         self._lock = threading.Lock()
         self._barrier = threading.Barrier(2) if synchronize_transactions else None
@@ -289,24 +320,24 @@ class _ReconciliationTable:
                     status="completed",
                     completed_at=values[":applied_at"],
                     updated_at=values[":applied_at"],
-                    version=values[":next_version"],
+                    version=_as_stored(values[":next_version"]),
                 )
             elif key == COMMAND_KEY:
                 current.update(
                     reversal_id=values[":reversal"],
                     reversed_at=values[":reversed_at"],
                     updated_at=values[":reversed_at"],
-                    version=values[":next_version"],
+                    version=_as_stored(values[":next_version"]),
                 )
             elif key == QUESTION_KEY:
                 current.update(
                     status="submission_failed",
                     failure_code=values[":failure_code"],
                     failed_at=values[":reversed_at"],
-                    version=_required_int(current.get("version", 0)) + 1,
+                    version=Decimal(_required_int(current.get("version", 0)) + 1),
                 )
             elif key == COUNTER_KEY:
-                current["count"] = _required_int(current["count"]) - 1
+                current["count"] = Decimal(_required_int(current["count"]) - 1)
             elif key == LEDGER_KEY:
                 current.update(
                     status="reversed",

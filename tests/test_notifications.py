@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -279,6 +281,46 @@ def test_delivery_decision_honors_realtime_preference(monkeypatch):
     assert decision["channels"]["realtime"]["decision"] == "skipped_preference"
     assert decision["channels"]["email_digest"]["decision"] == "deferred_digest"
     assert event["deliveryChannels"]["realtime"]["decision"] == "skipped_preference"
+
+
+def test_create_event_binds_a_generation_the_table_returned(monkeypatch):
+    """Callers hand create_event a generation they read off a row.
+
+    The resource interface returns it as `Decimal`, and dropping it leaves the
+    event unowned - which is what keeps a deletion from ever reaching it.
+    """
+    events, _preferences = _install_notification_repo(monkeypatch)
+
+    event = notification_service.create_event(
+        recipient_id="student-1",
+        recipient_role="student",
+        event_type="teacher_reply",
+        target_type="question",
+        target_id="question-1",
+        title="Teacher replied",
+        summary="Your teacher added a reply.",
+        owner_id="student-1",
+        account_fence_generation=Decimal(7),
+    )
+    stored = events[event["eventId"]]
+
+    assert stored["owner_classification"] == "private_owner"
+    assert stored["account_fence_generation"] == 7
+
+    # Negative control: reading the stored shape is not reading anything.
+    for malformed in ("7", True, Decimal("7.5"), 0):
+        other = notification_service.create_event(
+            recipient_id="student-1",
+            recipient_role="student",
+            event_type="teacher_reply",
+            target_type="question",
+            target_id="question-1",
+            title="Teacher replied",
+            summary="Your teacher added a reply.",
+            owner_id="student-1",
+            account_fence_generation=malformed,
+        )
+        assert events[other["eventId"]]["account_fence_generation"] != 7
 
 
 def test_admin_delivery_status_summarizes_recent_decisions(monkeypatch):

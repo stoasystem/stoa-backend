@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Mapping
 from dataclasses import replace
+from decimal import Decimal
 from typing import Callable
 
 import pytest
@@ -29,8 +30,30 @@ NOW_EPOCH = 1784889000
 
 def _fixture_integer(value: object, field: str) -> int:
     """Make fixture assumptions explicit instead of coercing malformed rows."""
-    if isinstance(value, bool) or not isinstance(value, int):
+    if isinstance(value, bool) or not isinstance(value, (int, Decimal)):
         raise AssertionError(f"fixture {field} must be an integer")
+    if Decimal(value) != Decimal(value).to_integral_value():
+        raise AssertionError(f"fixture {field} must be an integer")
+    return int(value)
+
+
+def _as_stored(value: object) -> object:
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`, so a
+    double that hands back the `int` it was given lets every guard written
+    against `int` pass here and fail in production.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
     return value
 
 
@@ -70,7 +93,9 @@ def _command(
         item["provider_session_url"] = provider_session_url
     if provider_customer_id is not None:
         item["provider_customer_id"] = provider_customer_id
-    return item
+    stored = _as_stored(item)
+    assert isinstance(stored, dict)
+    return stored
 
 
 def _session(
@@ -505,6 +530,9 @@ def test_active_lease_contention_is_bounded_and_has_no_provider_effect() -> None
     result = _reconcile(repository, provider)
     assert result.disposition is billing_reconciliation_service.BillingReconciliationDisposition.LEASE_BUSY
     assert result.safe_action == "recheck_payment"
+    # The lease generation is reported back from the stored command, which the
+    # table returns as Decimal.
+    assert result.reconciliation_lease_generation == 1
     assert provider.find_calls == provider.retrieve_calls == []
     assert repository.attach_calls == 0
 
@@ -690,3 +718,46 @@ def test_provider_dependency_is_retrieval_only_and_result_fields_are_bounded() -
         "reconciliation_reason",
         "failure_code",
     } <= fields
+
+
+def test_webhook_identity_binding_reads_the_stored_command_version() -> None:
+    """The webhook binds against the version the table returned, as Decimal."""
+    digests = {
+        "provider_customer_id_digest": "c" * 64,
+        "provider_subscription_id_digest": "d" * 64,
+        "expected_initial_invoice_id_digest": "e" * 64,
+    }
+    updates: list[dict[str, object]] = []
+
+    class _Table:
+        def update_item(self, **kwargs: object) -> dict[str, object]:
+            updates.append(kwargs)
+            values = kwargs["ExpressionAttributeValues"]
+            assert isinstance(values, dict)
+            return {"Attributes": {**_command(), **digests}}
+
+        def get_item(self, **_kwargs: object) -> dict[str, object]:
+            return {}
+
+    bound = billing_reconciliation_service.bind_webhook_provider_identity(
+        _command(),
+        now_iso=NOW_ISO,
+        table=_Table(),
+        **digests,
+    )
+
+    assert bound is not None
+    values = updates[0]["ExpressionAttributeValues"]
+    assert isinstance(values, dict)
+    assert values[":expected_version"] == 3
+    assert values[":next_version"] == 4
+
+    # Negative control: reading the stored shape is not reading anything.
+    for malformed in ("3", True, Decimal("3.5"), 0):
+        with pytest.raises(ValueError):
+            billing_reconciliation_service.bind_webhook_provider_identity(
+                {**_command(), "command_version": malformed},
+                now_iso=NOW_ISO,
+                table=_Table(),
+                **digests,
+            )

@@ -419,13 +419,15 @@ def _conversation_allowance_command_fields(
         or entitlement.get("effective_plan")
         or "free_trial"
     )
-    raw_version = (
+    # The entitlement and the command both come off the table, which returns
+    # every stored number as Decimal, and the identity payload below is JSON.
+    raw_version = stored_int(
         entitlement.get("allowanceVersion")
         or entitlement.get("allowance_version")
         or entitlement.get("planVersion")
         or 1
     )
-    if type(raw_version) is not int or raw_version < 1:
+    if raw_version is None or raw_version < 1:
         raise _allowance_recoverable_failure()
     grant_id = str(
         entitlement.get("grantId")
@@ -467,8 +469,10 @@ def _conversation_allowance_coordinates(
     plan_id = command.get("allowance_plan_id")
     grant_id = command.get("allowance_grant_id")
     week_identity = command.get("allowance_week_identity")
-    allowance_version = command.get("allowance_version")
-    generation = command.get("account_fence_generation")
+    # The table returns both numbers as Decimal, and everything downstream of
+    # here takes whole `int` only.
+    allowance_version = stored_int(command.get("allowance_version"))
+    generation = stored_int(command.get("account_fence_generation"))
     if (
         not isinstance(effect_id, str)
         or len(effect_id) != 64
@@ -479,10 +483,10 @@ def _conversation_allowance_coordinates(
         or not grant_id
         or not isinstance(week_identity, str)
         or not week_identity
-        or stored_int(allowance_version) is None
-        or int(allowance_version) < 1
-        or stored_int(generation) is None
-        or int(generation) < 1
+        or allowance_version is None
+        or allowance_version < 1
+        or generation is None
+        or generation < 1
     ):
         raise _allowance_recoverable_failure()
     expected = _conversation_allowance_command_fields(
@@ -928,9 +932,10 @@ def _observe_message_provider_usage(
     validated = _validated_message_allowance_metadata(metadata)
     if validated is None:
         return metadata is None
-    input_tokens = validated["provider_input_tokens"]
-    output_tokens = validated["provider_output_tokens"]
-    if stored_int(input_tokens) is None or stored_int(output_tokens) is None:
+    # The counts go on to an allowance service that takes whole `int` only.
+    input_tokens = stored_int(validated["provider_input_tokens"])
+    output_tokens = stored_int(validated["provider_output_tokens"])
+    if input_tokens is None or output_tokens is None:
         return False
     observed = allowance_service.record_provider_usage(
         beneficiary_id=beneficiary_id,

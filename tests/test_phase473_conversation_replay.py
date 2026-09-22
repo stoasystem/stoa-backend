@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -16,9 +17,29 @@ from stoa.services import ai_service, attachment_service
 from stoa.services.document_extraction_service import DocumentExtractionFailure
 
 
+def _as_stored(value: Any) -> Any:
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`, so a
+    double that hands back the `int` it was given lets every guard written
+    against `int` pass here and fail in production.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
+    return value
+
+
 def _attachment(attachment_id: str, *, owner_id: str = "student-1") -> dict[str, Any]:
     data = f"private text for {attachment_id}".encode()
-    return {
+    return _as_stored({
         **attachment_repo.attachment_key(attachment_id),
         "entity_type": "attachment",
         "schema_version": "attachment.v1",
@@ -34,7 +55,7 @@ def _attachment(attachment_id: str, *, owner_id: str = "student-1") -> dict[str,
         "detected_type": "text/plain",
         "original_filename": f"{attachment_id}.txt",
         "source_fingerprint": "a" * 64,
-    }
+    })
 
 
 class _BatchTable:
@@ -152,6 +173,19 @@ def test_replay_attachment_row_requires_exact_owner_active_schema_and_immutable_
         )
     assert captured.value.code is AttachmentErrorCode.UPLOAD_NOT_FOUND
     assert "private-canary" not in str(captured.value)
+
+
+def test_replay_attachment_row_is_accepted_in_the_shape_the_table_returns() -> None:
+    """The positive control the rejection cases rest on.
+
+    Every number in the row comes back from the table as `Decimal`, so a guard
+    written against `int` refuses the row it exists to accept.
+    """
+    row = _attachment("attachment-1")
+    assert isinstance(row["content_length"], Decimal)
+    assert conversations._validate_replay_attachment(
+        row, attachment_id="attachment-1", owner_id="student-1"
+    ) is row
 
 
 def _message(message_id: str, created_at: str, content: str) -> dict[str, Any]:

@@ -585,6 +585,13 @@ def _bounded_json_value(value: object, *, depth: int = 0) -> object:
         raise ValueError("question effect result is too deeply nested")
     if value is None or isinstance(value, (bool, int, float)):
         return value
+    if isinstance(value, Decimal):
+        # A receipt read back from the table carries its numbers as Decimal,
+        # and refusing them here makes every replayed completion stale.
+        if not value.is_finite():
+            raise ValueError("question effect result contains an unsupported value")
+        integral = value.to_integral_value()
+        return int(integral) if value == integral else float(value)
     if isinstance(value, str):
         if len(value.encode("utf-8")) > _MAX_EFFECT_STRING_BYTES:
             raise ValueError("question effect result string is too large")
@@ -2205,7 +2212,9 @@ def preview_question_submission_reconciliation(
         "ledger_status": ledger.get("status") if ledger else None,
         "ledger_identity": ledger.get("event_id") if ledger else None,
         "counter_present": counter is not None,
-        "counter_count": counter.get("count") if counter else None,
+        # The digest is JSON, and the table returns the counter as Decimal,
+        # which json.dumps refuses.
+        "counter_count": stored_int(counter.get("count")) if counter else None,
         "command_row_digest": _row_digest(command),
         "question_row_digest": _row_digest(question),
         "ledger_row_digest": _row_digest(ledger),

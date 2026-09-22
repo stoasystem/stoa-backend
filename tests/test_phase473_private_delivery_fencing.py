@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from decimal import Decimal
 from typing import Any, Mapping
 
 import pytest
@@ -17,7 +18,27 @@ GENERATION = 7
 EVENT_ID = "event-private-delivery"
 
 
-def _private_event(**overrides: Any) -> dict[str, Any]:
+def _as_stored(value: Any) -> Any:
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`, so a
+    double that hands back the `int` it was given lets every guard written
+    against `int` pass here and fail in production.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, Mapping):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
+    return value
+
+
+def _private_event(*, stored: bool = True, **overrides: Any) -> dict[str, Any]:
     item = {
         "PK": f"NOTIFICATION#{EVENT_ID}",
         "SK": "META",
@@ -41,7 +62,7 @@ def _private_event(**overrides: Any) -> dict[str, Any]:
         "created_at": "2026-07-18T15:30:00+00:00",
     }
     item.update(overrides)
-    return item
+    return _as_stored(item) if stored else item
 
 
 class _StrongTable:
@@ -131,6 +152,39 @@ def test_private_push_rejects_missing_malformed_or_stale_persisted_generation(
     assert calls == []
 
 
+def test_private_owner_scope_resolves_in_the_shape_the_table_returns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The positive control the scope-mismatch cases rest on."""
+    monkeypatch.setattr(
+        account_deletion_repo,
+        "require_active_account_fence",
+        lambda *_args, **_kwargs: {"status": "active", "generation": GENERATION},
+    )
+    event = _private_event()
+    assert isinstance(event["account_fence_generation"], Decimal)
+    assert isinstance(event["event_version"], Decimal)
+
+    ownership = notification_service.resolve_delivery_ownership(event)
+
+    assert ownership.kind == "private_owner"
+    assert ownership.owner_id == OWNER
+    assert ownership.generation == GENERATION
+
+    # Negative control: reading the stored shape is not reading anything.
+    for malformed in ("7", True, Decimal("7.5"), 0, None):
+        with pytest.raises(notification_service.DeliveryOwnershipError) as caught:
+            notification_service.resolve_delivery_ownership(
+                _private_event(account_fence_generation=malformed)
+            )
+        assert caught.value.status == "delivery_scope_mismatch"
+        with pytest.raises(notification_service.DeliveryOwnershipError) as caught:
+            notification_service.resolve_delivery_ownership(
+                _private_event(event_version=malformed)
+            )
+        assert caught.value.status == "delivery_scope_mismatch"
+
+
 def test_legacy_question_owner_resolution_uses_closed_strong_target_join(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -143,13 +197,13 @@ def test_legacy_question_owner_resolution_uses_closed_strong_target_join(
         recipient_id="forged-recipient",
         actor_id="forged-actor",
     )
-    question = {
+    question = _as_stored({
         "PK": "QUESTION#question-private-delivery",
         "SK": "META",
         "question_id": "question-private-delivery",
         "student_id": OWNER,
         "account_fence_generation": GENERATION,
-    }
+    })
     question_pk = question["PK"]
     question_sk = question["SK"]
     assert isinstance(question_pk, str)
@@ -158,6 +212,7 @@ def test_legacy_question_owner_resolution_uses_closed_strong_target_join(
     monkeypatch.setattr(
         account_deletion_repo,
         "require_active_account_fence",
+        # require_active_account_fence normalises the stored Decimal itself.
         lambda owner_id, generation=None, **_kwargs: {
             "status": "active",
             "generation": GENERATION,
@@ -206,7 +261,12 @@ def test_legacy_metadata_only_owner_fails_closed_without_target() -> None:
 
 
 def test_global_nonprivate_requires_exact_persisted_contract_digest() -> None:
+    # The seal is taken before the event is ever stored, so this one event is
+    # built in the shape the sealer is handed, not in the shape the table
+    # returns. Sealing a row read back from the table is a separate hole:
+    # `_delivery_digest` is JSON, and it is handed `event_version` raw.
     raw = _private_event(
+        stored=False,
         owner_classification="global_nonprivate",
         owner_id=None,
         account_fence_generation=None,

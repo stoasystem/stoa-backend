@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -22,6 +23,26 @@ STUDENT_ID = "student-moderation-delete"
 CASE_ID = "moderation-private-case"
 QUESTION_ID = "moderation-private-question"
 NOW = "2026-07-17T23:00:25+00:00"
+
+
+def _as_stored(value: Any) -> Any:
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`, so a
+    double that hands back the `int` it was given lets every guard written
+    against `int` pass here and fail in production.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
+    return value
 
 
 def _require_contract(name: str) -> Any:
@@ -45,7 +66,7 @@ def _question(**overrides: Any) -> dict[str, Any]:
         "ai_response": {"answer": "private answer canary"},
     }
     item.update(overrides)
-    return item
+    return _as_stored(item)
 
 
 def _summary(**overrides: Any) -> dict[str, Any]:
@@ -72,7 +93,7 @@ def _summary(**overrides: Any) -> dict[str, Any]:
         "updated_at": NOW,
     }
     item.update(overrides)
-    return item
+    return _as_stored(item)
 
 
 def _event(event_id: str = "event-private", **overrides: Any) -> dict[str, Any]:
@@ -96,7 +117,7 @@ def _event(event_id: str = "event-private", **overrides: Any) -> dict[str, Any]:
         "created_at": NOW,
     }
     item.update(overrides)
-    return item
+    return _as_stored(item)
 
 
 def test_moderation_source_registry_closes_rows_fields_writers_and_branch() -> None:
@@ -180,7 +201,7 @@ def test_moderation_repository_case_and_event_writes_share_exact_fence() -> None
                     "Item": {
                         **Key,
                         "status": "active",
-                        "generation": 7,
+                        "generation": Decimal(7),
                     }
                 }
             if Key["SK"] == "SUMMARY":
@@ -379,7 +400,7 @@ def test_moderation_tombstones_are_not_returned_as_active_cases(
         "entity_type": "moderation_case",
         "case_id": CASE_ID,
         "privacy_deleted": True,
-        "privacy_generation": 7,
+        "privacy_generation": Decimal(7),
     }
     active = _summary(case_id="active-case", PK="MODERATION#active-case")
 

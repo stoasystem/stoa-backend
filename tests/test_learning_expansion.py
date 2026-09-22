@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -270,7 +271,8 @@ def test_learning_profile_aggregates_subject_activity_and_topic_seeds(monkeypatc
                     "last_seen_at": "2026-06-08T08:00:00+00:00",
                 }
             ],
-            "student_feedback": 4,
+            # The table returns the stored rating as Decimal.
+            "student_feedback": Decimal(4),
             "created_at": "2026-06-08T08:00:00+00:00",
         },
         {
@@ -281,7 +283,7 @@ def test_learning_profile_aggregates_subject_activity_and_topic_seeds(monkeypatc
             "subject": "german",
             "status": "escalated",
             "knowledge_points": ["word order"],
-            "student_feedback": 2,
+            "student_feedback": Decimal(2),
             "created_at": "2026-06-08T09:00:00+00:00",
         },
     ]

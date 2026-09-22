@@ -835,7 +835,8 @@ def ensure_teacher_takeover_notification(
     persisted_teacher = str(question.get("teacher_id") or "").strip()
     claim_id = str(question.get("teacher_takeover_claim_id") or "").strip()
     persisted_session = str(question.get("session_id") or "").strip()
-    generation = question.get("account_fence_generation")
+    # The scope below takes a whole `int`, and the table returns Decimal.
+    generation = stored_int(question.get("account_fence_generation"))
     claimed_at = str(
         question.get("teacher_taken_over_at")
         or question.get("teacher_started_at")
@@ -850,8 +851,8 @@ def ensure_teacher_takeover_notification(
         or not claim_id
         or not session_id
         or persisted_session != session_id
-        or stored_int(generation) is None
-        or int(generation) <= 0
+        or generation is None
+        or generation <= 0
         or not claimed_at
     ):
         return {"effect_id": "", "status": "retryable_dependency"}

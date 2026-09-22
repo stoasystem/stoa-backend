@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -13,7 +15,27 @@ def _app(router, prefix: str, user: dict) -> TestClient:
     return TestClient(app)
 
 
-QUESTION = {
+def _as_stored(value):
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`, so a
+    double that hands back the `int` it was given lets every guard written
+    against `int` pass here and fail in production.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
+    return value
+
+
+QUESTION = _as_stored({
     "question_id": "question-1",
     "student_id": "student-1",
     "subject": "math",
@@ -21,7 +43,7 @@ QUESTION = {
     "teacher_requested_at": "2026-06-15T10:00:00+00:00",
     "queue_visible_at": "2026-06-15T10:00:00+00:00",
     "version": 1,
-}
+})
 
 
 def _applied_mutation(question, status, attrs):
@@ -38,7 +60,7 @@ def _applied_mutation(question, status, attrs):
     )
 
 
-TEACHERS = [
+TEACHERS = _as_stored([
     {
         "user_id": "teacher-low-load",
         "role": "teacher",
@@ -83,7 +105,7 @@ TEACHERS = [
         "subjects": ["math"],
         "dispatch_availability": "paused",
     },
-]
+])
 
 
 def test_dispatch_planner_ranks_eligible_and_explains_refusals():

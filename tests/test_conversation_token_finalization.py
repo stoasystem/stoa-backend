@@ -6,6 +6,7 @@ import copy
 import inspect
 import json
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import pytest
 
@@ -90,13 +91,14 @@ class MockBedrockProvider:
 
 
 def _command() -> dict[str, object]:
+    """One message command in the shape the table hands it back."""
     command: dict[str, object] = {
         "command_id": "message-command-1",
         "conversation_id": "conversation-1",
         "student_id": "student-1",
         "owner_id": "student-1",
         "assistant_message_id": "assistant-message-1",
-        "account_fence_generation": 1,
+        "account_fence_generation": Decimal(1),
         "created_at": NOW.isoformat(),
     }
     command.update(
@@ -106,10 +108,11 @@ def _command() -> dict[str, object]:
                 "effectivePlan": "free_trial",
                 "source": "free_trial_activation",
                 "grantId": "free-trial-grant-1",
-                "allowanceVersion": 7,
+                "allowanceVersion": Decimal(7),
             },
         )
     )
+    command["allowance_version"] = Decimal(str(command["allowance_version"]))
     return command
 
 
@@ -301,6 +304,45 @@ def test_store_ambiguity_keeps_observed_reservation_without_finalizing(
     assert counter["reserved_input_tokens"] == 90
     assert counter["finalized_input_tokens"] == 0
     assert counter["provider_cost_input_tokens"] == 70
+
+
+def test_stored_token_counts_are_observed_as_the_table_returns_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The metadata guard reads whole numbers, not only `int` ones.
+
+    Nothing feeds this path a `Decimal` today - the counts come from botocore or
+    from `json.loads` of the durable result - so this is a direct proof of the
+    guard, not of a route.
+    """
+    table = AtomicAllowanceTable()
+    command, result = _provider_result(
+        monkeypatch,
+        table=table,
+        provider=MockBedrockProvider(),
+    )
+    metadata = _metadata(result, command)
+    stored = {
+        **metadata,
+        "provider_input_tokens": Decimal(int(metadata["provider_input_tokens"])),
+        "provider_output_tokens": Decimal(int(metadata["provider_output_tokens"])),
+    }
+
+    assert conversations._validated_message_allowance_metadata(stored) is not None
+    assert conversations._observe_message_provider_usage(
+        beneficiary_id="student-1",
+        metadata=stored,
+    )
+    assert table.counter()["provider_cost_input_tokens"] == 70
+
+    # Negative control: reading the stored shape is not reading anything.
+    for malformed in (Decimal("70.5"), True, "70", None):
+        assert (
+            conversations._validated_message_allowance_metadata(
+                {**stored, "provider_input_tokens": malformed}
+            )
+            is None
+        )
 
 
 def test_regular_sse_and_hint_replay_finalize_one_exact_debit(

@@ -2,6 +2,7 @@ import json
 import asyncio
 import hashlib
 import inspect
+from decimal import Decimal
 import subprocess
 import sys
 import threading
@@ -461,6 +462,26 @@ def test_message_fingerprint_is_versioned_typed_ordered_and_exact() -> None:
     assert reproduced == baseline
 
 
+def _as_stored(value: Any) -> Any:
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`, so a
+    double that hands back the `int` it was given lets every guard written
+    against `int` pass here and fail in production.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
+    return value
+
+
 def _completed_command(body: conversations.SendMessageRequest) -> dict:
     command_id = str(
         conversations.uuid5(
@@ -494,7 +515,7 @@ def _completed_command(body: conversations.SendMessageRequest) -> dict:
         }
         for index, reference in enumerate(body.attachmentIds or [])
     ]
-    return {
+    return _as_stored({
         "entity_type": "message_command",
         "schema_version": "message-command.v2",
         "command_id": command_id,
@@ -518,7 +539,7 @@ def _completed_command(body: conversations.SendMessageRequest) -> dict:
         "history_anchor_created_at": "2026-07-16T00:00:00Z",
         "created_at": "2026-07-16T00:00:00Z",
         "result_json": response.model_dump_json(),
-    }
+    })
 
 
 def test_stage_a_completed_replay_bypasses_consumed_upload_resolution(

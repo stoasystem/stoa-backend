@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import pytest
 
@@ -421,8 +422,8 @@ def test_report_recovery_resend_worker_processes_success(monkeypatch):
         "status": "queued",
         "reason": "incident resend",
         "created_by": "admin-sub",
-        "target_count": 1,
-        "failure_threshold": 5,
+        "target_count": Decimal(1),
+        "failure_threshold": Decimal(5),
     }
     target = {
         "PK": "REPORT_RECOVERY_JOB#job-1",
@@ -511,6 +512,9 @@ def test_report_recovery_resend_worker_processes_success(monkeypatch):
     assert target_updates[0][2] == "success"
     assert job_updates[0][1] == "completed"
     assert job_updates[0][2]["success_count"] == 1
+    # The remaining work is counted against the stored target count, which the
+    # table returns as Decimal.
+    assert job_updates[0][2]["pending_count"] == 0
     assert "weekly-reports/" not in str(audits)
 
 
@@ -521,7 +525,7 @@ def test_report_recovery_resend_worker_marks_cancelled_pending_targets(monkeypat
     job = {
         "job_id": "job-1",
         "status": "cancellation_requested",
-        "target_count": 1,
+        "target_count": Decimal(1),
     }
     target = {
         "PK": "REPORT_RECOVERY_JOB#job-1",
@@ -576,8 +580,8 @@ def test_report_recovery_retry_generation_worker_completes_target(monkeypatch):
         "status": "queued",
         "reason": "incident generation retry",
         "created_by": "admin-sub",
-        "target_count": 1,
-        "failure_threshold": 5,
+        "target_count": Decimal(1),
+        "failure_threshold": Decimal(5),
     }
     target = {
         "PK": "REPORT_RECOVERY_JOB#job-1",

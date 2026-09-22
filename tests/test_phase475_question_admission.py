@@ -6,6 +6,7 @@ import json
 import re
 import threading
 from collections.abc import Mapping
+from decimal import Decimal
 from typing import TypeGuard
 
 import pytest
@@ -110,8 +111,35 @@ def _required_str(value: object) -> str:
 
 
 def _required_int(value: object) -> int:
-    if type(value) is not int:
+    """One stored number, compared the way DynamoDB compares numbers.
+
+    A double that insists on `int` here models the condition expression more
+    strictly than the table does, which hides the very values the table returns.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, Decimal)):
         raise _conditional_error()
+    if Decimal(value) != Decimal(value).to_integral_value():
+        raise _conditional_error()
+    return int(value)
+
+
+def _as_stored(value: object) -> object:
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`, so a
+    double that hands back the `int` it was given lets every guard written
+    against `int` pass here and fail in production.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, Mapping):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
     return value
 
 
@@ -126,19 +154,27 @@ class _AdmissionTable:
         synchronize_initial_reads: bool = False,
     ) -> None:
         self.items: dict[tuple[str, str], dict[str, object]] = {
-            ("USER#student-1", "ACCOUNT_FENCE"): {
-                "PK": "USER#student-1",
-                "SK": "ACCOUNT_FENCE",
-                "status": "active",
-                "generation": 1,
-            }
+            ("USER#student-1", "ACCOUNT_FENCE"): _required_dict(
+                _as_stored(
+                    {
+                        "PK": "USER#student-1",
+                        "SK": "ACCOUNT_FENCE",
+                        "status": "active",
+                        "generation": 1,
+                    }
+                )
+            )
         }
         if counter:
-            self.items[("USAGE#student-1", "QUESTION#2026-07-21")] = {
-                "PK": "USAGE#student-1",
-                "SK": "QUESTION#2026-07-21",
-                "count": counter,
-            }
+            self.items[("USAGE#student-1", "QUESTION#2026-07-21")] = _required_dict(
+                _as_stored(
+                    {
+                        "PK": "USAGE#student-1",
+                        "SK": "QUESTION#2026-07-21",
+                        "count": counter,
+                    }
+                )
+            )
         self.failure = failure
         self.transactions: list[list[dict[str, object]]] = []
         self._lock = threading.Lock()
@@ -222,7 +258,7 @@ class _AdmissionTable:
         for operation in operations:
             if "Put" in operation:
                 put = _required_mapping(operation["Put"])
-                item = dict(_required_mapping(put["Item"]))
+                item = _required_dict(_as_stored(_required_mapping(put["Item"])))
                 self.items[(
                     _required_str(item["PK"]),
                     _required_str(item["SK"]),
@@ -238,9 +274,9 @@ class _AdmissionTable:
                 item = self.items.setdefault(
                     key, {"PK": key[0], "SK": key[1]}
                 )
-                item["count"] = values[":next"]
-                item["expires_at"] = values[":expires"]
-                item["usage_type"] = values[":usage_type"]
+                item["count"] = _as_stored(values[":next"])
+                item["expires_at"] = _as_stored(values[":expires"])
+                item["usage_type"] = _as_stored(values[":usage_type"])
 
 
 def _admit(
@@ -344,6 +380,7 @@ def test_arbitrary_caller_key_is_absent_from_every_admission_item() -> None:
             "question": result.question,
         },
         sort_keys=True,
+        default=str,
     )
     assert caller_key not in encoded
     assert digest in encoded
@@ -393,6 +430,43 @@ def test_repository_rejects_raw_or_legacy_command_identity_without_echo() -> Non
     assert legacy.disposition is question_submission_repo.QuestionAdmissionDisposition.RETRYABLE
     assert legacy.command is None
     assert caller_key not in repr(legacy)
+
+
+def test_resumed_command_classification_reads_the_stored_counter() -> None:
+    """The resumed counter comes off the table, which returns it as Decimal."""
+    digest = _command_digest()
+    command: dict[str, object] = {
+        "entity_type": "question_submission_command",
+        "schema_version": "question-submission-command.v2",
+        "command_id": digest,
+        "student_id": "student-1",
+        "idempotency_digest": digest,
+        "fingerprint": _fingerprint(),
+        "question_id": "question-1",
+        "status": "processing",
+        "counter_value": 3,
+    }
+    resumed = question_submission_repo.classify_question_submission_command(
+        _required_dict(_as_stored(command)),
+        student_id="student-1",
+        idempotency_digest=digest,
+        fingerprint=_fingerprint(),
+    )
+
+    assert resumed is not None
+    assert resumed.disposition is question_submission_repo.QuestionAdmissionDisposition.RESUME
+    assert resumed.counter_value == 3
+
+    # Negative control: reading the stored shape is not reading anything.
+    for malformed in ("3", True, 3.5, None):
+        widened = question_submission_repo.classify_question_submission_command(
+            _required_dict(_as_stored({**command, "counter_value": malformed})),
+            student_id="student-1",
+            idempotency_digest=digest,
+            fingerprint=_fingerprint(),
+        )
+        assert widened is not None
+        assert widened.counter_value is None
 
 
 def test_transaction_has_one_counter_update_and_no_duplicate_targets() -> None:
@@ -506,6 +580,9 @@ def test_commit_then_timeout_reconciles_to_resume() -> None:
     assert result.command is not None
     assert result.command["status"] == "processing"
     assert len(table.transactions) == 1
+    # The resumed counter is read back out of the table, which returns it as
+    # Decimal; losing it here is how a resumed submission stops being counted.
+    assert result.counter_value == 1
 
 
 def test_precommit_dependency_failure_is_retryable_without_partial_state() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, replace
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -383,3 +384,67 @@ def test_notification_branch_is_registered_and_requires_two_later_clean_scans(
     assert first.status == "retryable" and first.epoch == 0
     assert second.status == "retryable" and second.epoch == 1
     assert third.status == "complete" and third.quiescent is True and third.epoch == 2
+
+
+def test_connection_update_keeps_the_generation_the_row_carries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stale connection must be rewritten under its own fence generation.
+
+    The resource interface returns the stored generation as `Decimal`, so a
+    guard written against `int` misses it and falls through to the live fence -
+    which is how a row left behind by an earlier account silently adopts the
+    generation of the current one.
+    """
+    connection = {
+        "PK": "WS_CONN#connection-private",
+        "SK": "META",
+        "entity_type": "websocket_connection",
+        "connection_id": "connection-private",
+        "owner_id": STUDENT_ID,
+        "user_id": STUDENT_ID,
+        "account_fence_generation": Decimal(GENERATION),
+        "endpoint_url": "https://private-endpoint.example",
+    }
+    transactions: list[list[dict[str, Any]]] = []
+
+    class _Table:
+        def get_item(self, *, Key: dict[str, str], **_kwargs: Any) -> dict[str, Any]:
+            if Key["SK"] == "ACCOUNT_FENCE":
+                return {
+                    "Item": {
+                        **Key,
+                        "status": "active",
+                        "generation": Decimal(GENERATION + 1),
+                    }
+                }
+            if Key["PK"] == connection["PK"]:
+                return {"Item": dict(connection)}
+            return {}
+
+        def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+            transactions.append(operations)
+
+    monkeypatch.setattr(websocket_repo, "get_table", lambda: _Table())
+    updated = websocket_repo.update_connection(
+        "connection-private", {"subscribed_channels": ["notifications"]}
+    )
+
+    assert updated is not None
+    assert len(transactions) == 1
+    fence = transactions[0][0]["ConditionCheck"]
+    assert fence["Key"] == {"PK": f"USER#{STUDENT_ID}", "SK": "ACCOUNT_FENCE"}
+    assert fence["ExpressionAttributeValues"][":generation"] == GENERATION
+
+    # Negative control: widening the read to Decimal must not widen it to
+    # everything. A value the table could never have stored as a number still
+    # falls through to the live fence.
+    for malformed in ("7", True, Decimal("7.5"), None):
+        transactions.clear()
+        connection["account_fence_generation"] = malformed
+        websocket_repo.update_connection(
+            "connection-private", {"subscribed_channels": ["notifications"]}
+        )
+        assert transactions[0][0]["ConditionCheck"]["ExpressionAttributeValues"][
+            ":generation"
+        ] == GENERATION + 1

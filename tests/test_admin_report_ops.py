@@ -1,4 +1,6 @@
 
+from decimal import Decimal
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -1124,8 +1126,8 @@ def test_resume_recovery_job_preview_and_create_persist_linked_job(monkeypatch):
         "job_type": "retry_generation",
         "status": "completed_with_failures",
         "reason": "source incident",
-        "target_count": 3,
-        "failure_threshold": 5,
+        "target_count": Decimal(3),
+        "failure_threshold": Decimal(5),
     }
     source_targets = [
         {
@@ -1254,7 +1256,7 @@ def test_resume_recovery_job_allows_historical_stopped_source_statuses(monkeypat
         "job_id": "job-stopped",
         "job_type": "resend_email",
         "status": status,
-        "failure_threshold": 5,
+        "failure_threshold": Decimal(5),
     }
     monkeypatch.setattr(report_repo, "get_recovery_job", lambda job_id: source_job if job_id == "job-stopped" else None)
     monkeypatch.setattr(report_repo, "list_recovery_job_targets", lambda job_id, **kwargs: {"Items": []})
@@ -1275,7 +1277,7 @@ def test_resume_recovery_job_rejects_incomplete_historical_source_without_mutati
         "job_id": "job-incomplete",
         "job_type": "resend_email",
         "status": "stopped_failure_threshold",
-        "failure_threshold": 5,
+        "failure_threshold": Decimal(5),
     }
     source_job.pop(missing_field)
     writes = []
@@ -1300,7 +1302,7 @@ def test_create_resume_job_revalidates_source_record_before_mutation(monkeypatch
         "job_id": "job-source",
         "job_type": "resend_email",
         "status": "stopped_failure_threshold",
-        "failure_threshold": 5,
+        "failure_threshold": Decimal(5),
     }
     source_targets = [{"target_id": "target-1", "result": "failed"}]
     writes = []
@@ -1342,8 +1344,8 @@ def test_recovery_job_list_detail_results_and_cancel(monkeypatch):
         "created_at": "2026-06-04T10:00:00+00:00",
         "updated_at": "2026-06-04T10:00:00+00:00",
         "filters": {"status": "email_failed"},
-        "target_count": 1,
-        "pending_count": 1,
+        "target_count": Decimal(1),
+        "pending_count": Decimal(1),
     }
     target = {
         "PK": "REPORT_RECOVERY_JOB#job-1",

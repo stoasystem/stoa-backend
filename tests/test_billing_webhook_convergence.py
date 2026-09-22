@@ -8,6 +8,7 @@ import time
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -26,8 +27,31 @@ NOW_ISO = datetime.fromtimestamp(NOW_EPOCH, tz=timezone.utc).isoformat()
 
 
 def _fixture_integer(value: object, field: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
+    """One stored number, read the way the table returns it."""
+    if isinstance(value, bool) or not isinstance(value, (int, Decimal)):
         raise AssertionError(f"fixture {field} must be an integer")
+    if Decimal(value) != Decimal(value).to_integral_value():
+        raise AssertionError(f"fixture {field} must be an integer")
+    return int(value)
+
+
+def _as_stored(value: object) -> object:
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`, so a
+    double that hands back the `int` it was given lets every guard written
+    against `int` pass here and fail in production.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
     return value
 
 
@@ -52,8 +76,11 @@ def _signed_payload(event: dict[str, Any], *, timestamp: int = NOW_EPOCH) -> tup
     return payload, f"t={timestamp},v1={signature}"
 
 
+ALLOWANCE_VERSION = 5
+
+
 def _command() -> dict[str, object]:
-    return {
+    stored = _as_stored({
         "PK": "CHECKOUT_COMMAND#checkout-command-1",
         "SK": "COMMAND",
         "entity_type": "checkout_command",
@@ -68,8 +95,11 @@ def _command() -> dict[str, object]:
         "beneficiary_ids": ["student-1"],
         "price_id": "price_test_student_v1",
         "plan_version": 3,
+        "allowance_version": ALLOWANCE_VERSION,
         "environment": "test",
-    }
+    })
+    assert isinstance(stored, dict)
+    return stored
 
 
 def _session() -> dict[str, object]:
@@ -264,6 +294,9 @@ class FakePersistence:
         assert billing_projection["plan_id"] == "student"
         assert [grant["beneficiary_id"] for grant in grant_items] == ["student-1"]
         assert allowance_item["allowance_version"] == request.allowance_version
+        # The command carries its own allowance version, and the table returns
+        # it as Decimal; losing it silently falls back to the plan version.
+        assert request.allowance_version == ALLOWANCE_VERSION
         if self.activation_count:
             return billing_fact_repo.ActivationResult(
                 billing_fact_repo.ActivationDisposition.ALREADY_COMMITTED

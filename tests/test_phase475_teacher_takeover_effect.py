@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -24,8 +25,28 @@ SESSION_ID = question_repo.teacher_session_id_for_claim(CLAIM_ID)
 CLAIMED_AT = "2026-07-21T10:05:00+00:00"
 
 
+def _as_stored(value: Any) -> Any:
+    """Numbers as the table gives them back, which is never `int`.
+
+    The resource interface deserializes every stored number to `Decimal`, so a
+    double that hands back the `int` it was given lets every guard written
+    against `int` pass here and fail in production.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, Mapping):
+        return {key: _as_stored(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_as_stored(item) for item in value]
+    return value
+
+
 def _claimed_question() -> dict[str, object]:
-    return {
+    return _as_stored({
         "PK": "QUESTION#question-1",
         "SK": "META",
         "entity_type": "question",
@@ -40,7 +61,7 @@ def _claimed_question() -> dict[str, object]:
         "teacher_started_at": CLAIMED_AT,
         "teacher_taken_over_at": CLAIMED_AT,
         "account_fence_generation": 7,
-    }
+    })
 
 
 def _authorized(question: Mapping[str, object]) -> AuthorizedResource:
