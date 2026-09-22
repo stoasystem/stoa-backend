@@ -253,8 +253,64 @@ def current_python_version() -> str:
     return runtime_platform.python_version()
 
 
+def host_runs_the_target() -> str | None:
+    """Why this host cannot import the distribution, or None when it can.
+
+    The distribution carries manylinux aarch64 binaries, so the smoke is a real
+    check exactly where the host matches the runtime it was built for - which CI
+    does, on `ubuntu-24.04-arm`. A developer's macOS cannot import those wheels
+    at all, and the check used to fail there rather than report itself
+    inapplicable. Since the same verification runs before every `cdk synth`, that
+    made `cdk diff` impossible to run outside CI, and "look at the diff before
+    deploying" was a step nobody could actually take.
+    """
+    system = runtime_platform.system()
+    machine = runtime_platform.machine().lower()
+    if system != "Linux":
+        return f"host is {system}, and the distribution targets Linux"
+    if machine not in {"aarch64", "arm64"}:
+        return f"host is {machine}, and the distribution targets {ARCHITECTURE}"
+    # A wrong interpreter version is not the same kind of fact. It is a host
+    # somebody can fix, and skipping for it would hide a real mismatch, so it
+    # stays an error below rather than a reason to stand down.
+    return None
+
+
+def foreign_binaries(dist_dir: Path) -> list[str]:
+    """Compiled extensions in the distribution that this host cannot load.
+
+    Judged from what is actually in the tree rather than from the host alone: a
+    distribution with no compiled extension imports anywhere, and the smoke is a
+    real check for it on any machine.
+    """
+    if not dist_dir.exists():
+        return []
+    machine = runtime_platform.machine().lower()
+    host_linux = runtime_platform.system() == "Linux"
+    host_arm = machine in {"aarch64", "arm64"}
+    foreign: list[str] = []
+    for binary in dist_dir.rglob("*.so"):
+        name = binary.name.lower()
+        if "linux" in name and not host_linux:
+            foreign.append(binary.name)
+        elif ("aarch64" in name or "arm64" in name) and not host_arm:
+            foreign.append(binary.name)
+    return sorted(foreign)
+
+
 def boot_smoke(dist_dir: Path) -> dict[str, Any]:
     """Import the exact handlers through an isolated Python 3.12 process."""
+    inapplicable = host_runs_the_target()
+    unloadable = foreign_binaries(dist_dir)
+    if inapplicable is not None and unloadable:
+        return {
+            "status": "SKIPPED",
+            "reason": (
+                f"{inapplicable}, and the distribution carries {len(unloadable)} "
+                "extensions built for it; the smoke runs where the host matches, which CI does"
+            ),
+            "runtime_target": RUNTIME_TARGET,
+        }
     if not current_python_version().startswith("3.12."):
         raise DistVerificationError("Lambda boot smoke requires Python 3.12")
     handler_pairs = [handler.rsplit(".", 1) for handler in sorted(EXPECTED_HANDLERS)]

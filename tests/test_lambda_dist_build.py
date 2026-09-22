@@ -497,3 +497,48 @@ def test_archive_identity_detects_changed_zip_bytes(tmp_path):
 
     with pytest.raises(builder.DistVerificationError, match="archive digest"):
         builder.validate_archive_identity(archive, json.loads(receipt.read_text(encoding="utf-8")))
+
+
+def test_boot_smoke_reports_itself_inapplicable_off_the_target_platform(tmp_path, monkeypatch):
+    """The smoke used to fail on a host that could never have run it.
+
+    The distribution carries manylinux aarch64 wheels, so importing its handlers
+    is a real check only where the host matches - which CI does. On macOS the
+    import cannot succeed, and raising there made `verify_lambda_dist` fail,
+    which made `cdk synth` and therefore `cdk diff` impossible to run outside
+    CI. "Look at the diff before deploying" was a step nobody could take.
+    """
+    builder = _load_builder()
+
+    monkeypatch.setattr(builder.runtime_platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(builder.runtime_platform, "machine", lambda: "arm64")
+    assert builder.host_runs_the_target() is not None
+
+    dist = tmp_path / "dist"
+    _write_minimal_repo(tmp_path)
+    builder.copy_source(tmp_path, dist)
+    # A pure-Python tree imports anywhere, so the smoke is still a real check.
+    assert builder.boot_smoke(dist)["status"] == "PASS"
+
+    (dist / "_speedups.cpython-312-aarch64-linux-gnu.so").write_bytes(b"\x7fELF")
+    skipped = builder.boot_smoke(dist)
+    assert skipped["status"] == "SKIPPED"
+    assert skipped["runtime_target"] == builder.RUNTIME_TARGET
+
+
+def test_boot_smoke_still_runs_where_the_host_matches_the_runtime(monkeypatch):
+    """Negative control: the check is skipped off-target, never on it.
+
+    If this ever passes on Linux arm64 with Python 3.12, the smoke has stopped
+    running in the one place it was ever real, and every handler could be broken
+    without anything noticing.
+    """
+    builder = _load_builder()
+
+    monkeypatch.setattr(builder.runtime_platform, "system", lambda: "Linux")
+    monkeypatch.setattr(builder.runtime_platform, "machine", lambda: "aarch64")
+    monkeypatch.setattr(builder, "current_python_version", lambda: "3.12.13")
+    assert builder.host_runs_the_target() is None
+
+    with pytest.raises(builder.DistVerificationError):
+        builder.boot_smoke(Path("/nonexistent"))
