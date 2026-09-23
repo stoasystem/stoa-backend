@@ -30,6 +30,11 @@ class _PutTable(Protocol):
     def put_item(self, **kwargs: object) -> object: ...
 
 
+@runtime_checkable
+class _UpdateTable(Protocol):
+    def update_item(self, **kwargs: object) -> object: ...
+
+
 def _response_mapping(value: object) -> IdentityItem:
     if not isinstance(value, Mapping):
         raise ValueError("malformed identity repository response")
@@ -51,6 +56,12 @@ def _put_item(table: object, **kwargs: object) -> object:
     if not isinstance(table, _PutTable):
         raise ValueError("identity repository dependency is unavailable")
     return table.put_item(**kwargs)
+
+
+def _update_item(table: object, **kwargs: object) -> object:
+    if not isinstance(table, _UpdateTable):
+        raise ValueError("identity repository dependency is unavailable")
+    return table.update_item(**kwargs)
 
 
 def issuer_hash(issuer: str) -> str:
@@ -203,6 +214,36 @@ def get_identity_binding(issuer: str, subject: str) -> IdentityItem | None:
     return _optional_item(item)
 
 
+def record_session_revocation(issuer: str, subject: str, revoked_before: int) -> int:
+    """Raise the binding's session cut-off, never lower it.
+
+    An unbound identity is a no-op rather than an error: there is no local
+    session to end, and every protected route already refuses such a token.
+    """
+    cutoff = int(revoked_before)
+    if cutoff <= 0:
+        raise ValueError("session revocation cut-off must be positive")
+    key = {
+        "PK": f"IDENTITY#{issuer_hash(issuer)}#{subject.strip()}",
+        "SK": "BINDING",
+    }
+    try:
+        _update_item(
+            get_table(),
+            Key=key,
+            UpdateExpression="SET revoked_before = :cutoff",
+            ConditionExpression=(
+                "attribute_exists(PK) AND ("
+                "attribute_not_exists(revoked_before) OR revoked_before < :cutoff)"
+            ),
+            ExpressionAttributeValues={":cutoff": cutoff},
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
+            raise
+    return cutoff
+
+
 def get_current_capability_grants(user_id: str) -> list[IdentityItem]:
     from stoa.db.repositories import capability_repo
 
@@ -223,6 +264,13 @@ class DynamoIdentityRepository:
 
     async def get_current_grants(self, user_id: str) -> list[IdentityItem]:
         return await asyncio.to_thread(get_current_capability_grants, user_id)
+
+    async def record_session_revocation(
+        self, issuer: str, subject: str, revoked_before: int
+    ) -> int:
+        return await asyncio.to_thread(
+            record_session_revocation, issuer, subject, revoked_before
+        )
 
 
 def _get_account_fence(user_id: str) -> IdentityItem | None:

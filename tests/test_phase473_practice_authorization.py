@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 import pytest
+from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -566,3 +568,46 @@ def test_route_audit_is_redacted_and_uses_one_opaque_fingerprint(monkeypatch) ->
         "class-1",
     ):
         assert canary not in serialized
+
+
+def _stored(item: dict[str, Any]) -> dict[str, Any]:
+    """The row as the resource interface hands it back after a real roundtrip."""
+    serializer = TypeSerializer()
+    deserializer = TypeDeserializer()
+    return {
+        key: deserializer.deserialize(serializer.serialize(value))
+        for key, value in item.items()
+    }
+
+
+def _stored_assignment_row(monkeypatch: Any, item: dict[str, Any]):
+    stored = _stored(item)
+
+    class Table:
+        def get_item(self, **kwargs: Any) -> dict[str, Any]:
+            return {"Item": stored}
+
+    monkeypatch.setattr(question_repo, "get_table", lambda: Table())
+    return question_repo.get_teacher_curriculum_assignment("teacher-1")
+
+
+def test_teacher_curriculum_assignment_survives_dynamodb_number_roundtrip(
+    monkeypatch: Any,
+) -> None:
+    assert isinstance(_stored(_assignment())["version"], Decimal)
+    row = _stored_assignment_row(monkeypatch, _assignment())
+    assert row is not None
+    assert isinstance(row["version"], int) and not isinstance(row["version"], bool)
+    assert _policy_decision(row).allowed is True
+    assert _policy_decision(_assignment()).allowed is True
+
+
+@pytest.mark.parametrize(
+    "version", [True, Decimal("1.5"), "3", 0, -1, None, [7], {"n": 7}]
+)
+def test_stored_assignment_with_non_integral_version_is_refused(
+    monkeypatch: Any, version: object
+) -> None:
+    row = _stored_assignment_row(monkeypatch, _assignment(version=version))
+    assert row is None
+    assert _policy_decision(row).allowed is False

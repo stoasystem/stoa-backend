@@ -30,8 +30,9 @@ from stoa.services import (
     public_identity_service,
 )
 from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD
+from stoa.security.tokens import verify_access_token
 from stoa.security.route_inventory import explicit_route_classification
-from stoa.security.errors import SecurityDecisionError
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.public_auth_errors import (
     PublicAuthOperation,
     normalize_cognito_failure,
@@ -1016,8 +1017,48 @@ async def logout(
     body: LogoutRequest,
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
+    key_provider=Depends(get_jwks_key_provider),
+    identity_repository=Depends(get_identity_repository),
 ):
-    """Revoke the access token globally."""
+    """Revoke the access token globally and locally.
+
+    Cognito's global_sign_out kills the refresh token but leaves an already
+    issued access token passing signature and expiry checks, so the backend
+    records its own cut-off first. The local write happens before the provider
+    call: if the provider fails the session is already dead here, whereas the
+    reverse order would leave a live token behind whenever the write failed.
+
+    A token that does not verify gets no cut-off because there is nothing to
+    revoke - every protected route refuses it already - and the provider call
+    still runs so its failure taxonomy is unchanged.
+    """
+    verified = None
+    try:
+        verified = await verify_access_token(
+            body.access_token,
+            allowed_issuers=settings.allowed_cognito_issuers,
+            allowed_client_ids=settings.allowed_cognito_access_clients,
+            key_provider=key_provider,
+        )
+    except SecurityDecisionError:
+        verified = None
+
+    if verified is not None:
+        try:
+            await identity_repository.record_session_revocation(
+                verified.issuer,
+                verified.subject,
+                int(datetime.now(UTC).timestamp()) + 1,
+            )
+        except Exception as exc:
+            error = SecurityDecisionError(
+                SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+                internal_detail=type(exc).__name__,
+            )
+            raise HTTPException(
+                status_code=error.status_code, detail=error.public_body()
+            ) from exc
+
     cognito = _get_cognito(settings)
     try:
         cognito.global_sign_out(AccessToken=body.access_token)

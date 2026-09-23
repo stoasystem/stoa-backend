@@ -18,6 +18,9 @@ class VerifiedAccessToken:
     client_id: str
     groups: tuple[str, ...]
     verified_email: str | None = None
+    # Compared against the account's session revocation cut-off. The default is
+    # deliberately out of range so a token built without it fails closed.
+    issued_at: int = 0
 
 
 async def verify_access_token(
@@ -64,13 +67,18 @@ async def verify_access_token(
         or not subject
     ):
         raise SecurityDecisionError(SecurityErrorCode.INVALID_TOKEN)
+    issued_at = claims.get("iat")
+    if isinstance(issued_at, bool) or not isinstance(issued_at, int) or issued_at <= 0:
+        raise SecurityDecisionError(SecurityErrorCode.INVALID_TOKEN)
     groups = claims.get("cognito:groups") or ()
     if not isinstance(groups, (list, tuple)) or not all(isinstance(value, str) for value in groups):
         raise SecurityDecisionError(SecurityErrorCode.INVALID_TOKEN)
     verified_email = None
     if claims.get("email_verified") is True and isinstance(claims.get("email"), str):
         verified_email = claims["email"].strip().casefold() or None
-    return VerifiedAccessToken(issuer, subject, client_id, tuple(groups), verified_email)
+    return VerifiedAccessToken(
+        issuer, subject, client_id, tuple(groups), verified_email, issued_at
+    )
 
 
 @dataclass(frozen=True, slots=True)

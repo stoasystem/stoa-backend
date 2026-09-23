@@ -9,14 +9,37 @@ from stoa.db.repositories import account_deletion_repo, question_repo
 from stoa.services import teacher_dispatch_service
 
 
+class EscalationEnvelopeError(ValueError):
+    """An SQS record whose envelope carries no readable body."""
+
+
+def _record_body(message: Any) -> str:
+    """Read one record's body in either shape SQS delivers it.
+
+    The native Lambda event source uses lowercase `body`; the client
+    `receive_message` API uses `Body`. An envelope with neither raises, because
+    returning successfully acknowledges the batch and would discard live work.
+    """
+    if not isinstance(message, dict):
+        raise EscalationEnvelopeError("sqs record is not a mapping")
+    for key in ("body", "Body"):
+        if key in message:
+            value = message[key]
+            if not isinstance(value, str):
+                raise EscalationEnvelopeError(f"sqs record {key} is not a string")
+            return value
+    raise EscalationEnvelopeError("sqs record carries no body")
+
+
 def consume_message(
     message: dict[str, Any],
     *,
     delete: Any | None = None,
 ) -> str:
     """Drop legacy/private or fenced payloads before any dispatch effect."""
+    raw_body = _record_body(message)
     try:
-        body = json.loads(str(message.get("Body") or ""))
+        body = json.loads(raw_body)
     except (TypeError, ValueError, json.JSONDecodeError):
         return "legacy_debt"
     if not isinstance(body, dict) or set(body) != {

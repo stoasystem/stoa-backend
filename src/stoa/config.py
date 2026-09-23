@@ -176,6 +176,9 @@ class Settings(BaseSettings):
     cognito_jwks_read_timeout_seconds: float = 3.0
     cognito_jwks_ttl_seconds: int = 300
     cognito_jwks_max_stale_seconds: int = 900
+    # One wasted JWKS fetch per issuer per window; a real rotation is still
+    # discovered on its first request.
+    cognito_jwks_unknown_kid_cooldown_seconds: int = 30
     # 72 hours: the invitation is delivered by email, so it must survive a human
     # round-trip. It stays single-use and same-email bound regardless of lifetime.
     teacher_activation_invitation_expiry_seconds: int = 259200
@@ -231,6 +234,8 @@ class Settings(BaseSettings):
             raise ValueError("Cognito JWKS TTL must be positive")
         if self.cognito_jwks_max_stale_seconds < self.cognito_jwks_ttl_seconds:
             raise ValueError("Cognito JWKS maximum stale window must be at least its TTL")
+        if not 0 < self.cognito_jwks_unknown_kid_cooldown_seconds <= self.cognito_jwks_ttl_seconds:
+            raise ValueError("Cognito JWKS unknown-kid cooldown must be positive and at most its TTL")
         if self.is_production and (not issuers or not clients):
             raise ValueError("Production requires Cognito issuer and access-client allowlists")
         if self.is_production:

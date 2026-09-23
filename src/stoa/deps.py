@@ -21,7 +21,13 @@ from stoa.db.repositories.security_audit_repo import (
     UnavailableAuthorizationAuditSink,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
-from stoa.security.identity import Actor, CanonicalRole, IdentityRepository, resolve_actor
+from stoa.security.identity import (
+    Actor,
+    CanonicalRole,
+    IdentityRepository,
+    enforce_session_not_revoked,
+    resolve_actor,
+)
 from stoa.security.jwks import HttpxJwksTransport, JwksKeyProvider
 from stoa.security.tokens import VerifiedAccessToken, verify_access_token
 from stoa.services.account_deletion_service import DeletionReceipt, begin_or_replay_deletion
@@ -113,6 +119,7 @@ def _configured_jwks_provider(
     read_timeout: float,
     ttl_seconds: int,
     max_stale_seconds: int,
+    unknown_kid_cooldown_seconds: int,
 ) -> JwksKeyProvider:
     del issuers  # issuer allowlisting happens before the provider is consulted
     return JwksKeyProvider(
@@ -122,6 +129,7 @@ def _configured_jwks_provider(
         ),
         ttl_seconds=ttl_seconds,
         max_stale_seconds=max_stale_seconds,
+        unknown_kid_cooldown_seconds=unknown_kid_cooldown_seconds,
     )
 
 
@@ -132,6 +140,7 @@ def get_jwks_key_provider(settings: Settings = Depends(get_settings)) -> JwksKey
         settings.cognito_jwks_read_timeout_seconds,
         settings.cognito_jwks_ttl_seconds,
         settings.cognito_jwks_max_stale_seconds,
+        settings.cognito_jwks_unknown_kid_cooldown_seconds,
     )
 
 
@@ -239,6 +248,7 @@ async def get_deletion_command(
     """
     try:
         binding = await repository.get_binding(verified.issuer, verified.subject)
+        enforce_session_not_revoked(verified, binding)
         user_id = (
             str(binding.get("user_id") or "").strip()
             if binding and binding.get("status") == "active"
@@ -264,6 +274,8 @@ async def get_deletion_command(
             body=b"",
             now_iso=datetime.now(UTC).isoformat(),
         )
+    except SecurityDecisionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.public_body()) from exc
     except account_deletion_repo.AccountDeletionConflict as exc:
         error = SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
         raise HTTPException(

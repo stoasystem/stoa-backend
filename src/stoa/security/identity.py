@@ -14,6 +14,41 @@ from stoa.security.tokens import VerifiedAccessToken
 # self-service password change lowers. Authority is local, not the provider's.
 MUST_CHANGE_PASSWORD_FIELD = "must_change_password"
 
+# Epoch seconds written on the identity binding when a session is torn down.
+# Every access token issued strictly before it is refused, whatever the provider
+# still says about the signature.
+SESSION_REVOCATION_FIELD = "revoked_before"
+
+
+def session_revocation_cutoff(binding: Mapping[str, object] | None) -> int:
+    """Read the stored cut-off, treating anything unreadable as fully revoked.
+
+    A stored value that cannot be parsed is the one case where guessing costs
+    access to the account rather than access to an attacker, so it fails closed.
+    """
+    if not binding:
+        return 0
+    raw = binding.get(SESSION_REVOCATION_FIELD)
+    if raw is None:
+        return 0
+    if isinstance(raw, bool) or not isinstance(raw, (str, bytes, bytearray, SupportsInt)):
+        raise SecurityDecisionError(SecurityErrorCode.INVALID_TOKEN)
+    try:
+        return int(raw)
+    except (TypeError, ValueError) as exc:
+        raise SecurityDecisionError(SecurityErrorCode.INVALID_TOKEN) from exc
+
+
+def enforce_session_not_revoked(
+    token: VerifiedAccessToken, binding: Mapping[str, object] | None
+) -> None:
+    """Refuse any token issued before the account's session revocation cut-off."""
+    cutoff = session_revocation_cutoff(binding)
+    if cutoff <= 0:
+        return
+    if token.issued_at < cutoff:
+        raise SecurityDecisionError(SecurityErrorCode.INVALID_TOKEN)
+
 
 class CanonicalRole(StrEnum):
     STUDENT = "student"
@@ -88,6 +123,10 @@ class IdentityRepository(Protocol):
 
     async def get_current_grants(self, user_id: str) -> Sequence[Mapping[str, object]]: ...
 
+    async def record_session_revocation(
+        self, issuer: str, subject: str, revoked_before: int
+    ) -> int: ...
+
 
 _GROUP_ROLES = {
     "students": CanonicalRole.STUDENT,
@@ -136,6 +175,7 @@ async def resolve_actor(
         user_id = str(binding.get("user_id") or "").strip()
         if not user_id:
             raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
+        enforce_session_not_revoked(token, binding)
 
         fence = await repository.get_account_fence(user_id)
         raw_generation = fence.get("generation") if fence else None

@@ -600,21 +600,21 @@ def get_teacher_curriculum_assignment(teacher_id: str) -> QuestionItem | None:
     item = response.get("Item")
     if not isinstance(item, dict):
         return None
-    # DynamoDB returns the stored version as Decimal.
-    version = item.get("version")
-    if isinstance(version, Decimal) and version == version.to_integral_value():
-        version = int(version)
+    # DynamoDB returns the stored version as Decimal, so it is normalized here,
+    # at the trusted boundary, and handed onward as the int the policy requires.
+    version = stored_int(item.get("version"))
     if (
         item.get("PK") != f"TEACHER_ASSIGNMENT#{teacher_id}"
         or item.get("SK") != "CURRICULUM#CURRENT"
         or item.get("entity_type") != "teacher_curriculum_assignment"
         or item.get("teacher_id") != teacher_id
-        or not isinstance(version, int)
-        or isinstance(version, bool)
+        or version is None
         or version <= 0
     ):
         return None
-    return _response(item)
+    row = _response(item)
+    row["version"] = version
+    return row
 
 
 def is_question_record(row: object) -> bool:

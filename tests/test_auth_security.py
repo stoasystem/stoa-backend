@@ -1,10 +1,11 @@
 """Authentication security contracts with no AWS credentials or network access."""
 
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from jose import jwt
 from pydantic import ValidationError
@@ -17,8 +18,10 @@ from security.conftest import (
 )
 from stoa.config import Settings, get_settings
 from stoa.deps import (
+    get_actor,
     get_current_user,
     get_identity_repository,
+    get_jwks_key_provider,
     get_verified_token,
     require_role,
 )
@@ -535,3 +538,298 @@ def test_validation_failures_never_echo_the_password():
 
     assert response.status_code == 422
     assert secret not in response.text
+
+
+# ---------------------------------------------------------------------------
+# NP-04: logout must end the session for the backend too, not only for Cognito
+# ---------------------------------------------------------------------------
+
+
+class _DynamoShapedIdentityRepository:
+    """Model the real table: numbers read back as Decimal, not int."""
+
+    def __init__(self, issuer: str, subject: str):
+        self.binding: dict[str, object] = {
+            "status": "active",
+            "user_id": "student-1",
+            "issuer": issuer,
+            "subject": subject,
+        }
+        self.revocations: list[tuple[str, str, int]] = []
+
+    async def get_binding(self, issuer, subject):
+        if (issuer, subject) != (self.binding["issuer"], self.binding["subject"]):
+            return None
+        return dict(self.binding)
+
+    async def get_account_fence(self, user_id):
+        return {"status": "active", "generation": Decimal(1)}
+
+    async def get_account(self, user_id):
+        return {"role": "student", "account_status": "active"}
+
+    async def get_current_grants(self, user_id):
+        return []
+
+    async def record_session_revocation(self, issuer, subject, revoked_before):
+        self.revocations.append((issuer, subject, int(revoked_before)))
+        current = self.binding.get("revoked_before")
+        if current is None or int(current) < int(revoked_before):
+            self.binding["revoked_before"] = Decimal(int(revoked_before))
+        return int(self.binding["revoked_before"])
+
+
+def _logout_settings(keyset) -> Settings:
+    return Settings(
+        aws_region="eu-central-2",
+        cognito_user_pool_id="offline-pool",
+        cognito_student_client_id="student-client",
+        cognito_allowed_issuers=[keyset.issuer],
+        cognito_access_client_ids=["student-client"],
+    )
+
+
+def _signed_token(keyset, *, issued_at: int, kid: str | None = None):
+    return jwt.encode(
+        {
+            "iss": keyset.issuer,
+            "sub": "subject-1",
+            "client_id": "student-client",
+            "token_use": "access",
+            "cognito:groups": ["students"],
+            "iat": issued_at,
+            "exp": issued_at + 3600,
+        },
+        keyset.private_key,
+        algorithm="RS256",
+        headers={"kid": kid or keyset.kid},
+    )
+
+
+def _logout_app(keyset, repository):
+    provider = JwksKeyProvider(
+        FakeAsyncJwksTransport({keyset.issuer: keyset.jwks}),
+        ttl_seconds=3600,
+        max_stale_seconds=7200,
+    )
+    app = FastAPI()
+    app.include_router(auth.router, prefix="/auth")
+
+    @app.get("/protected")
+    async def protected(actor=Depends(get_actor)):
+        return {"userId": actor.user_id}
+
+    app.dependency_overrides[get_settings] = lambda: _logout_settings(keyset)
+    app.dependency_overrides[get_jwks_key_provider] = lambda: provider
+    app.dependency_overrides[get_identity_repository] = lambda: repository
+    return app
+
+
+def test_logout_revokes_existing_token_at_protected_backend_route(
+    rsa_jwks_keysets, fake_cognito, monkeypatch
+):
+    keyset, _ = rsa_jwks_keysets
+    repository = _DynamoShapedIdentityRepository(keyset.issuer, "subject-1")
+    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: fake_cognito)
+    client = TestClient(_logout_app(keyset, repository))
+
+    now = int(datetime.now(timezone.utc).timestamp())
+    stolen = _signed_token(keyset, issued_at=now - 60)
+    headers = {"Authorization": f"Bearer {stolen}"}
+
+    assert client.get("/protected", headers=headers).status_code == 200
+
+    logout = client.post("/auth/logout", json={"access_token": stolen})
+    assert logout.status_code == 204
+    assert [operation for operation, _ in fake_cognito.calls] == ["global_sign_out"]
+    assert repository.revocations and repository.revocations[0][:2] == (
+        keyset.issuer,
+        "subject-1",
+    )
+
+    replayed = client.get("/protected", headers=headers)
+    assert replayed.status_code == 401
+    assert replayed.json()["detail"]["code"] == "invalid_token"
+
+
+def test_logout_leaves_a_later_legitimate_sign_in_usable(
+    rsa_jwks_keysets, fake_cognito, monkeypatch
+):
+    """Negative control: the cut-off must not outlive the session it ended."""
+    keyset, _ = rsa_jwks_keysets
+    repository = _DynamoShapedIdentityRepository(keyset.issuer, "subject-1")
+    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: fake_cognito)
+    client = TestClient(_logout_app(keyset, repository))
+
+    now = int(datetime.now(timezone.utc).timestamp())
+    old_token = _signed_token(keyset, issued_at=now - 60)
+    assert client.post("/auth/logout", json={"access_token": old_token}).status_code == 204
+    assert (
+        client.get("/protected", headers={"Authorization": f"Bearer {old_token}"}).status_code
+        == 401
+    )
+
+    fresh = _signed_token(keyset, issued_at=now + 60)
+    reissued = client.get("/protected", headers={"Authorization": f"Bearer {fresh}"})
+    assert reissued.status_code == 200, reissued.json()
+    assert reissued.json() == {"userId": "student-1"}
+
+
+def test_logout_does_not_record_a_cut_off_for_an_unverifiable_token(
+    rsa_jwks_keysets, fake_cognito, monkeypatch
+):
+    keyset, other = rsa_jwks_keysets
+    repository = _DynamoShapedIdentityRepository(keyset.issuer, "subject-1")
+    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: fake_cognito)
+    client = TestClient(_logout_app(keyset, repository))
+
+    forged = _signed_token(other, issued_at=int(datetime.now(timezone.utc).timestamp()))
+    assert client.post("/auth/logout", json={"access_token": forged}).status_code == 204
+    assert repository.revocations == []
+    assert "revoked_before" not in repository.binding
+
+
+@pytest.mark.asyncio
+async def test_revoked_session_is_refused_before_the_deletion_command_is_built():
+    from stoa.deps import get_deletion_command
+
+    repository = _DynamoShapedIdentityRepository("https://identity.test/primary", "subject-1")
+    repository.binding["revoked_before"] = Decimal(2000)
+    verified = VerifiedAccessToken(
+        issuer="https://identity.test/primary",
+        subject="subject-1",
+        client_id="student-client",
+        groups=("students",),
+        issued_at=1999,
+    )
+    with pytest.raises(HTTPException) as refused:
+        await get_deletion_command(verified=verified, repository=repository)
+    assert refused.value.status_code == 401
+    assert refused.value.detail["code"] == "invalid_token"
+
+
+def test_unreadable_session_cut_off_fails_closed():
+    from stoa.security.identity import enforce_session_not_revoked
+
+    verified = VerifiedAccessToken(
+        issuer="https://identity.test/primary",
+        subject="subject-1",
+        client_id="student-client",
+        groups=("students",),
+        issued_at=10_000,
+    )
+    enforce_session_not_revoked(verified, {"revoked_before": Decimal(9_999)})
+    with pytest.raises(SecurityDecisionError) as refused:
+        enforce_session_not_revoked(verified, {"revoked_before": object()})
+    assert refused.value.code is SecurityErrorCode.INVALID_TOKEN
+
+
+@pytest.mark.asyncio
+async def test_verified_access_token_carries_the_issued_at_it_will_be_judged_by(
+    rsa_jwks_keysets,
+):
+    keyset, _ = rsa_jwks_keysets
+    provider = JwksKeyProvider(
+        FakeAsyncJwksTransport({keyset.issuer: keyset.jwks}),
+        ttl_seconds=3600,
+        max_stale_seconds=7200,
+    )
+    issued_at = int(datetime.now(timezone.utc).timestamp()) - 30
+    verified = await verify_access_token(
+        _signed_token(keyset, issued_at=issued_at),
+        allowed_issuers={keyset.issuer},
+        allowed_client_ids={"student-client"},
+        key_provider=provider,
+    )
+    assert verified.issued_at == issued_at
+
+
+# ---------------------------------------------------------------------------
+# NP-11: unknown kids must not buy one outbound JWKS fetch per request
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_unknown_jwt_kids_do_not_force_one_external_fetch_per_request(
+    rsa_jwks_keysets,
+):
+    keyset, _ = rsa_jwks_keysets
+    transport = FakeAsyncJwksTransport({keyset.issuer: keyset.jwks})
+    current = 0.0
+
+    provider = JwksKeyProvider(
+        transport,
+        ttl_seconds=300,
+        max_stale_seconds=600,
+        unknown_kid_cooldown_seconds=30,
+        monotonic=lambda: current,
+    )
+
+    await provider.get_key(keyset.issuer, keyset.kid)
+    assert len(transport.calls) == 1
+
+    for index in range(10):
+        current += 1.0
+        with pytest.raises(SecurityDecisionError) as refused:
+            await provider.get_key(keyset.issuer, f"attacker-kid-{index}")
+        assert refused.value.code is SecurityErrorCode.INVALID_TOKEN
+
+    assert len(transport.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_unknown_kid_cooldown_still_discovers_a_real_key_rotation(
+    rsa_jwks_keysets,
+):
+    """Negative control: a cooldown that also blocks rotation is a permanent cache."""
+    keyset, _ = rsa_jwks_keysets
+    rotated = {"keys": [{**keyset.jwks["keys"][0], "kid": "primary-kid-v2"}]}
+    transport = FakeAsyncJwksTransport(
+        {keyset.issuer: [keyset.jwks, keyset.jwks, rotated]}
+    )
+    current = 0.0
+
+    provider = JwksKeyProvider(
+        transport,
+        ttl_seconds=300,
+        max_stale_seconds=600,
+        unknown_kid_cooldown_seconds=30,
+        monotonic=lambda: current,
+    )
+
+    await provider.get_key(keyset.issuer, keyset.kid)
+    for index in range(5):
+        current += 1.0
+        with pytest.raises(SecurityDecisionError):
+            await provider.get_key(keyset.issuer, f"attacker-kid-{index}")
+    assert len(transport.calls) == 2
+
+    current += 30.0
+    rotated_key = await provider.get_key(keyset.issuer, "primary-kid-v2")
+    assert rotated_key.to_dict()["n"] == keyset.jwks["keys"][0]["n"]
+    assert len(transport.calls) == 3
+
+
+@pytest.mark.asyncio
+async def test_a_rotation_arriving_with_no_wasted_fetch_is_not_delayed_at_all(
+    rsa_jwks_keysets,
+):
+    keyset, _ = rsa_jwks_keysets
+    rotated = {"keys": [{**keyset.jwks["keys"][0], "kid": "primary-kid-v2"}]}
+    transport = FakeAsyncJwksTransport({keyset.issuer: [keyset.jwks, rotated]})
+    current = 0.0
+
+    provider = JwksKeyProvider(
+        transport,
+        ttl_seconds=300,
+        max_stale_seconds=600,
+        unknown_kid_cooldown_seconds=30,
+        monotonic=lambda: current,
+    )
+
+    await provider.get_key(keyset.issuer, keyset.kid)
+    current += 1.0
+    rotated_key = await provider.get_key(keyset.issuer, "primary-kid-v2")
+    assert rotated_key.to_dict()["n"] == keyset.jwks["keys"][0]["n"]
+    assert len(transport.calls) == 2
+
