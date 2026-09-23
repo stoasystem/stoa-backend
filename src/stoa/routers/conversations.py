@@ -111,6 +111,27 @@ def _required_conversation_text(record: Mapping[str, object], field: str) -> str
     return value
 
 
+def _conversation_grade(record: Mapping[str, object]) -> str:
+    """The year group the conversation was opened for, which may be none yet.
+
+    A grade is asked for on the learning profile, not when an account is opened,
+    so a student an administrator opened has none and the console sends an empty
+    one. Creation accepted it, every later read refused it, and the conversation
+    existed in a state it could never be read out of: the assistant's reply
+    failed with `upload_service_unavailable` on a request with no upload in it.
+
+    Blank is safe downstream - a grade of whitespace produces a reply - so what
+    was wrong was refusing here what the door accepted. A value of the wrong
+    type is still refused.
+    """
+    value = record.get("grade")
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return value
+
+
 def _conversation_record(value: object) -> Mapping[str, object]:
     if not isinstance(value, Mapping):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
@@ -1347,7 +1368,7 @@ async def get_conversation(
         id=conv_id,
         title=_required_conversation_text(conv, "title"),
         subject=_required_conversation_text(conv, "subject"),
-        grade=_required_conversation_text(conv, "grade"),
+        grade=_conversation_grade(conv),
         updatedAt=_required_conversation_text(conv, "updated_at"),
         messages=messages,
     )
@@ -1403,7 +1424,7 @@ async def send_message(
             conv_id=conv_id,
             student_id=student_id,
             subject=_required_conversation_text(conv, "subject"),
-            grade=_required_conversation_text(conv, "grade"),
+            grade=_conversation_grade(conv),
             body=body,
             command_context=message_command,
         )
@@ -1446,7 +1467,7 @@ async def stream_message(
             conv_id=conv_id,
             student_id=student_id,
             subject=_required_conversation_text(conv, "subject"),
-            grade=_required_conversation_text(conv, "grade"),
+            grade=_conversation_grade(conv),
             body=body,
             command_context=message_command,
         )

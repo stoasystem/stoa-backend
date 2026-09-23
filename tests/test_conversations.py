@@ -1857,3 +1857,44 @@ def test_conversation_list_stops_at_the_result_limit_and_says_so(monkeypatch):
     assert len(page.items) == 200
     assert page.truncated is True
     assert len(table.query_calls) == 4
+
+
+def test_a_conversation_opened_without_a_year_group_can_be_read_back():
+    """Creation accepted an empty grade and every read refused it.
+
+    A grade is asked for on the learning profile, not when an account is opened,
+    so a student an administrator opened has none and the console sends "". The
+    conversation was created and then existed in a state it could never be read
+    out of: the assistant's reply came back `upload_service_unavailable`, on a
+    request carrying no upload. Measured on production.
+    """
+    conv = {
+        "id": "conv-1",
+        "title": "math",
+        "subject": "math",
+        "grade": "",
+        "updated_at": "2026-09-23T00:00:00+00:00",
+    }
+
+    assert conversations._conversation_grade(conv) == ""
+
+
+def test_a_missing_year_group_reads_the_same_as_an_empty_one():
+    assert conversations._conversation_grade({"subject": "math"}) == ""
+
+
+def test_a_year_group_of_the_wrong_type_is_still_refused():
+    """Negative control: "nobody said" is not "the row is damaged"."""
+    with pytest.raises(conversations.AttachmentDecisionError):
+        conversations._conversation_grade({"grade": 9})
+
+
+def test_the_other_conversation_fields_still_refuse_an_empty_value():
+    """Second negative control: only the grade was widened.
+
+    A conversation with no subject or no title is a damaged row, and widening
+    the grade must not have widened those with it.
+    """
+    for field in ("title", "subject", "updated_at"):
+        with pytest.raises(conversations.AttachmentDecisionError):
+            conversations._required_conversation_text({field: ""}, field)
