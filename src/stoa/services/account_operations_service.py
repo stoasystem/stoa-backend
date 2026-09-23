@@ -5,10 +5,11 @@ from typing import Any
 
 from stoa import config
 from stoa.config import Settings
-from stoa.db.repositories import user_repo
+from stoa.db.repositories import parent_link_repo, user_repo
 from stoa.services import (
     account_verification_service,
     entitlement_service,
+    parent_link_service,
     subscription_service,
     usage_ledger_service,
 )
@@ -22,7 +23,7 @@ def build_parent_operations_summary(
 ) -> dict[str, Any]:
     """Build the parent-visible account operations summary."""
     parent = _require_parent(parent_id)
-    children = _child_operation_rows(parent_id, settings=settings, day=day)
+    children = _current_child_operation_rows(parent_id, settings=settings, day=day)
     billing = subscription_service.get_parent_billing(parent_id, settings=settings)
     usage = [child["usage"] for child in children if child.get("usage")]
     return {
@@ -63,6 +64,41 @@ def _require_parent(parent_id: str) -> dict[str, Any]:
     return parent
 
 
+def _current_child_operation_rows(
+    parent_id: str,
+    *,
+    settings: Settings,
+    day: str | None,
+) -> list[dict[str, Any]]:
+    """The parent-visible set: only relationships that are valid right now.
+
+    The admin detail below keeps the wider enumeration on purpose - support
+    repairs a revoked or half-stored relationship by seeing it - and that route
+    is authorized as an administrator, not as a party to the relationship.
+    """
+    rows: list[dict[str, Any]] = []
+    for relationship in parent_link_service.current_children(parent_id):
+        student_id = str(relationship.get("student_id") or "")
+        if not student_id:
+            continue
+        rows.append(
+            _child_operation_row(
+                parent_id,
+                student_id,
+                {
+                    "parent_id": parent_id,
+                    "student_id": student_id,
+                    "status": "active",
+                    "relationship": relationship.get("relationship") or "child",
+                    "source": relationship.get("source"),
+                },
+                settings=settings,
+                day=day,
+            )
+        )
+    return rows
+
+
 def _child_operation_rows(
     parent_id: str,
     *,
@@ -96,6 +132,27 @@ def _child_operation_rows(
                 settings=settings,
                 day=day,
                 child_profile=child,
+            )
+        )
+    for link in parent_link_repo.list_links_for_parent(parent_id):
+        student_id = str(link.get("student_id") or "")
+        if not student_id or student_id in seen:
+            continue
+        seen.add(student_id)
+        rows.append(
+            _child_operation_row(
+                parent_id,
+                student_id,
+                {
+                    "parent_id": parent_id,
+                    "student_id": student_id,
+                    "status": link.get("status") or "missing",
+                    "relationship": link.get("relationship") or "child",
+                    "source": "parent_student_link",
+                    "updated_at": link.get("link_updated_at") or link.get("linked_at"),
+                },
+                settings=settings,
+                day=day,
             )
         )
     return rows

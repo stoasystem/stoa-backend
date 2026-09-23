@@ -95,6 +95,8 @@ def table(
 ) -> FakeLinkTable:
     """Link table only: the legacy binding key space stays deliberately empty."""
     fake = FakeLinkTable()
+    for user_id in accounts:
+        fake.seed_account_fence(user_id)
     monkeypatch.setattr(parent_link_repo, "get_table", lambda: fake)
     monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(accounts.get(user_id)))
     monkeypatch.setattr(
@@ -158,7 +160,7 @@ def _assign(table: FakeLinkTable) -> None:
 def test_admin_assigned_link_alone_grants_every_parent_route(
     table: FakeLinkTable, path: str
 ) -> None:
-    assert not table.items
+    assert not [key for key in table.items if key[1] != "ACCOUNT_FENCE"]
     _assign(table)
 
     response = _client().get(path)
@@ -257,6 +259,7 @@ def test_a_second_parent_reaches_the_same_child(
 ) -> None:
     """The legacy binding holds one parent per student; this is why A3 mattered."""
     accounts["parent-b"] = _profile("parent-b", "parent")
+    table.seed_account_fence("parent-b")
     _assign(table)
     parent_link_service.assign_link(
         parent_id="parent-b", student_id=STUDENT, actor_id="admin-1", now=NOW

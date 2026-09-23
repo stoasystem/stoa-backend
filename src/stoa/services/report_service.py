@@ -21,14 +21,9 @@ from stoa.db.repositories import (
     report_repo,
     user_repo,
 )
-from stoa.services import notify_service, report_artifact_service
+from stoa.services import notify_service, parent_link_service, report_artifact_service
 
 logger = logging.getLogger(__name__)
-
-
-@runtime_checkable
-class _ScanTable(Protocol):
-    def scan(self, **kwargs: object) -> object: ...
 
 
 @runtime_checkable
@@ -633,32 +628,19 @@ def _is_in_window(value: Any, start: date, end: date) -> bool:
     return start_dt <= parsed < end_dt
 
 
-def _scan_children_for_parent(parent_id: str) -> list[dict[str, Any]]:
-    table = get_table()
-    if not isinstance(table, _ScanTable):
-        raise RuntimeError("report table scan dependency is unavailable")
-    scan_kwargs: dict[str, Any] = {
-        "FilterExpression": "#pid = :pid AND #role = :role",
-        "ExpressionAttributeNames": {"#pid": "parent_id", "#role": "role"},
-        "ExpressionAttributeValues": {":pid": parent_id, ":role": "student"},
-    }
-    children: list[dict[str, Any]] = []
-    while True:
-        result = _repository_response(table.scan(**scan_kwargs), label="report child scan")
-        children.extend(_repository_items(result, label="report child scan"))
-        last_key = result.get("LastEvaluatedKey")
-        if last_key is None:
-            return children
-        if not isinstance(last_key, Mapping):
-            raise RuntimeError("report child scan pagination is malformed")
-        scan_kwargs["ExclusiveStartKey"] = dict(last_key)
-
-
 def _get_linked_student_profile(parent_id: str, student_id: str) -> dict[str, Any]:
-    for child in _scan_children_for_parent(parent_id):
-        if child.get("user_id") == student_id or child.get("id") == student_id:
-            return child
-    raise ValueError("student is not linked to parent")
+    """A report is private data, so the relationship is judged, not matched.
+
+    The profile scan this replaced accepted any student carrying the parent's
+    identifier, including one whose binding had been revoked, and it could not
+    see a `parent_student_link` at all.
+    """
+    if parent_link_service.current_relationship(parent_id, student_id) is None:
+        raise ValueError("student is not linked to parent")
+    student = user_repo.get_user(student_id)
+    if not student:
+        raise ValueError("student is not linked to parent")
+    return dict(student)
 
 
 def _list_all_questions(student_id: str) -> list[dict[str, Any]]:

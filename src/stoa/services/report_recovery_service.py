@@ -8,8 +8,13 @@ import re
 from typing import Any
 from uuid import uuid4
 
-from stoa.db.repositories import account_deletion_repo, report_repo
-from stoa.services import notify_service, report_artifact_service, report_service
+from stoa.db.repositories import account_deletion_repo, report_repo, user_repo
+from stoa.services import (
+    notify_service,
+    parent_link_service,
+    report_artifact_service,
+    report_service,
+)
 
 
 @dataclass(frozen=True)
@@ -29,6 +34,23 @@ class ReportRecoveryResult:
     operation_result: str
     updated_at: str
     artifacts: dict[str, bool] | None = None
+
+
+def _current_recipient(report: dict) -> str | None:
+    """Who may receive this stored report now, judged from the relationship today.
+
+    The archived `parent_email` says who was entitled when the artifact was
+    written. A resend happens later, so the recipient is resolved again: the
+    relationship must still be current, and the address comes from that parent's
+    profile rather than from the report.
+    """
+    parent_id = str(report.get("parent_id") or "")
+    student_id = str(report.get("student_id") or "")
+    if parent_link_service.current_relationship(parent_id, student_id) is None:
+        return None
+    parent = user_repo.get_user(parent_id) or {}
+    email = str(parent.get("email") or "").strip()
+    return email or None
 
 
 def resend_report_email(
@@ -56,6 +78,18 @@ def resend_report_email(
             status_code=422,
         )
 
+    recipient = _current_recipient(report)
+    if recipient is None:
+        raise _refused(
+            report,
+            "resend_email",
+            operator,
+            reason,
+            source,
+            "Report recipient is no longer linked to the student",
+            status_code=403,
+        )
+
     before = _audit_snapshot(report)
     attempted_at = _now_iso()
     try:
@@ -63,7 +97,7 @@ def resend_report_email(
         owner_id = str(report.get("student_id") or "")
         fence = account_deletion_repo.require_active_account_fence(owner_id)
         delivery_outcome = notify_service.send_fenced_weekly_report_email(
-            str(parent_email),
+            str(recipient),
             html,
             owner_id=owner_id,
             generation=int(fence["generation"]),

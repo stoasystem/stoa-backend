@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -70,11 +71,40 @@ class FakeLinkTable:
         self._refuse_guard(key)
         self.items[key] = deepcopy(Item)
 
+    def seed_account_fence(
+        self, user_id: str, *, status: str = "active", generation: int = 1
+    ) -> None:
+        """An account fence row, storing the generation as the real table does."""
+        self.items[(f"USER#{user_id}", "ACCOUNT_FENCE")] = {
+            "PK": f"USER#{user_id}",
+            "SK": "ACCOUNT_FENCE",
+            "entity_type": "account_fence",
+            "status": status,
+            "generation": Decimal(generation),
+        }
+
+    def _check_condition(self, check, staged) -> None:
+        key = (check["Key"]["PK"], check["Key"]["SK"])
+        item = staged.get(key)
+        expression = check.get("ConditionExpression") or ""
+        values = check.get("ExpressionAttributeValues") or {}
+        if item is None:
+            raise account_deletion_repo.AccountDeletionConflict("condition row missing")
+        if "#status=:active" in expression and item.get("status") != values[":active"]:
+            raise account_deletion_repo.AccountDeletionConflict("condition status")
+        if "generation=:generation" in expression and item.get("generation") != values[
+            ":generation"
+        ]:
+            raise account_deletion_repo.AccountDeletionConflict("condition generation")
+
     def transact_account_deletion(self, operations):
         copied = deepcopy(operations)
         self.transactions.append(copied)
         staged = deepcopy(self.items)
         for operation in copied:
+            if "ConditionCheck" in operation:
+                self._check_condition(operation["ConditionCheck"], staged)
+                continue
             put = operation["Put"]
             item = put["Item"]
             key = (item["PK"], item["SK"])
@@ -143,6 +173,8 @@ ACCOUNTS = {
 @pytest.fixture
 def table(monkeypatch: pytest.MonkeyPatch) -> FakeLinkTable:
     fake = FakeLinkTable()
+    for user_id in ACCOUNTS:
+        fake.seed_account_fence(user_id)
     monkeypatch.setattr(parent_link_repo, "get_table", lambda: fake)
     monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(ACCOUNTS.get(user_id)))
     monkeypatch.setattr(user_repo, "list_parent_student_bindings", lambda _parent_id: [])
@@ -319,6 +351,8 @@ def test_child_list_holds_exactly_the_active_links(table: FakeLinkTable) -> None
 
 def test_failed_second_write_leaves_no_half_link(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = FakeLinkTable(refuse_prefix="STUDENT#")
+    for user_id in ACCOUNTS:
+        fake.seed_account_fence(user_id)
     monkeypatch.setattr(parent_link_repo, "get_table", lambda: fake)
     monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(ACCOUNTS.get(user_id)))
 
@@ -328,11 +362,13 @@ def test_failed_second_write_leaves_no_half_link(monkeypatch: pytest.MonkeyPatch
         )
 
     assert ("PARENT#parent-a", "CHILD#student-b") not in fake.items
-    assert fake.items == {}
+    assert not [key for key in fake.items if key[1] != "ACCOUNT_FENCE"]
 
 
 def test_failed_second_write_leaves_no_half_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = FakeLinkTable()
+    for user_id in ACCOUNTS:
+        fake.seed_account_fence(user_id)
     monkeypatch.setattr(parent_link_repo, "get_table", lambda: fake)
     monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(ACCOUNTS.get(user_id)))
     parent_link_service.request_link(
@@ -736,7 +772,8 @@ def test_重建不走放松的创建条件(table: FakeLinkTable) -> None:
         operation["Put"]["ConditionExpression"]
         for transaction in table.transactions
         for operation in transaction
-        if "attribute_not_exists" in operation["Put"].get("ConditionExpression", "")
+        if "Put" in operation
+        and "attribute_not_exists" in operation["Put"].get("ConditionExpression", "")
     ]
     assert creates, "首次创建仍然要走 attribute_not_exists"
     assert all(
@@ -746,9 +783,9 @@ def test_重建不走放松的创建条件(table: FakeLinkTable) -> None:
         operation["Put"]["ConditionExpression"]
         for transaction in table.transactions
         for operation in transaction
-        if "link_updated_at = :expected_link_updated_at" in operation["Put"].get(
-            "ConditionExpression", ""
-        )
+        if "Put" in operation
+        and "link_updated_at = :expected_link_updated_at"
+        in operation["Put"].get("ConditionExpression", "")
     ]
     assert len(reclaims) == 2
 

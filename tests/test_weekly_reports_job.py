@@ -31,6 +31,58 @@ def _active_report_owner(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def current_relationships(monkeypatch):
+    """The relationship stores the weekly job now judges every pair against.
+
+    Seeded with the pairs these tests drive; a test that is about revocation
+    removes its pair from `bindings` rather than stubbing the judge itself.
+    """
+    from stoa.db.repositories import user_repo
+
+    bindings: dict[tuple[str, str], dict] = {}
+
+    def link(parent_id: str, student_id: str) -> None:
+        bindings[(parent_id, student_id)] = {
+            "entity_type": "parent_student_binding",
+            "parent_id": parent_id,
+            "student_id": student_id,
+            "relationship": "child",
+            "status": "active",
+            "version": 1,
+        }
+
+    for pair in (("parent-1", "student-1"), ("parent-2", "student-2")):
+        link(*pair)
+
+    monkeypatch.setattr(
+        user_repo,
+        "get_user",
+        lambda user_id, **_kwargs: {
+            "user_id": user_id,
+            "role": "parent" if user_id.startswith("parent") else "student",
+            "account_status": "active",
+            "email": f"{user_id}@example.com",
+            "name": user_id,
+        },
+    )
+    monkeypatch.setattr(
+        user_repo,
+        "get_parent_student_binding",
+        lambda parent_id, student_id: dict(bindings[(parent_id, student_id)])
+        if (parent_id, student_id) in bindings
+        else None,
+    )
+    monkeypatch.setattr(
+        user_repo,
+        "get_student_parent_binding",
+        lambda student_id, parent_id: dict(bindings[(parent_id, student_id)])
+        if (parent_id, student_id) in bindings
+        else None,
+    )
+    return bindings
+
+
 class FakeTable:
     def __init__(self, pages):
         self.pages = list(pages)
@@ -507,7 +559,9 @@ def test_report_recovery_resend_worker_processes_success(monkeypatch):
     result = weekly_reports.report_recovery_job_service.execute_resend_job("job-1")
 
     assert result["status"] == "completed"
-    assert sent == [("parent@example.com", "<html>Report</html>")]
+    # The recipient comes from the parent's current profile, not the address
+    # archived on the report when it was generated.
+    assert sent == [("parent-1@example.com", "<html>Report</html>")]
     assert report_updates[0][1] == "email_sent"
     assert target_updates[0][2] == "success"
     assert job_updates[0][1] == "completed"

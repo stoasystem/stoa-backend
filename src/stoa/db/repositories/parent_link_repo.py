@@ -149,6 +149,32 @@ def list_links_for_student(student_id: str, *, table: Any | None = None) -> list
     return _items(response.get("Items", []))
 
 
+def _participant_fence_conditions(
+    parent_id: str, student_id: str, *, target: Any
+) -> list[dict[str, Any]]:
+    """Both accounts must still be writable, judged inside the write itself.
+
+    A profile stays active and readable after a deletion is accepted; the fence
+    is what closes at acceptance. Checking the profile therefore admitted a new
+    private relationship into an account already being deleted, and the two
+    relationship rows were the only things the transaction conditioned on.
+    """
+    conditions: list[dict[str, Any]] = []
+    for user_id in (parent_id, student_id):
+        try:
+            fence = account_deletion_repo.require_active_account_fence(
+                user_id, table=target
+            )
+        except account_deletion_repo.AccountDeletionConflict as exc:
+            raise ParentLinkConflict("parent link participant is not writable") from exc
+        conditions.append(
+            account_deletion_repo.active_fence_condition(
+                user_id, int(fence["generation"])
+            )
+        )
+    return conditions
+
+
 def _both_sides(body: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     parent_id = str(body["parent_id"])
     student_id = str(body["student_id"])
@@ -180,8 +206,12 @@ def create_link(
         updated_by=_required(created_by, "created_by"),
         link_updated_at=_required(linked_at, "linked_at"),
     )
+    target = table or get_table()
     forward, reverse = _both_sides(body)
-    operations = [
+    operations = _participant_fence_conditions(
+        str(body["parent_id"]), str(body["student_id"]), target=target
+    )
+    operations.extend(
         {
             "Put": {
                 "Item": item,
@@ -189,9 +219,9 @@ def create_link(
             }
         }
         for item in (forward, reverse)
-    ]
+    )
     try:
-        account_deletion_repo.transact(operations, table=table or get_table())
+        account_deletion_repo.transact(operations, table=target)
     except account_deletion_repo.AccountDeletionConflict as exc:
         raise ParentLinkConflict("parent link already exists") from exc
     return dict(body)
@@ -216,7 +246,10 @@ def _conditional_rewrite(
     refusal: str,
 ) -> LinkItem:
     forward, reverse = _both_sides(body)
-    operations = [
+    operations = _participant_fence_conditions(
+        str(body["parent_id"]), str(body["student_id"]), target=target
+    )
+    operations.extend(
         {
             "Put": {
                 "Item": item,
@@ -226,7 +259,7 @@ def _conditional_rewrite(
             }
         }
         for item in (forward, reverse)
-    ]
+    )
     try:
         account_deletion_repo.transact(operations, table=target)
     except account_deletion_repo.AccountDeletionConflict as exc:

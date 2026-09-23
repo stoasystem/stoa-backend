@@ -54,7 +54,9 @@ class FakeDataTable:
         names = kwargs["ExpressionAttributeNames"]
         values = kwargs["ExpressionAttributeValues"]
         if names.get("#entity") == "entity_type":
-            assert values[":entity"] == "parent_student_binding"
+            # Both relationship key spaces are gathered in the one scan.
+            assert values[":binding"] == "parent_student_binding"
+            assert values[":link"] == "parent_student_link"
             assert values[":status"] == "active"
             return {"Items": []}
         assert names["#role"] == "role"
@@ -141,7 +143,38 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
     monkeypatch.setattr(
         report_service.user_repo,
         "get_user",
-        lambda user_id, **_kwargs: {"user_id": user_id, "email": "parent@example.com", "name": "Parent One"},
+        lambda user_id, **_kwargs: {
+            "user_id": user_id,
+            "email": "parent@example.com" if user_id == "parent-1" else "student@example.com",
+            "name": "Parent One" if user_id == "parent-1" else "Student One",
+            "role": "parent" if user_id == "parent-1" else "student",
+            "account_status": "active",
+        },
+    )
+    # The legacy relationship the flow rides on, in both formal rows: the job
+    # and the generator now judge the relationship instead of matching a
+    # profile's parent_id.
+    binding = {
+        "entity_type": "parent_student_binding",
+        "parent_id": "parent-1",
+        "student_id": "student-1",
+        "relationship": "child",
+        "status": "active",
+        "version": 1,
+    }
+    monkeypatch.setattr(
+        report_service.user_repo,
+        "get_parent_student_binding",
+        lambda parent_id, student_id: dict(binding)
+        if (parent_id, student_id) == ("parent-1", "student-1")
+        else None,
+    )
+    monkeypatch.setattr(
+        report_service.user_repo,
+        "get_student_parent_binding",
+        lambda student_id, parent_id: dict(binding)
+        if (parent_id, student_id) == ("parent-1", "student-1")
+        else None,
     )
 
     question_pages = [
@@ -264,7 +297,10 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
         "failed": 0,
     }
     assert question_last_keys == [None, {"PK": "QUESTION#q1"}]
-    assert len(data_table.scans) == 3
+    # Two discovery scans. The third used to be report generation re-scanning
+    # every student carrying this parent's identifier; it now reads the
+    # relationship rows instead.
+    assert len(data_table.scans) == 2
     assert len(data_table.queries) == 1
     assert [event[0] for event in events] == [
         "claim",

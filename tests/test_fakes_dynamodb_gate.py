@@ -43,6 +43,13 @@ HAND_WRITTEN_DOUBLES: dict[str, str] = {
     "test_conversations.py::_PagedIndexTable": "script",
     "test_identity_authorization.py::FakeTable": "repo",
     "test_parent_link_paid_downstream.py::ConditionalTable": "repo",
+    "test_parent_relationship_current.py::_Empty": (
+        "script: answers nothing on purpose, so a report source somebody forgot to "
+        "stub is visibly empty here rather than reaching a real table"
+    ),
+    "test_parent_relationship_current.py::_DeletionTable": (
+        "repo: stands in for the deletion branch's own `delete_owned_row`, not for a table"
+    ),
     "test_parent_student_links.py::FakeLinkTable": "repo",
     "test_phase473_account_deletion.py::_PagedPrivateTable": "script",
     "test_phase473_account_deletion.py::_Malformed": "script",

@@ -463,3 +463,106 @@ def pending_requests_for_student(student_id: str, *, now: str | None = None) -> 
         for link in parent_link_repo.list_links_for_student(student_id)
         if _live_pending(link, at)
     ]
+
+
+# --- The one judge of "is this relationship valid right now" -----------------
+#
+# Two key spaces hold parent-student relationships: the new bidirectional
+# `parent_student_link` rows and the legacy `parent_student_binding` rows. A
+# student profile's `parent_id` is a third thing and is not one of them: it is a
+# projection of a binding that may since have been revoked or deleted, so
+# holding that identifier is not a grant. Every read path that shows one party
+# the other's private data asks the functions below and nothing else.
+
+RELATIONSHIP_SOURCE_LINK: Final = parent_link_repo.ENTITY_TYPE
+RELATIONSHIP_SOURCE_BINDING: Final = "parent_student_binding"
+
+# The coordinates both legacy rows must agree on before either is believed.
+_BINDING_COORDINATES: Final = ("parent_id", "student_id", "relationship", "version")
+
+
+def _relationship(
+    row: Mapping[str, Any], source: str, parent_id: str, student_id: str
+) -> LinkItem:
+    return {
+        "parent_id": parent_id,
+        "student_id": student_id,
+        "relationship": row.get("relationship") or "child",
+        "status": STATUS_ACTIVE,
+        "source": source,
+    }
+
+
+def _active_legacy_binding(parent_id: str, student_id: str) -> LinkItem | None:
+    """The legacy binding, only when both rows agree and both accounts are usable."""
+    forward = user_repo.get_parent_student_binding(parent_id, student_id)
+    reverse = user_repo.get_student_parent_binding(student_id, parent_id)
+    if not forward or not reverse:
+        return None
+    if forward.get("status") != STATUS_ACTIVE or reverse.get("status") != STATUS_ACTIVE:
+        return None
+    if any(forward.get(key) != reverse.get(key) for key in _BINDING_COORDINATES):
+        return None
+    if forward.get("parent_id") != parent_id or forward.get("student_id") != student_id:
+        return None
+    if not _usable_account(user_repo.get_user(parent_id), parent_id, ROLE_PARENT):
+        return None
+    if not _usable_account(user_repo.get_user(student_id), student_id, ROLE_STUDENT):
+        return None
+    return dict(forward)
+
+
+def current_relationship(parent_id: str, student_id: str) -> LinkItem | None:
+    """Whether this parent may read this student's private data right now."""
+    if not parent_id or not student_id:
+        return None
+    link = active_link(parent_id, student_id)
+    if link is not None:
+        return _relationship(link, RELATIONSHIP_SOURCE_LINK, parent_id, student_id)
+    binding = _active_legacy_binding(parent_id, student_id)
+    if binding is None:
+        return None
+    return _relationship(binding, RELATIONSHIP_SOURCE_BINDING, parent_id, student_id)
+
+
+def _current_from_candidates(pairs: list[tuple[str, str]]) -> list[LinkItem]:
+    relationships: list[LinkItem] = []
+    seen: set[tuple[str, str]] = set()
+    for parent_id, student_id in pairs:
+        if not parent_id or not student_id or (parent_id, student_id) in seen:
+            continue
+        seen.add((parent_id, student_id))
+        relationship = current_relationship(parent_id, student_id)
+        if relationship is not None:
+            relationships.append(relationship)
+    return relationships
+
+
+def current_children(parent_id: str) -> list[LinkItem]:
+    """Every student this parent may currently see, from both key spaces."""
+    if not parent_id:
+        return []
+    candidates = [
+        (parent_id, str(link.get("student_id") or ""))
+        for link in parent_link_repo.list_links_for_parent(parent_id)
+    ]
+    candidates.extend(
+        (parent_id, str(binding.get("student_id") or ""))
+        for binding in user_repo.list_parent_student_bindings(parent_id)
+    )
+    return _current_from_candidates(candidates)
+
+
+def current_parents(student_id: str) -> list[LinkItem]:
+    """Every parent who may currently see this student, from both key spaces."""
+    if not student_id:
+        return []
+    candidates = [
+        (str(link.get("parent_id") or ""), student_id)
+        for link in parent_link_repo.list_links_for_student(student_id)
+    ]
+    candidates.extend(
+        (str(binding.get("parent_id") or ""), student_id)
+        for binding in user_repo.list_student_parent_bindings(student_id)
+    )
+    return _current_from_candidates(candidates)

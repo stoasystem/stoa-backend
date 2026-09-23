@@ -22,6 +22,7 @@ from stoa.db.repositories import (
     curriculum_analytics_repo,
     moderation_repo,
     notification_repo,
+    parent_link_repo,
     practice_repo,
     report_repo,
     websocket_repo,
@@ -549,8 +550,15 @@ def _account_profile_branch(
     return _run_base_branch(
         command=command,
         previous=previous,
+        # The current `parent_student_link` rows were owned by no branch: the
+        # scanner found both directions and this predicate discarded them, so
+        # two clean epochs could be reached with the relationship still stored.
+        # They fall to `delete_owned_row` in `mutate` above - never to the two
+        # profile arms, whose keys are `PROFILE`, nor to the binding arm, whose
+        # entity_type differs.
         predicate=lambda item: item.get("SK") == "PROFILE"
-        or item.get("entity_type") == "parent_student_binding",
+        or item.get("entity_type")
+        in {"parent_student_binding", parent_link_repo.ENTITY_TYPE},
         mutate=mutate,
     )
 

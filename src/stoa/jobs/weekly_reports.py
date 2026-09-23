@@ -8,7 +8,12 @@ from zoneinfo import ZoneInfo
 
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo, report_repo
-from stoa.services import report_artifact_service, report_recovery_job_service, report_service
+from stoa.services import (
+    parent_link_service,
+    report_artifact_service,
+    report_recovery_job_service,
+    report_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +73,7 @@ def run_weekly_report_job(event: dict[str, Any] | None = None, *, now: datetime 
     """Run weekly report generation for eligible parent/student pairs."""
     event = event or {}
     week_start = target_week_start_from_event(event, now=now)
-    pairs = discover_linked_parent_student_pairs()
+    pairs = eligible_parent_student_pairs()
     counts = {
         "status": "completed",
         "week_start": week_start,
@@ -154,8 +159,23 @@ def previous_zurich_week_start(now: datetime | None = None) -> date:
     return this_week_start - timedelta(days=7)
 
 
+def eligible_parent_student_pairs() -> list[dict[str, str]]:
+    """Discovered candidates narrowed to relationships that are valid right now."""
+    return [
+        pair
+        for pair in discover_linked_parent_student_pairs()
+        if parent_link_service.current_relationship(pair["parent_id"], pair["student_id"])
+        is not None
+    ]
+
+
 def discover_linked_parent_student_pairs() -> list[dict[str, str]]:
-    """Discover linked parent/student pairs from formal bindings and legacy student profiles."""
+    """Gather candidate pairs from both relationship tables and legacy profiles.
+
+    This is candidate gathering, not authorization: the profile scan below finds
+    a stale `parent_id` too. `eligible_parent_student_pairs` is what the job
+    runs on.
+    """
     table = cast(_ScanTable, get_table())
     scan_kwargs: dict[str, Any] = {
         "FilterExpression": "#role = :role AND attribute_exists(#pid)",
@@ -163,10 +183,17 @@ def discover_linked_parent_student_pairs() -> list[dict[str, str]]:
         "ExpressionAttributeValues": {":role": "student"},
     }
     pairs_by_key: dict[tuple[str, str], dict[str, str]] = {}
+    # Both relationship key spaces are scanned in one pass. The forward row of
+    # either is PK=<owner>/SK=CHILD#<student>, so the SK filter below still
+    # takes each pair exactly once.
     binding_scan_kwargs: dict[str, Any] = {
-        "FilterExpression": "#entity = :entity AND #status = :status",
+        "FilterExpression": "#entity IN (:binding, :link) AND #status = :status",
         "ExpressionAttributeNames": {"#entity": "entity_type", "#status": "status"},
-        "ExpressionAttributeValues": {":entity": "parent_student_binding", ":status": "active"},
+        "ExpressionAttributeValues": {
+            ":binding": "parent_student_binding",
+            ":link": "parent_student_link",
+            ":status": "active",
+        },
     }
     while True:
         result = table.scan(**binding_scan_kwargs)

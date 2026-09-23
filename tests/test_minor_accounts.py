@@ -228,6 +228,7 @@ class LinkWorld:
         if date_of_birth is not None:
             row["date_of_birth"] = date_of_birth
         self.accounts[user_id] = row
+        self.table.seed_account_fence(user_id)
         return user_id
 
     def pending(self, *, parent_id: str, student_id: str, created_by: str) -> None:

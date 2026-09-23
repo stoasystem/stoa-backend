@@ -109,6 +109,64 @@ def _fenced_report_recovery_compat(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def current_relationships(monkeypatch):
+    """A resend now revalidates the recipient, so these tests need the stores.
+
+    Removing a pair from `bindings` is how a test says the relationship ended.
+    """
+    from stoa.db.repositories import user_repo
+
+    pairs = (
+        ("parent-1", "student-1"),
+        ("parent-1", "student-2"),
+        ("parent-1", "student-3"),
+        ("parent-1", "student-ok"),
+        ("parent-1", "student-refused"),
+        ("parent-1", "student-success"),
+        ("parent-2", "student-2"),
+        ("parent-3", "student-3"),
+        ("parent-fail", "student-failed"),
+    )
+    bindings = {
+        (parent_id, student_id): {
+            "entity_type": "parent_student_binding",
+            "parent_id": parent_id,
+            "student_id": student_id,
+            "relationship": "child",
+            "status": "active",
+            "version": 1,
+        }
+        for parent_id, student_id in pairs
+    }
+    monkeypatch.setattr(
+        user_repo,
+        "get_user",
+        lambda user_id, **_kwargs: {
+            "user_id": user_id,
+            "role": "parent" if user_id.startswith("parent") else "student",
+            "account_status": "active",
+            "email": f"{user_id}@example.com",
+            "name": user_id,
+        },
+    )
+    monkeypatch.setattr(
+        user_repo,
+        "get_parent_student_binding",
+        lambda parent_id, student_id: dict(bindings[(parent_id, student_id)])
+        if (parent_id, student_id) in bindings
+        else None,
+    )
+    monkeypatch.setattr(
+        user_repo,
+        "get_student_parent_binding",
+        lambda student_id, parent_id: dict(bindings[(parent_id, student_id)])
+        if (parent_id, student_id) in bindings
+        else None,
+    )
+    return bindings
+
+
+@pytest.fixture(autouse=True)
 def audit_events(monkeypatch):
     events = []
     monkeypatch.setattr(
@@ -319,7 +377,8 @@ def test_resend_failed_report_uses_existing_html_artifact_and_audits(monkeypatch
     response = client.post("/admin/reports/parent-1/student-1/2026-06-01/resend")
 
     assert response.status_code == 200
-    assert sent == [("parent@example.com", "<html>Report</html>", "STOA weekly report for Student")]
+    # The parent's current address, not the one archived on the report.
+    assert sent == [("parent-1@example.com", "<html>Report</html>", "STOA weekly report for Student")]
     assert updates[0][1] == "email_sent"
     assert updates[0][2]["email_status"] == "sent"
     assert updates[0][2]["last_operation"] == "resend_email"
@@ -423,6 +482,9 @@ def test_bulk_resend_returns_mixed_results_and_continues(monkeypatch):
         **_report(),
         "student_id": "student-failed",
         "report_id": "report-failed",
+        # The recipient now comes from this parent's profile, so the address the
+        # fake SES refuses has to be that parent's.
+        "parent_id": "parent-fail",
         "parent_email": "fail@example.com",
         "html_s3_key": "weekly-reports/parent-1/student-failed/2026-06-01/report.html",
     }
@@ -444,7 +506,7 @@ def test_bulk_resend_returns_mixed_results_and_continues(monkeypatch):
 
     def send_email(email, html, **kwargs):
         sent.append((email, html, kwargs.get("subject")))
-        if email == "fail@example.com":
+        if email == "parent-fail@example.com":
             raise RuntimeError("SES failed weekly-reports/private/report.html")
 
     monkeypatch.setattr(report_recovery_service.report_artifact_service, "get_report_html", get_html)
@@ -463,7 +525,7 @@ def test_bulk_resend_returns_mixed_results_and_continues(monkeypatch):
                 {"parent_id": "parent-1", "student_id": "student-success", "week_start": "2026-06-01"},
                 {"parent_id": "parent-1", "student_id": "student-refused", "week_start": "2026-06-01"},
                 {"parent_id": "parent-1", "student_id": "student-missing", "week_start": "2026-06-01"},
-                {"parent_id": "parent-1", "student_id": "student-failed", "week_start": "2026-06-01"},
+                {"parent_id": "parent-fail", "student_id": "student-failed", "week_start": "2026-06-01"},
             ]
         },
     )
@@ -482,8 +544,8 @@ def test_bulk_resend_returns_mixed_results_and_continues(monkeypatch):
     assert data["results"][0]["report_id"] == "report-success"
     assert data["results"][2]["detail"] == "Report not found"
     assert sent == [
-        ("parent@example.com", "<html>Report</html>", "STOA weekly report for Student"),
-        ("fail@example.com", "<html>Report</html>", "STOA weekly report for Student"),
+        ("parent-1@example.com", "<html>Report</html>", "STOA weekly report for Student"),
+        ("parent-fail@example.com", "<html>Report</html>", "STOA weekly report for Student"),
     ]
     assert html_reads == [
         "weekly-reports/parent-1/student-success/2026-06-01/report.html",
