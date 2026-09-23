@@ -54,6 +54,37 @@ CURRICULUM_REVIEWER = "curriculum_reviewer"
 CURRICULUM_PUBLISHER = "curriculum_publisher"
 MIGRATION_OPERATOR = "migration_operator"
 
+# Everything below was required by a registered admin route and absent from the
+# registry, which is the only list `grant_capability` will issue from. Forty-nine
+# admin routes therefore answered every account that could ever exist with
+# `action_not_allowed`: the platform dashboard, the notification console, report
+# operations, teacher dispatch, parent-binding repair, usage inspection and the
+# whole billing surface. Not one of them was reachable, and nothing said so - the
+# refusal a missing grant produces is the same refusal a forbidden one produces.
+# `tests/test_capability_registry_covers_routes.py` now pins the two lists together.
+CURRICULUM_ANALYTICS_READER = "curriculum_analytics_reader"
+CURRICULUM_ANALYTICS_EXPORTER = "curriculum_analytics_exporter"
+PLATFORM_OPERATIONS_READER = "platform_operations_reader"
+NOTIFICATION_EVENT_INSPECTOR = "notification_event_inspector"
+NOTIFICATION_DELIVERY_HEALTH_READER = "notification_delivery_health_reader"
+PARENT_BINDING_REPAIRER = "parent_binding_repairer"
+TEACHER_DISPATCH_OPERATOR = "teacher_dispatch_operator"
+USAGE_EVENT_INSPECTOR = "usage_event_inspector"
+USAGE_RECONCILIATION_OPERATOR = "usage_reconciliation_operator"
+REPORT_METADATA_READER = "report_metadata_reader"
+REPORT_RECOVERY_READER = "report_recovery_reader"
+REPORT_RECOVERY_OPERATOR = "report_recovery_operator"
+REPORT_EVIDENCE_EXPORTER = "report_evidence_exporter"
+REPORT_EXTERNAL_HANDOFF_SENDER = "report_external_handoff_sender"
+# Billing is frozen as a product surface. Its capabilities still belong in the
+# registry: a name being issuable is not the same as anyone holding it, and
+# leaving them out is what hid the other thirteen.
+BILLING_OPERATIONS_READER = "billing_operations_reader"
+BILLING_OPERATIONS_MANAGER = "billing_operations_manager"
+BILLING_ACCOUNTING_EXPORTER = "billing_accounting_exporter"
+BILLING_ROLLOUT_MANAGER = "billing_rollout_manager"
+BILLING_REFUND_EXECUTOR = "billing_refund_executor"
+
 KNOWN_CAPABILITIES = frozenset(
     {
         TEACHER_IDENTITY_REVIEWER,
@@ -66,6 +97,25 @@ KNOWN_CAPABILITIES = frozenset(
         CURRICULUM_REVIEWER,
         CURRICULUM_PUBLISHER,
         MIGRATION_OPERATOR,
+        CURRICULUM_ANALYTICS_READER,
+        CURRICULUM_ANALYTICS_EXPORTER,
+        PLATFORM_OPERATIONS_READER,
+        NOTIFICATION_EVENT_INSPECTOR,
+        NOTIFICATION_DELIVERY_HEALTH_READER,
+        PARENT_BINDING_REPAIRER,
+        TEACHER_DISPATCH_OPERATOR,
+        USAGE_EVENT_INSPECTOR,
+        USAGE_RECONCILIATION_OPERATOR,
+        REPORT_METADATA_READER,
+        REPORT_RECOVERY_READER,
+        REPORT_RECOVERY_OPERATOR,
+        REPORT_EVIDENCE_EXPORTER,
+        REPORT_EXTERNAL_HANDOFF_SENDER,
+        BILLING_OPERATIONS_READER,
+        BILLING_OPERATIONS_MANAGER,
+        BILLING_ACCOUNTING_EXPORTER,
+        BILLING_ROLLOUT_MANAGER,
+        BILLING_REFUND_EXECUTOR,
     }
 )
 
