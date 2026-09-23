@@ -372,21 +372,39 @@ def reissue_invitation(
         raise HTTPException(status_code=409, detail={"code": "account_not_invited"})
     # The conditional retirement is the guard, not the status read above it: a stale
     # read cannot be allowed to leave the previous token live beside the new one.
-    if not account_invitation_repo.revoke_invitation(
-        str(previous.get("token_digest") or ""), revoked_at=instant.isoformat()
-    ):
+    digest = str(previous.get("token_digest") or "")
+    if not account_invitation_repo.revoke_invitation(digest, revoked_at=instant.isoformat()):
         raise HTTPException(status_code=409, detail={"code": "invitation_not_reissuable"})
-    issued = _issue_invitation(
-        account_id=account_id,
-        role=str(previous.get("role") or ""),
-        email=str(previous.get("email") or ""),
-        full_name=str(previous.get("full_name") or ""),
-        account_number=str(previous.get("account_number") or ""),
-        invited_by=_actor_id(actor),
-        invitation_expiry_seconds=invitation_expiry_seconds,
-        deliver=deliver,
-        now=instant,
-    )
+    # Retirement and replacement are several writes, so a failure anywhere after the
+    # first is compensated: the invitation id the administrator was handed is the only
+    # one they have, and leaving it revoked with no replacement strands the account.
+    # `replacement` collects the row as soon as it lands, because a replacement that
+    # was written but never returned has to be retired before the old one comes back -
+    # otherwise the compensation is what creates the second live token.
+    replacement: list[dict[str, Any]] = []
+    try:
+        issued = _issue_invitation(
+            account_id=account_id,
+            role=str(previous.get("role") or ""),
+            email=str(previous.get("email") or ""),
+            full_name=str(previous.get("full_name") or ""),
+            account_number=str(previous.get("account_number") or ""),
+            invited_by=_actor_id(actor),
+            invitation_expiry_seconds=invitation_expiry_seconds,
+            deliver=deliver,
+            now=instant,
+            created=replacement,
+        )
+    except Exception:
+        _withdraw_replacement(replacement, now=instant)
+        _restore_retired_invitation(
+            digest,
+            account_id=account_id,
+            invitation_id=str(invitation_id),
+            actor_id=_actor_id(actor),
+            now=instant,
+        )
+        raise
     return {
         "userId": account_id,
         "role": str(previous.get("role") or ""),
@@ -492,6 +510,7 @@ def _issue_invitation(
     invitation_expiry_seconds: int,
     deliver: Callable[..., None] | None,
     now: datetime,
+    created: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     token = secrets.token_urlsafe(32)
     digest = _token_digest(token)
@@ -500,7 +519,7 @@ def _issue_invitation(
         MAX_INVITATION_SECONDS, max(MIN_INVITATION_SECONDS, int(invitation_expiry_seconds))
     )
     expires_at = now + timedelta(seconds=seconds)
-    account_invitation_repo.create_invitation(
+    row = account_invitation_repo.create_invitation(
         {
             "invitation_id": invitation_id,
             "token_digest": digest,
@@ -519,6 +538,8 @@ def _issue_invitation(
             "expires_at_iso": expires_at.isoformat(),
         }
     )
+    if created is not None:
+        created.append(row)
     _audit(
         stream_id=account_id,
         event_type="account_invitation_issued",
@@ -786,6 +807,57 @@ def _transition_account_status(
         )
     except account_deletion_repo.AccountDeletionConflict as exc:
         raise HTTPException(status_code=409, detail={"code": "account_status_unexpected"}) from exc
+
+
+def _withdraw_replacement(replacement: list[dict[str, Any]], *, now: datetime) -> None:
+    """Retire a replacement that was written but never handed to anyone.
+
+    Best effort, and ordered before the restore on purpose: the account may hold one
+    live invitation, never two.
+    """
+    for row in replacement:
+        try:
+            account_invitation_repo.revoke_invitation(
+                str(row.get("token_digest") or ""), revoked_at=now.isoformat()
+            )
+        except Exception:
+            continue
+
+
+def _restore_retired_invitation(
+    digest: str, *, account_id: str, invitation_id: str, actor_id: str, now: datetime
+) -> None:
+    """Give back the invitation a reissue retired for a replacement that never landed.
+
+    Best effort for the same reason as `_release_failed_account`: the caller is already
+    raising the error that explains what went wrong, and a failure to tidy up must not
+    replace it. A restore the store refuses leaves the row revoked - no worse than
+    before - and is recorded so the stranded account can be found.
+    """
+    restored = False
+    try:
+        restored = account_invitation_repo.restore_revoked_invitation(
+            digest, revoked_at=now.isoformat(), restored_at=now.isoformat()
+        )
+    except Exception:
+        restored = False
+    try:
+        _audit(
+            stream_id=account_id,
+            event_type=(
+                "account_invitation_reissue_rolled_back"
+                if restored
+                else "account_invitation_reissue_stranded"
+            ),
+            actor_id=actor_id,
+            target_id=account_id,
+            action="reissue_invitation",
+            reason_code="replacement_write_failed",
+            evidence_reference=f"account-invitation:{invitation_id}",
+            created_at=now.isoformat(),
+        )
+    except Exception:
+        return
 
 
 def _release_failed_account(*, account_id: str, now: datetime) -> None:

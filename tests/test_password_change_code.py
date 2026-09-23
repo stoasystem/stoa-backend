@@ -12,6 +12,9 @@ from fastapi.testclient import TestClient
 import pytest
 
 from actor_helpers import install_actor_overrides
+# The shared double already evaluates conditions and stores numbers the way the
+# table returns them, which is everything the local one here was written for.
+from fakes.dynamodb import FakeTable, as_stored as _as_stored
 from stoa.config import Settings, get_settings
 from stoa.routers import auth
 from stoa.services import locale_service, password_change_code_service as codes
@@ -19,57 +22,6 @@ from stoa.services import locale_service, password_change_code_service as codes
 
 SERVICE_SOURCE = Path(codes.__file__).read_text(encoding="utf-8")
 BASE_TIME = datetime(2026, 9, 19, 12, 0, tzinfo=UTC)
-
-
-class FakeTable:
-    """In-memory stand-in for the exact expressions this service writes."""
-
-    def __init__(self) -> None:
-        self.rows: dict[tuple[str, str], dict] = {}
-
-    @staticmethod
-    def _conflict() -> ClientError:
-        return ClientError(
-            {"Error": {"Code": "ConditionalCheckFailedException", "Message": "conflict"}},
-            "UpdateItem",
-        )
-
-    def get_item(self, *, Key, ConsistentRead=False):
-        row = self.rows.get((Key["PK"], Key["SK"]))
-        return {"Item": dict(row)} if row is not None else {}
-
-    def put_item(self, *, Item, ConditionExpression=None):
-        key = (Item["PK"], Item["SK"])
-        if ConditionExpression == "attribute_not_exists(PK)" and key in self.rows:
-            raise self._conflict()
-        self.rows[key] = dict(Item)
-
-    def update_item(
-        self,
-        *,
-        Key,
-        UpdateExpression,
-        ConditionExpression=None,
-        ExpressionAttributeNames=None,
-        ExpressionAttributeValues=None,
-    ):
-        key = (Key["PK"], Key["SK"])
-        row = self.rows.setdefault(key, {"PK": Key["PK"], "SK": Key["SK"]})
-        names = ExpressionAttributeNames or {}
-        values = ExpressionAttributeValues or {}
-        if ConditionExpression == "#version = :version":
-            if row.get("version") != values[":version"]:
-                raise self._conflict()
-        if ConditionExpression == "attribute_not_exists(#consumed_at)":
-            if names["#consumed_at"] in row:
-                raise self._conflict()
-        if UpdateExpression.startswith("ADD "):
-            attribute = names["#attempts"]
-            row[attribute] = int(row.get(attribute) or 0) + values[":one"]
-            return
-        for assignment in UpdateExpression.removeprefix("SET ").split(", "):
-            target, _, source = assignment.partition(" = ")
-            row[names.get(target.strip(), target.strip())] = values[source.strip()]
 
 
 class RecordingSes:
@@ -165,6 +117,120 @@ def test_a_wrong_code_is_rejected_and_bounded_by_attempts():
 
     with pytest.raises(codes.PasswordChangeCodeRejected):
         codes.verify_and_consume("user-1", code, now=BASE_TIME, table=table)
+
+
+class ReplacingTable(FakeTable):
+    """Issue a fresh code the instant verification has read the live one.
+
+    The interleaving the service has to survive: the snapshot a request
+    validated is no longer the challenge sitting at `CURRENT` by the time that
+    request writes.
+    """
+
+    def __init__(self, *, owner: str, replacement: str, at: datetime) -> None:
+        super().__init__()
+        self.owner = owner
+        self.replacement = replacement
+        self.at = at
+        self.replacements = 0
+
+    def get_item(self, *, Key, ConsistentRead=False):
+        response = super().get_item(Key=Key, ConsistentRead=ConsistentRead)
+        if Key["SK"] == "CURRENT" and "Item" in response and not self.replacements:
+            self.replacements += 1
+            codes.store_code(self.owner, self.replacement, now=self.at, table=self)
+        return response
+
+
+class BudgetSpendingTable(FakeTable):
+    """Spend the whole attempt budget after verification has read its snapshot."""
+
+    def __init__(self, *, spend_to: int) -> None:
+        super().__init__()
+        self.spend_to = spend_to
+        self.spent = 0
+
+    def get_item(self, *, Key, ConsistentRead=False):
+        response = super().get_item(Key=Key, ConsistentRead=ConsistentRead)
+        if Key["SK"] == "CURRENT" and "Item" in response and not self.spent:
+            self.spent += 1
+            self.rows[(Key["PK"], Key["SK"])]["attempts"] = _as_stored(self.spend_to)
+        return response
+
+
+def test_consumption_is_bound_to_the_challenge_that_was_verified():
+    ses = RecordingSes()
+    table = ReplacingTable(
+        owner="user-1", replacement="654321", at=BASE_TIME + timedelta(seconds=1)
+    )
+    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    first = _sent_code(ses)
+
+    with pytest.raises(codes.PasswordChangeCodeRejected):
+        codes.verify_and_consume("user-1", first, now=BASE_TIME, table=table)
+
+    row = table.rows[("PASSWORD_CHANGE_CODE#user-1", "CURRENT")]
+    assert "consumed_at" not in row, "the replacement was consumed without being presented"
+    assert row["attempts"] == 0
+    # The replacement is untouched, so the code its owner actually holds still works.
+    codes.verify_and_consume(
+        "user-1", "654321", now=BASE_TIME + timedelta(seconds=2), table=table
+    )
+
+
+def test_a_failed_attempt_is_not_charged_to_a_replacement_challenge():
+    ses = RecordingSes()
+    table = ReplacingTable(
+        owner="user-1", replacement="654321", at=BASE_TIME + timedelta(seconds=1)
+    )
+    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    first = _sent_code(ses)
+    wrong = f"{(int(first) + 1) % 1000000:06d}"
+
+    with pytest.raises(codes.PasswordChangeCodeRejected):
+        codes.verify_and_consume("user-1", wrong, now=BASE_TIME, table=table)
+
+    row = table.rows[("PASSWORD_CHANGE_CODE#user-1", "CURRENT")]
+    assert row["attempts"] == 0, "a wrong guess at the old code spent the new code's budget"
+
+
+def test_consumption_rechecks_attempt_budget_at_commit():
+    ses = RecordingSes()
+    table = BudgetSpendingTable(spend_to=codes.MAX_VERIFY_ATTEMPTS)
+    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    code = _sent_code(ses)
+
+    with pytest.raises(codes.PasswordChangeCodeRejected):
+        codes.verify_and_consume("user-1", code, now=BASE_TIME, table=table)
+
+    assert "consumed_at" not in table.rows[("PASSWORD_CHANGE_CODE#user-1", "CURRENT")]
+
+
+def test_a_concurrent_failed_attempt_still_leaves_the_right_code_usable():
+    """Negative control: only an exhausted budget may refuse the commit."""
+    ses = RecordingSes()
+    table = BudgetSpendingTable(spend_to=codes.MAX_VERIFY_ATTEMPTS - 1)
+    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    code = _sent_code(ses)
+
+    codes.verify_and_consume("user-1", code, now=BASE_TIME, table=table)
+
+    assert table.rows[("PASSWORD_CHANGE_CODE#user-1", "CURRENT")]["consumed_at"] == int(
+        BASE_TIME.timestamp()
+    )
+
+
+def test_a_wrong_guess_does_not_stop_the_right_code_that_follows():
+    """Negative control: the ordinary retry an account makes after a typo."""
+    table = FakeTable()
+    ses = RecordingSes()
+    codes.issue("user-1", "learner@example.com", now=BASE_TIME, table=table, ses_client=ses)
+    code = _sent_code(ses)
+    wrong = f"{(int(code) + 1) % 1000000:06d}"
+
+    with pytest.raises(codes.PasswordChangeCodeRejected):
+        codes.verify_and_consume("user-1", wrong, now=BASE_TIME, table=table)
+    codes.verify_and_consume("user-1", code, now=BASE_TIME + timedelta(seconds=5), table=table)
 
 
 def test_sends_are_limited_to_five_per_rolling_hour():

@@ -241,6 +241,21 @@ def store_code(user_id: str, code: str, *, now: datetime | None = None, table=No
     return expires_at
 
 
+# The challenge that was read, named by everything `store_code` redraws when it
+# replaces one. Without it the commit only knows that some code at `CURRENT` is
+# unconsumed, and a replacement issued after the read is the one that gets spent.
+_IDENTITY_CONDITION = "#salt = :salt AND #code_digest = :code_digest AND #issued_at = :issued_at"
+_IDENTITY_NAMES = {"#salt": "salt", "#code_digest": "code_digest", "#issued_at": "issued_at"}
+
+
+def _identity_values(stored: dict) -> dict[str, object]:
+    return {
+        ":salt": str(stored.get("salt") or ""),
+        ":code_digest": str(stored.get("code_digest") or ""),
+        ":issued_at": _int(stored.get("issued_at")),
+    }
+
+
 def verify_and_consume(
     user_id: str,
     code: str,
@@ -267,10 +282,10 @@ def verify_and_consume(
     expected = str(stored.get("code_digest") or "")
     presented = str(code or "")
     if not salt or not expected or not presented.isdigit() or len(presented) != CODE_DIGITS:
-        _record_failed_attempt(client, key)
+        _record_failed_attempt(client, key, stored)
         raise PasswordChangeCodeRejected()
     if not secrets.compare_digest(_digest(presented, salt), expected):
-        _record_failed_attempt(client, key)
+        _record_failed_attempt(client, key, stored)
         raise PasswordChangeCodeRejected()
     if moment >= _int(stored.get("expires_at")):
         raise PasswordChangeCodeRejected()
@@ -278,9 +293,22 @@ def verify_and_consume(
         client.update_item(
             Key=key,
             UpdateExpression="SET #consumed_at = :consumed_at",
-            ConditionExpression="attribute_not_exists(#consumed_at)",
-            ExpressionAttributeNames={"#consumed_at": "consumed_at"},
-            ExpressionAttributeValues={":consumed_at": moment},
+            ConditionExpression=(
+                f"attribute_not_exists(#consumed_at) AND {_IDENTITY_CONDITION} "
+                "AND #attempts < :max_attempts AND #expires_at > :now"
+            ),
+            ExpressionAttributeNames={
+                "#consumed_at": "consumed_at",
+                "#attempts": "attempts",
+                "#expires_at": "expires_at",
+                **_IDENTITY_NAMES,
+            },
+            ExpressionAttributeValues={
+                ":consumed_at": moment,
+                ":max_attempts": MAX_VERIFY_ATTEMPTS,
+                ":now": moment,
+                **_identity_values(stored),
+            },
         )
     except ClientError as exc:
         if _conditional_check_failed(exc):
@@ -288,13 +316,24 @@ def verify_and_consume(
         raise
 
 
-def _record_failed_attempt(client, key: dict[str, str]) -> None:
-    client.update_item(
-        Key=key,
-        UpdateExpression="ADD #attempts :one",
-        ExpressionAttributeNames={"#attempts": "attempts"},
-        ExpressionAttributeValues={":one": 1},
-    )
+def _record_failed_attempt(client, key: dict[str, str], stored: dict) -> None:
+    """Charge the guess to the challenge it was a guess at, or to nothing."""
+
+    try:
+        client.update_item(
+            Key=key,
+            UpdateExpression="ADD #attempts :one",
+            ConditionExpression=f"attribute_not_exists(#consumed_at) AND {_IDENTITY_CONDITION}",
+            ExpressionAttributeNames={
+                "#attempts": "attempts",
+                "#consumed_at": "consumed_at",
+                **_IDENTITY_NAMES,
+            },
+            ExpressionAttributeValues={":one": 1, **_identity_values(stored)},
+        )
+    except ClientError as exc:
+        if not _conditional_check_failed(exc):
+            raise
 
 
 _EMAIL_TEMPLATES: dict[str, tuple[str, str]] = {

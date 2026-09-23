@@ -981,6 +981,106 @@ def test_拿已作废的邀请id重发被拒绝(table: FakeAccountTable) -> None
     assert exc_info.value.detail == {"code": "invitation_not_reissuable"}
 
 
+def test_invitation_reissue_recovers_after_transient_replacement_write_failure(
+    table: FakeAccountTable, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The invitation id the administrator holds has to survive a failed reissue.
+
+    The old token is retired before the replacement is written, so a storage
+    failure in between used to leave the account invited, the old row revoked
+    and no replacement - with the only handle anybody had now refused.
+    """
+    issued = _invite(table)
+    real_create = account_invitation_repo.create_invitation
+    attempts = {"count": 0}
+
+    def flaky(item: dict[str, Any], *, table: object | None = None) -> Any:
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise RuntimeError("invitation store unavailable")
+        return real_create(item, table=table)
+
+    monkeypatch.setattr(account_invitation_repo, "create_invitation", flaky)
+
+    with pytest.raises(RuntimeError):
+        account_provisioning_service.reissue_invitation(
+            actor=_admin(), invitation_id=issued["invitationId"], now=lambda: _moment(30)
+        )
+
+    reissued = account_provisioning_service.reissue_invitation(
+        actor=_admin(), invitation_id=issued["invitationId"], now=lambda: _moment(60)
+    )
+
+    assert reissued["userId"] == issued["userId"]
+    assert reissued["accountNumber"] == issued["accountNumber"]
+    assert reissued["activationToken"] != issued["activationToken"]
+    live = [
+        row
+        for row in table.invitations()
+        if row.get("status") == account_invitation_repo.ISSUED_STATUS
+    ]
+    assert len(live) == 1
+    assert live[0]["invitation_id"] == reissued["invitationId"]
+    with pytest.raises(HTTPException):
+        _claim(token=issued["activationToken"], at=_moment(90))
+    assert _claim(token=reissued["activationToken"], at=_moment(90))["status"] == "active"
+
+
+def test_重发在副本已落库之后失败也只留一个可用邀请(
+    table: FakeAccountTable, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failure after the replacement row lands must not leave two live tokens.
+
+    The compensation puts the administrator's old invitation back, so the replacement
+    it never got to return has to be retired first.
+    """
+    issued = _invite(table)
+    real_append = security_audit_repo.append_event
+    failures = {"count": 0}
+
+    def flaky(stream_id: str, event: dict[str, Any], **kwargs: Any) -> Any:
+        if event.get("event_type") == "account_invitation_issued" and not failures["count"]:
+            failures["count"] += 1
+            raise RuntimeError("audit stream unavailable")
+        return real_append(stream_id, event, **kwargs)
+
+    monkeypatch.setattr(security_audit_repo, "append_event", flaky)
+
+    with pytest.raises(RuntimeError):
+        account_provisioning_service.reissue_invitation(
+            actor=_admin(), invitation_id=issued["invitationId"], now=lambda: _moment(30)
+        )
+
+    live = [
+        row
+        for row in table.invitations()
+        if row.get("status") == account_invitation_repo.ISSUED_STATUS
+    ]
+    assert len(live) == 1
+    assert live[0]["invitation_id"] == issued["invitationId"]
+
+    reissued = account_provisioning_service.reissue_invitation(
+        actor=_admin(), invitation_id=issued["invitationId"], now=lambda: _moment(60)
+    )
+    assert _claim(token=reissued["activationToken"], at=_moment(90))["status"] == "active"
+
+
+def test_重发失败的补偿只放回自己撤销的那一行(table: FakeAccountTable) -> None:
+    """Negative control: compensation must not resurrect somebody else's revocation."""
+    issued = _invite(table)
+    digest = sha256(issued["activationToken"].encode("utf-8")).hexdigest()
+    assert account_invitation_repo.revoke_invitation(
+        digest, revoked_at=_moment(10).isoformat()
+    )
+
+    assert not account_invitation_repo.restore_revoked_invitation(
+        digest, revoked_at=_moment(999).isoformat(), restored_at=_moment(20).isoformat()
+    )
+    stored = account_invitation_repo.get_invitation(digest)
+    assert stored is not None
+    assert stored["status"] == account_invitation_repo.REVOKED_STATUS
+
+
 def test_任何时刻一个账号最多一个issued邀请(table: FakeAccountTable) -> None:
     issued = _invite(table)
     first = account_provisioning_service.reissue_invitation(

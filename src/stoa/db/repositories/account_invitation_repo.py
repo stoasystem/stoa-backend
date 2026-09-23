@@ -29,6 +29,11 @@ POINTER_SK = "POINTER"
 CREATE_CONDITION = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
 ISSUED_CONDITION = "#status = :issued AND #version = :expected_version"
 BURNED_CONDITION = "#status = :used AND #version = :expected_version"
+# The revocation stamp is part of the identity on purpose: it is what makes this the
+# revocation one caller performed rather than any revocation the row has ever carried.
+RETIRED_CONDITION = (
+    "#status = :revoked AND #version = :expected_version AND #revoked_at = :revoked_at"
+)
 
 ISSUED_STATUS = "issued"
 USED_STATUS = "used"
@@ -231,6 +236,45 @@ def restore_invitation(
             ExpressionAttributeValues={
                 ":used": USED_STATUS,
                 ":issued": ISSUED_STATUS,
+                ":stamp": restored_at,
+                ":expected_version": 2,
+                ":next_version": 1,
+            },
+        )
+    except ClientError as exc:
+        if _conditional_failure(exc):
+            return False
+        raise
+    return True
+
+
+def restore_revoked_invitation(
+    token_digest: str, *, revoked_at: str, restored_at: str, table: object | None = None
+) -> bool:
+    """Undo one revocation whose replacement was never written.
+
+    Conditional on the exact row this caller retired - `revoked`, still at version 2
+    and still carrying the stamp that retirement wrote - so it can only give back a
+    revocation this same operation performed. Every other revoked invitation stays
+    revoked, which is what keeps a reissue from becoming a second live token.
+    """
+    try:
+        _update_item(
+            _table(table),
+            Key=invitation_key(token_digest),
+            UpdateExpression=(
+                "SET #status = :issued, restored_at = :stamp, #version = :next_version"
+            ),
+            ConditionExpression=RETIRED_CONDITION,
+            ExpressionAttributeNames={
+                "#status": "status",
+                "#version": "version",
+                "#revoked_at": "revoked_at",
+            },
+            ExpressionAttributeValues={
+                ":revoked": REVOKED_STATUS,
+                ":issued": ISSUED_STATUS,
+                ":revoked_at": revoked_at,
                 ":stamp": restored_at,
                 ":expected_version": 2,
                 ":next_version": 1,
