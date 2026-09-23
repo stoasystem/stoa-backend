@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from stoa.db.repositories import question_repo, user_repo
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.models.question import QuestionStatus
@@ -168,8 +168,13 @@ def _initialize_legacy_question_for_mutation(
     *,
     allowed_source_statuses: frozenset[str],
 ) -> dict[str, Any]:
-    version = question.get("version")
-    if isinstance(version, int) and not isinstance(version, bool) and version > 0:
+    # The resource interface returns every stored number as `Decimal`, and
+    # `isinstance(Decimal("3"), int)` is False. A question that already carried a
+    # version was therefore taken for a legacy row and sent to be initialised -
+    # where the same judgement, made correctly, raised "question already has a
+    # positive version". Every teacher reply to a versioned question hit that.
+    version = stored_int(question.get("version"))
+    if version is not None and version > 0:
         return question
     return _require_applied_question_mutation(
         question_repo.initialize_legacy_question_version(
