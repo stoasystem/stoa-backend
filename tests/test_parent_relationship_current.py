@@ -290,14 +290,12 @@ def test_profile_parent_id_alone_does_not_authorize_operations(
 
 @pytest.fixture
 def quiet_report_sources(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _Empty:
-        def query(self, **_kwargs: object) -> dict[str, list]:
-            return {"Items": []}
-
-        def scan(self, **_kwargs: object) -> dict[str, list]:
-            return {"Items": []}
-
-    monkeypatch.setattr(report_service, "get_table", _Empty)
+    # An empty shared double, not a hand-written one. The exemption this used to
+    # carry said "script", and the gate reserves that for a double driving a
+    # repository down a path a real table cannot take; an empty table is not
+    # that, and the shared one is empty just as well.
+    empty = FakeTable()
+    monkeypatch.setattr(report_service, "get_table", lambda: empty)
     monkeypatch.setattr(
         report_service.question_repo,
         "list_by_student",

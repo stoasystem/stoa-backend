@@ -30,6 +30,14 @@ SHARED_DOUBLE = "FakeTable"
 # "repo"    - the collaborator is a repository, not a table: its surface is that
 #             repository's own methods and its `scan`/`query` exist only to feed
 #             them.
+#
+#             A double in this class still answers real reads, so it is only as
+#             faithful as it was written to be. `_DeletionTable` was filed here
+#             and its own row-delete hook skipped the fenced transaction the real
+#             repository runs, so four deletion tests proved the branch called
+#             delete and not that the delete held under a fence. Filing a double
+#             here is not a finding that it is safe: it is a statement about which
+#             collaborator it replaces.
 # "pending" - an ordinary table double that could move onto the shared one and has
 #             not been moved yet. These are the ones still carrying the risk; card
 #             019 group A converted the doubles behind the five known incidents
@@ -43,12 +51,12 @@ HAND_WRITTEN_DOUBLES: dict[str, str] = {
     "test_conversations.py::_PagedIndexTable": "script",
     "test_identity_authorization.py::FakeTable": "repo",
     "test_parent_link_paid_downstream.py::ConditionalTable": "repo",
-    "test_parent_relationship_current.py::_Empty": (
-        "script: answers nothing on purpose, so a report source somebody forgot to "
-        "stub is visibly empty here rather than reaching a real table"
-    ),
     "test_parent_relationship_current.py::_DeletionTable": (
-        "repo: stands in for the deletion branch's own `delete_owned_row`, not for a table"
+        "repo: stands in for the deletion branch's own `delete_owned_row`, not for a "
+        "table -- and its hook skips the fenced transaction the real one runs, so the "
+        "deletion tests on it show the branch calls delete, not that the delete holds. "
+        "Card 021 B-3: move it onto the shared double with a seeded fence before the "
+        "deletion branch is touched again."
     ),
     "test_parent_student_links.py::FakeLinkTable": "repo",
     "test_phase473_account_deletion.py::_PagedPrivateTable": "script",
