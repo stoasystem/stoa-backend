@@ -319,3 +319,59 @@ def test_a_plan_without_teacher_support_says_so(monkeypatch):
     body = response.json()
     assert body["teacherSupportIncluded"] is False
     assert body["freeTrialActive"] is True
+
+
+def test_a_student_the_administrator_opened_can_read_its_own_profile(monkeypatch):
+    """The row `open_account` actually writes, which carries no learning fields.
+
+    `grade` and `primary_subjects` are asked for on the learning profile, not
+    when an account is opened, so every account an administrator opens has
+    neither. Treating that as a damaged row answered the student's own profile
+    with 503 `authorization_temporarily_unavailable` - a server-fault code, for
+    a student who simply had not filled in a year group yet. Measured on
+    production before the fix.
+
+    The fixture above is more generous than the platform: its student carries
+    both fields, so it could never have shown this.
+    """
+    opened = {
+        "user_id": "student-opened",
+        "role": "student",
+        "account_status": "active",
+        "email": "opened@stoa.test",
+        "name": "Opened Student",
+        "created_at": "2026-09-23T00:00:00Z",
+        "updated_at": "2026-09-23T00:00:00Z",
+    }
+    monkeypatch.setattr(students.user_repo, "get_user", lambda uid: opened if uid == "student-opened" else None)
+
+    response = _client(_actor(CanonicalRole.STUDENT, "student-opened")).get("/students/me/profile")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["grade"] == ""
+    assert body["primarySubjects"] == []
+    assert body["name"] == "Opened Student"
+
+
+def test_a_stored_grade_of_the_wrong_type_is_still_refused(monkeypatch):
+    """Negative control: "nobody filled it in" is not "the row is damaged".
+
+    Widening the first case must not empty the guard. A grade stored as a number
+    is the shape this check was put here for.
+    """
+    damaged = {
+        "user_id": "student-damaged",
+        "role": "student",
+        "account_status": "active",
+        "name": "Damaged",
+        "grade": 9,
+        "created_at": "2026-09-23T00:00:00Z",
+        "updated_at": "2026-09-23T00:00:00Z",
+    }
+    monkeypatch.setattr(students.user_repo, "get_user", lambda uid: damaged if uid == "student-damaged" else None)
+
+    response = _client(_actor(CanonicalRole.STUDENT, "student-damaged")).get("/students/me/profile")
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "authorization_temporarily_unavailable"

@@ -89,8 +89,27 @@ def _required_profile_text(
     return value
 
 
+def _unset_or_text(profile: Mapping[str, object], field: str, correlation_id: str) -> str:
+    """A field the student has not filled in yet, told apart from a damaged one.
+
+    `grade` is asked for on the learning profile, not when the account is opened,
+    so every account an administrator opens has none - and treating that as a
+    damaged row answered the student's own profile with a 503. The distinction is
+    the same one `minorKnown` draws: nobody said, which is not the same as
+    somebody stored nonsense. A value of the wrong type is still refused, because
+    that is the case this guard was put here for.
+    """
+    if field not in profile or profile[field] is None:
+        return ""
+    return _required_profile_text(profile, field, correlation_id)
+
+
 def _profile_subjects(profile: Mapping[str, object], correlation_id: str) -> list[str]:
+    if "primary_subjects" not in profile and "subjects" not in profile:
+        return []
     value = profile.get("primary_subjects", profile.get("subjects"))
+    if value is None:
+        return []
     if not isinstance(value, list) or not all(isinstance(subject, str) for subject in value):
         _invalid_stored_student_response(correlation_id, "primary_subjects")
     return value
@@ -125,7 +144,7 @@ def _student_profile_response(
         userId=user_id,
         name=_required_profile_text(profile, "name", correlation_id),
         email=_optional_profile_text(profile, "email", correlation_id) or "",
-        grade=_required_profile_text(profile, "grade", correlation_id),
+        grade=_unset_or_text(profile, "grade", correlation_id),
         primarySubjects=_profile_subjects(profile, correlation_id),
         schoolSystem=_optional_profile_text(profile, "school_system", correlation_id),
         preferredAnswerLanguage=_optional_profile_text(
