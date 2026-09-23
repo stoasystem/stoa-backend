@@ -29,6 +29,7 @@ from stoa.db.repositories import (
     account_invitation_repo,
     capability_repo,
     identity_repo,
+    public_identity_repo,
     security_audit_repo,
     user_repo,
 )
@@ -69,6 +70,10 @@ RESERVED_PROFILE_FIELDS = frozenset(
         "version",
         DATE_OF_BIRTH_FIELD,
         MUST_CHANGE_PASSWORD_FIELD,
+        # How the account came to exist, and as what. The sign-in guard reads
+        # both, so a caller's extra fields must not be able to restate them.
+        "registration_command",
+        "registration_role",
     }
 )
 
@@ -612,6 +617,11 @@ def _create_account_row(
                 "email": email,
                 "name": full_name,
                 "created_by": created_by,
+                # The provenance the sign-in guard checks. Without it a student
+                # or parent account opened here is refused at sign-in, which is
+                # every one of them: public sign-up is closed.
+                "registration_command": public_identity_repo.ADMIN_ASSIGNMENT_COMMAND,
+                "registration_role": role,
                 "created_at": now.isoformat(),
                 "updated_at": now.isoformat(),
                 # Last so a caller's own fields can never displace the identity the

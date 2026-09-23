@@ -601,3 +601,93 @@ async def test_token_response_denies_identity_conflicts(rsa_jwks_keysets, case):
             identity_repository=Repository(),
         )
     assert denied.value.code is SecurityErrorCode.IDENTITY_CONFLICT
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("role", "group"), [("student", "students"), ("parent", "parents")])
+async def test_an_account_the_administrator_opened_can_sign_in(rsa_jwks_keysets, role, group):
+    """Public sign-up is closed, so this is the only provenance these roles have.
+
+    The guard demanded `public_self_service` and nothing else, which is exactly
+    the path `PUBLIC_SELF_REGISTRATION_ENABLED = False` turned off. Every student
+    and parent account an administrator opened was refused at sign-in with
+    `identity_conflict` - and since nothing else opens one, no student or parent
+    could sign in at all. Nothing caught it because no test ever signed in as an
+    account the assignment path had produced.
+    """
+    from stoa.db.repositories import public_identity_repo
+    from stoa.services import public_identity_service
+
+    keyset, _ = rsa_jwks_keysets
+    profile = {
+        "user_id": f"{role}-assigned",
+        "email": f"{role}@example.test",
+        "role": role,
+        "account_status": "active",
+        "registration_command": public_identity_repo.ADMIN_ASSIGNMENT_COMMAND,
+        "registration_role": role,
+    }
+
+    actor, resolved = await public_identity_service.resolve_account_access_token(
+        _signed_public_token(keyset, groups=(group,), email=f"{role}@example.test"),
+        allowed_issuers=(keyset.issuer,),
+        allowed_client_ids=("student-client",),
+        key_provider=_jwks_provider(keyset),
+        identity_repository=_identity_repository(profile),
+    )
+
+    assert actor.role.value == role
+    assert resolved["user_id"] == f"{role}-assigned"
+
+
+@pytest.mark.asyncio
+async def test_a_public_role_profile_with_no_provenance_is_still_refused(rsa_jwks_keysets):
+    """Negative control: widening the guard must not empty it.
+
+    The rule being kept is that a public-role profile names how it was opened.
+    A row carrying no provenance at all is the shape this guard exists for.
+    """
+    from stoa.services import public_identity_service
+
+    keyset, _ = rsa_jwks_keysets
+    profile = {
+        "user_id": "student-nowhere",
+        "email": "student@example.test",
+        "role": "student",
+        "account_status": "active",
+    }
+
+    with pytest.raises(SecurityDecisionError):
+        await public_identity_service.resolve_account_access_token(
+            _signed_public_token(keyset, groups=("students",), email="student@example.test"),
+            allowed_issuers=(keyset.issuer,),
+            allowed_client_ids=("student-client",),
+            key_provider=_jwks_provider(keyset),
+            identity_repository=_identity_repository(profile),
+        )
+
+
+@pytest.mark.asyncio
+async def test_provenance_for_one_role_does_not_admit_another(rsa_jwks_keysets):
+    """Second negative control: the provenance still has to name this role."""
+    from stoa.db.repositories import public_identity_repo
+    from stoa.services import public_identity_service
+
+    keyset, _ = rsa_jwks_keysets
+    profile = {
+        "user_id": "student-mislabelled",
+        "email": "student@example.test",
+        "role": "student",
+        "account_status": "active",
+        "registration_command": public_identity_repo.ADMIN_ASSIGNMENT_COMMAND,
+        "registration_role": "parent",
+    }
+
+    with pytest.raises(SecurityDecisionError):
+        await public_identity_service.resolve_account_access_token(
+            _signed_public_token(keyset, groups=("students",), email="student@example.test"),
+            allowed_issuers=(keyset.issuer,),
+            allowed_client_ids=("student-client",),
+            key_provider=_jwks_provider(keyset),
+            identity_repository=_identity_repository(profile),
+        )

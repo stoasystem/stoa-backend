@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from stoa.db.repositories import identity_repo, public_identity_repo, user_repo
 from stoa.db.repositories.public_identity_repo import (
+    ACCEPTED_REGISTRATION_COMMANDS,
     PUBLIC_REGISTRATION_COMMAND,
     PUBLIC_ROLES,
     PublicIdentityCommandConflict,
@@ -167,8 +168,12 @@ async def _resolve_account_access_token(
         or role not in allowed_roles
     ):
         raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
+    # A public-role profile has to carry the provenance it was opened under, and
+    # that provenance has to name the role it is being used as. What it may not
+    # do is carry only the self-service one: that path is closed, so demanding it
+    # refused every account an administrator had opened.
     if role in PUBLIC_ROLES and (
-        profile.get("registration_command") != PUBLIC_REGISTRATION_COMMAND
+        profile.get("registration_command") not in ACCEPTED_REGISTRATION_COMMANDS
         or profile.get("registration_role") != role
     ):
         raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)

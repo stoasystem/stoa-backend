@@ -15,6 +15,16 @@ from stoa.db.repositories import account_deletion_repo
 
 
 PUBLIC_REGISTRATION_COMMAND = "public_self_service"
+# Public sign-up is closed, so the only way a student or parent account comes
+# into being is an administrator opening one. The sign-in guard below used to
+# accept the self-service provenance alone, which is the one the platform no
+# longer produces: every account an administrator opened was refused at sign-in
+# with `identity_conflict`, and since nothing else can open one, no student or
+# parent could sign in at all.
+ADMIN_ASSIGNMENT_COMMAND = "admin_assignment"
+ACCEPTED_REGISTRATION_COMMANDS = frozenset(
+    {PUBLIC_REGISTRATION_COMMAND, ADMIN_ASSIGNMENT_COMMAND}
+)
 PUBLIC_ROLES = frozenset({"student", "parent"})
 
 

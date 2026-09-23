@@ -27,6 +27,7 @@ from stoa.db.repositories import (
     account_invitation_repo,
     account_number_repo,
     identity_repo,
+    public_identity_repo,
     security_audit_repo,
     user_repo,
 )
@@ -1628,3 +1629,49 @@ def test_占位行读不出来时仍然要把半开账号停放(
     parked = table.rows[(f"USER#{user_id}", "PROFILE")]
     assert parked["account_status"] == account_provisioning_service.FAILED_ACCOUNT_STATUS
     assert "@" not in str(parked["email"])
+
+
+def test_开出来的账号带着登录要读的出身(table: FakeAccountTable) -> None:
+    """The sign-in guard reads how a public-role account came to exist.
+
+    Public sign-up is closed, so an administrator opening one is the only way a
+    student or parent account appears - and the profile has to say so, or the
+    guard refuses it at sign-in. Every account opened before this said nothing,
+    which is why none of them could sign in.
+    """
+    account_provisioning_service.open_account(
+        account_id="student-provenance",
+        role="student",
+        email="provenance@stoa.test",
+        created_by="admin-1",
+        account_status="active",
+        full_name="Provenance Probe",
+    )
+
+    profile = table.rows[("USER#student-provenance", "PROFILE")]
+    assert profile["registration_command"] == public_identity_repo.ADMIN_ASSIGNMENT_COMMAND
+    assert profile["registration_role"] == "student"
+
+
+def test_调用方的附加字段改不动那份出身(table: FakeAccountTable) -> None:
+    """Negative control: the provenance is identity, not caller-supplied metadata.
+
+    `extra_fields` is how callers decorate a profile. If it could restate how the
+    account was opened, or as what, the guard would be reading the caller instead
+    of the platform.
+    """
+    account_provisioning_service.open_account(
+        account_id="student-forged",
+        role="student",
+        email="forged@stoa.test",
+        created_by="admin-1",
+        account_status="active",
+        extra_fields={
+            "registration_command": "public_self_service",
+            "registration_role": "parent",
+        },
+    )
+
+    profile = table.rows[("USER#student-forged", "PROFILE")]
+    assert profile["registration_command"] == public_identity_repo.ADMIN_ASSIGNMENT_COMMAND
+    assert profile["registration_role"] == "student"
