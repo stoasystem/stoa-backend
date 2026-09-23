@@ -2351,28 +2351,50 @@ def test_system_web_launcher_fails_closed_when_group_cannot_be_confirmed(
 
 
 def test_system_web_launcher_kills_process_group_on_timeout(tmp_path: Path) -> None:
+    """A grandchild of the launched process does not outlive the timeout.
+
+    The margin used to be three tenths of a second: the timeout fired at one and
+    the grandchild wrote its marker at one-point-three, so a loaded machine that
+    reaped the group a little late failed a test about containment for reasons
+    that had nothing to do with containment. It went red twice in one day's
+    gate runs and passed every time it was run on its own.
+
+    The grandchild now says when it starts and waits several seconds before
+    claiming to have survived, and the wait here outlasts that. Containment has
+    to fail by seconds to be reported as failing. The started marker is the
+    control: without it this passes just as well when the grandchild never ran,
+    which is the shape the old one could also have had.
+    """
     gate = _load_gate()
-    marker = tmp_path / "timeout-child-survived"
+    started = tmp_path / "timeout-child-started"
+    survived = tmp_path / "timeout-child-survived"
     child = (
         "import pathlib,sys,time;"
-        "time.sleep(1.3);"
-        "pathlib.Path(sys.argv[1]).write_text('survived',encoding='utf-8')"
+        "pathlib.Path(sys.argv[1]).write_text('started',encoding='utf-8');"
+        "time.sleep(5);"
+        "pathlib.Path(sys.argv[2]).write_text('survived',encoding='utf-8')"
     )
     parent = (
         "import subprocess,sys,time;"
-        "subprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2]],"
+        "subprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2],sys.argv[3]],"
         "stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);"
         "time.sleep(30)"
     )
+    launched_at = time.monotonic()
     with pytest.raises(subprocess.TimeoutExpired):
         gate._run_web_process_group(
-            (sys.executable, "-c", parent, child, str(marker)),
+            (sys.executable, "-c", parent, child, str(started), str(survived)),
             {"PATH": str(Path(sys.executable).resolve().parent)},
             tmp_path,
             1,
         )
-    time.sleep(0.5)
-    assert not marker.exists()
+
+    deadline = launched_at + 6.5
+    while time.monotonic() < deadline:
+        time.sleep(0.2)
+
+    assert started.exists(), "the grandchild never ran, so this proves nothing"
+    assert not survived.exists()
 
 
 def test_audit_system_web_containment_probe_is_fixed_and_closed(
