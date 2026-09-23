@@ -896,16 +896,42 @@ def _is_current_week(value: Any) -> bool:
     return _utc_week_start(parsed) == _utc_week_start()
 
 
+# Index pages one child's conversation list may read before giving up.
+_CHILD_CONVERSATION_PAGE_BUDGET = 25
+
+
 def _list_conversations_for_child(child_id: str, limit: int = 50) -> list[dict[str, Any]]:
+    """This child's conversations, newest first, following the index.
+
+    `GSI-StudentId` holds every row carrying the student id, so `Limit` counts
+    rows read rather than conversations found and a page can be spent entirely
+    on messages and usage events. A parent then sees a child who has asked
+    nothing. Same shape as the two lists already fixed elsewhere.
+    """
     table = cast(_DynamoQueryTable, get_table())
-    result = table.query(
-        IndexName="GSI-StudentId",
-        KeyConditionExpression=Key("student_id").eq(child_id),
-        FilterExpression=Attr("entity_type").eq("conversation"),
-        Limit=limit,
-        ScanIndexForward=False,
-    )
-    return _response_items(result)
+    conversations: list[dict[str, Any]] = []
+    last_key: dict[str, Any] | None = None
+    for _page in range(_CHILD_CONVERSATION_PAGE_BUDGET):
+        request: dict[str, Any] = {
+            "IndexName": "GSI-StudentId",
+            "KeyConditionExpression": Key("student_id").eq(child_id),
+            "FilterExpression": Attr("entity_type").eq("conversation"),
+            "Limit": limit,
+            "ScanIndexForward": False,
+        }
+        if last_key is not None:
+            request["ExclusiveStartKey"] = last_key
+        result = table.query(**request)
+        conversations.extend(_response_items(result))
+        if len(conversations) >= limit:
+            break
+        raw_last_key = result.get("LastEvaluatedKey")
+        if raw_last_key is None:
+            break
+        if not isinstance(raw_last_key, dict) or not raw_last_key:
+            raise RuntimeError("child conversation pagination is malformed")
+        last_key = dict(raw_last_key)
+    return conversations[:limit]
 
 
 def _latest_report_for_child(parent_user_id: str, child_id: str) -> dict[str, Any] | None:

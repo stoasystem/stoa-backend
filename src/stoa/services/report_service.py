@@ -661,18 +661,48 @@ def _list_all_questions(student_id: str) -> list[dict[str, Any]]:
         last_key = dict(raw_last_key)
 
 
+# One conversation list reads at most this many index pages and keeps at most
+# this many conversations.
+_CONVERSATION_PAGE_BUDGET = 25
+_CONVERSATION_LIMIT = 100
+
+
 def _list_conversations_for_student(student_id: str) -> list[dict[str, Any]]:
+    """The student's conversations, newest first, following the index.
+
+    `GSI-StudentId` carries every row holding the student id - messages, usage
+    events, reports - so `Limit` is rows read and not conversations found, and a
+    page can be spent entirely on rows the filter drops. One query then reports
+    a week with no conversations in it, which is what a parent's report said.
+    The questions above already follow the continuation key; this did not.
+    """
     table = get_table()
     if not isinstance(table, _QueryTable):
         raise RuntimeError("report table query dependency is unavailable")
-    result = _repository_response(table.query(
-        IndexName="GSI-StudentId",
-        KeyConditionExpression=Key("student_id").eq(student_id),
-        FilterExpression=Attr("entity_type").eq("conversation"),
-        Limit=100,
-        ScanIndexForward=False,
-    ), label="student conversations")
-    return _repository_items(result, label="student conversations")
+
+    conversations: list[dict[str, Any]] = []
+    last_key: dict[str, Any] | None = None
+    for _page in range(_CONVERSATION_PAGE_BUDGET):
+        request: dict[str, Any] = {
+            "IndexName": "GSI-StudentId",
+            "KeyConditionExpression": Key("student_id").eq(student_id),
+            "FilterExpression": Attr("entity_type").eq("conversation"),
+            "Limit": _CONVERSATION_LIMIT,
+            "ScanIndexForward": False,
+        }
+        if last_key is not None:
+            request["ExclusiveStartKey"] = last_key
+        result = _repository_response(table.query(**request), label="student conversations")
+        conversations.extend(_repository_items(result, label="student conversations"))
+        if len(conversations) >= _CONVERSATION_LIMIT:
+            break
+        raw_last_key = result.get("LastEvaluatedKey")
+        if raw_last_key is None:
+            break
+        if not isinstance(raw_last_key, Mapping):
+            raise RuntimeError("student conversation pagination is malformed")
+        last_key = dict(raw_last_key)
+    return conversations[:_CONVERSATION_LIMIT]
 
 
 def _question_requested_teacher_help(question: dict[str, Any]) -> bool:
