@@ -43,6 +43,7 @@ from stoa.security.authorization import (
     ResourceType,
 )
 from stoa.security.identity import Actor
+from stoa.models.allowance import ProviderUsageEvidence
 from stoa.models.attachment import AttachmentReference, AttachmentSummary
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.request_correlation import get_request_correlation_id
@@ -970,16 +971,40 @@ def _message_allowance_metadata_from_provider(
 ) -> dict[str, object]:
     if provider_result.invocation_class is not ai_service.AIInvocationClass.USER_ALLOWANCE:
         raise _allowance_recoverable_failure()
+    return _message_allowance_metadata_from_usage(
+        provider_result.usage,
+        allowance_effect_id=allowance_effect_id,
+    )
+
+
+def _message_allowance_metadata_from_failure(
+    failure: BaseException,
+    *,
+    allowance_effect_id: str,
+) -> dict[str, object] | None:
+    """The allowance metadata for a paid reply that could not be used, if any."""
+    usage = getattr(failure, "usage", None)
+    if not isinstance(failure, ai_service.AIInvocationFailure) or usage is None:
+        return None
+    return _message_allowance_metadata_from_usage(
+        usage,
+        allowance_effect_id=allowance_effect_id,
+    )
+
+
+def _message_allowance_metadata_from_usage(
+    usage: ProviderUsageEvidence,
+    *,
+    allowance_effect_id: str,
+) -> dict[str, object]:
     metadata = {
         "allowance_effect_id": allowance_effect_id,
-        "provider_usage_evidence_id": provider_result.usage.evidence_id,
+        "provider_usage_evidence_id": usage.evidence_id,
         "allowance_finalization_status": "durable_result_boundary",
-        "provider_request_id_digest": (
-            provider_result.usage.provider_request_id_digest
-        ),
-        "provider_model_id_digest": provider_result.usage.model_id_digest,
-        "provider_input_tokens": provider_result.usage.input_tokens,
-        "provider_output_tokens": provider_result.usage.output_tokens,
+        "provider_request_id_digest": usage.provider_request_id_digest,
+        "provider_model_id_digest": usage.model_id_digest,
+        "provider_input_tokens": usage.input_tokens,
+        "provider_output_tokens": usage.output_tokens,
     }
     validated = _validated_message_allowance_metadata(metadata)
     if validated is None:
@@ -2359,6 +2384,13 @@ def _execute_message_command(
     except _ConversationAllowanceFailure:
         raise
     except Exception as exc:
+        if allowance_metadata is None:
+            # A reply that was cut off or garbled was still paid for; its usage
+            # rides on the failure so the reservation can be released here.
+            allowance_metadata = _message_allowance_metadata_from_failure(
+                exc,
+                allowance_effect_id=allowance_client.allowance_effect_id,
+            )
         if allowance_metadata is not None:
             observed = _observe_message_provider_usage(
                 beneficiary_id=student_id,

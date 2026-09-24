@@ -116,10 +116,16 @@ _MAX_HISTORY_TURNS = 6
 
 
 class AIInvocationFailure(Exception):
-    """Closed model-boundary failure without provider diagnostics."""
+    """Closed model-boundary failure without provider diagnostics.
 
-    def __init__(self, category: str):
+    `usage` is set when the provider did answer and was paid for, but the
+    answer cannot be used, so the caller can still account for the cost and
+    release the student's reservation.
+    """
+
+    def __init__(self, category: str, *, usage: ProviderUsageEvidence | None = None):
         self.category = category
+        self.usage = usage
         super().__init__(category)
 
 
@@ -243,6 +249,15 @@ def parse_provider_usage(
         raise AIInvocationFailure("malformed_provider_usage") from None
 
 
+def _provider_request_id(response: Mapping[str, object]) -> str:
+    metadata = response.get("ResponseMetadata")
+    if isinstance(metadata, Mapping):
+        raw_request_id = metadata.get("RequestId")
+        if isinstance(raw_request_id, str):
+            return raw_request_id.strip()
+    return ""
+
+
 def _provider_result(
     content: AIContent,
     payload: Mapping[str, object],
@@ -253,12 +268,7 @@ def _provider_result(
     observed_at: datetime | None,
     invocation_class: AIInvocationClass,
 ) -> AIProviderResult[AIContent]:
-    metadata = response.get("ResponseMetadata")
-    request_id = ""
-    if isinstance(metadata, Mapping):
-        raw_request_id = metadata.get("RequestId")
-        if isinstance(raw_request_id, str):
-            request_id = raw_request_id.strip()
+    request_id = _provider_request_id(response)
     message_id = payload.get("id")
     model_id = payload.get("model")
     stop_reason = payload.get("stop_reason")
@@ -346,6 +356,10 @@ def _validate_output(parsed: dict, raw_text: str) -> dict:
 
     # 3. No guided steps for a question response
     if not parsed.get("steps") and not parsed.get("answer"):
+        # Prose that was never JSON can stand as the answer; a JSON object
+        # cannot, or the student is shown the braces.
+        if _looks_like_json_object(raw_text):
+            raise AIInvocationFailure("malformed_response")
         issues.append("missing_structure")
         parsed["answer"] = raw_text  # fall back to raw text
 
@@ -455,8 +469,6 @@ def _stream_ai_answer(
         output_size=len(raw_text),
         correlation_id=correlation_id,
     )
-    parsed = _parse_ai_response(raw_text)
-    validated = _validate_output(parsed, raw_text)
     result = {
         "id": message_id,
         "model": model_id,
@@ -464,15 +476,66 @@ def _stream_ai_answer(
         "usage": usage,
         "stop_reason": stop_reason,
     }
-    return _provider_result(
-        validated,
+    return _answer_result(
+        raw_text,
         result,
         response=response,
-        inference_profile_id=settings.bedrock_model_id,
         effect_id=effect_id or correlation_id or "unbound-user-allowance-effect",
         observed_at=observed_at,
         invocation_class=invocation_class,
     )
+
+
+def _answer_result(
+    raw_text: str,
+    payload: Mapping[str, object],
+    *,
+    response: Mapping[str, object],
+    effect_id: str,
+    observed_at: datetime | None,
+    invocation_class: AIInvocationClass,
+) -> AIProviderResult[dict]:
+    """Turn a structured answer into a result, or a failure that keeps its usage.
+
+    A reply cut off at `max_tokens` is refused before it is parsed: a cut can
+    land where the JSON happens to close, and the answer is still unfinished.
+    """
+    if payload.get("stop_reason") == "max_tokens":
+        failure = AIInvocationFailure("incomplete_output")
+    else:
+        try:
+            validated = _validate_output(_parse_ai_response(raw_text), raw_text)
+        except AIInvocationFailure as exc:
+            failure = exc
+        else:
+            return _provider_result(
+                validated,
+                payload,
+                response=response,
+                inference_profile_id=settings.bedrock_model_id,
+                effect_id=effect_id,
+                observed_at=observed_at,
+                invocation_class=invocation_class,
+            )
+    # The provider was paid for this reply, so the failure carries the usage
+    # evidence; the caller needs it to release the student's reservation.
+    failure.usage = parse_provider_usage(
+        payload,
+        provider_request_id=_provider_request_id(response),
+        inference_profile_id=settings.bedrock_model_id,
+        effect_id=effect_id,
+        observed_at=observed_at,
+    )
+    raise failure
+
+
+def _looks_like_json_object(text: str) -> bool:
+    return _strip_code_fence(text).startswith("{")
+
+
+def _strip_code_fence(text: str) -> str:
+    stripped = re.sub(r"^```(?:json)?\s*", "", text.strip())
+    return re.sub(r"\s*```$", "", stripped)
 
 
 def _parse_ai_response(text: str) -> dict:
@@ -482,8 +545,7 @@ def _parse_ai_response(text: str) -> dict:
     except json.JSONDecodeError:
         pass
 
-    stripped = re.sub(r"^```(?:json)?\s*", "", text.strip())
-    stripped = re.sub(r"\s*```$", "", stripped)
+    stripped = _strip_code_fence(text)
     try:
         return json.loads(stripped)
     except json.JSONDecodeError:
@@ -499,6 +561,10 @@ def _parse_ai_response(text: str) -> dict:
     emit_private_event(
         "model_output_parse_failed", output_size=len(text), level=logging.WARNING
     )
+    if stripped.startswith("{"):
+        # An object that does not close was cut off or garbled. Shown as the
+        # answer, the student reads half a JSON document.
+        raise AIInvocationFailure("malformed_response")
     return {"steps": [], "answer": text, "hints": [], "similar_exercises": [], "suggest_teacher": False}
 
 
@@ -686,15 +752,11 @@ def get_ai_answer(
         correlation_id=correlation_id,
     )
 
-    parsed = _parse_ai_response(raw_text)
-    validated = _validate_output(parsed, raw_text)
-    logical_effect_id = effect_id or correlation_id or "unbound-user-allowance-effect"
-    return _provider_result(
-        validated,
+    return _answer_result(
+        raw_text,
         result,
         response=response,
-        inference_profile_id=settings.bedrock_model_id,
-        effect_id=logical_effect_id,
+        effect_id=effect_id or correlation_id or "unbound-user-allowance-effect",
         observed_at=observed_at,
         invocation_class=invocation_class,
     )
