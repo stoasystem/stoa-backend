@@ -14,7 +14,7 @@ import logging
 import struct
 import time
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from typing import Any, NamedTuple, Protocol, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -67,6 +67,7 @@ from stoa.services import (
     entitlement_service,
     learning_profile_service,
     locale_service,
+    runtime_budget_service,
     teacher_dispatch_service,
     teacher_support_allowance_service,
     usage_ledger_service,
@@ -572,6 +573,8 @@ class _ConversationAllowanceBedrockClient:
     """Count and reserve the durable message effect before InvokeModel."""
 
     def __init__(self, command: Mapping[str, object]) -> None:
+        self._deadline_monotonic: float | None = None
+        self._clock: Callable[[], float] = time.monotonic
         (
             self.allowance_effect_id,
             self.plan_id,
@@ -591,6 +594,11 @@ class _ConversationAllowanceBedrockClient:
         self._runtime_client: object | None = None
         self._invocation_method = "invoke_model"
 
+    def bind_deadline(self, deadline_monotonic: float, clock: Callable[[], float]) -> None:
+        """Take the answer's deadline from `ai_service.get_ai_answer`, its one source."""
+        self._deadline_monotonic = deadline_monotonic
+        self._clock = clock
+
     def invoke_model(self, **kwargs: object) -> object:
         model_id = kwargs.get("modelId")
         request_body = kwargs.get("body")
@@ -601,9 +609,15 @@ class _ConversationAllowanceBedrockClient:
                 "retry_same_message",
                 status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+        remaining = (
+            None
+            if self._deadline_monotonic is None
+            else self._deadline_monotonic - self._clock()
+        )
         runtime_client = self._runtime_client or ai_service.boto3.client(
             "bedrock-runtime",
             region_name=ai_service.settings.aws_region,
+            config=ai_service.bedrock_runtime_config(remaining),
         )
         self._runtime_client = runtime_client
         try:
@@ -661,6 +675,16 @@ class _ConversationAllowanceBedrockClient:
             allowance_repo.ReservationDisposition.REPLAYED,
         }:
             raise _allowance_recoverable_failure()
+
+        # Counting and reserving can take the time up. Starting a generation
+        # now would only be cut off by the Lambda; fail recoverably instead.
+        # The reservation is kept on purpose: the ledger restores only after
+        # provider usage, and the student's retry of this message reuses it.
+        if (
+            self._deadline_monotonic is not None
+            and self._clock() >= self._deadline_monotonic
+        ):
+            raise ai_service.AIInvocationFailure("deadline_exceeded")
 
         invoke = getattr(runtime_client, self._invocation_method, None)
         if not callable(invoke):
@@ -1548,6 +1572,8 @@ _MESSAGE_POLL_ATTEMPTS = 20
 _MESSAGE_POLL_SECONDS = 0.05
 _AI_LEASE_SECONDS = 120
 _AI_INVOCATION_DEADLINE_SECONDS = 90
+# Kept back from the Lambda's remaining time to store the answer and respond.
+_AI_PERSIST_RESERVE_SECONDS = 4
 
 _SUBJECT_ALIASES = {
     "Mathematics": "math", "Mathematik": "math", "math": "math",
@@ -2330,7 +2356,10 @@ def _execute_message_command(
         attachment_context = context_result.context
     normalized_subject = _SUBJECT_ALIASES.get(subject, "math")
     student_locale = _student_locale(student_id)
-    ai_deadline = time.monotonic() + _AI_INVOCATION_DEADLINE_SECONDS
+    ai_deadline = runtime_budget_service.ai_deadline(
+        fixed_seconds=_AI_INVOCATION_DEADLINE_SECONDS,
+        reserve_seconds=_AI_PERSIST_RESERVE_SECONDS,
+    )
     _active_conversation_generation(student_id, table)
     allowance_client = _ConversationAllowanceBedrockClient(command)
     allowance_metadata: dict[str, object] | None = None

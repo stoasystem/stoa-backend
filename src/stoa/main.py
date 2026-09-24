@@ -6,7 +6,7 @@ from mangum import Mangum
 
 from stoa.config import settings
 from stoa.security.errors import redacted_validation_errors
-from stoa.services import locale_service
+from stoa.services import locale_service, runtime_budget_service
 from stoa.security.route_inventory import (
     explicit_route_classification,
     install_authorization_openapi,
@@ -69,6 +69,37 @@ class RequestLocaleMiddleware:
 
 
 app.add_middleware(RequestLocaleMiddleware)
+
+
+class RequestBudgetMiddleware:
+    """Bind when the request started and how long the Lambda has left.
+
+    Mangum puts the Lambda context in the ASGI scope; read at the door, its
+    remaining time is what every later deadline in the request is measured
+    against. Plain ASGI for the same reasons as the locale middleware above.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            started = runtime_budget_service.time.monotonic()
+            remaining = None
+            context = scope.get("aws.context")
+            reader = getattr(context, "get_remaining_time_in_millis", None)
+            if callable(reader):
+                try:
+                    remaining = float(reader()) / 1000
+                except (TypeError, ValueError):
+                    remaining = None
+            runtime_budget_service.begin_request(
+                started_monotonic=started, remaining_seconds=remaining
+            )
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(RequestBudgetMiddleware)
 
 
 @app.exception_handler(RequestValidationError)

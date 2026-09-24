@@ -422,6 +422,10 @@ def _stream_ai_answer(
     stream = response.get("body") if isinstance(response, dict) else None
     if stream is None:
         raise AIInvocationFailure("malformed_response")
+    # Opening the stream can itself take the time up; do not wait for the first
+    # event to find that out.
+    if deadline_monotonic is not None and clock() >= deadline_monotonic:
+        raise AIInvocationFailure("deadline_exceeded")
 
     raw_text = ""
     reported = 0
@@ -614,6 +618,21 @@ def _build_messages(
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
+def bedrock_runtime_config(remaining: float | None) -> Config:
+    """Transport limits for one answer: one attempt, reads bounded by the time left.
+
+    Every client that carries an answer uses this, the allowance wrapper
+    included, so no path waits on a socket past its deadline or retries behind
+    the caller's back.
+    """
+    read_timeout = max(1, min(90, int((remaining or 90) - 5)))
+    return Config(
+        connect_timeout=5,
+        read_timeout=read_timeout,
+        retries={"total_max_attempts": 1, "mode": "standard"},
+    )
+
+
 def get_ai_answer(
     content: str,
     subject: str,
@@ -674,16 +693,16 @@ def get_ai_answer(
         remaining = deadline_monotonic - clock()
         if remaining <= 0:
             raise AIInvocationFailure("deadline_exceeded")
+        # A wrapping client (the allowance wrapper) does work of its own before
+        # the model is called; it is held to this deadline, not one of its own.
+        bind_deadline = getattr(client, "bind_deadline", None)
+        if callable(bind_deadline):
+            bind_deadline(deadline_monotonic, clock)
     if client is None:
-        read_timeout = max(1, min(90, int((remaining or 90) - 5)))
         client = boto3.client(
             "bedrock-runtime",
             region_name=settings.aws_region,
-            config=Config(
-                connect_timeout=5,
-                read_timeout=read_timeout,
-                retries={"total_max_attempts": 1, "mode": "standard"},
-            ),
+            config=bedrock_runtime_config(remaining),
         )
     body = json.dumps({
         "anthropic_version": "bedrock-2023-05-31",
