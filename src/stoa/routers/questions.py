@@ -37,6 +37,7 @@ from stoa.security.route_authorization import (
     authorized_question_dependency,
     student_create_actor_dependency,
 )
+from stoa.models.allowance import ProviderUsageEvidence
 from stoa.models.question import (
     FeedbackRequest,
     QuestionResponse,
@@ -790,19 +791,62 @@ def _with_question_allowance_metadata(
 ) -> dict[str, object]:
     response = dict(provider_result.content)
     response.update(
-        {
-            "allowance_effect_id": allowance_effect_id,
-            "provider_usage_evidence_id": provider_result.usage.evidence_id,
-            "allowance_finalization_status": "durable_result_boundary",
-            "provider_request_id_digest": (
-                provider_result.usage.provider_request_id_digest
-            ),
-            "provider_model_id_digest": provider_result.usage.model_id_digest,
-            "provider_input_tokens": provider_result.usage.input_tokens,
-            "provider_output_tokens": provider_result.usage.output_tokens,
-        }
+        _question_usage_metadata(
+            provider_result.usage,
+            allowance_effect_id=allowance_effect_id,
+        )
     )
     return response
+
+
+def _question_usage_metadata(
+    usage: ProviderUsageEvidence,
+    *,
+    allowance_effect_id: str,
+) -> dict[str, object]:
+    return {
+        "allowance_effect_id": allowance_effect_id,
+        "provider_usage_evidence_id": usage.evidence_id,
+        "allowance_finalization_status": "durable_result_boundary",
+        "provider_request_id_digest": usage.provider_request_id_digest,
+        "provider_model_id_digest": usage.model_id_digest,
+        "provider_input_tokens": usage.input_tokens,
+        "provider_output_tokens": usage.output_tokens,
+    }
+
+
+def _paid_ai_failure(error: BaseException) -> ProviderUsageEvidence | None:
+    """The usage on an AI failure the provider answered and was paid for, if any.
+
+    Such a failure is a known result - the answer came back and cannot be used -
+    not an unknown one like a timeout, so it goes terminal instead of waiting.
+    """
+    if isinstance(error, ai_service.AIInvocationFailure):
+        return error.usage
+    return None
+
+
+def _settle_paid_ai_failure(
+    usage: ProviderUsageEvidence,
+    *,
+    allowance_effect_id: str,
+    beneficiary_id: str,
+    correlation_id: str,
+) -> None:
+    """Record the provider's cost and give the student back their reservation."""
+    metadata = _question_usage_metadata(usage, allowance_effect_id=allowance_effect_id)
+    if not _observe_question_provider_usage(
+        beneficiary_id=beneficiary_id,
+        ai_response=metadata,
+    ) or not _restore_question_allowance(
+        beneficiary_id=beneficiary_id,
+        ai_response=metadata,
+        technical_validation_passed=False,
+    ):
+        _raise_question_allowance_failure(
+            _allowance_recoverable_failure(),
+            correlation_id=correlation_id,
+        )
 
 
 def _observe_question_provider_usage(
@@ -859,6 +903,7 @@ def _restore_question_allowance(
     *,
     beneficiary_id: str,
     ai_response: object,
+    technical_validation_passed: bool = True,
 ) -> bool:
     metadata = _question_allowance_metadata(ai_response)
     if metadata is None:
@@ -866,7 +911,7 @@ def _restore_question_allowance(
     restored = allowance_service.restore_user_allowance(
         beneficiary_id=beneficiary_id,
         effect_id=str(metadata["allowance_effect_id"]),
-        technical_validation_passed=True,
+        technical_validation_passed=technical_validation_passed,
         safety_check_passed=True,
         durable_result_stored=False,
         stable_replay_readable=False,
@@ -1070,6 +1115,21 @@ def _recover_missing_question_effect(
             and isinstance(error, ai_service.AIInvocationFailure)
             and error.category == "response_cleanup_failed"
         )
+        paid_usage = (
+            _paid_ai_failure(error)
+            if kind is question_submission_repo.QuestionEffectKind.AI
+            and allowance_client is not None
+            else None
+        )
+        if paid_usage is not None:
+            assert allowance_client is not None
+            _settle_paid_ai_failure(
+                paid_usage,
+                allowance_effect_id=allowance_client.allowance_effect_id,
+                beneficiary_id=str(intent.effect["student_id"]),
+                correlation_id=correlation_id,
+            )
+            terminal = True
         if terminal:
             receipt = question_submission_repo.mark_question_effect_terminal(
                 intent.effect,
@@ -1573,6 +1633,15 @@ async def submit_question(
             isinstance(exc, ai_service.AIInvocationFailure)
             and exc.category == "response_cleanup_failed"
         )
+        paid_usage = _paid_ai_failure(exc)
+        if paid_usage is not None:
+            _settle_paid_ai_failure(
+                paid_usage,
+                allowance_effect_id=allowance_client.allowance_effect_id,
+                beneficiary_id=str(ai_effect["student_id"]),
+                correlation_id=correlation_id,
+            )
+            terminal = True
         if terminal:
             terminal_receipt = question_submission_repo.mark_question_effect_terminal(
                 ai_effect,
