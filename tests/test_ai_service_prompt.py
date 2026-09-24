@@ -172,3 +172,45 @@ def test_answer_language_does_not_vary_by_subject(subject):
     """
     prompt = _system_prompt(subject=subject, language="de")
     assert "OUTPUT LANGUAGE: German" in prompt
+
+
+# ── Grade sets the depth of the answer, not whether there is one (#19) ──────
+
+_DEPTH_GUIDE = "never to decide whether a question deserves an answer"
+
+
+@pytest.mark.parametrize(
+    ("subject", "grade", "content"),
+    [
+        ("math", "Grade 6", "Was ist eine Ableitung?"),
+        ("physics", "Grade 5", "Was ist Quantenphysik?"),
+    ],
+)
+def test_a_question_above_the_grade_is_steered_to_an_explanation(subject, grade, content):
+    """An in-subject question beyond the grade is explained at that grade's depth.
+
+    The old first sentence limited answers to the grade's level and the
+    "too complex" rule handed such questions to a teacher, which the model
+    read as permission to refuse. This only proves what the prompt says; it
+    cannot measure how often the real model refuses.
+    """
+    prompt = _system_prompt(subject=subject, grade=grade, content=content, language="de")
+    assert f"ONLY answer questions related to {subject} at {grade} level" not in prompt
+    assert f"The student is in {grade}" in prompt
+    assert _DEPTH_GUIDE in prompt
+    assert f"far above {grade}, first give a short accessible explanation" in prompt
+    assert "question is too complex" not in prompt
+
+
+def test_a_question_within_the_grade_keeps_the_same_scope_and_depth_guide():
+    prompt = _system_prompt(subject="math", grade="Grade 6", content="how do I add fractions?")
+    assert "You ONLY answer questions related to math." in prompt
+    assert _DEPTH_GUIDE in prompt
+    assert "Never give the final answer directly. Always explain step-by-step." in prompt
+
+
+def test_a_question_outside_the_subject_is_still_rejected():
+    prompt = _system_prompt(subject="math", grade="Grade 6", content="Wer war Napoleon?")
+    assert "You ONLY answer questions related to math." in prompt
+    assert "Stay strictly within the subject scope. Reject unrelated questions politely." in prompt
+    assert "Reject only questions outside math." in prompt
