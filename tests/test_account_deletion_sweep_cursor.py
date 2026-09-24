@@ -208,3 +208,131 @@ def test_a_malformed_stored_place_is_read_as_the_top_of_the_table(table: FakeTab
     assert _scan_starts(table)[0] is None
     assert worker.continued == ["first-command"]
     assert _stored().version == 5
+
+
+# ── Follow-up review: the place moves only once the slice is dealt with ─────
+
+
+class _Interrupted(BaseException):
+    """What a hard stop looks like from inside the run: nothing catches it."""
+
+
+class _DyingWorker(_Worker):
+    def continue_command(self, claim: account_deletion_repo.DeletionCommandClaim) -> None:
+        super().continue_command(claim)
+        raise _Interrupted
+
+
+class _FailingWorker(_Worker):
+    def continue_command(self, claim: account_deletion_repo.DeletionCommandClaim) -> None:
+        super().continue_command(claim)
+        raise RuntimeError("continuation failed")
+
+
+def _place_after_first_budget(table: FakeTable) -> account_deletion_repo.DeletionScanCursor:
+    """Store a real mid-table place, with a command waiting in the next slice."""
+    _run(_Worker())
+    saved = _stored()
+    assert saved.cursor == {"PK": f"ROW#{BUDGET_ROWS - 1:05d}", "SK": "DATA"}
+    return saved
+
+
+def test_a_run_stopped_while_handling_its_commands_leaves_the_stored_place_alone(
+    table: FakeTable,
+) -> None:
+    table.seed(*_unrelated(2_600), _command("late-command"))
+    saved = _place_after_first_budget(table)
+
+    with pytest.raises(_Interrupted):
+        _run(_DyingWorker())
+    assert _stored() == saved
+
+    scans_so_far = len(_scan_starts(table))
+    _run(_Worker())
+    assert _scan_starts(table)[scans_so_far] == saved.cursor
+
+
+def test_a_command_that_fails_holds_the_place_so_the_next_run_retries_it(
+    table: FakeTable, caplog: pytest.LogCaptureFixture
+) -> None:
+    table.seed(*_unrelated(2_600), _command("late-command"))
+    saved = _place_after_first_budget(table)
+
+    summary = _run(_FailingWorker())
+
+    assert summary.retryable >= 1
+    assert _stored() == saved
+    assert "account_deletion_scan_held" in caplog.text
+
+
+def test_a_claim_lost_to_another_run_does_not_hold_the_place(table: FakeTable) -> None:
+    table.seed(*_unrelated(30), {**_command("taken", user="early"), "status": "running",
+                                 "lease_expires_at": 4_102_444_800})
+    _run(_Worker())
+
+    assert _stored().cursor is None
+    assert _stored().version == 1
+
+
+def test_a_continuation_key_equal_to_the_starting_place_is_not_stored(
+    table: FakeTable, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    table.seed(*_unrelated(2_600))
+    saved = _place_after_first_budget(table)
+    real_scan = table.scan
+
+    def stuck(**kwargs: Any) -> dict[str, Any]:
+        page = real_scan(**kwargs)
+        page["LastEvaluatedKey"] = dict(saved.cursor or {})
+        return page
+
+    monkeypatch.setattr(table, "scan", stuck)
+    before = len(_scan_starts(table))
+    _run(_Worker())
+
+    assert len(_scan_starts(table)) - before == 1
+    assert _stored() == saved
+    assert "account_deletion_scan_anomaly" in caplog.text
+
+
+def test_finishing_a_cycle_is_logged_once_the_reset_is_stored(
+    table: FakeTable, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="stoa.jobs.account_deletion")
+    table.seed(*_unrelated(2_600))
+    _run(_Worker())
+    assert "account_deletion_scan_cycle_completed" not in caplog.text
+
+    _run(_Worker())
+
+    completed = [
+        record for record in caplog.records
+        if "account_deletion_scan_cycle_completed" in record.getMessage()
+    ]
+    assert len(completed) == 1
+    assert "version=2" in completed[0].getMessage()
+    assert "duration_seconds=" in completed[0].getMessage()
+
+
+def test_a_stored_row_at_version_zero_still_moves(table: FakeTable) -> None:
+    table.seed({**account_deletion_repo.DELETION_SCAN_CURSOR_KEY, "version": 0})
+
+    _run(_Worker())
+
+    assert _stored().version == 1
+
+
+def test_a_malformed_cycle_start_is_dropped_and_the_place_kept(table: FakeTable) -> None:
+    table.seed(*_unrelated(6_000))
+    saved = _place_after_first_budget(table)
+    row = table.rows[("JOB#account_deletion", "SCAN_CURSOR")]
+    row["cycle_started_at"] = "yesterday-ish"
+
+    assert _stored().cycle_started_at is None
+    assert _stored().cursor == saved.cursor
+
+    _run(_Worker())
+
+    assert _stored().version == saved.version + 1
+    assert _stored().cursor == {"PK": f"ROW#{2 * BUDGET_ROWS - 1:05d}", "SK": "DATA"}
+    assert _stored().cycle_started_at is not None

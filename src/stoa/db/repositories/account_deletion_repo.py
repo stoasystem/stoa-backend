@@ -1573,7 +1573,9 @@ DELETION_SCAN_CURSOR_KEY = {"PK": "JOB#account_deletion", "SK": "SCAN_CURSOR"}
 @dataclass(frozen=True, slots=True)
 class DeletionScanCursor:
     cursor: dict[str, str] | None
-    version: int
+    # None when no row is stored yet, which the next write must tell apart from
+    # a stored row at version 0.
+    version: int | None
     cycle_started_at: str | None
 
 
@@ -1591,7 +1593,7 @@ def get_deletion_scan_cursor(*, table: Any | None = None) -> DeletionScanCursor:
         "Item"
     )
     if not isinstance(item, Mapping):
-        return DeletionScanCursor(cursor=None, version=0, cycle_started_at=None)
+        return DeletionScanCursor(cursor=None, version=None, cycle_started_at=None)
     version = stored_int(item.get("version"))
     if version is None or version < 0:
         raise AccountDeletionConflict("invalid deletion scan cursor version")
@@ -1599,17 +1601,18 @@ def get_deletion_scan_cursor(*, table: Any | None = None) -> DeletionScanCursor:
         cursor = _validated_cursor(item["cursor"]) if item.get("cursor") else None
     except AccountDeletionConflict:
         cursor = None
-    started = item.get("cycle_started_at")
-    return DeletionScanCursor(
-        cursor=cursor,
-        version=version,
-        cycle_started_at=started if isinstance(started, str) and started else None,
-    )
+    # Only an observation: a malformed start time is dropped rather than
+    # allowed to fail the write that carries the scan forward.
+    try:
+        started: str | None = _valid_lifecycle_timestamp(item.get("cycle_started_at"))
+    except AccountDeletionConflict:
+        started = None
+    return DeletionScanCursor(cursor=cursor, version=version, cycle_started_at=started)
 
 
 def advance_deletion_scan_cursor(
     *,
-    expected_version: int,
+    expected_version: int | None,
     cursor: dict[str, str] | None,
     cycle_started_at: str | None,
     updated_at: str,
@@ -1617,9 +1620,10 @@ def advance_deletion_scan_cursor(
 ) -> bool:
     """Store the sweep's new place if nobody has moved it since it was read.
 
-    False means another run stored a place first; its place stands.
+    `expected_version` is None when the read found no row. False means another
+    run stored a place first; its place stands.
     """
-    if (
+    if expected_version is not None and (
         isinstance(expected_version, bool)
         or not isinstance(expected_version, int)
         or expected_version < 0
@@ -1628,7 +1632,7 @@ def advance_deletion_scan_cursor(
     item: dict[str, Any] = {
         **DELETION_SCAN_CURSOR_KEY,
         "entity_type": "account_deletion_scan_cursor",
-        "version": expected_version + 1,
+        "version": (expected_version or 0) + 1,
         "updated_at": _valid_lifecycle_timestamp(updated_at),
     }
     if cursor is not None:
@@ -1636,7 +1640,7 @@ def advance_deletion_scan_cursor(
     if cycle_started_at is not None:
         item["cycle_started_at"] = _valid_lifecycle_timestamp(cycle_started_at)
     request: dict[str, Any] = {"Item": item}
-    if expected_version == 0:
+    if expected_version is None:
         request["ConditionExpression"] = "attribute_not_exists(PK)"
     else:
         request["ConditionExpression"] = "#version = :expected"
