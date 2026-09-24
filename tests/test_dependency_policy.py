@@ -416,12 +416,13 @@ def test_committed_ecdsa_exception_is_exact_approved_expiring_and_source_support
             "advisory": "PYSEC-2026-1325",
             "advisory_aliases": ["CVE-2024-23342", "GHSA-wj6h-64fc-37mp"],
             "installed_version": "0.19.2",
-            "lock_sha256": "19910f62932829f069c21ac21c54cf6125deda55d0a63dfe6b8f0efa98e3fd7e",
+            "lock_sha256": "f8011b0c41641ee6f950e1803e92e94ce97cb3a7bd526d8f9b839443aff838d1",
             "dependency_scope": "runtime",
             "severity": "unavailable",
             "reachability": "proven-unreachable",
             "reachability_evidence": (
-                "Re-verified 2026-09-22. src/stoa/security/tokens.py rejects any alg other "
+                "Re-verified 2026-09-24 after the pypdf 6.19.0 lock change. "
+                "src/stoa/security/tokens.py rejects any alg other "
                 "than RS256 and passes algorithms RS256 only. src/stoa/security/jwks.py "
                 "accepts kty RSA alone and constructs RSAKey alone. A search of src for "
                 "ecdsa ECDH and curve names returns nothing. ecdsa arrives only through "
@@ -429,10 +430,10 @@ def test_committed_ecdsa_exception_is_exact_approved_expiring_and_source_support
             ),
             "owner": "project-owner",
             "approval_evidence": (
-                "Owner approved extension in Claude Code conversation on 2026-09-22 after "
-                "the original exception lapsed unnoticed on 2026-08-18. Upstream still "
-                "publishes 0.19.2 as latest and has not yanked it so neither exit named in "
-                "the previous target had become available."
+                "Owner directed ticket E8 in Claude Code conversation on 2026-09-24: the "
+                "lock changed only by the pypdf 6.19.0 upgrade so this exception is rebound "
+                "to the new lock with its expiry unchanged. Upstream ecdsa still publishes "
+                "0.19.2 as latest so neither exit named in the target is available yet."
             ),
             "expires_at": "2026-12-21T09:00:00Z",
             "target": (
@@ -540,7 +541,7 @@ def test_committed_ecdsa_exception_accepts_only_the_exact_audit_identity():
             "advisory": "PYSEC-2026-1325",
             "advisory_aliases": ["CVE-2024-23342", "GHSA-wj6h-64fc-37mp"],
             "installed_version": "0.19.2",
-            "lock_sha256": "19910f62932829f069c21ac21c54cf6125deda55d0a63dfe6b8f0efa98e3fd7e",
+            "lock_sha256": "f8011b0c41641ee6f950e1803e92e94ce97cb3a7bd526d8f9b839443aff838d1",
             "reachability": "proven-unreachable",
             "expires_at": "2026-12-21T09:00:00Z",
         }
