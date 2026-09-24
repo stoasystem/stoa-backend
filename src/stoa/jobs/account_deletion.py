@@ -16,6 +16,17 @@ from stoa.services.account_deletion_service import AccountDeletionService
 logger = logging.getLogger(__name__)
 
 
+# Everything the sweep calls. A repository without one of these is refused
+# before anything is read: a double missing the cursor methods used to get the
+# old start-from-the-top behaviour silently, which is the bug #7 describes.
+_REQUIRED_REPOSITORY_METHODS = (
+    "get_deletion_scan_cursor",
+    "advance_deletion_scan_cursor",
+    "scan_pending_deletion_commands",
+    "claim_deletion_command",
+)
+
+
 @dataclass(frozen=True, slots=True)
 class DeletionJobSummary:
     discovered: int = 0
@@ -30,16 +41,22 @@ def run_pending_deletions(
     service_factory: Callable[[], Any] | None = None,
     limit: int = 25,
 ) -> DeletionJobSummary:
+    missing = [
+        name
+        for name in _REQUIRED_REPOSITORY_METHODS
+        if not callable(getattr(repository, name, None))
+    ]
+    if missing:
+        raise account_deletion_repo.AccountDeletionConflict(
+            f"deletion repository lacks {', '.join(missing)}"
+        )
     now = datetime.now(UTC)
-    scan = getattr(repository, "scan_pending_deletion_commands", None)
     # One run reads a bounded slice of the table, so it starts where the last
     # run stopped. Without this every run read the same first slice, and a
     # command further down was never reached by the schedule (#7).
-    read_place = getattr(repository, "get_deletion_scan_cursor", None)
-    store_place = getattr(repository, "advance_deletion_scan_cursor", None)
-    place = read_place() if callable(read_place) and callable(store_place) else None
+    place = repository.get_deletion_scan_cursor()
     commands: list[dict[str, Any]] = []
-    cursor: dict[str, str] | None = place.cursor if place is not None else None
+    cursor: dict[str, str] | None = place.cursor
     # The starting place counts as seen: a page that hands it back again is
     # going round in a circle, not moving on.
     seen_cursors: set[tuple[str, str]] = (
@@ -49,73 +66,51 @@ def run_pending_deletions(
     # A continuation key the scan should never hand back; where it points is
     # not a place worth keeping.
     anomalous = False
-    if repository is account_deletion_repo or callable(scan):
-        pages = 0
-        while len(commands) < limit and pages < 100:
-            pages += 1
-            page_limit = max(limit - len(commands), 1)
-            if repository is account_deletion_repo:
-                page = account_deletion_repo.scan_pending_deletion_commands(
-                    limit=page_limit, cursor=cursor
-                )
-                items, next_cursor = list(page.items), page.cursor
-            else:
-                assert callable(scan)
-                raw = scan(limit=page_limit, exclusive_start_key=cursor)
-                if isinstance(raw, tuple):
-                    items, next_cursor = list(raw[0]), raw[1]
-                else:
-                    items, next_cursor = list(raw.items), raw.cursor
-            commands.extend(dict(item) for item in items[:page_limit])
-            if next_cursor is None:
-                cursor = None
-                break
-            if (
-                not isinstance(next_cursor, dict)
-                or set(next_cursor) != {"PK", "SK"}
-                or not all(
-                    isinstance(next_cursor.get(field), str) and next_cursor[field]
-                    for field in ("PK", "SK")
-                )
-            ):
-                unfinished = anomalous = True
-                break
-            identity = (next_cursor["PK"], next_cursor["SK"])
-            if identity in seen_cursors:
-                unfinished = anomalous = True
-                break
-            seen_cursors.add(identity)
-            cursor = next_cursor
-        # Running out of scan budget is not the same as having nothing to do.
-        # `Limit` is applied before the filter, so a page reads that many rows
-        # and yields the deletion commands among them - on a table of any size
-        # the budget runs out long before twenty-five of them are found. This
-        # returned early and threw the commands it had already found away, so
-        # every deletion stopped after the one pass the request itself did.
-        if len(commands) < limit and cursor is not None and pages >= 100:
-            unfinished = True
-    else:
-        return DeletionJobSummary(retryable=1)
+    pages = 0
+    while len(commands) < limit and pages < 100:
+        pages += 1
+        page_limit = max(limit - len(commands), 1)
+        page = repository.scan_pending_deletion_commands(limit=page_limit, cursor=cursor)
+        items, next_cursor = list(page.items), page.cursor
+        commands.extend(dict(item) for item in items[:page_limit])
+        if next_cursor is None:
+            cursor = None
+            break
+        if (
+            not isinstance(next_cursor, dict)
+            or set(next_cursor) != {"PK", "SK"}
+            or not all(
+                isinstance(next_cursor.get(field), str) and next_cursor[field]
+                for field in ("PK", "SK")
+            )
+        ):
+            unfinished = anomalous = True
+            break
+        identity = (next_cursor["PK"], next_cursor["SK"])
+        if identity in seen_cursors:
+            unfinished = anomalous = True
+            break
+        seen_cursors.add(identity)
+        cursor = next_cursor
+    # Running out of scan budget is not the same as having nothing to do.
+    # `Limit` is applied before the filter, so a page reads that many rows
+    # and yields the deletion commands among them - on a table of any size
+    # the budget runs out long before twenty-five of them are found. This
+    # returned early and threw the commands it had already found away, so
+    # every deletion stopped after the one pass the request itself did.
+    if len(commands) < limit and cursor is not None and pages >= 100:
+        unfinished = True
     worker = (service_factory or (lambda: AccountDeletionService()))()
     claimed = continued = retryable = 0
     for command in commands:
         try:
-            if repository is account_deletion_repo:
-                claim = account_deletion_repo.claim_deletion_command(
-                    command,
-                    lease_owner=uuid4().hex,
-                    now_epoch=int(now.timestamp()),
-                    lease_expires_at=int((now + timedelta(minutes=2)).timestamp()),
-                    now_iso=now.isoformat(),
-                )
-            else:
-                claim = repository.claim_deletion_command(
-                    command,
-                    lease_owner=uuid4().hex,
-                    now_epoch=int(now.timestamp()),
-                    lease_expires_at=int((now + timedelta(minutes=2)).timestamp()),
-                    now_iso=now.isoformat(),
-                )
+            claim = repository.claim_deletion_command(
+                command,
+                lease_owner=uuid4().hex,
+                now_epoch=int(now.timestamp()),
+                lease_expires_at=int((now + timedelta(minutes=2)).timestamp()),
+                now_iso=now.isoformat(),
+            )
             if not claim:
                 # Another run holds it; that is progress, not failure.
                 continue
@@ -131,25 +126,24 @@ def run_pending_deletions(
     # Reaching the end of the table starts the next cycle from the top. A write
     # refused because another run stored a place first is fine; that run's
     # place stands.
-    if place is not None and anomalous:
+    if anomalous:
         logger.warning(
             "account_deletion_scan_anomaly version=%s reason=continuation_key",
             place.version,
         )
-    elif place is not None and retryable:
+    elif retryable:
         logger.warning(
             "account_deletion_scan_held version=%s failed_commands=%s",
             place.version,
             retryable,
         )
-    elif place is not None:
-        assert callable(store_place)
+    else:
         cycle_started_at = (
             place.cycle_started_at
             if place.cursor is not None and place.cycle_started_at
             else now.isoformat()
         )
-        stored = store_place(
+        stored = repository.advance_deletion_scan_cursor(
             expected_version=place.version,
             cursor=cursor,
             cycle_started_at=None if cursor is None else cycle_started_at,

@@ -464,10 +464,17 @@ def test_teacher_queue_payload_is_opaque_and_generation_fenced(monkeypatch) -> N
     assert "subject" not in rendered
 
 
-def test_scheduled_discovery_recovers_lost_route_trigger_and_reconstructs_service() -> None:
+def test_scheduled_discovery_recovers_lost_route_trigger_and_reconstructs_service(
+    monkeypatch,
+) -> None:
+    # The real repository against the shared table double: the sweep now
+    # requires the cursor methods, and a double without them is refused.
+    from fakes.dynamodb import FakeTable
+
     _repository, service, job = _deletion_modules()
-    table = _AccountTable()
-    table.pending.append(
+    table = FakeTable()
+    monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
+    table.seed(
         {
             "PK": f"USER#{STUDENT_ID}",
             "SK": "DELETE_COMMAND#delete-command-1",
@@ -476,11 +483,11 @@ def test_scheduled_discovery_recovers_lost_route_trigger_and_reconstructs_servic
             "user_id": STUDENT_ID,
             "generation": 1,
             "status": "pending",
+            "version": 1,
         }
     )
     calls: list[account_deletion_repo.DeletionCommandClaim] = []
     result = job.run_pending_deletions(
-        repository=table,
         service_factory=lambda: type(
             "Worker",
             (),

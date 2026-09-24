@@ -336,3 +336,44 @@ def test_a_malformed_cycle_start_is_dropped_and_the_place_kept(table: FakeTable)
     assert _stored().version == saved.version + 1
     assert _stored().cursor == {"PK": f"ROW#{2 * BUDGET_ROWS - 1:05d}", "SK": "DATA"}
     assert _stored().cycle_started_at is not None
+
+
+# ── E17: a repository without the cursor methods is refused, not humoured ───
+
+
+class _RecordingRepository:
+    """A repository double that records every call it receives."""
+
+    def __init__(self, *, omit: str) -> None:
+        self.calls: list[str] = []
+        self._omit = omit
+
+    def __getattr__(self, name: str) -> Any:
+        if name == self._omit or name not in _REQUIRED_METHODS:
+            raise AttributeError(name)
+
+        def record(*_args: Any, **_kwargs: Any) -> Any:
+            self.calls.append(name)
+            raise AssertionError(f"{name} must not be reached")
+
+        return record
+
+
+_REQUIRED_METHODS = (
+    "get_deletion_scan_cursor",
+    "advance_deletion_scan_cursor",
+    "scan_pending_deletion_commands",
+    "claim_deletion_command",
+)
+
+
+@pytest.mark.parametrize("missing", _REQUIRED_METHODS)
+def test_a_repository_missing_a_method_is_refused_before_any_scan_or_claim(
+    missing: str,
+) -> None:
+    repository = _RecordingRepository(omit=missing)
+
+    with pytest.raises(account_deletion_repo.AccountDeletionConflict, match=missing):
+        job.run_pending_deletions(repository=repository, service_factory=_Worker)
+
+    assert repository.calls == []
