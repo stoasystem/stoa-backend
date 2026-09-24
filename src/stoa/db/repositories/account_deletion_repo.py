@@ -1577,6 +1577,9 @@ class DeletionScanCursor:
     # a stored row at version 0.
     version: int | None
     cycle_started_at: str | None
+    # Consecutive runs that kept this place because a command in its slice
+    # failed; the sweep moves past the slice once this reaches its limit.
+    held_runs: int = 0
 
 
 def get_deletion_scan_cursor(*, table: Any | None = None) -> DeletionScanCursor:
@@ -1607,7 +1610,13 @@ def get_deletion_scan_cursor(*, table: Any | None = None) -> DeletionScanCursor:
         started: str | None = _valid_lifecycle_timestamp(item.get("cycle_started_at"))
     except AccountDeletionConflict:
         started = None
-    return DeletionScanCursor(cursor=cursor, version=version, cycle_started_at=started)
+    held_runs = stored_int(item.get("held_runs"))
+    return DeletionScanCursor(
+        cursor=cursor,
+        version=version,
+        cycle_started_at=started,
+        held_runs=held_runs if held_runs is not None and held_runs > 0 else 0,
+    )
 
 
 def advance_deletion_scan_cursor(
@@ -1616,6 +1625,7 @@ def advance_deletion_scan_cursor(
     cursor: dict[str, str] | None,
     cycle_started_at: str | None,
     updated_at: str,
+    held_runs: int = 0,
     table: Any | None = None,
 ) -> bool:
     """Store the sweep's new place if nobody has moved it since it was read.
@@ -1629,11 +1639,14 @@ def advance_deletion_scan_cursor(
         or expected_version < 0
     ):
         raise AccountDeletionConflict("invalid deletion scan cursor version")
+    if isinstance(held_runs, bool) or not isinstance(held_runs, int) or held_runs < 0:
+        raise AccountDeletionConflict("invalid deletion scan held run count")
     item: dict[str, Any] = {
         **DELETION_SCAN_CURSOR_KEY,
         "entity_type": "account_deletion_scan_cursor",
         "version": (expected_version or 0) + 1,
         "updated_at": _valid_lifecycle_timestamp(updated_at),
+        "held_runs": held_runs,
     }
     if cursor is not None:
         item["cursor"] = _validated_cursor(cursor)

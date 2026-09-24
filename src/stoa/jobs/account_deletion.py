@@ -27,6 +27,13 @@ _REQUIRED_REPOSITORY_METHODS = (
 )
 
 
+# How many consecutive runs a failing command may keep the sweep in place. The
+# next run after that still tries the slice first, and moves past it if the
+# command fails again; the command itself is left exactly as it is, for the
+# request-side continuation or a later cycle to finish (ticket 12).
+_HOLD_LIMIT = 3
+
+
 @dataclass(frozen=True, slots=True)
 class DeletionJobSummary:
     discovered: int = 0
@@ -102,6 +109,7 @@ def run_pending_deletions(
         unfinished = True
     worker = (service_factory or (lambda: AccountDeletionService()))()
     claimed = continued = retryable = 0
+    failed_command_ids: list[str] = []
     for command in commands:
         try:
             claim = repository.claim_deletion_command(
@@ -119,6 +127,7 @@ def run_pending_deletions(
             continued += 1
         except Exception:
             retryable += 1
+            failed_command_ids.append(str(command.get("command_id") or ""))
     # Only after every command found here has been dealt with: a run that ends
     # before this line leaves the stored place where it was, and the next run
     # reads the same slice again. A command that failed holds the place too, so
@@ -126,37 +135,55 @@ def run_pending_deletions(
     # Reaching the end of the table starts the next cycle from the top. A write
     # refused because another run stored a place first is fine; that run's
     # place stands.
+    # The cycle started when its first run stored anything; a hold at the very
+    # start of a cycle stores the start time too, and later runs keep it.
+    cycle_started_at = place.cycle_started_at or now.isoformat()
     if anomalous:
         logger.warning(
             "account_deletion_scan_anomaly version=%s reason=continuation_key",
             place.version,
         )
-    elif retryable:
+    elif retryable and place.held_runs < _HOLD_LIMIT:
+        # A write lost to another run on the same version is not counted.
+        repository.advance_deletion_scan_cursor(
+            expected_version=place.version,
+            cursor=place.cursor,
+            cycle_started_at=cycle_started_at,
+            updated_at=now.isoformat(),
+            held_runs=place.held_runs + 1,
+        )
         logger.warning(
-            "account_deletion_scan_held version=%s failed_commands=%s",
+            "account_deletion_scan_held version=%s failed_commands=%s held_runs=%s",
             place.version,
             retryable,
+            place.held_runs + 1,
         )
     else:
-        cycle_started_at = (
-            place.cycle_started_at
-            if place.cursor is not None and place.cycle_started_at
-            else now.isoformat()
-        )
+        if retryable:
+            logger.warning(
+                "account_deletion_scan_skipped version=%s held_runs=%s command_ids=%s",
+                place.version,
+                place.held_runs,
+                ",".join(failed_command_ids),
+            )
         stored = repository.advance_deletion_scan_cursor(
             expected_version=place.version,
             cursor=cursor,
             cycle_started_at=None if cursor is None else cycle_started_at,
             updated_at=now.isoformat(),
+            held_runs=0,
         )
         if stored and cursor is None:
+            # Taken after the reset is stored, not at entry: the scan and the
+            # claims in between are part of the cycle.
+            completed = datetime.now(UTC)
             started = datetime.fromisoformat(cycle_started_at)
             logger.info(
                 "account_deletion_scan_cycle_completed version=%s completed_at=%s "
                 "duration_seconds=%s",
                 (place.version or 0) + 1,
-                now.isoformat(),
-                int((now - started).total_seconds()),
+                completed.isoformat(),
+                int((completed - started).total_seconds()),
             )
     # A sweep that stopped short says so, so the next run knows to come back.
     return DeletionJobSummary(

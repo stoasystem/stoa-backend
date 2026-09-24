@@ -13,6 +13,7 @@ scan applies `Limit` before the filter and whose conditions are evaluated.
 from __future__ import annotations
 
 import threading
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -261,7 +262,11 @@ def test_a_command_that_fails_holds_the_place_so_the_next_run_retries_it(
     summary = _run(_FailingWorker())
 
     assert summary.retryable >= 1
-    assert _stored() == saved
+    held = _stored()
+    assert held.cursor == saved.cursor
+    # The hold is itself a write: it counts the run and moves the version on.
+    assert held.held_runs == 1
+    assert held.version == (saved.version or 0) + 1
     assert "account_deletion_scan_held" in caplog.text
 
 
@@ -377,3 +382,161 @@ def test_a_repository_missing_a_method_is_refused_before_any_scan_or_claim(
         job.run_pending_deletions(repository=repository, service_factory=_Worker)
 
     assert repository.calls == []
+
+
+# ── E16: a failing command holds the place for three runs at most ───────────
+
+
+def _failing_claim(monkeypatch: pytest.MonkeyPatch, command_id: str) -> dict[str, int]:
+    """Make the claim itself fail for one command, touching nothing."""
+    real = account_deletion_repo.claim_deletion_command
+    attempts = {"count": 0}
+
+    def claim(command: dict[str, Any], **kwargs: Any) -> Any:
+        if command.get("command_id") == command_id:
+            attempts["count"] += 1
+            raise account_deletion_repo.AccountDeletionConflict("claim unavailable")
+        return real(command, **kwargs)
+
+    monkeypatch.setattr(account_deletion_repo, "claim_deletion_command", claim)
+    return attempts
+
+
+def test_a_command_that_keeps_failing_holds_three_runs_then_is_passed_over(
+    table: FakeTable, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    table.seed(*_unrelated(2_600), _command("stuck-command"))
+    saved = _place_after_first_budget(table)
+    row_before = dict(table.rows[("USER#late", "DELETE_COMMAND#stuck-command")])
+    attempts = _failing_claim(monkeypatch, "stuck-command")
+
+    for held in (1, 2, 3):
+        _run(_Worker())
+        stored = _stored()
+        assert stored.cursor == saved.cursor
+        assert stored.held_runs == held
+        assert stored.version == (saved.version or 0) + held
+    assert "account_deletion_scan_skipped" not in caplog.text
+
+    _run(_Worker())
+
+    stored = _stored()
+    assert stored.cursor is None  # moved on, here to the end of the table
+    assert stored.held_runs == 0
+    assert stored.version == (saved.version or 0) + 4
+    assert attempts["count"] == 4  # the fourth run still tried it first
+    skipped = [r for r in caplog.records if "account_deletion_scan_skipped" in r.getMessage()]
+    assert len(skipped) == 1 and "stuck-command" in skipped[0].getMessage()
+    assert table.rows[("USER#late", "DELETE_COMMAND#stuck-command")] == row_before
+
+
+def test_two_runs_failing_on_the_same_version_count_once(
+    table: FakeTable, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    table.seed(*_unrelated(30), _command("stuck-command", user="early"))
+    _failing_claim(monkeypatch, "stuck-command")
+    barrier = threading.Barrier(2)
+    read = account_deletion_repo.get_deletion_scan_cursor
+
+    def read_together(**kwargs: Any) -> account_deletion_repo.DeletionScanCursor:
+        state = read(**kwargs)
+        barrier.wait(timeout=5)
+        return state
+
+    monkeypatch.setattr(account_deletion_repo, "get_deletion_scan_cursor", read_together)
+    threads = [threading.Thread(target=_run, args=(_Worker(),)) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert read().held_runs == 1
+    assert read().version == 1
+
+
+def test_a_run_that_succeeds_after_a_failure_clears_the_count(
+    table: FakeTable, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    table.seed(*_unrelated(2_600), _command("flaky-command"))
+    _place_after_first_budget(table)
+    _failing_claim(monkeypatch, "flaky-command")
+    _run(_Worker())
+    assert _stored().held_runs == 1
+
+    monkeypatch.setattr(account_deletion_repo, "claim_deletion_command", _REAL_CLAIM)
+    worker = _Worker()
+    _run(worker)
+
+    assert worker.continued == ["flaky-command"]
+    assert _stored().held_runs == 0
+    assert _stored().cursor is None
+
+
+_REAL_CLAIM = account_deletion_repo.claim_deletion_command
+
+
+def test_a_run_whose_scan_fails_writes_nothing_and_counts_nothing(
+    table: FakeTable, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    table.seed(*_unrelated(2_600), _command("stuck-command"))
+    _place_after_first_budget(table)
+    _failing_claim(monkeypatch, "stuck-command")
+    _run(_Worker())
+    held = _stored()
+    assert held.held_runs == 1
+
+    real_scan = table.scan
+    calls = {"count": 0}
+
+    def breaks_midway(**kwargs: Any) -> dict[str, Any]:
+        calls["count"] += 1
+        if calls["count"] == 2:
+            raise RuntimeError("scan unavailable")
+        return real_scan(**kwargs)
+
+    monkeypatch.setattr(table, "scan", breaks_midway)
+    with pytest.raises(Exception):
+        _run(_Worker())
+
+    assert _stored() == held
+
+
+def test_a_hold_at_the_start_of_a_cycle_keeps_the_cycles_first_start_time(
+    table: FakeTable, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    table.seed(_command("stuck-command", user="early"), *_unrelated(30))
+    _failing_claim(monkeypatch, "stuck-command")
+
+    _run(_Worker())
+    first = _stored()
+    assert first.cursor is None and first.held_runs == 1
+    assert first.cycle_started_at is not None
+
+    _run(_Worker())
+    assert _stored().held_runs == 2
+    assert _stored().cycle_started_at == first.cycle_started_at
+
+
+def test_the_cycle_log_uses_the_time_the_reset_was_stored(
+    table: FakeTable, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="stoa.jobs.account_deletion")
+    table.seed(*_unrelated(30))
+    entry = datetime(2026, 9, 24, 10, 0, 0, tzinfo=UTC)
+    moments = iter([entry, entry + timedelta(seconds=10)])
+
+    class _Clock(datetime):
+        @classmethod
+        def now(cls, tz: Any = None) -> datetime:  # type: ignore[override]
+            return next(moments)
+
+    monkeypatch.setattr(job, "datetime", _Clock)
+
+    _run(_Worker())
+
+    message = next(
+        r.getMessage() for r in caplog.records
+        if "account_deletion_scan_cycle_completed" in r.getMessage()
+    )
+    assert "duration_seconds=10" in message
+    assert f"completed_at={(entry + timedelta(seconds=10)).isoformat()}" in message
