@@ -8,7 +8,7 @@ import re
 from typing import Any
 from uuid import uuid4
 
-from stoa.db.repositories import account_deletion_repo, report_repo, user_repo
+from stoa.db.repositories import account_deletion_repo, report_repo
 from stoa.services import (
     notify_service,
     parent_link_service,
@@ -36,7 +36,7 @@ class ReportRecoveryResult:
     artifacts: dict[str, bool] | None = None
 
 
-def _current_recipient(report: dict) -> str | None:
+def _current_recipient(report: dict) -> parent_link_service.ParentRecipient:
     """Who may receive this stored report now, judged from the relationship today.
 
     The archived `parent_email` says who was entitled when the artifact was
@@ -44,13 +44,10 @@ def _current_recipient(report: dict) -> str | None:
     relationship must still be current, and the address comes from that parent's
     profile rather than from the report.
     """
-    parent_id = str(report.get("parent_id") or "")
-    student_id = str(report.get("student_id") or "")
-    if parent_link_service.current_relationship(parent_id, student_id) is None:
-        return None
-    parent = user_repo.get_user(parent_id) or {}
-    email = str(parent.get("email") or "").strip()
-    return email or None
+    return parent_link_service.current_parent_recipient(
+        str(report.get("parent_id") or ""),
+        str(report.get("student_id") or ""),
+    )
 
 
 def resend_report_email(
@@ -66,20 +63,19 @@ def resend_report_email(
         raise _refused(report, "resend_email", operator, reason, source, "Report delivery is not failed")
 
     html_key = report.get("html_s3_key") or report.get("s3_key")
-    parent_email = report.get("parent_email")
-    if not html_key or not parent_email:
+    if not html_key:
         raise _refused(
             report,
             "resend_email",
             operator,
             reason,
             source,
-            "Report is missing email or HTML artifact metadata",
+            "Report is missing HTML artifact metadata",
             status_code=422,
         )
 
     recipient = _current_recipient(report)
-    if recipient is None:
+    if recipient.refusal == parent_link_service.RECIPIENT_RELATIONSHIP_REVOKED:
         raise _refused(
             report,
             "resend_email",
@@ -88,6 +84,18 @@ def resend_report_email(
             source,
             "Report recipient is no longer linked to the student",
             status_code=403,
+            error_class=recipient.refusal,
+        )
+    if recipient.email is None:
+        raise _refused(
+            report,
+            "resend_email",
+            operator,
+            reason,
+            source,
+            "Report recipient has no email address",
+            status_code=422,
+            error_class=recipient.refusal,
         )
 
     before = _audit_snapshot(report)
@@ -97,7 +105,7 @@ def resend_report_email(
         owner_id = str(report.get("student_id") or "")
         fence = account_deletion_repo.require_active_account_fence(owner_id)
         delivery_outcome = notify_service.send_fenced_weekly_report_email(
-            str(recipient),
+            recipient.email,
             html,
             owner_id=owner_id,
             generation=int(fence["generation"]),
@@ -307,6 +315,7 @@ def _refused(
     detail: str,
     *,
     status_code: int = 409,
+    error_class: str | None = None,
 ) -> ReportRecoveryError:
     event_at = _now_iso()
     before = _audit_snapshot(report)
@@ -322,7 +331,9 @@ def _refused(
         event_at=event_at,
         error_message=detail,
     )
-    return ReportRecoveryError(status_code=status_code, detail=detail, result="refused")
+    return ReportRecoveryError(
+        status_code=status_code, detail=detail, result="refused", error_class=error_class
+    )
 
 
 def _write_report_audit(

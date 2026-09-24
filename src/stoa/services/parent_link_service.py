@@ -7,6 +7,7 @@ A link is data visibility. A self-service request therefore only ever reaches
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Final
 
@@ -523,6 +524,38 @@ def current_relationship(parent_id: str, student_id: str) -> LinkItem | None:
     if binding is None:
         return None
     return _relationship(binding, RELATIONSHIP_SOURCE_BINDING, parent_id, student_id)
+
+
+RECIPIENT_RELATIONSHIP_REVOKED: Final = "relationship_revoked"
+RECIPIENT_MISSING: Final = "recipient_missing"
+
+
+@dataclass(frozen=True)
+class ParentRecipient:
+    """Where a parent's copy of a child's report may go right now.
+
+    Exactly one of `email` and `refusal` is set. The two refusals are kept
+    apart because they call for different people: a relationship that ended
+    is correct as it is, a current parent with no address needs fixing.
+    """
+
+    email: str | None = None
+    refusal: str | None = None
+
+
+def current_parent_recipient(parent_id: str, student_id: str) -> ParentRecipient:
+    """Judge the relationship now and read the parent's address from their profile.
+
+    Called at the moment of sending, never earlier: anything stored alongside
+    the report says who was entitled when it was written, not who is now.
+    """
+    if current_relationship(parent_id, student_id) is None:
+        return ParentRecipient(refusal=RECIPIENT_RELATIONSHIP_REVOKED)
+    parent = user_repo.get_user(parent_id) or {}
+    email = str(parent.get("email") or "").strip()
+    if not email:
+        return ParentRecipient(refusal=RECIPIENT_MISSING)
+    return ParentRecipient(email=email)
 
 
 def _current_from_candidates(pairs: list[tuple[str, str]]) -> list[LinkItem]:

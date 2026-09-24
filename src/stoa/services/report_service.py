@@ -386,9 +386,22 @@ def store_and_send_weekly_report(
         report_item.get("source_counts", {}),
     )
 
+    # The payload was judged before the AI call and the artifact writes; the
+    # relationship can end, or the address change, in between. Judge again at
+    # the last moment, and send to the address the parent has now.
+    recipient = parent_link_service.current_parent_recipient(
+        str(report_item["parent_id"]),
+        str(report_item["student_id"]),
+    )
+    if recipient.email is None:
+        return _mark_report_email_failed(
+            report_item,
+            error_class=str(recipient.refusal),
+            error_message=_WITHHELD_MESSAGES.get(str(recipient.refusal), "withheld"),
+        )
     try:
         delivery_outcome = notify_service.send_fenced_weekly_report_email(
-            report_item["parent_email"],
+            recipient.email,
             html_report,
             owner_id=str(report_item["student_id"]),
             generation=generation,
@@ -399,35 +412,11 @@ def store_and_send_weekly_report(
         if delivery_outcome != "accepted":
             raise RuntimeError(delivery_outcome)
     except Exception as exc:
-        failed_at = _now_iso()
-        error_class = type(exc).__name__
-        error_message = str(exc)[:240]
-        report_repo.update_report_status(
-            report_item["report_id"],
-            "email_failed",
-            email_status="failed",
-            email_failed_at=failed_at,
-            email_error_class=error_class,
-            email_error_message=error_message,
-            updated_at=failed_at,
+        return _mark_report_email_failed(
+            report_item,
+            error_class=type(exc).__name__,
+            error_message=str(exc)[:240],
         )
-        logger.warning(
-            "Weekly report email failed report_id=%s parent_id=%s student_id=%s week_start=%s error_class=%s",
-            report_item["report_id"],
-            report_item["parent_id"],
-            report_item["student_id"],
-            report_item["week_start"],
-            error_class,
-        )
-        return {
-            **report_item,
-            "status": "email_failed",
-            "email_status": "failed",
-            "email_failed_at": failed_at,
-            "email_error_class": error_class,
-            "email_error_message": error_message,
-            "updated_at": failed_at,
-        }
 
     sent_at = _now_iso()
     report_repo.update_report_status(
@@ -450,6 +439,49 @@ def store_and_send_weekly_report(
         "email_status": "sent",
         "email_sent_at": sent_at,
         "updated_at": sent_at,
+    }
+
+
+_WITHHELD_MESSAGES = {
+    parent_link_service.RECIPIENT_RELATIONSHIP_REVOKED: (
+        "Parent is no longer linked to the student"
+    ),
+    parent_link_service.RECIPIENT_MISSING: "Parent has no email address",
+}
+
+
+def _mark_report_email_failed(
+    report_item: dict[str, Any],
+    *,
+    error_class: str,
+    error_message: str,
+) -> dict[str, Any]:
+    failed_at = _now_iso()
+    report_repo.update_report_status(
+        report_item["report_id"],
+        "email_failed",
+        email_status="failed",
+        email_failed_at=failed_at,
+        email_error_class=error_class,
+        email_error_message=error_message,
+        updated_at=failed_at,
+    )
+    logger.warning(
+        "Weekly report email failed report_id=%s parent_id=%s student_id=%s week_start=%s error_class=%s",
+        report_item["report_id"],
+        report_item["parent_id"],
+        report_item["student_id"],
+        report_item["week_start"],
+        error_class,
+    )
+    return {
+        **report_item,
+        "status": "email_failed",
+        "email_status": "failed",
+        "email_failed_at": failed_at,
+        "email_error_class": error_class,
+        "email_error_message": error_message,
+        "updated_at": failed_at,
     }
 
 

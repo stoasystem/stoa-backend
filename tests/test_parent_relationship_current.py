@@ -677,3 +677,188 @@ def test_account_profile_deletion_removes_both_link_directions(
     _run_profile_branch(table, deleting, passes=1)
 
     assert table.items == {}
+
+
+# ---------------------------------------------------------------------------
+# Issue #3, the generation path: the recipient is judged again at the last step
+# ---------------------------------------------------------------------------
+
+
+class _GenerationDelivery:
+    """Everything `store_and_send_weekly_report` touches except the judge."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.sent: list[str] = []
+        self.status_updates: list[tuple[str, dict[str, Any]]] = []
+        # The repository module is shared; link writes pass their own table and
+        # must still see the real fence.
+        real_fence = account_deletion_repo.require_active_account_fence
+        monkeypatch.setattr(
+            report_service.account_deletion_repo,
+            "require_active_account_fence",
+            lambda owner, **kwargs: (
+                real_fence(owner, **kwargs) if kwargs else {"status": "active", "generation": 7}
+            ),
+        )
+        monkeypatch.setattr(
+            report_service.report_artifact_service,
+            "write_fenced_report_artifacts",
+            lambda *_a, **_k: None,
+        )
+        monkeypatch.setattr(report_service.report_repo, "put_report", lambda _item: None)
+        monkeypatch.setattr(
+            report_service.report_repo,
+            "update_report_status",
+            lambda _report_id, status, **fields: self.status_updates.append((status, fields)),
+        )
+        monkeypatch.setattr(
+            report_service.notify_service,
+            "send_fenced_weekly_report_email",
+            lambda email, _html, **_kwargs: (self.sent.append(email), "accepted")[1],
+        )
+
+
+@pytest.fixture
+def delivery(monkeypatch: pytest.MonkeyPatch) -> _GenerationDelivery:
+    return _GenerationDelivery(monkeypatch)
+
+
+def _generate_and_store(world: RelationshipWorld, change=None) -> dict[str, Any]:
+    """Build the payload while the relationship holds, change the world, deliver."""
+    payload = report_service.build_weekly_learning_payload(PARENT, STUDENT, "2026-06-01")
+    assert payload["parent"]["email"] == f"{PARENT}@stoa.test"
+    if change is not None:
+        change()
+    return report_service.store_and_send_weekly_report(
+        payload,
+        report_service.build_deterministic_report_fallback(payload),
+    )
+
+
+@pytest.mark.usefixtures("quiet_report_sources")
+def test_a_current_parent_still_receives_the_generated_report(
+    world: RelationshipWorld, delivery: _GenerationDelivery
+) -> None:
+    """Negative control for the refusals below."""
+    world.bind(PARENT, STUDENT)
+
+    stored = _generate_and_store(world)
+
+    assert delivery.sent == [f"{PARENT}@stoa.test"]
+    assert stored["status"] == "email_sent"
+    assert stored["email_status"] == "sent"
+
+
+@pytest.mark.usefixtures("quiet_report_sources")
+def test_a_new_link_parent_receives_the_generated_report(
+    world: RelationshipWorld, delivery: _GenerationDelivery
+) -> None:
+    world.link(PARENT, STUDENT)
+
+    stored = _generate_and_store(world)
+
+    assert delivery.sent == [f"{PARENT}@stoa.test"]
+    assert stored["email_status"] == "sent"
+
+
+@pytest.mark.usefixtures("quiet_report_sources")
+def test_a_parent_revoked_after_the_payload_does_not_receive_the_report(
+    world: RelationshipWorld, delivery: _GenerationDelivery
+) -> None:
+    world.bind(PARENT, STUDENT)
+
+    stored = _generate_and_store(world, lambda: world.revoke_binding(PARENT, STUDENT))
+
+    assert delivery.sent == []
+    assert stored["status"] == "email_failed"
+    assert stored["email_status"] == "failed"
+    assert stored["email_error_class"] == "relationship_revoked"
+    assert delivery.status_updates[-1][0] == "email_failed"
+    assert delivery.status_updates[-1][1]["email_error_class"] == "relationship_revoked"
+
+
+@pytest.mark.usefixtures("quiet_report_sources")
+def test_a_parent_whose_account_closes_after_the_payload_does_not_receive_the_report(
+    world: RelationshipWorld, delivery: _GenerationDelivery
+) -> None:
+    world.bind(PARENT, STUDENT)
+
+    def close_parent() -> None:
+        world.profiles[PARENT]["account_status"] = "deletion_pending"
+
+    stored = _generate_and_store(world, close_parent)
+
+    assert delivery.sent == []
+    assert stored["email_error_class"] == "relationship_revoked"
+
+
+@pytest.mark.usefixtures("quiet_report_sources")
+def test_the_generated_report_goes_to_the_parents_current_address(
+    world: RelationshipWorld, delivery: _GenerationDelivery
+) -> None:
+    world.bind(PARENT, STUDENT)
+
+    def change_address() -> None:
+        world.profiles[PARENT]["email"] = "new-address@stoa.test"
+
+    stored = _generate_and_store(world, change_address)
+
+    assert delivery.sent == ["new-address@stoa.test"]
+    assert stored["email_status"] == "sent"
+
+
+@pytest.mark.usefixtures("quiet_report_sources")
+def test_a_parent_without_an_address_is_not_sent_the_generated_report(
+    world: RelationshipWorld, delivery: _GenerationDelivery
+) -> None:
+    world.bind(PARENT, STUDENT)
+
+    def drop_address() -> None:
+        world.profiles[PARENT]["email"] = "  "
+
+    stored = _generate_and_store(world, drop_address)
+
+    assert delivery.sent == []
+    assert stored["status"] == "email_failed"
+    assert stored["email_error_class"] == "recipient_missing"
+
+
+def test_the_recipient_judge_tells_its_three_answers_apart(world: RelationshipWorld) -> None:
+    assert parent_link_service.current_parent_recipient(PARENT, STUDENT) == (
+        parent_link_service.ParentRecipient(refusal="relationship_revoked")
+    )
+    world.bind(PARENT, STUDENT)
+    assert parent_link_service.current_parent_recipient(PARENT, STUDENT) == (
+        parent_link_service.ParentRecipient(email=f"{PARENT}@stoa.test")
+    )
+    world.profiles[PARENT].pop("email")
+    assert parent_link_service.current_parent_recipient(PARENT, STUDENT) == (
+        parent_link_service.ParentRecipient(refusal="recipient_missing")
+    )
+
+
+def test_a_resend_to_a_current_parent_without_an_address_is_refused_as_such(
+    world: RelationshipWorld, resend_doubles: list[tuple[str, str]]
+) -> None:
+    world.bind(PARENT, STUDENT)
+    world.profiles[PARENT]["email"] = ""
+
+    with pytest.raises(report_recovery_service.ReportRecoveryError) as refused:
+        report_recovery_service.resend_report_email(_failed_report(), operator="admin-1")
+
+    assert refused.value.status_code == 422
+    assert refused.value.error_class == "recipient_missing"
+    assert resend_doubles == []
+
+
+def test_a_resend_does_not_need_the_archived_address(
+    world: RelationshipWorld, resend_doubles: list[tuple[str, str]]
+) -> None:
+    world.bind(PARENT, STUDENT)
+    report = _failed_report()
+    report.pop("parent_email")
+
+    result = report_recovery_service.resend_report_email(report, operator="admin-1")
+
+    assert result.status == "email_sent"
+    assert resend_doubles == [(f"{PARENT}@stoa.test", "<html>Report</html>")]

@@ -9,6 +9,15 @@ from stoa.services import report_service
 
 @pytest.fixture(autouse=True)
 def _fenced_report_provider_compat(monkeypatch):
+    # Delivery judges the recipient again; the judge has its own tests in
+    # test_parent_relationship_current.py, so here the parent is simply current.
+    monkeypatch.setattr(
+        report_service.parent_link_service,
+        "current_parent_recipient",
+        lambda _parent_id, _student_id: report_service.parent_link_service.ParentRecipient(
+            email="parent@example.com"
+        ),
+    )
     monkeypatch.setattr(
         report_service.account_deletion_repo,
         "require_active_account_fence",
