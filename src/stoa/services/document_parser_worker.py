@@ -54,11 +54,36 @@ def parse_document_isolated(
         return ParserResult(category="document_limit_exceeded")
     if not isinstance(media_type, str) or not media_type or timeout_seconds <= 0:
         return ParserResult(category="service_unavailable")
+    return _run_isolated(raw, media_type, "extract", timeout_seconds)
+
+
+def validate_pdf_isolated(
+    data: bytes | Any,
+    *,
+    timeout_seconds: float = PARSER_WALL_SECONDS,
+) -> ParserResult:
+    """Check one PDF's structure under the same fences as extraction.
+
+    A clean check answers with empty text; anything else is a category. Upload
+    admission runs this instead of opening the document in the API process,
+    which has no CPU or memory limit of its own (#6).
+    """
+    raw = _bounded_input(data)
+    if raw is None:
+        return ParserResult(category="document_limit_exceeded")
+    if timeout_seconds <= 0:
+        return ParserResult(category="service_unavailable")
+    return _run_isolated(raw, "application/pdf", "validate_pdf", timeout_seconds)
+
+
+def _run_isolated(
+    raw: bytes, media_type: str, task: str, timeout_seconds: float
+) -> ParserResult:
     context = multiprocessing.get_context("spawn")
     parent, child = context.Pipe(duplex=False)
     process = context.Process(
         target=_worker_main,
-        args=(child, raw, media_type),
+        args=(child, raw, media_type, task),
         name="stoa-document-parser",
         daemon=True,
     )
@@ -95,7 +120,7 @@ def _bounded_input(data: bytes | Any) -> bytes | None:
         return None
 
 
-def _worker_main(connection, raw: bytes, media_type: str) -> None:
+def _worker_main(connection, raw: bytes, media_type: str, task: str = "extract") -> None:
     try:
         _silence_worker_output()
         if not _apply_resource_limits():
@@ -103,11 +128,16 @@ def _worker_main(connection, raw: bytes, media_type: str) -> None:
             return
         from stoa.services.document_extraction_service import (
             DocumentExtractionFailure,
+            check_pdf_structure,
             extract_attachment_text,
         )
 
         try:
-            text = extract_attachment_text(raw, media_type)
+            if task == "validate_pdf":
+                check_pdf_structure(raw)
+                text = ""
+            else:
+                text = extract_attachment_text(raw, media_type)
             if len(text) > MAX_PARSER_RESULT_CHARACTERS:
                 result = ParserResult(category="document_limit_exceeded")
             else:

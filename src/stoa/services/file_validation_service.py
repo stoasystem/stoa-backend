@@ -15,10 +15,10 @@ from xml.parsers import expat
 from zipfile import BadZipFile, ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 from PIL import Image, UnidentifiedImageError
-from pypdf import PdfReader
 
 from stoa.config import DOCUMENT_MAX_BYTES, IMAGE_MAX_BYTES, IMAGE_MAX_EDGE
 from stoa.security.attachment_errors import AttachmentErrorCode
+from stoa.services import document_parser_worker
 
 
 MIME_BY_EXTENSION = {
@@ -159,20 +159,25 @@ def validate_image(stream, extension: str, size: int) -> DetectedFile:
     return DetectedFile("image/jpeg" if extension in {"jpg", "jpeg"} else "image/png", size, width, height)
 
 
+# Wall time for the isolated structure check, spawn included.
+PDF_VALIDATION_WALL_SECONDS = document_parser_worker.PARSER_WALL_SECONDS
+
+
 def validate_pdf(stream, size: int) -> DetectedFile:
+    """Admit a PDF only on a clean answer from the restricted parser process.
+
+    This process only reads the magic bytes. Parsing a hostile document here
+    had no CPU or memory limit (#6); in the worker a timeout, a CPU or memory
+    kill, or any rejection comes back as a category, and every one of them
+    leaves the upload invalid.
+    """
     stream.seek(0)
     if stream.read(5) != b"%PDF-":
         _fail(AttachmentErrorCode.UPLOAD_CONTENT_MISMATCH)
-    try:
-        stream.seek(0)
-        reader = PdfReader(stream, strict=True)
-        if reader.is_encrypted or len(reader.pages) > 500:
-            _fail(AttachmentErrorCode.UPLOAD_INVALID)
-        for page in reader.pages:
-            _ = page.mediabox
-    except ValidationFailure:
-        raise
-    except Exception:
+    result = document_parser_worker.validate_pdf_isolated(
+        stream, timeout_seconds=PDF_VALIDATION_WALL_SECONDS
+    )
+    if result.category is not None:
         _fail(AttachmentErrorCode.UPLOAD_INVALID)
     stream.seek(0)
     return DetectedFile("application/pdf", size)

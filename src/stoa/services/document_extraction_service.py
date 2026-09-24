@@ -18,6 +18,9 @@ from stoa.services.file_validation_service import (
 
 MAX_EXTRACTED_CHARACTERS = 200_000
 MAX_PDF_PAGES = 100
+# Admission accepts more pages than extraction reads: a long document can be
+# stored and shown even though only its first hundred pages are summarised.
+MAX_ADMITTED_PDF_PAGES = 500
 MAX_PRESENTATION_SLIDES = 200
 MAX_WORKBOOK_SHEETS = 50
 MAX_WORKBOOK_CELLS = 100_000
@@ -72,6 +75,28 @@ def extract_pdf_text(data) -> str:
             text = page.extract_text() or ""
             length = _append_bounded(parts, text, length)
         return "\n".join(parts)
+    except DocumentExtractionFailure:
+        raise
+    except Exception:
+        raise DocumentExtractionFailure("invalid_document") from None
+
+
+def check_pdf_structure(data) -> None:
+    """Upload admission's structure check; runs only inside the parser worker.
+
+    The same rules the API process used to apply itself: strict parsing, no
+    encryption, at most 500 pages, and every page's media box readable.
+    """
+    try:
+        stream = BytesIO(data) if isinstance(data, bytes) else data
+        stream.seek(0)
+        reader = PdfReader(stream, strict=True)
+        if reader.is_encrypted:
+            raise DocumentExtractionFailure("encrypted_document")
+        if len(reader.pages) > MAX_ADMITTED_PDF_PAGES:
+            raise DocumentExtractionFailure("document_limit_exceeded")
+        for page in reader.pages:
+            _ = page.mediabox
     except DocumentExtractionFailure:
         raise
     except Exception:
