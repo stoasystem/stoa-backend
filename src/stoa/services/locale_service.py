@@ -46,18 +46,46 @@ def effective_locale(profile: dict[str, Any] | None) -> str:
 
 
 def locale_from_accept_language(header: str | None) -> str | None:
-    """Return the first supported locale in an Accept-Language header."""
+    """Return the most preferred supported locale in an Accept-Language header.
+
+    Entries are ranked by `q` (1 when absent), ties keeping header order. An
+    entry with q=0 is a refusal and never chosen; one whose q is not a number
+    from 0 to 1 is skipped rather than guessed at.
+    """
     if not header:
         return None
+    ranked: list[tuple[float, str]] = []
     for entry in header.split(","):
-        tag = entry.split(";", 1)[0].strip()
+        tag, *params = (part.strip() for part in entry.split(";"))
         if not tag or tag == "*":
             continue
+        weight = _quality(params)
+        if weight is None or weight <= 0:
+            continue
+        ranked.append((weight, tag))
+    # sorted() is stable, so equal weights keep the order the client sent.
+    for _, tag in sorted(ranked, key=lambda item: -item[0]):
         try:
             return normalize_locale(tag)
         except ValueError:
             continue
     return None
+
+
+def _quality(params: list[str]) -> float | None:
+    """The entry's q value, 1.0 when absent, None when it is not a usable weight."""
+    for param in params:
+        name, _, value = param.partition("=")
+        if name.strip().lower() != "q":
+            continue
+        try:
+            weight = float(value.strip())
+        except ValueError:
+            return None
+        if not 0 <= weight <= 1:  # also false for NaN
+            return None
+        return weight
+    return 1.0
 
 
 def set_request_locale(locale: str | None) -> None:

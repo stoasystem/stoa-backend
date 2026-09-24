@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
 from stoa.config import Settings, get_settings
 from stoa.deps import get_current_user
@@ -168,3 +169,52 @@ def test_update_locale_preference_rejects_unsupported_locale(monkeypatch):
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Unsupported locale"
+
+
+# ── Accept-Language is negotiated by weight (#20) ───────────────────────────
+
+@pytest.mark.parametrize(
+    ("header", "expected"),
+    [
+        ("de;q=0, en;q=1", "en"),
+        ("de;q=0,en;q=1", "en"),
+        ("fr;q=0.2,en;q=1", "en"),
+        ("fr;q=0.2, en", "en"),
+        ("en;q=0.8,fr;q=0.8", "en"),
+        ("fr;q=0.8,en;q=0.8", "fr"),
+        ("de-CH", "de"),
+        ("de-CH;q=0.9, zz;q=1", "de"),
+        ("en;q=abc,fr", "fr"),
+        ("en;q=nan,fr;q=0.1", "fr"),
+        ("en;q=1.5,it;q=0.3", "it"),
+        ("en;q=-1,it;q=0.3", "it"),
+        ("en; q=0.5 , fr ; q=0.7", "fr"),
+        ("*;q=1, it;q=0.1", "it"),
+        ("en;level=1;q=0.4,fr;q=0.3", "en"),
+    ],
+)
+def test_accept_language_takes_the_heaviest_supported_language(header, expected):
+    assert locale_service.locale_from_accept_language(header) == expected
+
+
+@pytest.mark.parametrize(
+    "header",
+    ["de;q=0, en;q=0", "de;q=0.0,fr;q=0.000", "zz, xx;q=0.5", "en;q=abc", "*", "", None],
+)
+def test_accept_language_with_nothing_acceptable_gives_no_locale(header):
+    assert locale_service.locale_from_accept_language(header) is None
+
+
+@pytest.mark.parametrize("locale", ["de", "en", "fr", "it"])
+def test_a_single_language_header_is_taken_as_asked(locale):
+    assert locale_service.locale_from_accept_language(locale) == locale
+
+
+@pytest.mark.parametrize("header", [None, "de;q=0, en;q=0"])
+def test_without_an_acceptable_request_language_the_profile_decides(header):
+    locale_service.set_request_locale(locale_service.locale_from_accept_language(header))
+    try:
+        assert locale_service.resolve_locale({"preferred_locale": "it"}) == "it"
+        assert locale_service.resolve_locale(None) == locale_service.DEFAULT_LOCALE
+    finally:
+        locale_service.set_request_locale(None)
