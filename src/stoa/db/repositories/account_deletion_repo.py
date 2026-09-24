@@ -40,6 +40,11 @@ class _UpdateTable(Protocol):
     def update_item(self, **kwargs: object) -> object: ...
 
 
+@runtime_checkable
+class _PutTable(Protocol):
+    def put_item(self, **kwargs: object) -> object: ...
+
+
 def _dependency_mapping(value: object) -> AccountDeletionItem:
     if not isinstance(value, Mapping):
         raise AccountDeletionConflict("malformed account deletion dependency response")
@@ -1555,6 +1560,98 @@ def scan_pending_deletion_commands(
         if response.get("LastEvaluatedKey")
         else None,
     )
+
+
+# Where the scheduled sweep stopped. A scan's `Limit` counts rows read, so one
+# run covers a bounded slice of the table; the next run carries on from here,
+# and reaching the end of the table starts the next cycle from the top. The
+# version rises on every write, the reset included, so a run that read an older
+# place cannot overwrite a newer one.
+DELETION_SCAN_CURSOR_KEY = {"PK": "JOB#account_deletion", "SK": "SCAN_CURSOR"}
+
+
+@dataclass(frozen=True, slots=True)
+class DeletionScanCursor:
+    cursor: dict[str, str] | None
+    version: int
+    cycle_started_at: str | None
+
+
+def get_deletion_scan_cursor(*, table: Any | None = None) -> DeletionScanCursor:
+    """The stored place, or the top of the table when there is none.
+
+    A stored cursor that is not a valid key is read as the top of the table:
+    starting a cycle over costs one rescan, while refusing would stop the
+    schedule until someone repaired the row. The version is kept so the next
+    write still applies. A version that is not a whole number is refused: the
+    next write is conditional on it, so there is nothing safe to write against.
+    """
+    target = table or get_table()
+    item = _get_item(target, Key=dict(DELETION_SCAN_CURSOR_KEY), ConsistentRead=True).get(
+        "Item"
+    )
+    if not isinstance(item, Mapping):
+        return DeletionScanCursor(cursor=None, version=0, cycle_started_at=None)
+    version = stored_int(item.get("version"))
+    if version is None or version < 0:
+        raise AccountDeletionConflict("invalid deletion scan cursor version")
+    try:
+        cursor = _validated_cursor(item["cursor"]) if item.get("cursor") else None
+    except AccountDeletionConflict:
+        cursor = None
+    started = item.get("cycle_started_at")
+    return DeletionScanCursor(
+        cursor=cursor,
+        version=version,
+        cycle_started_at=started if isinstance(started, str) and started else None,
+    )
+
+
+def advance_deletion_scan_cursor(
+    *,
+    expected_version: int,
+    cursor: dict[str, str] | None,
+    cycle_started_at: str | None,
+    updated_at: str,
+    table: Any | None = None,
+) -> bool:
+    """Store the sweep's new place if nobody has moved it since it was read.
+
+    False means another run stored a place first; its place stands.
+    """
+    if (
+        isinstance(expected_version, bool)
+        or not isinstance(expected_version, int)
+        or expected_version < 0
+    ):
+        raise AccountDeletionConflict("invalid deletion scan cursor version")
+    item: dict[str, Any] = {
+        **DELETION_SCAN_CURSOR_KEY,
+        "entity_type": "account_deletion_scan_cursor",
+        "version": expected_version + 1,
+        "updated_at": _valid_lifecycle_timestamp(updated_at),
+    }
+    if cursor is not None:
+        item["cursor"] = _validated_cursor(cursor)
+    if cycle_started_at is not None:
+        item["cycle_started_at"] = _valid_lifecycle_timestamp(cycle_started_at)
+    request: dict[str, Any] = {"Item": item}
+    if expected_version == 0:
+        request["ConditionExpression"] = "attribute_not_exists(PK)"
+    else:
+        request["ConditionExpression"] = "#version = :expected"
+        request["ExpressionAttributeNames"] = {"#version": "version"}
+        request["ExpressionAttributeValues"] = {":expected": expected_version}
+    target = table or get_table()
+    if not isinstance(target, _PutTable):
+        raise AccountDeletionConflict("account deletion dependency unavailable")
+    try:
+        target.put_item(**request)
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AccountDeletionConflict("deletion scan cursor unavailable") from exc
+    return True
 
 
 def claim_deletion_command(

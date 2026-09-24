@@ -28,10 +28,19 @@ def run_pending_deletions(
 ) -> DeletionJobSummary:
     now = datetime.now(UTC)
     scan = getattr(repository, "scan_pending_deletion_commands", None)
+    # One run reads a bounded slice of the table, so it starts where the last
+    # run stopped. Without this every run read the same first slice, and a
+    # command further down was never reached by the schedule (#7).
+    read_place = getattr(repository, "get_deletion_scan_cursor", None)
+    store_place = getattr(repository, "advance_deletion_scan_cursor", None)
+    place = read_place() if callable(read_place) and callable(store_place) else None
     commands: list[dict[str, Any]] = []
-    cursor: dict[str, str] | None = None
+    cursor: dict[str, str] | None = place.cursor if place is not None else None
     seen_cursors: set[tuple[str, str]] = set()
     unfinished = False
+    # A continuation key the scan should never hand back; where it points is
+    # not a place worth keeping.
+    anomalous = False
     if repository is account_deletion_repo or callable(scan):
         pages = 0
         while len(commands) < limit and pages < 100:
@@ -61,11 +70,11 @@ def run_pending_deletions(
                     for field in ("PK", "SK")
                 )
             ):
-                unfinished = True
+                unfinished = anomalous = True
                 break
             identity = (next_cursor["PK"], next_cursor["SK"])
             if identity in seen_cursors:
-                unfinished = True
+                unfinished = anomalous = True
                 break
             seen_cursors.add(identity)
             cursor = next_cursor
@@ -106,6 +115,27 @@ def run_pending_deletions(
             continued += 1
         except Exception:
             retryable += 1
+    # Only after every command found here has been attempted: a run that ends
+    # before this line leaves the stored place where it was, and the next run
+    # reads the same slice again. Reaching the end of the table starts the next
+    # cycle from the top. A write refused because another run stored a place
+    # first is fine; that run's place stands.
+    if place is not None and not anomalous:
+        assert callable(store_place)
+        store_place(
+            expected_version=place.version,
+            cursor=cursor,
+            cycle_started_at=(
+                None
+                if cursor is None
+                else (
+                    place.cycle_started_at
+                    if place.cursor is not None and place.cycle_started_at
+                    else now.isoformat()
+                )
+            ),
+            updated_at=now.isoformat(),
+        )
     # A sweep that stopped short says so, so the next run knows to come back.
     return DeletionJobSummary(
         len(commands), claimed, continued, retryable + (1 if unfinished else 0)

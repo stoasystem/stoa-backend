@@ -331,6 +331,15 @@ def condition_holds(
 def _resolve_operand(token: str, evaluator: ConditionEvaluator, item: dict[str, Any]) -> Any:
     """One side of a SET assignment: a placeholder, a stored path, or a function."""
     text = token.strip()
+    # Arithmetic first: `if_not_exists(a, :zero) + :one` is one operand to
+    # DynamoDB, and read as a function call it loses its closing parenthesis.
+    for operator in ("+", "-"):
+        parts = _split_top(text, operator)
+        if len(parts) > 1:
+            left = _resolve_operand(parts[0], evaluator, item)
+            right = _resolve_operand(operator.join(parts[1:]), evaluator, item)
+            left = Decimal(0) if left is None else left
+            return left + right if operator == "+" else left - right
     if text.startswith("if_not_exists("):
         path, fallback = (part.strip() for part in _split_top(text[len("if_not_exists(") : -1], ","))
         current = item.get(evaluator.path(path))
@@ -340,13 +349,6 @@ def _resolve_operand(token: str, evaluator: ConditionEvaluator, item: dict[str, 
         head = _resolve_operand(first, evaluator, item) or []
         tail = _resolve_operand(second, evaluator, item) or []
         return list(head) + list(tail)
-    for operator in ("+", "-"):
-        parts = _split_top(text, operator)
-        if len(parts) > 1:
-            left = _resolve_operand(parts[0], evaluator, item)
-            right = _resolve_operand(operator.join(parts[1:]), evaluator, item)
-            left = Decimal(0) if left is None else left
-            return left + right if operator == "+" else left - right
     if text.startswith(":"):
         return evaluator.value(text)
     if text.startswith("#") or text in item:
