@@ -15,13 +15,14 @@ import struct
 import time
 import uuid
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, NamedTuple, Protocol, cast
+from typing import Any, Literal, NamedTuple, NoReturn, Protocol, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -1228,11 +1229,18 @@ async def list_conversations(
 GENERATION_PROGRESS_TTL_SECONDS = 3600
 
 
-def _publish_generation_step(conv_id: str, student_id: str):
+def _publish_generation_step(
+    conv_id: str,
+    student_id: str,
+    *,
+    command_id: str | None = None,
+    attempt: int | None = None,
+):
     """Publish each finished step so the student can read the answer forming.
 
-    Progress is held per conversation and carries when it was written, so a
-    reader can tell this answer's steps from the previous answer's.
+    Progress is held per conversation and carries when it was written and which
+    command and attempt wrote it, so a reader can tell this answer's steps from
+    the previous answer's.
     """
     delivered: list[str] = []
 
@@ -1247,6 +1255,8 @@ def _publish_generation_step(conv_id: str, student_id: str):
             now_iso=_now(),
             expires_at=int(datetime.now(timezone.utc).timestamp())
             + GENERATION_PROGRESS_TTL_SECONDS,
+            command_id=command_id,
+            attempt=attempt,
         )
 
     return publish
@@ -1436,6 +1446,59 @@ class GenerationProgressResponse(BaseModel):
     # When these steps were written, so a reader can tell them from the steps
     # of a previous answer in the same conversation.
     updatedAt: str = ""
+    # Set only when the reader names the message's idempotency key: where that
+    # command stands. A `failed` command that is `retryable` may be sent again
+    # with the same key; `assistantMessageId` names the answer once `completed`.
+    commandId: str | None = None
+    status: Literal["message_committed", "ai_running", "completed", "failed"] | None = None
+    attempt: int | None = None
+    assistantMessageId: str | None = None
+    failureCategory: str | None = None
+    retryable: bool | None = None
+
+
+def _command_generation_state(
+    conv_id: str, command: Mapping[str, object]
+) -> GenerationProgressResponse | None:
+    """Project a stored command onto the four states a reader is told about.
+
+    `claimed` reads as `message_committed`: both are waiting for an answer, and
+    the student's message becomes visible in the same transaction that leaves
+    `claimed`. Commands written before E19 carry none of the failure fields and
+    read the same way.
+    """
+    stored_status = command.get("status")
+    state = GenerationProgressResponse(
+        conversationId=conv_id,
+        commandId=str(command.get("command_id") or ""),
+        attempt=stored_int(command.get("attempt")) or 0,
+    )
+    if stored_status == "claimed" and (
+        stored_int(command.get("expires_at")) or 0
+    ) <= int(datetime.now(timezone.utc).timestamp()):
+        stored_status = "expired"
+    if stored_status in {"claimed", "message_committed"}:
+        state.status = "message_committed"
+    elif stored_status == "ai_running":
+        state.status = "ai_running"
+    elif stored_status == "completed":
+        state.status = "completed"
+        state.assistantMessageId = str(command.get("assistant_message_id") or "")
+    elif stored_status == "failed":
+        state.status = "failed"
+        state.failureCategory = str(command.get("failure_category") or "unknown")
+        state.retryable = attachment_repo.failed_command_can_retry(command)
+    elif stored_status in {"terminal_failed", "rejected", "expired"}:
+        state.status = "failed"
+        state.failureCategory = {
+            "terminal_failed": "attempts_exhausted",
+            "rejected": str(command.get("error_code") or "rejected"),
+            "expired": "expired",
+        }[str(stored_status)]
+        state.retryable = False
+    else:
+        return None
+    return state
 
 
 @router.get("/{conv_id}/generation", response_model=GenerationProgressResponse)
@@ -1447,15 +1510,49 @@ async def get_generation_progress(
             resolver=lambda conversation_id: _get_conversation(conversation_id),
         )
     ),
+    idempotency_key: str | None = Query(
+        default=None,
+        alias="idempotencyKey",
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9._~-]+$",
+    ),
+    correlation_id: str = Depends(get_request_correlation_id),
 ):
-    """Return the steps of an answer still being written."""
+    """Return the steps of an answer still being written.
+
+    Named by its idempotency key, the message's command is reported too, with
+    only the steps its current attempt wrote.
+    """
     conv_id = authorized.ref.resource_id
-    steps, updated_at = attachment_repo.read_generation_progress(
-        conv_id, owner_id=authorized.ref.student_id
+    owner_id = authorized.ref.student_id
+    if idempotency_key is None:
+        steps, updated_at = attachment_repo.read_generation_progress(
+            conv_id, owner_id=owner_id
+        )
+        return GenerationProgressResponse(
+            conversationId=conv_id, steps=steps, updatedAt=updated_at
+        )
+    try:
+        command = _conversation_repository_call(
+            lambda: attachment_repo.get_message_command(conv_id, idempotency_key)
+        )
+        state = (
+            _command_generation_state(conv_id, command)
+            if isinstance(command, dict) and command.get("owner_id") == owner_id
+            else None
+        )
+        if state is None:
+            raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_COMMAND_NOT_FOUND)
+    except AttachmentDecisionError as error:
+        _raise_attachment(error, correlation_id)
+    state.steps, state.updatedAt = attachment_repo.read_generation_progress(
+        conv_id,
+        owner_id=owner_id,
+        command_id=state.commandId,
+        attempt=state.attempt,
     )
-    return GenerationProgressResponse(
-        conversationId=conv_id, steps=steps, updatedAt=updated_at
-    )
+    return state
 
 
 @router.post("/{conv_id}/messages", response_model=SendMessageResponse)
@@ -1851,6 +1948,7 @@ def _validate_replay_command(
             "claimed",
             "message_committed",
             "ai_running",
+            "failed",
             "completed",
             "rejected",
             "terminal_failed",
@@ -1887,7 +1985,96 @@ def _execute_message_command(
     body: SendMessageRequest,
     command_context: dict,
 ) -> SendMessageResponse:
-    """Run the shared regular/SSE command through claim, message, and AI fences."""
+    """Run the shared regular/SSE command: commit it, then generate its answer."""
+    committed = commit_message_command(
+        conv_id=conv_id,
+        student_id=student_id,
+        subject=subject,
+        grade=grade,
+        body=body,
+        command_context=command_context,
+    )
+    if isinstance(committed, SendMessageResponse):
+        return committed
+    return generate_for_command(committed)
+
+
+@dataclass(frozen=True)
+class CommittedMessage:
+    """A command whose student message and quota claim are stored.
+
+    `command` carries the generation context; the rest was loaded against the
+    command while committing, so generating does not read it twice.
+    """
+
+    command: dict
+    account_fence_generation: int
+    content: str
+    prior_messages: list[dict]
+    prepared: list
+    attachments: list[AttachmentSummary]
+
+
+def _resolve_generation_context(
+    student_id: str, actor: Actor, subject: str, grade: str
+) -> dict[str, object]:
+    """What the answer depends on that only the request knows, resolved once."""
+    return {
+        "schema_version": "generation-context.v1",
+        "locale": _student_locale(student_id),
+        "subject": _SUBJECT_ALIASES.get(subject, "math"),
+        "grade": grade,
+        "memory_context": _memory_context_for_student(student_id, actor, subject),
+    }
+
+
+def _record_generation_failure(
+    command: Mapping[str, object],
+    *,
+    table: object,
+    lease_owner: str,
+    lease_attempt: int | None,
+    category: str,
+    retryable: bool,
+) -> None:
+    """End the attempt as failed on the command.
+
+    Best effort: if the write is lost the attempt still ends when its lease
+    does, which is how every failure ended before.
+    """
+    try:
+        attachment_repo.fail_message_command(
+            conversation_id=str(command["conversation_id"]),
+            idempotency_key=str(command["idempotency_key"]),
+            owner_id=str(command["owner_id"]),
+            lease_owner=lease_owner,
+            lease_attempt=int(lease_attempt or 0),
+            failure_category=category,
+            retryable=retryable,
+            now_iso=_now(),
+            table=table,
+        )
+    except Exception:
+        logger.warning("message_command_failure_not_recorded", exc_info=True)
+
+
+def commit_message_command(
+    *,
+    conv_id: str,
+    student_id: str,
+    subject: str,
+    grade: str,
+    body: SendMessageRequest,
+    command_context: dict,
+) -> SendMessageResponse | CommittedMessage:
+    """Store the student's message, its quota claim and the command.
+
+    Returns the stored answer when the command already has one. Otherwise the
+    command is left `message_committed` (or as a resumable earlier attempt left
+    it) carrying the context its answer is generated from, and
+    `generate_for_command` takes it from there. This half is the only one that
+    reads the request.
+    """
     actor: Actor = command_context["actor"]
     fingerprint = str(command_context["fingerprint"])
     table = cast(_DynamoConversationTable, get_table())
@@ -1973,6 +2160,14 @@ def _execute_message_command(
         else now_epoch + 172800
     )
     usage_idempotency_key = f"chat_message:{student_msg_id}"
+    # Resolved before the claim: the lookups span several table reads, and the
+    # answer's language is the one this request asked in, not whichever request
+    # happens to be around when the answer is generated.
+    generation_context = (
+        None
+        if existing
+        else _resolve_generation_context(student_id, actor, subject, grade)
+    )
     command = existing or {
         "entity_type": "message_command",
         "schema_version": "message-command.v2",
@@ -2001,6 +2196,7 @@ def _execute_message_command(
         "attempt": 0,
         "created_at": created_at,
         "expires_at": command_expires_at,
+        "generation_context": generation_context,
     }
     if existing:
         prior_messages = _conversation_repository_call(
@@ -2023,7 +2219,8 @@ def _execute_message_command(
         lambda: _chat_limit_for_student(student_id)
     )
     resume_after_message = bool(
-        existing and existing.get("status") in {"message_committed", "ai_running"}
+        existing
+        and existing.get("status") in {"message_committed", "ai_running", "failed"}
     )
     if resume_after_message:
         stored_student = _conversation_repository_call(
@@ -2234,7 +2431,7 @@ def _execute_message_command(
                         AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
                     )
                 raced = reread.command
-            return _execute_message_command(
+            return commit_message_command(
                 conv_id=conv_id,
                 student_id=student_id,
                 subject=subject,
@@ -2267,10 +2464,61 @@ def _execute_message_command(
             _conversation_allowance_command_fields(command, entitlement)
         )
 
-    # Resolved before the AI lease is claimed: the lookup spans several table
-    # reads, and holding the lease across it would push concurrent duplicates
-    # past their bounded replay wait.
-    memory_context = _memory_context_for_student(student_id, actor, subject)
+    if not isinstance(command.get("generation_context"), Mapping):
+        # A command claimed before its context was stored with it (E19) takes
+        # the context of the request resuming it.
+        resumed_context = _resolve_generation_context(student_id, actor, subject, grade)
+        command["generation_context"] = _conversation_repository_call(
+            lambda: attachment_repo.record_message_generation_context(
+                conversation_id=conv_id,
+                idempotency_key=body.idempotencyKey,
+                owner_id=student_id,
+                context=resumed_context,
+                table=table,
+            )
+        )
+    return CommittedMessage(
+        command=command,
+        account_fence_generation=account_fence_generation,
+        content=body.content,
+        prior_messages=prior_messages,
+        prepared=prepared,
+        attachments=attachments,
+    )
+
+
+def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
+    """Generate, store and settle the answer to one committed command.
+
+    Reads only the command and the store: the language, subject, grade and
+    weak topics come from the context stored at commit, never from a request.
+    An attempt that fails ends the command `failed` with its category, and says
+    whether the same command may be tried again.
+    """
+    command = committed.command
+    conv_id = str(command["conversation_id"])
+    student_id = str(command["owner_id"])
+    idempotency_key = str(command["idempotency_key"])
+    fingerprint = str(command["fingerprint"])
+    command_id = str(command["command_id"])
+    student_msg_id = str(command["student_message_id"])
+    assistant_msg_id = str(command["assistant_message_id"])
+    created_at = str(command["created_at"])
+    account_fence_generation = committed.account_fence_generation
+    prepared = committed.prepared
+    attachments = committed.attachments
+    prior_messages = committed.prior_messages
+    table = cast(_DynamoConversationTable, get_table())
+    context = command.get("generation_context")
+    if (
+        not isinstance(context, Mapping)
+        or not isinstance(context.get("locale"), str)
+        or not isinstance(context.get("subject"), str)
+        or not isinstance(context.get("grade"), str)
+        or not isinstance(context.get("memory_context"), (str, type(None)))
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    memory_context = context["memory_context"]
 
     lease_owner = str(uuid.uuid4())
     now_epoch = int(datetime.now(timezone.utc).timestamp())
@@ -2278,7 +2526,7 @@ def _execute_message_command(
         _conversation_repository_call(
             lambda: attachment_repo.claim_message_ai_lease(
                 conversation_id=conv_id,
-                idempotency_key=body.idempotencyKey,
+                idempotency_key=idempotency_key,
                 owner_id=student_id,
                 lease_owner=lease_owner,
                 now_epoch=now_epoch,
@@ -2296,7 +2544,7 @@ def _execute_message_command(
             current = _conversation_repository_call(
                 lambda: attachment_repo.read_message_command_result(
                     conv_id,
-                    body.idempotencyKey,
+                    idempotency_key,
                     owner_id=student_id,
                     fingerprint=fingerprint,
                     now_epoch=now_epoch,
@@ -2310,7 +2558,7 @@ def _execute_message_command(
                 terminal = _conversation_repository_call(
                     lambda: attachment_repo.mark_message_command_terminal(
                         conversation_id=conv_id,
-                        idempotency_key=body.idempotencyKey,
+                        idempotency_key=idempotency_key,
                         owner_id=student_id,
                         now_iso=_now(),
                         table=table,
@@ -2328,12 +2576,22 @@ def _execute_message_command(
         }:
             return _wait_for_message_command(
                 conv_id,
-                body.idempotencyKey,
+                idempotency_key,
                 fingerprint,
                 table=table,
                 owner_id=student_id,
             )
         raise AttachmentDecisionError(_command_error_code(lease_result))
+
+    def record_failure(category: str, *, retryable: bool) -> None:
+        _record_generation_failure(
+            command,
+            table=table,
+            lease_owner=lease_owner,
+            lease_attempt=lease_result.attempt,
+            category=category,
+            retryable=retryable,
+        )
 
     _active_conversation_generation(student_id, table)
     attachment_context = ""
@@ -2359,10 +2617,16 @@ def _execute_message_command(
                 and context_result.error_code is not None
                 else AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
             )
+            transient = code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            record_failure(
+                "attachment_unavailable" if transient else "attachment_invalid",
+                retryable=transient,
+            )
             raise AttachmentDecisionError(code)
         attachment_context = context_result.context
-    normalized_subject = _SUBJECT_ALIASES.get(subject, "math")
-    student_locale = _student_locale(student_id)
+    normalized_subject = context["subject"]
+    grade = context["grade"]
+    student_locale = context["locale"]
     ai_deadline = runtime_budget_service.ai_deadline(
         fixed_seconds=_AI_INVOCATION_DEADLINE_SECONDS,
         reserve_seconds=_AI_PERSIST_RESERVE_SECONDS,
@@ -2370,10 +2634,11 @@ def _execute_message_command(
     _active_conversation_generation(student_id, table)
     allowance_client = _ConversationAllowanceBedrockClient(command)
     allowance_metadata: dict[str, object] | None = None
+    provider_answered = False
 
     try:
         provider_result = ai_service.get_ai_answer(
-            content=body.content,
+            content=committed.content,
             subject=normalized_subject,
             grade=grade,
             language=student_locale,
@@ -2385,8 +2650,11 @@ def _execute_message_command(
             effect_id=allowance_client.allowance_effect_id,
             client=allowance_client,
             invocation_class=ai_service.AIInvocationClass.USER_ALLOWANCE,
-            on_step=_publish_generation_step(conv_id, student_id),
+            on_step=_publish_generation_step(
+                conv_id, student_id, command_id=command_id, attempt=lease_result.attempt
+            ),
         )
+        provider_answered = True
         if isinstance(provider_result, ai_service.AIProviderResult):
             allowance_metadata = _message_allowance_metadata_from_provider(
                 provider_result,
@@ -2417,7 +2685,11 @@ def _execute_message_command(
         ai_content = f"{steps}\n\n{answer}{hint}".strip()
         if not ai_content:
             raise ai_service.AIInvocationFailure("malformed_response")
-    except _ConversationAllowanceFailure:
+    except _ConversationAllowanceFailure as failure:
+        # Refused at counting, admission or the allowance itself, before the
+        # model was paid for, the same message may be sent again. Refused over
+        # the evidence of an answer that did come back, it may not.
+        record_failure(failure.code, retryable=not provider_answered)
         raise
     except Exception as exc:
         if allowance_metadata is None:
@@ -2438,10 +2710,18 @@ def _execute_message_command(
             )
             if not restored:
                 raise _allowance_recoverable_failure() from None
+        # A reply that was paid for is a known result: generating the same
+        # command again would call the model for an effect already settled.
+        record_failure(
+            exc.category
+            if isinstance(exc, ai_service.AIInvocationFailure)
+            else "provider_error",
+            retryable=allowance_metadata is None,
+        )
         emit_private_event(
             "conversation_ai_failed",
             exception=exc,
-            input_size=len(body.content),
+            input_size=len(committed.content),
             attachment_count=len(prepared),
             correlation_id=command_id,
             level=logging.ERROR,
@@ -2460,7 +2740,7 @@ def _execute_message_command(
     renewed = _conversation_repository_call(
         lambda: attachment_repo.renew_message_ai_lease(
             conversation_id=conv_id,
-            idempotency_key=body.idempotencyKey,
+            idempotency_key=idempotency_key,
             owner_id=student_id,
             lease_owner=lease_owner,
             now_epoch=completed_epoch,
@@ -2484,7 +2764,7 @@ def _execute_message_command(
         id=student_msg_id,
         conversationId=conv_id,
         role="student",
-        content=body.content,
+        content=committed.content,
         createdAt=created_at,
         status="sent",
         attachments=attachments,
@@ -2519,7 +2799,7 @@ def _execute_message_command(
         _conversation_repository_call(
             lambda: attachment_repo.complete_message_command(
                 conversation_id=conv_id,
-                idempotency_key=body.idempotencyKey,
+                idempotency_key=idempotency_key,
                 owner_id=student_id,
                 lease_owner=lease_owner,
                 lease_attempt=lease_attempt,
@@ -2547,7 +2827,7 @@ def _execute_message_command(
     raise AttachmentDecisionError(_command_error_code(completion))
 
 
-def _raise_attachment(error: AttachmentDecisionError, correlation_id: str) -> None:
+def _raise_attachment(error: AttachmentDecisionError, correlation_id: str) -> NoReturn:
     error.correlation_id = correlation_id
     headers = {"X-Correlation-ID": correlation_id}
     if error.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE:

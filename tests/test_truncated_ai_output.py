@@ -298,7 +298,7 @@ def _run_message_command(
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
     monkeypatch.setattr(conversations, "_student_locale", lambda *_: "de")
     monkeypatch.setattr(
-        conversations, "_publish_generation_step", lambda *_: lambda _i, _s: None
+        conversations, "_publish_generation_step", lambda *_a, **_k: lambda _i, _s: None
     )
     monkeypatch.setattr(
         conversations.attachment_service,

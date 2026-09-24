@@ -397,6 +397,31 @@ def test_command_state_classifier_is_closed(status_value: str, expected: str) ->
     assert result.disposition.value == expected
 
 
+@pytest.mark.parametrize(
+    ("retryable", "attempt", "expected"),
+    [
+        (True, 1, "resume"),
+        (True, 2, "resume"),
+        (True, 3, "terminal"),
+        (False, 1, "terminal"),
+        (None, 1, "terminal"),
+    ],
+)
+def test_a_failed_command_resumes_only_when_unpaid_with_attempts_left(
+    retryable: bool | None, attempt: int, expected: str
+) -> None:
+    command = _command(status="failed", attempt=attempt, failure_category="deadline_exceeded")
+    if retryable is not None:
+        command["failure_retryable"] = retryable
+    result = attachment_repo.classify_message_command(
+        command,
+        owner_id="student-1",
+        fingerprint="f" * 64,
+        now_epoch=1784307600,
+    )
+    assert result.disposition.value == expected
+
+
 def test_command_state_classifier_distinguishes_missing_and_conflict() -> None:
     missing = attachment_repo.classify_message_command(
         None,

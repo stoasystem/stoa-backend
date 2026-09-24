@@ -268,6 +268,8 @@ CONVERSATION_WRITER_REGISTRY = frozenset(
         "ai_lease_claim",
         "ai_lease_renew",
         "ai_completion",
+        "ai_failure",
+        "generation_context_record",
         "teacher_help",
         "usage_event",
     }
@@ -305,6 +307,7 @@ CONVERSATION_PRIVATE_FIELDS = frozenset(
         "claimedAt",
         "expiresAt",
         "error_code",
+        "generation_context",
     }
 )
 CONVERSATION_TOMBSTONE_ALLOWLIST = frozenset(
@@ -335,8 +338,13 @@ CONVERSATION_TOMBSTONE_ALLOWLIST = frozenset(
     }
 )
 CONVERSATION_ACTIVE_COMMAND_STATES = frozenset(
-    {"claimed", "message_committed", "ai_running"}
+    {"claimed", "message_committed", "ai_running", "failed"}
 )
+# A generation is tried this many times under one command, whichever way the
+# earlier attempts ended.
+MESSAGE_AI_MAX_ATTEMPTS = 3
+# What `fail_message_command` writes and the next lease claim clears.
+MESSAGE_FAILURE_FIELDS = ("failure_category", "failure_retryable", "failed_at")
 CONVERSATION_PROVIDER_RETENTION_BOUNDARY = {
     "bedrock_request_response": "outside_backend_deletion_control"
 }
@@ -529,6 +537,8 @@ def record_generation_progress(
     steps: list[str],
     now_iso: str,
     expires_at: int,
+    command_id: str | None = None,
+    attempt: int | None = None,
     table: object | None = None,
 ) -> bool:
     """Publish the steps of an answer still being written.
@@ -536,7 +546,8 @@ def record_generation_progress(
     The request that generates an answer holds its connection until the answer
     is whole, so a student sees nothing meanwhile. This row lets them read the
     steps as they land. Best effort: a lost update costs a moment of progress,
-    never the answer.
+    never the answer. The command and attempt that wrote the steps go with
+    them, so a reader asking about one command never sees another's.
     """
     target = table or get_table()
     update_item = getattr(target, "update_item", None)
@@ -547,7 +558,8 @@ def record_generation_progress(
             Key=generation_progress_key(conversation_id),
             UpdateExpression=(
                 "SET steps=:steps, owner_id=:owner, entity_type=:entity, "
-                "updated_at=:now, expires_at=:expires"
+                "updated_at=:now, expires_at=:expires, command_id=:command, "
+                "attempt=:attempt"
             ),
             ExpressionAttributeValues={
                 ":steps": steps,
@@ -555,6 +567,8 @@ def record_generation_progress(
                 ":entity": "conversation_generation_progress",
                 ":now": now_iso,
                 ":expires": expires_at,
+                ":command": command_id,
+                ":attempt": attempt,
             },
         )
     except Exception:
@@ -566,9 +580,14 @@ def read_generation_progress(
     conversation_id: str,
     *,
     owner_id: str,
+    command_id: str | None = None,
+    attempt: int | None = None,
     table: object | None = None,
 ) -> tuple[list[str], str]:
-    """Return the steps published so far, only to the student who asked."""
+    """Return the steps published so far, only to the student who asked.
+
+    Given a command and attempt, only steps that attempt wrote are returned.
+    """
     target = table or get_table()
     try:
         item = _optional_mapping(
@@ -579,6 +598,11 @@ def read_generation_progress(
     except Exception:
         return [], ""
     if item is None or item.get("owner_id") != owner_id:
+        return [], ""
+    if command_id is not None and (
+        item.get("command_id") != command_id
+        or _optional_positive_int(item.get("attempt")) != attempt
+    ):
         return [], ""
     steps = item.get("steps")
     if not isinstance(steps, list):
@@ -965,6 +989,12 @@ def classify_message_command(
         disposition = MessageCommandDisposition.REJECTED
     elif status == "terminal_failed":
         disposition = MessageCommandDisposition.TERMINAL
+    elif status == "failed":
+        disposition = (
+            MessageCommandDisposition.RESUME
+            if failed_command_can_retry(persisted)
+            else MessageCommandDisposition.TERMINAL
+        )
     elif status == "expired":
         disposition = MessageCommandDisposition.EXPIRED
     else:
@@ -979,6 +1009,17 @@ def classify_message_command(
             else None
         ),
         attempt=_optional_positive_int(persisted.get("attempt")) or 0,
+    )
+
+
+def failed_command_can_retry(
+    command: Mapping[str, object], max_attempts: int = MESSAGE_AI_MAX_ATTEMPTS
+) -> bool:
+    """A failed generation is tried again only if nothing was paid for and
+    attempts remain."""
+    return (
+        command.get("failure_retryable") is True
+        and (_optional_positive_int(command.get("attempt")) or 0) < max_attempts
     )
 
 
@@ -2738,7 +2779,7 @@ def claim_message_ai_lease(
     lease_owner: str,
     now_epoch: int,
     expires_at: int,
-    max_attempts: int = 3,
+    max_attempts: int = MESSAGE_AI_MAX_ATTEMPTS,
     account_fence_generation: int | None = None,
     table: object | None = None,
 ) -> MessageCommandResult:
@@ -2753,17 +2794,21 @@ def claim_message_ai_lease(
     if type(generation) is not int or generation <= 0:
         return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
     command_status = command.get("status")
-    can_claim = command_status == "message_committed" or (
-        command_status == "ai_running"
-        and (_optional_positive_int(command.get("expiresAt")) or 0) <= now_epoch
-        and attempt <= max_attempts
+    can_claim = (
+        command_status == "message_committed"
+        or (
+            command_status == "ai_running"
+            and (_optional_positive_int(command.get("expiresAt")) or 0) <= now_epoch
+            and attempt <= max_attempts
+        )
+        or (command_status == "failed" and failed_command_can_retry(command, max_attempts))
     )
     if not can_claim or attempt > max_attempts:
         if command_status == "completed":
             disposition = MessageCommandDisposition.COMPLETED
         elif command_status == "rejected":
             disposition = MessageCommandDisposition.REJECTED
-        elif persisted_attempt >= max_attempts:
+        elif command_status == "failed" or persisted_attempt >= max_attempts:
             disposition = MessageCommandDisposition.TERMINAL
         elif command_status == "ai_running":
             disposition = MessageCommandDisposition.LEASE_HELD
@@ -2794,12 +2839,15 @@ def claim_message_ai_lease(
                             "Key": message_command_key(conversation_id, idempotency_key),
                             "UpdateExpression": (
                                 "SET #status=:running, leaseOwner=:lease_owner, claimedAt=:claimed, "
-                                "expiresAt=:expires, attempt=:attempt"
+                                "expiresAt=:expires, attempt=:attempt "
+                                f"REMOVE {', '.join(MESSAGE_FAILURE_FIELDS)}"
                             ),
                             "ConditionExpression": (
                                 "owner_id=:owner AND account_fence_generation=:generation AND "
                                 "(#status=:committed OR (#status=:running AND "
-                                "expiresAt<=:now AND attempt<:max_attempts))"
+                                "expiresAt<=:now AND attempt<:max_attempts) OR "
+                                "(#status=:failed AND failure_retryable=:retryable AND "
+                                "attempt<:max_attempts))"
                             ),
                             "ExpressionAttributeNames": {"#status": "status"},
                             "ExpressionAttributeValues": {
@@ -2807,6 +2855,8 @@ def claim_message_ai_lease(
                                 ":generation": generation,
                                 ":committed": "message_committed",
                                 ":running": "ai_running",
+                                ":failed": "failed",
+                                ":retryable": True,
                                 ":lease_owner": lease_owner,
                                 ":claimed": now_epoch,
                                 ":expires": expires_at,
@@ -2840,7 +2890,11 @@ def claim_message_ai_lease(
             return MessageCommandResult(MessageCommandDisposition.MISSING)
         return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
     claimed = {
-        **command,
+        **{
+            key: value
+            for key, value in command.items()
+            if key not in MESSAGE_FAILURE_FIELDS
+        },
         "status": "ai_running",
         "leaseOwner": lease_owner,
         "claimedAt": now_epoch,
@@ -2952,6 +3006,99 @@ def complete_message_command(
             )
         return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
     return MessageCommandResult(MessageCommandDisposition.COMPLETED)
+
+
+def record_message_generation_context(
+    *,
+    conversation_id: str,
+    idempotency_key: str,
+    owner_id: str,
+    context: dict[str, object],
+    table: object | None = None,
+) -> dict[str, object]:
+    """Store what the answer is generated from on a command that lacks it.
+
+    Commands claimed before the context moved onto the command are resumed
+    with the context of the request that resumes them. The first stored context
+    wins, so two resuming requests agree on one language. Returns the stored one.
+    """
+    try:
+        response = _update_item(
+            table or get_table(),
+            Key=message_command_key(conversation_id, idempotency_key),
+            UpdateExpression="SET generation_context=if_not_exists(generation_context, :context)",
+            ConditionExpression=(
+                "owner_id=:owner AND #status IN (:committed, :running, :failed)"
+            ),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":owner": owner_id,
+                ":context": context,
+                ":committed": "message_committed",
+                ":running": "ai_running",
+                ":failed": "failed",
+            },
+            ReturnValues="ALL_NEW",
+        )
+    except ClientError as exc:
+        raise AttachmentRepositoryConflict(
+            "conditional_conflict" if _conditional(exc) else "dependency_failure"
+        ) from None
+    stored = _optional_mapping(response.get("Attributes"))
+    stored_context = _optional_mapping((stored or {}).get("generation_context"))
+    if stored_context is None:
+        raise AttachmentRepositoryConflict("dependency_failure")
+    return dict(stored_context)
+
+
+def fail_message_command(
+    *,
+    conversation_id: str,
+    idempotency_key: str,
+    owner_id: str,
+    lease_owner: str,
+    lease_attempt: int,
+    failure_category: str,
+    retryable: bool,
+    now_iso: str,
+    table: object | None = None,
+) -> bool:
+    """End the leased attempt as failed, instead of leaving it to its lease.
+
+    `retryable` says whether the same command may be generated again: only when
+    no provider result was paid for. Returns False when the lease was no longer
+    this attempt's, which leaves the command as the newer holder left it.
+    """
+    try:
+        _update_item(
+            table or get_table(),
+            Key=message_command_key(conversation_id, idempotency_key),
+            UpdateExpression=(
+                "SET #status=:failed, failure_category=:category, "
+                "failure_retryable=:retryable, failed_at=:now "
+                "REMOVE leaseOwner, claimedAt, expiresAt"
+            ),
+            ConditionExpression=(
+                "owner_id=:owner AND #status=:running AND leaseOwner=:lease_owner "
+                "AND attempt=:attempt"
+            ),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":owner": owner_id,
+                ":running": "ai_running",
+                ":failed": "failed",
+                ":lease_owner": lease_owner,
+                ":attempt": lease_attempt,
+                ":category": failure_category,
+                ":retryable": retryable,
+                ":now": now_iso,
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
 
 
 def renew_message_ai_lease(
