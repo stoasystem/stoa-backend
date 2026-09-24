@@ -531,6 +531,21 @@ def classify_admin_route(method: str, path: str) -> AdminRoutePolicy:
         capability = "admin_identity_manager" if method != "GET" else "student_support_lookup"
         op_action = AuthorizationAction.MANAGE_PRIVILEGE if method != "GET" else AuthorizationAction.LOOKUP
         return _policy(capability, AuthorizationPurpose.ACCOUNT_OPERATIONS, op_action, "user_id")
+    if path.startswith("/admin/teacher-support/allowances"):
+        # Reading how many teacher-support cases a student has is support
+        # lookup; changing it is its own authority, because it spends nothing
+        # and grants everything - a raised figure is real teacher time.
+        capability = (
+            "student_support_lookup"
+            if method == "GET"
+            else "teacher_support_allowance_manager"
+        )
+        return _policy(
+            capability,
+            AuthorizationPurpose.ACCOUNT_OPERATIONS,
+            AuthorizationAction.LOOKUP if method == "GET" else AuthorizationAction.UPDATE,
+            "student_id",
+        )
     if path.startswith("/admin/account-verification") or path.startswith("/admin/account-operations"):
         return _policy("student_support_lookup", AuthorizationPurpose.ACCOUNT_OPERATIONS,
                        AuthorizationAction.LOOKUP, "user_id", "parent_id")

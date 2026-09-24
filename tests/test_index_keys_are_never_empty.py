@@ -114,13 +114,31 @@ def _dictionaries_that_reach_the_table(tree: ast.AST) -> list[ast.Dict]:
         # `{"Item": {...}}` and `{"Put": {"Item": {...}}}`, the transaction shapes.
         if isinstance(node, ast.Dict):
             for key, value in zip(node.keys, node.values, strict=False):
-                if (
-                    isinstance(key, ast.Constant)
-                    and key.value in WRITE_SINKS
-                    and isinstance(value, ast.Dict)
-                ):
-                    reaching.append(value)
-    return reaching
+                if isinstance(key, ast.Constant) and key.value in WRITE_SINKS:
+                    reaching.extend(_literals_behind(value, assigned))
+    # One literal can be reached by more than one route - by its name and again
+    # through the transaction shape it is nested in. Report the row once.
+    return list({id(node): node for node in reaching}.values())
+
+
+def _literals_behind(value: ast.AST, assigned: dict[str, ast.Dict]) -> list[ast.Dict]:
+    """The literals a write sink is actually handed, through one builder call.
+
+    `{"Item": question_repo.question_item({...})}` used to read as "not a
+    literal" and the row inside it was never scanned - the gate went green on a
+    shape the codebase uses, which is the failure this file warns about in its
+    own docstring and then had.
+    """
+    if isinstance(value, ast.Dict):
+        return [value]
+    if isinstance(value, ast.Name):
+        return [assigned[value.id]] if value.id in assigned else []
+    if isinstance(value, ast.Call):
+        found: list[ast.Dict] = []
+        for argument in (*value.args, *(keyword.value for keyword in value.keywords)):
+            found.extend(_literals_behind(argument, assigned))
+        return found
+    return []
 
 
 def empty_index_key_literals() -> list[str]:
@@ -169,6 +187,13 @@ def test_the_reader_finds_one_when_there_is_one() -> None:
     assert _offenders_in(
         'counter = {"parent_id": "", "note": "x"}\n'
         'ops = [{"Put": {"Item": counter}}]\n'
+    ) == ["parent_id"]
+    # And through a row builder, which is how the escalated question row is
+    # written. This shape read as "not a literal" and the row inside it was
+    # never scanned at all.
+    assert _offenders_in(
+        'ops = [{"Put": {"Item": question_repo.question_item('
+        '{"parent_id": "", "note": "x"})}}]\n'
     ) == ["parent_id"]
 
 

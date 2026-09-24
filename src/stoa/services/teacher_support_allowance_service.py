@@ -894,22 +894,26 @@ def admit_teacher_support_case(
             case_kind=kind,
             beneficiary_id=beneficiary,
         )
-    try:
-        scope = _resolve_scope(beneficiary, table=target)
-    except _DependencyFailure:
-        logger.warning("Teacher-support admission deferred", exc_info=True)
-        return TeacherSupportAdmissionResult(
-            TeacherSupportAdmissionDisposition.RETRYABLE
-        )
-    if scope is None:
-        return TeacherSupportAdmissionResult(
-            TeacherSupportAdmissionDisposition.PLAN_DENIED
-        )
-
     week = allowance_service.zurich_week(observed)
     identity = _week_identity(week)
-    counter_key = _counter_key(scope.support_scope_id, identity)
+    # Resolved once per attempt, not once per call. The scope carries the
+    # versions this admission fences, so a scope read before somebody changed
+    # the student's figure can only ever be refused - and refused four times in
+    # a row reaches the student as a 503 for something an administrator did to
+    # help them.
     for _ in range(4):
+        try:
+            scope = _resolve_scope(beneficiary, table=target)
+        except _DependencyFailure:
+            logger.warning("Teacher-support admission deferred", exc_info=True)
+            return TeacherSupportAdmissionResult(
+                TeacherSupportAdmissionDisposition.RETRYABLE
+            )
+        if scope is None:
+            return TeacherSupportAdmissionResult(
+                TeacherSupportAdmissionDisposition.PLAN_DENIED
+            )
+        counter_key = _counter_key(scope.support_scope_id, identity)
         try:
             existing = _strong_get(target, receipt_key)
             if existing is not None:

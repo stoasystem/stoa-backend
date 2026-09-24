@@ -434,7 +434,7 @@ def test_link_revoked_after_the_preread_cancels_the_paid_transaction(
         account_deletion_repo.transact(list(built.grant_operations), table=table)
 
 
-def test_link_revoked_after_the_preread_cancels_the_support_admission(
+def test_link_revoked_after_the_preread_cancels_the_paid_admission_only(
     table: ConditionalTable,
 ) -> None:
     _link_active(table)
@@ -457,12 +457,23 @@ def test_link_revoked_after_the_preread_cancels_the_support_admission(
         table=table,
     )
 
-    assert result.disposition.value == "retryable"
-    assert not [
+    # The paid grant is not spent: the link it hangs on is gone, and the fence
+    # on it refuses. What the student keeps is the seven cases they have for
+    # being a student here, so the retry lands on those instead of on a 503 for
+    # something that happened to their parent's account.
+    assert result.disposition.value == "admitted"
+    counters = [
         item
         for item in table.items.values()
         if item.get("entity_type") == "teacher_support_counter"
     ]
+    assert len(counters) == 1
+    assert int(counters[0]["limit"]) == 7
+    assert str(counters[0]["plan_id"]) == "free_trial"
+    # The revoked parent is nowhere in what was written.
+    assert all("parent_id" not in item for item in table.items.values()
+               if item.get("entity_type") in {
+                   "teacher_support_counter", "teacher_support_admission"})
 
 
 # --- 3. negative control: the legacy binding is untouched ------------------

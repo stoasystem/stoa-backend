@@ -33,6 +33,7 @@ from stoa.db.repositories import (
     account_deletion_repo,
     allowance_repo,
     attachment_repo,
+    question_repo,
     user_repo,
 )
 from stoa.security.authorization import (
@@ -44,6 +45,7 @@ from stoa.security.authorization import (
 )
 from stoa.security.identity import Actor
 from stoa.models.attachment import AttachmentReference, AttachmentSummary
+from stoa.models.question import QuestionStatus
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.private_telemetry import emit_private_event
@@ -866,6 +868,7 @@ def _dispatch_escalated_conversation(
     conversation_id: str,
     conversation: dict[str, Any],
     student_id: str,
+    request_id: str,
     subject: object,
     now: str,
     table: Any,
@@ -885,6 +888,10 @@ def _dispatch_escalated_conversation(
                 "student_id": student_id,
                 "subject": subject,
                 "escalation_status": "pending",
+                # The row this was read from predates the escalation, so it does
+                # not carry the request id yet - and without it dispatch cannot
+                # find the queue row to mark, which left that row unassigned.
+                "escalation_request_id": request_id,
             },
             now=now,
             table=table,
@@ -2539,6 +2546,63 @@ async def get_teacher_help_availability(
     return teacher_dispatch_service.teacher_availability_summary()
 
 
+def _escalated_question_operation(
+    *,
+    request_id: str,
+    conversation: Mapping[str, object],
+    conversation_id: str,
+    student_id: str,
+    generation: int,
+    message: str | None,
+    now: str,
+) -> dict[str, Any]:
+    """The row the teacher side reads, written with the escalation that caused it.
+
+    Everything a teacher touches - the queue, dispatch, the reply, the SLA
+    figures - reads question rows with `status=escalated`. Escalating a
+    conversation wrote a marker on the conversation and nothing else, so a
+    student could ask for a teacher, see the request accepted, and have no
+    teacher ever see it. Measured in production: the request was admitted and
+    `GET /teachers/queue` stayed empty.
+
+    The conversation row already reaches one teacher surface - `_get_escalated_conversations`
+    feeds `/teachers/me/help-requests` - but not the queue, the dispatch ranking
+    or the SLA figures, all of which read question rows. So this is a second
+    representation of one case, and the two must not drift: `dispatch_conversation`
+    writes the dispatch to both rows in one transaction.
+
+    Created only once: the condition refuses a row that already exists, which is
+    what makes a repeated escalation of the same conversation a replay rather
+    than a second case.
+    """
+    return {
+        "Put": {
+            "Item": question_repo.question_item(
+                {
+                    "question_id": request_id,
+                    "entity_type": "question",
+                    "student_id": student_id,
+                    "owner_id": student_id,
+                    "account_fence_generation": generation,
+                    "version": 1,
+                    "status": QuestionStatus.ESCALATED.value,
+                    "subject": str(conversation.get("subject") or ""),
+                    "grade": str(conversation.get("grade") or ""),
+                    "source": "conversation_escalation",
+                    "conversation_id": conversation_id,
+                    "teacher_help_requested": True,
+                    "teacher_requested_at": now,
+                    "queue_visible_at": now,
+                    "content": (message or "").strip(),
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            ),
+            "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+        }
+    }
+
+
 @teacher_help_router.post("/request", response_model=TeacherHelpResponse)
 async def request_teacher_help(
     body: TeacherHelpRequest,
@@ -2579,6 +2643,18 @@ async def request_teacher_help(
             return False
         try:
             attachment_repo.record_teacher_help_request(
+                additional_operations=(
+                    *allowance_operations,
+                    _escalated_question_operation(
+                        request_id=request_id,
+                        conversation=conv,
+                        conversation_id=body.conversationId,
+                        student_id=student_id,
+                        generation=generation,
+                        message=body.message,
+                        now=now,
+                    ),
+                ),
                 conversation={
                     **conv,
                     "PK": _conv_pk(body.conversationId),
@@ -2601,7 +2677,6 @@ async def request_teacher_help(
                 },
                 owner_id=student_id,
                 generation=generation,
-                additional_operations=allowance_operations,
                 table=table,
             )
         except attachment_repo.AttachmentRepositoryConflict:
@@ -2624,8 +2699,12 @@ async def request_teacher_help(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "teacher_support_not_included",
-                "message": "Teacher support is not included in the active plan.",
-                "action": "choose_paid_plan",
+                # Nobody can buy their way past this while the paid surface is
+                # frozen, and on an assigned account there was never anything to
+                # buy. Pointing at a plan sends the student somewhere that
+                # cannot help them.
+                "message": "Teacher support is not switched on for this account.",
+                "action": "contact_administrator",
             },
         )
     if (
@@ -2680,6 +2759,7 @@ async def request_teacher_help(
         conversation_id=body.conversationId,
         conversation=conv,
         student_id=student_id,
+        request_id=request_id,
         subject=conv.get("subject"),
         now=now,
         table=table,

@@ -77,7 +77,7 @@ def test_registered_admin_router_has_exact_executable_policy_and_controls(method
 
 def test_registered_admin_router_table_is_complete_across_main_registrations():
     keys = [(method, path) for method, path, _route in REGISTERED_ADMIN_ROUTES]
-    assert len(keys) == len(set(keys)) == 83
+    assert len(keys) == len(set(keys)) == 85
     assert ("GET", "/admin/notifications") in keys
     assert ("GET", "/admin/notifications/delivery-status") in keys
     # Card 002-D: every account command is an admin-capability route, not a role check.

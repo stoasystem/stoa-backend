@@ -54,7 +54,31 @@ def student(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
     return row
 
 
+def _seed_profile_row(table: AtomicSupportTable, student_id: str) -> None:
+    """Put on the table the row the admission fences against.
+
+    `get_user` is patched, so without this the profile the scope was resolved
+    from exists only in the patch and the ConditionCheck on it has nothing to
+    check. The double used to skip those checks, which is why no test needed
+    this and why code that dropped the fence stayed green.
+    """
+    key = (f"USER#{student_id}", "PROFILE")
+    if key in table.items:
+        return
+    profile = service.user_repo.get_user(student_id) or {}
+    table.items[key] = {"PK": f"USER#{student_id}", "SK": "PROFILE", **dict(profile)}
+    # `_case_committer` fences generation 6; the case repository contributes it,
+    # so the row has to be here too or every admission is refused.
+    table.items[(f"USER#{student_id}", "ACCOUNT_FENCE")] = {
+        "PK": f"USER#{student_id}",
+        "SK": "ACCOUNT_FENCE",
+        "status": "active",
+        "generation": Decimal("6"),
+    }
+
+
 def _admit(table: AtomicSupportTable, case_id: str, *, student_id: str = STUDENT):
+    _seed_profile_row(table, student_id)
     return service.admit_teacher_support_case(
         support_case_id=case_id,
         case_kind="question",
@@ -336,3 +360,320 @@ def test_the_counter_write_is_a_compare_and_set(student) -> None:
     assert values[":expected_state_version"] == 3
     assert counter_put["Item"]["state_version"] == 4
     assert counter_put["Item"]["admitted_cases"] == 4
+
+
+# --- The administrator's side of the same figure -----------------------------
+#
+# The endpoint and the admission path are two programs reading one row, so the
+# tests below do not stop at "the endpoint answered 200": they take the row the
+# endpoint actually wrote and hand it to the service, because a figure stored in
+# a shape the service falls back on would pass every assertion about the reply.
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from stoa.routers import conversations  # noqa: E402
+from test_account_admin_endpoints import (  # noqa: E402
+    _admin_user,
+    _app,
+    _seed_profile,
+    table as _account_admin_table,
+)
+
+# Re-exported under a name of its own: `table` is already a parameter name in
+# this module's helpers, and a fixture that shadows them silently changes what
+# those helpers receive.
+admin_table = _account_admin_table
+
+
+ALLOWANCE_PATH = f"/admin/teacher-support/allowances/{STUDENT}"
+
+
+def _admin_client(user: dict[str, Any] | None = None) -> TestClient:
+    return TestClient(_app(user or _admin_user()))
+
+
+def _stored(table_double: Any) -> dict[str, Any] | None:
+    return table_double.rows.get((f"USER#{STUDENT}", service.ASSIGNED_ALLOWANCE_SK))
+
+
+def test_a_student_with_no_row_reads_as_the_assigned_default(admin_table) -> None:
+    _seed_profile(admin_table, STUDENT, "student")
+
+    body = _admin_client().get(ALLOWANCE_PATH).json()
+
+    assert body["weeklyCases"] == service.ASSIGNED_WEEKLY_TEACHER_SUPPORT_CASES == 7
+    assert body["source"] == "default"
+
+
+def test_the_figure_an_administrator_sets_is_the_figure_the_service_reads(admin_table) -> None:
+    _seed_profile(admin_table, STUDENT, "student")
+    client = _admin_client()
+
+    response = client.put(ALLOWANCE_PATH, json={"weekly_cases": 20, "reason": "exam week"})
+
+    assert response.status_code == 200
+    assert response.json()["weeklyCases"] == 20
+    assert client.get(ALLOWANCE_PATH).json() == {
+        "studentId": STUDENT,
+        "weeklyCases": 20,
+        "source": "administrator",
+        "default": 7,
+        "maximum": service.ASSIGNED_WEEKLY_CASES_MAXIMUM,
+    }
+    # The join: the stored row read by the admission path, not by the endpoint.
+    assert service.assigned_weekly_cases(_stored(admin_table)) == 20
+
+
+def test_the_raised_figure_is_what_the_student_may_actually_spend(admin_table) -> None:
+    """The whole chain in one test: set two, spend two, be refused the third.
+
+    Each half of this passes on its own while the row the endpoint writes is in a
+    shape the service falls back on - it would simply hand out seven and nothing
+    would go red.
+    """
+    _seed_profile(admin_table, STUDENT, "student")
+    _admin_client().put(ALLOWANCE_PATH, json={"weekly_cases": 2, "reason": "pilot"})
+
+    spend = AtomicSupportTable()
+    written = _stored(admin_table)
+    assert written is not None
+    spend.items[(f"USER#{STUDENT}", service.ASSIGNED_ALLOWANCE_SK)] = deepcopy(written)
+
+    spent = [_admit(spend, f"case-{index}").disposition.value for index in (1, 2)]
+    third = _admit(spend, "case-3")
+
+    assert spent == ["admitted", "admitted"]
+    assert third.disposition.value == "limit_exceeded"
+
+
+def test_a_second_administrator_writing_the_same_row_is_refused_not_merged(
+    admin_table, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A write built against a figure somebody else has already replaced is refused.
+
+    The interleave is forced rather than hoped for: the competing write lands
+    between this caller's read and its put, which is the only window in which
+    two administrators can both believe they set the figure.
+    """
+    _seed_profile(admin_table, STUDENT, "student")
+    client = _admin_client()
+    client.put(ALLOWANCE_PATH, json={"weekly_cases": 12, "reason": "first"})
+
+    key = (f"USER#{STUDENT}", service.ASSIGNED_ALLOWANCE_SK)
+    original = admin_table.get_item
+    intruded: list[bool] = []
+
+    def get_item_then_intrude(**kwargs: Any) -> dict[str, Any]:
+        response = original(**kwargs)
+        if (str(kwargs["Key"]["PK"]), str(kwargs["Key"]["SK"])) == key and not intruded:
+            intruded.append(True)
+            row = deepcopy(admin_table.rows[key])
+            row["weekly_cases"] = Decimal("30")
+            row["state_version"] = Decimal("2")
+            admin_table.rows[key] = row
+        return response
+
+    monkeypatch.setattr(admin_table, "get_item", get_item_then_intrude)
+    conflicting = client.put(ALLOWANCE_PATH, json={"weekly_cases": 5, "reason": "second"})
+
+    assert intruded == [True]
+    assert conflicting.status_code == 409
+    assert conflicting.json()["detail"]["code"] == "allowance_version_conflict"
+    # The other administrator's figure is the one still standing.
+    assert service.assigned_weekly_cases(_stored(admin_table)) == 30
+
+
+def test_each_write_carries_the_version_it_read(admin_table, monkeypatch: pytest.MonkeyPatch) -> None:
+    _seed_profile(admin_table, STUDENT, "student")
+    client = _admin_client()
+    puts: list[dict[str, Any]] = []
+    original = admin_table.put_item
+
+    def recording_put(**kwargs: Any) -> dict[str, Any]:
+        if str(kwargs.get("Item", {}).get("SK")) == service.ASSIGNED_ALLOWANCE_SK:
+            puts.append(kwargs)
+        return original(**kwargs)
+
+    monkeypatch.setattr(admin_table, "put_item", recording_put)
+
+    first = client.put(ALLOWANCE_PATH, json={"weekly_cases": 9, "reason": "a"}).json()
+    second = client.put(ALLOWANCE_PATH, json={"weekly_cases": 11, "reason": "b"}).json()
+
+    assert (first["stateVersion"], second["stateVersion"]) == (1, 2)
+    # The first write may only create; the second may only replace version 1.
+    assert puts[0]["ConditionExpression"] == "attribute_not_exists(PK)"
+    assert "ExpressionAttributeValues" not in puts[0]
+    assert puts[1]["ConditionExpression"] == "state_version = :expected"
+    assert puts[1]["ExpressionAttributeValues"] == {":expected": 1}
+
+
+def test_an_account_that_is_not_a_student_has_no_such_figure(admin_table) -> None:
+    _seed_profile(admin_table, STUDENT, "teacher")
+
+    response = _admin_client().put(
+        ALLOWANCE_PATH, json={"weekly_cases": 40, "reason": "no"}
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "account_not_a_student"
+    assert _stored(admin_table) is None
+
+
+def test_an_account_that_does_not_exist_is_a_miss_not_a_new_row(admin_table) -> None:
+    client = _admin_client()
+
+    response = client.put(ALLOWANCE_PATH, json={"weekly_cases": 40, "reason": "no"})
+
+    assert response.status_code == 404
+    assert _stored(admin_table) is None
+    # And the read says the same thing. Answering "7, by default" for an id that
+    # is not an account made looking it up and changing it disagree.
+    assert client.get(ALLOWANCE_PATH).status_code == 404
+
+
+def test_reading_a_non_student_refuses_the_way_writing_one_does(admin_table) -> None:
+    _seed_profile(admin_table, STUDENT, "teacher")
+
+    response = _admin_client().get(ALLOWANCE_PATH)
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "account_not_a_student"
+
+
+def test_the_figure_cannot_be_set_past_what_the_service_will_read_back(admin_table) -> None:
+    """Refused at the door rather than stored and silently ignored later.
+
+    `assigned_weekly_cases` falls back to seven for anything out of range, so a
+    stored 5000 would read as a *cut*, not a raise, and the administrator would
+    have been told it worked.
+    """
+    _seed_profile(admin_table, STUDENT, "student")
+
+    beyond = _admin_client().put(
+        ALLOWANCE_PATH,
+        json={"weekly_cases": service.ASSIGNED_WEEKLY_CASES_MAXIMUM + 1, "reason": "no"},
+    )
+    negative = _admin_client().put(ALLOWANCE_PATH, json={"weekly_cases": -1, "reason": "no"})
+
+    assert (beyond.status_code, negative.status_code) == (422, 422)
+    assert _stored(admin_table) is None
+
+
+def test_setting_it_to_zero_takes_teacher_support_away_rather_than_using_it_up(
+    admin_table,
+) -> None:
+    """Zero is "this account does not have teacher support", not "spent for now".
+
+    The two refusals read differently to the student - one says come back next
+    week, the other says ask an administrator - so which one a zero produces is
+    part of what is being set here, not an implementation detail.
+    """
+    _seed_profile(admin_table, STUDENT, "student")
+    _admin_client().put(ALLOWANCE_PATH, json={"weekly_cases": 0, "reason": "abuse"})
+
+    spend = AtomicSupportTable()
+    spend.items[(f"USER#{STUDENT}", service.ASSIGNED_ALLOWANCE_SK)] = deepcopy(
+        _stored(admin_table)
+    )
+
+    assert _admit(spend, "case-1").disposition.value == "plan_denied"
+
+
+def test_a_non_administrator_cannot_read_or_set_it(admin_table) -> None:
+    _seed_profile(admin_table, STUDENT, "student")
+    client = _admin_client({"sub": "teacher-1", "role": "teacher", "accountStatus": "active"})
+
+    assert client.get(ALLOWANCE_PATH).status_code == 403
+    assert client.put(ALLOWANCE_PATH, json={"weekly_cases": 99, "reason": "x"}).status_code == 403
+    assert _stored(admin_table) is None
+
+
+def test_the_change_leaves_a_durable_administrator_event(admin_table) -> None:
+    _seed_profile(admin_table, STUDENT, "student")
+
+    _admin_client().put(ALLOWANCE_PATH, json={"weekly_cases": 15, "reason": "exam preparation"})
+
+    events = [
+        row
+        for (pk, sk), row in admin_table.rows.items()
+        if pk == f"SECURITY_AUDIT#{STUDENT}" and str(sk).startswith("EVENT#")
+    ]
+    assert [row["event_type"] for row in events] == ["teacher_support_allowance_set"]
+    assert "weekly_cases=15" in str(events[0]["evidence_reference"])
+
+
+def test_an_administrator_without_the_capability_may_look_but_not_raise(admin_table) -> None:
+    """Reading is support work; changing what a student is owed is not.
+
+    The two verbs ask for different capabilities on purpose, so this is the
+    negative control for the one that grants the raise.
+    """
+    _seed_profile(admin_table, STUDENT, "student")
+    limited = dict(_admin_user())
+    limited["grantCapabilities"] = ("student_support_lookup",)
+    client = _admin_client(limited)
+
+    assert client.get(ALLOWANCE_PATH).status_code == 200
+    assert client.put(ALLOWANCE_PATH, json={"weekly_cases": 99, "reason": "x"}).status_code == 403
+    assert _stored(admin_table) is None
+
+
+def test_an_administrator_raising_the_figure_mid_request_does_not_503_the_student(
+    monkeypatch: pytest.MonkeyPatch, student
+) -> None:
+    """The scope is read again on each attempt, not once for the whole call.
+
+    The fence an admission carries names the allowance version it read. An
+    administrator who changes the figure between that read and the write
+    invalidates it, and with the scope resolved once the same stale fence was
+    replayed four times and ran out - which the student saw as a 503 for
+    something somebody did to help them.
+    """
+    table = AtomicSupportTable()
+    key = (f"USER#{STUDENT}", service.ASSIGNED_ALLOWANCE_SK)
+    _seed_profile_row(table, STUDENT)
+    _raise_to(table, 3, version=1)
+    intruded: list[bool] = []
+
+    def commit(allowance_operations: tuple[dict[str, Any], ...]) -> bool:
+        if not intruded:
+            intruded.append(True)
+            _raise_to(table, 30, version=2)
+        return _case_committer(
+            table, kind="question", case_id="q-1", beneficiary_id=STUDENT
+        )(allowance_operations)
+
+    result = service.admit_teacher_support_case(
+        support_case_id="q-1",
+        case_kind="question",
+        beneficiary_id=STUDENT,
+        observed_at=NOW,
+        persist_case=commit,
+        table=table,
+    )
+
+    assert intruded == [True]
+    assert result.disposition.value == "admitted"
+    # And it was admitted against the figure that is now in force, not the old one.
+    counter = next(row for k, row in table.items.items() if k[1].startswith("WEEK#"))
+    assert int(counter["limit"]) == 30
+    assert int(table.items[key]["weekly_cases"]) == 30
+
+
+def test_the_refusal_does_not_send_the_student_to_a_shop(admin_table) -> None:
+    """Both lanes refuse the same way, and neither names a plan.
+
+    Payments are frozen and an assigned account never had anything to buy, so
+    "choose a paid plan" is an instruction the student cannot carry out.
+    """
+    import inspect
+
+    from stoa.routers import questions
+
+    for source in (
+        inspect.getsource(conversations.request_teacher_help),
+        inspect.getsource(questions.request_teacher),
+    ):
+        assert '"code": "teacher_support_not_included"' in source
+        assert "choose_paid_plan" not in source
+        assert '"action": "contact_administrator"' in source

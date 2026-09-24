@@ -52,6 +52,7 @@ def actor_from_user(user: dict) -> Actor:
             "production_readiness_reader",
             "platform_operations_reader",
             "teacher_dispatch_operator",
+            "teacher_support_allowance_manager",
             "notification_event_inspector",
             "notification_delivery_health_reader",
         )

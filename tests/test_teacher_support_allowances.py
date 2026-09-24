@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+
+from fakes.dynamodb import condition_holds
 from copy import deepcopy
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -18,7 +20,7 @@ from stoa.config import Settings
 from stoa.db.repositories import account_deletion_repo
 from stoa.routers import conversations, questions, teachers
 from stoa.security.authorization import AuthorizedResource, ResourceRef, ResourceType
-from stoa.services import teacher_support_allowance_service
+from stoa.services import paid_entitlement_service, teacher_support_allowance_service
 
 
 UTC = timezone.utc
@@ -56,10 +58,28 @@ class AtomicSupportTable:
         return {"Item": item} if item is not None else {}
 
     def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+        """Conditions first, then effects - including the ConditionCheck rows.
+
+        This used to `continue` past every ConditionCheck, which meant the
+        fences an admission carries - the student's profile version, the
+        allowance version, the account fence - were never evaluated by any test
+        using this double. Code that dropped them entirely stayed green.
+        """
         with self._lock:
             snapshot = deepcopy(self.items)
             for operation in operations:
                 if "ConditionCheck" in operation:
+                    check = operation["ConditionCheck"]
+                    key = (str(check["Key"]["PK"]), str(check["Key"]["SK"]))
+                    if not condition_holds(
+                        check.get("ConditionExpression"),
+                        snapshot.get(key),
+                        names=check.get("ExpressionAttributeNames"),
+                        values=check.get("ExpressionAttributeValues"),
+                    ):
+                        raise account_deletion_repo.AccountDeletionConflict(
+                            "condition check failed"
+                        )
                     continue
                 put = operation["Put"]
                 item = deepcopy(put["Item"])
@@ -148,6 +168,76 @@ def grants(monkeypatch: pytest.MonkeyPatch) -> dict[str, dict[str, object]]:
     return values
 
 
+def seed_fenced_rows(table: AtomicSupportTable, beneficiary_id: str) -> None:
+    """Put on the table every row an admission fences against.
+
+    The scope is resolved from patched repositories, so without this the rows
+    those fences name exist only in the patch. The double used to skip every
+    ConditionCheck, which is why no test needed this - and why code that
+    dropped a fence altogether stayed green.
+    """
+    profile = teacher_support_allowance_service.user_repo.get_user(beneficiary_id) or {}
+    parent_id = str(profile.get("parent_id") or "")
+    grant = (
+        teacher_support_allowance_service.paid_entitlement_service.get_active_beneficiary_grant(
+            parent_id, beneficiary_id
+        )
+        if parent_id
+        else None
+    )
+
+    def put(row: dict[str, Any]) -> None:
+        table.items.setdefault((str(row["PK"]), str(row["SK"])), row)
+
+    put({
+        "PK": f"USER#{beneficiary_id}",
+        "SK": "PROFILE",
+        **{key: value for key, value in profile.items() if value is not None},
+        "version": Decimal(str((grant or {}).get("student_profile_version") or 1)),
+    })
+    put({
+        "PK": f"USER#{beneficiary_id}",
+        "SK": "ACCOUNT_FENCE",
+        "status": "active",
+        "generation": Decimal("6"),
+    })
+    if grant is None:
+        return
+    put({**deepcopy(grant)})
+    put({
+        "PK": f"USER#{parent_id}",
+        "SK": "PROFILE",
+        "user_id": parent_id,
+        "role": "parent",
+        "account_status": "active",
+        "version": Decimal(str(grant.get("parent_profile_version") or 1)),
+    })
+    put({
+        "PK": f"USER#{parent_id}",
+        "SK": "ACCOUNT_FENCE",
+        "status": "active",
+        "generation": Decimal(str(grant.get("parent_account_fence_generation") or 1)),
+    })
+    relationship = {
+        "parent_id": parent_id,
+        "student_id": beneficiary_id,
+        "relationship": paid_entitlement_service.BENEFICIARY_RELATIONSHIP,
+        "status": "active",
+    }
+    put({
+        "PK": f"USER#{parent_id}",
+        "SK": f"CHILD#{beneficiary_id}",
+        **relationship,
+        "version": Decimal(str(grant.get("forward_relationship_version") or 1)),
+    })
+    put({
+        "PK": f"USER#{beneficiary_id}",
+        "SK": f"PARENT#{parent_id}",
+        **relationship,
+        "version": Decimal(str(grant.get("reverse_relationship_version") or 1)),
+    })
+
+
 def _case_committer(
     table: AtomicSupportTable,
     *,
@@ -156,6 +246,8 @@ def _case_committer(
     beneficiary_id: str,
     calls: list[tuple[dict[str, Any], ...]] | None = None,
 ) -> Callable[[tuple[dict[str, Any], ...]], bool]:
+    seed_fenced_rows(table, beneficiary_id)
+
     def commit(allowance_operations: tuple[dict[str, Any], ...]) -> bool:
         if calls is not None:
             calls.append(allowance_operations)
@@ -369,12 +461,16 @@ def test_denied_plan_persists_no_case_queue_notification_assignment_or_counter(
         grants["student-1"] = grant
     table = AtomicSupportTable()
     calls: list[tuple[dict[str, Any], ...]] = []
+    # The rows an admission would fence against are the fixture's world, not
+    # its effects. Snapshot them so "wrote nothing" stays an exact comparison.
+    seed_fenced_rows(table, "student-1")
+    before = deepcopy(table.items)
 
     result = _admit(table, case_id="denied", calls=calls)
 
     assert result.disposition.value == "plan_denied"
     assert calls == []
-    assert table.items == {}
+    assert table.items == before
 
 
 def test_cross_family_case_identity_cannot_replay_into_another_grant(

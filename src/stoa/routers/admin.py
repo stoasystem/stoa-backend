@@ -9,12 +9,13 @@ from uuid import uuid4
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
+from botocore.exceptions import ClientError
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import JSONResponse
 
 from stoa.config import Settings, get_settings
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import (
     account_deletion_repo,
     account_invitation_repo,
@@ -49,6 +50,7 @@ from stoa.models import user as user_model
 from stoa.models.user import SubscriptionTier
 from stoa.services import (
     account_provisioning_service,
+    teacher_support_allowance_service,
     locale_service,
     notify_service,
     parent_link_service,
@@ -255,6 +257,120 @@ class AdminStatusCommand(BaseModel):
     operation: str
     provider_username: str
     reason: str = Field(min_length=1, max_length=1000)
+
+
+class TeacherSupportAllowanceCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    weekly_cases: int = Field(ge=0, le=teacher_support_allowance_service.ASSIGNED_WEEKLY_CASES_MAXIMUM)
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+@router.get("/teacher-support/allowances/{student_id}")
+async def read_teacher_support_allowance(
+    student_id: str,
+    user: dict = Depends(require_role("admin")),
+):
+    """How many teacher-support cases this student has in a week, and from where."""
+    del user
+    # The same 404 the write gives. Answering "7, by default" for an id that is
+    # not an account made "look it up, then change it" contradict itself.
+    profile = _account_profile_or_404(student_id)
+    if str(profile.get("role") or "") != "student":
+        raise HTTPException(status_code=409, detail={"code": "account_not_a_student"})
+    table = get_table()
+    raised = _admin_mapping(
+        table.get_item(
+            Key={
+                "PK": f"USER#{student_id}",
+                "SK": teacher_support_allowance_service.ASSIGNED_ALLOWANCE_SK,
+            },
+            ConsistentRead=True,
+        )
+    ).get("Item")
+    stored = _admin_mapping(raised) if isinstance(raised, dict) else None
+    return {
+        "studentId": student_id,
+        "weeklyCases": teacher_support_allowance_service.assigned_weekly_cases(stored),
+        "source": "administrator" if stored else "default",
+        "default": teacher_support_allowance_service.ASSIGNED_WEEKLY_TEACHER_SUPPORT_CASES,
+        "maximum": teacher_support_allowance_service.ASSIGNED_WEEKLY_CASES_MAXIMUM,
+    }
+
+
+@router.put("/teacher-support/allowances/{student_id}")
+async def set_teacher_support_allowance(
+    student_id: str,
+    body: TeacherSupportAllowanceCommand,
+    user: dict = Depends(require_role("admin")),
+):
+    """Set this student's weekly figure, replacing whatever it was.
+
+    The write carries the version it read, so two administrators changing the
+    same student at once cannot both believe they set it. The admission path
+    fences the same version, so a case can never be spent against a figure that
+    was replaced between reading it and writing the case.
+    """
+    profile = _account_profile_or_404(student_id)
+    if str(profile.get("role") or "") != "student":
+        raise HTTPException(status_code=409, detail={"code": "account_not_a_student"})
+
+    table = get_table()
+    key = {
+        "PK": f"USER#{student_id}",
+        "SK": teacher_support_allowance_service.ASSIGNED_ALLOWANCE_SK,
+    }
+    existing = _admin_mapping(
+        table.get_item(Key=key, ConsistentRead=True)
+    ).get("Item")
+    previous = _admin_mapping(existing) if isinstance(existing, dict) else None
+    next_version = (stored_int((previous or {}).get("state_version")) or 0) + 1
+    now = datetime.now(timezone.utc).isoformat()
+    item = {
+        **key,
+        "entity_type": "teacher_support_assigned_allowance",
+        "schema_version": teacher_support_allowance_service.ASSIGNED_ALLOWANCE_SCHEMA_VERSION,
+        "student_id": student_id,
+        "weekly_cases": body.weekly_cases,
+        "state_version": next_version,
+        "updated_at": now,
+        "updated_by": str(user.get("sub") or user.get("user_id") or ""),
+    }
+    condition = (
+        "attribute_not_exists(PK)"
+        if previous is None
+        else "state_version = :expected"
+    )
+    values = {} if previous is None else {":expected": next_version - 1}
+    try:
+        table.put_item(
+            Item=item,
+            ConditionExpression=condition,
+            **({"ExpressionAttributeValues": values} if values else {}),
+        )
+    except ClientError as exc:
+        # A concurrent administrator got there first. Their figure stands; this
+        # one is refused rather than silently overwriting it.
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            raise HTTPException(
+                status_code=409, detail={"code": "allowance_version_conflict"}
+            ) from exc
+        raise
+
+    _record_account_admin_event(
+        actor=user,
+        target_id=student_id,
+        event_type="teacher_support_allowance_set",
+        action="set_teacher_support_allowance",
+        reason_code="teacher_support_allowance_set",
+        evidence_reference=f"weekly_cases={body.weekly_cases};state_version={next_version}",
+    )
+    return {
+        "studentId": student_id,
+        "weeklyCases": body.weekly_cases,
+        "source": "administrator",
+        "stateVersion": next_version,
+    }
 
 
 class CapabilityGrantCommand(BaseModel):

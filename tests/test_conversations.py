@@ -1898,3 +1898,346 @@ def test_the_other_conversation_fields_still_refuse_an_empty_value():
     for field in ("title", "subject", "updated_at"):
         with pytest.raises(conversations.AttachmentDecisionError):
             conversations._required_conversation_text({field: ""}, field)
+
+
+def test_escalating_a_conversation_writes_the_row_the_teacher_side_reads():
+    """A student asking for a teacher has to reach a teacher.
+
+    Everything on the teacher side - the queue, dispatch, the reply, the SLA
+    figures - reads question rows with `status=escalated`. Escalation wrote a
+    marker on the conversation and nothing else, so the request was accepted and
+    `GET /teachers/queue` stayed empty. Measured in production on 2026-09-24.
+    """
+    operation = conversations._escalated_question_operation(
+        request_id="req-1",
+        conversation={"subject": "mathematics", "grade": "Sek1"},
+        conversation_id="conv-1",
+        student_id="student-1",
+        generation=3,
+        message="Bitte hilf mir.",
+        now="2026-09-24T09:00:00+00:00",
+    )
+
+    item = operation["Put"]["Item"]
+    assert item["PK"] == "QUESTION#req-1"
+    assert item["SK"] == "META"
+    # What the queue scan filters on, and what it renders each row from.
+    assert item["status"] == "escalated"
+    assert item["student_id"] == "student-1"
+    assert item["subject"] == "mathematics"
+    assert item["teacher_requested_at"] == "2026-09-24T09:00:00+00:00"
+    assert item["queue_visible_at"] == "2026-09-24T09:00:00+00:00"
+    assert item["conversation_id"] == "conv-1"
+    # A version the reply path can recognise; `teachers.py` treats a row without
+    # a positive one as a legacy row and sends it to be initialised.
+    assert item["version"] == 1
+
+
+def test_escalating_the_same_conversation_twice_cannot_open_a_second_case():
+    """Negative control: the row is created, never overwritten."""
+    operation = conversations._escalated_question_operation(
+        request_id="req-1",
+        conversation={},
+        conversation_id="conv-1",
+        student_id="student-1",
+        generation=3,
+        message=None,
+        now="2026-09-24T09:00:00+00:00",
+    )
+
+    assert operation["Put"]["ConditionExpression"] == (
+        "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+    )
+
+
+def test_the_escalated_row_is_written_in_the_same_transaction_as_the_case():
+    """It has to be atomic with the escalation, or the two can disagree.
+
+    A separate write would let the conversation carry an escalation the queue
+    never heard of - which is the state production was already in - or a queue
+    row for an escalation that failed.
+    """
+    import ast
+    from pathlib import Path
+
+    source = Path(conversations.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    persist = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "persist_case"
+    )
+    calls = [
+        node
+        for node in ast.walk(persist)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "record_teacher_help_request"
+    ]
+    assert len(calls) == 1
+    passed = next(
+        keyword for keyword in calls[0].keywords if keyword.arg == "additional_operations"
+    )
+    names = {
+        node.func.id
+        for node in ast.walk(passed.value)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    assert "_escalated_question_operation" in names
+
+
+# --- The escalation actually executed, not the operations we meant to send ----
+#
+# Everything above about the queue row asserted on a dictionary. The shared
+# double used to fall into `record_teacher_help_request`'s degraded branch,
+# which writes the conversation header and the system message and **drops every
+# other operation in the transaction** - the allowance fences, the admission
+# receipt, the counter and the queue row. Those assertions could not have failed
+# no matter what the code did, because none of it ran.
+#
+# This one runs it: one real transaction against the shared table double, then
+# the teacher-side queue read against the same table.
+
+
+def _escalation_table():
+    from fakes.dynamodb import FakeTable
+
+    table = FakeTable()
+    table.rows[("USER#student-1", "ACCOUNT_FENCE")] = _as_stored(
+        {
+            "PK": "USER#student-1",
+            "SK": "ACCOUNT_FENCE",
+            "status": "active",
+            "generation": 1,
+        }
+    )
+    table.rows[("USER#student-1", "PROFILE")] = _as_stored(
+        {
+            "PK": "USER#student-1",
+            "SK": "PROFILE",
+            "user_id": "student-1",
+            "role": "student",
+            "account_status": "active",
+            "version": 3,
+        }
+    )
+    table.rows[("CONV#conv-1", "CONV")] = _as_stored(
+        {
+            "PK": "CONV#conv-1",
+            "SK": "CONV",
+            "entity_type": "conversation",
+            "conversation_id": "conv-1",
+            "student_id": "student-1",
+            "owner_id": "student-1",
+            "account_fence_generation": 1,
+            "subject": "physics",
+            "grade": "Sek1",
+        }
+    )
+    return table
+
+
+def _conversation(table, conversation_id: str) -> None:
+    table.rows[(f"CONV#{conversation_id}", "CONV")] = _as_stored(
+        {
+            "PK": f"CONV#{conversation_id}",
+            "SK": "CONV",
+            "entity_type": "conversation",
+            "conversation_id": conversation_id,
+            "student_id": "student-1",
+            "owner_id": "student-1",
+            "account_fence_generation": 1,
+            "subject": "physics",
+            "grade": "Sek1",
+        }
+    )
+
+
+def _escalate(monkeypatch, table, conversation_id: str = "conv-1"):
+    """Run the real route against the real admission service and one real table."""
+    from stoa.routers import teachers
+    from stoa.services import teacher_support_allowance_service as allowance_service
+
+    from stoa.services import teacher_dispatch_service
+
+    for module in (
+        conversations,
+        allowance_service,
+        attachment_repo,
+        teachers,
+        teacher_dispatch_service,
+    ):
+        monkeypatch.setattr(module, "get_table", lambda table=table: table)
+    monkeypatch.setattr(
+        allowance_service.paid_entitlement_service,
+        "get_active_beneficiary_grant",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        allowance_service.user_repo,
+        "get_user",
+        lambda user_id, **_kwargs: dict(table.rows.get((f"USER#{user_id}", "PROFILE")) or {}),
+    )
+    monkeypatch.setattr(
+        conversations,
+        "_get_conversation",
+        lambda conv_id: dict(table.rows[(f"CONV#{conv_id}", "CONV")]),
+    )
+    monkeypatch.setattr(
+        conversations.usage_ledger_service,
+        "record_usage_event",
+        lambda **_kwargs: {"idempotency_status": "created"},
+    )
+    return _client(conversations.teacher_help_router, "/teacher-help").post(
+        "/teacher-help/request",
+        json={"conversationId": conversation_id, "message": "please help"},
+    )
+
+
+def test_the_escalation_lands_in_the_queue_the_teacher_actually_reads(monkeypatch):
+    from stoa.routers import teachers
+
+    table = _escalation_table()
+
+    response = _escalate(monkeypatch, table)
+
+    assert response.status_code == 200
+    request_id = response.json()["requestId"]
+
+    stored = table.rows.get((f"QUESTION#{request_id}", "META"))
+    assert stored is not None, "the queue row was never written"
+    assert stored["status"] == "escalated"
+    assert stored["student_id"] == "student-1"
+    assert stored["conversation_id"] == "conv-1"
+
+    # The teacher side, reading the same table through its own query.
+    page = teachers._list_escalated_questions()
+    assert [item["question_id"] for item in page.items] == [request_id]
+    assert page.items[0]["subject"] == "physics"
+
+
+def test_the_case_the_student_spent_is_on_the_table_too(monkeypatch):
+    """The receipt and the counter, not just the queue row.
+
+    They travel in the same transaction, so a branch that dropped the queue row
+    dropped these as well - and a student who was charged for help nobody can
+    see is the worse half of that failure.
+    """
+    table = _escalation_table()
+
+    assert _escalate(monkeypatch, table).status_code == 200
+
+    receipts = [row for key, row in table.rows.items() if key[0].startswith("TEACHER_SUPPORT_CASE#")]
+    counters = [row for key, row in table.rows.items() if key[1].startswith("WEEK#")]
+    assert len(receipts) == 1
+    assert len(counters) == 1
+    assert int(counters[0]["admitted_cases"]) == 1
+    assert int(counters[0]["limit"]) == 7
+
+
+def test_an_eighth_escalation_in_one_week_is_refused_end_to_end(monkeypatch):
+    """The figure is enforced by the transaction, not by the caller counting."""
+    table = _escalation_table()
+
+    for index in range(7):
+        _conversation(table, f"conv-{index}")
+        assert _escalate(monkeypatch, table, f"conv-{index}").status_code == 200, index
+
+    _conversation(table, "conv-8")
+    eighth = _escalate(monkeypatch, table, "conv-8")
+
+    assert eighth.status_code == 429
+    counters = [row for key, row in table.rows.items() if key[1].startswith("WEEK#")]
+    assert int(counters[0]["admitted_cases"]) == 7
+    # The refused one left nothing behind.
+    assert (("QUESTION#" + eighth.json().get("requestId", "-")), "META") not in table.rows
+
+
+def test_asking_twice_about_one_conversation_spends_one_case(monkeypatch):
+    """The case is the conversation, so a repeat is the same case, not a new one.
+
+    Without this the retry a student makes when nothing seems to happen would
+    quietly cost them another of the week's seven.
+    """
+    table = _escalation_table()
+
+    first = _escalate(monkeypatch, table)
+    second = _escalate(monkeypatch, table)
+
+    assert (first.status_code, second.status_code) == (200, 200)
+    assert first.json()["requestId"] == second.json()["requestId"]
+    counters = [row for key, row in table.rows.items() if key[1].startswith("WEEK#")]
+    assert int(counters[0]["admitted_cases"]) == 1
+
+
+def _with_a_teacher_on_duty(table) -> None:
+    table.rows[("USER#teacher-1", "PROFILE")] = _as_stored(
+        {
+            "PK": "USER#teacher-1",
+            "SK": "PROFILE",
+            "user_id": "teacher-1",
+            "role": "teacher",
+            "account_status": "active",
+            "version": 4,
+            "dispatch_availability": "available",
+            "dispatch_subjects": ["physics"],
+        }
+    )
+    table.rows[("USER#teacher-1", "ACCOUNT_FENCE")] = _as_stored(
+        {"PK": "USER#teacher-1", "SK": "ACCOUNT_FENCE", "status": "active", "generation": 2}
+    )
+
+
+def test_dispatch_marks_both_rows_the_case_is_represented_by(monkeypatch):
+    """One escalation, two rows, one dispatch.
+
+    The conversation is what the student reads and the question row is what the
+    teacher queue reads. Writing the dispatch to only the conversation left the
+    queue row saying `unassigned` for good, which let a second teacher be sent
+    to the same case and left the SLA dashboard counting it as never dispatched.
+    """
+    table = _escalation_table()
+    _with_a_teacher_on_duty(table)
+
+    request_id = _escalate(monkeypatch, table).json()["requestId"]
+
+    question = table.rows[(f"QUESTION#{request_id}", "META")]
+    assert question["dispatch_status"] == "dispatched"
+    assert question["dispatched_teacher_id"] == "teacher-1"
+    # Still escalated, and the version moved: the write went through the same
+    # compare-and-set every other question write goes through.
+    assert question["status"] == "escalated"
+    assert int(question["version"]) == 2
+    assert table.rows[("CONV#conv-1", "CONV")]["dispatch_status"] == "dispatched"
+
+
+def test_an_escalation_made_before_the_queue_row_existed_still_dispatches(monkeypatch):
+    """Rows escalated by the deploy that had no queue row must stay dispatchable.
+
+    An Update against a row that is not there would create a half-formed
+    question, so the second write is included only when there is one.
+    """
+    from stoa.services import teacher_dispatch_service
+
+    table = _escalation_table()
+    _with_a_teacher_on_duty(table)
+    request_id = _escalate(monkeypatch, table).json()["requestId"]
+
+    # Put the pair back into the shape an older escalation left behind: the
+    # conversation still pending, and no queue row at all.
+    del table.rows[(f"QUESTION#{request_id}", "META")]
+    conversation = {
+        **dict(table.rows[("CONV#conv-1", "CONV")]),
+        "dispatch_status": "unassigned",
+        "dispatched_teacher_id": "",
+        "dispatch_deadline_at": "",
+    }
+    table.rows[("CONV#conv-1", "CONV")] = _as_stored(conversation)
+
+    result = teacher_dispatch_service.dispatch_conversation(
+        "conv-1", conversation=conversation, table=table
+    )
+
+    assert result["status"] == "dispatched"
+    assert (f"QUESTION#{request_id}", "META") not in table.rows
+    assert table.rows[("CONV#conv-1", "CONV")]["dispatch_status"] == "dispatched"

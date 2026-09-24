@@ -700,6 +700,56 @@ class FakeTable:
 
     # -- transactions ------------------------------------------------------------
 
+    def seed_active_account(self, user_id: str, *, generation: int = 1) -> None:
+        """The fence row every lifecycle transaction checks before it writes.
+
+        Fixtures did not need it while `transact_account_deletion` was missing
+        and the transaction never ran.
+        """
+        self.rows[(f"USER#{user_id}", "ACCOUNT_FENCE")] = as_stored(
+            {
+                "PK": f"USER#{user_id}",
+                "SK": "ACCOUNT_FENCE",
+                "status": "active",
+                "generation": generation,
+            }
+        )
+
+    def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+        """The seam `account_deletion_repo.transact` reaches for.
+
+        Without it that function falls through to a real boto3 client, which
+        under `--disable-socket` fails and is reported by most callers as an
+        ordinary conflict. Every lifecycle transaction in every test using this
+        double was being refused for a reason that had nothing to do with the
+        code under test.
+        """
+        from stoa.db.repositories import account_deletion_repo
+
+        try:
+            self.transact_write_items(operations)
+        except ClientError as exc:
+            if (
+                exc.response.get("Error", {}).get("Code")
+                == "TransactionCanceledException"
+            ):
+                raise account_deletion_repo.AccountDeletionConflict(
+                    "conditional conflict"
+                ) from exc
+            raise
+
+    def transact_conversation_write(self, operations: list[dict[str, Any]]) -> None:
+        """The seam `record_teacher_help_request` reaches for before it degrades.
+
+        Without this the double falls into a branch that writes the conversation
+        header and the message and **silently drops everything else in the
+        transaction** - the allowance fences, the admission receipt, the counter
+        and the queue row. Tests written against that branch assert on operations
+        that were never executed, which is the most complete form of the failure
+        this file exists to prevent.
+        """
+        self.transact_write_items(operations)
+
     def transact_write_items(self, operations: list[dict[str, Any]]) -> None:
         """All conditions, then all effects, under one lock.
 

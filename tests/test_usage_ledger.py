@@ -351,6 +351,9 @@ def test_parent_usage_summaries_use_active_child_bindings(monkeypatch):
 
 def test_student_usage_summary_includes_multi_action_groups(monkeypatch):
     table = FakeTable()
+    # The ledger writes this summary reads are lifecycle transactions fenced on
+    # this row; the double used not to run them.
+    table.seed_active_account("student-1")
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
     monkeypatch.setattr(usage_ledger_service.user_repo, "get_user", lambda user_id, **_kwargs: {"user_id": user_id})
     monkeypatch.setattr(
