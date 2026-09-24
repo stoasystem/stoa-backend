@@ -24,6 +24,24 @@ ADMISSION_SCHEMA_VERSION = "teacher_support_admission.v1"
 COUNTER_SCHEMA_VERSION = "teacher_support_counter.v1"
 _CASE_KINDS = frozenset({"question", "conversation"})
 
+# Where a student's teacher-support allowance comes from.
+#
+# `paid_grant` is a parent's purchase, which is the only source this service had.
+# Payments are frozen and STOA assigns accounts rather than selling them, so no
+# grant can be created and the feature was unreachable for every student on the
+# platform - the refusal even told them to go and buy it.
+SUPPORT_SOURCE_PAID_GRANT = "paid_grant"
+SUPPORT_SOURCE_ASSIGNED = "assigned"
+
+# What an assigned student gets each Zurich week when nobody has said otherwise.
+ASSIGNED_WEEKLY_TEACHER_SUPPORT_CASES = 7
+
+# Where an administrator's raised figure is kept, one row per student.
+ASSIGNED_ALLOWANCE_SK = "TEACHER_SUPPORT_ALLOWANCE"
+ASSIGNED_ALLOWANCE_SCHEMA_VERSION = "teacher_support_assigned_allowance.v1"
+# A ceiling on what can be stored, so a bad write cannot become an open budget.
+ASSIGNED_WEEKLY_CASES_MAXIMUM = 200
+
 type AdmissionOperation = dict[str, Any]
 type PersistCase = Callable[[tuple[AdmissionOperation, ...]], bool]
 
@@ -75,6 +93,11 @@ class _ResolvedScope:
     relationship_source: str = paid_entitlement_service.RELATIONSHIP_SOURCE_BINDING
     forward_relationship_version: int | None = None
     reverse_relationship_version: int | None = None
+    support_source: str = SUPPORT_SOURCE_PAID_GRANT
+    # Only an assigned scope carries this: the paid path reads it off the grant.
+    student_profile_version: int | None = None
+    # Present when an administrator has raised this student's weekly figure.
+    assigned_allowance_version: int | None = None
 
 
 
@@ -231,6 +254,115 @@ def _resolve_scope(
     *,
     table: object,
 ) -> _ResolvedScope | None:
+    """The allowance this student has, whoever it came from.
+
+    A parent's purchase still wins where one exists, because it is the wider
+    budget and it is the one the grant rows are fenced against. Where there is
+    none - which today is every student, payments being frozen - the student
+    has the figure they were assigned.
+    """
+    paid = _resolve_paid_scope(beneficiary_id, table=table)
+    if paid is not None:
+        return paid
+    return _resolve_assigned_scope(beneficiary_id, table=table)
+
+
+def assigned_weekly_cases(student: Mapping[str, object] | None) -> int:
+    """The figure to use for this student, read off their own allowance row."""
+    if student is None:
+        return ASSIGNED_WEEKLY_TEACHER_SUPPORT_CASES
+    stored = _stored_integer(student.get("weekly_cases"))
+    if stored is None or stored < 0 or stored > ASSIGNED_WEEKLY_CASES_MAXIMUM:
+        return ASSIGNED_WEEKLY_TEACHER_SUPPORT_CASES
+    return stored
+
+
+def _resolve_assigned_scope(
+    beneficiary_id: str,
+    *,
+    table: object,
+) -> _ResolvedScope | None:
+    """The allowance a student has by being a student here, with no parent in it.
+
+    Anchored on the student alone: their profile has to say they are an active
+    student, and that profile's version is fenced at admission so a change made
+    between reading and writing cannot slip through. The account fence is not
+    added here - the case repository already contributes it, and one transaction
+    cannot target the same row twice.
+    """
+    beneficiary = _required_text(beneficiary_id, "beneficiary_id")
+    try:
+        student = _mapping(user_repo.get_user(beneficiary))
+    except Exception:
+        raise _DependencyFailure("student entitlement is unavailable") from None
+    if student is None:
+        return None
+    if (
+        student.get("user_id") != beneficiary
+        or student.get("role") != "student"
+        or student.get("account_status") != "active"
+    ):
+        return None
+    try:
+        profile_version = _positive_integer(student.get("version"), "version")
+    except ValueError:
+        return None
+
+    try:
+        raised = _mapping(
+            _strong_get(table, {"PK": f"USER#{beneficiary}", "SK": ASSIGNED_ALLOWANCE_SK})
+        )
+    except _DependencyFailure:
+        raise
+    except Exception:
+        raise _DependencyFailure("assigned allowance is unavailable") from None
+    allowance_version: int | None = None
+    if raised is not None:
+        if raised.get("entity_type") != "teacher_support_assigned_allowance" or raised.get(
+            "schema_version"
+        ) != ASSIGNED_ALLOWANCE_SCHEMA_VERSION:
+            raise _DependencyFailure("assigned allowance row is malformed")
+        allowance_version = _positive_integer(raised.get("state_version"), "state_version")
+    limit = assigned_weekly_cases(raised)
+    if limit <= 0:
+        return None
+
+    # Stable per student: raising the figure must not start the week over, and
+    # the receipt that already spent a case must keep pointing at this scope.
+    support_scope_id = _domain_digest(
+        b"stoa.teacher-support.scope.v1",
+        SUPPORT_SOURCE_ASSIGNED,
+        beneficiary,
+    )
+    return _ResolvedScope(
+        beneficiary_id=beneficiary,
+        parent_id="",
+        # What the student is actually on. The source is recorded separately, so
+        # nothing here reads as a purchase that did not happen.
+        plan_id=BillingPlanId.FREE_TRIAL,
+        plan_version=1,
+        allowance_version=1,
+        grant_version=1,
+        subscription_id_digest=_domain_digest(
+            b"stoa.teacher-support.assigned.v1", beneficiary
+        ),
+        grant_id=_domain_digest(b"stoa.teacher-support.assigned-grant.v1", beneficiary),
+        support_scope=TeacherSupportScope.PER_BENEFICIARY,
+        support_scope_id=support_scope_id,
+        limit=limit,
+        grant={},
+        relationship_source=SUPPORT_SOURCE_ASSIGNED,
+        support_source=SUPPORT_SOURCE_ASSIGNED,
+        student_profile_version=profile_version,
+        assigned_allowance_version=allowance_version,
+    )
+
+
+def _resolve_paid_scope(
+    beneficiary_id: str,
+    *,
+    table: object,
+) -> _ResolvedScope | None:
     beneficiary = _required_text(beneficiary_id, "beneficiary_id")
     try:
         student = _mapping(user_repo.get_user(beneficiary))
@@ -364,6 +496,8 @@ def _live_relationship(
 
 
 def _grant_condition_operations(scope: _ResolvedScope) -> tuple[AdmissionOperation, ...]:
+    if scope.support_source == SUPPORT_SOURCE_ASSIGNED:
+        return _assigned_condition_operations(scope)
     grant = scope.grant
     parent_generation = _positive_integer(
         grant.get("parent_account_fence_generation"),
@@ -433,6 +567,55 @@ def _grant_condition_operations(scope: _ResolvedScope) -> tuple[AdmissionOperati
     )
 
 
+def _assigned_condition_operations(
+    scope: _ResolvedScope,
+) -> tuple[AdmissionOperation, ...]:
+    """What an assigned allowance is fenced against: the student, and nothing else.
+
+    There is no parent, no grant row and no relationship to fence. The student's
+    account fence is deliberately absent - the case repository contributes it,
+    and a transaction cannot target the same row twice.
+    """
+    version = scope.student_profile_version
+    if version is None:
+        raise _DependencyFailure("assigned scope carries no student profile version")
+    operations: list[AdmissionOperation] = [_student_profile_condition(scope, version)]
+    if scope.assigned_allowance_version is not None:
+        # The figure was raised by somebody. Fence the row it was raised on, so a
+        # change made between reading it and spending a case cannot slip past.
+        operations.append(
+            {
+                "ConditionCheck": {
+                    "Key": {
+                        "PK": f"USER#{scope.beneficiary_id}",
+                        "SK": ASSIGNED_ALLOWANCE_SK,
+                    },
+                    "ConditionExpression": "#version=:version AND weekly_cases=:cases",
+                    "ExpressionAttributeNames": {"#version": "state_version"},
+                    "ExpressionAttributeValues": {
+                        ":version": scope.assigned_allowance_version,
+                        ":cases": scope.limit,
+                    },
+                }
+            }
+        )
+    else:
+        # Nobody has raised it. That has to still be true at admission, or the
+        # limit spent against was not the one in force.
+        operations.append(
+            {
+                "ConditionCheck": {
+                    "Key": {
+                        "PK": f"USER#{scope.beneficiary_id}",
+                        "SK": ASSIGNED_ALLOWANCE_SK,
+                    },
+                    "ConditionExpression": "attribute_not_exists(PK)",
+                }
+            }
+        )
+    return tuple(operations)
+
+
 def _student_profile_condition(
     scope: _ResolvedScope, student_profile_version: int
 ) -> AdmissionOperation:
@@ -466,6 +649,8 @@ def _relationship_source(scope: _ResolvedScope) -> str:
 
 def _relationship_conditions(scope: _ResolvedScope) -> tuple[AdmissionOperation, ...]:
     """Fence the two rows of whichever table authorized the grant."""
+    if scope.support_source == SUPPORT_SOURCE_ASSIGNED:
+        return ()
     if _relationship_source(scope) == paid_entitlement_service.RELATIONSHIP_SOURCE_LINK:
         return (
             _link_condition(
@@ -638,6 +823,7 @@ def _validated_counter(
     week: ZurichWeek,
 ) -> tuple[int, int]:
     identity = _week_identity(week)
+    assigned = scope.support_source == SUPPORT_SOURCE_ASSIGNED
     if (
         item.get("entity_type") != "teacher_support_counter"
         or item.get("schema_version") != COUNTER_SCHEMA_VERSION
@@ -647,7 +833,11 @@ def _validated_counter(
         or item.get("plan_id") != str(scope.plan_id)
         or item.get("plan_version") != scope.plan_version
         or item.get("allowance_version") != scope.allowance_version
-        or item.get("limit") != scope.limit
+        # A plan's figure is fixed, so a counter carrying a different one is a
+        # damaged row. An assigned figure is not fixed: an administrator can
+        # raise it, and comparing it here would turn the week's own counter into
+        # "malformed" the moment they did - a 503 for the student, mid-week.
+        or (not assigned and item.get("limit") != scope.limit)
     ):
         raise _DependencyFailure("teacher-support counter is malformed")
     admitted_cases = _stored_nonnegative_integer(
@@ -657,7 +847,11 @@ def _validated_counter(
         item.get("state_version"), "state_version"
     )
     if admitted_cases > scope.limit:
-        raise _DependencyFailure("teacher-support counter is malformed")
+        # Same reasoning in the other direction: lowering the figure below what
+        # the week already spent is a refusal for the rest of the week, not a
+        # damaged row. Under a fixed plan figure it is still damage.
+        if not assigned:
+            raise _DependencyFailure("teacher-support counter is malformed")
     return admitted_cases, state_version
 
 
