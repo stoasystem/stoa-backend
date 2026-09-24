@@ -76,6 +76,9 @@ REPORT_RECOVERY_READER = "report_recovery_reader"
 REPORT_RECOVERY_OPERATOR = "report_recovery_operator"
 REPORT_EVIDENCE_EXPORTER = "report_evidence_exporter"
 REPORT_EXTERNAL_HANDOFF_SENDER = "report_external_handoff_sender"
+# Raising a student's weekly teacher-support figure spends no money and commits
+# real teacher time, so it is its own authority rather than part of lookup.
+TEACHER_SUPPORT_ALLOWANCE_MANAGER = "teacher_support_allowance_manager"
 # Billing is frozen as a product surface. Its capabilities still belong in the
 # registry: a name being issuable is not the same as anyone holding it, and
 # leaving them out is what hid the other thirteen.
@@ -111,6 +114,7 @@ KNOWN_CAPABILITIES = frozenset(
         REPORT_RECOVERY_OPERATOR,
         REPORT_EVIDENCE_EXPORTER,
         REPORT_EXTERNAL_HANDOFF_SENDER,
+        TEACHER_SUPPORT_ALLOWANCE_MANAGER,
         BILLING_OPERATIONS_READER,
         BILLING_OPERATIONS_MANAGER,
         BILLING_ACCOUNTING_EXPORTER,

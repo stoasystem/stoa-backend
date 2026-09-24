@@ -5,6 +5,13 @@ writes: a link that is revoked between the pre-read and the commit has to cancel
 the transaction, exactly as a revoked profile binding always did.
 """
 
+# These read `_resolve_paid_scope`, not `_resolve_scope`. What each one holds is
+# that a relationship which is not a live paid one yields no *paid* allowance.
+# `_resolve_scope` also answers the figure a student has by being assigned one,
+# which every student now has, so asking it here would be asking a different
+# question and would never be None again.
+
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -436,7 +443,7 @@ def test_link_revoked_after_the_preread_cancels_the_paid_transaction(
         account_deletion_repo.transact(list(built.grant_operations), table=table)
 
 
-def test_link_revoked_after_the_preread_cancels_the_support_admission(
+def test_link_revoked_after_the_preread_cancels_the_paid_admission_only(
     table: ConditionalTable,
 ) -> None:
     _link_active(table)
@@ -459,12 +466,23 @@ def test_link_revoked_after_the_preread_cancels_the_support_admission(
         table=table,
     )
 
-    assert result.disposition.value == "retryable"
-    assert not [
+    # The paid grant is not spent: the link it hangs on is gone, and the fence
+    # on it refuses. What the student keeps is the seven cases they have for
+    # being a student here, so the retry lands on those instead of on a 503 for
+    # something that happened to their parent's account.
+    assert result.disposition.value == "admitted"
+    counters = [
         item
         for item in table.items.values()
         if item.get("entity_type") == "teacher_support_counter"
     ]
+    assert len(counters) == 1
+    assert int(counters[0]["limit"]) == 7
+    assert str(counters[0]["plan_id"]) == "free_trial"
+    # The revoked parent is nowhere in what was written.
+    assert all("parent_id" not in item for item in table.items.values()
+               if item.get("entity_type") in {
+                   "teacher_support_counter", "teacher_support_admission"})
 
 
 # --- 3. negative control: the legacy binding is untouched ------------------
@@ -557,7 +575,7 @@ def test_pending_link_is_not_a_paid_relationship(table: ConditionalTable) -> Non
     with pytest.raises(paid_entitlement_service.PaidGrantConflict):
         _build(table)
     assert (
-        teacher_support_allowance_service._resolve_scope(STUDENT, table=table) is None
+        teacher_support_allowance_service._resolve_paid_scope(STUDENT, table=table) is None
     )
     resolved = entitlement_service.resolve_student_entitlement(
         STUDENT, settings=_settings()
@@ -581,7 +599,7 @@ def test_half_stored_link_is_not_a_paid_relationship(
     with pytest.raises(paid_entitlement_service.PaidGrantConflict):
         _build(table)
     assert (
-        teacher_support_allowance_service._resolve_scope(STUDENT, table=table) is None
+        teacher_support_allowance_service._resolve_paid_scope(STUDENT, table=table) is None
     )
 
 
@@ -759,14 +777,37 @@ def test_a_stale_link_source_admits_through_the_live_binding(
 def test_a_relationship_that_died_on_both_tables_is_denied_not_retried(
     table: ConditionalTable,
 ) -> None:
-    """A dead relationship is a clean terminal denial, never a permanent 503."""
+    """A dead relationship is a clean terminal denial, never a permanent 503.
+
+    The denial is of the *paid* allowance. A student whose parent relationship
+    died still has the figure they were assigned, and spending that is the right
+    answer - what must not happen is the dead relationship being retried until
+    the caller gives up, which is a 503 for a student who did nothing wrong.
+    """
     _bind_legacy(table)
     table.put(_grant_item(source=BINDING))
     _revoke_legacy_binding(table)
 
+    assert (
+        teacher_support_allowance_service._resolve_paid_scope(STUDENT, table=table)
+        is None
+    )
+
     result = _admit(table, "question-dead")
 
-    assert result.disposition.value == "plan_denied"
+    # Terminal either way: admitted on the student's own figure, never retryable.
+    assert result.disposition.value != "retryable"
+    assert result.disposition.value == "admitted"
+    assert result.admission is not None
+    assert result.admission.limit == (
+        teacher_support_allowance_service.ASSIGNED_WEEKLY_TEACHER_SUPPORT_CASES
+    )
+    # And it is the student's own scope: the assigned one, not the dead grant's.
+    assert result.admission.support_scope_id == (
+        teacher_support_allowance_service._resolve_assigned_scope(
+            STUDENT, table=table
+        ).support_scope_id
+    )
 
 
 # --- B1: one judge, one answer per cell ------------------------------------
@@ -855,7 +896,7 @@ def test_every_service_reads_the_same_relationship_cell(
     authority = paid_entitlement_service.relationship_authority(
         PARENT, STUDENT, student=profile
     )
-    scope = teacher_support_allowance_service._resolve_scope(STUDENT, table=table)
+    scope = teacher_support_allowance_service._resolve_paid_scope(STUDENT, table=table)
     resolved = entitlement_service.resolve_student_entitlement(
         STUDENT, settings=_settings()
     )
@@ -983,7 +1024,7 @@ def test_a_non_child_link_is_not_a_paid_relationship(table: ConditionalTable) ->
     with pytest.raises(paid_entitlement_service.PaidGrantConflict):
         _build(table)
     assert (
-        teacher_support_allowance_service._resolve_scope(STUDENT, table=table) is None
+        teacher_support_allowance_service._resolve_paid_scope(STUDENT, table=table) is None
     )
     resolved = entitlement_service.resolve_student_entitlement(
         STUDENT, settings=_settings()
@@ -1023,7 +1064,7 @@ def test_a_profile_bound_student_never_reaches_a_paying_link_parent(
         )
     ] == [PARENT]
     assert (
-        teacher_support_allowance_service._resolve_scope(STUDENT, table=table) is None
+        teacher_support_allowance_service._resolve_paid_scope(STUDENT, table=table) is None
     )
     assert (
         entitlement_service.resolve_student_entitlement(STUDENT, settings=_settings())[

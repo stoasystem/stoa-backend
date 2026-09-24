@@ -1812,8 +1812,10 @@ async def request_teacher(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "teacher_support_not_included",
-                "message": "Teacher support is not included in the active plan.",
-                "action": "choose_paid_plan",
+                # The same refusal as the conversation lane, and the same reason
+                # for not naming a plan: there is nothing to buy.
+                "message": "Teacher support is not switched on for this account.",
+                "action": "contact_administrator",
             },
         )
     if (

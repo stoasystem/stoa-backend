@@ -28,6 +28,9 @@ CHALLENGE = {
 
 def use_table(monkeypatch) -> FakeTable:
     table = FakeTable()
+    # Every card write is a lifecycle transaction fenced on this row. The
+    # double used not to run those transactions at all, so no fixture needed it.
+    table.seed_active_account("student-1")
     monkeypatch.setattr(review_repo, "get_table", lambda: table)
     monkeypatch.setattr(review_repo, "_write_generation", lambda *a, **k: 1)
     return table

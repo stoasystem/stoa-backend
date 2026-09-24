@@ -817,6 +817,24 @@
   {
     "authorization": [
       {
+        "action": "lookup",
+        "capability": "student_support_lookup",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "student_id"
+    ],
+    "method": "GET",
+    "path": "/admin/teacher-support/allowances/{student_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
         "action": "update",
         "capability": "usage_reconciliation_operator",
         "purpose": "usage_operations",
@@ -4286,6 +4304,24 @@
     ],
     "method": "POST",
     "path": "/teachers/questions/{question_id}/takeover",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": "teacher_support_allowance_manager",
+        "purpose": "account_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [
+      "student_id"
+    ],
+    "method": "PUT",
+    "path": "/admin/teacher-support/allowances/{student_id}",
     "sensitive": true
   },
   {

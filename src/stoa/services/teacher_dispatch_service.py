@@ -400,6 +400,17 @@ def build_dispatch_dashboard(
     }
 
 
+def _escalated_question_row(table: Any, request_id: str) -> dict[str, Any] | None:
+    try:
+        response = table.get_item(
+            Key={"PK": f"QUESTION#{request_id}", "SK": "META"}, ConsistentRead=True
+        )
+    except Exception:
+        return None
+    item = response.get("Item") if isinstance(response, dict) else None
+    return dict(item) if isinstance(item, dict) else None
+
+
 def dispatch_conversation(
     conversation_id: str,
     *,
@@ -409,10 +420,11 @@ def dispatch_conversation(
 ) -> dict[str, Any]:
     """Claim an escalated conversation for the best available teacher.
 
-    The question lane records dispatch on the question item. A chat escalation has
-    no question item, so the same ranking and the same teacher-binding conditions
-    are applied to the conversation itself. Without this the escalation only sets
-    flags and no teacher is ever able to see the request.
+    A chat escalation is two rows: the conversation the student reads and the
+    question row the teacher queue reads. Both carry the dispatch, in one
+    transaction. Updating only the conversation left the queue row saying
+    `unassigned` forever, which let a second teacher be dispatched to the same
+    case and left the SLA dashboard counting it as never dispatched.
     """
     timestamp = now or _now()
     target = table or get_table()
@@ -444,10 +456,36 @@ def dispatch_conversation(
     deadline = _deadline(timestamp)
     attempt_count = int(_int(conversation.get("dispatch_attempt_count"), 0)) + 1
 
+    # Escalations made before the queue row existed have only the conversation.
+    # An Update with no row to update would create a half-formed question, so the
+    # second write is included only when there is something to update.
+    request_id = str(conversation.get("escalation_request_id") or "")
+    question = _escalated_question_row(target, request_id) if request_id else None
+    question_operations: list[dict[str, Any]] = (
+        question_repo.build_question_update_transaction(
+            question,
+            # The state does not move: a dispatched case is still escalated. What
+            # is written is who it went to, through the same version CAS every
+            # other question write goes through.
+            status=str(question.get("status") or "escalated"),
+            expected_generation=int(_int(question.get("account_fence_generation"), 1)),
+            extra_attrs={
+                "dispatched_teacher_id": str(candidate["teacherId"]),
+                "dispatch_status": "dispatched",
+                "dispatch_id": dispatch_id,
+                "dispatch_deadline_at": deadline,
+                "dispatch_updated_at": timestamp,
+            },
+        )
+        if question is not None
+        else []
+    )
+
     try:
         account_deletion_repo.transact(
             [
                 *_teacher_assignment_conditions(candidate),
+                *question_operations,
                 {
                     "Update": {
                         "Key": {"PK": f"CONV#{conversation_id}", "SK": "CONV"},
