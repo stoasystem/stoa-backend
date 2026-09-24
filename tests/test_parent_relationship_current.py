@@ -18,11 +18,14 @@ from fastapi.testclient import TestClient
 
 from fakes.dynamodb import FakeTable
 
+from stoa.config import Settings
+
 from stoa.db.repositories import account_deletion_repo, parent_link_repo, user_repo
 from stoa.jobs import weekly_reports
 from stoa.services import (
     account_deletion_service,
     account_operations_service,
+    entitlement_service,
     parent_link_service,
     report_recovery_service,
     report_service,
@@ -862,3 +865,62 @@ def test_a_resend_does_not_need_the_archived_address(
 
     assert result.status == "email_sent"
     assert resend_doubles == [(f"{PARENT}@stoa.test", "<html>Report</html>")]
+
+
+# ---------------------------------------------------------------------------
+# Card 022 B-2: the entitlement list judges children the same way
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def entitlement_list(monkeypatch: pytest.MonkeyPatch):
+    """The parent's entitlement list, with each child's plan lookup stubbed out."""
+    monkeypatch.setattr(
+        entitlement_service,
+        "resolve_student_entitlement",
+        lambda student_id, **_k: {"studentId": student_id, "parentId": PARENT},
+    )
+
+    def listed() -> list[str]:
+        return [
+            item["studentId"]
+            for item in entitlement_service.list_parent_child_entitlements(
+                PARENT, settings=Settings()
+            )
+        ]
+
+    return listed
+
+
+def test_a_reverse_revoked_legacy_binding_leaves_the_entitlement_list(
+    world: RelationshipWorld, monkeypatch: pytest.MonkeyPatch, entitlement_list
+) -> None:
+    """The forward row still says active; the reverse row has been revoked."""
+    world.bind(PARENT, STUDENT)
+    revoked_reverse = {**world.bindings[(PARENT, STUDENT)], "status": "revoked"}
+    monkeypatch.setattr(
+        user_repo,
+        "get_student_parent_binding",
+        lambda student_id, parent_id: (
+            deepcopy(revoked_reverse) if (parent_id, student_id) == (PARENT, STUDENT) else None
+        ),
+    )
+
+    assert parent_link_service.current_relationship(PARENT, STUDENT) is None
+    assert entitlement_list() == []
+
+
+def test_a_current_legacy_binding_is_on_the_entitlement_list(
+    world: RelationshipWorld, entitlement_list
+) -> None:
+    world.bind(PARENT, STUDENT)
+
+    assert entitlement_list() == [STUDENT]
+
+
+def test_a_current_new_link_is_on_the_entitlement_list(
+    world: RelationshipWorld, entitlement_list
+) -> None:
+    world.link(PARENT, STUDENT)
+
+    assert entitlement_list() == [STUDENT]

@@ -353,35 +353,44 @@ def test_link_only_student_enters_the_paid_entitlement_pool(
 
 
 def test_parent_child_entitlement_list_unions_bindings_and_links(
-    table: ConditionalTable, monkeypatch: pytest.MonkeyPatch
+    table: ConditionalTable,
 ) -> None:
     _link_active(table)
-    table.put(
-        {
-            "PK": "USER#student-legacy",
-            "SK": "PROFILE",
-            "user_id": "student-legacy",
-            "role": "student",
-            "account_status": "active",
-            "version": 31,
-            "subscription_tier": "free_trial",
-            "date_of_birth": "2000-01-01",
-        }
-    )
-    monkeypatch.setattr(
-        entitlement_service.user_repo,
-        "list_parent_student_bindings",
-        lambda _parent_id: [
-            {"student_id": "student-legacy", "status": "active"},
-            {"student_id": "student-dropped", "status": "revoked"},
-        ],
-    )
+    for student_id, status in (("student-legacy", "active"), ("student-dropped", "revoked")):
+        table.put(
+            {
+                "PK": f"USER#{student_id}",
+                "SK": "PROFILE",
+                "user_id": student_id,
+                "role": "student",
+                "account_status": "active",
+                "version": 31,
+                "subscription_tier": "free_trial",
+                "date_of_birth": "2000-01-01",
+            }
+        )
+        for key in (
+            (f"USER#{PARENT}", f"CHILD#{student_id}"),
+            (f"USER#{student_id}", f"PARENT#{PARENT}"),
+        ):
+            table.put(
+                {
+                    "PK": key[0],
+                    "SK": key[1],
+                    "parent_id": PARENT,
+                    "student_id": student_id,
+                    "relationship": "child",
+                    "status": status,
+                    "version": 8,
+                }
+            )
 
     listed = entitlement_service.list_parent_child_entitlements(
         PARENT, settings=_settings()
     )
 
-    assert [item["studentId"] for item in listed] == ["student-legacy", STUDENT]
+    # `current_children` judges links before bindings.
+    assert [item["studentId"] for item in listed] == [STUDENT, "student-legacy"]
 
 
 def test_link_only_student_occupies_the_teacher_support_allowance(

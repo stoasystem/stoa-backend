@@ -120,7 +120,7 @@ def resolve_student_entitlement(
 
 
 def list_parent_child_entitlements(parent_id: str, *, settings: Settings) -> list[dict[str, Any]]:
-    """Return effective entitlement summaries for every active child binding."""
+    """Return effective entitlement summaries for every child the parent may see now."""
     return [
         _viewer_projection(
             resolve_student_entitlement(student_id, settings=settings),
@@ -154,19 +154,14 @@ def _viewer_projection(
 
 
 def _active_child_ids(parent_id: str) -> list[str]:
-    """Union the legacy bindings with the many-to-many links, legacy order first."""
-    ordered: dict[str, None] = {}
-    for binding in user_repo.list_parent_student_bindings(parent_id):
-        if str(binding.get("status") or "active") != "active":
-            continue
-        student_id = str(binding.get("student_id") or "")
-        if student_id:
-            ordered[student_id] = None
-    for link in parent_link_service.active_children(parent_id):
-        student_id = str(link.get("student_id") or "")
-        if student_id:
-            ordered[student_id] = None
-    return list(ordered)
+    """The children this parent may see now, judged by the one relationship rule.
+
+    Reading the forward binding row's status alone kept a child whose reverse
+    row had been revoked, which `current_relationship` already refuses.
+    """
+    return [
+        str(link["student_id"]) for link in parent_link_service.current_children(parent_id)
+    ]
 
 
 def _billing_decision(
