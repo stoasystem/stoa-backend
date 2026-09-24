@@ -956,7 +956,11 @@ def admit_teacher_support_case(
             "case_kind": kind,
             "effect_id": effect_id,
             "beneficiary_id": beneficiary,
-            "parent_id": scope.parent_id,
+            # `parent_id` is the key of GSI-ParentId, and DynamoDB refuses an
+            # empty string for an index key outright. An assigned allowance has
+            # no parent, so the attribute is absent rather than empty - which is
+            # also the honest record: there is no parent in this admission.
+            **({"parent_id": scope.parent_id} if scope.parent_id else {}),
             "plan_id": str(scope.plan_id),
             "plan_version": scope.plan_version,
             "allowance_version": scope.allowance_version,
