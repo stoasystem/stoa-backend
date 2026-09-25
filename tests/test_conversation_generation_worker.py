@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -90,6 +90,31 @@ def _expire_lease(table, key: str) -> None:
     assert row["status"] == "ai_running"
     row["expiresAt"] = 1
     table.seed(row)
+
+
+def _minutes_ago(minutes: float) -> str:
+    return (datetime.now(UTC) - timedelta(minutes=minutes)).isoformat()
+
+
+def _asked_at(table, row: dict[str, Any], when: str) -> None:
+    """Move when the question was asked, with its message and allowance identity."""
+    row["created_at"] = row["history_anchor_created_at"] = when
+    [student] = [
+        message
+        for message in _messages(table, "student")
+        if message["message_id"] == row["student_message_id"]
+    ]
+    table.seed({**student, "created_at": when})
+    row.update(
+        conversations._conversation_allowance_command_fields(
+            row,
+            {
+                "effectivePlan": row["allowance_plan_id"],
+                "grantId": row["allowance_grant_id"],
+                "allowanceVersion": row["allowance_version"],
+            },
+        )
+    )
 
 
 def test_the_worker_generates_a_committed_command(table, model) -> None:
@@ -235,7 +260,7 @@ def test_the_sweep_finishes_unclaimed_commands_and_expired_leases(table, model) 
     for key in ("old", "fresh", "expired", "failed"):
         _commit(key)
     old = dict(_command_row(table, "old"))
-    old["message_committed_at"] = "2026-09-24T08:00:00+00:00"
+    old["message_committed_at"] = _minutes_ago(2)
     table.seed(old)
     model.outcomes = [_Killed()]
     with pytest.raises(_Killed):
@@ -262,7 +287,7 @@ def test_the_sweep_stops_starting_answers_when_the_lambda_is_nearly_out_of_time(
 ) -> None:
     _commit("old")
     old = dict(_command_row(table, "old"))
-    old["message_committed_at"] = "2026-09-24T08:00:00+00:00"
+    old["message_committed_at"] = _minutes_ago(2)
     table.seed(old)
 
     class _Context:
@@ -492,7 +517,7 @@ def test_one_command_that_breaks_does_not_stop_the_sweep(
     for key in ("broken", "fine"):
         _commit(key)
         row = dict(_command_row(table, key))
-        row["message_committed_at"] = "2026-09-24T08:00:00+00:00"
+        row["message_committed_at"] = _minutes_ago(2)
         if key == "broken":
             # First in line: a second earlier than it was.
             asked = datetime.fromisoformat(row["created_at"]) - timedelta(seconds=1)
@@ -526,9 +551,10 @@ def test_the_sweep_leaves_a_command_nobody_is_waiting_for_any_more(table, model)
     for key in ("yesterday", "recent"):
         _commit(key)
         row = dict(_command_row(table, key))
-        row["message_committed_at"] = "2026-09-24T08:00:00+00:00"
+        row["message_committed_at"] = _minutes_ago(2)
         if key == "yesterday":
             row["created_at"] = "2026-09-24T08:00:00+00:00"
+            row["message_committed_at"] = row["created_at"]
         table.seed(row)
 
     summary = conversation_generation.handler(
@@ -539,3 +565,47 @@ def test_the_sweep_leaves_a_command_nobody_is_waiting_for_any_more(table, model)
     assert summary["completed"] == 1
     assert _command_row(table, "yesterday")["status"] == "message_committed"
     assert _command_row(table, "recent")["status"] == "completed"
+
+
+def test_the_sweep_takes_up_a_late_attempt_by_when_it_was_claimed(table, model) -> None:
+    """Age runs from the latest attempt, not from when the question was asked (E25).
+
+    Asked 25 minutes ago, tried again at minute 19, its lease ran out at
+    minute 24: the student may still be looking, and the sweep takes it up.
+    """
+    _commit("late")
+    now = datetime.now(UTC)
+    row = dict(_command_row(table, "late"))
+    _asked_at(table, row, _minutes_ago(25))
+    row["message_committed_at"] = row["created_at"]
+    row.update(
+        status="ai_running",
+        attempt=2,
+        leaseOwner="died",
+        claimedAt=int((now - timedelta(minutes=6)).timestamp()),
+        expiresAt=int((now - timedelta(minutes=1)).timestamp()),
+    )
+    table.seed(row)
+
+    summary = conversation_generation.handler(
+        {"source": "stoa.scheduler", "job": "conversation_generation_sweep"}, None
+    )
+
+    assert summary["too_old"] == 0
+    assert summary["completed"] == 1
+    assert _command_row(table, "late")["status"] == "completed"
+
+
+def test_the_sweep_ages_a_reopened_command_by_when_it_was_sent_again(table, model) -> None:
+    _commit("resent")
+    row = dict(_command_row(table, "resent"))
+    _asked_at(table, row, _minutes_ago(40))
+    row["message_committed_at"] = _minutes_ago(2)
+    table.seed(row)
+
+    summary = conversation_generation.handler(
+        {"source": "stoa.scheduler", "job": "conversation_generation_sweep"}, None
+    )
+
+    assert summary["too_old"] == 0
+    assert _command_row(table, "resent")["status"] == "completed"

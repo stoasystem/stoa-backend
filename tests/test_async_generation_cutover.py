@@ -14,6 +14,7 @@ double; the model call and the Lambda invoke are replaced.
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -112,7 +113,8 @@ def test_a_lost_invoke_leaves_the_command_for_the_sweep(
     row = dict(_command_row(table, "key-1"))
     assert row["status"] == "message_committed"
     assert len(_messages(table, "student")) == 1
-    row["message_committed_at"] = "2026-09-24T08:00:00+00:00"
+    # Committed long enough ago for the sweep to take it from the lost invoke.
+    row["message_committed_at"] = (datetime.now(UTC) - timedelta(minutes=2)).isoformat()
     table.seed(row)
     summary = _deliver({"source": "stoa.scheduler", "job": "conversation_generation_sweep"})
     assert summary["completed"] == 1
@@ -206,7 +208,8 @@ def test_a_retry_whose_invoke_is_lost_is_swept(table, model, invokes, switched_o
 
     row = dict(_command_row(table, "key-1"))
     assert row["status"] == "message_committed"
-    row["message_committed_at"] = "2026-09-24T08:00:00+00:00"
+    # Committed long enough ago for the sweep to take it from the lost invoke.
+    row["message_committed_at"] = (datetime.now(UTC) - timedelta(minutes=2)).isoformat()
     table.seed(row)
     summary = _deliver({"source": "stoa.scheduler", "job": "conversation_generation_sweep"})
     assert summary["completed"] == 1

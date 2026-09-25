@@ -37,10 +37,10 @@ SWEEP_JOB = "conversation_generation_sweep"
 # covers a slow start without taking work a delivery is about to do.
 _UNCLAIMED_AFTER = timedelta(seconds=60)
 
-# The sweep answers only questions someone may still be waiting for. The chat
-# stops waiting after six minutes, and a live lease is recovered within ten; an
-# older command is left for the student's own retry with the same key, which
-# still resumes it. Without this, switching the sweep on would answer, and
+# The sweep answers only questions someone may still be waiting for, counted
+# from the latest attempt. The chat stops waiting after six minutes, and a live
+# lease is recovered within ten; an older command is left for the student's own
+# retry with the same key, which still resumes it. Without this, switching the sweep on would answer, and
 # charge for, every question that ever got stuck.
 _SWEEP_MAX_AGE = timedelta(minutes=20)
 
@@ -175,14 +175,30 @@ def run_sweep(context: Any) -> SweepSummary:
 
 
 def _recent(command: dict[str, Any], now: datetime) -> bool:
-    """Asked within `_SWEEP_MAX_AGE`; an unreadable time counts as old."""
+    """Last tried within `_SWEEP_MAX_AGE`; an unreadable time counts as old.
+
+    A running attempt is aged from its claim and a waiting command from when it
+    was committed (or sent again), so a third attempt claimed late in the
+    window is still taken up when its lease runs out. `created_at` is only the
+    fallback for a command that carries neither.
+    """
+    if command.get("status") == "ai_running":
+        claimed = stored_int(command.get("claimedAt"))
+        if claimed is not None:
+            return now - datetime.fromtimestamp(claimed, UTC) <= _SWEEP_MAX_AGE
+    elif command.get("message_committed_at") is not None:
+        committed = _aware_time(command.get("message_committed_at"))
+        return committed is not None and now - committed <= _SWEEP_MAX_AGE
+    asked = _aware_time(command.get("created_at"))
+    return asked is not None and now - asked <= _SWEEP_MAX_AGE
+
+
+def _aware_time(value: object) -> datetime | None:
     try:
-        asked = datetime.fromisoformat(str(command.get("created_at")).replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     except ValueError:
-        return False
-    if asked.tzinfo is None:
-        return False
-    return now - asked <= _SWEEP_MAX_AGE
+        return None
+    return parsed if parsed.tzinfo is not None else None
 
 
 def _waiting_too_long(command: dict[str, Any], now: datetime) -> bool:
