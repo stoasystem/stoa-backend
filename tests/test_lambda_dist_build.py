@@ -48,6 +48,10 @@ def _write_minimal_repo(root: Path) -> None:
         "def handler(event, context):\n    return {'ok': True}\n",
         encoding="utf-8",
     )
+    (root / "src" / "stoa" / "jobs" / "conversation_generation.py").write_text(
+        "def handler(event, context):\n    return {'ok': True}\n",
+        encoding="utf-8",
+    )
 
 
 def _stub_locked_export(builder, monkeypatch, root: Path) -> None:
@@ -462,7 +466,7 @@ def test_boot_smoke_isolatedly_imports_exact_handlers(tmp_path):
 
     assert result == {
         "runtime_target": "python3.12",
-        "handler_count": 3,
+        "handler_count": 4,
         "status": "PASS",
     }
 

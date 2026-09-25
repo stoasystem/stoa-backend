@@ -238,6 +238,9 @@ class MessageCommandResult:
     error_code: str | None = None
     attempt: int | None = None
     operations: tuple[TransactionOperation, ...] = ()
+    # On a claimed AI lease: the status the command had just before the claim,
+    # which tells a lease that ran out from an attempt that ended on its own.
+    previous_status: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -269,6 +272,8 @@ CONVERSATION_WRITER_REGISTRY = frozenset(
         "ai_lease_renew",
         "ai_completion",
         "ai_failure",
+        "ai_invocation_record",
+        "ai_result_record",
         "generation_context_record",
         "teacher_help",
         "usage_event",
@@ -308,6 +313,7 @@ CONVERSATION_PRIVATE_FIELDS = frozenset(
         "expiresAt",
         "error_code",
         "generation_context",
+        "provider_result_json",
     }
 )
 CONVERSATION_TOMBSTONE_ALLOWLIST = frozenset(
@@ -345,6 +351,15 @@ CONVERSATION_ACTIVE_COMMAND_STATES = frozenset(
 MESSAGE_AI_MAX_ATTEMPTS = 3
 # What `fail_message_command` writes and the next lease claim clears.
 MESSAGE_FAILURE_FIELDS = ("failure_category", "failure_retryable", "failed_at")
+# What an attempt leaves while its outcome is not settled: the mark that it
+# called the model, and the answer it kept. Completion and a recorded failure
+# settle the outcome and clear them, so a mark still present always means a
+# call nobody has accounted for.
+MESSAGE_ATTEMPT_TRACE_FIELDS = (
+    "provider_invoked_attempt",
+    "provider_result_attempt",
+    "provider_result_json",
+)
 CONVERSATION_PROVIDER_RETENTION_BOUNDARY = {
     "bedrock_request_response": "outside_backend_deletion_control"
 }
@@ -2803,6 +2818,16 @@ def claim_message_ai_lease(
         )
         or (command_status == "failed" and failed_command_can_retry(command, max_attempts))
     )
+    # The claim acts on what it read about an earlier call. A lost attempt may
+    # still mark a call after that read, until its own lease clock runs out, so
+    # the mark is part of the condition: a claim over a changed mark fails.
+    invoked_mark = _optional_positive_int(command.get("provider_invoked_attempt"))
+    mark_condition = (
+        "attribute_not_exists(provider_invoked_attempt)"
+        if invoked_mark is None
+        else "provider_invoked_attempt=:mark"
+    )
+    mark_values: dict[str, object] = {} if invoked_mark is None else {":mark": invoked_mark}
     if not can_claim or attempt > max_attempts:
         if command_status == "completed":
             disposition = MessageCommandDisposition.COMPLETED
@@ -2847,7 +2872,8 @@ def claim_message_ai_lease(
                                 "(#status=:committed OR (#status=:running AND "
                                 "expiresAt<=:now AND attempt<:max_attempts) OR "
                                 "(#status=:failed AND failure_retryable=:retryable AND "
-                                "attempt<:max_attempts))"
+                                "attempt<:max_attempts)) AND "
+                                + mark_condition
                             ),
                             "ExpressionAttributeNames": {"#status": "status"},
                             "ExpressionAttributeValues": {
@@ -2863,6 +2889,7 @@ def claim_message_ai_lease(
                                 ":now": now_epoch,
                                 ":attempt": attempt,
                                 ":max_attempts": max_attempts,
+                                **mark_values,
                             },
                         }
                     },
@@ -2906,6 +2933,7 @@ def claim_message_ai_lease(
         command=claimed,
         counter_value=_optional_positive_int(command.get("counter_value")),
         attempt=attempt,
+        previous_status=str(command_status),
     )
 
 
@@ -2960,7 +2988,8 @@ def complete_message_command(
                     "Key": message_command_key(conversation_id, idempotency_key),
                     "UpdateExpression": (
                         "SET #status=:completed, result_json=:result, completed_at=:completed_at "
-                        "REMOVE leaseOwner, claimedAt, expiresAt"
+                        "REMOVE leaseOwner, claimedAt, expiresAt, "
+                        + ", ".join(MESSAGE_ATTEMPT_TRACE_FIELDS)
                     ),
                     "ConditionExpression": (
                         "owner_id=:owner AND account_fence_generation=:generation AND #status=:running AND "
@@ -3076,7 +3105,8 @@ def fail_message_command(
             UpdateExpression=(
                 "SET #status=:failed, failure_category=:category, "
                 "failure_retryable=:retryable, failed_at=:now "
-                "REMOVE leaseOwner, claimedAt, expiresAt"
+                "REMOVE leaseOwner, claimedAt, expiresAt, "
+                + ", ".join(MESSAGE_ATTEMPT_TRACE_FIELDS)
             ),
             ConditionExpression=(
                 "owner_id=:owner AND #status=:running AND leaseOwner=:lease_owner "
@@ -3099,6 +3129,144 @@ def fail_message_command(
             return False
         raise AttachmentRepositoryConflict("dependency_failure") from None
     return True
+
+
+def _leased_command_update(
+    *,
+    conversation_id: str,
+    idempotency_key: str,
+    owner_id: str,
+    lease_owner: str,
+    lease_attempt: int,
+    now_epoch: int,
+    update_expression: str,
+    values: dict[str, object],
+    table: object | None,
+) -> bool:
+    """One write the attempt holding an unexpired lease may make; False if it does not."""
+    try:
+        _update_item(
+            table or get_table(),
+            Key=message_command_key(conversation_id, idempotency_key),
+            UpdateExpression=update_expression,
+            ConditionExpression=(
+                "owner_id=:owner AND #status=:running AND leaseOwner=:lease_owner "
+                "AND attempt=:attempt AND expiresAt>:now"
+            ),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":owner": owner_id,
+                ":running": "ai_running",
+                ":lease_owner": lease_owner,
+                ":attempt": lease_attempt,
+                ":now": now_epoch,
+                **values,
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
+
+
+def record_provider_invocation(
+    *,
+    conversation_id: str,
+    idempotency_key: str,
+    owner_id: str,
+    lease_owner: str,
+    lease_attempt: int,
+    now_epoch: int,
+    table: object | None = None,
+) -> bool:
+    """Mark that this attempt is about to call the model, before it does.
+
+    Once the mark is there, an attempt whose lease runs out without a stored
+    result may have been paid for, so it is never called again (ticket 08,
+    constraint 2). Returns False when the lease is no longer this attempt's,
+    and then the model must not be called.
+    """
+    return _leased_command_update(
+        conversation_id=conversation_id,
+        idempotency_key=idempotency_key,
+        owner_id=owner_id,
+        lease_owner=lease_owner,
+        lease_attempt=lease_attempt,
+        now_epoch=now_epoch,
+        update_expression="SET provider_invoked_attempt=:attempt",
+        values={},
+        table=table,
+    )
+
+
+def record_provider_result(
+    *,
+    conversation_id: str,
+    idempotency_key: str,
+    owner_id: str,
+    lease_owner: str,
+    lease_attempt: int,
+    now_epoch: int,
+    result_json: str,
+    table: object | None = None,
+) -> bool:
+    """Keep the answer the model gave this attempt until it is stored for good.
+
+    A later attempt that finds it finishes storing it instead of calling the
+    model again. Completion removes it.
+    """
+    return _leased_command_update(
+        conversation_id=conversation_id,
+        idempotency_key=idempotency_key,
+        owner_id=owner_id,
+        lease_owner=lease_owner,
+        lease_attempt=lease_attempt,
+        now_epoch=now_epoch,
+        update_expression=(
+            "SET provider_result_json=:result, provider_result_attempt=:attempt"
+        ),
+        values={":result": result_json},
+        table=table,
+    )
+
+
+# Pages one sweep may read. The filtered scan reads the whole table, which is
+# a few pages today; a run that reaches this says so, and the table has then
+# outgrown a scan (a sparse index on waiting commands would replace it).
+GENERATION_SWEEP_MAX_PAGES = 50
+
+
+def scan_waiting_generation_commands(
+    *, table: object | None = None, max_pages: int = GENERATION_SWEEP_MAX_PAGES
+) -> tuple[list[dict[str, object]], bool]:
+    """Every command still waiting for an answer, and whether the scan finished.
+
+    Eventually consistent: a command written in the last moment is picked up by
+    the next run, and whatever acts on one claims it conditionally anyway.
+    """
+    target = table or get_table()
+    request: dict[str, object] = {
+        "FilterExpression": "entity_type=:entity AND #status IN (:committed, :running)",
+        "ExpressionAttributeNames": {"#status": "status"},
+        "ExpressionAttributeValues": {
+            ":entity": "message_command",
+            ":committed": "message_committed",
+            ":running": "ai_running",
+        },
+    }
+    commands: list[dict[str, object]] = []
+    for _ in range(max_pages):
+        response = _scan(target, **request)
+        items = response.get("Items", [])
+        if not isinstance(items, list) or any(not isinstance(item, Mapping) for item in items):
+            raise AttachmentRepositoryConflict("dependency_failure")
+        commands.extend(dict(item) for item in items)
+        last = response.get("LastEvaluatedKey")
+        if not last:
+            return commands, True
+        request["ExclusiveStartKey"] = last
+    return commands, False
 
 
 def renew_message_ai_lease(

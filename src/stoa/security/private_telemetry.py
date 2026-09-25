@@ -18,6 +18,7 @@ _EVENTS = frozenset(
         "hint_generation_failed",
         "title_generation_failed",
         "conversation_ai_failed",
+        "conversation_ai_needs_reconciliation",
         "question_ocr_failed",
         "question_ai_failed",
         "message_replay_wait_exhausted",

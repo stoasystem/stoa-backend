@@ -317,6 +317,9 @@ def _run_message_command(
     monkeypatch.setattr(
         conversations.attachment_repo, "renew_message_ai_lease", lambda **_k: True
     )
+    monkeypatch.setattr(
+        conversations.attachment_repo, "record_provider_invocation", lambda **_k: True
+    )
     monkeypatch.setattr(conversations.attachment_repo, "complete_message_command", complete)
     try:
         outcome: Any = conversations._execute_message_command(

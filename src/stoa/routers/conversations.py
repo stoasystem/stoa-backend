@@ -596,6 +596,24 @@ class _ConversationAllowanceBedrockClient:
             raise _allowance_recoverable_failure()
         self._runtime_client: object | None = None
         self._invocation_method = "invoke_model"
+        # Records that the model is about to be called; False means the call
+        # may not be made. Set by `generate_for_command` for the leased attempt.
+        self.on_invocation: Callable[[], bool] | None = None
+
+    def mark_invocation(self) -> None:
+        """Record the call before it is made; refuse one that was not recorded.
+
+        Nothing has been paid for at this point, so the failures raised here
+        leave the command free to be generated again.
+        """
+        if self.on_invocation is None:
+            return
+        try:
+            recorded = self.on_invocation()
+        except Exception:
+            raise ai_service.AIInvocationFailure("invocation_not_recorded") from None
+        if not recorded:
+            raise ai_service.AIInvocationFailure("lease_lost")
 
     def bind_deadline(self, deadline_monotonic: float, clock: Callable[[], float]) -> None:
         """Take the answer's deadline from `ai_service.get_ai_answer`, its one source."""
@@ -692,6 +710,7 @@ class _ConversationAllowanceBedrockClient:
         invoke = getattr(runtime_client, self._invocation_method, None)
         if not callable(invoke):
             raise RuntimeError("Bedrock invocation dependency unavailable")
+        self.mark_invocation()
         return invoke(**kwargs)
 
     def invoke_model_with_response_stream(self, **kwargs: object) -> object:
@@ -1674,7 +1693,9 @@ async def stream_message(
 
 _MESSAGE_POLL_ATTEMPTS = 20
 _MESSAGE_POLL_SECONDS = 0.05
-_AI_LEASE_SECONDS = 120
+# No shorter than the generation sweep's 5-minute period: a lease that ran out
+# between two runs would otherwise be taken over while its attempt still runs.
+_AI_LEASE_SECONDS = 300
 _AI_INVOCATION_DEADLINE_SECONDS = 90
 # Kept back from the Lambda's remaining time to store the answer and respond.
 _AI_PERSIST_RESERVE_SECONDS = 4
@@ -1976,6 +1997,85 @@ def _validate_replay_command(
     return command
 
 
+def _stored_student_message(
+    *,
+    conv_id: str,
+    student_id: str,
+    student_msg_id: str,
+    created_at: str,
+    expected_content: str | None,
+    table: Any,
+) -> tuple[str, list, list[AttachmentSummary]]:
+    """Read back a committed student message and its attachments, checked.
+
+    Returns its content, the attachments as generation prepares them, and their
+    summaries. `expected_content` is the request's, when there is a request.
+    """
+    stored_student = _conversation_repository_call(
+        lambda: table.get_item(
+            Key={"PK": _conv_pk(conv_id), "SK": _msg_sk(student_msg_id)},
+            ConsistentRead=True,
+        ).get("Item")
+    )
+    if (
+        not isinstance(stored_student, dict)
+        or stored_student.get("PK") != _conv_pk(conv_id)
+        or stored_student.get("SK") != _msg_sk(student_msg_id)
+        or stored_student.get("entity_type") != "conversation_message"
+        or stored_student.get("schema_version") != "conversation-message.v1"
+        or stored_student.get("message_id") != student_msg_id
+        or stored_student.get("conversation_id") != conv_id
+        or stored_student.get("student_id") != student_id
+        or stored_student.get("role") != "student"
+        or not isinstance(stored_student.get("content"), str)
+        or (
+            expected_content is not None
+            and stored_student.get("content") != expected_content
+        )
+        or stored_student.get("created_at") != created_at
+    ):
+        raise AttachmentDecisionError(
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+        )
+    raw_attachment_ids = stored_student.get("attachment_ids", [])
+    if (
+        not isinstance(raw_attachment_ids, list)
+        or any(
+            not isinstance(value, str) or not value
+            for value in raw_attachment_ids
+        )
+        or len(set(raw_attachment_ids)) != len(raw_attachment_ids)
+    ):
+        raise AttachmentDecisionError(
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+        )
+    attachment_ids = list(raw_attachment_ids)
+    stored_attachments = _conversation_repository_call(
+        lambda: attachment_repo.get_attachments(attachment_ids, table=table)
+    )
+    if len(stored_attachments) != len(attachment_ids) or set(
+        stored_attachments
+    ) != set(attachment_ids):
+        raise AttachmentDecisionError(
+            AttachmentErrorCode.UPLOAD_NOT_FOUND
+        )
+    prepared = [
+        (
+            "attachment",
+            _validate_replay_attachment(
+                stored_attachments[value],
+                attachment_id=value,
+                owner_id=student_id,
+            ),
+        )
+        for value in attachment_ids
+    ]
+    attachments = attachment_service.attachment_summaries_for_records(
+        attachment_ids, stored_attachments
+    )
+    return str(stored_student["content"]), prepared, attachments
+
+
 def _execute_message_command(
     *,
     conv_id: str,
@@ -2026,6 +2126,110 @@ def _resolve_generation_context(
         "grade": grade,
         "memory_context": _memory_context_for_student(student_id, actor, subject),
     }
+
+
+def _generation_context_without_request(
+    student_id: str, conversation: Mapping[str, object] | None
+) -> dict[str, object]:
+    """The context for a command committed before it was stored with one.
+
+    The worker has no request: the language is the student's stored
+    preference, and the weak topics are left out, because reading them needs
+    the student's own authorisation.
+    """
+    try:
+        profile = user_repo.get_user(student_id)
+    except Exception:
+        logger.warning("student_locale_fetch_failed", exc_info=True)
+        profile = None
+    conversation = conversation or {}
+    return {
+        "schema_version": "generation-context.v1",
+        "locale": locale_service.effective_locale(profile),
+        "subject": _SUBJECT_ALIASES.get(str(conversation.get("subject") or ""), "math"),
+        "grade": _conversation_grade(conversation),
+        "memory_context": None,
+    }
+
+
+def load_committed_message(command: dict) -> CommittedMessage:
+    """Rebuild a committed command from the store alone, for the worker.
+
+    The same checks a resuming request makes, without the request: the
+    command's identity, its history snapshot, the stored student message and
+    its attachments. A command without its generation context is given one.
+    """
+    table = cast(_DynamoConversationTable, get_table())
+    conv_id = str(command.get("conversation_id") or "")
+    student_id = str(command.get("owner_id") or "")
+    command = _validate_replay_command(
+        command,
+        conversation_id=conv_id,
+        owner_id=student_id,
+        idempotency_key=str(command.get("idempotency_key") or ""),
+        fingerprint=str(command.get("fingerprint") or ""),
+    )
+    generation = stored_int(command.get("account_fence_generation"))
+    if generation is None or generation < 1:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    prior_messages = _conversation_repository_call(
+        lambda: _load_anchored_message_history(
+            conversation_id=conv_id,
+            owner_id=student_id,
+            expected_message_ids=command["history_message_ids"],
+            expected_fingerprint=command["history_fingerprint"],
+            table=table,
+        )
+    )
+    content, prepared, attachments = _stored_student_message(
+        conv_id=conv_id,
+        student_id=student_id,
+        student_msg_id=str(command["student_message_id"]),
+        created_at=str(command["created_at"]),
+        expected_content=None,
+        table=table,
+    )
+    if not isinstance(command.get("generation_context"), Mapping):
+        context = _generation_context_without_request(
+            student_id, _conversation_repository_call(lambda: _get_conversation(conv_id))
+        )
+        command["generation_context"] = _conversation_repository_call(
+            lambda: attachment_repo.record_message_generation_context(
+                conversation_id=conv_id,
+                idempotency_key=str(command["idempotency_key"]),
+                owner_id=student_id,
+                context=context,
+                table=table,
+            )
+        )
+    return CommittedMessage(
+        command=command,
+        account_fence_generation=generation,
+        content=content,
+        prior_messages=prior_messages,
+        prepared=prepared,
+        attachments=attachments,
+    )
+
+
+def _stored_provider_result(
+    command: Mapping[str, object], attempt: int
+) -> tuple[str, dict[str, object] | None] | None:
+    """The answer a lost attempt kept on the command, if it kept one."""
+    raw = command.get("provider_result_json")
+    if stored_int(command.get("provider_result_attempt")) != attempt or not isinstance(raw, str):
+        return None
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, Mapping) or not isinstance(payload.get("content"), str):
+        return None
+    metadata = payload.get("allowance")
+    validated = _validated_message_allowance_metadata(metadata)
+    if metadata is not None and validated is None:
+        return None
+    return payload["content"], validated
 
 
 def _record_generation_failure(
@@ -2223,63 +2427,13 @@ def commit_message_command(
         and existing.get("status") in {"message_committed", "ai_running", "failed"}
     )
     if resume_after_message:
-        stored_student = _conversation_repository_call(
-            lambda: table.get_item(
-                Key={"PK": _conv_pk(conv_id), "SK": _msg_sk(student_msg_id)},
-                ConsistentRead=True,
-            ).get("Item")
-        )
-        if (
-            not isinstance(stored_student, dict)
-            or stored_student.get("PK") != _conv_pk(conv_id)
-            or stored_student.get("SK") != _msg_sk(student_msg_id)
-            or stored_student.get("entity_type") != "conversation_message"
-            or stored_student.get("schema_version") != "conversation-message.v1"
-            or stored_student.get("message_id") != student_msg_id
-            or stored_student.get("conversation_id") != conv_id
-            or stored_student.get("student_id") != student_id
-            or stored_student.get("role") != "student"
-            or stored_student.get("content") != body.content
-            or stored_student.get("created_at") != created_at
-        ):
-            raise AttachmentDecisionError(
-                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-            )
-        raw_attachment_ids = stored_student.get("attachment_ids", [])
-        if (
-            not isinstance(raw_attachment_ids, list)
-            or any(
-                not isinstance(value, str) or not value
-                for value in raw_attachment_ids
-            )
-            or len(set(raw_attachment_ids)) != len(raw_attachment_ids)
-        ):
-            raise AttachmentDecisionError(
-                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-            )
-        attachment_ids = list(raw_attachment_ids)
-        stored_attachments = _conversation_repository_call(
-            lambda: attachment_repo.get_attachments(attachment_ids, table=table)
-        )
-        if len(stored_attachments) != len(attachment_ids) or set(
-            stored_attachments
-        ) != set(attachment_ids):
-            raise AttachmentDecisionError(
-                AttachmentErrorCode.UPLOAD_NOT_FOUND
-            )
-        prepared = [
-            (
-                "attachment",
-                _validate_replay_attachment(
-                    stored_attachments[value],
-                    attachment_id=value,
-                    owner_id=student_id,
-                ),
-            )
-            for value in attachment_ids
-        ]
-        attachments = attachment_service.attachment_summaries_for_records(
-            attachment_ids, stored_attachments
+        _, prepared, attachments = _stored_student_message(
+            conv_id=conv_id,
+            student_id=student_id,
+            student_msg_id=student_msg_id,
+            created_at=created_at,
+            expected_content=body.content,
+            table=table,
         )
     else:
         # Stage B is entered only for an absent command, or to resume a claimed
@@ -2593,142 +2747,195 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             retryable=retryable,
         )
 
-    _active_conversation_generation(student_id, table)
-    attachment_context = ""
-    if prepared:
-        s3 = _conversation_repository_call(
-            lambda: boto3.client("s3", region_name=settings.aws_region)
-        )
-        context_result = _conversation_repository_call(
-            lambda: attachment_service.extract_message_attachment_context(
-                prepared,
-                s3=s3,
-                settings=settings,
+    lease_attempt_number = int(lease_result.attempt or 0)
+    # An attempt whose lease ran out is recovered by what it left behind (ticket
+    # 08, constraint 2): not yet called, generate again; answer kept, finish
+    # storing it; called with nothing kept, never call again. The mark is
+    # cleared only when an outcome is settled, so one still present belongs to
+    # whichever earlier attempt called, however many attempts died since.
+    leased = lease_result.command or {}
+    invoked_attempt = stored_int(leased.get("provider_invoked_attempt"))
+    recovered: tuple[str, dict[str, object] | None] | None = None
+    if lease_result.previous_status == "ai_running" and invoked_attempt is not None:
+        recovered = _stored_provider_result(leased, invoked_attempt)
+        if recovered is None:
+            record_failure("needs_reconciliation", retryable=False)
+            emit_private_event(
+                "conversation_ai_needs_reconciliation",
+                correlation_id=command_id,
+                level=logging.WARNING,
             )
-        )
-        if (
-            not isinstance(context_result, attachment_service.AttachmentContextResult)
-            or context_result.disposition
-            is not attachment_service.AttachmentContextDisposition.READY
-        ):
-            code = (
-                context_result.error_code
-                if isinstance(context_result, attachment_service.AttachmentContextResult)
-                and context_result.error_code is not None
-                else AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-            )
-            transient = code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-            record_failure(
-                "attachment_unavailable" if transient else "attachment_invalid",
-                retryable=transient,
-            )
-            raise AttachmentDecisionError(code)
-        attachment_context = context_result.context
-    normalized_subject = context["subject"]
-    grade = context["grade"]
-    student_locale = context["locale"]
-    ai_deadline = runtime_budget_service.ai_deadline(
-        fixed_seconds=_AI_INVOCATION_DEADLINE_SECONDS,
-        reserve_seconds=_AI_PERSIST_RESERVE_SECONDS,
-    )
-    _active_conversation_generation(student_id, table)
-    allowance_client = _ConversationAllowanceBedrockClient(command)
-    allowance_metadata: dict[str, object] | None = None
-    provider_answered = False
+            raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_FAILED)
 
-    try:
-        provider_result = ai_service.get_ai_answer(
-            content=committed.content,
-            subject=normalized_subject,
-            grade=grade,
-            language=student_locale,
-            history=prior_messages,
-            attachment_context=attachment_context,
-            memory_context=memory_context,
-            correlation_id=command_id,
-            deadline_monotonic=ai_deadline,
-            effect_id=allowance_client.allowance_effect_id,
-            client=allowance_client,
-            invocation_class=ai_service.AIInvocationClass.USER_ALLOWANCE,
-            on_step=_publish_generation_step(
-                conv_id, student_id, command_id=command_id, attempt=lease_result.attempt
-            ),
-        )
-        provider_answered = True
-        if isinstance(provider_result, ai_service.AIProviderResult):
-            allowance_metadata = _message_allowance_metadata_from_provider(
-                provider_result,
-                allowance_effect_id=allowance_client.allowance_effect_id,
+    allowance_metadata: dict[str, object] | None = None
+    if recovered is not None:
+        ai_content, allowance_metadata = recovered
+    else:
+        _active_conversation_generation(student_id, table)
+        attachment_context = ""
+        if prepared:
+            s3 = _conversation_repository_call(
+                lambda: boto3.client("s3", region_name=settings.aws_region)
             )
-            ai_result = provider_result.content
-        elif isinstance(provider_result, Mapping):
-            # Narrow compatibility for inherited tests that replace the complete
-            # provider function. Production always returns AIProviderResult.
-            ai_result = dict(provider_result)
-        else:
-            raise ai_service.AIInvocationFailure("malformed_response")
-        if (
-            not isinstance(ai_result.get("steps", []), list)
-            or any(not isinstance(value, str) for value in ai_result.get("steps", []))
-            or not isinstance(ai_result.get("answer", ""), str)
-            or not isinstance(ai_result.get("hints", []), list)
-            or any(not isinstance(value, str) for value in ai_result.get("hints", []))
-        ):
-            raise ai_service.AIInvocationFailure("malformed_response")
-        steps = "\n".join(
-            f"{index + 1}. {value}" for index, value in enumerate(ai_result.get("steps", []))
-        )
-        answer = ai_result.get("answer", "")
-        hints = ai_result.get("hints", [])
-        hint_label = _HINT_LABELS.get(student_locale, _HINT_LABELS[locale_service.DEFAULT_LOCALE])
-        hint = (f"\n\n**{hint_label}:** " + hints[0]) if hints else ""
-        ai_content = f"{steps}\n\n{answer}{hint}".strip()
-        if not ai_content:
-            raise ai_service.AIInvocationFailure("malformed_response")
-    except _ConversationAllowanceFailure as failure:
-        # Refused at counting, admission or the allowance itself, before the
-        # model was paid for, the same message may be sent again. Refused over
-        # the evidence of an answer that did come back, it may not.
-        record_failure(failure.code, retryable=not provider_answered)
-        raise
-    except Exception as exc:
-        if allowance_metadata is None:
-            # A reply that was cut off or garbled was still paid for; its usage
-            # rides on the failure so the reservation can be released here.
-            allowance_metadata = _message_allowance_metadata_from_failure(
-                exc,
-                allowance_effect_id=allowance_client.allowance_effect_id,
+            context_result = _conversation_repository_call(
+                lambda: attachment_service.extract_message_attachment_context(
+                    prepared,
+                    s3=s3,
+                    settings=settings,
+                )
             )
-        if allowance_metadata is not None:
-            observed = _observe_message_provider_usage(
-                beneficiary_id=student_id,
-                metadata=allowance_metadata,
-            )
-            restored = observed and _restore_message_allowance(
-                beneficiary_id=student_id,
-                metadata=allowance_metadata,
-            )
-            if not restored:
-                raise _allowance_recoverable_failure() from None
-        # A reply that was paid for is a known result: generating the same
-        # command again would call the model for an effect already settled.
-        record_failure(
-            exc.category
-            if isinstance(exc, ai_service.AIInvocationFailure)
-            else "provider_error",
-            retryable=allowance_metadata is None,
+            if (
+                not isinstance(context_result, attachment_service.AttachmentContextResult)
+                or context_result.disposition
+                is not attachment_service.AttachmentContextDisposition.READY
+            ):
+                code = (
+                    context_result.error_code
+                    if isinstance(context_result, attachment_service.AttachmentContextResult)
+                    and context_result.error_code is not None
+                    else AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                )
+                transient = code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                record_failure(
+                    "attachment_unavailable" if transient else "attachment_invalid",
+                    retryable=transient,
+                )
+                raise AttachmentDecisionError(code)
+            attachment_context = context_result.context
+        normalized_subject = context["subject"]
+        grade = context["grade"]
+        student_locale = context["locale"]
+        ai_deadline = runtime_budget_service.ai_deadline(
+            fixed_seconds=_AI_INVOCATION_DEADLINE_SECONDS,
+            reserve_seconds=_AI_PERSIST_RESERVE_SECONDS,
         )
-        emit_private_event(
-            "conversation_ai_failed",
-            exception=exc,
-            input_size=len(committed.content),
-            attachment_count=len(prepared),
-            correlation_id=command_id,
-            level=logging.ERROR,
+        _active_conversation_generation(student_id, table)
+        allowance_client = _ConversationAllowanceBedrockClient(command)
+        allowance_client.on_invocation = lambda: _conversation_repository_call(
+            lambda: attachment_repo.record_provider_invocation(
+                conversation_id=conv_id,
+                idempotency_key=idempotency_key,
+                owner_id=student_id,
+                lease_owner=lease_owner,
+                lease_attempt=lease_attempt_number,
+                now_epoch=int(datetime.now(timezone.utc).timestamp()),
+                table=table,
+            )
         )
-        raise AttachmentDecisionError(
-            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-        ) from None
+        provider_answered = False
+
+        try:
+            provider_result = ai_service.get_ai_answer(
+                content=committed.content,
+                subject=normalized_subject,
+                grade=grade,
+                language=student_locale,
+                history=prior_messages,
+                attachment_context=attachment_context,
+                memory_context=memory_context,
+                correlation_id=command_id,
+                deadline_monotonic=ai_deadline,
+                effect_id=allowance_client.allowance_effect_id,
+                client=allowance_client,
+                invocation_class=ai_service.AIInvocationClass.USER_ALLOWANCE,
+                on_step=_publish_generation_step(
+                    conv_id, student_id, command_id=command_id, attempt=lease_result.attempt
+                ),
+            )
+            provider_answered = True
+            if isinstance(provider_result, ai_service.AIProviderResult):
+                allowance_metadata = _message_allowance_metadata_from_provider(
+                    provider_result,
+                    allowance_effect_id=allowance_client.allowance_effect_id,
+                )
+                ai_result = provider_result.content
+            elif isinstance(provider_result, Mapping):
+                # Narrow compatibility for inherited tests that replace the complete
+                # provider function. Production always returns AIProviderResult.
+                ai_result = dict(provider_result)
+            else:
+                raise ai_service.AIInvocationFailure("malformed_response")
+            if (
+                not isinstance(ai_result.get("steps", []), list)
+                or any(not isinstance(value, str) for value in ai_result.get("steps", []))
+                or not isinstance(ai_result.get("answer", ""), str)
+                or not isinstance(ai_result.get("hints", []), list)
+                or any(not isinstance(value, str) for value in ai_result.get("hints", []))
+            ):
+                raise ai_service.AIInvocationFailure("malformed_response")
+            steps = "\n".join(
+                f"{index + 1}. {value}" for index, value in enumerate(ai_result.get("steps", []))
+            )
+            answer = ai_result.get("answer", "")
+            hints = ai_result.get("hints", [])
+            hint_label = _HINT_LABELS.get(student_locale, _HINT_LABELS[locale_service.DEFAULT_LOCALE])
+            hint = (f"\n\n**{hint_label}:** " + hints[0]) if hints else ""
+            ai_content = f"{steps}\n\n{answer}{hint}".strip()
+            if not ai_content:
+                raise ai_service.AIInvocationFailure("malformed_response")
+        except _ConversationAllowanceFailure as failure:
+            # Refused at counting, admission or the allowance itself, before the
+            # model was paid for, the same message may be sent again. Refused over
+            # the evidence of an answer that did come back, it may not.
+            record_failure(failure.code, retryable=not provider_answered)
+            raise
+        except Exception as exc:
+            if allowance_metadata is None:
+                # A reply that was cut off or garbled was still paid for; its usage
+                # rides on the failure so the reservation can be released here.
+                allowance_metadata = _message_allowance_metadata_from_failure(
+                    exc,
+                    allowance_effect_id=allowance_client.allowance_effect_id,
+                )
+            if allowance_metadata is not None:
+                observed = _observe_message_provider_usage(
+                    beneficiary_id=student_id,
+                    metadata=allowance_metadata,
+                )
+                restored = observed and _restore_message_allowance(
+                    beneficiary_id=student_id,
+                    metadata=allowance_metadata,
+                )
+                if not restored:
+                    raise _allowance_recoverable_failure() from None
+            # A reply that was paid for is a known result: generating the same
+            # command again would call the model for an effect already settled.
+            record_failure(
+                exc.category
+                if isinstance(exc, ai_service.AIInvocationFailure)
+                else "provider_error",
+                retryable=allowance_metadata is None,
+            )
+            emit_private_event(
+                "conversation_ai_failed",
+                exception=exc,
+                input_size=len(committed.content),
+                attachment_count=len(prepared),
+                correlation_id=command_id,
+                level=logging.ERROR,
+            )
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            ) from None
+        # Kept until the answer is stored for good, so an attempt that dies on
+        # the way is finished by the next one without a second model call.
+        try:
+            attachment_repo.record_provider_result(
+                conversation_id=conv_id,
+                idempotency_key=idempotency_key,
+                owner_id=student_id,
+                lease_owner=lease_owner,
+                lease_attempt=lease_attempt_number,
+                now_epoch=int(datetime.now(timezone.utc).timestamp()),
+                result_json=json.dumps(
+                    {"content": ai_content, "allowance": allowance_metadata},
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+                table=table,
+            )
+        except Exception:
+            logger.warning("provider_result_not_kept", exc_info=True)
     if allowance_metadata is not None and not _observe_message_provider_usage(
         beneficiary_id=student_id,
         metadata=allowance_metadata,
