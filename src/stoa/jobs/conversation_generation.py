@@ -80,6 +80,9 @@ class SweepSummary:
     settled: int = 0
     # Waiting, but asked too long ago for anyone to be waiting for the answer.
     too_old: int = 0
+    # Of those, attempts whose lease ran out and nobody took up: each still
+    # holds its reservation (ticket 15).
+    stale_leases: int = 0
     missing: int = 0
     # Broke in a way nothing expected; logged, and the sweep moved on.
     errored: int = 0
@@ -185,6 +188,11 @@ def run_sweep(context: Any) -> SweepSummary:
         0,
     )
     outcomes["too_old"] = len(waiting) - len(candidates)
+    outcomes["stale_leases"] = sum(
+        1
+        for command in waiting
+        if command.get("status") == "ai_running" and not _recent(command, now)
+    )
     for command in candidates:
         remaining = _remaining_seconds(context)
         if remaining is not None and remaining < _SWEEP_MIN_REMAINING_SECONDS:
@@ -217,9 +225,14 @@ def run_sweep(context: Any) -> SweepSummary:
             logger.exception("conversation_generation_settlement_failed")
             outcome = "errored"
         outcomes[outcome] += 1
-    return SweepSummary(
+    summary = SweepSummary(
         scanned_to_end=scanned_to_end, candidates=len(candidates), **outcomes
     )
+    logger.info(
+        "conversation_generation_sweep_summary %s",
+        " ".join(f"{name}={value}" for name, value in asdict(summary).items()),
+    )
+    return summary
 
 
 def settle_reservation(command: dict[str, Any]) -> str:

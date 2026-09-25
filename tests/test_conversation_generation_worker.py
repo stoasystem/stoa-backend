@@ -24,6 +24,7 @@ import pytest
 from stoa.db.repositories import attachment_repo
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
+from stoa.security.attachment_errors import AttachmentDecisionError
 from stoa.services import ai_service
 from test_message_command_generation import (  # noqa: F401 - fixtures
     ANSWER,
@@ -609,3 +610,73 @@ def test_the_sweep_ages_a_reopened_command_by_when_it_was_sent_again(table, mode
 
     assert summary["too_old"] == 0
     assert _command_row(table, "resent")["status"] == "completed"
+
+
+def _running(table, key: str, *, attempt: int, claimed_minutes_ago: float) -> None:
+    """An attempt that died: claimed then, its five-minute lease run out since."""
+    now = datetime.now(UTC)
+    row = dict(_command_row(table, key))
+    claimed = now - timedelta(minutes=claimed_minutes_ago)
+    row.update(
+        status="ai_running",
+        attempt=attempt,
+        leaseOwner="died",
+        claimedAt=int(claimed.timestamp()),
+        expiresAt=int((claimed + timedelta(minutes=5)).timestamp()),
+    )
+    table.seed(row)
+
+
+def test_a_command_whose_last_attempt_died_is_counted_once_as_exhausted(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """E26: how often a third attempt dies is readable before it is settled."""
+    events: list[str] = []
+    monkeypatch.setattr(
+        conversations, "emit_private_event", lambda category, **_: events.append(category)
+    )
+    _commit("last")
+    _running(table, "last", attempt=3, claimed_minutes_ago=6)
+
+    summary = conversation_generation.handler(
+        {"source": "stoa.scheduler", "job": "conversation_generation_sweep"}, None
+    )
+    _deliver("last")
+    # The student sending it again reaches the same end, already reached.
+    with pytest.raises(AttachmentDecisionError):
+        conversations.generate_for_command(
+            conversations.load_committed_message(dict(_command_row(table, "last")))
+        )
+
+    assert summary["failed"] == 1
+    assert _command_row(table, "last")["status"] == "terminal_failed"
+    assert events.count("conversation_ai_attempts_exhausted") == 1
+    assert model.calls == []
+
+
+def test_the_sweep_counts_leases_that_ran_out_too_long_ago(
+    table, model, caplog: pytest.LogCaptureFixture
+) -> None:
+    """E26: a lease nobody took up in the window holds its reservation for good."""
+    for key in ("stale", "fresh", "unanswered"):
+        _commit(key)
+    _running(table, "stale", attempt=1, claimed_minutes_ago=40)
+    _running(table, "fresh", attempt=1, claimed_minutes_ago=8)
+    row = dict(_command_row(table, "unanswered"))
+    row["message_committed_at"] = _minutes_ago(40)
+    table.seed(row)
+
+    with caplog.at_level("INFO", logger=conversation_generation.logger.name):
+        summary = conversation_generation.handler(
+            {"source": "stoa.scheduler", "job": "conversation_generation_sweep"}, None
+        )
+
+    assert summary["too_old"] == 2
+    assert summary["stale_leases"] == 1
+    assert summary["completed"] == 1
+    [line] = [
+        record.getMessage()
+        for record in caplog.records
+        if record.getMessage().startswith("conversation_generation_sweep_summary")
+    ]
+    assert "too_old=2" in line and "stale_leases=1" in line and "completed=1" in line

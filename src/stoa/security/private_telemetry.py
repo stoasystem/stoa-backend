@@ -20,6 +20,7 @@ _EVENTS = frozenset(
         "conversation_ai_failed",
         "conversation_ai_needs_reconciliation",
         "conversation_ai_needs_reconciliation_settled",
+        "conversation_ai_attempts_exhausted",
         "question_ocr_failed",
         "question_ai_failed",
         "message_replay_wait_exhausted",

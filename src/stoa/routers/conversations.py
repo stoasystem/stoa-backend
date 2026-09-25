@@ -2863,6 +2863,14 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                     terminal,
                     false_disposition=attachment_repo.MessageCommandDisposition.RETRYABLE,
                 )
+                if terminal.previous_status == "ai_running":
+                    # Its last attempt died; whatever it reserved is still held
+                    # (ticket 15). Counted once, by the write that ended it.
+                    emit_private_event(
+                        "conversation_ai_attempts_exhausted",
+                        correlation_id=command_id,
+                        level=logging.WARNING,
+                    )
                 raise AttachmentDecisionError(_command_error_code(terminal))
             lease_result = current
         if lease_result.disposition in {

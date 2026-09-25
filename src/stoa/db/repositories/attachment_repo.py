@@ -3620,7 +3620,10 @@ def mark_message_command_terminal(
                     )
             return MessageCommandResult(MessageCommandDisposition.MISSING)
         return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
-    return MessageCommandResult(MessageCommandDisposition.TERMINAL)
+    # Only this write ended the command; a later reader finds it already ended.
+    return MessageCommandResult(
+        MessageCommandDisposition.TERMINAL, previous_status="ai_running"
+    )
 
 
 def reserve_upload_for_question(
