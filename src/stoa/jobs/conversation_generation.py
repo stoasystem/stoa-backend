@@ -7,6 +7,12 @@ Scheduler invokes it every five minutes with `job=conversation_generation_sweep`
 to pick up what the direct invocation missed: a command committed but never
 claimed, and an attempt whose lease ran out because its Lambda died.
 
+The sweep also settles what a failure left reserved and nothing else will
+settle: a `needs_reconciliation` command (the model was called, the answer
+lost), and a reservation kept when no time was left to call (E10) that the
+student never sent again. It is restored with the cost recorded at the
+reservation's ceiling (E24).
+
 Either way the work is `conversations.generate_for_command`, which claims the
 command's lease conditionally, so a duplicate delivery finds the lease held or
 the answer stored and leaves. How an attempt that ran out is recovered - again,
@@ -23,10 +29,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from stoa.db.dynamodb import stored_int
-from stoa.db.repositories import attachment_repo
+from stoa.db.repositories import allowance_repo, attachment_repo
 from stoa.routers import conversations
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
-from stoa.services import runtime_budget_service
+from stoa.security.private_telemetry import emit_private_event
+from stoa.services import allowance_service, runtime_budget_service
 
 logger = logging.getLogger(__name__)
 
@@ -40,14 +47,27 @@ _UNCLAIMED_AFTER = timedelta(seconds=60)
 # The sweep answers only questions someone may still be waiting for, counted
 # from the latest attempt. The chat stops waiting after six minutes, and a live
 # lease is recovered within ten; an older command is left for the student's own
-# retry with the same key, which still resumes it. Without this, switching the sweep on would answer, and
-# charge for, every question that ever got stuck.
+# retry with the same key, which still resumes it. Without this, switching the
+# sweep on would answer, and charge for, every question that ever got stuck.
 _SWEEP_MAX_AGE = timedelta(minutes=20)
 
 # The sweep starts another answer only with this much of the Lambda left: the
 # model's own budget is 90 seconds, and one cut short by the timeout leaves its
 # lease to run out, which costs the student five minutes.
 _SWEEP_MIN_REMAINING_SECONDS = 100.0
+
+# How long a failure's reservation is left before the sweep settles it. A lost
+# answer is never tried again, so two sweep runs is enough to be sure no
+# attempt still holds it. A reservation kept at admission is the student's
+# retry to reuse for as long as the sweep would still answer that retry.
+_SETTLE_AFTER = {
+    "needs_reconciliation": timedelta(minutes=10),
+    "deadline_exceeded": timedelta(minutes=20),
+}
+assert set(_SETTLE_AFTER) == set(attachment_repo.UNSETTLED_RESERVATION_FAILURES)
+
+# Settling calls no model; this is only enough for its few writes.
+_SETTLE_MIN_REMAINING_SECONDS = 10.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +85,8 @@ class SweepSummary:
     errored: int = 0
     # Left for the next run: too little of this Lambda remained.
     deferred: int = 0
+    # Failures whose reservation the sweep released, its cost at the ceiling.
+    reconciled: int = 0
 
 
 def handler(event: dict[str, Any] | None, context: Any) -> dict[str, Any]:
@@ -136,11 +158,12 @@ def generate_one(conversation_id: str, idempotency_key: str) -> str:
 def run_sweep(context: Any) -> SweepSummary:
     """Generate what nobody claimed and what a dead attempt left, oldest first.
 
-    A `failed` command is left alone: a failed answer is the student's to send
-    again, and the command already says whether they may.
+    A `failed` command is never generated: a failed answer is the student's to
+    send again, and the command already says whether they may. Its reservation
+    is settled once nothing else will.
     """
     now = datetime.now(UTC)
-    commands, scanned_to_end = attachment_repo.scan_waiting_generation_commands()
+    commands, scanned_to_end = attachment_repo.scan_generation_sweep_commands()
     if not scanned_to_end:
         logger.warning("conversation_generation_sweep_page_limit")
     waiting = [command for command in commands if _waiting_too_long(command, now)]
@@ -149,7 +172,17 @@ def run_sweep(context: Any) -> SweepSummary:
         key=lambda command: str(command.get("created_at") or ""),
     )
     outcomes = dict.fromkeys(
-        ("completed", "failed", "held", "settled", "missing", "errored", "deferred"), 0
+        (
+            "completed",
+            "failed",
+            "held",
+            "settled",
+            "missing",
+            "errored",
+            "deferred",
+            "reconciled",
+        ),
+        0,
     )
     outcomes["too_old"] = len(waiting) - len(candidates)
     for command in candidates:
@@ -169,9 +202,91 @@ def run_sweep(context: Any) -> SweepSummary:
             logger.exception("conversation_generation_sweep_command_failed")
             outcome = "errored"
         outcomes[outcome] += 1
+    unsettled = sorted(
+        (command for command in commands if _settlement_due(command, now)),
+        key=lambda command: str(command.get("failed_at") or ""),
+    )
+    for command in unsettled:
+        remaining = _remaining_seconds(context)
+        if remaining is not None and remaining < _SETTLE_MIN_REMAINING_SECONDS:
+            outcomes["deferred"] += 1
+            continue
+        try:
+            outcome = settle_reservation(command)
+        except Exception:
+            logger.exception("conversation_generation_settlement_failed")
+            outcome = "errored"
+        outcomes[outcome] += 1
     return SweepSummary(
         scanned_to_end=scanned_to_end, candidates=len(candidates), **outcomes
     )
+
+
+def settle_reservation(command: dict[str, Any]) -> str:
+    """Restore what a failure left reserved, its cost at the reservation's ceiling.
+
+    Returns `reconciled` (a reservation was released), `settled` (there was
+    none left to release), `held` (the student sent it again, or another run
+    settled it) or `errored` (the ledger could not settle it; the next run
+    tries again). The command is first closed to retries, which would reuse the
+    reservation; it is marked settled last, so a run that stops in between is
+    finished by the next.
+    """
+    conversation_id = command.get("conversation_id")
+    idempotency_key = command.get("idempotency_key")
+    owner_id = command.get("owner_id")
+    failed_at = command.get("failed_at")
+    if not all(
+        isinstance(value, str) and value
+        for value in (conversation_id, idempotency_key, owner_id, failed_at)
+    ):
+        logger.warning("conversation_generation_settlement_unreadable")
+        return "errored"
+    identity = {
+        "conversation_id": str(conversation_id),
+        "idempotency_key": str(idempotency_key),
+        "owner_id": str(owner_id),
+        "failed_at": str(failed_at),
+    }
+    if not attachment_repo.close_failure_for_settlement(**identity):
+        return "held"
+    effect_id = command.get("allowance_effect_id")
+    released_now = False
+    if isinstance(effect_id, str) and effect_id:
+        released = allowance_service.release_unknown_cost_allowance(
+            beneficiary_id=str(command.get("student_id") or owner_id),
+            effect_id=effect_id,
+        )
+        if released.disposition in {
+            allowance_repo.ReleaseDisposition.RETRYABLE,
+            allowance_repo.ReleaseDisposition.INVALID_STATE,
+        }:
+            logger.warning(
+                "conversation_generation_settlement_refused disposition=%s",
+                released.disposition.value,
+            )
+            return "errored"
+        released_now = released.disposition is allowance_repo.ReleaseDisposition.RELEASED
+        if released_now:
+            # Before the mark: a repeated alert is better than a missing one.
+            emit_private_event(
+                "conversation_ai_needs_reconciliation_settled",
+                correlation_id=str(command.get("command_id") or ""),
+                level=logging.WARNING,
+            )
+    if not attachment_repo.mark_allowance_settled(
+        **identity, now_iso=datetime.now(UTC).isoformat()
+    ):
+        return "held"
+    return "reconciled" if released_now else "settled"
+
+
+def _settlement_due(command: dict[str, Any], now: datetime) -> bool:
+    if command.get("status") != "failed" or "allowance_settled_at" in command:
+        return False
+    after = _SETTLE_AFTER.get(str(command.get("failure_category")))
+    failed = _aware_time(command.get("failed_at"))
+    return after is not None and failed is not None and now - failed >= after
 
 
 def _recent(command: dict[str, Any], now: datetime) -> bool:

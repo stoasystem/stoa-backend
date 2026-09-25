@@ -265,6 +265,27 @@ def restore_user_allowance(
     )
 
 
+def release_unknown_cost_allowance(
+    *,
+    beneficiary_id: str,
+    effect_id: str,
+    released_at: datetime | None = None,
+    table: object | None = None,
+) -> allowance_repo.ReleaseResult:
+    """Restore a reservation with no usage evidence, its cost at the ceiling."""
+    released = _aware(
+        released_at or datetime.now(timezone.utc),
+        "released_at",
+    )
+    beneficiary = _required_text(beneficiary_id, "beneficiary_id")
+    return allowance_repo.release_unknown_cost(
+        beneficiary_id=beneficiary,
+        effect_id=_effect_digest(beneficiary, effect_id),
+        released_at=released,
+        table=table,
+    )
+
+
 def _used_percent(used: int, budget: int) -> float:
     return round((used / budget) * 100, 4)
 

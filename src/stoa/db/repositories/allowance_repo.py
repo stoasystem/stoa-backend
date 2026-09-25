@@ -58,6 +58,17 @@ class FinalizationDisposition(StrEnum):
     RETRYABLE = "retryable"
 
 
+class ReleaseDisposition(StrEnum):
+    # The reservation was given back now, its cost recorded at the ceiling.
+    RELEASED = "released"
+    # Finalized or restored before; nothing was changed.
+    ALREADY_SETTLED = "already_settled"
+    # No reservation was ever made for the effect.
+    NOTHING_RESERVED = "nothing_reserved"
+    INVALID_STATE = "invalid_state"
+    RETRYABLE = "retryable"
+
+
 @dataclass(frozen=True, slots=True)
 class ReservationResult:
     disposition: ReservationDisposition
@@ -74,6 +85,11 @@ class ProviderUsageResult:
 class FinalizationResult:
     disposition: FinalizationDisposition
     finalization: AllowanceFinalization | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ReleaseResult:
+    disposition: ReleaseDisposition
 
 
 class _AllowanceDependencyFailure(RuntimeError):
@@ -783,6 +799,31 @@ def record_provider_usage(
     table: object | None = None,
 ) -> ProviderUsageResult:
     """Persist one immutable provider observation and increment cost exactly once."""
+    return _record_usage(
+        beneficiary_id=beneficiary_id,
+        effect_id=effect_id,
+        provider_request_id_digest=provider_request_id_digest,
+        model_id_digest=model_id_digest,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        observed_at=observed_at,
+        unknown_cost=False,
+        table=table,
+    )
+
+
+def _record_usage(
+    *,
+    beneficiary_id: str,
+    effect_id: str,
+    provider_request_id_digest: str,
+    model_id_digest: str,
+    input_tokens: int,
+    output_tokens: int,
+    observed_at: datetime,
+    unknown_cost: bool,
+    table: object | None,
+) -> ProviderUsageResult:
     beneficiary = _required_text(beneficiary_id, "beneficiary_id")
     effect = _sha256(effect_id, "effect_id")
     request_digest = _sha256(
@@ -804,6 +845,7 @@ def record_provider_usage(
             "model_id_digest": provider_model_digest,
             "input_tokens": actual_input,
             "output_tokens": actual_output,
+            **({"cost_basis": "unknown_cost"} if unknown_cost else {}),
         },
     )
     target = table or get_table()
@@ -865,6 +907,8 @@ def record_provider_usage(
             "provider_cost_retained": True,
             "provider_payload_digest": payload_digest,
             "observed_at": _timestamp_text(now),
+            # The provider never reported usage; the counts are the reservation.
+            **({"cost_basis": "unknown_cost"} if unknown_cost else {}),
         }
         next_effect = {
             **current_effect,
@@ -1229,6 +1273,83 @@ def restore_allowance(
     )
 
 
+def release_unknown_cost(
+    *,
+    beneficiary_id: str,
+    effect_id: str,
+    released_at: datetime,
+    table: object | None = None,
+) -> ReleaseResult:
+    """Give back a reservation whose provider usage will never be known (#18).
+
+    A reservation still `reserved` has its provider cost recorded at the
+    reservation's ceiling, on evidence marked `unknown_cost`, so cost is never
+    understated; one already `observed` keeps the usage it has. Either way the
+    student's reservation is then restored. Each step replays, so a run cut
+    short between them is finished by the next.
+    """
+    beneficiary = _required_text(beneficiary_id, "beneficiary_id")
+    effect = _sha256(effect_id, "effect_id")
+    now = _aware_timestamp(released_at, "released_at")
+    target = table or get_table()
+    try:
+        raw_effect = _strong_get(target, _effect_key(beneficiary, effect))
+        if raw_effect is None:
+            return ReleaseResult(ReleaseDisposition.NOTHING_RESERVED)
+        current_effect = _validated_effect(
+            raw_effect, beneficiary_id=beneficiary, effect_id=effect
+        )
+        reserved_input = _stored_count(
+            current_effect.get("reservation_input_tokens"), "reservation_input_tokens"
+        )
+        reserved_output = _stored_count(
+            current_effect.get("reservation_output_tokens"), "reservation_output_tokens"
+        )
+    except (_AllowanceDependencyFailure, TypeError, ValueError):
+        return ReleaseResult(ReleaseDisposition.RETRYABLE)
+    if current_effect["state"] in {"finalized", "restored"}:
+        return ReleaseResult(ReleaseDisposition.ALREADY_SETTLED)
+    if current_effect["state"] == "reserved":
+        unknown = _payload_digest("unknown_cost", {"effect_id": effect})
+        recorded = _record_usage(
+            beneficiary_id=beneficiary,
+            effect_id=effect,
+            provider_request_id_digest=unknown,
+            model_id_digest=unknown,
+            input_tokens=reserved_input,
+            output_tokens=reserved_output,
+            observed_at=now,
+            unknown_cost=True,
+            table=target,
+        )
+        if recorded.disposition is ProviderUsageDisposition.INVALID_STATE:
+            return ReleaseResult(ReleaseDisposition.INVALID_STATE)
+        if recorded.disposition not in {
+            ProviderUsageDisposition.RECORDED,
+            ProviderUsageDisposition.REPLAYED,
+        }:
+            return ReleaseResult(ReleaseDisposition.RETRYABLE)
+    restored = _complete_allowance(
+        beneficiary_id=beneficiary,
+        effect_id=effect,
+        restore=True,
+        technical_validation_passed=False,
+        safety_check_passed=False,
+        durable_result_stored=False,
+        stable_replay_readable=False,
+        finalized_at=now,
+        table=target,
+    )
+    if restored.disposition in {
+        FinalizationDisposition.RESTORED,
+        FinalizationDisposition.REPLAYED,
+    }:
+        return ReleaseResult(ReleaseDisposition.RELEASED)
+    if restored.disposition is FinalizationDisposition.RETRYABLE:
+        return ReleaseResult(ReleaseDisposition.RETRYABLE)
+    return ReleaseResult(ReleaseDisposition.INVALID_STATE)
+
+
 def get_allowance_counter(
     *,
     beneficiary_id: str,
@@ -1274,12 +1395,15 @@ __all__ = [
     "FinalizationResult",
     "ProviderUsageDisposition",
     "ProviderUsageResult",
+    "ReleaseDisposition",
+    "ReleaseResult",
     "ReservationDisposition",
     "ReservationResult",
     "finalize_allowance",
     "get_allowance_counter",
     "list_provider_usage_evidence",
     "record_provider_usage",
+    "release_unknown_cost",
     "reserve_allowance",
     "restore_allowance",
 ]

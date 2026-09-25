@@ -275,6 +275,7 @@ CONVERSATION_WRITER_REGISTRY = frozenset(
         "ai_invocation_record",
         "ai_result_record",
         "generation_context_record",
+        "allowance_settlement",
         "teacher_help",
         "usage_event",
     }
@@ -3283,22 +3284,37 @@ def record_provider_result(
 GENERATION_SWEEP_MAX_PAGES = 50
 
 
-def scan_waiting_generation_commands(
+# Failures that may leave an allowance reservation nothing else settles: a
+# model call whose answer was lost, and a reservation kept at admission when no
+# time was left to call (E10). The sweep settles them (E24).
+UNSETTLED_RESERVATION_FAILURES = ("needs_reconciliation", "deadline_exceeded")
+
+
+def scan_generation_sweep_commands(
     *, table: object | None = None, max_pages: int = GENERATION_SWEEP_MAX_PAGES
 ) -> tuple[list[dict[str, object]], bool]:
-    """Every command still waiting for an answer, and whether the scan finished.
+    """Every command the sweep may act on, and whether the scan finished.
 
-    Eventually consistent: a command written in the last moment is picked up by
-    the next run, and whatever acts on one claims it conditionally anyway.
+    Those still waiting for an answer, and failed ones whose reservation may
+    still need settling. Eventually consistent: a command written in the last
+    moment is picked up by the next run, and whatever acts on one does so
+    conditionally anyway.
     """
     target = table or get_table()
     request: dict[str, object] = {
-        "FilterExpression": "entity_type=:entity AND #status IN (:committed, :running)",
+        "FilterExpression": (
+            "entity_type=:entity AND (#status IN (:committed, :running) OR "
+            "(#status=:failed AND failure_category IN (:needs_reconciliation, "
+            ":deadline_exceeded) AND "
+            "attribute_not_exists(allowance_settled_at)))"
+        ),
         "ExpressionAttributeNames": {"#status": "status"},
         "ExpressionAttributeValues": {
             ":entity": "message_command",
             ":committed": "message_committed",
             ":running": "ai_running",
+            ":failed": "failed",
+            **{f":{category}": category for category in UNSETTLED_RESERVATION_FAILURES},
         },
     }
     commands: list[dict[str, object]] = []
@@ -3313,6 +3329,86 @@ def scan_waiting_generation_commands(
             return commands, True
         request["ExclusiveStartKey"] = last
     return commands, False
+
+
+def _unsettled_failure_update(
+    *,
+    conversation_id: str,
+    idempotency_key: str,
+    owner_id: str,
+    failed_at: str,
+    update_expression: str,
+    values: dict[str, object],
+    table: object | None,
+) -> bool:
+    """One write to a failure still as the sweep read it and not yet settled."""
+    try:
+        _update_item(
+            table or get_table(),
+            Key=message_command_key(conversation_id, idempotency_key),
+            UpdateExpression=update_expression,
+            ConditionExpression=(
+                "owner_id=:owner AND #status=:failed AND failed_at=:failed_at AND "
+                "attribute_not_exists(allowance_settled_at)"
+            ),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":owner": owner_id,
+                ":failed": "failed",
+                ":failed_at": failed_at,
+                **values,
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
+
+
+def close_failure_for_settlement(
+    *,
+    conversation_id: str,
+    idempotency_key: str,
+    owner_id: str,
+    failed_at: str,
+    table: object | None = None,
+) -> bool:
+    """Stop the same command being tried again before its reservation is released.
+
+    A retry would reuse a reservation that is about to be gone. False when the
+    failure is no longer the one read (the student sent it again) or is settled.
+    """
+    return _unsettled_failure_update(
+        conversation_id=conversation_id,
+        idempotency_key=idempotency_key,
+        owner_id=owner_id,
+        failed_at=failed_at,
+        update_expression="SET failure_retryable=:not_retryable",
+        values={":not_retryable": False},
+        table=table,
+    )
+
+
+def mark_allowance_settled(
+    *,
+    conversation_id: str,
+    idempotency_key: str,
+    owner_id: str,
+    failed_at: str,
+    now_iso: str,
+    table: object | None = None,
+) -> bool:
+    """Record that the failure's reservation is settled, so it is settled once."""
+    return _unsettled_failure_update(
+        conversation_id=conversation_id,
+        idempotency_key=idempotency_key,
+        owner_id=owner_id,
+        failed_at=failed_at,
+        update_expression="SET allowance_settled_at=:now",
+        values={":now": now_iso},
+        table=table,
+    )
 
 
 def renew_message_ai_lease(
