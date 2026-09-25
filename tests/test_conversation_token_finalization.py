@@ -612,5 +612,5 @@ def test_source_binds_durable_message_effect_before_invoke_and_finalize() -> Non
     assert "record_provider_usage" in source
     assert "finalize_token_allowance" in source
     assert "restore_user_allowance" in source
-    assert "_execute_message_command" in inspect.getsource(conversations.send_message)
-    assert "_execute_message_command" in inspect.getsource(conversations.stream_message)
+    assert "_submit_message_command" in inspect.getsource(conversations.send_message)
+    assert "_submit_message_command" in inspect.getsource(conversations.stream_message)

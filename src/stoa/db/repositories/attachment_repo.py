@@ -3080,6 +3080,52 @@ def record_message_generation_context(
     return dict(stored_context)
 
 
+def reopen_failed_message_command(
+    *,
+    conversation_id: str,
+    idempotency_key: str,
+    owner_id: str,
+    attempt: int,
+    now_iso: str,
+    table: object | None = None,
+) -> bool:
+    """Put a failed command the student sends again back to waiting.
+
+    Only while that failure is retryable and still the latest attempt: a
+    request that read an older attempt changes nothing. Waiting is what the
+    student's chat reads while the answer is on its way, and what the sweep
+    takes up if the worker's invoke is lost.
+    """
+    try:
+        _update_item(
+            table or get_table(),
+            Key=message_command_key(conversation_id, idempotency_key),
+            UpdateExpression=(
+                "SET #status=:committed, message_committed_at=:now "
+                f"REMOVE {', '.join(MESSAGE_FAILURE_FIELDS)}"
+            ),
+            ConditionExpression=(
+                "owner_id=:owner AND #status=:failed AND failure_retryable=:retryable "
+                "AND attempt=:attempt AND attempt<:max_attempts"
+            ),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":owner": owner_id,
+                ":failed": "failed",
+                ":committed": "message_committed",
+                ":retryable": True,
+                ":attempt": attempt,
+                ":max_attempts": MESSAGE_AI_MAX_ATTEMPTS,
+                ":now": now_iso,
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
+
+
 def fail_message_command(
     *,
     conversation_id: str,

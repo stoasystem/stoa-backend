@@ -469,10 +469,13 @@ def test_stale_worker_result_is_refused_after_deterministic_takeover(monkeypatch
 
 def test_regular_and_sse_share_one_closed_executor_boundary() -> None:
     source = open(conversations.__file__, encoding="utf-8").read()
-    # One definition plus three closed call sites, including initial-message
-    # reuse. A replay raced during binding re-enters the commit half only.
-    assert source.count("_execute_message_command(") == 4
-    assert source.count("commit_message_command(") == 3
+    # Every route (regular, SSE, initial message) goes through one submit
+    # boundary, which generates in the request or hands the answer to the
+    # worker; both commit through the one commit half. A replay raced during
+    # binding re-enters the commit half only.
+    assert source.count("_submit_message_command(") == 4
+    assert source.count("_execute_message_command(") == 2
+    assert source.count("commit_message_command(") == 4
     assert "[attachment:" not in source
     assert "Entschuldigung, ich konnte keine Antwort generieren." not in source
     assert "Es gab ein technisches Problem." not in source

@@ -102,7 +102,8 @@ def generate_one(conversation_id: str, idempotency_key: str) -> str:
         return "missing"
     if command.get("status") == "failed":
         # Whether it may be tried again is the student's to act on, with the
-        # same key; a late or repeated delivery must not spend their attempts.
+        # same key (the request reopens it); a late or repeated delivery must
+        # not spend their attempts.
         return "settled"
     fingerprint = command.get("fingerprint")
     owner_id = command.get("owner_id")

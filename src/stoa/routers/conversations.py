@@ -22,8 +22,9 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
+from botocore.config import Config
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from stoa.config import settings
@@ -883,6 +884,20 @@ class SendMessageResponse(BaseModel):
     assistantMessage: ChatMessage
 
 
+class MessageAcceptedResponse(BaseModel):
+    """The message is stored and its answer is on its way (202).
+
+    Where it stands is read at `GET /conversations/{id}/generation` with this
+    idempotency key.
+    """
+
+    conversationId: str
+    commandId: str
+    idempotencyKey: str
+    status: Literal["message_committed"] = "message_committed"
+    studentMessage: ChatMessage
+
+
 class ConversationSummary(BaseModel):
     id: str
     title: str
@@ -1386,7 +1401,7 @@ async def create_conversation(
             idempotencyKey=f"initial-{conv_id}",
         )
         try:
-            result = _execute_message_command(
+            result = _submit_message_command(
                 conv_id=conv_id,
                 student_id=student_id,
                 subject=body.subject,
@@ -1404,7 +1419,12 @@ async def create_conversation(
                 error,
                 correlation_id=correlation_id,
             )
-        messages = [result.studentMessage, result.assistantMessage]
+        messages = (
+            # The answer follows; it is read at /generation with this key.
+            [result.studentMessage]
+            if isinstance(result, MessageAcceptedResponse)
+            else [result.studentMessage, result.assistantMessage]
+        )
 
     return ConversationDetail(
         id=conv_id,
@@ -1574,7 +1594,11 @@ async def get_generation_progress(
     return state
 
 
-@router.post("/{conv_id}/messages", response_model=SendMessageResponse)
+@router.post(
+    "/{conv_id}/messages",
+    response_model=SendMessageResponse,
+    responses={status.HTTP_202_ACCEPTED: {"model": MessageAcceptedResponse}},
+)
 async def send_message(
     body: SendMessageRequest,
     authorized: AuthorizedResource = Depends(
@@ -1592,7 +1616,7 @@ async def send_message(
     conv = _conversation_record(authorized.value)
 
     try:
-        result = _execute_message_command(
+        result = _submit_message_command(
             conv_id=conv_id,
             student_id=student_id,
             subject=_required_conversation_text(conv, "subject"),
@@ -1608,10 +1632,18 @@ async def send_message(
     except AttachmentDecisionError as error:
         _raise_attachment(error, correlation_id)
     _adopt_question_as_title(conv_id, conv, body.content)
+    if isinstance(result, MessageAcceptedResponse):
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content=result.model_dump(mode="json"),
+        )
     return result
 
 
-@router.post("/{conv_id}/messages/stream")
+@router.post(
+    "/{conv_id}/messages/stream",
+    responses={status.HTTP_202_ACCEPTED: {"model": MessageAcceptedResponse}},
+)
 async def stream_message(
     body: SendMessageRequest,
     authorized: AuthorizedResource = Depends(
@@ -1635,7 +1667,7 @@ async def stream_message(
     conv = _conversation_record(authorized.value)
 
     try:
-        result = _execute_message_command(
+        result = _submit_message_command(
             conv_id=conv_id,
             student_id=student_id,
             subject=_required_conversation_text(conv, "subject"),
@@ -1654,6 +1686,12 @@ async def stream_message(
     # the client only ever calls this one, so every conversation it opened stayed
     # listed under the subject-and-grade placeholder.
     _adopt_question_as_title(conv_id, conv, body.content)
+    if isinstance(result, MessageAcceptedResponse):
+        # Stored, answer to follow from the worker: nothing to stream here.
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content=result.model_dump(mode="json"),
+        )
     student_msg = result.studentMessage
     assistant_msg = result.assistantMessage
 
@@ -2074,6 +2112,109 @@ def _stored_student_message(
         attachment_ids, stored_attachments
     )
     return str(stored_student["content"]), prepared, attachments
+
+
+def _generation_worker_name() -> str:
+    return settings.conversation_generation_function_name.strip()
+
+
+# Bounded well inside the request's 29 seconds: a slow or throttled invoke
+# leaves the stored command to the sweep, not the student to a gateway timeout.
+_GENERATION_INVOKE_CONFIG = Config(
+    connect_timeout=2,
+    read_timeout=3,
+    retries={"max_attempts": 1, "mode": "standard"},
+)
+
+
+def _invoke_generation_worker(event: dict[str, object]) -> None:
+    """Hand one command to the worker; returns once Lambda has queued it."""
+    client = boto3.client(
+        "lambda", region_name=settings.aws_region, config=_GENERATION_INVOKE_CONFIG
+    )
+    client.invoke(
+        FunctionName=_generation_worker_name(),
+        InvocationType="Event",
+        Payload=json.dumps(event).encode(),
+    )
+
+
+def _submit_message_command(
+    *,
+    conv_id: str,
+    student_id: str,
+    subject: str,
+    grade: str,
+    body: SendMessageRequest,
+    command_context: dict,
+) -> SendMessageResponse | MessageAcceptedResponse:
+    """Commit the message, and generate its answer here or hand it to the worker.
+
+    With the worker named (E21), the request returns as soon as the message is
+    stored: an answer that takes longer than API Gateway's 29 seconds is no
+    longer cut off. A stored answer is still replayed here. Without it, the
+    answer is generated in the request as before; that is the rollback.
+    """
+    if not _generation_worker_name():
+        return _execute_message_command(
+            conv_id=conv_id,
+            student_id=student_id,
+            subject=subject,
+            grade=grade,
+            body=body,
+            command_context=command_context,
+        )
+    committed = commit_message_command(
+        conv_id=conv_id,
+        student_id=student_id,
+        subject=subject,
+        grade=grade,
+        body=body,
+        command_context=command_context,
+    )
+    if isinstance(committed, SendMessageResponse):
+        return committed
+    command = committed.command
+    event: dict[str, object] = {
+        "conversation_id": conv_id,
+        "idempotency_key": body.idempotencyKey,
+    }
+    if command.get("status") == "failed":
+        # The student's retry of a failed answer. Back to waiting before the
+        # request returns: the chat reads that while the answer is on its way
+        # (not the old failure), and the sweep takes it up if this invoke is
+        # lost. Only the student reopens a failure, never a redelivered event.
+        attempt = stored_int(command.get("attempt"))
+        if attempt is not None:
+            _conversation_repository_call(
+                lambda: attachment_repo.reopen_failed_message_command(
+                    conversation_id=conv_id,
+                    idempotency_key=body.idempotencyKey,
+                    owner_id=student_id,
+                    attempt=attempt,
+                    now_iso=_now(),
+                )
+            )
+    try:
+        _invoke_generation_worker(event)
+    except Exception:
+        # Not rolled back: the message and its command are stored, and the
+        # sweep takes up a command nobody claimed within a minute.
+        logger.warning("conversation_generation_invoke_failed", exc_info=True)
+    return MessageAcceptedResponse(
+        conversationId=conv_id,
+        commandId=str(command["command_id"]),
+        idempotencyKey=body.idempotencyKey,
+        studentMessage=ChatMessage(
+            id=str(command["student_message_id"]),
+            conversationId=conv_id,
+            role="student",
+            content=committed.content,
+            createdAt=str(command["created_at"]),
+            status="sent",
+            attachments=committed.attachments,
+        ),
+    )
 
 
 def _execute_message_command(
