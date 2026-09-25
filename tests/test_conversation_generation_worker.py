@@ -680,3 +680,126 @@ def test_the_sweep_counts_leases_that_ran_out_too_long_ago(
         if record.getMessage().startswith("conversation_generation_sweep_summary")
     ]
     assert "too_old=2" in line and "stale_leases=1" in line and "completed=1" in line
+
+
+def _last_attempt_kept_its_answer(
+    table, model, monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
+    """The answer was stored, then the Lambda died; that attempt was the last."""
+    _commit(key)
+    model.outcomes = [_Called()]
+    renew = attachment_repo.renew_message_ai_lease
+
+    def die(**_: Any) -> bool:
+        raise _Killed()
+
+    monkeypatch.setattr(attachment_repo, "renew_message_ai_lease", die)
+    with pytest.raises(_Killed):
+        _deliver(key)
+    monkeypatch.setattr(attachment_repo, "renew_message_ai_lease", renew)
+    row = dict(_command_row(table, key))
+    assert row["provider_result_json"]
+    row.update(attempt=3, provider_invoked_attempt=3, provider_result_attempt=3)
+    table.seed(row)
+
+
+def test_a_last_attempt_that_kept_its_answer_is_finished_not_ended(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """E28: the answer was paid for and stored; storing it needs no model call."""
+    events: list[str] = []
+    monkeypatch.setattr(
+        conversations, "emit_private_event", lambda category, **_: events.append(category)
+    )
+    _last_attempt_kept_its_answer(table, model, monkeypatch, "last")
+    _expire_lease(table, "last")
+
+    summary = conversation_generation.handler(
+        {"source": "stoa.scheduler", "job": "conversation_generation_sweep"}, None
+    )
+
+    assert summary["completed"] == 1
+    assert _command_row(table, "last")["status"] == "completed"
+    [assistant] = _messages(table, "assistant")
+    assert "So kürzt man." in assistant["content"]
+    assert len(model.calls) == 1
+    assert _generation(_client(), "last")["attempt"] == 3
+    assert "conversation_ai_attempts_exhausted" not in events
+
+
+def test_a_kept_answer_is_finished_however_long_ago_its_lease_ran_out(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Finishing costs nothing new, so the window that keeps the sweep from
+    paying for yesterday's questions does not apply."""
+    _last_attempt_kept_its_answer(table, model, monkeypatch, "old")
+    _running(table, "old", attempt=3, claimed_minutes_ago=40)
+
+    summary = conversation_generation.handler(
+        {"source": "stoa.scheduler", "job": "conversation_generation_sweep"}, None
+    )
+
+    assert (summary["completed"], summary["too_old"], summary["stale_leases"]) == (1, 0, 0)
+    assert _command_row(table, "old")["status"] == "completed"
+    assert len(model.calls) == 1
+
+
+def test_an_earlier_attempts_kept_answer_is_finished_outside_the_window(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _commit("early")
+    model.outcomes = [_Called()]
+    renew = attachment_repo.renew_message_ai_lease
+
+    def die(**_: Any) -> bool:
+        raise _Killed()
+
+    monkeypatch.setattr(attachment_repo, "renew_message_ai_lease", die)
+    with pytest.raises(_Killed):
+        _deliver("early")
+    monkeypatch.setattr(attachment_repo, "renew_message_ai_lease", renew)
+    _running(table, "early", attempt=1, claimed_minutes_ago=40)
+
+    summary = conversation_generation.handler(
+        {"source": "stoa.scheduler", "job": "conversation_generation_sweep"}, None
+    )
+
+    assert summary["completed"] == 1
+    assert len(model.calls) == 1
+
+
+def test_a_kept_answer_that_cannot_be_finished_for_a_day_is_given_up(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Finishing retries every run while it keeps failing; a day bounds that,
+    after which the lease is stale and its reservation is settled (E27)."""
+    _last_attempt_kept_its_answer(table, model, monkeypatch, "stuck")
+    row = dict(_command_row(table, "stuck"))
+    _asked_at(table, row, _minutes_ago(25 * 60))
+    table.seed(row)
+    _running(table, "stuck", attempt=3, claimed_minutes_ago=40)
+
+    summary = conversation_generation.handler(
+        {"source": "stoa.scheduler", "job": "conversation_generation_sweep"}, None
+    )
+
+    assert (summary["completed"], summary["stale_leases"]) == (0, 1)
+    assert _command_row(table, "stuck")["status"] == "terminal_failed"
+
+
+def test_a_command_that_kept_its_answer_is_not_ended_terminal(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The request's own terminal branch must not drop it either."""
+    _last_attempt_kept_its_answer(table, model, monkeypatch, "last")
+    _expire_lease(table, "last")
+
+    ended = attachment_repo.mark_message_command_terminal(
+        conversation_id=CONV,
+        idempotency_key="last",
+        owner_id=_command_row(table, "last")["owner_id"],
+        now_iso=_minutes_ago(0),
+    )
+
+    assert ended.disposition is not attachment_repo.MessageCommandDisposition.TERMINAL
+    assert _command_row(table, "last")["status"] == "ai_running"

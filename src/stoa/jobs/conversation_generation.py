@@ -49,8 +49,14 @@ _UNCLAIMED_AFTER = timedelta(seconds=60)
 # from the latest attempt. The chat stops waiting after six minutes, and a live
 # lease is recovered within ten; an older command is left for the student's own
 # retry with the same key, which still resumes it. Without this, switching the
-# sweep on would answer, and charge for, every question that ever got stuck.
+# sweep on would answer, and charge for, every question that ever got stuck. An
+# answer already stored is finished for longer: that calls no model.
 _SWEEP_MAX_AGE = timedelta(minutes=20)
+
+# How long the sweep keeps trying to finish an answer already stored, counted
+# from the question. It retries every run while finishing fails; after this the
+# lease is stale and its reservation is settled instead (E27, E28).
+_KEPT_ANSWER_MAX_AGE = timedelta(days=1)
 
 # The sweep starts another answer only with this much of the Lambda left: the
 # model's own budget is 90 seconds, and one cut short by the timeout leaves its
@@ -175,7 +181,11 @@ def run_sweep(context: Any) -> SweepSummary:
         logger.warning("conversation_generation_sweep_page_limit")
     waiting = [command for command in commands if _waiting_too_long(command, now)]
     candidates = sorted(
-        (command for command in waiting if _recent(command, now)),
+        (
+            command
+            for command in waiting
+            if _recent(command, now) or _finishable(command, now)
+        ),
         key=lambda command: str(command.get("created_at") or ""),
     )
     outcomes = dict.fromkeys(
@@ -339,12 +349,24 @@ def _settlement_due(command: dict[str, Any], now: datetime) -> bool:
 
 
 def _stale_lease(command: dict[str, Any], now: datetime) -> bool:
-    """A lease that ran out, and the window closed with nobody taking it up."""
+    """A lease that ran out, and the window closed with nobody taking it up.
+
+    One that kept its answer is not, while the sweep still tries to finish it.
+    """
     return (
         command.get("status") == "ai_running"
         and _waiting_too_long(command, now)
         and not _recent(command, now)
+        and not _finishable(command, now)
     )
+
+
+def _finishable(command: dict[str, Any], now: datetime) -> bool:
+    """Holds its stored answer, asked within `_KEPT_ANSWER_MAX_AGE`."""
+    if attachment_repo.kept_answer_attempt(command) is None:
+        return False
+    asked = _aware_time(command.get("created_at"))
+    return asked is not None and now - asked <= _KEPT_ANSWER_MAX_AGE
 
 
 def _ended_at(command: dict[str, Any]) -> str:

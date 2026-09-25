@@ -2787,6 +2787,24 @@ def build_message_attachment_transaction(
     return operations
 
 
+def kept_answer_attempt(command: Mapping[str, object]) -> int | None:
+    """The attempt that called the model and stored its answer on the command.
+
+    None unless the stored answer is the called attempt's own, which is what
+    recovery finishes from (`conversations._stored_provider_result`). Storing
+    it needs no model call, so it is finished even when that attempt was the
+    last (E28).
+    """
+    attempt = _optional_positive_int(command.get("provider_result_attempt"))
+    if (
+        attempt is None
+        or attempt != _optional_positive_int(command.get("provider_invoked_attempt"))
+        or not isinstance(command.get("provider_result_json"), str)
+    ):
+        return None
+    return attempt
+
+
 def claim_message_ai_lease(
     *,
     conversation_id: str,
@@ -2805,7 +2823,14 @@ def claim_message_ai_lease(
     except Exception:
         return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
     persisted_attempt = _optional_positive_int(command.get("attempt")) or 0
-    attempt = persisted_attempt + 1
+    # A last attempt that died after storing its answer may be claimed again,
+    # only to store it: that is not another try, so the count stays. The
+    # condition below carries the same test.
+    finishing = (
+        persisted_attempt == max_attempts
+        and kept_answer_attempt(command) == max_attempts
+    )
+    attempt = persisted_attempt if finishing else persisted_attempt + 1
     generation = account_fence_generation or command.get("account_fence_generation")
     if type(generation) is not int or generation <= 0:
         return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
@@ -2872,6 +2897,10 @@ def claim_message_ai_lease(
                                 "owner_id=:owner AND account_fence_generation=:generation AND "
                                 "(#status=:committed OR (#status=:running AND "
                                 "expiresAt<=:now AND attempt<:max_attempts) OR "
+                                "(#status=:running AND expiresAt<=:now AND "
+                                "attempt=:max_attempts AND "
+                                "provider_result_attempt=:max_attempts AND "
+                                "attribute_exists(provider_result_json)) OR "
                                 "(#status=:failed AND failure_retryable=:retryable AND "
                                 "attempt<:max_attempts)) AND "
                                 + mark_condition
@@ -3652,7 +3681,11 @@ def mark_message_command_terminal(
             UpdateExpression=(
                 "SET #status=:terminal, terminal_at=:now REMOVE leaseOwner, claimedAt, expiresAt"
             ),
-            ConditionExpression="owner_id=:owner AND #status=:running AND attempt>=:max",
+            # A command holding its answer is finished, never ended here (E28).
+            ConditionExpression=(
+                "owner_id=:owner AND #status=:running AND attempt>=:max AND "
+                "attribute_not_exists(provider_result_json)"
+            ),
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={
                 ":owner": owner_id,
