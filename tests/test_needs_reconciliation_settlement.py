@@ -187,7 +187,8 @@ def test_a_settled_command_is_not_settled_again(table, model, events) -> None:
 
     again = _sweep()
 
-    assert again["reconciled"] == 0
+    # Not a candidate at all: the ledger's own refusal is not what stops it.
+    assert (again["reconciled"], again["settled"], again["errored"]) == (0, 0, 0)
     assert _command_row(table, "lost")["allowance_settled_at"] == settled_at
     assert _counter(table, "lost")["provider_cost_output_tokens"] == RESERVED_OUTPUT
     assert len(_evidence(table)) == 1
