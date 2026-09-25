@@ -1532,11 +1532,9 @@ def scan_pending_deletion_commands(
     cursor: dict[str, str] | None = None,
     table: Any | None = None,
 ) -> OwnedPrivatePage:
+    # Always the real scan, never a same-named method on the table: discovery
+    # is what the sweep's cursor walks (ticket 13).
     target = table or get_table()
-    hook = getattr(target, "scan_pending_deletion_commands", None)
-    if callable(hook):
-        items, next_cursor = hook(limit=limit, exclusive_start_key=cursor)
-        return OwnedPrivatePage(tuple(dict(item) for item in items), next_cursor)
     request: dict[str, Any] = {
         "ConsistentRead": True,
         "Limit": min(max(int(limit), 1), 100),
@@ -1686,21 +1684,9 @@ def claim_deletion_command(
     if lease_expires_at <= now_epoch:
         raise AccountDeletionConflict("lease must expire after current epoch")
     now_iso = _valid_lifecycle_timestamp(now_iso)
+    # Always the conditional update on the table, never a same-named method:
+    # the claim is what lets exactly one run continue a command (ticket 13).
     target = table or get_table()
-    hook = getattr(target, "claim_deletion_command", None)
-    if callable(hook):
-        claimed = hook(
-            dict(command),
-            lease_owner=lease_owner,
-            now_epoch=now_epoch,
-            lease_expires_at=lease_expires_at,
-            now_iso=now_iso,
-        )
-        if claimed is None or isinstance(claimed, DeletionCommandClaim):
-            return claimed
-        if isinstance(claimed, Mapping):
-            return _claim_from_command(claimed)
-        raise AccountDeletionConflict("malformed deletion claim")
     initial_version = _positive_int(
         stored_int(command.get("command_version") or command.get("version")),
         "command version",
@@ -1763,21 +1749,9 @@ def renew_deletion_command_claim(
     if lease_expires_at <= now_epoch:
         raise AccountDeletionConflict("lease must expire after current epoch")
     now_iso = _valid_lifecycle_timestamp(now_iso)
+    # Always the conditional update on the table: the renewal keeps the claim
+    # alive, so it is guarded the way the claim is.
     target = table or get_table()
-    hook = getattr(target, "renew_deletion_command_claim", None)
-    if callable(hook):
-        renewed = hook(
-            dict(command),
-            claim=claim,
-            now_epoch=now_epoch,
-            lease_expires_at=lease_expires_at,
-            now_iso=now_iso,
-        )
-        if isinstance(renewed, DeletionCommandClaim):
-            return renewed
-        if isinstance(renewed, Mapping):
-            return _claim_from_command(renewed)
-        raise DeletionCommandClaimLost("deletion renewal lost")
     try:
         _update_item(
             target,

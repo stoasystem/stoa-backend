@@ -540,3 +540,91 @@ def test_the_cycle_log_uses_the_time_the_reset_was_stored(
     )
     assert "duration_seconds=10" in message
     assert f"completed_at={(entry + timedelta(seconds=10)).isoformat()}" in message
+
+
+class _LookalikeTable:
+    """A table double that answers the sweep's calls by name, not as a table.
+
+    It has neither `scan` nor `update_item`. The repository used to hand the
+    sweep's discovery and claim to such same-named methods, so a double could
+    replace their semantics without anything noticing (ticket 13, E23).
+    """
+
+    def __init__(self) -> None:
+        self.adopted: list[str] = []
+
+    def scan_pending_deletion_commands(self, **_kwargs: Any) -> Any:
+        self.adopted.append("scan_pending_deletion_commands")
+        return [{"command_id": "c-1", "generation": 1}], None
+
+    def claim_deletion_command(self, *_args: Any, **_kwargs: Any) -> Any:
+        self.adopted.append("claim_deletion_command")
+        return None
+
+    def renew_deletion_command_claim(self, *_args: Any, **_kwargs: Any) -> Any:
+        self.adopted.append("renew_deletion_command_claim")
+        return None
+
+
+def test_a_table_that_only_answers_by_name_is_refused_for_discovery() -> None:
+    table = _LookalikeTable()
+
+    with pytest.raises(account_deletion_repo.AccountDeletionConflict):
+        account_deletion_repo.scan_pending_deletion_commands(limit=5, table=table)
+
+    assert table.adopted == []
+
+
+def test_a_table_that_only_answers_by_name_is_refused_for_the_claim() -> None:
+    table = _LookalikeTable()
+    command = {
+        "PK": "USER#student-1",
+        "SK": "DELETE_COMMAND#c-1",
+        "command_id": "c-1",
+        "generation": 1,
+        "version": 1,
+    }
+
+    with pytest.raises(account_deletion_repo.AccountDeletionConflict):
+        account_deletion_repo.claim_deletion_command(
+            command,
+            lease_owner="sweep-1",
+            now_epoch=1_000,
+            lease_expires_at=1_300,
+            now_iso="2026-09-25T08:00:00+00:00",
+            table=table,
+        )
+
+    assert table.adopted == []
+
+
+def test_a_table_that_only_answers_by_name_is_refused_for_the_renewal() -> None:
+    """The renewal keeps the claim alive, so it is the claim's to guard too."""
+    table = _LookalikeTable()
+    command = {
+        "PK": "USER#student-1",
+        "SK": "DELETE_COMMAND#c-1",
+        "command_id": "c-1",
+        "generation": 1,
+        "version": 2,
+    }
+    claim = account_deletion_repo.DeletionCommandClaim(
+        command_id="c-1",
+        generation=1,
+        lease_owner="sweep-1",
+        lease_expires_at=1_300,
+        command_version=2,
+        branch_results_digest=account_deletion_repo.branch_results_digest({}),
+    )
+
+    with pytest.raises(account_deletion_repo.AccountDeletionConflict):
+        account_deletion_repo.renew_deletion_command_claim(
+            command,
+            claim=claim,
+            now_epoch=1_100,
+            lease_expires_at=1_400,
+            now_iso="2026-09-25T08:00:00+00:00",
+            table=table,
+        )
+
+    assert table.adopted == []

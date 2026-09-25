@@ -82,7 +82,6 @@ class _AccountTable:
         self.fence: dict[str, Any] | None = None
         self.command: dict[str, Any] | None = None
         self.branch_results: dict[str, Any] = {}
-        self.pending: list[dict[str, Any]] = []
 
     def get_item(self, *, Key: dict[str, str], **_kwargs: Any) -> dict[str, Any]:
         if Key["SK"] == "PROFILE":
@@ -109,37 +108,6 @@ class _AccountTable:
         elif not self.command or self.command["fingerprint"] != command["fingerprint"]:
             raise RuntimeError("command conflict")
         return dict(self.fence), dict(self.command)
-
-    def scan_pending_deletion_commands(
-        self, *, limit: int, exclusive_start_key: dict[str, str] | None = None
-    ) -> tuple[list[dict[str, Any]], dict[str, str] | None]:
-        del exclusive_start_key
-        return [dict(item) for item in self.pending[:limit]], None
-
-    def claim_deletion_command(self, command: dict[str, Any], **kwargs: Any):
-        match = next(
-            (
-                item
-                for item in self.pending
-                if item["command_id"] == command["command_id"]
-                and item["generation"] == command["generation"]
-            ),
-            None,
-        )
-        if not match:
-            return None
-        digest = account_deletion_repo.branch_results_digest(
-            match.get("branch_results") or {}
-        )
-        return account_deletion_repo.DeletionCommandClaim(
-            command_id=str(match["command_id"]),
-            generation=int(match["generation"]),
-            lease_owner=str(kwargs["lease_owner"]),
-            lease_expires_at=int(kwargs["lease_expires_at"]),
-            command_version=int(match.get("command_version") or match.get("version") or 1)
-            + 1,
-            branch_results_digest=digest,
-        )
 
 
 def test_account_status_and_registry_are_closed_before_later_branches() -> None:
