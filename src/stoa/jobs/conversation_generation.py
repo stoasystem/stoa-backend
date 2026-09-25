@@ -37,6 +37,13 @@ SWEEP_JOB = "conversation_generation_sweep"
 # covers a slow start without taking work a delivery is about to do.
 _UNCLAIMED_AFTER = timedelta(seconds=60)
 
+# The sweep answers only questions someone may still be waiting for. The chat
+# stops waiting after six minutes, and a live lease is recovered within ten; an
+# older command is left for the student's own retry with the same key, which
+# still resumes it. Without this, switching the sweep on would answer, and
+# charge for, every question that ever got stuck.
+_SWEEP_MAX_AGE = timedelta(minutes=20)
+
 # The sweep starts another answer only with this much of the Lambda left: the
 # model's own budget is 90 seconds, and one cut short by the timeout leaves its
 # lease to run out, which costs the student five minutes.
@@ -51,6 +58,8 @@ class SweepSummary:
     failed: int = 0
     held: int = 0
     settled: int = 0
+    # Waiting, but asked too long ago for anyone to be waiting for the answer.
+    too_old: int = 0
     missing: int = 0
     # Broke in a way nothing expected; logged, and the sweep moved on.
     errored: int = 0
@@ -133,13 +142,15 @@ def run_sweep(context: Any) -> SweepSummary:
     commands, scanned_to_end = attachment_repo.scan_waiting_generation_commands()
     if not scanned_to_end:
         logger.warning("conversation_generation_sweep_page_limit")
+    waiting = [command for command in commands if _waiting_too_long(command, now)]
     candidates = sorted(
-        (command for command in commands if _waiting_too_long(command, now)),
+        (command for command in waiting if _recent(command, now)),
         key=lambda command: str(command.get("created_at") or ""),
     )
     outcomes = dict.fromkeys(
         ("completed", "failed", "held", "settled", "missing", "errored", "deferred"), 0
     )
+    outcomes["too_old"] = len(waiting) - len(candidates)
     for command in candidates:
         remaining = _remaining_seconds(context)
         if remaining is not None and remaining < _SWEEP_MIN_REMAINING_SECONDS:
@@ -160,6 +171,17 @@ def run_sweep(context: Any) -> SweepSummary:
     return SweepSummary(
         scanned_to_end=scanned_to_end, candidates=len(candidates), **outcomes
     )
+
+
+def _recent(command: dict[str, Any], now: datetime) -> bool:
+    """Asked within `_SWEEP_MAX_AGE`; an unreadable time counts as old."""
+    try:
+        asked = datetime.fromisoformat(str(command.get("created_at")).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if asked.tzinfo is None:
+        return False
+    return now - asked <= _SWEEP_MAX_AGE
 
 
 def _waiting_too_long(command: dict[str, Any], now: datetime) -> bool:

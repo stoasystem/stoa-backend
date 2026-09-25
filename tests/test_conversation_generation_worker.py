@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import threading
 import time
+from datetime import datetime, timedelta
 from typing import Any
 
 import pytest
@@ -492,7 +493,10 @@ def test_one_command_that_breaks_does_not_stop_the_sweep(
         _commit(key)
         row = dict(_command_row(table, key))
         row["message_committed_at"] = "2026-09-24T08:00:00+00:00"
-        row["created_at"] = row["created_at"] if key == "fine" else "2026-09-24T07:00:00+00:00"
+        if key == "broken":
+            # First in line: a second earlier than it was.
+            asked = datetime.fromisoformat(row["created_at"]) - timedelta(seconds=1)
+            row["created_at"] = asked.isoformat()
         table.seed(row)
     load = conversations.load_committed_message
 
@@ -510,3 +514,28 @@ def test_one_command_that_breaks_does_not_stop_the_sweep(
     assert summary["errored"] == 1
     assert summary["completed"] == 1
     assert _command_row(table, "fine")["status"] == "completed"
+
+
+def test_the_sweep_leaves_a_command_nobody_is_waiting_for_any_more(table, model) -> None:
+    """Switching the sweep on must not answer, and charge for, yesterday's questions.
+
+    Nobody waits for them: the chat gives up after six minutes, and a live
+    lease is recovered within ten. The student's own retry with the same key
+    still resumes such a command.
+    """
+    for key in ("yesterday", "recent"):
+        _commit(key)
+        row = dict(_command_row(table, key))
+        row["message_committed_at"] = "2026-09-24T08:00:00+00:00"
+        if key == "yesterday":
+            row["created_at"] = "2026-09-24T08:00:00+00:00"
+        table.seed(row)
+
+    summary = conversation_generation.handler(
+        {"source": "stoa.scheduler", "job": "conversation_generation_sweep"}, None
+    )
+
+    assert summary["too_old"] == 1
+    assert summary["completed"] == 1
+    assert _command_row(table, "yesterday")["status"] == "message_committed"
+    assert _command_row(table, "recent")["status"] == "completed"
