@@ -7,11 +7,12 @@ Scheduler invokes it every five minutes with `job=conversation_generation_sweep`
 to pick up what the direct invocation missed: a command committed but never
 claimed, and an attempt whose lease ran out because its Lambda died.
 
-The sweep also settles what a failure left reserved and nothing else will
+The sweep also settles what a command left reserved and nothing else will
 settle: a `needs_reconciliation` command (the model was called, the answer
-lost), and a reservation kept when no time was left to call (E10) that the
-student never sent again. It is restored with the cost recorded at the
-reservation's ceiling (E24).
+lost), a reservation kept when no time was left to call (E10) that the student
+never sent again (E24), a command whose last attempt died, and one whose lease
+ran out with nobody taking it up in the window (E27). It is restored with the
+cost recorded at the reservation's ceiling.
 
 Either way the work is `conversations.generate_for_command`, which claims the
 command's lease conditionally, so a duplicate delivery finds the lease held or
@@ -65,6 +66,9 @@ _SETTLE_AFTER = {
     "deadline_exceeded": timedelta(minutes=20),
 }
 assert set(_SETTLE_AFTER) == set(attachment_repo.UNSETTLED_RESERVATION_FAILURES)
+# A command whose last attempt died is left two sweep runs after it is marked,
+# as a lost answer is, before its reservation is settled (E27).
+_SETTLE_TERMINAL_AFTER = timedelta(minutes=10)
 
 # Settling calls no model; this is only enough for its few writes.
 _SETTLE_MIN_REMAINING_SECONDS = 10.0
@@ -188,11 +192,7 @@ def run_sweep(context: Any) -> SweepSummary:
         0,
     )
     outcomes["too_old"] = len(waiting) - len(candidates)
-    outcomes["stale_leases"] = sum(
-        1
-        for command in waiting
-        if command.get("status") == "ai_running" and not _recent(command, now)
-    )
+    outcomes["stale_leases"] = sum(1 for command in waiting if _stale_lease(command, now))
     for command in candidates:
         remaining = _remaining_seconds(context)
         if remaining is not None and remaining < _SWEEP_MIN_REMAINING_SECONDS:
@@ -212,7 +212,7 @@ def run_sweep(context: Any) -> SweepSummary:
         outcomes[outcome] += 1
     unsettled = sorted(
         (command for command in commands if _settlement_due(command, now)),
-        key=lambda command: str(command.get("failed_at") or ""),
+        key=_ended_at,
     )
     for command in unsettled:
         remaining = _remaining_seconds(context)
@@ -236,22 +236,23 @@ def run_sweep(context: Any) -> SweepSummary:
 
 
 def settle_reservation(command: dict[str, Any]) -> str:
-    """Restore what a failure left reserved, its cost at the reservation's ceiling.
+    """Restore what a command left reserved, its cost at the reservation's ceiling.
 
     Returns `reconciled` (a reservation was released), `settled` (there was
     none left to release), `held` (the student sent it again, or another run
     settled it) or `errored` (the ledger could not settle it; the next run
     tries again). The command is first closed to retries, which would reuse the
-    reservation; it is marked settled last, so a run that stops in between is
-    finished by the next.
+    reservation: a failure is made not retryable, a stale lease is ended
+    `terminal_failed`. It is marked settled last, so a run that stops in
+    between is finished by the next.
     """
     conversation_id = command.get("conversation_id")
     idempotency_key = command.get("idempotency_key")
     owner_id = command.get("owner_id")
-    failed_at = command.get("failed_at")
+    read_status = command.get("status")
     if not all(
         isinstance(value, str) and value
-        for value in (conversation_id, idempotency_key, owner_id, failed_at)
+        for value in (conversation_id, idempotency_key, owner_id)
     ):
         logger.warning("conversation_generation_settlement_unreadable")
         return "errored"
@@ -259,10 +260,34 @@ def settle_reservation(command: dict[str, Any]) -> str:
         "conversation_id": str(conversation_id),
         "idempotency_key": str(idempotency_key),
         "owner_id": str(owner_id),
-        "failed_at": str(failed_at),
     }
-    if not attachment_repo.close_failure_for_settlement(**identity):
-        return "held"
+    if read_status == "ai_running":
+        lease_owner = command.get("leaseOwner")
+        expires_at = stored_int(command.get("expiresAt"))
+        if not isinstance(lease_owner, str) or expires_at is None:
+            logger.warning("conversation_generation_settlement_unreadable")
+            return "errored"
+        now = datetime.now(UTC)
+        # Ended here: settled as the command this write makes it.
+        ended_status, ended_at = "terminal_failed", now.isoformat()
+        if not attachment_repo.close_stale_lease(
+            **identity,
+            lease_owner=lease_owner,
+            expires_at=expires_at,
+            now_epoch=int(now.timestamp()),
+            now_iso=ended_at,
+        ):
+            return "held"
+    else:
+        ended = _ended_at(command)
+        if not ended:
+            logger.warning("conversation_generation_settlement_unreadable")
+            return "errored"
+        ended_status, ended_at = str(read_status), ended
+        if ended_status == "failed" and not attachment_repo.close_failure_for_settlement(
+            **identity, failed_at=ended_at
+        ):
+            return "held"
     effect_id = command.get("allowance_effect_id")
     released_now = False
     if isinstance(effect_id, str) and effect_id:
@@ -288,18 +313,45 @@ def settle_reservation(command: dict[str, Any]) -> str:
                 level=logging.WARNING,
             )
     if not attachment_repo.mark_allowance_settled(
-        **identity, now_iso=datetime.now(UTC).isoformat()
+        **identity,
+        status=ended_status,
+        ended_at=ended_at,
+        now_iso=datetime.now(UTC).isoformat(),
     ):
         return "held"
     return "reconciled" if released_now else "settled"
 
 
 def _settlement_due(command: dict[str, Any], now: datetime) -> bool:
-    if command.get("status") != "failed" or "allowance_settled_at" in command:
+    if "allowance_settled_at" in command:
+        return False
+    status = command.get("status")
+    if status == "ai_running":
+        return _stale_lease(command, now)
+    if status == "terminal_failed":
+        ended = _aware_time(command.get("terminal_at"))
+        return ended is not None and now - ended >= _SETTLE_TERMINAL_AFTER
+    if status != "failed":
         return False
     after = _SETTLE_AFTER.get(str(command.get("failure_category")))
     failed = _aware_time(command.get("failed_at"))
     return after is not None and failed is not None and now - failed >= after
+
+
+def _stale_lease(command: dict[str, Any], now: datetime) -> bool:
+    """A lease that ran out, and the window closed with nobody taking it up."""
+    return (
+        command.get("status") == "ai_running"
+        and _waiting_too_long(command, now)
+        and not _recent(command, now)
+    )
+
+
+def _ended_at(command: dict[str, Any]) -> str:
+    """When an ended command reached its end, as written; empty if it has none."""
+    field = attachment_repo.SETTLEMENT_ENDED_AT.get(str(command.get("status")))
+    ended = command.get(field) if field else None
+    return ended if isinstance(ended, str) else ""
 
 
 def _recent(command: dict[str, Any], now: datetime) -> bool:

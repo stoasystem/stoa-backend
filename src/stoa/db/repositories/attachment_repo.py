@@ -3288,6 +3288,10 @@ GENERATION_SWEEP_MAX_PAGES = 50
 # model call whose answer was lost, and a reservation kept at admission when no
 # time was left to call (E10). The sweep settles them (E24).
 UNSETTLED_RESERVATION_FAILURES = ("needs_reconciliation", "deadline_exceeded")
+# When each ended state was reached; a write to settle one is conditioned on it
+# still being the end the sweep read. `terminal_failed` is a command whose last
+# attempt died, or whose lease nobody took up (E27).
+SETTLEMENT_ENDED_AT = {"failed": "failed_at", "terminal_failed": "terminal_at"}
 
 
 def scan_generation_sweep_commands(
@@ -3304,8 +3308,8 @@ def scan_generation_sweep_commands(
     request: dict[str, object] = {
         "FilterExpression": (
             "entity_type=:entity AND (#status IN (:committed, :running) OR "
-            "(#status=:failed AND failure_category IN (:needs_reconciliation, "
-            ":deadline_exceeded) AND "
+            "(((#status=:failed AND failure_category IN (:needs_reconciliation, "
+            ":deadline_exceeded)) OR #status=:terminal) AND "
             "attribute_not_exists(allowance_settled_at)))"
         ),
         "ExpressionAttributeNames": {"#status": "status"},
@@ -3314,6 +3318,7 @@ def scan_generation_sweep_commands(
             ":committed": "message_committed",
             ":running": "ai_running",
             ":failed": "failed",
+            ":terminal": "terminal_failed",
             **{f":{category}": category for category in UNSETTLED_RESERVATION_FAILURES},
         },
     }
@@ -3331,31 +3336,32 @@ def scan_generation_sweep_commands(
     return commands, False
 
 
-def _unsettled_failure_update(
+def _unsettled_end_update(
     *,
     conversation_id: str,
     idempotency_key: str,
     owner_id: str,
-    failed_at: str,
+    status: str,
+    ended_at: str,
     update_expression: str,
     values: dict[str, object],
     table: object | None,
 ) -> bool:
-    """One write to a failure still as the sweep read it and not yet settled."""
+    """One write to an ended command still as the sweep read it and not yet settled."""
     try:
         _update_item(
             table or get_table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=update_expression,
             ConditionExpression=(
-                "owner_id=:owner AND #status=:failed AND failed_at=:failed_at AND "
-                "attribute_not_exists(allowance_settled_at)"
+                f"owner_id=:owner AND #status=:status AND {SETTLEMENT_ENDED_AT[status]}"
+                "=:ended_at AND attribute_not_exists(allowance_settled_at)"
             ),
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={
                 ":owner": owner_id,
-                ":failed": "failed",
-                ":failed_at": failed_at,
+                ":status": status,
+                ":ended_at": ended_at,
                 **values,
             },
         )
@@ -3379,11 +3385,12 @@ def close_failure_for_settlement(
     A retry would reuse a reservation that is about to be gone. False when the
     failure is no longer the one read (the student sent it again) or is settled.
     """
-    return _unsettled_failure_update(
+    return _unsettled_end_update(
         conversation_id=conversation_id,
         idempotency_key=idempotency_key,
         owner_id=owner_id,
-        failed_at=failed_at,
+        status="failed",
+        ended_at=failed_at,
         update_expression="SET failure_retryable=:not_retryable",
         values={":not_retryable": False},
         table=table,
@@ -3395,20 +3402,74 @@ def mark_allowance_settled(
     conversation_id: str,
     idempotency_key: str,
     owner_id: str,
-    failed_at: str,
+    status: str,
+    ended_at: str,
     now_iso: str,
     table: object | None = None,
 ) -> bool:
-    """Record that the failure's reservation is settled, so it is settled once."""
-    return _unsettled_failure_update(
+    """Record that the command's reservation is settled, so it is settled once.
+
+    `status` is `failed` or `terminal_failed`, and `ended_at` its `failed_at`
+    or `terminal_at` as the sweep read it.
+    """
+    return _unsettled_end_update(
         conversation_id=conversation_id,
         idempotency_key=idempotency_key,
         owner_id=owner_id,
-        failed_at=failed_at,
+        status=status,
+        ended_at=ended_at,
         update_expression="SET allowance_settled_at=:now",
         values={":now": now_iso},
         table=table,
     )
+
+
+def close_stale_lease(
+    *,
+    conversation_id: str,
+    idempotency_key: str,
+    owner_id: str,
+    lease_owner: str,
+    expires_at: int,
+    now_epoch: int,
+    now_iso: str,
+    table: object | None = None,
+) -> bool:
+    """End a command whose lease ran out and that nobody took up (E27).
+
+    `terminal_failed`, as if its attempts were used up, so no retry reuses the
+    reservation about to be released and `/generation` reports an end. Only
+    while the lease is the expired one the sweep read: a student who sent it
+    again since holds a new one, and False leaves the command to them.
+    """
+    try:
+        _update_item(
+            table or get_table(),
+            Key=message_command_key(conversation_id, idempotency_key),
+            UpdateExpression=(
+                "SET #status=:terminal, terminal_at=:now_iso "
+                "REMOVE leaseOwner, claimedAt, expiresAt"
+            ),
+            ConditionExpression=(
+                "owner_id=:owner AND #status=:running AND leaseOwner=:lease_owner "
+                "AND expiresAt=:expires AND expiresAt<=:now"
+            ),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":owner": owner_id,
+                ":running": "ai_running",
+                ":terminal": "terminal_failed",
+                ":lease_owner": lease_owner,
+                ":expires": expires_at,
+                ":now": now_epoch,
+                ":now_iso": now_iso,
+            },
+        )
+    except ClientError as exc:
+        if _conditional(exc):
+            return False
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return True
 
 
 def renew_message_ai_lease(

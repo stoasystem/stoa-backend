@@ -18,16 +18,18 @@ from typing import Any
 
 import pytest
 
-from stoa.db.repositories import allowance_repo
+from stoa.db.repositories import allowance_repo, attachment_repo
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.services import ai_service, allowance_service
-from test_conversation_generation_worker import _deliver, _expire_lease, _Killed
+from test_conversation_generation_worker import _deliver, _expire_lease, _Killed, _running
 from test_message_command_generation import (  # noqa: F401 - fixtures
     ANSWER,
     STUDENT,
+    _client,
     _command_row,
     _commit,
+    _generation,
 )
 from test_message_command_generation import table as table  # noqa: F401 - the fixture
 
@@ -324,3 +326,149 @@ def test_a_settlement_cut_short_is_finished_by_the_next_run_without_charging_twi
     assert counter["reserved_output_tokens"] == 0
     assert counter["provider_cost_output_tokens"] == RESERVED_OUTPUT
     assert len(_evidence(table)) == 1
+
+
+# E27: what E24 does not reach (ticket 15). A command whose last attempt died
+# ends `terminal_failed`; one whose lease ran out outside the sweep's window is
+# never taken up and stays `ai_running`.
+
+
+def _died_after_the_call(table, model: _Model, key: str, **steps: Any) -> None:
+    _commit(key)
+    model.outcomes = [{"reserve": True, "call": True, "then": _Killed(), **steps}]
+    with pytest.raises(_Killed):
+        _deliver(key)
+
+
+def _last_attempt_died(table, model: _Model, key: str, **steps: Any) -> None:
+    """The attempt that called and died was the third; the sweep ends the command."""
+    _died_after_the_call(table, model, key, **steps)
+    row = dict(_command_row(table, key))
+    row.update(attempt=3, provider_invoked_attempt=3)
+    table.seed(row)
+    _expire_lease(table, key)
+    _sweep()
+    assert _command_row(table, key)["status"] == "terminal_failed"
+
+
+def _ended_minutes_ago(table, key: str, minutes: float) -> None:
+    row = dict(_command_row(table, key))
+    row["terminal_at"] = (datetime.now(UTC) - timedelta(minutes=minutes)).isoformat()
+    table.seed(row)
+
+
+def test_a_command_whose_last_attempt_died_is_settled_at_the_ceiling(
+    table, model, events
+) -> None:
+    _last_attempt_died(table, model, "last")
+    _ended_minutes_ago(table, "last", 11)
+
+    summary = _sweep()
+
+    assert summary["reconciled"] == 1
+    counter = _counter(table, "last")
+    assert counter["reserved_output_tokens"] == 0
+    assert counter["provider_cost_input_tokens"] == RESERVED_INPUT
+    assert counter["provider_cost_output_tokens"] == RESERVED_OUTPUT
+    [evidence] = _evidence(table)
+    assert evidence["cost_basis"] == "unknown_cost"
+    assert _command_row(table, "last")["allowance_settled_at"]
+    assert [category for category, _ in events] == [
+        "conversation_ai_needs_reconciliation_settled"
+    ]
+
+    again = _sweep()
+
+    assert (again["reconciled"], again["settled"], again["errored"]) == (0, 0, 0)
+    assert len(events) == 1
+
+
+def test_a_command_whose_last_attempt_died_is_left_while_it_is_recent(
+    table, model, events
+) -> None:
+    _last_attempt_died(table, model, "last")
+    _ended_minutes_ago(table, "last", 5)
+
+    assert _sweep()["reconciled"] == 0
+    assert _counter(table, "last")["reserved_output_tokens"] == RESERVED_OUTPUT
+    assert events == []
+
+
+def test_a_last_attempt_whose_usage_was_observed_keeps_that_usage(
+    table, model, events
+) -> None:
+    _last_attempt_died(table, model, "last", usage=(100, 300))
+    _ended_minutes_ago(table, "last", 11)
+
+    _sweep()
+
+    counter = _counter(table, "last")
+    assert counter["reserved_output_tokens"] == 0
+    assert counter["provider_cost_output_tokens"] == 300
+    [evidence] = _evidence(table)
+    assert "cost_basis" not in evidence
+
+
+def test_a_lease_nobody_took_up_is_ended_and_settled(table, model, events) -> None:
+    _died_after_the_call(table, model, "stale")
+    _running(table, "stale", attempt=1, claimed_minutes_ago=40)
+
+    summary = _sweep()
+
+    assert summary["reconciled"] == 1
+    row = _command_row(table, "stale")
+    assert row["status"] == "terminal_failed"
+    assert row["allowance_settled_at"]
+    assert "leaseOwner" not in row
+    assert _counter(table, "stale")["reserved_output_tokens"] == 0
+    assert _counter(table, "stale")["provider_cost_output_tokens"] == RESERVED_OUTPUT
+    generation = _generation(_client(), "stale")
+    assert (generation["status"], generation["retryable"]) == ("failed", False)
+    assert model.calls == 1
+
+
+def test_a_lease_that_ran_out_within_the_window_is_generated_not_settled(
+    table, model, events
+) -> None:
+    _commit("recent")
+    model.outcomes = [{"reserve": True, "then": _Killed()}]
+    with pytest.raises(_Killed):
+        _deliver("recent")
+    _running(table, "recent", attempt=1, claimed_minutes_ago=8)
+
+    summary = _sweep()
+
+    # Taken up by the sweep and nothing else: not a settlement candidate too.
+    assert (summary["completed"], summary["reconciled"], summary["held"]) == (1, 0, 0)
+    assert _command_row(table, "recent")["status"] == "completed"
+    assert "allowance_settled_at" not in _command_row(table, "recent")
+
+
+def test_a_lease_taken_up_after_the_sweep_read_it_is_left_alone(
+    table, model, events, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The student sent it again between the sweep's read and its write.
+
+    That attempt died too, so its lease has also run out: only that it is not
+    the lease the sweep read keeps the sweep from ending a recent attempt.
+    """
+    _died_after_the_call(table, model, "stale")
+    _running(table, "stale", attempt=1, claimed_minutes_ago=40)
+    close = attachment_repo.close_stale_lease
+
+    def retried_first(**kwargs: Any) -> bool:
+        row = dict(_command_row(table, "stale"))
+        now = int(datetime.now(UTC).timestamp())
+        row.update(leaseOwner="retry", claimedAt=now - 360, expiresAt=now - 60)
+        table.seed(row)
+        return close(**kwargs)
+
+    monkeypatch.setattr(attachment_repo, "close_stale_lease", retried_first)
+
+    summary = _sweep()
+
+    assert (summary["reconciled"], summary["held"]) == (0, 1)
+    row = _command_row(table, "stale")
+    assert (row["status"], row["leaseOwner"]) == ("ai_running", "retry")
+    assert _counter(table, "stale")["reserved_output_tokens"] == RESERVED_OUTPUT
+    assert events == []
