@@ -23,6 +23,13 @@ refuses the whole request with a ValidationException; the doubles stored the row
 on 2026-09-24 a teacher-support admission carrying `parent_id=""` 503'd every request
 in production with the suite green.
 
+A seventh is the same key written as `None`. The resource interface sends it as the
+NULL type and the table refuses the type mismatch; on 2026-07-09 the usage ledger's
+`put_item` 503'd five times that way. The transaction serializers in the repositories
+leave a Put's top-level `None` attributes out instead, so the same row is accepted
+there - and the seams below apply each repository's rule, so a test sees what the
+table would.
+
 `tests/test_fakes_dynamodb_fidelity.py` holds one test per rule below; those tests are
 what make this file load-bearing rather than merely well intentioned.
 """
@@ -34,6 +41,7 @@ from collections.abc import Mapping
 from copy import deepcopy
 from decimal import Decimal
 import threading
+import re
 from typing import Any, NamedTuple
 
 from botocore.exceptions import ClientError
@@ -50,7 +58,9 @@ class IndexSchema(NamedTuple):
 # `stoa-infra/stacks/database_stack.py`. A row reaches an index only when it holds
 # every one of its key attributes - that sparseness is a real DynamoDB property and
 # `parent_link_repo` depends on it: the link rows omit `created_at` on purpose so they
-# stay out of GSI-StudentId. An attribute listed here may be absent but never `""`.
+# stay out of GSI-StudentId. An attribute listed here may be absent but never `""`
+# or `None`: the first is refused as an empty string, the second as a NULL where
+# the index expects S.
 DEFAULT_INDEXES: dict[str, IndexSchema] = {
     "GSI-Email": IndexSchema("email"),
     "GSI-StudentId": IndexSchema("student_id", "created_at"),
@@ -106,6 +116,81 @@ def empty_index_key(index_name: str, attribute: str, operation: str) -> ClientEr
         },
         operation,
     )
+
+
+def null_index_key(index_name: str, attribute: str, operation: str) -> ClientError:
+    """The ValidationException DynamoDB answers a NULL secondary index key with."""
+    return ClientError(
+        {
+            "Error": {
+                "Code": "ValidationException",
+                "Message": (
+                    "One or more parameter values were invalid: Type mismatch for "
+                    f"Index Key {attribute} Expected: S Actual: NULL IndexName: {index_name}"
+                ),
+            },
+            "ResponseMetadata": {"HTTPStatusCode": 400},
+        },
+        operation,
+    )
+
+
+def undefined_expression_value(expression: str, token: str) -> ClientError:
+    """The ValidationException for an expression naming a value that was not sent."""
+    return ClientError(
+        {
+            "Error": {
+                "Code": "ValidationException",
+                "Message": (
+                    f"Invalid {expression}: An expression attribute value used in "
+                    f"expression is not defined; attribute value: {token}"
+                ),
+            },
+            "ResponseMetadata": {"HTTPStatusCode": 400},
+        },
+        "TransactWriteItems",
+    )
+
+
+def _without_none(values: Mapping[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in values.items() if value is not None}
+
+
+def as_attachment_transaction(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """What `attachment_repo._serialize_transactions` sends: a Put's top-level `None` left out.
+
+    Keys and expression values are sent as they are, `None` included.
+    """
+    result = []
+    for operation in operations:
+        kind, body = next(iter(operation.items()))
+        if kind == "Put" and "Item" in body:
+            body = {**body, "Item": _without_none(body["Item"])}
+        result.append({kind: body})
+    return result
+
+
+def as_account_transaction(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """What `account_deletion_repo._serialize_operation` sends.
+
+    `None` is left out of the item, the key and the expression values alike - but the
+    expressions are sent untouched, so one that named a dropped value now names a
+    value that is not there, and the table refuses the request.
+    """
+    result = []
+    for operation in operations:
+        kind, body = next(iter(operation.items()))
+        body = dict(body)
+        for field in ("Item", "Key", "ExpressionAttributeValues"):
+            if field in body:
+                body[field] = _without_none(body[field])
+        sent = body.get("ExpressionAttributeValues") or {}
+        for expression in ("UpdateExpression", "ConditionExpression"):
+            for token in re.findall(r":[A-Za-z0-9_]+", str(body.get(expression) or "")):
+                if token not in sent:
+                    raise undefined_expression_value(expression, token)
+        result.append({kind: body})
+    return result
 
 
 def as_stored(value: Any) -> Any:
@@ -513,7 +598,7 @@ class FakeTable:
         incident 2 through the back door.
         """
         for item in items:
-            self._refuse_empty_index_keys(item, "Seed")
+            self._refuse_invalid_index_keys(item, "Seed")
             self.rows[_key_of(item)] = as_stored(deepcopy(item))
 
     def item_count(self) -> int:
@@ -523,18 +608,23 @@ class FakeTable:
         self.calls[operation] += 1
         self.requests.append((operation, request))
 
-    def _refuse_empty_index_keys(self, row: dict[str, Any], operation: str) -> None:
-        """Raise the real ValidationException if `row` carries `""` as an index key.
+    def _refuse_invalid_index_keys(self, row: dict[str, Any], operation: str) -> None:
+        """Raise the real ValidationException if `row` holds `""` or `None` as an index key.
 
         Every path that can leave a row in `self.rows` calls this on the row it would
         leave, before anything is stored. Absent is fine - that is how a row stays out
-        of a sparse index. Only `""` is refused, which is all this checks: a wrong key
+        of a sparse index. `""` is refused as an empty string and `None` as a NULL
+        where the index expects S, which is all this checks: any other wrong key
         type, an oversized item or an empty table key still get through.
         """
         for index_name, schema in self.indexes.items():
             for attribute in (schema.partition_key, schema.sort_key):
-                if attribute is not None and row.get(attribute) == "":
+                if attribute is None or attribute not in row:
+                    continue
+                if row[attribute] == "":
                     raise empty_index_key(index_name, attribute, operation)
+                if row[attribute] is None:
+                    raise null_index_key(index_name, attribute, operation)
 
     # -- point operations --------------------------------------------------------
 
@@ -552,7 +642,7 @@ class FakeTable:
             key = _key_of(item)
             # The item is invalid whatever is stored, so it is refused before the
             # condition is judged, as the real request validation does.
-            self._refuse_empty_index_keys(item, "PutItem")
+            self._refuse_invalid_index_keys(item, "PutItem")
             if not condition_holds(
                 kwargs.get("ConditionExpression"),
                 self.rows.get(key),
@@ -583,7 +673,7 @@ class FakeTable:
                 kwargs.get("ExpressionAttributeNames"),
                 kwargs.get("ExpressionAttributeValues"),
             )
-            self._refuse_empty_index_keys(updated, "UpdateItem")
+            self._refuse_invalid_index_keys(updated, "UpdateItem")
             self.rows[key] = as_stored(updated)
             return self._return_values(
                 kwargs.get("ReturnValues"), current, self.rows[key], touched
@@ -772,17 +862,23 @@ class FakeTable:
         """
         from stoa.db.repositories import account_deletion_repo
 
+        # The production function serializes with `_serialize_operation` and reports
+        # every refusal as an `AccountDeletionConflict` - a cancellation as the
+        # conditional kind, anything else, a ValidationException included, as a
+        # dependency failure. The cause is kept, so a test can still see which.
         try:
-            self.transact_write_items(operations)
+            self.transact_write_items(as_account_transaction(operations))
         except ClientError as exc:
-            if (
-                exc.response.get("Error", {}).get("Code")
-                == "TransactionCanceledException"
-            ):
+            if exc.response.get("Error", {}).get("Code") in {
+                "ConditionalCheckFailedException",
+                "TransactionCanceledException",
+            }:
                 raise account_deletion_repo.AccountDeletionConflict(
-                    "conditional conflict"
+                    "conditional account lifecycle conflict"
                 ) from exc
-            raise
+            raise account_deletion_repo.AccountDeletionConflict(
+                "account lifecycle dependency unavailable"
+            ) from exc
 
     def transact_conversation_write(self, operations: list[dict[str, Any]]) -> None:
         """The seam `record_teacher_help_request` reaches for before it degrades.
@@ -793,8 +889,12 @@ class FakeTable:
         and the queue row. Tests written against that branch assert on operations
         that were never executed, which is the most complete form of the failure
         this file exists to prevent.
+
+        Production sends these through `account_deletion_repo.transact`, so the
+        same `None` handling applies. Its errors are still raised as the table
+        raises them; the wrapping the two callers do around that path is theirs.
         """
-        self.transact_write_items(operations)
+        self.transact_write_items(as_account_transaction(operations))
 
     def transact_write_items(self, operations: list[dict[str, Any]]) -> None:
         """All conditions, then all effects, under one lock.
@@ -803,10 +903,18 @@ class FakeTable:
         conditions before either writes, and a conditional claim the real store would
         refuse gets through the double.
 
-        A row that would be left with an index key of `""` makes the whole request
-        invalid - a ValidationException, not a cancellation, so no caller can take it
-        for a condition race worth retrying - and nothing is written.
+        A row that would be left with an index key of `""` or `None` makes the whole
+        request invalid - a ValidationException, not a cancellation, so no caller can
+        take it for a condition race worth retrying - and nothing is written.
+
+        This is the seam `attachment_repo.transact` reaches for (a resource table has
+        no `transact_write_items`, so in production that function serializes with
+        `_serialize_transactions`), and it applies that rule: a Put's top-level
+        `None` attributes are left out, keys and expression values are sent as given.
+        A NULL that survives that, in an expression value or a nested map, is judged
+        on the row it would leave, like the table does.
         """
+        operations = as_attachment_transaction(operations)
         with self.lock:
             self._record("transact_write_items", {"operations": operations})
             staged: list[tuple[tuple[str, str], dict[str, Any] | None]] = []
@@ -819,7 +927,7 @@ class FakeTable:
                         else _key_of(body["Item"])
                     )
                     if kind == "Put":
-                        self._refuse_empty_index_keys(body["Item"], "TransactWriteItems")
+                        self._refuse_invalid_index_keys(body["Item"], "TransactWriteItems")
                     current = self.rows.get(key)
                     if not condition_holds(
                         body.get("ConditionExpression"),
@@ -847,7 +955,7 @@ class FakeTable:
                         body.get("ExpressionAttributeNames"),
                         body.get("ExpressionAttributeValues"),
                     )
-                    self._refuse_empty_index_keys(updated, "TransactWriteItems")
+                    self._refuse_invalid_index_keys(updated, "TransactWriteItems")
                     staged.append((key, as_stored(updated)))
             if any(reason != "None" for reason in reasons):
                 raise transaction_canceled(reasons)

@@ -8,7 +8,7 @@ from typing import Protocol, SupportsInt, runtime_checkable
 from boto3.dynamodb.conditions import Attr, ConditionBase, Key
 from botocore.exceptions import ClientError
 
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, omit_none_attributes
 
 
 VERSION_ENTITY = "curriculum_version"
@@ -70,6 +70,11 @@ def _get_item(table: object, **kwargs: object) -> CurriculumItem:
 def _put_item(table: object, **kwargs: object) -> object:
     if not isinstance(table, _PutTable):
         raise RuntimeError("curriculum dependency unavailable")
+    item = kwargs.get("Item")
+    if isinstance(item, Mapping):
+        # A fresh draft has no review state yet, and `review_state` keys
+        # GSI-ReviewState; the table refuses it as NULL.
+        kwargs["Item"] = omit_none_attributes(item)
     return table.put_item(**kwargs)
 
 

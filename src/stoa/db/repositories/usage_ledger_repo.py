@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
-from stoa.db.dynamodb import get_table
+from stoa.db.dynamodb import get_table, omit_none_attributes
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -62,7 +63,23 @@ def _get_item(table: object, **kwargs: object) -> UsageItem:
 def _put_item(table: object, **kwargs: object) -> object:
     if not isinstance(table, _PutTable):
         raise ValueError("usage ledger dependency unavailable")
+    item = kwargs.get("Item")
+    if isinstance(item, Mapping):
+        # A ledger event names its parent even when the student has none, and
+        # `parent_id` keys GSI-ParentId; the table refuses it as NULL.
+        kwargs["Item"] = omit_none_attributes(item)
     return table.put_item(**kwargs)
+
+
+def _event_exists(table: object, event: UsageItem) -> bool:
+    """Whether the event is in the table now: the one conflict that is a duplicate.
+
+    The account seam reports every refusal as the same conflict - a fence that
+    moved, a throttle, a request the table would not take. Only one of them means
+    the event was already written, and only that one may be answered as such.
+    """
+    response = _get_item(table, Key={"PK": event["PK"], "SK": event["SK"]})
+    return response.get("Item") is not None
 
 
 def _query(table: object, **kwargs: object) -> UsageItem:
@@ -148,7 +165,9 @@ def put_usage_event(
             )
             return True
         except account_deletion_repo.AccountDeletionConflict:
-            return False
+            if _event_exists(target, event):
+                return False
+            raise
     try:
         _put_item(target,
             Item=event,

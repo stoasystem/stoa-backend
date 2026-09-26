@@ -21,6 +21,7 @@ from fakes.dynamodb import (
     apply_update_expression,
     as_stored,
 )
+from stoa.db.repositories.account_deletion_repo import AccountDeletionConflict
 from test_index_keys_are_never_empty import INDEX_KEY_ATTRIBUTES
 
 
@@ -539,16 +540,19 @@ def test_a_conversation_transaction_with_an_empty_index_key_is_invalid_not_cance
     assert table.rows == {}
 
 
-def test_an_account_transaction_that_empties_an_index_key_is_invalid_not_a_conflict() -> None:
+def test_an_account_transaction_that_empties_an_index_key_is_refused_like_production() -> None:
     """An Update inside the lifecycle transaction, judged on the row it would leave.
 
-    `transact_account_deletion` turns a cancelled transaction into a retryable
-    `AccountDeletionConflict`; an invalid one must not be dressed up that way.
+    Production's `account_deletion_repo.transact` reports every ClientError as an
+    `AccountDeletionConflict` - a cancellation as the conditional kind, a
+    ValidationException as a dependency failure - and keeps the cause. So does
+    this seam, which is how a caller that answers every conflict the same way is
+    seen doing so here.
     """
     table = FakeTable()
     table.seed({"PK": "USER#a", "SK": "PROFILE", "email": "a@stoa.test"})
 
-    with pytest.raises(ClientError) as raised:
+    with pytest.raises(AccountDeletionConflict, match="dependency unavailable") as conflict:
         table.transact_account_deletion(
             [
                 {"Put": {"Item": {"PK": "USER#a", "SK": "TOMBSTONE"}}},
@@ -562,7 +566,9 @@ def test_an_account_transaction_that_empties_an_index_key_is_invalid_not_a_confl
             ]
         )
 
-    _assert_refused_for_an_empty_index_key(raised)
+    cause = conflict.value.__cause__
+    assert isinstance(cause, ClientError)
+    _assert_refused_for_an_empty_index_key(pytest.ExceptionInfo.from_exception(cause))
     assert table.rows[("USER#a", "PROFILE")]["email"] == "a@stoa.test"
     assert ("USER#a", "TOMBSTONE") not in table.rows
 
@@ -614,6 +620,178 @@ def test_an_absent_index_key_and_an_empty_ordinary_attribute_are_both_fine() -> 
 
     assert table.rows[("X", "Y")] == {"PK": "X", "SK": "Y", "note": ""}
     assert table.rows[("Z", "Y")]["note"] == ""
+
+
+# -- rule 8: an index key written as None is a NULL, and each seam sends what its --
+# -- repository sends -----------------------------------------------------------
+#
+# The seventh time: on 2026-07-09 the usage ledger's `put_item` carried
+# `parent_id: None`, the resource interface sent it as NULL, and the table refused
+# the type mismatch five times. The transaction serializers leave a Put's top-level
+# None out, so the same row goes through there. The double does both, each where
+# production does.
+
+
+def _assert_refused_for_a_null_index_key(raised: pytest.ExceptionInfo[ClientError]) -> None:
+    error = raised.value.response["Error"]
+    assert error["Code"] == "ValidationException"
+    assert "Type mismatch for Index Key parent_id Expected: S Actual: NULL" in error["Message"]
+    assert "IndexName: GSI-ParentId" in error["Message"]
+
+
+def test_put_item_refuses_a_null_index_key() -> None:
+    table = FakeTable()
+
+    with pytest.raises(ClientError) as raised:
+        table.put_item(Item={"PK": "X", "SK": "Y", "parent_id": None})
+
+    _assert_refused_for_a_null_index_key(raised)
+    assert raised.value.operation_name == "PutItem"
+    assert ("X", "Y") not in table.rows
+
+
+def test_update_item_refuses_to_set_an_index_key_to_null() -> None:
+    table = FakeTable()
+    table.seed({"PK": "ROW", "SK": "META", "parent_id": "p-1", "week_start": "2026-09-21"})
+
+    with pytest.raises(ClientError) as raised:
+        table.update_item(
+            Key={"PK": "ROW", "SK": "META"},
+            UpdateExpression="SET parent_id = :none",
+            ExpressionAttributeValues={":none": None},
+        )
+
+    _assert_refused_for_a_null_index_key(raised)
+    assert table.rows[("ROW", "META")]["parent_id"] == "p-1"
+
+
+def test_seed_refuses_a_null_index_key() -> None:
+    with pytest.raises(ClientError) as raised:
+        FakeTable().seed({"PK": "X", "SK": "Y", "parent_id": None})
+
+    _assert_refused_for_a_null_index_key(raised)
+
+
+def test_the_raw_transaction_leaves_a_puts_top_level_none_out_like_attachment_repo() -> None:
+    """`attachment_repo._serialize_transactions`: the item loses its None, nothing else does."""
+    table = FakeTable()
+
+    table.transact_write_items(
+        [
+            {
+                "Put": {
+                    "Item": {
+                        "PK": "X",
+                        "SK": "Y",
+                        "parent_id": None,
+                        "metadata": {"subject": None},
+                    }
+                }
+            }
+        ]
+    )
+
+    assert table.rows[("X", "Y")] == {"PK": "X", "SK": "Y", "metadata": {"subject": None}}
+
+
+def test_the_raw_transaction_still_refuses_a_null_that_reaches_the_row() -> None:
+    """An expression value is sent as given, so an Update to None is a NULL on the row."""
+    table = FakeTable()
+    table.seed({"PK": "ROW", "SK": "META", "parent_id": "p-1"})
+
+    with pytest.raises(ClientError) as raised:
+        table.transact_write_items(
+            [
+                {
+                    "Update": {
+                        "Key": {"PK": "ROW", "SK": "META"},
+                        "UpdateExpression": "SET parent_id = :none",
+                        "ExpressionAttributeValues": {":none": None},
+                    }
+                }
+            ]
+        )
+
+    _assert_refused_for_a_null_index_key(raised)
+    assert table.rows[("ROW", "META")]["parent_id"] == "p-1"
+
+
+def test_the_account_transaction_leaves_none_out_like_account_deletion_repo() -> None:
+    """`_serialize_operation` drops None from the item, so the row is stored sparse."""
+    table = FakeTable()
+    table.seed_active_account("a")
+
+    table.transact_account_deletion(
+        [
+            {
+                "ConditionCheck": {
+                    "Key": {"PK": "USER#a", "SK": "ACCOUNT_FENCE"},
+                    "ConditionExpression": "generation = :g",
+                    "ExpressionAttributeValues": {":g": 1},
+                }
+            },
+            {"Put": {"Item": {"PK": "X", "SK": "Y", "parent_id": None, "note": "kept"}}},
+        ]
+    )
+
+    assert table.rows[("X", "Y")] == {"PK": "X", "SK": "Y", "note": "kept"}
+
+
+def test_the_account_transaction_refuses_an_expression_naming_a_dropped_value() -> None:
+    """`_serialize_operation` drops a None expression value but not the expression."""
+    table = FakeTable()
+    table.seed({"PK": "ROW", "SK": "META", "parent_id": "p-1"})
+
+    with pytest.raises(AccountDeletionConflict, match="dependency unavailable") as conflict:
+        table.transact_account_deletion(
+            [
+                {
+                    "Update": {
+                        "Key": {"PK": "ROW", "SK": "META"},
+                        "UpdateExpression": "SET parent_id = :none",
+                        "ExpressionAttributeValues": {":none": None},
+                    }
+                }
+            ]
+        )
+
+    cause = conflict.value.__cause__
+    assert isinstance(cause, ClientError)
+    assert cause.response["Error"]["Code"] == "ValidationException"
+    assert "attribute value: :none" in cause.response["Error"]["Message"]
+    assert table.rows[("ROW", "META")]["parent_id"] == "p-1"
+
+
+def test_the_account_transaction_reports_a_cancellation_as_a_conditional_conflict() -> None:
+    table = FakeTable()
+    table.seed({"PK": "X", "SK": "Y"})
+
+    with pytest.raises(AccountDeletionConflict, match="conditional") as conflict:
+        table.transact_account_deletion(
+            [
+                {
+                    "Put": {
+                        "Item": {"PK": "X", "SK": "Y"},
+                        "ConditionExpression": "attribute_not_exists(PK)",
+                    }
+                }
+            ]
+        )
+
+    cause = conflict.value.__cause__
+    assert isinstance(cause, ClientError)
+    assert cause.response["Error"]["Code"] == "TransactionCanceledException"
+
+
+def test_the_conversation_transaction_leaves_none_out_the_same_way() -> None:
+    """Production sends it through `account_deletion_repo.transact` too."""
+    table = FakeTable()
+
+    table.transact_conversation_write(
+        [{"Put": {"Item": {"PK": "CONV#1", "SK": "META", "parent_id": None, "status": "open"}}}]
+    )
+
+    assert table.rows[("CONV#1", "META")] == {"PK": "CONV#1", "SK": "META", "status": "open"}
 
 
 def test_every_round_trip_is_counted() -> None:
