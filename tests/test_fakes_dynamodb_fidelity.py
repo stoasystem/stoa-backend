@@ -724,23 +724,81 @@ def test_the_attachment_seam_leaves_a_puts_top_level_none_out() -> None:
     assert table.rows[("X", "Y")] == {"PK": "X", "SK": "Y", "metadata": {"subject": None}}
 
 
-def test_the_attachment_seam_reports_refusals_as_attachment_conflicts() -> None:
+def test_attachment_repo_classifies_the_seams_refusals_itself() -> None:
+    """Through the real entry: the seam hands the ClientError over, and
+    `attachment_repo.transact` sorts it as production does - a cancellation is a
+    conditional conflict, an invalid request a dependency failure."""
+    from stoa.db.repositories import attachment_repo
+
     table = FakeTable()
     table.seed({"PK": "X", "SK": "Y"})
 
     with pytest.raises(AttachmentRepositoryConflict) as cancelled:
-        table.transact_attachment_write(
-            [{"Put": {"Item": {"PK": "X", "SK": "Y"}, "ConditionExpression": "attribute_not_exists(PK)"}}]
+        attachment_repo.transact(
+            [{"Put": {"Item": {"PK": "X", "SK": "Y"}, "ConditionExpression": "attribute_not_exists(PK)"}}],
+            table=table,
         )
-    with pytest.raises(AttachmentRepositoryConflict, match="dependency_failure") as invalid:
-        table.transact_attachment_write(
-            [{"Put": {"Item": {"PK": "Z", "SK": "Y", "parent_id": ""}}}]
+    with pytest.raises(AttachmentRepositoryConflict) as invalid:
+        attachment_repo.transact(
+            [{"Put": {"Item": {"PK": "Z", "SK": "Y", "parent_id": ""}}}], table=table
         )
 
-    assert isinstance(cancelled.value.__cause__, ClientError)
-    assert cancelled.value.__cause__.response["Error"]["Code"] == "TransactionCanceledException"
-    assert isinstance(invalid.value.__cause__, ClientError)
-    assert invalid.value.__cause__.response["Error"]["Code"] == "ValidationException"
+    assert cancelled.value.args == ()
+    assert invalid.value.args == ("dependency_failure",)
+
+
+def test_attachment_repo_reads_the_seams_cancellation_reasons_per_operation() -> None:
+    """Described operations are classified by which one refused: a quota update
+    that failed its condition is `quota_exceeded`, a message put that did is a
+    concealed resource conflict. A wrapper in the seam would make both
+    `retryable_dependency`."""
+    from stoa.db.repositories import attachment_repo
+
+    Kind = attachment_repo.TransactionOperationKind
+    Outcome = attachment_repo.AttachmentTransactionOutcome
+    table = FakeTable()
+    table.seed({"PK": "QUOTA#s1", "SK": "STORAGE", "used": 10})
+    table.seed({"PK": "CONV#1", "SK": "MSG#m1"})
+
+    def described(kind, operation):
+        return attachment_repo.TransactionOperation(kind, operation)
+
+    with pytest.raises(attachment_repo.AttachmentTransactionError) as over_quota:
+        attachment_repo.transact(
+            [
+                described(
+                    Kind.STORAGE_QUOTA_UPDATE,
+                    {
+                        "Update": {
+                            "Key": {"PK": "QUOTA#s1", "SK": "STORAGE"},
+                            "UpdateExpression": "SET used = used + :n",
+                            "ConditionExpression": "used < :cap",
+                            "ExpressionAttributeValues": {":n": 1, ":cap": 5},
+                        }
+                    },
+                ),
+                described(Kind.MESSAGE_PUT, {"Put": {"Item": {"PK": "CONV#1", "SK": "MSG#new"}}}),
+            ],
+            table=table,
+        )
+    with pytest.raises(attachment_repo.AttachmentTransactionError) as concealed:
+        attachment_repo.transact(
+            [
+                described(
+                    Kind.MESSAGE_PUT,
+                    {
+                        "Put": {
+                            "Item": {"PK": "CONV#1", "SK": "MSG#m1"},
+                            "ConditionExpression": "attribute_not_exists(PK)",
+                        }
+                    },
+                )
+            ],
+            table=table,
+        )
+
+    assert over_quota.value.args == (Outcome.QUOTA_EXCEEDED,)
+    assert concealed.value.args == (Outcome.CONCEALED_RESOURCE_CONFLICT,)
 
 
 def test_attachment_repo_reaches_its_seam_and_stores_its_put_sparse() -> None:

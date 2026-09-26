@@ -903,22 +903,13 @@ class FakeTable:
     def transact_attachment_write(self, operations: list[dict[str, Any]]) -> None:
         """The seam `attachment_repo.transact` reaches for.
 
-        `_serialize_transactions` leaves a Put's top-level `None` out and sends keys
-        and expression values as given; every ClientError comes back as an
-        `AttachmentRepositoryConflict`, conditional or dependency failure. Production
-        discards the cause; it is kept here so a test can see which refusal it was.
+        Only what `_serialize_transactions` does: a Put's top-level `None` is left
+        out, keys and expression values are sent as given. The table's ClientError
+        is raised as it is - `attachment_repo.transact` classifies it itself, by
+        error code and per-operation cancellation reason, and a wrapper here would
+        send every refusal down its generic branch instead.
         """
-        from stoa.db.repositories import attachment_repo
-
-        try:
-            self.transact_write_items(as_attachment_transaction(operations))
-        except ClientError as exc:
-            if exc.response.get("Error", {}).get("Code") in {
-                "ConditionalCheckFailedException",
-                "TransactionCanceledException",
-            }:
-                raise attachment_repo.AttachmentRepositoryConflict() from exc
-            raise attachment_repo.AttachmentRepositoryConflict("dependency_failure") from exc
+        self.transact_write_items(as_attachment_transaction(operations))
 
     def transact_write_items(
         self,
