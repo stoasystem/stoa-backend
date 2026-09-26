@@ -14,7 +14,14 @@ from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
 import pytest
 
-from fakes.dynamodb import FakeTable, IndexSchema, apply_update_expression, as_stored
+from fakes.dynamodb import (
+    DEFAULT_INDEXES,
+    FakeTable,
+    IndexSchema,
+    apply_update_expression,
+    as_stored,
+)
+from test_index_keys_are_never_empty import INDEX_KEY_ATTRIBUTES
 
 
 def _table_with_profiles(noise: int = 40, profiles: int = 3) -> FakeTable:
@@ -461,6 +468,152 @@ def test_an_unknown_index_is_refused_rather_than_silently_scanned() -> None:
 
     with pytest.raises(AssertionError, match="unknown index"):
         table.query(IndexName="GSI-Nope", KeyConditionExpression=Key("email").eq("a@b.test"))
+
+
+# -- rule 7: an index key is never written as an empty string -----------------------
+#
+# The sixth time a double was wider than the table: on 2026-09-24 an assigned
+# teacher-support admission was written with `parent_id=""`, DynamoDB refused the
+# whole `TransactWriteItems` with a ValidationException, and every request 503'd. The
+# double stored the row without complaint, so the suite was green on the defect.
+
+
+def _assert_refused_for_an_empty_index_key(raised: pytest.ExceptionInfo[ClientError]) -> None:
+    error = raised.value.response["Error"]
+    assert error["Code"] == "ValidationException"
+    assert "A value specified for a secondary index key is not supported" in error["Message"]
+
+
+def test_put_item_refuses_an_empty_index_key() -> None:
+    table = FakeTable()
+
+    with pytest.raises(ClientError) as raised:
+        table.put_item(Item={"PK": "X", "SK": "Y", "parent_id": ""})
+
+    _assert_refused_for_an_empty_index_key(raised)
+    assert raised.value.operation_name == "PutItem"
+    assert ("X", "Y") not in table.rows
+
+
+def test_update_item_refuses_to_set_an_index_key_to_an_empty_string() -> None:
+    table = FakeTable()
+    table.seed({"PK": "ROW", "SK": "META", "parent_id": "p-1", "week_start": "2026-09-21"})
+
+    with pytest.raises(ClientError) as raised:
+        table.update_item(
+            Key={"PK": "ROW", "SK": "META"},
+            UpdateExpression="SET #p = :none",
+            ExpressionAttributeNames={"#p": "parent_id"},
+            ExpressionAttributeValues={":none": ""},
+        )
+
+    _assert_refused_for_an_empty_index_key(raised)
+    assert raised.value.operation_name == "UpdateItem"
+    assert table.rows[("ROW", "META")]["parent_id"] == "p-1"
+
+
+def test_a_conversation_transaction_with_an_empty_index_key_is_invalid_not_cancelled() -> None:
+    """The 2026-09-24 shape: a Put in the conversation transaction carrying `parent_id=""`.
+
+    It is a ValidationException for the whole request, not a cancelled transaction -
+    no condition failed, so nothing about it is worth retrying - and none of the other
+    operations lands.
+    """
+    table = FakeTable()
+
+    with pytest.raises(ClientError) as raised:
+        table.transact_conversation_write(
+            [
+                {"Put": {"Item": {"PK": "CONV#1", "SK": "META", "status": "open"}}},
+                {
+                    "Put": {
+                        "Item": {"PK": "ADMISSION#1", "SK": "RECEIPT", "parent_id": ""},
+                        "ConditionExpression": "attribute_not_exists(PK)",
+                    }
+                },
+            ]
+        )
+
+    _assert_refused_for_an_empty_index_key(raised)
+    assert raised.value.operation_name == "TransactWriteItems"
+    assert table.rows == {}
+
+
+def test_an_account_transaction_that_empties_an_index_key_is_invalid_not_a_conflict() -> None:
+    """An Update inside the lifecycle transaction, judged on the row it would leave.
+
+    `transact_account_deletion` turns a cancelled transaction into a retryable
+    `AccountDeletionConflict`; an invalid one must not be dressed up that way.
+    """
+    table = FakeTable()
+    table.seed({"PK": "USER#a", "SK": "PROFILE", "email": "a@stoa.test"})
+
+    with pytest.raises(ClientError) as raised:
+        table.transact_account_deletion(
+            [
+                {"Put": {"Item": {"PK": "USER#a", "SK": "TOMBSTONE"}}},
+                {
+                    "Update": {
+                        "Key": {"PK": "USER#a", "SK": "PROFILE"},
+                        "UpdateExpression": "SET email = :none",
+                        "ExpressionAttributeValues": {":none": ""},
+                    }
+                },
+            ]
+        )
+
+    _assert_refused_for_an_empty_index_key(raised)
+    assert table.rows[("USER#a", "PROFILE")]["email"] == "a@stoa.test"
+    assert ("USER#a", "TOMBSTONE") not in table.rows
+
+
+def test_seed_refuses_a_row_the_real_table_could_not_hold() -> None:
+    """Otherwise a fixture can arrange a state no write path could ever reach."""
+    with pytest.raises(ClientError) as raised:
+        FakeTable().seed({"PK": "X", "SK": "Y", "email": ""})
+
+    _assert_refused_for_an_empty_index_key(raised)
+
+
+@pytest.mark.parametrize("attribute", sorted(INDEX_KEY_ATTRIBUTES))
+def test_every_key_attribute_of_every_real_index_is_refused_empty(attribute: str) -> None:
+    """Partition and sort keys alike, for each index `stoa-main` really carries."""
+    with pytest.raises(ClientError) as raised:
+        FakeTable().put_item(Item={"PK": "X", "SK": "Y", attribute: ""})
+
+    _assert_refused_for_an_empty_index_key(raised)
+
+
+def test_the_double_carries_the_key_attributes_of_every_real_index() -> None:
+    """`INDEX_KEY_ATTRIBUTES` is pinned to `stoa-infra/stacks/database_stack.py`.
+
+    The double was missing `GSI-TeacherId`, so `teacher_id=""` would have been stored
+    here and refused in production.
+    """
+    carried = {
+        attribute
+        for schema in DEFAULT_INDEXES.values()
+        for attribute in (schema.partition_key, schema.sort_key)
+        if attribute is not None
+    }
+
+    assert carried == INDEX_KEY_ATTRIBUTES
+
+
+def test_an_absent_index_key_and_an_empty_ordinary_attribute_are_both_fine() -> None:
+    """The control: sparse rows and empty non-key strings are what the real table allows."""
+    table = FakeTable()
+
+    table.put_item(Item={"PK": "X", "SK": "Y", "note": "", "student_id": "s1"})
+    table.update_item(
+        Key={"PK": "X", "SK": "Y"},
+        UpdateExpression="SET note = :none REMOVE student_id",
+        ExpressionAttributeValues={":none": ""},
+    )
+    table.transact_write_items([{"Put": {"Item": {"PK": "Z", "SK": "Y", "note": ""}}}])
+
+    assert table.rows[("X", "Y")] == {"PK": "X", "SK": "Y", "note": ""}
+    assert table.rows[("Z", "Y")]["note"] == ""
 
 
 def test_every_round_trip_is_counted() -> None:

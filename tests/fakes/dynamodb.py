@@ -18,6 +18,11 @@ one of them broke:
    evaluating `FilterExpression`, so a scan that had stopped naming a row kind still
    got that kind back.
 
+A sixth came later and is held here too: an index key written as `""`. DynamoDB
+refuses the whole request with a ValidationException; the doubles stored the row, and
+on 2026-09-24 a teacher-support admission carrying `parent_id=""` 503'd every request
+in production with the suite green.
+
 `tests/test_fakes_dynamodb_fidelity.py` holds one test per rule below; those tests are
 what make this file load-bearing rather than merely well intentioned.
 """
@@ -41,14 +46,16 @@ class IndexSchema(NamedTuple):
     sort_key: str | None = None
 
 
-# The indexes this table actually carries. A row reaches an index only when it holds
+# The indexes this table actually carries, as declared in
+# `stoa-infra/stacks/database_stack.py`. A row reaches an index only when it holds
 # every one of its key attributes - that sparseness is a real DynamoDB property and
 # `parent_link_repo` depends on it: the link rows omit `created_at` on purpose so they
-# stay out of GSI-StudentId.
+# stay out of GSI-StudentId. An attribute listed here may be absent but never `""`.
 DEFAULT_INDEXES: dict[str, IndexSchema] = {
     "GSI-Email": IndexSchema("email"),
     "GSI-StudentId": IndexSchema("student_id", "created_at"),
     "GSI-ParentId": IndexSchema("parent_id", "week_start"),
+    "GSI-TeacherId": IndexSchema("teacher_id", "started_at"),
     "GSI-ReviewState": IndexSchema("review_state", "created_at"),
 }
 
@@ -76,6 +83,25 @@ def transaction_canceled(reasons: list[str], operation: str = "TransactWriteItem
                 "Message": "Transaction cancelled, please refer cancellation reasons",
             },
             "CancellationReasons": [{"Code": reason} for reason in reasons],
+            "ResponseMetadata": {"HTTPStatusCode": 400},
+        },
+        operation,
+    )
+
+
+def empty_index_key(index_name: str, attribute: str, operation: str) -> ClientError:
+    """The ValidationException DynamoDB answers a `""` secondary index key with."""
+    return ClientError(
+        {
+            "Error": {
+                "Code": "ValidationException",
+                "Message": (
+                    "One or more parameter values were invalid: A value specified for a "
+                    "secondary index key is not supported. The AttributeValue for a key "
+                    "attribute cannot contain an empty string value. "
+                    f"IndexName: {index_name}, IndexKey: {attribute}"
+                ),
+            },
             "ResponseMetadata": {"HTTPStatusCode": 400},
         },
         operation,
@@ -487,6 +513,7 @@ class FakeTable:
         incident 2 through the back door.
         """
         for item in items:
+            self._refuse_empty_index_keys(item, "Seed")
             self.rows[_key_of(item)] = as_stored(deepcopy(item))
 
     def item_count(self) -> int:
@@ -495,6 +522,19 @@ class FakeTable:
     def _record(self, operation: str, request: dict[str, Any]) -> None:
         self.calls[operation] += 1
         self.requests.append((operation, request))
+
+    def _refuse_empty_index_keys(self, row: dict[str, Any], operation: str) -> None:
+        """Raise the real ValidationException if `row` carries `""` as an index key.
+
+        Every path that can leave a row in `self.rows` calls this on the row it would
+        leave, before anything is stored. Absent is fine - that is how a row stays out
+        of a sparse index. Only `""` is refused, which is all this checks: a wrong key
+        type, an oversized item or an empty table key still get through.
+        """
+        for index_name, schema in self.indexes.items():
+            for attribute in (schema.partition_key, schema.sort_key):
+                if attribute is not None and row.get(attribute) == "":
+                    raise empty_index_key(index_name, attribute, operation)
 
     # -- point operations --------------------------------------------------------
 
@@ -510,6 +550,9 @@ class FakeTable:
             self._record("put_item", kwargs)
             item = kwargs["Item"]
             key = _key_of(item)
+            # The item is invalid whatever is stored, so it is refused before the
+            # condition is judged, as the real request validation does.
+            self._refuse_empty_index_keys(item, "PutItem")
             if not condition_holds(
                 kwargs.get("ConditionExpression"),
                 self.rows.get(key),
@@ -540,6 +583,7 @@ class FakeTable:
                 kwargs.get("ExpressionAttributeNames"),
                 kwargs.get("ExpressionAttributeValues"),
             )
+            self._refuse_empty_index_keys(updated, "UpdateItem")
             self.rows[key] = as_stored(updated)
             return self._return_values(
                 kwargs.get("ReturnValues"), current, self.rows[key], touched
@@ -758,6 +802,10 @@ class FakeTable:
         The lock is the transaction: without it two callers can both pass their
         conditions before either writes, and a conditional claim the real store would
         refuse gets through the double.
+
+        A row that would be left with an index key of `""` makes the whole request
+        invalid - a ValidationException, not a cancellation, so no caller can take it
+        for a condition race worth retrying - and nothing is written.
         """
         with self.lock:
             self._record("transact_write_items", {"operations": operations})
@@ -770,6 +818,8 @@ class FakeTable:
                         if "Key" in body
                         else _key_of(body["Item"])
                     )
+                    if kind == "Put":
+                        self._refuse_empty_index_keys(body["Item"], "TransactWriteItems")
                     current = self.rows.get(key)
                     if not condition_holds(
                         body.get("ConditionExpression"),
@@ -797,6 +847,7 @@ class FakeTable:
                         body.get("ExpressionAttributeNames"),
                         body.get("ExpressionAttributeValues"),
                     )
+                    self._refuse_empty_index_keys(updated, "TransactWriteItems")
                     staged.append((key, as_stored(updated)))
             if any(reason != "None" for reason in reasons):
                 raise transaction_canceled(reasons)
