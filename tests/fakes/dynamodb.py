@@ -896,7 +896,12 @@ class FakeTable:
         """
         self.transact_write_items(as_account_transaction(operations))
 
-    def transact_write_items(self, operations: list[dict[str, Any]]) -> None:
+    def transact_write_items(
+        self,
+        operations: list[dict[str, Any]] | None = None,
+        *,
+        TransactItems: list[dict[str, Any]] | None = None,  # noqa: N803
+    ) -> None:
         """All conditions, then all effects, under one lock.
 
         The lock is the transaction: without it two callers can both pass their
@@ -907,14 +912,20 @@ class FakeTable:
         request invalid - a ValidationException, not a cancellation, so no caller can
         take it for a condition race worth retrying - and nothing is written.
 
-        This is the seam `attachment_repo.transact` reaches for (a resource table has
-        no `transact_write_items`, so in production that function serializes with
-        `_serialize_transactions`), and it applies that rule: a Put's top-level
-        `None` attributes are left out, keys and expression values are sent as given.
-        A NULL that survives that, in an expression value or a nested map, is judged
-        on the row it would leave, like the table does.
+        Called with `operations`, this is the table itself: what is given is what is
+        judged, a `None` index key included. Called with `TransactItems=`, the shape
+        `attachment_repo.transact` uses (a resource table has no such method, so in
+        production that function serializes with `_serialize_transactions`), it
+        applies that function's rule first: a Put's top-level `None` attributes are
+        left out, keys and expression values are sent as given. A NULL that survives
+        that, in an expression value or a nested map, is judged on the row it would
+        leave, like the table does.
         """
-        operations = as_attachment_transaction(operations)
+        if (operations is None) == (TransactItems is None):
+            raise TypeError("transact_write_items takes operations or TransactItems=")
+        if TransactItems is not None:
+            operations = as_attachment_transaction(TransactItems)
+        assert operations is not None
         with self.lock:
             self._record("transact_write_items", {"operations": operations})
             staged: list[tuple[tuple[str, str], dict[str, Any] | None]] = []

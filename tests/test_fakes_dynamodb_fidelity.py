@@ -672,12 +672,24 @@ def test_seed_refuses_a_null_index_key() -> None:
     _assert_refused_for_a_null_index_key(raised)
 
 
-def test_the_raw_transaction_leaves_a_puts_top_level_none_out_like_attachment_repo() -> None:
-    """`attachment_repo._serialize_transactions`: the item loses its None, nothing else does."""
+def test_the_low_level_transaction_refuses_a_null_index_key_it_is_given() -> None:
+    """Called as the table, it judges the item as sent - no repository rule applies."""
+    table = FakeTable()
+
+    with pytest.raises(ClientError) as raised:
+        table.transact_write_items([{"Put": {"Item": {"PK": "X", "SK": "Y", "parent_id": None}}}])
+
+    _assert_refused_for_a_null_index_key(raised)
+    assert table.rows == {}
+
+
+def test_attachment_repos_call_shape_leaves_a_puts_top_level_none_out() -> None:
+    """`TransactItems=` is how `attachment_repo.transact` calls; `_serialize_transactions`
+    leaves the item's top-level None out and touches nothing else."""
     table = FakeTable()
 
     table.transact_write_items(
-        [
+        TransactItems=[
             {
                 "Put": {
                     "Item": {
@@ -692,6 +704,20 @@ def test_the_raw_transaction_leaves_a_puts_top_level_none_out_like_attachment_re
     )
 
     assert table.rows[("X", "Y")] == {"PK": "X", "SK": "Y", "metadata": {"subject": None}}
+
+
+def test_attachment_repo_reaches_the_double_and_stores_its_put_sparse() -> None:
+    """The real function, the real call shape: what production would store."""
+    from stoa.db.repositories import attachment_repo
+
+    table = FakeTable()
+
+    attachment_repo.transact(
+        [{"Put": {"Item": {"PK": "X", "SK": "Y", "parent_id": None, "note": "kept"}}}],
+        table=table,
+    )
+
+    assert table.rows[("X", "Y")] == {"PK": "X", "SK": "Y", "note": "kept"}
 
 
 def test_the_raw_transaction_still_refuses_a_null_that_reaches_the_row() -> None:

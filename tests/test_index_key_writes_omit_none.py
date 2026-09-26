@@ -33,9 +33,10 @@ from fakes.dynamodb import FakeTable
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import account_deletion_repo, curriculum_ops_repo, usage_ledger_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
-from stoa.routers import questions
+from stoa.routers import conversations, questions
 from stoa.services import curriculum_ops_service, usage_ledger_service
 from test_curriculum_ops import _draft_payload, _operator_user
+from test_conversations import _client as _conversation_client
 from test_questions import _actor
 
 
@@ -161,6 +162,11 @@ def test_only_an_event_already_in_the_table_is_a_duplicate() -> None:
         _fenced_event(), account_fence_generation=1, table=table
     )
     assert len(_ledger_rows(table)) == 1
+    # The read that decides "duplicate" must see the write that refused ours, which
+    # may be milliseconds old: an eventually consistent read could miss it and turn a
+    # real duplicate into a raised conflict.
+    reads = [request for operation, request in table.requests if operation == "get_item"]
+    assert reads == [{"Key": {"PK": _fenced_event()["PK"], "SK": _fenced_event()["SK"]}, "ConsistentRead": True}]
 
 
 # -- the retry owes the ledger row -----------------------------------------------------
@@ -170,7 +176,7 @@ def _settings() -> Settings:
     return Settings(free_tier_daily_question_limit=2)
 
 
-def _client() -> TestClient:
+def _question_client() -> TestClient:
     app = FastAPI()
     app.include_router(questions.router, prefix="/questions")
     app.dependency_overrides[get_settings] = _settings
@@ -179,13 +185,17 @@ def _client() -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
-def test_a_retry_after_a_failed_ledger_write_records_exactly_one_event(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """First attempt: admitted, dispatched, ledger refused. Retries: replayed, one row."""
-    ledger = FakeTable()
+def _escalation_scaffold(
+    monkeypatch: pytest.MonkeyPatch, ledger: FakeTable
+) -> tuple[TestClient, dict[str, object], list[str]]:
+    """`request-teacher` with admission, mutation and dispatch stubbed, the ledger real.
+
+    Admission is granted once and replayed after; the question row keeps the state
+    the mutation gave it, so the replay reads `teacher_requested_at` as production
+    would.
+    """
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: ledger)
-    question = {
+    question: dict[str, object] = {
         "question_id": "question-1",
         "student_id": "student-1",
         "subject": "math",
@@ -193,26 +203,14 @@ def test_a_retry_after_a_failed_ledger_write_records_exactly_one_event(
         "version": 1,
     }
     dispatches: list[str] = []
-    refusals = {"left": 1}
-    real_put_item = ledger.put_item
-
-    def put_item_refused_once(**kwargs: object) -> dict[str, object]:
-        if refusals["left"]:
-            refusals["left"] -= 1
-            raise ClientError(
-                {"Error": {"Code": "ProvisionedThroughputExceededException", "Message": "slow"}},
-                "PutItem",
-            )
-        return real_put_item(**kwargs)
-
-    monkeypatch.setattr(ledger, "put_item", put_item_refused_once)
+    service = questions.teacher_support_allowance_service
     monkeypatch.setattr(
-        questions.teacher_support_allowance_service,
+        service,
         "admit_teacher_support_case",
-        lambda *, persist_case, **_kwargs: questions.teacher_support_allowance_service.TeacherSupportAdmissionResult(
-            questions.teacher_support_allowance_service.TeacherSupportAdmissionDisposition.ADMITTED
+        lambda *, persist_case, **_kwargs: service.TeacherSupportAdmissionResult(
+            service.TeacherSupportAdmissionDisposition.ADMITTED
             if persist_case(())
-            else questions.teacher_support_allowance_service.TeacherSupportAdmissionDisposition.REPLAYED
+            else service.TeacherSupportAdmissionDisposition.REPLAYED
         ),
     )
     monkeypatch.setattr(questions.question_repo, "get_question", lambda question_id: dict(question))
@@ -220,9 +218,7 @@ def test_a_retry_after_a_failed_ledger_write_records_exactly_one_event(
     def mutate(item: dict[str, object], *, status: str, extra_attrs: dict[str, object], **_kwargs: object):
         question.update({**extra_attrs, "status": status, "version": int(item["version"]) + 1})
         return questions.question_repo.QuestionMutationResult(
-            questions.question_repo.QuestionMutationDisposition.APPLIED,
-            "question-1",
-            dict(question),
+            questions.question_repo.QuestionMutationDisposition.APPLIED, "question-1", dict(question)
         )
 
     monkeypatch.setattr(questions.question_repo, "mutate_question", mutate)
@@ -235,7 +231,32 @@ def test_a_retry_after_a_failed_ledger_write_records_exactly_one_event(
         "dispatch_question",
         lambda question_id, **_kwargs: dispatches.append(question_id) or {"status": "deferred"},
     )
-    client = _client()
+    return _question_client(), question, dispatches
+
+
+def _refuse_put_once(monkeypatch: pytest.MonkeyPatch, table: FakeTable) -> None:
+    refusals = {"left": 1}
+    real_put_item = table.put_item
+
+    def put_item_refused_once(**kwargs: object) -> dict[str, object]:
+        if refusals["left"]:
+            refusals["left"] -= 1
+            raise ClientError(
+                {"Error": {"Code": "ProvisionedThroughputExceededException", "Message": "slow"}},
+                "PutItem",
+            )
+        return real_put_item(**kwargs)
+
+    monkeypatch.setattr(table, "put_item", put_item_refused_once)
+
+
+def test_a_retry_after_a_failed_ledger_write_records_exactly_one_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """First attempt: admitted, dispatched, ledger refused. Retries: replayed, one row."""
+    ledger = FakeTable()
+    client, question, dispatches = _escalation_scaffold(monkeypatch, ledger)
+    _refuse_put_once(monkeypatch, ledger)
 
     first = client.post("/questions/question-1/request-teacher")
     assert first.status_code == 500
@@ -259,46 +280,119 @@ def test_a_retry_after_a_failed_ledger_write_records_exactly_one_event(
     assert len(_ledger_rows(ledger)) == 1
 
 
+def test_a_retry_on_a_later_day_keys_the_row_by_the_admission_day(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The period in the key is the admission's, so a replay tomorrow is still a duplicate."""
+    import time_machine
+
+    ledger = FakeTable()
+    client, question, _dispatches = _escalation_scaffold(monkeypatch, ledger)
+    _refuse_put_once(monkeypatch, ledger)
+
+    with time_machine.travel("2026-09-26T23:30:00+00:00", tick=False):
+        assert client.post("/questions/question-1/request-teacher").status_code == 500
+    with time_machine.travel("2026-09-27T09:00:00+00:00", tick=False):
+        assert client.post("/questions/question-1/request-teacher").status_code == 202
+        assert client.post("/questions/question-1/request-teacher").status_code == 202
+
+    (row,) = _ledger_rows(ledger)
+    assert row["quota_period"] == "2026-09-26"
+    assert str(row["created_at"]).startswith("2026-09-26T23:30:00")
+    assert str(question["teacher_requested_at"]).startswith("2026-09-26T23:30:00")
+
+
 def test_the_first_attempt_still_records_the_event_once(monkeypatch: pytest.MonkeyPatch) -> None:
     """The control: with nothing refused, one call is one row, and a replay adds none."""
     ledger = FakeTable()
-    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: ledger)
-    question = {
-        "question_id": "question-1",
-        "student_id": "student-1",
-        "subject": "math",
-        "status": "ai_answered",
-        "version": 1,
-    }
-    monkeypatch.setattr(
-        questions.teacher_support_allowance_service,
-        "admit_teacher_support_case",
-        lambda *, persist_case, **_kwargs: questions.teacher_support_allowance_service.TeacherSupportAdmissionResult(
-            questions.teacher_support_allowance_service.TeacherSupportAdmissionDisposition.ADMITTED
-            if persist_case(())
-            else questions.teacher_support_allowance_service.TeacherSupportAdmissionDisposition.REPLAYED
-        ),
-    )
-    monkeypatch.setattr(questions.question_repo, "get_question", lambda question_id: dict(question))
-
-    def mutate(item: dict[str, object], *, status: str, extra_attrs: dict[str, object], **_kwargs: object):
-        question.update({**extra_attrs, "status": status, "version": int(item["version"]) + 1})
-        return questions.question_repo.QuestionMutationResult(
-            questions.question_repo.QuestionMutationDisposition.APPLIED, "question-1", dict(question)
-        )
-
-    monkeypatch.setattr(questions.question_repo, "mutate_question", mutate)
-    monkeypatch.setattr(questions.notify_service, "enqueue_teacher_request", lambda **_kwargs: None)
-    monkeypatch.setattr(
-        questions.notification_service, "emit_teacher_requested", lambda **_kwargs: None
-    )
-    monkeypatch.setattr(
-        questions.teacher_dispatch_service, "dispatch_question", lambda *_a, **_k: {"status": "deferred"}
-    )
-    client = _client()
+    client, _question, dispatches = _escalation_scaffold(monkeypatch, ledger)
 
     assert client.post("/questions/question-1/request-teacher").status_code == 202
     assert client.post("/questions/question-1/request-teacher").status_code == 202
 
+    assert dispatches == ["question-1"]
     assert len(_ledger_rows(ledger)) == 1
     assert datetime.fromisoformat(str(_ledger_rows(ledger)[0]["created_at"])).tzinfo is timezone.utc
+
+
+# -- the conversation lane has the same debt -------------------------------------------
+
+
+def test_a_repeat_conversation_help_request_after_a_failed_ledger_write_records_one_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The escalation lands on the conversation in the admission's transaction; the
+    ledger row is written after dispatch, fenced. A refusal there leaves the row
+    missing, and a repeat request - answered from the conversation's escalation -
+    owes it, keyed by that escalation's request and day."""
+    table = FakeTable()
+    table.seed_active_account("student-1")
+    table.seed(
+        {
+            "PK": "CONV#conv-1",
+            "SK": "CONV",
+            "entity_type": "conversation",
+            "conversation_id": "conv-1",
+            "student_id": "student-1",
+            "owner_id": "student-1",
+            "account_fence_generation": 1,
+            "subject": "physics",
+            "grade": "Sek1",
+            "status": "active",
+            "created_at": NOW,
+            "updated_at": NOW,
+        }
+    )
+    monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
+    service = conversations.teacher_support_allowance_service
+    monkeypatch.setattr(
+        service,
+        "admit_teacher_support_case",
+        lambda *, persist_case, **_kwargs: service.TeacherSupportAdmissionResult(
+            service.TeacherSupportAdmissionDisposition.ADMITTED
+            if persist_case(())
+            else service.TeacherSupportAdmissionDisposition.REPLAYED
+        ),
+    )
+    dispatches: list[str] = []
+    monkeypatch.setattr(
+        conversations,
+        "_dispatch_escalated_conversation",
+        lambda **kwargs: dispatches.append(str(kwargs["request_id"])) or None,
+    )
+    monkeypatch.setattr(conversations.user_repo, "get_user", lambda *_args, **_kwargs: None)
+    refusals = {"left": 1}
+    real_seam = table.transact_account_deletion
+
+    def seam_refused_once(operations: list[dict[str, object]]) -> None:
+        if refusals["left"]:
+            refusals["left"] -= 1
+            raise account_deletion_repo.AccountDeletionConflict(
+                "account lifecycle dependency unavailable"
+            )
+        real_seam(operations)
+
+    monkeypatch.setattr(table, "transact_account_deletion", seam_refused_once)
+    client = _conversation_client(conversations.teacher_help_router, "/teacher-help")
+    body = {"conversationId": "conv-1", "message": "please help"}
+
+    with pytest.raises(account_deletion_repo.AccountDeletionConflict):
+        client.post("/teacher-help/request", json=body)
+    escalation_request_id = table.rows[("CONV#conv-1", "CONV")]["escalation_request_id"]
+    assert dispatches == [escalation_request_id]
+    assert _ledger_rows(table) == []
+
+    second = client.post("/teacher-help/request", json=body)
+    assert second.status_code == 200
+    assert second.json()["requestId"] == escalation_request_id
+    assert dispatches == [escalation_request_id]
+    (row,) = _ledger_rows(table)
+    assert row["action"] == usage_ledger_service.CONVERSATION_TEACHER_HELP_ACTION
+    assert row["request_correlation_id"] == escalation_request_id
+    assert row["account_fence_generation"] == 1
+    assert "parent_id" not in row
+
+    third = client.post("/teacher-help/request", json=body)
+    assert third.status_code == 200
+    assert len(_ledger_rows(table)) == 1

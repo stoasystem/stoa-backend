@@ -563,9 +563,18 @@ def test_both_escalation_lanes_dispatch_to_a_teacher() -> None:
     assert question_source.index("admit_teacher_support_case") < question_source.index(
         "dispatch_question"
     )
-    assert conversation_source.index(
+    # The usage row is written after the case is admitted. The one call before
+    # admission is the repeat path, which answers with an escalation the admission
+    # transaction already wrote, so the row it owes is for an admitted case too.
+    assert conversation_source.index("admit_teacher_support_case") < conversation_source.rindex(
+        "record_help_usage("
+    )
+    assert conversation_source.index("record_help_usage(") < conversation_source.index(
         "admit_teacher_support_case"
-    ) < conversation_source.index("record_usage_event")
+    )
+    assert "existing_request_id" in conversation_source[
+        : conversation_source.index("record_help_usage(")
+    ]
 
 
 def test_service_reuses_allowance_week_budget_and_conditional_effect_counter() -> None:

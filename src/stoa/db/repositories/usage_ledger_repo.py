@@ -78,7 +78,9 @@ def _event_exists(table: object, event: UsageItem) -> bool:
     moved, a throttle, a request the table would not take. Only one of them means
     the event was already written, and only that one may be answered as such.
     """
-    response = _get_item(table, Key={"PK": event["PK"], "SK": event["SK"]})
+    response = _get_item(
+        table, Key={"PK": event["PK"], "SK": event["SK"]}, ConsistentRead=True
+    )
     return response.get("Item") is not None
 
 

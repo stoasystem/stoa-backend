@@ -3317,11 +3317,44 @@ async def request_teacher_help(
     now = _now()
     observed_at = datetime.fromisoformat(now.replace("Z", "+00:00"))
 
+    def record_help_usage(
+        *, escalation: Mapping[str, object], request_id: str, generation: int | None = None
+    ) -> None:
+        # Written after the case is durable and dispatched, so a first attempt
+        # that fails here leaves the escalation on the conversation and the row
+        # missing. A repeat request answers with that escalation and still owes
+        # the row, keyed by the escalation's request and its day, so once the
+        # row is there every later repeat is a duplicate.
+        escalated_at = str(escalation.get("escalated_at") or now)
+        if generation is None:
+            generation = _active_conversation_generation(student_id, get_table())
+        usage_ledger_service.record_usage_event(
+            student_id=student_id,
+            action=usage_ledger_service.CONVERSATION_TEACHER_HELP_ACTION,
+            quota_period=usage_ledger_service.quota_period_of(escalated_at),
+            idempotency_key=usage_ledger_service.build_usage_idempotency_key(
+                action=usage_ledger_service.CONVERSATION_TEACHER_HELP_ACTION,
+                resource_id=body.conversationId,
+                qualifier=request_id,
+            ),
+            request_correlation_id=request_id,
+            created_at=escalated_at,
+            account_fence_generation=generation,
+            metadata={
+                "conversation_id": body.conversationId,
+                "request_id": request_id,
+                "subject": escalation.get("subject"),
+                "grade_level": escalation.get("grade"),
+                "status": "pending",
+            },
+        )
+
     # A conversation that already carries an escalation is answered with that
     # escalation. Sending a repeat request back through admission made
     # ``persist_case`` decline every attempt, so the retry loop ran out and the
     # student was shown a 503 instead of the request they already have.
     if isinstance(existing_request_id, str) and existing_request_id:
+        record_help_usage(escalation=conv, request_id=existing_request_id)
         return _teacher_help_response(
             conv,
             request_id=existing_request_id,
@@ -3445,9 +3478,22 @@ async def request_teacher_help(
         admission.disposition
         is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.REPLAYED
     ):
+        # The admission's transaction also marks the conversation, so a replay
+        # seen here means the read above raced it. Read again: the marker names
+        # the request the first attempt's row is keyed by.
+        escalated = _get_conversation(body.conversationId) or conv
+        recorded_request_id = escalated.get("escalation_request_id")
+        if isinstance(recorded_request_id, str) and recorded_request_id:
+            record_help_usage(
+                escalation=escalated, request_id=recorded_request_id, generation=generation
+            )
         return _teacher_help_response(
-            conv,
-            request_id=request_id,
+            escalated,
+            request_id=(
+                recorded_request_id
+                if isinstance(recorded_request_id, str) and recorded_request_id
+                else request_id
+            ),
             conversation_id=body.conversationId,
             fallback_created_at=now,
         )
@@ -3462,25 +3508,8 @@ async def request_teacher_help(
         table=table,
     )
 
-    usage_ledger_service.record_usage_event(
-        student_id=student_id,
-        action=usage_ledger_service.CONVERSATION_TEACHER_HELP_ACTION,
-        quota_period=usage_ledger_service.today_period(),
-        idempotency_key=usage_ledger_service.build_usage_idempotency_key(
-            action=usage_ledger_service.CONVERSATION_TEACHER_HELP_ACTION,
-            resource_id=body.conversationId,
-            qualifier=request_id,
-        ),
-        request_correlation_id=request_id,
-        created_at=now,
-        account_fence_generation=generation,
-        metadata={
-            "conversation_id": body.conversationId,
-            "request_id": request_id,
-            "subject": conv.get("subject"),
-            "grade_level": conv.get("grade"),
-            "status": "pending",
-        },
+    record_help_usage(
+        escalation={**conv, "escalated_at": now}, request_id=request_id, generation=generation
     )
 
     return TeacherHelpResponse(

@@ -265,6 +265,19 @@ def today_period() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
+def quota_period_of(created_at: str) -> str:
+    """The UTC quota period an event created at `created_at` belongs to.
+
+    A retry that writes the row a first attempt failed to write must key it the
+    way that attempt would have - by the day the case was admitted, not the day
+    the retry runs - or a replay on a later day records a second event.
+    """
+    moment = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%d")
+
+
 def counter_ttl() -> int:
     """Return the existing two-day TTL horizon for daily question counter rows."""
     return int((datetime.now(timezone.utc) + timedelta(days=2)).timestamp())

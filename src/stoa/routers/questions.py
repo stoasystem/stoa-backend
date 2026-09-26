@@ -1782,17 +1782,19 @@ async def request_teacher(
     def record_help_usage() -> None:
         # Written after the case is durable and dispatched, so a first attempt
         # that fails here leaves the case admitted and the row missing. A retry
-        # finds the case replayed and still owes the row; the key is the
-        # question's, so once it is there every later retry is a duplicate.
+        # finds the case replayed and still owes the row. The key is the
+        # question's and the period is the admission's day, so once the row is
+        # there every later retry, on any day, is a duplicate.
+        requested_at = str(item.get("teacher_requested_at") or now)
         usage_ledger_service.record_usage_event(
             student_id=student_id,
             action=usage_ledger_service.QUESTION_TEACHER_HELP_ACTION,
-            quota_period=usage_ledger_service.today_period(),
+            quota_period=usage_ledger_service.quota_period_of(requested_at),
             idempotency_key=usage_ledger_service.build_usage_idempotency_key(
                 action=usage_ledger_service.QUESTION_TEACHER_HELP_ACTION,
                 resource_id=question_id,
             ),
-            created_at=now,
+            created_at=requested_at,
             request_correlation_id=question_id,
             metadata={
                 "question_id": question_id,

@@ -191,6 +191,12 @@ def test_repeat_teacher_help_replays_the_existing_escalation(monkeypatch):
     monkeypatch.setattr(
         conversations.user_repo, "get_user", lambda _id, **_kwargs: {"name": "Test Teacher"}
     )
+    ledger_calls = []
+    monkeypatch.setattr(
+        conversations.usage_ledger_service,
+        "record_usage_event",
+        lambda **kwargs: ledger_calls.append(kwargs) or {"idempotency_status": "duplicate"},
+    )
 
     response = _client(conversations.teacher_help_router, "/teacher-help").post(
         "/teacher-help/request",
@@ -203,6 +209,13 @@ def test_repeat_teacher_help_replays_the_existing_escalation(monkeypatch):
     assert body["teacherName"] == "Test Teacher"
     assert body["status"] == "assigned"
     assert admissions == []
+    # The repeat still owes the usage row a failed first attempt may have left
+    # unwritten, keyed by the escalation it answers with, not by this request.
+    (ledger_call,) = ledger_calls
+    assert ledger_call["request_correlation_id"] == "req-1"
+    assert ledger_call["created_at"] == "2026-08-24T08:00:00+00:00"
+    assert ledger_call["quota_period"] == "2026-08-24"
+    assert ledger_call["idempotency_key"].endswith("req-1")
 
 
 def test_teacher_help_retryable_admission_stays_out_of_student_words(monkeypatch):
