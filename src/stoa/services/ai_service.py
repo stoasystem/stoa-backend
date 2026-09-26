@@ -30,6 +30,13 @@ logger = logging.getLogger(__name__)
 
 # ── System prompt ──────────────────────────────────────────────────────────────
 
+# stoasystem/stoa-backend#50: a grade is asked for on the learning profile, not
+# when an account is opened, so a conversation can carry none. Left as "", both
+# grade sentences below lost their subject and the model was never told the
+# grade is unknown. This is the one place that says what an unknown grade means:
+# the web client sends a blank grade as blank rather than inventing one.
+UNKNOWN_GRADE = "an unknown year group (none was given; pitch it at lower secondary school)"
+
 SYSTEM_PROMPT = """You are a controlled educational AI assistant for STOA, a Swiss after-school \
 learning platform. You ONLY answer questions related to {subject}. The student is in {grade}: \
 use that to choose the depth of the explanation, the examples and the prerequisites you point to, \
@@ -655,7 +662,8 @@ def get_ai_answer(
     Args:
         content:        The student's latest message (will be sanitised).
         subject:        Normalised subject string (e.g. "math", "german").
-        grade:          Grade/level string (e.g. "Grade 8").
+        grade:          Grade/level string (e.g. "Grade 8"). May be blank when the
+                        profile has none; it is then sent as UNKNOWN_GRADE.
         language:       ISO language hint for the response ("de", "en", "fr").
         history:        Optional list of previous raw message dicts from DynamoDB,
                         each with keys ``role`` and ``content``.  The most recent
@@ -670,7 +678,7 @@ def get_ai_answer(
     base_prompt = SYSTEM_PROMPT.format(
         subject=normalized_subject,
         subject_context=learning_profile_service.subject_prompt_context(normalized_subject),
-        grade=grade,
+        grade=grade.strip() or UNKNOWN_GRADE,
         language=language,
         language_name=language_name(language),
     )

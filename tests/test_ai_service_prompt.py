@@ -202,6 +202,23 @@ def test_a_question_above_the_grade_is_steered_to_an_explanation(subject, grade,
     assert "question is too complex" not in prompt
 
 
+@pytest.mark.parametrize("grade", ["", "   "])
+def test_a_blank_grade_is_sent_as_unknown_not_as_nothing(grade):
+    """stoasystem/stoa-backend#50: no grade on the profile opens a conversation with "".
+
+    The two grade sentences then read "The student is in : use that ..." and
+    "far above , first give ...", so the model was never told the grade is
+    unknown. Such a conversation stays valid; the prompt has to say so.
+    """
+    prompt = _system_prompt(subject="math", grade=grade, content="Was ist eine Ableitung?", language="de")
+    unknown = ai_service.UNKNOWN_GRADE
+    assert f"The student is in {unknown}: use that to choose the depth" in prompt
+    assert f"far above {unknown}, first give a short accessible explanation" in prompt
+    assert "The student is in :" not in prompt
+    assert "far above , first" not in prompt
+    assert _DEPTH_GUIDE in prompt
+
+
 def test_a_question_within_the_grade_keeps_the_same_scope_and_depth_guide():
     prompt = _system_prompt(subject="math", grade="Grade 6", content="how do I add fractions?")
     assert "You ONLY answer questions related to math." in prompt
