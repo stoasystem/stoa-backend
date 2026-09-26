@@ -3479,21 +3479,40 @@ async def request_teacher_help(
         is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.REPLAYED
     ):
         # The admission's transaction also marks the conversation, so a replay
-        # seen here means the read above raced it. Read again: the marker names
-        # the request the first attempt's row is keyed by.
-        escalated = _get_conversation(body.conversationId) or conv
-        recorded_request_id = escalated.get("escalation_request_id")
-        if isinstance(recorded_request_id, str) and recorded_request_id:
-            record_help_usage(
-                escalation=escalated, request_id=recorded_request_id, generation=generation
+        # seen here means the read above raced it. Read the marker with a
+        # consistent read: it names the request the first attempt's row is
+        # keyed by. Without it there is nothing to answer with, or to key the
+        # row by, so the student is asked to retry rather than handed a request
+        # id nothing was written under.
+        escalated = _conversation_response_item(
+            cast(_DynamoConversationTable, table).get_item(
+                Key={"PK": _conv_pk(body.conversationId), "SK": "CONV"},
+                ConsistentRead=True,
             )
+        )
+        recorded_request_id = (escalated or {}).get("escalation_request_id")
+        if escalated is None or not (
+            isinstance(recorded_request_id, str) and recorded_request_id
+        ):
+            logger.warning(
+                "teacher_help_replay_without_marker student=%s conversation=%s",
+                student_id,
+                body.conversationId,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "code": "teacher_support_admission_recoverable",
+                    "message": "Teacher support is briefly unavailable. Please try again.",
+                    "action": "retry_same_case",
+                },
+            )
+        record_help_usage(
+            escalation=escalated, request_id=recorded_request_id, generation=generation
+        )
         return _teacher_help_response(
             escalated,
-            request_id=(
-                recorded_request_id
-                if isinstance(recorded_request_id, str) and recorded_request_id
-                else request_id
-            ),
+            request_id=recorded_request_id,
             conversation_id=body.conversationId,
             fallback_created_at=now,
         )

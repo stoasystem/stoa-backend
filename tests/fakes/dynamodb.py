@@ -46,6 +46,8 @@ from typing import Any, NamedTuple
 
 from botocore.exceptions import ClientError
 
+from stoa.db.dynamodb import omit_none_attributes
+
 
 class IndexSchema(NamedTuple):
     """A global secondary index: what partitions it and what orders it."""
@@ -152,10 +154,6 @@ def undefined_expression_value(expression: str, token: str) -> ClientError:
     )
 
 
-def _without_none(values: Mapping[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in values.items() if value is not None}
-
-
 def as_attachment_transaction(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """What `attachment_repo._serialize_transactions` sends: a Put's top-level `None` left out.
 
@@ -165,7 +163,7 @@ def as_attachment_transaction(operations: list[dict[str, Any]]) -> list[dict[str
     for operation in operations:
         kind, body = next(iter(operation.items()))
         if kind == "Put" and "Item" in body:
-            body = {**body, "Item": _without_none(body["Item"])}
+            body = {**body, "Item": omit_none_attributes(body["Item"])}
         result.append({kind: body})
     return result
 
@@ -183,7 +181,7 @@ def as_account_transaction(operations: list[dict[str, Any]]) -> list[dict[str, A
         body = dict(body)
         for field in ("Item", "Key", "ExpressionAttributeValues"):
             if field in body:
-                body[field] = _without_none(body[field])
+                body[field] = omit_none_attributes(body[field])
         sent = body.get("ExpressionAttributeValues") or {}
         for expression in ("UpdateExpression", "ConditionExpression"):
             for token in re.findall(r":[A-Za-z0-9_]+", str(body.get(expression) or "")):
@@ -890,11 +888,37 @@ class FakeTable:
         that were never executed, which is the most complete form of the failure
         this file exists to prevent.
 
-        Production sends these through `account_deletion_repo.transact`, so the
-        same `None` handling applies. Its errors are still raised as the table
-        raises them; the wrapping the two callers do around that path is theirs.
+        Production sends these through `account_deletion_repo.transact` and
+        reports its `AccountDeletionConflict` as an
+        `AttachmentRepositoryConflict("conditional_conflict")`, so a caller that
+        answers every conflict the same way is seen doing so here too.
         """
-        self.transact_write_items(as_account_transaction(operations))
+        from stoa.db.repositories import account_deletion_repo, attachment_repo
+
+        try:
+            self.transact_account_deletion(operations)
+        except account_deletion_repo.AccountDeletionConflict as exc:
+            raise attachment_repo.AttachmentRepositoryConflict("conditional_conflict") from exc
+
+    def transact_attachment_write(self, operations: list[dict[str, Any]]) -> None:
+        """The seam `attachment_repo.transact` reaches for.
+
+        `_serialize_transactions` leaves a Put's top-level `None` out and sends keys
+        and expression values as given; every ClientError comes back as an
+        `AttachmentRepositoryConflict`, conditional or dependency failure. Production
+        discards the cause; it is kept here so a test can see which refusal it was.
+        """
+        from stoa.db.repositories import attachment_repo
+
+        try:
+            self.transact_write_items(as_attachment_transaction(operations))
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") in {
+                "ConditionalCheckFailedException",
+                "TransactionCanceledException",
+            }:
+                raise attachment_repo.AttachmentRepositoryConflict() from exc
+            raise attachment_repo.AttachmentRepositoryConflict("dependency_failure") from exc
 
     def transact_write_items(
         self,
@@ -912,19 +936,17 @@ class FakeTable:
         request invalid - a ValidationException, not a cancellation, so no caller can
         take it for a condition race worth retrying - and nothing is written.
 
-        Called with `operations`, this is the table itself: what is given is what is
-        judged, a `None` index key included. Called with `TransactItems=`, the shape
-        `attachment_repo.transact` uses (a resource table has no such method, so in
-        production that function serializes with `_serialize_transactions`), it
-        applies that function's rule first: a Put's top-level `None` attributes are
-        left out, keys and expression values are sent as given. A NULL that survives
-        that, in an expression value or a nested map, is judged on the row it would
-        leave, like the table does.
+        This is the table itself, in either call shape: what is given is what is
+        judged, a `None` index key included. A writer whose serializer leaves `None`
+        out has a seam above for that rule (`transact_attachment_write`,
+        `transact_account_deletion`); one whose serializer keeps it, such as
+        `subscription_service._transact_write`, reaches this entry directly and is
+        refused here as the table would refuse it.
         """
         if (operations is None) == (TransactItems is None):
             raise TypeError("transact_write_items takes operations or TransactItems=")
         if TransactItems is not None:
-            operations = as_attachment_transaction(TransactItems)
+            operations = TransactItems
         assert operations is not None
         with self.lock:
             self._record("transact_write_items", {"operations": operations})

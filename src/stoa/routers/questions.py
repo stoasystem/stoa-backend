@@ -1779,13 +1779,14 @@ async def request_teacher(
     table = get_table()
     mutations: list[question_repo.QuestionMutationResult] = []
 
-    def record_help_usage() -> None:
+    def record_help_usage(requested_at: str) -> None:
         # Written after the case is durable and dispatched, so a first attempt
         # that fails here leaves the case admitted and the row missing. A retry
         # finds the case replayed and still owes the row. The key is the
-        # question's and the period is the admission's day, so once the row is
-        # there every later retry, on any day, is a duplicate.
-        requested_at = str(item.get("teacher_requested_at") or now)
+        # question's and the period is the day of the persisted admission -
+        # not of the question snapshot read before it, which another request
+        # may have admitted since - so once the row is there every later
+        # retry, on any day, is a duplicate.
         usage_ledger_service.record_usage_event(
             student_id=student_id,
             action=usage_ledger_service.QUESTION_TEACHER_HELP_ACTION,
@@ -1827,6 +1828,9 @@ async def request_teacher(
         observed_at=observed_at,
         persist_case=persist_case,
         table=table,
+    )
+    admitted_at = (
+        admission.admission.admitted_at.isoformat() if admission.admission is not None else now
     )
     if (
         admission.disposition
@@ -1878,7 +1882,7 @@ async def request_teacher(
         admission.disposition
         is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.REPLAYED
     ):
-        record_help_usage()
+        record_help_usage(admitted_at)
         return {
             "question_id": question_id,
             "status": QuestionStatus.ESCALATED.value,
@@ -1931,7 +1935,7 @@ async def request_teacher(
             "status": "deferred",
             "reason": type(exc).__name__,
         }
-    record_help_usage()
+    record_help_usage(admitted_at)
     return {"question_id": question_id, "status": QuestionStatus.ESCALATED.value, "dispatch": dispatch}
 
 

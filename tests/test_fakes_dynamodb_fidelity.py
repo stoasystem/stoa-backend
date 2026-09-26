@@ -22,6 +22,7 @@ from fakes.dynamodb import (
     as_stored,
 )
 from stoa.db.repositories.account_deletion_repo import AccountDeletionConflict
+from stoa.db.repositories.attachment_repo import AttachmentRepositoryConflict
 from test_index_keys_are_never_empty import INDEX_KEY_ATTRIBUTES
 
 
@@ -513,16 +514,17 @@ def test_update_item_refuses_to_set_an_index_key_to_an_empty_string() -> None:
     assert table.rows[("ROW", "META")]["parent_id"] == "p-1"
 
 
-def test_a_conversation_transaction_with_an_empty_index_key_is_invalid_not_cancelled() -> None:
+def test_a_conversation_transaction_with_an_empty_index_key_is_refused_like_production() -> None:
     """The 2026-09-24 shape: a Put in the conversation transaction carrying `parent_id=""`.
 
-    It is a ValidationException for the whole request, not a cancelled transaction -
-    no condition failed, so nothing about it is worth retrying - and none of the other
-    operations lands.
+    Production sends it through `account_deletion_repo.transact`, which reports the
+    ValidationException as an `AccountDeletionConflict`, and the two callers of this
+    seam report that as an `AttachmentRepositoryConflict("conditional_conflict")`.
+    The chain is kept so the refusal is still visible, and nothing lands.
     """
     table = FakeTable()
 
-    with pytest.raises(ClientError) as raised:
+    with pytest.raises(AttachmentRepositoryConflict) as conflict:
         table.transact_conversation_write(
             [
                 {"Put": {"Item": {"PK": "CONV#1", "SK": "META", "status": "open"}}},
@@ -535,8 +537,11 @@ def test_a_conversation_transaction_with_an_empty_index_key_is_invalid_not_cance
             ]
         )
 
-    _assert_refused_for_an_empty_index_key(raised)
-    assert raised.value.operation_name == "TransactWriteItems"
+    wrapped = conflict.value.__cause__
+    assert isinstance(wrapped, AccountDeletionConflict)
+    assert isinstance(wrapped.__cause__, ClientError)
+    _assert_refused_for_an_empty_index_key(pytest.ExceptionInfo.from_exception(wrapped.__cause__))
+    assert wrapped.__cause__.operation_name == "TransactWriteItems"
     assert table.rows == {}
 
 
@@ -683,13 +688,26 @@ def test_the_low_level_transaction_refuses_a_null_index_key_it_is_given() -> Non
     assert table.rows == {}
 
 
-def test_attachment_repos_call_shape_leaves_a_puts_top_level_none_out() -> None:
-    """`TransactItems=` is how `attachment_repo.transact` calls; `_serialize_transactions`
-    leaves the item's top-level None out and touches nothing else."""
+def test_the_low_level_transaction_refuses_a_null_index_key_in_the_keyword_shape_too() -> None:
+    """`TransactItems=` is also how `subscription_service._transact_write` calls, and its
+    serializer keeps None - so this entry must not drop it for anyone."""
     table = FakeTable()
 
-    table.transact_write_items(
-        TransactItems=[
+    with pytest.raises(ClientError) as raised:
+        table.transact_write_items(
+            TransactItems=[{"Put": {"Item": {"PK": "X", "SK": "Y", "student_id": None}}}]
+        )
+
+    assert "Type mismatch for Index Key student_id" in raised.value.response["Error"]["Message"]
+    assert table.rows == {}
+
+
+def test_the_attachment_seam_leaves_a_puts_top_level_none_out() -> None:
+    """`attachment_repo._serialize_transactions`: the item loses its None, nothing else does."""
+    table = FakeTable()
+
+    table.transact_attachment_write(
+        [
             {
                 "Put": {
                     "Item": {
@@ -706,8 +724,27 @@ def test_attachment_repos_call_shape_leaves_a_puts_top_level_none_out() -> None:
     assert table.rows[("X", "Y")] == {"PK": "X", "SK": "Y", "metadata": {"subject": None}}
 
 
-def test_attachment_repo_reaches_the_double_and_stores_its_put_sparse() -> None:
-    """The real function, the real call shape: what production would store."""
+def test_the_attachment_seam_reports_refusals_as_attachment_conflicts() -> None:
+    table = FakeTable()
+    table.seed({"PK": "X", "SK": "Y"})
+
+    with pytest.raises(AttachmentRepositoryConflict) as cancelled:
+        table.transact_attachment_write(
+            [{"Put": {"Item": {"PK": "X", "SK": "Y"}, "ConditionExpression": "attribute_not_exists(PK)"}}]
+        )
+    with pytest.raises(AttachmentRepositoryConflict, match="dependency_failure") as invalid:
+        table.transact_attachment_write(
+            [{"Put": {"Item": {"PK": "Z", "SK": "Y", "parent_id": ""}}}]
+        )
+
+    assert isinstance(cancelled.value.__cause__, ClientError)
+    assert cancelled.value.__cause__.response["Error"]["Code"] == "TransactionCanceledException"
+    assert isinstance(invalid.value.__cause__, ClientError)
+    assert invalid.value.__cause__.response["Error"]["Code"] == "ValidationException"
+
+
+def test_attachment_repo_reaches_its_seam_and_stores_its_put_sparse() -> None:
+    """The real function reaches `transact_attachment_write`: what production would store."""
     from stoa.db.repositories import attachment_repo
 
     table = FakeTable()

@@ -4706,8 +4706,14 @@ def transact(
     described = bool(described_operations)
     if described and len(described_operations) != len(operations):
         raise AttachmentRepositoryConflict("dependency_failure")
+    hook = getattr(target, "transact_attachment_write", None)
     try:
-        if isinstance(target, _HighLevelTransactionTable):
+        if callable(hook):
+            # The seam a table double offers for this function's own rules; the
+            # low-level entry below is shared with writers that serialize
+            # differently.
+            hook(transact_items)
+        elif isinstance(target, _HighLevelTransactionTable):
             target.transact_write_items(TransactItems=transact_items)
         else:
             if not isinstance(target, _DynamoTable):
