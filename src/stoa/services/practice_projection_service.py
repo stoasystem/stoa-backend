@@ -302,11 +302,29 @@ def approved_directional_hint(challenge: Mapping[str, Any]) -> str | None:
     return DIRECTIONAL_HINT_TEMPLATES.get(template_id.value)
 
 
+# What a practice row's `status` says about the student, not about rollout:
+# `_lesson_status` answers `completed` or `available`, the lesson preview defaults
+# to `available`, and the seeded topics carry `available`. A `status` holding one of
+# these is not a rollout state and must not hide the row; any other `status`
+# (`draft`, `archived`) is the lifecycle state the rollout contract lists for lessons
+# and exercises, and still governs visibility.
+PRACTICE_AVAILABILITY_STATUSES = frozenset({"available", "completed"})
+
+
+def content_state(raw: Mapping[str, Any]) -> str:
+    """A content row's rollout state: what publishing wrote, else its lifecycle
+    `status`, else active. A student-availability `status` is not a state."""
+    for key in ("rollout_state", "content_state"):
+        if raw.get(key):
+            return str(raw[key]).lower()
+    status = str(raw.get("status") or "").lower()
+    if status and status not in PRACTICE_AVAILABILITY_STATUSES:
+        return status
+    return "active"
+
+
 def _content_state(raw: Mapping[str, Any]) -> str:
-    # The rollout state publishing wrote, else active. `status` is the
-    # student-facing availability of a practice row, not a rollout state; see
-    # curriculum_service._content_state.
-    return str(raw.get("rollout_state") or raw.get("content_state") or "active").lower()
+    return content_state(raw)
 
 
 def _normal_subject_id(subject_id: Any) -> str:

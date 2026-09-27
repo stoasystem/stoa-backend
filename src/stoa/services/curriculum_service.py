@@ -328,14 +328,14 @@ def _matches_state(raw: dict[str, Any], rollout_state: str | None, include_previ
 
 
 def _content_state(raw: dict[str, Any]) -> str:
-    """The rollout state of a content row: what publishing wrote, else active.
+    """The rollout state of a content row, read the same way the practice projection reads it.
 
-    `status` is not read. On a practice row it is the student-facing availability
-    (`available`, `completed`), and the seeded topics carry `status: "available"`;
-    reading it as a rollout state hid every seeded topic, and every unit under
-    them, from the student catalog while `includePreview` showed all five.
+    The seeded topics carry `status: "available"`, the practice domain's
+    student-facing availability; read as a rollout state it hid every seeded topic,
+    and every unit under them, from the student catalog while `includePreview`
+    showed all five. A lifecycle `status` (`draft`, `archived`) still hides a row.
     """
-    return str(raw.get("rollout_state") or raw.get("content_state") or "active").lower()
+    return practice_projection_service.content_state(raw)
 
 
 def _subject_language(subject_id: str) -> str:
