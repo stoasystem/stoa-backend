@@ -328,7 +328,14 @@ def _matches_state(raw: dict[str, Any], rollout_state: str | None, include_previ
 
 
 def _content_state(raw: dict[str, Any]) -> str:
-    return str(raw.get("rollout_state") or raw.get("content_state") or raw.get("status") or "active").lower()
+    """The rollout state of a content row: what publishing wrote, else active.
+
+    `status` is not read. On a practice row it is the student-facing availability
+    (`available`, `completed`), and the seeded topics carry `status: "available"`;
+    reading it as a rollout state hid every seeded topic, and every unit under
+    them, from the student catalog while `includePreview` showed all five.
+    """
+    return str(raw.get("rollout_state") or raw.get("content_state") or "active").lower()
 
 
 def _subject_language(subject_id: str) -> str:

@@ -303,12 +303,10 @@ def approved_directional_hint(challenge: Mapping[str, Any]) -> str | None:
 
 
 def _content_state(raw: Mapping[str, Any]) -> str:
-    return str(
-        raw.get("rollout_state")
-        or raw.get("content_state")
-        or raw.get("status")
-        or "active"
-    ).lower()
+    # The rollout state publishing wrote, else active. `status` is the
+    # student-facing availability of a practice row, not a rollout state; see
+    # curriculum_service._content_state.
+    return str(raw.get("rollout_state") or raw.get("content_state") or "active").lower()
 
 
 def _normal_subject_id(subject_id: Any) -> str:

@@ -6,27 +6,31 @@ from stoa.security import route_authorization
 from actor_helpers import install_actor_overrides
 
 
+# Content rows carry their rollout state in `rollout_state`, the attribute
+# publishing writes (`curriculum_ops_repo.put_published_projection`). `status` on a
+# practice row is the student-facing availability and is not read as a rollout
+# state; see stoasystem/stoa-backend#53.
 SUBJECTS = [
     {
         "subject_id": "math",
         "name": "Mathematics",
         "description": "Math rollout",
         "grade_levels": ["lower_secondary"],
-        "status": "active",
+        "rollout_state": "active",
         "order": 1,
     },
     {
         "subject_id": "physics",
         "name": "Physics",
         "grade_levels": ["lower_secondary"],
-        "status": "draft",
+        "rollout_state": "draft",
         "order": 2,
     },
     {
         "subject_id": "french",
         "name": "French",
         "grade_levels": ["lower_secondary"],
-        "status": "active",
+        "rollout_state": "active",
         "order": 3,
     },
 ]
@@ -37,7 +41,7 @@ TOPICS = [
         "subject_id": "math",
         "grade_level": "lower_secondary",
         "title": "Linear equations",
-        "status": "active",
+        "rollout_state": "active",
         "order": 1,
     },
     {
@@ -45,7 +49,7 @@ TOPICS = [
         "subject_id": "physics",
         "grade_level": "lower_secondary",
         "title": "Forces",
-        "status": "draft",
+        "rollout_state": "draft",
         "order": 2,
     },
 ]
@@ -57,7 +61,7 @@ UNITS = [
         "topic_id": "linear-equations",
         "grade_level": "lower_secondary",
         "title": "Solving equations",
-        "status": "active",
+        "rollout_state": "active",
         "order": 1,
     },
     {
@@ -66,7 +70,7 @@ UNITS = [
         "topic_id": "forces",
         "grade_level": "lower_secondary",
         "title": "Forces",
-        "status": "draft",
+        "rollout_state": "draft",
         "order": 1,
     },
 ]
@@ -85,7 +89,7 @@ LESSONS = [
         "examples": ["x + 4 = 9"],
         "difficulty": "standard",
         "estimated_minutes": 12,
-        "status": "active",
+        "rollout_state": "active",
         "order": 1,
     },
     {
@@ -96,7 +100,7 @@ LESSONS = [
         "grade_level": "lower_secondary",
         "title": "Net force",
         "difficulty": "standard",
-        "status": "draft",
+        "rollout_state": "draft",
         "order": 1,
     },
 ]
@@ -111,7 +115,7 @@ CHALLENGES = [
         "correct_answer": "x = 5",
         "explanation": "Subtract 4 from both sides.",
         "difficulty": "standard",
-        "status": "active",
+        "rollout_state": "active",
         "order": 1,
     },
     {
@@ -122,7 +126,7 @@ CHALLENGES = [
         "prompt": "Find the net force.",
         "correct_answer": "5 N",
         "difficulty": "standard",
-        "status": "draft",
+        "rollout_state": "draft",
         "order": 1,
     },
 ]
