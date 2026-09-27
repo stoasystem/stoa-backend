@@ -40,6 +40,9 @@ jobs:
           path: stoa-frontend
           persist-credentials: false
 
+      # `tests/test_index_keys_are_never_empty.py` reads `stacks/database_stack.py`
+      # from this checkout to hold the test double's indexes to the real table's,
+      # and fails rather than skips when it is missing.
       - name: Check out infra
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:

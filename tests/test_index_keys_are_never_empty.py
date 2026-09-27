@@ -21,11 +21,18 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
 
-SRC = Path(__file__).resolve().parents[1] / "src"
+from fakes.dynamodb import DEFAULT_INDEXES, IndexSchema
+from test_infra_workflow_contract import _resolve_infra_root
+
+
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+SRC = BACKEND_ROOT / "src"
 
 # The key attributes of every secondary index on `stoa-main`, from
-# `stoa-infra/stacks/database_stack.py`.
+# `stoa-infra/stacks/database_stack.py`. The last test holds this list, and the
+# double's index table, to what that file declares.
 INDEX_KEY_ATTRIBUTES = frozenset(
     {
         "email",
@@ -213,29 +220,102 @@ def test_a_non_index_attribute_set_to_empty_is_not_reported() -> None:
     assert _offenders_in('table.put_item(Item={"note": "", "parent_id": "p-1"})\n') == []
 
 
-def test_the_index_key_list_matches_the_table_definition() -> None:
-    """The list above is a copy of the infrastructure, so it has to still match.
+def _attribute_name(node: ast.AST) -> str:
+    """The `name=` of a `dynamodb.Attribute(...)` call."""
+    if isinstance(node, ast.Call):
+        for keyword in node.keywords:
+            if keyword.arg == "name" and isinstance(keyword.value, ast.Constant):
+                return str(keyword.value.value)
+    raise AssertionError(f"not a literal dynamodb.Attribute: {ast.dump(node)}")
 
-    If an index is added and this list is not, the check quietly stops covering
-    it - which is the shape of every gate in this repository that went quiet.
+
+def declared_indexes(stack_source: str) -> dict[str, IndexSchema]:
+    """Every `add_global_secondary_index` in the CDK stack, as the double spells it.
+
+    Read from the source, not from a list of names: the first version of this
+    check filtered `INDEX_KEY_ATTRIBUTES` by whether each name appeared in the
+    file, so it could only notice a removal. An index added to the table and not
+    to the double came back `5 passed`, on the exact case it existed for.
     """
-    stack = (
-        Path(__file__).resolve().parents[2]
-        / "stoa-infra"
-        / "stacks"
-        / "database_stack.py"
-    )
-    if not stack.exists():
-        # The sibling checkout is not always present; the check above still runs.
-        return
-    source = stack.read_text(encoding="utf-8")
-    declared = {
-        literal
-        for literal in INDEX_KEY_ATTRIBUTES
-        if f'name="{literal}"' in source
+    declared: dict[str, IndexSchema] = {}
+    for node in ast.walk(ast.parse(stack_source)):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "add_global_secondary_index"
+        ):
+            continue
+        keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+        name = keywords["index_name"]
+        assert isinstance(name, ast.Constant) and isinstance(name.value, str), ast.dump(name)
+        assert name.value not in declared, f"{name.value} is declared twice"
+        sort_key = keywords.get("sort_key")
+        declared[name.value] = IndexSchema(
+            _attribute_name(keywords["partition_key"]),
+            None if sort_key is None else _attribute_name(sort_key),
+        )
+    return declared
+
+
+def _database_stack_source() -> str:
+    # Backend CI and the formal gate both check the infra repository out beside
+    # this one, so a missing sibling means this check is not reading what it
+    # guards. Fail, do not skip: skipping is how this gate went quiet before.
+    try:
+        infra_root = _resolve_infra_root(BACKEND_ROOT)
+    except RuntimeError as exc:
+        pytest.fail(f"the infra repository is not beside this checkout: {exc}")
+    stack = infra_root / "stacks" / "database_stack.py"
+    if not stack.is_file():
+        pytest.fail(f"the table definition is not where this gate reads it: {stack}")
+    return stack.read_text(encoding="utf-8")
+
+
+def test_the_double_carries_exactly_the_indexes_the_table_declares() -> None:
+    """Name, partition key and sort key, in both directions.
+
+    Since card 036 the double enforces every index it knows about - a row with
+    an empty or NULL key attribute is refused just as the table refuses it. An
+    index the double does not know about is one it silently lets through, which
+    is the gap this suite has been bitten by six times.
+    """
+    assert declared_indexes(_database_stack_source()) == DEFAULT_INDEXES
+
+
+def test_the_index_key_list_matches_the_table_definition() -> None:
+    """The list above is a copy of the infrastructure, so it has to still match."""
+    declared = declared_indexes(_database_stack_source())
+    key_attributes = {
+        attribute
+        for schema in declared.values()
+        for attribute in (schema.partition_key, schema.sort_key)
+        if attribute is not None
     }
 
-    assert declared == INDEX_KEY_ATTRIBUTES, (
-        "these are listed here but no longer declared on the table: "
-        f"{sorted(INDEX_KEY_ATTRIBUTES - declared)}"
-    )
+    assert key_attributes == INDEX_KEY_ATTRIBUTES
+
+
+STACK_FRAGMENT = """
+self.table.add_global_secondary_index(
+    index_name="GSI-Email",
+    partition_key=dynamodb.Attribute(name="email", type=dynamodb.AttributeType.STRING),
+    projection_type=dynamodb.ProjectionType.ALL,
+)
+self.table.add_global_secondary_index(
+    index_name="GSI-Poison",
+    partition_key=dynamodb.Attribute(
+        name="poison_attr", type=dynamodb.AttributeType.STRING
+    ),
+    sort_key=dynamodb.Attribute(name="created_at", type=dynamodb.AttributeType.STRING),
+    projection_type=dynamodb.ProjectionType.ALL,
+)
+"""
+
+
+def test_the_stack_reader_sees_an_added_index_and_its_keys() -> None:
+    """Negative control: the poison the card names has to come out of the reader."""
+    assert declared_indexes(STACK_FRAGMENT) == {
+        "GSI-Email": IndexSchema("email"),
+        "GSI-Poison": IndexSchema("poison_attr", "created_at"),
+    }
+    assert declared_indexes("table = dynamodb.Table(self, 'T')\n") == {}
