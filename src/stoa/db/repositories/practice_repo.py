@@ -341,6 +341,33 @@ def _validate_unique_challenges(items: list[dict]) -> list[dict]:
     return items
 
 
+# ── Subject ids ───────────────────────────────────────────────────────────
+
+_SUBJECT_ALIASES = {
+    "mathematics": "math",
+    "mathematik": "math",
+    "deutsch": "german",
+    "englisch": "english",
+}
+
+
+def normal_subject_id(subject_id: Any) -> str:
+    """The canonical subject id for a stored or requested one.
+
+    `math` is canonical: the curriculum responses, the rollout subjects, learning
+    profiles and question subjects all say it. The practice content is seeded with
+    `mathematics`, and progress rows copy their lesson's value, so a subject filter
+    that compared raw values found nothing for `math`. Every subject comparison
+    runs both sides through here. stoasystem/stoa-backend#62.
+    """
+    value = str(subject_id).strip().lower()
+    return _SUBJECT_ALIASES.get(value, value)
+
+
+def same_subject(stored: Any, requested: Any) -> bool:
+    return normal_subject_id(stored) == normal_subject_id(requested)
+
+
 # ── Content read ──────────────────────────────────────────────────────────
 
 
@@ -359,7 +386,7 @@ def get_topics(subject_id: str | None = None) -> list[dict]:
     )
     items = _response_items(resp.get("Items", []))
     if subject_id:
-        items = [i for i in items if i.get("subject_id") == subject_id]
+        items = [i for i in items if same_subject(i.get("subject_id", ""), subject_id)]
     return items
 
 
@@ -411,7 +438,7 @@ def get_all_challenges(
     )
     items = _validate_unique_challenges(items)
     if subject_id:
-        items = [i for i in items if i.get("subject_id") == subject_id]
+        items = [i for i in items if same_subject(i.get("subject_id", ""), subject_id)]
     if topic_id:
         items = [i for i in items if i.get("topic_id") == topic_id]
     return sorted(items, key=lambda x: (x.get("lesson_id", ""), x.get("order", 0)))
@@ -482,7 +509,7 @@ def get_progress(user_id: str, subject_id: str | None = None) -> list[dict]:
     )
     items = _response_items(resp.get("Items", []))
     if subject_id:
-        items = [i for i in items if i.get("subject_id") == subject_id]
+        items = [i for i in items if same_subject(i.get("subject_id", ""), subject_id)]
     return items
 
 

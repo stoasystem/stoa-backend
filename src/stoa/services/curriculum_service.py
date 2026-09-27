@@ -348,9 +348,7 @@ def _subject_language(subject_id: str) -> str:
 
 
 def _normal_subject_id(subject_id: str) -> str:
-    value = str(subject_id).strip().lower()
-    aliases = {"mathematics": "math", "mathematik": "math", "deutsch": "german", "englisch": "english"}
-    return aliases.get(value, value)
+    return practice_repo.normal_subject_id(subject_id)
 
 
 def _as_int(value: Any, default: int = 0) -> int:

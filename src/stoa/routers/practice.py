@@ -631,7 +631,7 @@ async def get_roadmap(
     """Return the lesson roadmap for a topic."""
     locale = _actor_locale(actor)
     topic = practice_repo.get_topic(topic_id)
-    if not topic or topic.get("subject_id") != subject_id:
+    if not topic or not practice_repo.same_subject(topic.get("subject_id", ""), subject_id):
         raise HTTPException(status_code=404, detail="Topic not found")
 
     user_id = actor.user_id
