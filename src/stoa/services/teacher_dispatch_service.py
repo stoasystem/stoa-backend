@@ -575,9 +575,10 @@ def advance_help_request(
     a reply passed as `extra_operations`).
 
     Every condition the decision rested on is part of the write: the exact offer
-    (`dispatch_id`), the teacher's active account and profile version, the
-    student's fence, and the queue row's version. If any moved, nothing is
-    written and `HelpRequestConflict` is raised.
+    (`dispatch_id`) and that it is still live (`dispatch_deadline_at`), the
+    teacher's active account and profile version, the student's fence, and the
+    queue row's version. If any moved, nothing is written and
+    `HelpRequestConflict` is raised.
     """
     if target not in HELP_REQUEST_STATUSES:
         raise ValueError(f"unsupported help request status: {target}")
@@ -614,7 +615,8 @@ def advance_help_request(
         condition = (
             "attribute_exists(PK) AND attribute_not_exists(teacher_id) "
             "AND escalation_status = :pending AND dispatch_status = :dispatched "
-            "AND dispatched_teacher_id = :teacher AND dispatch_id = :offer"
+            "AND dispatched_teacher_id = :teacher AND dispatch_id = :offer "
+            "AND dispatch_deadline_at > :now"
         )
         values.update(
             {
@@ -753,6 +755,10 @@ def _queue_row_transition(
             else QuestionStatus.TEACHER_ACTIVE.value
         ),
         expected_generation=int(_int(question.get("account_fence_generation"), 1)),
+        # An offer is taken only while it is live, checked where it is written,
+        # as question_repo.claim_teacher_takeover does for the question lane.
+        condition_expression="dispatch_deadline_at > :offer_live_at" if accepting else None,
+        condition_values={":offer_live_at": now} if accepting else None,
         extra_attrs=extra,
     )
 

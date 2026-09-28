@@ -505,3 +505,19 @@ def test_a_teacher_assigned_to_the_student_keeps_the_conversation_only_write(tab
     assert _conv(table)["escalation_status"] == "resolved"
     assert "teacher_id" not in _conv(table)
     assert _question(table) == question_before
+
+
+def test_an_offer_that_expires_between_the_check_and_the_write_is_refused(table, monkeypatch):
+    # The policy saw a live offer on its own clock; the write happens after the
+    # deadline. Found by the second independent audit: the deadline was checked
+    # by the policy only, so the late write still took the offer.
+    _dispatch_to(table, TEACHER)
+    deadline = _conv(table)["dispatch_deadline_at"]
+    monkeypatch.setattr(teachers, "_now", lambda: "2099-01-01T00:00:00+00:00")
+    before = (dict(_conv(table)), dict(_question(table)))
+    assert deadline < "2099"
+
+    for attempt in (_set_status(_client(), "in_progress"), _reply(_client())):
+        assert attempt.status_code == 409
+
+    assert _unchanged(table, before)
