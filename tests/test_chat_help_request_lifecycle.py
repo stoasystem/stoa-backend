@@ -464,8 +464,9 @@ def test_a_conversation_without_a_queue_row_cannot_be_taken(table):
     assert _conv(table) == before
 
 
+@pytest.mark.parametrize("held", [False, True], ids=["offered_to_another", "held_by_another"])
 def test_a_teacher_assigned_to_the_student_cannot_write_a_request_they_do_not_hold(
-    table, monkeypatch
+    table, monkeypatch, held
 ):
     # User decision on #73 (2026-09-28): a teacher the policy admits through an
     # assignment, who neither holds the request nor was offered it, may read
@@ -475,6 +476,8 @@ def test_a_teacher_assigned_to_the_student_cannot_write_a_request_they_do_not_ho
     from stoa.security.route_authorization import get_authorization_fact_repository
 
     _dispatch_to(table, TEACHER)
+    if held:
+        assert _set_status(_client(), "in_progress").status_code == 200
     assigned = "teacher-assigned"
 
     class AssignmentFacts:
@@ -509,6 +512,8 @@ def test_a_teacher_assigned_to_the_student_cannot_write_a_request_they_do_not_ho
         client.post(f"/teachers/me/help-requests/{REQUEST}/notes", json={"content": "Hi"}),
     ):
         assert attempt.status_code == 409, attempt.text
+        # Refused because they do not hold it, not because the request moved.
+        assert attempt.json()["detail"]["code"] == "help_request_not_held"
 
     assert _unchanged(table, before)
     assert set(table.rows) == rows_before
@@ -874,8 +879,10 @@ def test_a_conversation_without_a_queue_row_is_not_dispatched(table, missing):
 
 
 def test_one_reconciler_run_leaves_both_rows_on_the_same_offer(table):
-    # The question lane offers the queue row on its own first; the conversation
-    # lane then offers both rows. What a run leaves behind must be one offer.
+    # Both lanes of the reconciler see a chat request's queue row; whatever
+    # order they act in, what a run leaves behind must be one offer on both
+    # rows. (The question lane's own offer currently always fails, see
+    # stoasystem/stoa-backend#75, so today the conversation lane makes it.)
     table.rows[(f"USER#{OTHER_TEACHER}", "PROFILE")]["dispatch_availability"] = "paused"
 
     teacher_dispatch_service.reconcile_dispatches()
