@@ -1529,7 +1529,11 @@ async def get_help_request(
                 table,
                 Key={"PK": _conv_pk(conv_id), "SK": "CONV"},
                 UpdateExpression="SET first_teacher_action_at = :t",
-                ConditionExpression="attribute_not_exists(first_teacher_action_at)",
+                # Never on a tombstone the student's deletion left in its place.
+                ConditionExpression=(
+                    "attribute_exists(PK) AND attribute_exists(escalated) "
+                    "AND attribute_not_exists(first_teacher_action_at)"
+                ),
                 ExpressionAttributeValues={":t": first_teacher_action_at},
             )
         except Exception:
@@ -1643,7 +1647,18 @@ async def add_note(
     # teacher's identity stays on it when the teacher is deleted (user
     # decision, 2026-09-28).
     student_id = _text(conv.get("student_id"))
-    generation = stored_int(conv.get("account_fence_generation")) or 1
+    try:
+        # The generation stamped on the rows is the one the fence check holds
+        # them to, read from the fence itself, not a copy on the conversation.
+        generation = int(
+            account_deletion_repo.require_active_account_fence(student_id, table=table)[
+                "generation"
+            ]
+        )
+    except account_deletion_repo.AccountDeletionConflict as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
+        ) from exc
     note_item = {
         "PK": _conv_pk(conv_id),
         "SK": f"NOTE#{note_id}",

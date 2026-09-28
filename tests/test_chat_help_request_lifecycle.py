@@ -967,3 +967,57 @@ def test_deleting_the_student_removes_the_teachers_replies_from_their_conversati
     assert "content" not in note
     assert "teacher_name" not in note
     assert "Probier" not in json.dumps(note, default=str)
+
+
+def test_a_reply_that_would_accept_is_refused_once_the_students_deletion_has_begun(table):
+    # The accepting reply relies on the fence the queue row's CAS brings in.
+    _dispatch_to(table, TEACHER)
+    table.rows[(f"USER#{STUDENT}", "ACCOUNT_FENCE")]["status"] = "deletion_pending"
+    rows_before = set(table.rows)
+    before = (dict(_conv(table)), dict(_question(table)))
+
+    assert _reply(_client()).status_code == 409
+
+    assert set(table.rows) == rows_before
+    assert _unchanged(table, before)
+
+
+def test_a_reply_is_stamped_with_the_generation_its_fence_checks(table):
+    # A conversation row carrying a stale generation must not put that stale
+    # value on the reply: the stamp is what the transaction checked.
+    _dispatch_to(table, TEACHER)
+    _conv(table)["account_fence_generation"] = 2
+    client = _client()
+    assert _set_status(client, "in_progress").status_code == 200
+
+    assert _reply(client).status_code in {200, 201}
+
+    (note,) = _notes(table)
+    assert int(note["account_fence_generation"]) == 1
+    assert _reply(client, "Second reply.").status_code in {200, 201}
+
+
+def test_opening_a_request_never_writes_to_a_deleted_conversation(table, monkeypatch):
+    # Detail GET records the first teacher action. Between its read and that
+    # write, the student's deletion may tombstone the conversation; the write
+    # must not land on the tombstone.
+    _dispatch_to(table, TEACHER)
+    client = _client()
+    real_update = teachers._teacher_update
+    raced = []
+
+    def tombstone_then_update(target, **kwargs):
+        if "first_teacher_action_at" in str(kwargs.get("UpdateExpression")) and not raced:
+            raced.append(True)
+            table.rows[CONV_KEY] = {
+                "PK": f"CONV#{CONV}", "SK": "CONV", "owner_id": STUDENT, "student_id": STUDENT,
+                "status": "deleted", "owner_deletion_generation": 1,
+            }
+        return real_update(target, **kwargs)
+
+    monkeypatch.setattr(teachers, "_teacher_update", tombstone_then_update)
+
+    response = client.get(f"/teachers/me/help-requests/{REQUEST}")
+
+    assert raced, response.text
+    assert "first_teacher_action_at" not in table.rows[CONV_KEY]

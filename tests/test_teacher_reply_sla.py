@@ -343,6 +343,11 @@ def test_teacher_note_accepts_rich_teacher_reply_payload(monkeypatch):
     captured: list[dict] = []
     monkeypatch.setattr(
         teachers.account_deletion_repo,
+        "require_active_account_fence",
+        lambda user_id, generation=None, *, table=None: {"status": "active", "generation": 4},
+    )
+    monkeypatch.setattr(
+        teachers.account_deletion_repo,
         "transact",
         lambda operations, *, table=None: captured.extend(operations),
     )
@@ -366,6 +371,7 @@ def test_teacher_note_accepts_rich_teacher_reply_payload(monkeypatch):
     body = response.json()
     assert body["richContent"]["blocks"][1] == {"type": "formula", "latex": "3x = 15"}
     assert captured[0]["ConditionCheck"]["Key"] == {"PK": "USER#student-1", "SK": "ACCOUNT_FENCE"}
+    assert captured[0]["ConditionCheck"]["ExpressionAttributeValues"][":generation"] == 4
     note, message = (op["Put"]["Item"] for op in captured[1:])
     assert note["teacher_response_format"] == "stoa_teacher_reply_v1"
     assert message["teacher_response_rich"]["blocks"][1]["type"] == "formula"
