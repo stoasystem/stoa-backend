@@ -2303,10 +2303,7 @@ def test_audit_schema_binds_each_implemented_gate_to_its_exact_command_and_evide
     assert not _matches(web, schema, schema)
 
 
-def test_system_web_launcher_kills_normal_return_orphan_process_group(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_system_web_launcher_kills_normal_return_orphan_process_group(tmp_path: Path) -> None:
     gate = _load_gate()
     marker = tmp_path / "orphan-survived"
     child = (
@@ -2319,14 +2316,6 @@ def test_system_web_launcher_kills_normal_return_orphan_process_group(
         "subprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2]],"
         "stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)"
     )
-    system_killpg = os.killpg
-
-    def confirmed_killpg(process_group: int, signal_number: int) -> None:
-        if signal_number == 0:
-            raise ProcessLookupError
-        system_killpg(process_group, signal_number)
-
-    monkeypatch.setattr(gate.os, "killpg", confirmed_killpg)
     result = gate._run_web_process_group(
         (sys.executable, "-c", parent, child, str(marker)),
         {"PATH": str(Path(sys.executable).resolve().parent)},
