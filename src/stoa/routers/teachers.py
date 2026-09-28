@@ -281,6 +281,19 @@ _HELP_REQUEST_CHANGED = {
 }
 
 
+def _takes_two_row_path(conv: Mapping[str, object], teacher_id: str) -> bool:
+    """Whether this teacher's write goes through `advance_help_request`.
+
+    That is the teacher holding the request, or the one it is offered to.
+    Anyone else the policy lets write (a teacher assigned to the student) keeps
+    the conversation-only write they always had; that split is its own ticket.
+    """
+    holder = str(conv.get("teacher_id") or "")
+    if holder:
+        return holder == teacher_id
+    return str(conv.get("dispatched_teacher_id") or "") == teacher_id
+
+
 def _refuse_chat_question_row(item: Mapping[str, object]) -> None:
     """A chat request's queue row is not worked on its own.
 
@@ -1546,16 +1559,35 @@ async def update_help_request(
     request move in one transaction (stoasystem/stoa-backend#66).
     """
     now = _now()
-    try:
-        conv = teacher_dispatch_service.advance_help_request(
-            dict(authorized.value),
-            teacher_id=actor.user_id,
-            target=body.status,
-            now=now,
-            resolution_note=body.resolutionNote,
+    conv = dict(authorized.value)
+    if _takes_two_row_path(conv, actor.user_id):
+        try:
+            conv = teacher_dispatch_service.advance_help_request(
+                conv,
+                teacher_id=actor.user_id,
+                target=body.status,
+                now=now,
+                resolution_note=body.resolutionNote,
+            )
+        except teacher_dispatch_service.HelpRequestConflict as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
+            ) from exc
+    else:
+        update_parts = ["escalation_status = :s", "updated_at = :u"]
+        expr_values: dict = {":s": body.status, ":u": now}
+        if not conv.get("first_teacher_action_at"):
+            update_parts.append("first_teacher_action_at = :f")
+            expr_values[":f"] = now
+        if body.resolutionNote:
+            update_parts.append("resolution_note = :r")
+            expr_values[":r"] = body.resolutionNote
+        _teacher_update(
+            get_table(),
+            Key={"PK": _conv_pk(_required_text(conv.get("conversation_id"))), "SK": "CONV"},
+            UpdateExpression="SET " + ", ".join(update_parts),
+            ExpressionAttributeValues=expr_values,
         )
-    except teacher_dispatch_service.HelpRequestConflict as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED) from exc
 
     conv_id = _required_text(conv.get("conversation_id"))
     student_name = _get_student_name(_text(conv.get("student_id")))
@@ -1630,7 +1662,7 @@ async def add_note(
         "created_at": now,
     }
 
-    if not conv.get("teacher_id"):
+    if not conv.get("teacher_id") and _takes_two_row_path(conv, teacher_id):
         # Replying to an offer takes it: the acceptance and the reply are one
         # write, so a reply never lands on a request someone else then takes.
         try:

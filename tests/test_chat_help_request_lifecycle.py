@@ -319,3 +319,189 @@ def test_question_lane_writes_refuse_a_chat_question_row(table):
         assert response.status_code == 409
         assert response.json()["detail"]["code"] == "chat_help_request_use_help_request_routes"
     assert (_conv(table), _question(table)) == before
+
+
+# --- What the independent audit of the first version found ---
+
+
+def _unchanged(table: FakeTable, before: tuple[dict, dict]) -> bool:
+    return (_conv(table), _question(table)) == before
+
+
+def _fail_queue_row_reads(table: FakeTable, monkeypatch) -> None:
+    real_get = table.get_item
+
+    def get_item(**kwargs):
+        if kwargs.get("Key", {}).get("PK", "").startswith("QUESTION#"):
+            raise RuntimeError("ProvisionedThroughputExceededException")
+        return real_get(**kwargs)
+
+    monkeypatch.setattr(table, "get_item", get_item)
+
+
+@pytest.mark.parametrize("first_accept", [False, True], ids=["accepting", "holder"])
+def test_a_failed_queue_row_read_writes_nothing(table, monkeypatch, first_accept):
+    # A throttled read used to count as "no queue row", and the conversation
+    # alone was written: the split this ticket exists to close.
+    _dispatch_to(table, TEACHER)
+    client = _client()
+    if first_accept:
+        assert _set_status(client, "in_progress").status_code == 200
+    before = (dict(_conv(table)), dict(_question(table)))
+    _fail_queue_row_reads(table, monkeypatch)
+
+    assert _set_status(client, "resolved").status_code == 409
+    if not first_accept:
+        # Replying to the offer would accept it, so it is refused the same way.
+        assert _reply(client).status_code == 409
+
+    assert _unchanged(table, before)
+
+
+def test_dispatch_retries_a_failed_queue_row_read_instead_of_writing_one_row(table, monkeypatch):
+    before = (dict(_conv(table)), dict(_question(table)))
+    _fail_queue_row_reads(table, monkeypatch)
+
+    result = teacher_dispatch_service.dispatch_conversation(
+        CONV, conversation=dict(_conv(table)), table=table
+    )
+
+    assert result["status"] == "claim_conflict"
+    assert _unchanged(table, before)
+
+
+def test_a_teacher_who_timed_out_is_not_offered_the_case_again(table):
+    _dispatch_to(table, TEACHER)
+    for row in (_conv(table), _question(table)):
+        row["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
+
+    teacher_dispatch_service.reconcile_dispatches()
+
+    assert TEACHER in _question(table)["previous_dispatch_teacher_ids"]
+    conv = _conv(table)
+    assert not (
+        conv.get("dispatched_teacher_id") == TEACHER
+        and conv.get("dispatch_deadline_at", "") > "2026-02-01"
+    ), "the conversation lane offered the case back to the teacher who timed out"
+    assert _set_status(_client(), "in_progress").status_code in {403, 404, 409}
+    assert "teacher_id" not in _conv(table)
+
+
+def test_accepting_refuses_a_teacher_the_queue_row_says_timed_out(table):
+    _dispatch_to(table, TEACHER)
+    _question(table)["previous_dispatch_teacher_ids"] = [TEACHER]
+    before = (dict(_conv(table)), dict(_question(table)))
+
+    assert _set_status(_client(), "in_progress").status_code == 409
+    assert _unchanged(table, before)
+
+
+def test_accepting_refuses_when_the_queue_row_carries_another_offer(table):
+    # The question lane re-offered the queue row between the policy check and
+    # the read; the conversation still shows the old offer.
+    _dispatch_to(table, TEACHER)
+    _question(table)["dispatch_id"] = "queue-lane-offer"
+    before = (dict(_conv(table)), dict(_question(table)))
+
+    assert _set_status(_client(), "in_progress").status_code == 409
+    assert _unchanged(table, before)
+
+
+def test_a_queue_row_changed_between_read_and_write_is_refused(table, monkeypatch):
+    _dispatch_to(table, TEACHER)
+    real_transact = account_deletion_repo.transact
+    bumped = []
+
+    def transact_after_a_queue_row_write(operations, *, table=None):
+        if not bumped:
+            bumped.append(True)
+            row = table.rows[QUESTION_KEY]
+            row["version"] = row["version"] + 1
+        return real_transact(operations, table=table)
+
+    monkeypatch.setattr(account_deletion_repo, "transact", transact_after_a_queue_row_write)
+
+    assert _set_status(_client(), "in_progress").status_code == 409
+    assert "teacher_id" not in _conv(table)
+    assert _question(table)["status"] == "escalated"
+
+
+def test_an_offer_without_a_pending_conversation_is_refused(table):
+    _dispatch_to(table, TEACHER)
+    _conv(table)["escalation_status"] = "in_progress"
+    before = (dict(_conv(table)), dict(_question(table)))
+
+    assert _set_status(_client(), "resolved").status_code == 409
+    assert _unchanged(table, before)
+
+
+def test_a_holder_whose_account_is_being_deleted_cannot_resolve(table):
+    _dispatch_to(table, TEACHER)
+    client = _client()
+    assert _set_status(client, "in_progress").status_code == 200
+    table.rows[(f"USER#{TEACHER}", "ACCOUNT_FENCE")]["status"] = "deleting"
+    before = (dict(_conv(table)), dict(_question(table)))
+
+    assert _set_status(client, "resolved").status_code == 409
+    assert _unchanged(table, before)
+
+
+@pytest.mark.parametrize("fence", ["active", "deleting"])
+def test_a_conversation_without_a_queue_row_binds_the_students_fence(table, fence):
+    _dispatch_to(table, TEACHER)
+    del table.rows[QUESTION_KEY]
+    table.rows[(f"USER#{STUDENT}", "ACCOUNT_FENCE")]["status"] = fence
+
+    response = _set_status(_client(), "in_progress")
+
+    if fence == "active":
+        assert response.status_code == 200
+        assert _conv(table)["teacher_id"] == TEACHER
+    else:
+        assert response.status_code == 409
+        assert "teacher_id" not in _conv(table)
+
+
+def test_a_teacher_assigned_to_the_student_keeps_the_conversation_only_write(table, monkeypatch):
+    # Characterises the assignment path this change leaves as it was: such a
+    # teacher neither holds nor was offered the request, so the two-row move
+    # does not apply to them. That this path still moves only the conversation
+    # is recorded as its own ticket.
+    from stoa.security.authorization import AuthorizationFacts, TeacherAuthorizationFacts
+    from stoa.security.route_authorization import get_authorization_fact_repository
+
+    _dispatch_to(table, TEACHER)
+    assigned = "teacher-assigned"
+
+    class AssignmentFacts:
+        async def facts_for(self, actor, resource, action, purpose, value):
+            return AuthorizationFacts(
+                teacher=TeacherAuthorizationFacts(
+                    question=value,
+                    assignment={
+                        "teacher_id": assigned,
+                        "student_id": STUDENT,
+                        "status": "active",
+                        "resource_types": [resource.resource_type.value],
+                        "actions": [action.value],
+                        "purposes": [purpose.value],
+                    },
+                    teacher_account={"user_id": assigned, "role": "teacher", "account_status": "active"},
+                    student_account={"user_id": STUDENT, "role": "student", "account_status": "active"},
+                )
+            )
+
+    app = FastAPI()
+    app.include_router(teachers.router, prefix="/teachers")
+    install_actor_overrides(app, {"sub": assigned, "role": "teacher"})
+    app.dependency_overrides[get_authorization_fact_repository] = AssignmentFacts
+    question_before = dict(_question(table))
+
+    response = TestClient(app).patch(
+        f"/teachers/me/help-requests/{REQUEST}", json={"status": "resolved"}
+    )
+
+    assert response.status_code == 200
+    assert _conv(table)["escalation_status"] == "resolved"
+    assert "teacher_id" not in _conv(table)
+    assert _question(table) == question_before

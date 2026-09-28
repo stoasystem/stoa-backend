@@ -239,7 +239,15 @@ def test_cross_teacher_help_request_update_is_hidden_before_mutation(monkeypatch
         "escalation_status": "in_progress",
     }
     table = FakeTable()
-    table.seed(conv)
+    table.seed(
+        conv,
+        # The holder's write binds their account, and a conversation without a
+        # queue row binds the student's fence.
+        {"PK": "USER#teacher-1", "SK": "PROFILE", "user_id": "teacher-1", "role": "teacher",
+         "account_status": "active", "version": 1},
+        {"PK": "USER#teacher-1", "SK": "ACCOUNT_FENCE", "status": "active", "generation": 1},
+        {"PK": "USER#student-1", "SK": "ACCOUNT_FENCE", "status": "active", "generation": 1},
+    )
     monkeypatch.setattr(teachers, "_get_conversation", lambda _id: dict(table.rows[("CONV#conv-1", "CONV")]))
     monkeypatch.setattr(teachers, "_get_student_name", lambda _id: "Student")
     for module in (teachers, teacher_dispatch_service, account_deletion_repo):

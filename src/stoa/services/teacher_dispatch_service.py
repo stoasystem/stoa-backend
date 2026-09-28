@@ -400,14 +400,26 @@ def build_dispatch_dashboard(
     }
 
 
+class QueueRowUnavailable(Exception):
+    """The queue row of a chat escalation could not be read."""
+
+
 def _escalated_question_row(table: Any, request_id: str) -> dict[str, Any] | None:
+    """The queue row of a chat escalation, or `None` when it does not exist.
+
+    A failed read is raised, never reported as absent: callers write only the
+    conversation when there is no queue row, so reading a throttled or failed
+    lookup as "no row" split the two rows.
+    """
     try:
         response = table.get_item(
             Key={"PK": f"QUESTION#{request_id}", "SK": "META"}, ConsistentRead=True
         )
-    except Exception:
-        return None
-    item = response.get("Item") if isinstance(response, dict) else None
+    except Exception as exc:  # noqa: BLE001 - any failure means "unknown", not "absent"
+        raise QueueRowUnavailable(request_id) from exc
+    if not isinstance(response, dict):
+        raise QueueRowUnavailable(request_id)
+    item = response.get("Item")
     return dict(item) if isinstance(item, dict) else None
 
 
@@ -443,7 +455,25 @@ def dispatch_conversation(
             "teacherId": current_teacher,
         }
 
-    plan = plan_dispatch(conversation, now=timestamp)
+    # Escalations made before the queue row existed have only the conversation.
+    # An Update with no row to update would create a half-formed question, so the
+    # second write is included only when there is something to update. A read
+    # that failed is retried on the next sweep rather than read as "no row".
+    request_id = str(conversation.get("escalation_request_id") or "")
+    try:
+        question = _escalated_question_row(target, request_id) if request_id else None
+    except QueueRowUnavailable:
+        return {"conversationId": conversation_id, "status": "claim_conflict"}
+
+    # Who already timed out on this case is recorded on the queue row; the
+    # conversation does not carry it, so without this the same teacher was
+    # offered the case again.
+    planned = dict(conversation)
+    if question is not None:
+        planned["previous_dispatch_teacher_ids"] = sorted(
+            set(_previous_assignees(conversation)) | set(_previous_assignees(question))
+        )
+    plan = plan_dispatch(planned, now=timestamp)
     if not plan["selected"]:
         return {
             "conversationId": conversation_id,
@@ -455,12 +485,6 @@ def dispatch_conversation(
     dispatch_id = str(uuid.uuid4())
     deadline = _deadline(timestamp)
     attempt_count = int(_int(conversation.get("dispatch_attempt_count"), 0)) + 1
-
-    # Escalations made before the queue row existed have only the conversation.
-    # An Update with no row to update would create a half-formed question, so the
-    # second write is included only when there is something to update.
-    request_id = str(conversation.get("escalation_request_id") or "")
-    question = _escalated_question_row(target, request_id) if request_id else None
     question_operations: list[dict[str, Any]] = (
         question_repo.build_question_update_transaction(
             question,
@@ -566,7 +590,7 @@ def advance_help_request(
         raise HelpRequestConflict("help request is not open to this teacher")
     accepting = not holder
 
-    operations: list[dict[str, Any]] = []
+    operations: list[dict[str, Any]] = list(_teacher_standing_conditions(teacher_id, store))
     assignments = [
         "escalation_status = :target",
         "updated_at = :now",
@@ -582,7 +606,6 @@ def advance_help_request(
             or current != "pending"
         ):
             raise HelpRequestConflict("help request holds no offer for this teacher")
-        operations.extend(_teacher_standing_conditions(teacher_id, store))
         assignments += [
             "teacher_id = :teacher",
             "dispatch_status = :accepted",
@@ -624,11 +647,31 @@ def advance_help_request(
     )
 
     request_id = str(conversation.get("escalation_request_id") or "")
-    question = _escalated_question_row(store, request_id) if request_id else None
+    try:
+        question = _escalated_question_row(store, request_id) if request_id else None
+    except QueueRowUnavailable as exc:
+        raise HelpRequestConflict("queue row could not be read") from exc
     if question is not None:
+        # The queue row's CAS carries the student's fence.
         operations.extend(
             _queue_row_transition(
-                question, teacher_id=teacher_id, target=target, now=timestamp, accepting=accepting
+                question,
+                teacher_id=teacher_id,
+                target=target,
+                now=timestamp,
+                accepting=accepting,
+                offer=str(conversation.get("dispatch_id") or ""),
+            )
+        )
+    else:
+        # A conversation from before queue rows existed: bind the student's
+        # fence directly, since no queue-row write brings it in.
+        student_id = str(conversation.get("student_id") or "")
+        if not student_id:
+            raise HelpRequestConflict("help request has no student")
+        operations.append(
+            account_deletion_repo.active_fence_condition(
+                student_id, int(_int(conversation.get("account_fence_generation"), 1))
             )
         )
     operations.extend(extra_operations)
@@ -656,12 +699,34 @@ def is_chat_question_row(question: dict[str, Any] | None) -> bool:
 
 
 def _queue_row_transition(
-    question: dict[str, Any], *, teacher_id: str, target: str, now: str, accepting: bool
+    question: dict[str, Any],
+    *,
+    teacher_id: str,
+    target: str,
+    now: str,
+    accepting: bool,
+    offer: str = "",
 ) -> list[dict[str, Any]]:
+    """The queue row's half of a help-request move.
+
+    Everything read here is bound by the row's version CAS, so the checks hold
+    at write time: when accepting, the row must still be waiting on the very
+    offer the conversation carries, and the teacher must not be one who
+    already timed out on it.
+    """
     status = str(question.get("status") or "")
     if accepting:
         if status != QuestionStatus.ESCALATED.value:
             raise HelpRequestConflict("queue row is no longer waiting")
+        if (
+            question.get("dispatch_status") != "dispatched"
+            or str(question.get("dispatched_teacher_id") or "") != teacher_id
+            or not offer
+            or str(question.get("dispatch_id") or "") != offer
+        ):
+            raise HelpRequestConflict("queue row no longer carries this offer")
+        if teacher_id in _previous_assignees(question):
+            raise HelpRequestConflict("teacher already timed out on this request")
     elif status != QuestionStatus.TEACHER_ACTIVE.value or str(question.get("teacher_id") or "") != teacher_id:
         raise HelpRequestConflict("queue row is not held by this teacher")
     if not accepting and target == "in_progress":
