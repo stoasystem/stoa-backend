@@ -6,10 +6,11 @@ import secrets
 import uuid
 from collections.abc import Callable, Coroutine, Mapping
 from datetime import datetime, timedelta, timezone
-from typing import Any, NoReturn, cast
+from typing import Any, Literal, NoReturn, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
@@ -1745,7 +1746,44 @@ async def get_question(
     return _question_response(dict(authorized.value))
 
 
-@router.post("/{question_id}/request-teacher", status_code=status.HTTP_202_ACCEPTED)
+class StudentDispatchView(BaseModel):
+    """What a student is told about finding a teacher, and nothing more."""
+
+    questionId: str
+    status: Literal["assigned", "waiting", "replayed"]
+
+
+class RequestTeacherResponse(BaseModel):
+    question_id: str
+    status: str
+    dispatch: StudentDispatchView
+
+
+_FOUND_A_TEACHER = frozenset({"dispatched", "already_dispatched"})
+
+
+def _student_dispatch_view(question_id: str, result: dict[str, Any]) -> StudentDispatchView:
+    """Reduce a dispatch result to whether a teacher has been found.
+
+    The service's result carries the dispatch plan: every candidate teacher's
+    id, account state, availability, load, rank and refusal reason, and the
+    chosen teacher's id. None of that is the student's (#76).
+    """
+    outcome = str(result.get("status") or "")
+    if outcome == "replayed":
+        told = "replayed"
+    elif outcome in _FOUND_A_TEACHER:
+        told = "assigned"
+    else:
+        told = "waiting"
+    return StudentDispatchView(questionId=question_id, status=told)
+
+
+@router.post(
+    "/{question_id}/request-teacher",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=RequestTeacherResponse,
+)
 async def request_teacher(
     authorized: AuthorizedResource = Depends(
         authorized_question_dependency(
@@ -1886,7 +1924,7 @@ async def request_teacher(
         return {
             "question_id": question_id,
             "status": QuestionStatus.ESCALATED.value,
-            "dispatch": {"questionId": question_id, "status": "replayed"},
+            "dispatch": _student_dispatch_view(question_id, {"status": "replayed"}),
         }
     if not mutations:
         raise HTTPException(
@@ -1936,7 +1974,11 @@ async def request_teacher(
             "reason": type(exc).__name__,
         }
     record_help_usage(admitted_at)
-    return {"question_id": question_id, "status": QuestionStatus.ESCALATED.value, "dispatch": dispatch}
+    return {
+        "question_id": question_id,
+        "status": QuestionStatus.ESCALATED.value,
+        "dispatch": _student_dispatch_view(question_id, dispatch),
+    }
 
 
 @router.post("/{question_id}/feedback", status_code=status.HTTP_200_OK)
