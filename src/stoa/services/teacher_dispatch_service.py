@@ -523,6 +523,200 @@ def dispatch_conversation(
     }
 
 
+HELP_REQUEST_STATUSES = ("in_progress", "resolved")
+
+
+class HelpRequestConflict(Exception):
+    """The help request is not in the state the change was decided on."""
+
+
+def advance_help_request(
+    conversation: dict[str, Any],
+    *,
+    teacher_id: str,
+    target: str,
+    now: str | None = None,
+    resolution_note: str | None = None,
+    extra_operations: tuple[dict[str, Any], ...] = (),
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Move a chat help request to `target` for `teacher_id`, both rows at once.
+
+    A chat escalation is the conversation the student reads and the queue row
+    the reconciler reads. Dispatch offers it to one teacher; nothing used to let
+    that teacher take it, so the conversation never got a `teacher_id` and every
+    write the teacher tried was refused. The teacher's first write on an offer
+    is now the acceptance: it binds the conversation and the queue row to them,
+    in the same transaction as whatever they did (`in_progress`, `resolved`, or
+    a reply passed as `extra_operations`).
+
+    Every condition the decision rested on is part of the write: the exact offer
+    (`dispatch_id`), the teacher's active account and profile version, the
+    student's fence, and the queue row's version. If any moved, nothing is
+    written and `HelpRequestConflict` is raised.
+    """
+    if target not in HELP_REQUEST_STATUSES:
+        raise ValueError(f"unsupported help request status: {target}")
+    timestamp = now or _now()
+    store = table or get_table()
+    conversation_id = str(conversation.get("conversation_id") or "")
+    current = str(conversation.get("escalation_status") or "pending")
+    holder = str(conversation.get("teacher_id") or "")
+    if not conversation_id or current == "resolved" or (holder and holder != teacher_id):
+        raise HelpRequestConflict("help request is not open to this teacher")
+    accepting = not holder
+
+    operations: list[dict[str, Any]] = []
+    assignments = [
+        "escalation_status = :target",
+        "updated_at = :now",
+        "first_teacher_action_at = if_not_exists(first_teacher_action_at, :now)",
+    ]
+    values: dict[str, Any] = {":target": target, ":now": timestamp, ":teacher": teacher_id}
+    if accepting:
+        offer = str(conversation.get("dispatch_id") or "")
+        if (
+            not offer
+            or conversation.get("dispatch_status") != "dispatched"
+            or str(conversation.get("dispatched_teacher_id") or "") != teacher_id
+            or current != "pending"
+        ):
+            raise HelpRequestConflict("help request holds no offer for this teacher")
+        operations.extend(_teacher_standing_conditions(teacher_id, store))
+        assignments += [
+            "teacher_id = :teacher",
+            "dispatch_status = :accepted",
+            "accepted_at = :now",
+        ]
+        condition = (
+            "attribute_exists(PK) AND attribute_not_exists(teacher_id) "
+            "AND escalation_status = :pending AND dispatch_status = :dispatched "
+            "AND dispatched_teacher_id = :teacher AND dispatch_id = :offer"
+        )
+        values.update(
+            {
+                ":accepted": "accepted",
+                ":pending": "pending",
+                ":dispatched": "dispatched",
+                ":offer": offer,
+            }
+        )
+    else:
+        condition = (
+            "attribute_exists(PK) AND teacher_id = :teacher "
+            "AND escalation_status IN (:pending, :in_progress)"
+        )
+        values.update({":pending": "pending", ":in_progress": "in_progress"})
+    if target == "resolved":
+        assignments.append("escalation_resolved_at = :now")
+        if resolution_note:
+            assignments.append("resolution_note = :note")
+            values[":note"] = resolution_note
+    operations.append(
+        {
+            "Update": {
+                "Key": {"PK": f"CONV#{conversation_id}", "SK": "CONV"},
+                "UpdateExpression": "SET " + ", ".join(assignments),
+                "ConditionExpression": condition,
+                "ExpressionAttributeValues": values,
+            }
+        }
+    )
+
+    request_id = str(conversation.get("escalation_request_id") or "")
+    question = _escalated_question_row(store, request_id) if request_id else None
+    if question is not None:
+        operations.extend(
+            _queue_row_transition(
+                question, teacher_id=teacher_id, target=target, now=timestamp, accepting=accepting
+            )
+        )
+    operations.extend(extra_operations)
+
+    try:
+        account_deletion_repo.transact(operations, table=store)
+    except Exception as exc:  # noqa: BLE001 - every refusal means the case moved on
+        raise HelpRequestConflict("help request changed before the write") from exc
+
+    updated = {**conversation, "escalation_status": target, "updated_at": timestamp}
+    updated["first_teacher_action_at"] = conversation.get("first_teacher_action_at") or timestamp
+    if accepting:
+        updated.update({"teacher_id": teacher_id, "dispatch_status": "accepted", "accepted_at": timestamp})
+    if target == "resolved":
+        updated["escalation_resolved_at"] = timestamp
+        if resolution_note:
+            updated["resolution_note"] = resolution_note
+    return updated
+
+
+def is_chat_question_row(question: dict[str, Any] | None) -> bool:
+    """Whether a queue row is the second half of a chat help request."""
+    row = question or {}
+    return row.get("source") == "conversation_escalation" or bool(row.get("conversation_id"))
+
+
+def _queue_row_transition(
+    question: dict[str, Any], *, teacher_id: str, target: str, now: str, accepting: bool
+) -> list[dict[str, Any]]:
+    status = str(question.get("status") or "")
+    if accepting:
+        if status != QuestionStatus.ESCALATED.value:
+            raise HelpRequestConflict("queue row is no longer waiting")
+    elif status != QuestionStatus.TEACHER_ACTIVE.value or str(question.get("teacher_id") or "") != teacher_id:
+        raise HelpRequestConflict("queue row is not held by this teacher")
+    if not accepting and target == "in_progress":
+        return []  # already held and active: nothing moves on the queue row
+    extra: dict[str, Any] = {}
+    if accepting:
+        extra.update(
+            {
+                "teacher_id": teacher_id,
+                "dispatch_status": "accepted",
+                "teacher_accepted_at": now,
+                **teacher_reply_service.compute_takeover_sla_fields(question, now),
+            }
+        )
+    if target == "resolved":
+        extra.update(
+            {"resolved_at": now, **teacher_reply_service.compute_resolved_sla_fields(question, now)}
+        )
+    return question_repo.build_question_update_transaction(
+        question,
+        status=(
+            QuestionStatus.RESOLVED.value
+            if target == "resolved"
+            else QuestionStatus.TEACHER_ACTIVE.value
+        ),
+        expected_generation=int(_int(question.get("account_fence_generation"), 1)),
+        extra_attrs=extra,
+    )
+
+
+def _teacher_standing_conditions(teacher_id: str, table: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Bind the accepting teacher's active fence and exact current profile."""
+    try:
+        response = table.get_item(
+            Key={"PK": f"USER#{teacher_id}", "SK": "PROFILE"}, ConsistentRead=True
+        )
+        profile = response.get("Item") if isinstance(response, dict) else None
+        fence = account_deletion_repo.require_active_account_fence(teacher_id, table=table)
+    except account_deletion_repo.AccountDeletionConflict as exc:
+        raise HelpRequestConflict("teacher account is not active") from exc
+    if not isinstance(profile, dict) or profile.get("account_status") != "active":
+        raise HelpRequestConflict("teacher account is not active")
+    role = str(profile.get("role") or "").lower()
+    if role not in ELIGIBLE_ROLES:
+        raise HelpRequestConflict("profile cannot take teacher help requests")
+    return _teacher_assignment_conditions(
+        {
+            "teacherId": teacher_id,
+            "role": str(profile.get("role")),
+            "accountFenceGeneration": int(fence["generation"]),
+            "profileVersion": _int(profile.get("version"), 0),
+        }
+    )
+
+
 def teacher_availability_summary(
     teacher_profiles: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:

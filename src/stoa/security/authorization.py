@@ -254,9 +254,17 @@ class TeacherAuthorizationFacts:
             AuthorizationAction.RESOLVE,
             AuthorizationAction.UPDATE,
         }:
-            if question.get("teacher_id") != actor_id:
+            # A chat help request offered to this teacher is taken by their first
+            # write on it; the route binds that exact offer into the same
+            # transaction (teacher_dispatch_service.advance_help_request).
+            # stoasystem/stoa-backend#66.
+            if resource.resource_type is ResourceType.TEACHER_HELP_REQUEST and _holds_live_offer(
+                question, actor_id, now
+            ):
+                pass
+            elif question.get("teacher_id") != actor_id:
                 return False
-            if question.get("status") not in {"teacher_active", "resolved"}:
+            elif question.get("status") not in {"teacher_active", "resolved"}:
                 return False
         else:
             current_teacher = question.get("teacher_id") or question.get("dispatched_teacher_id")
@@ -278,6 +286,18 @@ class TeacherAuthorizationFacts:
             if session.get("resolved_at") and action is not AuthorizationAction.READ:
                 return False
         return True
+
+
+def _holds_live_offer(question: Mapping[str, object], actor_id: str, now: datetime) -> bool:
+    """Whether an open chat help request is currently offered to this teacher."""
+    return (
+        not question.get("teacher_id")
+        and question.get("status") == "escalated"
+        and question.get("dispatch_status") == "dispatched"
+        and question.get("dispatched_teacher_id") == actor_id
+        and actor_id not in _string_set(question.get("previous_dispatch_teacher_ids"))
+        and not _expired(question.get("dispatch_deadline_at"), now)
+    )
 
 
 @dataclass(frozen=True, slots=True)

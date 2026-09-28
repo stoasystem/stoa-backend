@@ -274,6 +274,32 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+_HELP_REQUEST_CHANGED = {
+    "code": "help_request_changed",
+    "message": "This help request changed. Refresh it and try again.",
+    "action": "refresh_help_request",
+}
+
+
+def _refuse_chat_question_row(item: Mapping[str, object]) -> None:
+    """A chat request's queue row is not worked on its own.
+
+    Taking over, replying to or resolving only the queue row would leave the
+    conversation the student reads behind, which is the split
+    stoasystem/stoa-backend#66 closed. Those requests go through
+    `/teachers/me/help-requests`.
+    """
+    if teacher_dispatch_service.is_chat_question_row(dict(item)):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "chat_help_request_use_help_request_routes",
+                "message": "This question belongs to a chat help request.",
+                "action": "open_help_request",
+            },
+        )
+
+
 @router.get("/queue")
 async def get_queue(
     actor: Actor = Depends(teacher_portal_self_dependency()),
@@ -358,6 +384,7 @@ async def takeover(
 ):
     """Lock a question to this teacher and start a session."""
     item = dict(authorized.value)
+    _refuse_chat_question_row(item)
     teacher_facts = authorized.facts.teacher
     teacher_account = teacher_facts.teacher_account if teacher_facts else None
     if teacher_account is None:
@@ -456,6 +483,7 @@ async def reply(
 ):
     """Post the teacher's reply to a question they have taken over."""
     observed_item = dict(authorized.value)
+    _refuse_chat_question_row(observed_item)
     if observed_item.get("status") == QuestionStatus.RESOLVED.value:
         raise HTTPException(status_code=409, detail="Question is already resolved")
     if observed_item.get("status") != QuestionStatus.TEACHER_ACTIVE.value:
@@ -524,6 +552,7 @@ async def resolve(
 ):
     """Mark a question as resolved and close the teacher session."""
     observed_item = dict(authorized.value)
+    _refuse_chat_question_row(observed_item)
     if observed_item.get("status") == QuestionStatus.RESOLVED.value:
         raise HTTPException(status_code=409, detail="Question is already resolved")
     if observed_item.get("status") != QuestionStatus.TEACHER_ACTIVE.value:
@@ -754,7 +783,9 @@ class TeacherHelpRequestDetail(BaseModel):
 
 
 class UpdateStatusRequest(BaseModel):
-    status: str
+    # Taking the request (`in_progress`) and finishing it (`resolved`) are the
+    # only moves a teacher makes; anything else used to be stored verbatim.
+    status: Literal["in_progress", "resolved"]
     resolutionNote: str | None = None
 
 
@@ -1506,30 +1537,27 @@ async def update_help_request(
             resolver=_resolve_help_request,
         )
     ),
+    actor: Actor = Depends(get_actor),
 ):
-    """Update the status of a help request (pending → in_progress → resolved)."""
-    table = get_table()
-    conv = dict(authorized.value)
+    """Take a help request (`in_progress`) or finish it (`resolved`).
+
+    The teacher it is offered to takes it with their first write, and finishing
+    it straight from the offer takes and finishes it at once. Both rows of the
+    request move in one transaction (stoasystem/stoa-backend#66).
+    """
+    now = _now()
+    try:
+        conv = teacher_dispatch_service.advance_help_request(
+            dict(authorized.value),
+            teacher_id=actor.user_id,
+            target=body.status,
+            now=now,
+            resolution_note=body.resolutionNote,
+        )
+    except teacher_dispatch_service.HelpRequestConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED) from exc
 
     conv_id = _required_text(conv.get("conversation_id"))
-    now = _now()
-    update_parts = ["escalation_status = :s", "updated_at = :u"]
-    expr_values: dict = {":s": body.status, ":u": now}
-    if not conv.get("first_teacher_action_at"):
-        update_parts.append("first_teacher_action_at = :f")
-        expr_values[":f"] = now
-
-    if body.resolutionNote:
-        update_parts.append("resolution_note = :r")
-        expr_values[":r"] = body.resolutionNote
-
-    _teacher_update(
-        table,
-        Key={"PK": _conv_pk(conv_id), "SK": "CONV"},
-        UpdateExpression="SET " + ", ".join(update_parts),
-        ExpressionAttributeValues=expr_values,
-    )
-
     student_name = _get_student_name(_text(conv.get("student_id")))
     return TeacherHelpRequestSummary(
         requestId=_text(conv.get("escalation_request_id"), default=conv_id),
@@ -1575,7 +1603,7 @@ async def add_note(
     except teacher_reply_service.TeacherReplyValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    _teacher_put(table, Item={
+    note_item = {
         "PK": _conv_pk(conv_id),
         "SK": f"NOTE#{note_id}",
         "note_id": note_id,
@@ -1586,11 +1614,10 @@ async def add_note(
         "teacher_response_rich": reply_fields["teacher_response_rich"],
         "teacher_response_format": reply_fields["teacher_response_format"],
         "created_at": now,
-    })
-
-    # Also add the teacher's reply as a message in the conversation
+    }
+    # The teacher's reply is also a message in the conversation.
     msg_id = str(uuid.uuid4())
-    _teacher_put(table, Item={
+    message_item = {
         "PK": _conv_pk(conv_id),
         "SK": f"MSG#{msg_id}",
         "message_id": msg_id,
@@ -1601,7 +1628,30 @@ async def add_note(
         "teacher_response_rich": reply_fields["teacher_response_rich"],
         "teacher_response_format": reply_fields["teacher_response_format"],
         "created_at": now,
-    })
+    }
+
+    if not conv.get("teacher_id"):
+        # Replying to an offer takes it: the acceptance and the reply are one
+        # write, so a reply never lands on a request someone else then takes.
+        try:
+            teacher_dispatch_service.advance_help_request(
+                conv,
+                teacher_id=teacher_id,
+                target="in_progress",
+                now=now,
+                extra_operations=tuple(
+                    {"Put": {"Item": item, "ConditionExpression": "attribute_not_exists(PK)"}}
+                    for item in (note_item, message_item)
+                ),
+                table=table,
+            )
+        except teacher_dispatch_service.HelpRequestConflict as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
+            ) from exc
+    else:
+        _teacher_put(table, Item=note_item)
+        _teacher_put(table, Item=message_item)
 
     return TeacherNoteOut(
         id=note_id,

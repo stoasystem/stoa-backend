@@ -228,33 +228,36 @@ def test_help_request_list_and_stats_include_only_current_assignment(monkeypatch
 
 
 def test_cross_teacher_help_request_update_is_hidden_before_mutation(monkeypatch):
-    updates = []
     conv = {
+        "PK": "CONV#conv-1",
+        "SK": "CONV",
         "conversation_id": "conv-1",
         "student_id": "student-1",
         "escalated": True,
         "escalation_request_id": "help-1",
         "teacher_id": "teacher-1",
-        "escalation_status": "pending",
+        "escalation_status": "in_progress",
     }
-    monkeypatch.setattr(teachers, "_get_conversation", lambda _id: conv)
+    table = FakeTable()
+    table.seed(conv)
+    monkeypatch.setattr(teachers, "_get_conversation", lambda _id: dict(table.rows[("CONV#conv-1", "CONV")]))
     monkeypatch.setattr(teachers, "_get_student_name", lambda _id: "Student")
+    for module in (teachers, teacher_dispatch_service, account_deletion_repo):
+        monkeypatch.setattr(module, "get_table", lambda table=table: table)
 
-    class Table:
-        def update_item(self, **kwargs):
-            updates.append(kwargs)
-
-    monkeypatch.setattr(teachers, "get_table", lambda: Table())
     other = _client(
         teachers.router, "/teachers", {"sub": "teacher-2", "role": "teacher"}
     ).patch("/teachers/me/help-requests/help-1", json={"status": "resolved"})
+
+    assert other.status_code == 404
+    assert table.rows[("CONV#conv-1", "CONV")] == conv
+
     current = _client(
         teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"}
     ).patch("/teachers/me/help-requests/help-1", json={"status": "resolved"})
 
-    assert other.status_code == 404
     assert current.status_code == 200
-    assert len(updates) == 1
+    assert table.rows[("CONV#conv-1", "CONV")]["escalation_status"] == "resolved"
 
 
 def test_help_request_authorization_outage_returns_503_before_mutation(monkeypatch):
