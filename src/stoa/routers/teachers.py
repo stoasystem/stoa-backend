@@ -274,6 +274,12 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+_HELP_REQUEST_NOT_HELD = {
+    "code": "help_request_not_held",
+    "message": "Only the teacher who holds or was offered this help request can change it.",
+    "action": "refresh_help_request",
+}
+
 _HELP_REQUEST_CHANGED = {
     "code": "help_request_changed",
     "message": "This help request changed. Refresh it and try again.",
@@ -282,11 +288,13 @@ _HELP_REQUEST_CHANGED = {
 
 
 def _takes_two_row_path(conv: Mapping[str, object], teacher_id: str) -> bool:
-    """Whether this teacher's write goes through `advance_help_request`.
+    """Whether this teacher may write the help request at all.
 
-    That is the teacher holding the request, or the one it is offered to.
-    Anyone else the policy lets write (a teacher assigned to the student) keeps
-    the conversation-only write they always had; that split is its own ticket.
+    Only the teacher holding it, or the one it is offered to, and always
+    through `advance_help_request`. A teacher the policy admits through an
+    assignment may read it but not write it (user decision, #73): the
+    conversation-only write they used to get could strand a request offered
+    to someone else or reopen a resolved one.
     """
     holder = str(conv.get("teacher_id") or "")
     if holder:
@@ -361,7 +369,14 @@ async def run_dispatch(
         )
     ),
 ):
-    """Run automatic dispatch for one escalated question."""
+    """Run automatic dispatch for one escalated question.
+
+    A chat help request is dispatched by the conversation lane, both rows at
+    once; offering its queue row alone would split it (#73).
+    """
+    existing = question_repo.get_question(body.question_id)
+    if existing:
+        _refuse_chat_question_row(existing)
     result = teacher_dispatch_service.dispatch_question(body.question_id, now=_now())
     if result["status"] == "not_found":
         raise HTTPException(status_code=404, detail="Question not found")
@@ -1574,20 +1589,7 @@ async def update_help_request(
                 status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
             ) from exc
     else:
-        update_parts = ["escalation_status = :s", "updated_at = :u"]
-        expr_values: dict = {":s": body.status, ":u": now}
-        if not conv.get("first_teacher_action_at"):
-            update_parts.append("first_teacher_action_at = :f")
-            expr_values[":f"] = now
-        if body.resolutionNote:
-            update_parts.append("resolution_note = :r")
-            expr_values[":r"] = body.resolutionNote
-        _teacher_update(
-            get_table(),
-            Key={"PK": _conv_pk(_required_text(conv.get("conversation_id"))), "SK": "CONV"},
-            UpdateExpression="SET " + ", ".join(update_parts),
-            ExpressionAttributeValues=expr_values,
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_NOT_HELD)
 
     conv_id = _required_text(conv.get("conversation_id"))
     student_name = _get_student_name(_text(conv.get("student_id")))
@@ -1670,7 +1672,9 @@ async def add_note(
         "created_at": now,
     }
 
-    if not conv.get("teacher_id") and _takes_two_row_path(conv, teacher_id):
+    if not _takes_two_row_path(conv, teacher_id):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_NOT_HELD)
+    if not conv.get("teacher_id"):
         # Replying to an offer takes it: the acceptance and the reply are one
         # write, so a reply never lands on a request someone else then takes.
         try:

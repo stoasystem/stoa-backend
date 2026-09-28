@@ -455,15 +455,21 @@ def dispatch_conversation(
             "teacherId": current_teacher,
         }
 
-    # Escalations made before the queue row existed have only the conversation.
-    # An Update with no row to update would create a half-formed question, so the
-    # second write is included only when there is something to update. A read
+    # Both rows are written together, so the queue row is read first. A read
     # that failed is retried on the next sweep rather than read as "no row".
     request_id = str(conversation.get("escalation_request_id") or "")
     try:
         question = _escalated_question_row(target, request_id) if request_id else None
     except QueueRowUnavailable:
         return {"conversationId": conversation_id, "status": "claim_conflict"}
+    if question is None:
+        # An escalation from before queue rows: it cannot be taken (#72), so
+        # offering it would only re-offer it forever to teachers who get 409.
+        return {
+            "conversationId": conversation_id,
+            "status": "not_dispatchable",
+            "reason": "no_queue_row",
+        }
 
     # Who already timed out on this case is recorded on the queue row; the
     # conversation does not carry it, so without this the same teacher was
@@ -485,24 +491,20 @@ def dispatch_conversation(
     dispatch_id = str(uuid.uuid4())
     deadline = _deadline(timestamp)
     attempt_count = int(_int(conversation.get("dispatch_attempt_count"), 0)) + 1
-    question_operations: list[dict[str, Any]] = (
-        question_repo.build_question_update_transaction(
-            question,
-            # The state does not move: a dispatched case is still escalated. What
-            # is written is who it went to, through the same version CAS every
-            # other question write goes through.
-            status=str(question.get("status") or "escalated"),
-            expected_generation=int(_int(question.get("account_fence_generation"), 1)),
-            extra_attrs={
-                "dispatched_teacher_id": str(candidate["teacherId"]),
-                "dispatch_status": "dispatched",
-                "dispatch_id": dispatch_id,
-                "dispatch_deadline_at": deadline,
-                "dispatch_updated_at": timestamp,
-            },
-        )
-        if question is not None
-        else []
+    question_operations = question_repo.build_question_update_transaction(
+        question,
+        # The state does not move: a dispatched case is still escalated. What
+        # is written is who it went to, through the same version CAS every
+        # other question write goes through.
+        status=str(question.get("status") or "escalated"),
+        expected_generation=int(_int(question.get("account_fence_generation"), 1)),
+        extra_attrs={
+            "dispatched_teacher_id": str(candidate["teacherId"]),
+            "dispatch_status": "dispatched",
+            "dispatch_id": dispatch_id,
+            "dispatch_deadline_at": deadline,
+            "dispatch_updated_at": timestamp,
+        },
     )
 
     try:

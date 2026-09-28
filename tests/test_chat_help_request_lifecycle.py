@@ -464,11 +464,13 @@ def test_a_conversation_without_a_queue_row_cannot_be_taken(table):
     assert _conv(table) == before
 
 
-def test_a_teacher_assigned_to_the_student_keeps_the_conversation_only_write(table, monkeypatch):
-    # Characterises the assignment path this change leaves as it was: such a
-    # teacher neither holds nor was offered the request, so the two-row move
-    # does not apply to them. That this path still moves only the conversation
-    # is recorded as its own ticket.
+def test_a_teacher_assigned_to_the_student_cannot_write_a_request_they_do_not_hold(
+    table, monkeypatch
+):
+    # User decision on #73 (2026-09-28): a teacher the policy admits through an
+    # assignment, who neither holds the request nor was offered it, may read
+    # it but not write it. The conversation-only write they used to get could
+    # strand a request offered to someone else, or reopen a resolved one.
     from stoa.security.authorization import AuthorizationFacts, TeacherAuthorizationFacts
     from stoa.security.route_authorization import get_authorization_fact_repository
 
@@ -497,16 +499,21 @@ def test_a_teacher_assigned_to_the_student_keeps_the_conversation_only_write(tab
     app.include_router(teachers.router, prefix="/teachers")
     install_actor_overrides(app, {"sub": assigned, "role": "teacher"})
     app.dependency_overrides[get_authorization_fact_repository] = AssignmentFacts
-    question_before = dict(_question(table))
+    client = TestClient(app)
+    before = (dict(_conv(table)), dict(_question(table)))
+    rows_before = set(table.rows)
 
-    response = TestClient(app).patch(
-        f"/teachers/me/help-requests/{REQUEST}", json={"status": "resolved"}
-    )
+    for attempt in (
+        client.patch(f"/teachers/me/help-requests/{REQUEST}", json={"status": "in_progress"}),
+        client.patch(f"/teachers/me/help-requests/{REQUEST}", json={"status": "resolved"}),
+        client.post(f"/teachers/me/help-requests/{REQUEST}/notes", json={"content": "Hi"}),
+    ):
+        assert attempt.status_code == 409, attempt.text
 
-    assert response.status_code == 200
-    assert _conv(table)["escalation_status"] == "resolved"
-    assert "teacher_id" not in _conv(table)
-    assert _question(table) == question_before
+    assert _unchanged(table, before)
+    assert set(table.rows) == rows_before
+    # Reading is still allowed.
+    assert client.get(f"/teachers/me/help-requests/{REQUEST}").status_code == 200
 
 
 @pytest.mark.parametrize("queue_row_live", [False, True], ids=["both_expired", "only_conversation_expired"])
@@ -825,3 +832,70 @@ def test_the_student_reads_the_teachers_reply_before_and_after_resolving(table, 
     after_resolve = student.get(f"/conversations/{CONV}")
     assert after_resolve.status_code == 200, after_resolve.text
     assert [m["role"] for m in after_resolve.json()["messages"]].count("teacher") == 1
+
+
+
+# --- #73: chat requests are dispatched by the conversation lane only ---
+
+
+def test_the_operator_dispatch_route_refuses_a_chat_queue_row(table):
+    import asyncio
+
+    from fastapi import HTTPException
+
+    before = (dict(_conv(table)), dict(_question(table)))
+
+    with pytest.raises(HTTPException) as refused:
+        asyncio.run(
+            teachers.run_dispatch(teachers.DispatchRunRequest(question_id=REQUEST), _actor=None)
+        )
+
+    assert refused.value.status_code == 409
+    assert refused.value.detail["code"] == "chat_help_request_use_help_request_routes"
+    assert _unchanged(table, before)
+
+
+@pytest.mark.parametrize("missing", ["queue_row", "request_id"])
+def test_a_conversation_without_a_queue_row_is_not_dispatched(table, missing):
+    # Such a request cannot be taken (#72), so offering it only re-offers it
+    # forever to teachers who get 409.
+    if missing == "queue_row":
+        del table.rows[QUESTION_KEY]
+    else:
+        del table.rows[CONV_KEY]["escalation_request_id"]
+    before = dict(_conv(table))
+
+    result = teacher_dispatch_service.dispatch_conversation(
+        CONV, conversation=dict(_conv(table)), table=table
+    )
+
+    assert result["status"] == "not_dispatchable"
+    assert _conv(table) == before
+
+
+def test_one_reconciler_run_leaves_both_rows_on_the_same_offer(table):
+    # The question lane offers the queue row on its own first; the conversation
+    # lane then offers both rows. What a run leaves behind must be one offer.
+    table.rows[(f"USER#{OTHER_TEACHER}", "PROFILE")]["dispatch_availability"] = "paused"
+
+    teacher_dispatch_service.reconcile_dispatches()
+
+    conv, question = _conv(table), _question(table)
+    assert conv["dispatched_teacher_id"] == question["dispatched_teacher_id"] == TEACHER
+    assert conv["dispatch_id"] == question["dispatch_id"]
+    assert conv["dispatch_deadline_at"] == question["dispatch_deadline_at"]
+
+    # After the offer lapses, the next run records the timeout on the queue row
+    # and re-offers both rows to the other teacher, again as one offer.
+    for row in (conv, question):
+        row["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
+    table.rows[(f"USER#{OTHER_TEACHER}", "PROFILE")]["dispatch_availability"] = "available"
+
+    teacher_dispatch_service.reconcile_dispatches()
+
+    conv, question = _conv(table), _question(table)
+    assert TEACHER in question["previous_dispatch_teacher_ids"]
+    assert conv["dispatched_teacher_id"] == question["dispatched_teacher_id"] == OTHER_TEACHER
+    assert conv["dispatch_id"] == question["dispatch_id"]
+    assert _set_status(_client(OTHER_TEACHER), "resolved").status_code == 200
+    _nothing_waits()

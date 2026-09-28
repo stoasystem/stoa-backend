@@ -2224,11 +2224,14 @@ def test_dispatch_marks_both_rows_the_case_is_represented_by(monkeypatch):
     assert table.rows[("CONV#conv-1", "CONV")]["dispatch_status"] == "dispatched"
 
 
-def test_an_escalation_made_before_the_queue_row_existed_still_dispatches(monkeypatch):
-    """Rows escalated by the deploy that had no queue row must stay dispatchable.
+def test_an_escalation_made_before_the_queue_row_existed_is_not_dispatched(monkeypatch):
+    """Rows escalated before queue rows existed are no longer offered.
 
-    An Update against a row that is not there would create a half-formed
-    question, so the second write is included only when there is one.
+    Such a request cannot be taken (#72): account deletion reaches a chat
+    request through its queue row, so a teacher bound to one without could
+    never be removed. Offering it would only re-offer it forever to teachers
+    who get 409, so dispatch leaves it alone (user decision on #73,
+    2026-09-28; none exist in production). This used to assert the opposite.
     """
     from stoa.services import teacher_dispatch_service
 
@@ -2251,6 +2254,7 @@ def test_an_escalation_made_before_the_queue_row_existed_still_dispatches(monkey
         "conv-1", conversation=conversation, table=table
     )
 
-    assert result["status"] == "dispatched"
+    assert result["status"] == "not_dispatchable"
+    assert result["reason"] == "no_queue_row"
     assert (f"QUESTION#{request_id}", "META") not in table.rows
-    assert table.rows[("CONV#conv-1", "CONV")]["dispatch_status"] == "dispatched"
+    assert table.rows[("CONV#conv-1", "CONV")]["dispatch_status"] == "unassigned"
