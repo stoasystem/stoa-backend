@@ -702,9 +702,14 @@ def build_question_update_transaction(
         ":next_version": expected_version + 1,
         **(condition_values or {}),
     }
+    removals = [k for k, v in (extra_attrs or {}).items() if v is None]
     for k, v in (extra_attrs or {}).items():
+        if v is None:
+            continue  # cleared below; a SET would name a value the serializer drops
         update_expr += f", {k} = :{k}"
         attr_values[f":{k}"] = v
+    if removals:
+        update_expr += " REMOVE " + ", ".join(removals)
     row_condition = (
         "attribute_exists(PK) AND attribute_exists(SK) AND student_id=:owner "
         "AND #s=:source_status AND #version=:expected_version"
@@ -784,16 +789,25 @@ def _question_mutation_operation(
     else:
         condition += "#version=:expected_version"
         values[":expected_version"] = expected_version
+    removals: list[str] = []
     for index, (field, value) in enumerate(extra_attrs.items()):
         name_token = f"#field_{index}"
-        value_token = f":field_{field}"
         names[name_token] = field
+        if value is None:
+            # `None` clears the field. Written as a SET it named a value the
+            # serializer drops, and DynamoDB refused the whole write (#75).
+            removals.append(name_token)
+            continue
+        value_token = f":field_{field}"
         values[value_token] = value
         updates.append(f"{name_token}={value_token}")
+    expression = "SET " + ", ".join(updates)
+    if removals:
+        expression += " REMOVE " + ", ".join(removals)
     return {
         "Update": {
             "Key": {"PK": f"QUESTION#{question_id}", "SK": "META"},
-            "UpdateExpression": "SET " + ", ".join(updates),
+            "UpdateExpression": expression,
             "ConditionExpression": condition,
             "ExpressionAttributeNames": names,
             "ExpressionAttributeValues": values,

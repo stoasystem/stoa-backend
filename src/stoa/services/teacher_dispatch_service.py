@@ -291,6 +291,14 @@ def reassign_timed_out_dispatches(
             )
             continue
         refreshed = dict(timeout_mutation.question)
+        if is_chat_question_row(refreshed):
+            # The timeout is recorded on the queue row, where the conversation
+            # lane and accepting read it; the conversation lane re-offers both
+            # rows. Re-offering the queue row here alone would split it (#75).
+            results.append(
+                {"questionId": question_id, "previousTeacherId": current_teacher, "status": "timed_out"}
+            )
+            continue
         result = dispatch_question(question_id, question=refreshed, now=timestamp)
         results.append({"questionId": question_id, "previousTeacherId": current_teacher, **result})
         if result["status"] == "not_found":
@@ -1147,11 +1155,14 @@ def reconcile_dispatches(
 
     # Re-read, because reassignment has moved some of them on.
     refreshed = questions if questions is not None else list_teacher_dispatch_questions()
+    # A chat request's queue row is offered by the conversation lane below,
+    # both rows at once; offering it here alone would split the request (#75).
     waiting = [
         item
         for item in refreshed
         if item.get("status") == QuestionStatus.ESCALATED.value
         and not _has_current_dispatch(item, timestamp)
+        and not is_chat_question_row(item)
     ]
 
     dispatched: list[dict[str, Any]] = []

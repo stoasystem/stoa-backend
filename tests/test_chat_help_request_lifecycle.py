@@ -879,10 +879,10 @@ def test_a_conversation_without_a_queue_row_is_not_dispatched(table, missing):
 
 
 def test_one_reconciler_run_leaves_both_rows_on_the_same_offer(table):
-    # Both lanes of the reconciler see a chat request's queue row; whatever
-    # order they act in, what a run leaves behind must be one offer on both
-    # rows. (The question lane's own offer currently always fails, see
-    # stoasystem/stoa-backend#75, so today the conversation lane makes it.)
+    # Both lanes of the reconciler see a chat request's queue row. The question
+    # lane only records timeouts on it; the conversation lane makes every offer,
+    # both rows at once (stoasystem/stoa-backend#75). What a run leaves behind
+    # must be one offer on both rows.
     table.rows[(f"USER#{OTHER_TEACHER}", "PROFILE")]["dispatch_availability"] = "paused"
 
     teacher_dispatch_service.reconcile_dispatches()
