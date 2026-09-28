@@ -11,7 +11,7 @@ from typing import Any, Protocol, cast
 
 from stoa.db.dynamodb import get_table
 from stoa.db.dynamodb import stored_int
-from stoa.db.repositories import account_deletion_repo, question_repo, user_repo
+from stoa.db.repositories import account_deletion_repo, practice_repo, question_repo, user_repo
 from stoa.models.question import QuestionStatus
 from stoa.services import teacher_reply_service
 
@@ -574,12 +574,11 @@ def student_dispatch_status(question: dict[str, Any]) -> str:
 
 
 def _normalize_teacher_profile(profile: dict[str, Any]) -> dict[str, Any]:
-    subjects = _list_value(
-        profile.get("dispatch_subjects")
-        or profile.get("primary_subjects")
-        or profile.get("subjects")
-        or profile.get("subject_ids")
-    )
+    # Canonical ids, so `math` and the stored `mathematics` are one subject.
+    subjects = [
+        practice_repo.normal_subject_id(subject)
+        for subject in user_repo.stored_teacher_subjects(profile)
+    ]
     availability = str(
         user_repo.stored_teacher_availability(profile) or "unavailable"
     ).lower()
@@ -592,7 +591,7 @@ def _normalize_teacher_profile(profile: dict[str, Any]) -> dict[str, Any]:
         "accountFenceGeneration": _int(
             profile.get("account_fence_generation"), 0
         ),
-        "subjects": [str(subject).lower() for subject in subjects],
+        "subjects": subjects,
         "availability": availability,
         "maxActiveSessions": max(1, _int(profile.get("max_active_sessions") or profile.get("maxActiveSessions"), 3)),
         "activeCount": max(0, active_count),
@@ -645,7 +644,7 @@ def _refusal_reason(question: dict[str, Any], teacher: dict[str, Any], previous:
         return {"refusalCode": "max_active_sessions", "refusalReason": "Teacher is at maximum active session load."}
     if teacher["teacherId"] in previous:
         return {"refusalCode": "previously_timed_out", "refusalReason": "Teacher already timed out or declined this request."}
-    subject = str(question.get("subject") or "").lower()
+    subject = practice_repo.normal_subject_id(question.get("subject") or "")
     if teacher["subjects"] and subject not in teacher["subjects"]:
         return {"refusalCode": "subject_mismatch", "refusalReason": "Teacher subject capability does not match the question."}
     if not teacher["subjects"]:

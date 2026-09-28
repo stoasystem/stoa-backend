@@ -477,3 +477,52 @@ def test_a_pause_that_lands_between_read_and_write_is_kept(monkeypatch):
     assert saved.status_code == 200
     assert saved.json()["status"] == "paused"
     assert _planner_verdict() == "not_available"
+
+
+# --- Dispatch reads a teacher's subjects one way, through the alias rule (#68) ---
+
+
+def _verdict_for(subject: str) -> str:
+    plan = teacher_dispatch_service.plan_dispatch({**_QUESTION, "subject": subject})
+    if plan["selected"]:
+        return "selected"
+    return plan["refused"][0]["refusalCode"]
+
+
+@pytest.mark.parametrize(
+    ("teacher_subject", "question_subject", "verdict"),
+    [
+        ("math", "mathematics", "selected"),
+        ("mathematics", "math", "selected"),
+        (" Math ", "Mathematics", "selected"),
+        ("physics", "mathematics", "subject_mismatch"),
+        ("math", "physics", "subject_mismatch"),
+    ],
+)
+def test_dispatch_compares_subjects_through_the_alias_rule(
+    monkeypatch, teacher_subject, question_subject, verdict
+):
+    # `math` is canonical and stored content still says `mathematics`
+    # (stoasystem/stoa-backend#62); a teacher who picks either must match both.
+    _availability_table(monkeypatch)
+    _save(_teacher_client(), subjects=[teacher_subject])
+
+    assert _verdict_for(question_subject) == verdict
+
+
+def test_clearing_subjects_also_clears_an_older_subject_ids_list(monkeypatch):
+    # Reading falls back through four fields; an explicit `[]` saved to the
+    # newer three used to leave `subject_ids` answering for the teacher.
+    _availability_table(
+        monkeypatch, subject_ids=["physics"], dispatch_availability="available"
+    )
+    client = _teacher_client()
+    assert client.get("/teachers/me/availability").json()["subjects"] == ["physics"]
+    assert _verdict_for("physics") == "selected"
+
+    cleared = client.patch("/teachers/me/availability", json={"subjects": []})
+
+    assert cleared.status_code == 200
+    assert cleared.json()["subjects"] == []
+    assert client.get("/teachers/me/availability").json()["subjects"] == []
+    assert _verdict_for("physics") == "missing_subject_capability"

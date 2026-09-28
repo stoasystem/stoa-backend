@@ -1040,16 +1040,7 @@ _ai_draft_list_actor_dependency.authorization_specs = tuple(  # type: ignore[att
 
 def _availability_response(profile: dict[str, Any] | None) -> TeacherAvailability:
     profile = profile or {}
-    subjects = [
-        str(subject).strip()
-        for subject in _list_value(
-            profile.get("dispatch_subjects")
-            or profile.get("primary_subjects")
-            or profile.get("subjects")
-            or profile.get("subject_ids")
-        )
-        if str(subject).strip()
-    ]
+    subjects = user_repo.stored_teacher_subjects(profile)
     weekly_availability = profile.get("weekly_availability") or profile.get("weeklyAvailability") or []
     slots = [
         TeacherAvailabilitySlot(

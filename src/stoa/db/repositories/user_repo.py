@@ -344,6 +344,28 @@ def stored_teacher_availability(profile: Mapping[str, object] | None) -> str | N
     return None
 
 
+TEACHER_SUBJECT_FIELDS = ("dispatch_subjects", "primary_subjects", "subjects", "subject_ids")
+
+
+def stored_teacher_subjects(profile: Mapping[str, object] | None) -> list[str]:
+    """The subjects a teacher is stored as taking, exactly as saved.
+
+    Older profiles carry them in `subjects` or `subject_ids`; the first
+    non-empty field wins. This is the one reading of those fields, used by the
+    dispatch planner and by the teacher's own availability view. Comparing
+    subjects is not done here: that goes through `practice_repo.normal_subject_id`.
+    """
+    for field in TEACHER_SUBJECT_FIELDS:
+        value = (profile or {}).get(field)
+        if not value:
+            continue
+        items = value if isinstance(value, (list, tuple, set)) else [value]
+        subjects = [str(item).strip() for item in items if str(item).strip()]
+        if subjects:
+            return subjects
+    return []
+
+
 def update_teacher_availability(
     user_id: str,
     *,
@@ -368,10 +390,13 @@ def update_teacher_availability(
     ]
     values: dict[str, object] = {":updated_at": updated_at}
     if subjects is not None:
+        # Every field the reading falls back through is written, so an
+        # explicit `[]` is not answered by an older `subject_ids`.
         parts[:0] = [
             "subjects = :subjects",
             "primary_subjects = :subjects",
             "dispatch_subjects = :subjects",
+            "subject_ids = :subjects",
         ]
         values[":subjects"] = subjects
     if weekly_availability is not None:
