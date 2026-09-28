@@ -1,3 +1,5 @@
+import pytest
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -407,3 +409,71 @@ def test_availability_status_accepts_only_available_or_paused(monkeypatch):
 
     assert response.status_code == 422
     assert table.rows[(f"USER#{_TEACHER}", "PROFILE")] == before
+
+
+@pytest.mark.parametrize(
+    "legacy",
+    [{"availability_status": "paused"}, {"teacher_status": "offline"}],
+    ids=["availability_status", "teacher_status"],
+)
+def test_a_pause_stored_only_in_an_older_field_survives_a_schedule_save(monkeypatch, legacy):
+    # The planner falls back through three fields; keeping only the first one
+    # let an older profile's pause be overwritten with `available`.
+    table = _availability_table(monkeypatch, subjects=["physics"], **legacy)
+    client = _teacher_client()
+    assert client.get("/teachers/me/availability").json()["status"] == "paused"
+    assert _planner_verdict() == "not_available"
+
+    saved = _save(client)
+
+    assert saved.status_code == 200
+    assert saved.json()["status"] == "paused"
+    assert _planner_verdict() == "not_available"
+    stored = table.rows[(f"USER#{_TEACHER}", "PROFILE")]
+    assert stored["dispatch_availability"] == stored["availability_status"]
+
+
+def test_switching_status_alone_keeps_subjects_and_hours(monkeypatch):
+    _availability_table(monkeypatch)
+    client = _teacher_client()
+    _save(client)
+
+    paused = client.patch("/teachers/me/availability", json={"status": "paused"})
+
+    assert paused.status_code == 200
+    assert paused.json()["subjects"] == ["physics"]
+    assert paused.json()["weeklyAvailability"] == [
+        {"dayOfWeek": "monday", "startTime": "16:00", "endTime": "18:00"}
+    ]
+
+    back = client.patch("/teachers/me/availability", json={"status": "available"})
+
+    assert back.json()["subjects"] == ["physics"]
+    assert _planner_verdict() == "selected"
+
+
+def test_a_pause_that_lands_between_read_and_write_is_kept(monkeypatch):
+    # The kept status must come from the read the version check is made against.
+    # Another writer pauses the teacher after the first read; that attempt loses
+    # the version race, and the retry must see the pause rather than undo it.
+    _availability_table(monkeypatch, subjects=["physics"], dispatch_availability="available")
+    key = (f"USER#{_TEACHER}", "PROFILE")
+    real_transact = account_deletion_repo.transact
+    raced = []
+
+    def transact_after_a_concurrent_pause(operations, *, table=None):
+        if not raced:
+            raced.append(True)
+            row = table.rows[key]
+            row["dispatch_availability"] = "paused"
+            row["version"] = row["version"] + 1
+        return real_transact(operations, table=table)
+
+    monkeypatch.setattr(account_deletion_repo, "transact", transact_after_a_concurrent_pause)
+
+    saved = _save(_teacher_client())
+
+    assert raced
+    assert saved.status_code == 200
+    assert saved.json()["status"] == "paused"
+    assert _planner_verdict() == "not_available"

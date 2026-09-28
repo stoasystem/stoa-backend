@@ -777,6 +777,13 @@ class TeacherAvailability(BaseModel):
     status: Literal["available", "paused"] | None = None
 
 
+class TeacherAvailabilityUpdate(BaseModel):
+    # Each field left out is kept as stored; `[]` clears a list on purpose.
+    weeklyAvailability: list[TeacherAvailabilitySlot] | None = None
+    subjects: list[str] | None = None
+    status: Literal["available", "paused"] | None = None
+
+
 class TeacherProfile(BaseModel):
     id: str
     userId: str
@@ -1114,7 +1121,7 @@ async def get_my_availability(
 
 @router.patch("/me/availability", response_model=TeacherAvailability)
 async def update_my_availability(
-    body: TeacherAvailability,
+    body: TeacherAvailabilityUpdate,
     actor: Actor = Depends(
         teacher_portal_self_dependency(AuthorizationAction.UPDATE)
     ),
@@ -1122,8 +1129,16 @@ async def update_my_availability(
     """Persist teacher availability so student support status can reflect it."""
     updated = user_repo.update_teacher_availability(
         actor.user_id,
-        subjects=[subject.strip() for subject in body.subjects if subject.strip()],
-        weekly_availability=[slot.model_dump() for slot in body.weeklyAvailability],
+        subjects=(
+            None
+            if body.subjects is None
+            else [subject.strip() for subject in body.subjects if subject.strip()]
+        ),
+        weekly_availability=(
+            None
+            if body.weeklyAvailability is None
+            else [slot.model_dump() for slot in body.weeklyAvailability]
+        ),
         updated_at=_now(),
         status=body.status,
     )

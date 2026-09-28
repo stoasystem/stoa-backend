@@ -11,7 +11,7 @@ from typing import Any, Protocol, cast
 
 from stoa.db.dynamodb import get_table
 from stoa.db.dynamodb import stored_int
-from stoa.db.repositories import account_deletion_repo, question_repo
+from stoa.db.repositories import account_deletion_repo, question_repo, user_repo
 from stoa.models.question import QuestionStatus
 from stoa.services import teacher_reply_service
 
@@ -545,9 +545,6 @@ def teacher_availability_summary(
     }
 
 
-TEACHER_AVAILABILITY_STATUSES = ("available", "paused")
-
-
 def teacher_availability_status(profile: dict[str, Any] | None) -> str | None:
     """Whether a teacher is on dispatch, read the way the planner reads it.
 
@@ -584,10 +581,7 @@ def _normalize_teacher_profile(profile: dict[str, Any]) -> dict[str, Any]:
         or profile.get("subject_ids")
     )
     availability = str(
-        profile.get("dispatch_availability")
-        or profile.get("availability_status")
-        or profile.get("teacher_status")
-        or "unavailable"
+        user_repo.stored_teacher_availability(profile) or "unavailable"
     ).lower()
     active_count = _int(profile.get("dispatch_active_count") or profile.get("active_session_count"), 0)
     return {

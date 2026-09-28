@@ -1,6 +1,6 @@
 """DynamoDB access patterns for the User entity."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -327,39 +327,72 @@ def update_locale_preference(user_id: str, locale: str, updated_at: str) -> User
     )
 
 
+TEACHER_AVAILABILITY_FIELDS = ("dispatch_availability", "availability_status", "teacher_status")
+
+
+def stored_teacher_availability(profile: Mapping[str, object] | None) -> str | None:
+    """The stored word for whether a teacher takes dispatch.
+
+    Older profiles carry it in `availability_status` or `teacher_status`; the
+    first non-empty field wins. This is the one reading of those fields, used
+    by the dispatch planner and by the save that has to keep it.
+    """
+    for field in TEACHER_AVAILABILITY_FIELDS:
+        value = (profile or {}).get(field)
+        if value:
+            return str(value)
+    return None
+
+
 def update_teacher_availability(
     user_id: str,
     *,
-    subjects: list[str],
-    weekly_availability: list[Mapping[str, object]],
+    subjects: list[str] | None,
+    weekly_availability: list[Mapping[str, object]] | None,
     updated_at: str,
     status: str | None = None,
 ) -> UserItem:
-    """Save a teacher's subjects and hours, and whether they take dispatch.
+    """Save what a teacher changed of subjects, hours and dispatch status.
 
-    `status` is written as given. Omitted, the stored status is kept, so editing
-    hours never puts a paused teacher back on dispatch; a teacher who has never
-    had one becomes `available`, which is what saving has always meant.
+    A field passed as `None` is left as stored, so switching status never clears
+    subjects or hours. An omitted `status` keeps the stored one, read from the
+    same profile whose version the write is checked against; a teacher who has
+    never had one becomes `available`, which is what saving has always meant.
+    Both status fields are written with the same word, so the planner's
+    fallback can no longer disagree with the first field.
     """
-    availability = (
-        ":availability"
-        if status is not None
-        else "if_not_exists(dispatch_availability, :availability)"
-    )
+    parts = [
+        "availability_status = :availability",
+        "dispatch_availability = :availability",
+        "updated_at = :updated_at",
+    ]
+    values: dict[str, object] = {":updated_at": updated_at}
+    if subjects is not None:
+        parts[:0] = [
+            "subjects = :subjects",
+            "primary_subjects = :subjects",
+            "dispatch_subjects = :subjects",
+        ]
+        values[":subjects"] = subjects
+    if weekly_availability is not None:
+        parts[:0] = [
+            "weekly_availability = :weekly_availability",
+            "weeklyAvailability = :weekly_availability",
+        ]
+        values[":weekly_availability"] = weekly_availability
+    if status is not None:
+        values[":availability"] = status
+
+    def kept_status(profile: UserItem) -> Mapping[str, object]:
+        if status is not None:
+            return {}
+        return {":availability": stored_teacher_availability(profile) or "available"}
+
     return update_profile_fields(
         user_id,
-        update_expression=(
-            "SET subjects = :subjects, primary_subjects = :subjects, "
-            "dispatch_subjects = :subjects, weekly_availability = :weekly_availability, "
-            f"weeklyAvailability = :weekly_availability, availability_status = {availability}, "
-            f"dispatch_availability = {availability}, updated_at = :updated_at"
-        ),
-        expression_attribute_values={
-            ":subjects": subjects,
-            ":weekly_availability": weekly_availability,
-            ":availability": status or "available",
-            ":updated_at": updated_at,
-        },
+        update_expression="SET " + ", ".join(parts),
+        expression_attribute_values=values,
+        values_from_profile=kept_status,
     )
 
 
@@ -459,8 +492,14 @@ def update_profile_fields_versioned(
     expression_attribute_names: Mapping[str, str] | None = None,
     owned_fields: frozenset[str] | None = None,
     max_attempts: int = PROFILE_WRITE_MAX_ATTEMPTS,
+    values_from_profile: Callable[[UserItem], Mapping[str, object]] | None = None,
 ) -> ProfileWriteResult:
-    """Strong-read and apply one bounded, narrow profile CAS operation."""
+    """Strong-read and apply one bounded, narrow profile CAS operation.
+
+    `values_from_profile` adds expression values computed from the profile read
+    on each attempt, so a value that depends on stored state is written under
+    the same version check as that read.
+    """
     if isinstance(max_attempts, bool) or not isinstance(max_attempts, int) or max_attempts < 1:
         raise ValueError("max_attempts must be a positive integer")
     fields = owned_fields or _profile_update_fields(update_expression, expression_attribute_names)
@@ -475,11 +514,14 @@ def update_profile_fields_versioned(
         expected_version = _optional_profile_version(profile.get("version"))
         try:
             fence = account_deletion_repo.require_active_account_fence(user_id, table=table)
+            values = dict(expression_attribute_values)
+            if values_from_profile is not None:
+                values.update(values_from_profile(profile))
             account_deletion_repo.transact(
                 build_profile_update_transaction(
                     user_id,
                     update_expression=update_expression,
-                    expression_attribute_values=expression_attribute_values,
+                    expression_attribute_values=values,
                     expression_attribute_names=expression_attribute_names,
                     expected_generation=_required_positive_integer(fence.get("generation")),
                     expected_version=expected_version,
@@ -506,6 +548,7 @@ def update_profile_fields(
     expression_attribute_values: Mapping[str, object],
     expression_attribute_names: Mapping[str, str] | None = None,
     owned_fields: frozenset[str] | None = None,
+    values_from_profile: Callable[[UserItem], Mapping[str, object]] | None = None,
 ) -> UserItem:
     """Compatibility projection over the typed, bounded profile writer."""
     result = update_profile_fields_versioned(
@@ -514,6 +557,7 @@ def update_profile_fields(
         expression_attribute_values=expression_attribute_values,
         expression_attribute_names=expression_attribute_names,
         owned_fields=owned_fields,
+        values_from_profile=values_from_profile,
     )
     if result.disposition is not ProfileWriteDisposition.UPDATED or result.profile is None:
         raise account_deletion_repo.AccountDeletionConflict("profile write remains retryable")
