@@ -785,3 +785,43 @@ def test_a_conversation_the_students_deletion_tombstoned_counts_as_gone(table):
     assert results[-1].status == "complete", [asdict(r) for r in results]
     assert table.rows[CONV_KEY] == tombstone
     assert "dispatched_teacher_id" not in _question(table)
+
+
+# --- The student reads the teacher's reply (#66 production acceptance) ---
+
+
+def _student_client() -> TestClient:
+    from stoa.routers import conversations
+    from stoa.security.route_authorization import get_authorization_fact_repository
+
+    app = FastAPI()
+    app.include_router(conversations.router, prefix="/conversations")
+    install_actor_overrides(app, {"sub": STUDENT, "role": "student"})
+    # The real fact repository, so the student's read is authorised as in production.
+    app.dependency_overrides.pop(get_authorization_fact_repository, None)
+    return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.mark.parametrize("accept_first", [False, True], ids=["reply_accepts", "accepted_then_reply"])
+def test_the_student_reads_the_teachers_reply_before_and_after_resolving(table, accept_first):
+    # The student's history reader refuses the whole conversation if any message
+    # breaks the message contract. The teacher's message was written without it,
+    # so in production on 2026-09-28 the student could no longer open the
+    # conversation at all once a teacher replied.
+    _dispatch_to(table, TEACHER)
+    teacher, student = _client(), _student_client()
+    assert student.get(f"/conversations/{CONV}").status_code == 200
+    if accept_first:
+        assert _set_status(teacher, "in_progress").status_code == 200
+
+    assert _reply(teacher, "Probier jetzt 15 : 5.").status_code in {200, 201}
+    after_reply = student.get(f"/conversations/{CONV}")
+
+    assert after_reply.status_code == 200, after_reply.text
+    teacher_messages = [m for m in after_reply.json()["messages"] if m["role"] == "teacher"]
+    assert [m["content"] for m in teacher_messages] == ["Probier jetzt 15 : 5."]
+
+    assert _set_status(teacher, "resolved").status_code == 200
+    after_resolve = student.get(f"/conversations/{CONV}")
+    assert after_resolve.status_code == 200, after_resolve.text
+    assert [m["role"] for m in after_resolve.json()["messages"]].count("teacher") == 1

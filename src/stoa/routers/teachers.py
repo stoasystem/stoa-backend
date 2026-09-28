@@ -1647,14 +1647,22 @@ async def add_note(
         "teacher_response_format": reply_fields["teacher_response_format"],
         "created_at": now,
     }
-    # The teacher's reply is also a message in the conversation.
+    # The teacher's reply is also a message in the conversation, so it follows
+    # the message contract the student's history reader enforces on every row
+    # (conversations._validate_history_message). Without it the student could
+    # no longer open the conversation once a teacher replied (#66, 2026-09-28).
     msg_id = str(uuid.uuid4())
+    student_id = _text(conv.get("student_id"))
     message_item = {
         "PK": _conv_pk(conv_id),
         "SK": f"MSG#{msg_id}",
+        "entity_type": "conversation_message",
+        "schema_version": "conversation-message.v1",
         "message_id": msg_id,
         "conversation_id": conv_id,
-        "student_id": _text(conv.get("student_id")),
+        "student_id": student_id,
+        "owner_id": student_id,
+        "account_fence_generation": stored_int(conv.get("account_fence_generation")) or 1,
         "role": "teacher",
         "content": reply_fields["teacher_response"],
         "teacher_response_rich": reply_fields["teacher_response_rich"],
