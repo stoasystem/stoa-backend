@@ -722,12 +722,23 @@ def _attachments_branch(
         s3=boto3.client("s3", region_name=settings.aws_region),
         settings=settings,
     )
+    quiescent = bool(result.quiescent)
+    epoch = int(previous.get("epoch") or 0) + (1 if quiescent else 0)
+    status = str(result.status)
+    # Complete means two clean passes, as for every other branch. The purge
+    # reported complete on its first clean pass; continue_command then never
+    # ran this branch again, its epoch stayed 1, and no deletion could seal.
+    if status == "complete" and epoch < 2:
+        status = "retryable"
+    cursors = dict(result.cursors)
     return BranchResult(
-        str(result.status),
-        cursor=dict(result.cursors),
+        status,
+        # A cursor with nothing left to resume is no cursor; the seal only
+        # accepts an empty one (stoasystem/stoa-backend#78).
+        cursor=cursors if any(value is not None for value in cursors.values()) else None,
         debt_counts=dict(result.debt_counts),
-        quiescent=bool(result.quiescent),
-        epoch=int(previous.get("epoch") or 0) + (1 if result.quiescent else 0),
+        quiescent=quiescent,
+        epoch=epoch,
     )
 
 

@@ -825,6 +825,10 @@ def _practice_owned(item: Mapping[str, Any], owner_id: str) -> bool:
     back, because only the deletion repository's tombstone knows how to. Every
     deleted address stayed claimed, and the pair could never be opened again.
     """
+    if account_deletion_repo.is_deletion_tombstone(item):
+        # Its own tombstone keeps the PK, so matching on the PK alone found it
+        # again every pass and the branch never finished (#78).
+        return False
     pk = str(item.get("PK") or "")
     if pk in {
         f"PROGRESS#{owner_id}",

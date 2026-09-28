@@ -1083,7 +1083,7 @@ def scrub_teacher_chat_help_request(
     except Exception as exc:  # noqa: BLE001 - an unread conversation is retried
         raise AccountDeletionRowConflict("chat conversation could not be read") from exc
     conversation = response.get("Item") if isinstance(response, dict) else None
-    if conversation is not None and is_conversation_tombstone(conversation):
+    if conversation is not None and is_deletion_tombstone(conversation):
         # The student's deletion got there first; only the queue row is left.
         conversation = None
     if conversation is not None and (
@@ -1181,16 +1181,16 @@ def scrub_teacher_chat_help_request(
         ) from exc
 
 
-def is_conversation_tombstone(conversation: Mapping[str, Any]) -> bool:
-    """Whether a CONV# row is what a student's deletion left in its place.
+def is_deletion_tombstone(row: Mapping[str, Any]) -> bool:
+    """Whether a row is a tombstone an account deletion left in a row's place.
 
-    `attachment_repo._conversation_tombstone` keeps the row's keys and its
-    owner, and marks it `status=deleted` with the deletion's generation.
+    Every deletion tombstone marks itself `status=deleted` with the deletion's
+    generation; live rows never carry `owner_deletion_generation`. Some keep
+    the row's keys and even its owner (the conversation and practice
+    tombstones), so a deletion scan that matches on keys or owner alone finds
+    its own tombstones again unless it skips them (stoasystem/stoa-backend#78).
     """
-    return (
-        conversation.get("status") == "deleted"
-        and conversation.get("owner_deletion_generation") is not None
-    )
+    return row.get("status") == "deleted" and row.get("owner_deletion_generation") is not None
 
 
 def _chat_conversation_scrub(
@@ -1690,7 +1690,7 @@ def create_provider_revoke_debt(
         "user_id": user_id,
         "generation": generation,
         "status": "pending",
-        "operations": ("attributes", "groups", "sessions"),
+        "operations": ["attributes", "groups", "sessions"],
         "created_at": now_iso,
     }
     target = table or get_table()
@@ -1719,10 +1719,15 @@ def create_provider_revoke_debt(
             Key={"PK": item["PK"], "SK": item["SK"]}, ConsistentRead=True
         )
         existing = response.get("Item")
+        # A replay compares what was stored with what would be written. The
+        # operations come back from the table as a list whatever sequence
+        # wrote them; comparing a tuple against that list never matched, so
+        # every pass after the first refused its own debt and the identity
+        # branch could never finish (stoasystem/stoa-backend#78).
         if not isinstance(existing, Mapping) or any(
             existing.get(field) != item[field]
-            for field in ("user_id", "generation", "entity_type", "operations")
-        ):
+            for field in ("user_id", "generation", "entity_type")
+        ) or list(existing.get("operations") or ()) != list(item["operations"]):
             raise
 
 
