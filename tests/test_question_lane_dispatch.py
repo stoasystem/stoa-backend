@@ -103,3 +103,41 @@ def test_a_lapsed_chat_offer_is_recorded_but_not_re_offered_by_the_question_lane
     assert lifecycle.TEACHER in row["previous_dispatch_teacher_ids"]
     assert row["dispatch_status"] == "timed_out"
     assert row.get("dispatched_teacher_id") != lifecycle.OTHER_TEACHER
+
+
+def test_the_transaction_builder_clears_a_field_given_none(table):
+    # The same None-to-REMOVE rule for the builder used by conversation-lane
+    # writes; no caller passes None to it today, so it is pinned directly.
+    from stoa.db.repositories import account_deletion_repo, question_repo
+
+    row = table.rows[lifecycle.QUESTION_KEY]
+    before = int(row["version"])
+
+    account_deletion_repo.transact(
+        question_repo.build_question_update_transaction(
+            dict(row),
+            status=row["status"],
+            expected_generation=1,
+            extra_attrs={"dispatch_no_candidate_reason": None, "dispatch_status": "unassigned"},
+        ),
+        table=table,
+    )
+
+    row = table.rows[lifecycle.QUESTION_KEY]
+    assert "dispatch_no_candidate_reason" not in row
+    assert row["dispatch_status"] == "unassigned"
+    assert int(row["version"]) == before + 1
+
+
+def test_dispatch_question_itself_refuses_a_chat_queue_row(table):
+    # Every caller of the question lane's dispatch, present and future, is
+    # covered here rather than by each caller remembering to skip chat rows.
+    # The fixture's queue row is a chat request's.
+    _only(table, lifecycle.TEACHER)
+    before = dict(table.rows[lifecycle.QUESTION_KEY])
+
+    result = teacher_dispatch_service.dispatch_question(lifecycle.REQUEST, now=NOW)
+
+    assert result["status"] == "not_dispatchable"
+    assert result["reason"] == "chat_help_request"
+    assert table.rows[lifecycle.QUESTION_KEY] == before

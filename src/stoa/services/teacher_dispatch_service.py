@@ -162,6 +162,11 @@ def dispatch_question(
         return {"questionId": question_id, "status": "not_found", "reason": "question_not_found"}
     if question.get("status") != QuestionStatus.ESCALATED.value:
         return {"questionId": question_id, "status": "not_dispatchable", "reason": "not_escalated"}
+    if is_chat_question_row(question):
+        # A chat request is offered by dispatch_conversation, both rows at once;
+        # offering its queue row alone would split it (#73, #75). Refused here so
+        # no caller of the question lane can do it.
+        return {"questionId": question_id, "status": "not_dispatchable", "reason": "chat_help_request"}
     question = _versioned_dispatch_question(question)
     if question is None:
         return {"questionId": question_id, "status": "claim_conflict", "reason": "question_changed"}
