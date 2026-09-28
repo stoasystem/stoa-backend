@@ -665,6 +665,18 @@ def _question_ocr_session_branch(
         if (
             item.get("entity_type") == "question"
             and item.get("student_id") != deleting_user_id
+            and account_deletion_repo.is_chat_help_request_queue_row(item)
+        ):
+            # A chat request goes back to waiting, both rows together (#72).
+            account_deletion_repo.scrub_teacher_chat_help_request(
+                item,
+                teacher_user_id=deleting_user_id,
+                generation=generation,
+                now_iso=now,
+            )
+        elif (
+            item.get("entity_type") == "question"
+            and item.get("student_id") != deleting_user_id
         ):
             account_deletion_repo.scrub_teacher_question_reference(
                 item,

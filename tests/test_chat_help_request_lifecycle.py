@@ -539,3 +539,147 @@ def test_accepting_refuses_when_only_the_queue_rows_offer_has_expired(table):
 
     assert _set_status(_client(), "in_progress").status_code == 409
     assert _unchanged(table, before)
+
+
+# --- Deleting a teacher returns their open chat requests to waiting (#72) ---
+#
+# User decision 2026-09-28: when a teacher account is deleted, a chat help
+# request they took or were offered goes back to waiting, both rows together,
+# so the reconciler offers it to someone else. A closed one keeps its outcome
+# and loses only the teacher references. These drive the real deletion branch
+# until it reports complete.
+
+from dataclasses import asdict  # noqa: E402
+
+from stoa.services import account_deletion_service  # noqa: E402
+
+_TEACHER_FIELDS_ON_CONVERSATION = (
+    "teacher_id",
+    "dispatched_teacher_id",
+    "dispatch_id",
+    "dispatch_deadline_at",
+    "accepted_at",
+)
+_TEACHER_FIELDS_ON_QUEUE_ROW = (
+    "teacher_id",
+    "dispatched_teacher_id",
+    "dispatch_id",
+    "dispatch_deadline_at",
+    "teacher_accepted_at",
+)
+
+
+def _delete_teacher(table: FakeTable, teacher_id: str = TEACHER) -> list:
+    table.rows[(f"USER#{teacher_id}", "ACCOUNT_FENCE")]["status"] = "deletion_pending"
+    branch = account_deletion_service.BRANCH_HANDLERS["question_ocr_session"]
+    command = {"user_id": teacher_id, "generation": 1}
+    previous: dict = {}
+    results = []
+    for _ in range(6):
+        result = branch(command=command, previous=previous)
+        results.append(result)
+        previous = asdict(result)
+        if result.status == "complete":
+            break
+    return results
+
+
+def _assert_waiting_without(table: FakeTable, teacher_id: str) -> None:
+    conv, question = _conv(table), _question(table)
+    assert conv["escalation_status"] == "pending"
+    assert conv["dispatch_status"] == "unassigned"
+    assert question["status"] == "escalated"
+    assert question["dispatch_status"] == "unassigned"
+    for field in _TEACHER_FIELDS_ON_CONVERSATION:
+        assert field not in conv, field
+    for field in _TEACHER_FIELDS_ON_QUEUE_ROW:
+        assert field not in question, field
+    assert teacher_id not in question.get("previous_dispatch_teacher_ids", [])
+    # The student's own content is untouched.
+    assert conv["escalation_message"] == "Step 2 makes no sense to me."
+    assert question["content"] == "Step 2 makes no sense to me."
+
+
+@pytest.mark.parametrize("accepted", [True, False], ids=["accepted", "offered"])
+def test_deleting_the_teacher_returns_an_open_request_to_waiting(table, accepted):
+    _dispatch_to(table, TEACHER)
+    if accepted:
+        assert _reply(_client()).status_code in {200, 201}
+
+    results = _delete_teacher(table)
+
+    assert results[-1].status == "complete", [asdict(r) for r in results]
+    _assert_waiting_without(table, TEACHER)
+
+    # Nothing is stuck: the reconciler offers it to another teacher, who ends it.
+    table.rows[(f"USER#{OTHER_TEACHER}", "PROFILE")]["dispatch_availability"] = "available"
+    teacher_dispatch_service.reconcile_dispatches()
+    assert _conv(table)["dispatched_teacher_id"] == OTHER_TEACHER
+    assert _set_status(_client(OTHER_TEACHER), "resolved").status_code == 200
+    assert _conv(table)["escalation_status"] == "resolved"
+    assert _question(table)["status"] == "resolved"
+    _nothing_waits()
+
+
+def test_deleting_the_teacher_after_a_timeout_clears_the_lapsed_offer(table):
+    _dispatch_to(table, TEACHER)
+    for row in (_conv(table), _question(table)):
+        row["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
+    teacher_dispatch_service.reconcile_dispatches()
+    assert TEACHER in _question(table)["previous_dispatch_teacher_ids"]
+
+    results = _delete_teacher(table)
+
+    assert results[-1].status == "complete", [asdict(r) for r in results]
+    _assert_waiting_without(table, TEACHER)
+
+
+def test_deleting_the_teacher_keeps_a_resolved_request_resolved(table):
+    _dispatch_to(table, TEACHER)
+    assert _set_status(_client(), "resolved", resolutionNote="Done together.").status_code == 200
+
+    results = _delete_teacher(table)
+
+    assert results[-1].status == "complete", [asdict(r) for r in results]
+    conv, question = _conv(table), _question(table)
+    assert conv["escalation_status"] == "resolved"
+    assert conv["resolution_note"] == "Done together."
+    assert question["status"] == "resolved"
+    for field in ("teacher_id", "dispatched_teacher_id"):
+        assert field not in conv, field
+        assert field not in question, field
+    _nothing_waits()
+
+
+def test_a_conversation_that_moves_during_the_scrub_is_retried_not_overwritten(
+    table, monkeypatch
+):
+    # The student's side moves between the scrub's read and its write; the
+    # write is bound to what it read, so the pass is retried, then completes.
+    _dispatch_to(table, TEACHER)
+    assert _reply(_client()).status_code in {200, 201}
+    real_transact = account_deletion_repo.transact
+    moved = []
+
+    def transact_after_the_conversation_moves(operations, *, table=None):
+        touches_conversation = any(
+            (op.get("Update") or {}).get("Key", {}).get("PK") == f"CONV#{CONV}"
+            for op in operations
+        )
+        if touches_conversation and not moved:
+            moved.append(True)
+            table.rows[CONV_KEY]["escalation_status"] = "resolved"
+        return real_transact(operations, table=table)
+
+    monkeypatch.setattr(account_deletion_repo, "transact", transact_after_the_conversation_moves)
+
+    results = _delete_teacher(table)
+
+    assert moved
+    assert results[0].status == "retryable"
+    assert results[0].debt_counts.get("row_conflict") == 1
+    assert results[-1].status == "complete", [asdict(r) for r in results]
+    # The later pass saw the conversation as resolved and kept that outcome.
+    assert _conv(table)["escalation_status"] == "resolved"
+    assert "teacher_id" not in _conv(table)
+    assert "teacher_id" not in _question(table)

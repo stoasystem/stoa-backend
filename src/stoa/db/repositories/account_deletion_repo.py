@@ -995,6 +995,231 @@ def replace_teacher_session_with_tombstone(
         ) from exc
 
 
+CHAT_ESCALATION_SOURCE = "conversation_escalation"
+# A chat request's teacher link and live offer, on each of its two rows. The
+# queue row also carries the question-lane link fields, removed as for any
+# question the teacher held.
+_CHAT_QUEUE_TEACHER_FIELDS = (
+    *_TEACHER_QUESTION_LINK_FIELDS,
+    *_TEACHER_DISPATCH_LINK_FIELDS,
+    "dispatch_id",
+    "teacher_accepted_at",
+)
+_CHAT_CONVERSATION_TEACHER_FIELDS = (
+    "teacher_id",
+    "dispatched_teacher_id",
+    "dispatch_id",
+    "dispatch_deadline_at",
+    "accepted_at",
+)
+_OPEN_QUEUE_STATUSES = frozenset({"escalated", "teacher_active"})
+_OPEN_CONVERSATION_STATUSES = frozenset({"", "pending", "in_progress"})
+
+
+def is_chat_help_request_queue_row(item: Mapping[str, Any]) -> bool:
+    """Whether a question row is the queue half of a chat help request."""
+    return item.get("source") == CHAT_ESCALATION_SOURCE and bool(item.get("conversation_id"))
+
+
+def scrub_teacher_chat_help_request(
+    item: Mapping[str, Any],
+    *,
+    teacher_user_id: str,
+    generation: int,
+    now_iso: str,
+    table: Any | None = None,
+) -> None:
+    """Remove a deleting teacher from a chat help request, both rows at once.
+
+    A chat request is the conversation the student reads and this queue row.
+    If it is still open, it goes back to waiting: the teacher and the offer are
+    removed from both rows, the conversation returns to `pending` and the queue
+    row to `escalated` / `unassigned`, so the reconciler offers it to someone
+    else (user decision, stoasystem/stoa-backend#72). A question-lane question
+    is resolved instead (`scrub_teacher_question_reference`); a student's chat
+    request is not closed unanswered because a teacher account went away. A
+    closed request keeps its outcome and loses only the teacher references.
+
+    The queue row is bound by its version and the conversation by the values
+    read from it, under the teacher's deletion fence, in one transaction; if
+    either moved, the pass is retried.
+    """
+    teacher_id = _teacher_reference_coordinate(teacher_user_id, "teacher user_id")
+    pk = _teacher_reference_coordinate(item.get("PK"), "question PK")
+    sk = _teacher_reference_coordinate(item.get("SK"), "question SK")
+    question_id = _teacher_reference_coordinate(item.get("question_id"), "question_id")
+    student_id = _teacher_reference_coordinate(item.get("student_id"), "student_id")
+    status = _teacher_reference_coordinate(item.get("status"), "question status")
+    conversation_id = _teacher_reference_coordinate(
+        item.get("conversation_id"), "conversation_id"
+    )
+    if (
+        pk != f"QUESTION#{question_id}"
+        or sk != "META"
+        or item.get("entity_type") != "question"
+        or not is_chat_help_request_queue_row(item)
+        or student_id == teacher_id
+    ):
+        raise AccountDeletionRowConflict("chat help request identity changed")
+    version = _teacher_reference_version(item.get("version"), "question version")
+    history_value = item.get("previous_dispatch_teacher_ids", [])
+    if not isinstance(history_value, (list, tuple)) or any(
+        not isinstance(value, str) or not value for value in history_value
+    ):
+        raise AccountDeletionRowConflict("invalid teacher dispatch history")
+    history = list(history_value)
+    holds_queue_row = teacher_id in {
+        item.get("teacher_id"),
+        item.get("dispatched_teacher_id"),
+    }
+    if not (holds_queue_row or teacher_id in history):
+        raise AccountDeletionRowConflict("teacher question reference changed")
+
+    store = table or get_table()
+    try:
+        response = store.get_item(
+            Key={"PK": f"CONV#{conversation_id}", "SK": "CONV"}, ConsistentRead=True
+        )
+    except Exception as exc:  # noqa: BLE001 - an unread conversation is retried
+        raise AccountDeletionRowConflict("chat conversation could not be read") from exc
+    conversation = response.get("Item") if isinstance(response, dict) else None
+    if conversation is not None and (
+        conversation.get("conversation_id") != conversation_id
+        or conversation.get("student_id") != student_id
+        or conversation.get("escalation_request_id") != question_id
+    ):
+        raise AccountDeletionRowConflict("chat conversation identity changed")
+
+    queue_open = status in _OPEN_QUEUE_STATUSES
+    names: dict[str, str] = {"#status": "status", "#version": "version"}
+    values: dict[str, Any] = {
+        ":pk": pk,
+        ":sk": sk,
+        ":entity": "question",
+        ":source": CHAT_ESCALATION_SOURCE,
+        ":conversation": conversation_id,
+        ":student": student_id,
+        ":teacher": teacher_id,
+        ":status": status,
+        ":version": version,
+        ":next_version": version + 1,
+    }
+    set_parts = ["#version=:next_version"]
+    remove_fields: list[str] = []
+    if holds_queue_row:
+        remove_fields.extend(_CHAT_QUEUE_TEACHER_FIELDS)
+        names["#dispatch_status"] = "dispatch_status"
+        if queue_open:
+            values[":waiting"] = "escalated"
+            values[":unassigned"] = "unassigned"
+            set_parts += ["#status=:waiting", "#dispatch_status=:unassigned"]
+        elif "dispatch_status" in item:
+            values[":closed_dispatch"] = "revoked"
+            set_parts.append("#dispatch_status=:closed_dispatch")
+        else:
+            del names["#dispatch_status"]
+    next_history = [value for value in history if value != teacher_id]
+    if next_history != history:
+        if next_history:
+            names["#previous_dispatch_teacher_ids"] = "previous_dispatch_teacher_ids"
+            values[":next_history"] = next_history
+            set_parts.append("#previous_dispatch_teacher_ids=:next_history")
+        else:
+            remove_fields.append("previous_dispatch_teacher_ids")
+    for field in dict.fromkeys(remove_fields):
+        names[f"#{field}"] = field
+    queue_expression = "SET " + ", ".join(set_parts)
+    if remove_fields:
+        queue_expression += " REMOVE " + ", ".join(
+            f"#{field}" for field in dict.fromkeys(remove_fields)
+        )
+    operations: list[dict[str, Any]] = [
+        deletion_fence_condition(teacher_id, generation),
+        {
+            "Update": {
+                "Key": {"PK": pk, "SK": sk},
+                "UpdateExpression": queue_expression,
+                "ConditionExpression": (
+                    "attribute_exists(PK) AND attribute_exists(SK) AND "
+                    "PK=:pk AND SK=:sk AND entity_type=:entity AND "
+                    "#source=:source AND conversation_id=:conversation AND "
+                    "student_id=:student AND #status=:status AND "
+                    "#version=:version AND "
+                    "(teacher_id=:teacher OR dispatched_teacher_id=:teacher OR "
+                    "contains(previous_dispatch_teacher_ids,:teacher))"
+                ),
+                "ExpressionAttributeNames": {**names, "#source": "source"},
+                "ExpressionAttributeValues": values,
+            }
+        },
+    ]
+    if conversation is not None and teacher_id in {
+        conversation.get("teacher_id"),
+        conversation.get("dispatched_teacher_id"),
+    }:
+        operations.append(
+            _chat_conversation_scrub(conversation, teacher_id=teacher_id, now_iso=now_iso)
+        )
+    try:
+        transact(operations, table=store)
+    except AccountDeletionConflict as exc:
+        raise AccountDeletionRowConflict(
+            "chat help request changed during cleanup"
+        ) from exc
+
+
+def _chat_conversation_scrub(
+    conversation: Mapping[str, Any], *, teacher_id: str, now_iso: str
+) -> dict[str, Any]:
+    """The conversation's half: bound to every value it was decided on."""
+    observed_status = str(conversation.get("escalation_status") or "")
+    names: dict[str, str] = {}
+    values: dict[str, Any] = {
+        ":conversation": conversation.get("conversation_id"),
+        ":student": conversation.get("student_id"),
+        ":teacher": teacher_id,
+    }
+    set_parts: list[str] = []
+    if observed_status in _OPEN_CONVERSATION_STATUSES:
+        values.update({":pending": "pending", ":unassigned": "unassigned", ":now": now_iso})
+        set_parts += [
+            "escalation_status=:pending",
+            "dispatch_status=:unassigned",
+            "updated_at=:now",
+        ]
+    remove_fields = [
+        field for field in _CHAT_CONVERSATION_TEACHER_FIELDS if field in conversation
+    ]
+    conditions = [
+        "attribute_exists(PK)",
+        "conversation_id=:conversation",
+        "student_id=:student",
+        "(teacher_id=:teacher OR dispatched_teacher_id=:teacher)",
+    ]
+    # Bind what the decision rested on: the request's state and the offer.
+    for field in ("escalation_status", "teacher_id", "dispatched_teacher_id", "dispatch_id"):
+        placeholder = f":observed_{field}"
+        if conversation.get(field) is None:
+            conditions.append(f"attribute_not_exists({field})")
+        else:
+            conditions.append(f"{field}={placeholder}")
+            values[placeholder] = conversation.get(field)
+    expression = ""
+    if set_parts:
+        expression = "SET " + ", ".join(set_parts)
+    if remove_fields:
+        expression += (" " if expression else "") + "REMOVE " + ", ".join(remove_fields)
+    update: dict[str, Any] = {
+        "Key": {"PK": f"CONV#{conversation.get('conversation_id')}", "SK": "CONV"},
+        "UpdateExpression": expression,
+        "ConditionExpression": " AND ".join(conditions),
+        "ExpressionAttributeValues": values,
+    }
+    if names:
+        update["ExpressionAttributeNames"] = names
+    return {"Update": update}
+
+
 def _teacher_reference_version(value: object, field: str) -> int:
     parsed = stored_int(value)
     if parsed is None or parsed <= 0:
