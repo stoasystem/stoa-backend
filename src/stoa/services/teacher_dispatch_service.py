@@ -653,29 +653,23 @@ def advance_help_request(
         question = _escalated_question_row(store, request_id) if request_id else None
     except QueueRowUnavailable as exc:
         raise HelpRequestConflict("queue row could not be read") from exc
-    if question is not None:
-        # The queue row's CAS carries the student's fence.
-        operations.extend(
-            _queue_row_transition(
-                question,
-                teacher_id=teacher_id,
-                target=target,
-                now=timestamp,
-                accepting=accepting,
-                offer=str(conversation.get("dispatch_id") or ""),
-            )
+    if question is None:
+        # Escalations from before queue rows existed are not taken: account
+        # deletion reaches a chat request through its queue row, so a teacher
+        # bound to a conversation without one could never be removed from it
+        # (stoasystem/stoa-backend#72). None exist in production (2026-09-28).
+        raise HelpRequestConflict("chat help request has no queue row")
+    # The queue row's CAS carries the student's fence.
+    operations.extend(
+        _queue_row_transition(
+            question,
+            teacher_id=teacher_id,
+            target=target,
+            now=timestamp,
+            accepting=accepting,
+            offer=str(conversation.get("dispatch_id") or ""),
         )
-    else:
-        # A conversation from before queue rows existed: bind the student's
-        # fence directly, since no queue-row write brings it in.
-        student_id = str(conversation.get("student_id") or "")
-        if not student_id:
-            raise HelpRequestConflict("help request has no student")
-        operations.append(
-            account_deletion_repo.active_fence_condition(
-                student_id, int(_int(conversation.get("account_fence_generation"), 1))
-            )
-        )
+    )
     operations.extend(extra_operations)
 
     try:

@@ -247,6 +247,11 @@ def test_cross_teacher_help_request_update_is_hidden_before_mutation(monkeypatch
          "account_status": "active", "version": 1},
         {"PK": "USER#teacher-1", "SK": "ACCOUNT_FENCE", "status": "active", "generation": 1},
         {"PK": "USER#student-1", "SK": "ACCOUNT_FENCE", "status": "active", "generation": 1},
+        # Every chat request has its queue row; the holder's write moves both.
+        {"PK": "QUESTION#help-1", "SK": "META", "question_id": "help-1",
+         "entity_type": "question", "source": "conversation_escalation",
+         "conversation_id": "conv-1", "student_id": "student-1", "status": "teacher_active",
+         "teacher_id": "teacher-1", "version": 1, "account_fence_generation": 1},
     )
     monkeypatch.setattr(teachers, "_get_conversation", lambda _id: dict(table.rows[("CONV#conv-1", "CONV")]))
     monkeypatch.setattr(teachers, "_get_student_name", lambda _id: "Student")
@@ -266,6 +271,7 @@ def test_cross_teacher_help_request_update_is_hidden_before_mutation(monkeypatch
 
     assert current.status_code == 200
     assert table.rows[("CONV#conv-1", "CONV")]["escalation_status"] == "resolved"
+    assert table.rows[("QUESTION#help-1", "META")]["status"] == "resolved"
 
 
 def test_help_request_authorization_outage_returns_503_before_mutation(monkeypatch):

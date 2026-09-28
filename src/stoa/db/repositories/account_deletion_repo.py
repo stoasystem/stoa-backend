@@ -1083,6 +1083,9 @@ def scrub_teacher_chat_help_request(
     except Exception as exc:  # noqa: BLE001 - an unread conversation is retried
         raise AccountDeletionRowConflict("chat conversation could not be read") from exc
     conversation = response.get("Item") if isinstance(response, dict) else None
+    if conversation is not None and _is_conversation_tombstone(conversation):
+        # The student's deletion got there first; only the queue row is left.
+        conversation = None
     if conversation is not None and (
         conversation.get("conversation_id") != conversation_id
         or conversation.get("student_id") != student_id
@@ -1090,7 +1093,13 @@ def scrub_teacher_chat_help_request(
     ):
         raise AccountDeletionRowConflict("chat conversation identity changed")
 
-    queue_open = status in _OPEN_QUEUE_STATUSES
+    # The conversation is what the student sees, so it decides whether the
+    # request is still open: a queue row left open beside a closed
+    # conversation is closed with it rather than reopened.
+    conversation_open = conversation is None or str(
+        conversation.get("escalation_status") or ""
+    ) in _OPEN_CONVERSATION_STATUSES
+    queue_open = status in _OPEN_QUEUE_STATUSES and conversation_open
     names: dict[str, str] = {"#status": "status", "#version": "version"}
     values: dict[str, Any] = {
         ":pk": pk,
@@ -1113,11 +1122,15 @@ def scrub_teacher_chat_help_request(
             values[":waiting"] = "escalated"
             values[":unassigned"] = "unassigned"
             set_parts += ["#status=:waiting", "#dispatch_status=:unassigned"]
-        elif "dispatch_status" in item:
-            values[":closed_dispatch"] = "revoked"
-            set_parts.append("#dispatch_status=:closed_dispatch")
         else:
-            del names["#dispatch_status"]
+            if status in _OPEN_QUEUE_STATUSES:
+                values[":closed"] = "resolved"
+                set_parts.append("#status=:closed")
+            if "dispatch_status" in item:
+                values[":closed_dispatch"] = "revoked"
+                set_parts.append("#dispatch_status=:closed_dispatch")
+            else:
+                del names["#dispatch_status"]
     next_history = [value for value in history if value != teacher_id]
     if next_history != history:
         if next_history:
@@ -1166,6 +1179,14 @@ def scrub_teacher_chat_help_request(
         raise AccountDeletionRowConflict(
             "chat help request changed during cleanup"
         ) from exc
+
+
+def _is_conversation_tombstone(conversation: Mapping[str, Any]) -> bool:
+    """Whether a CONV row is what a student's deletion left in its place."""
+    return (
+        conversation.get("status") == "deleted"
+        and conversation.get("owner_deletion_generation") is not None
+    )
 
 
 def _chat_conversation_scrub(

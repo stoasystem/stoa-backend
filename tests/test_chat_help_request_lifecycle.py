@@ -446,20 +446,22 @@ def test_a_holder_whose_account_is_being_deleted_cannot_resolve(table):
     assert _unchanged(table, before)
 
 
-@pytest.mark.parametrize("fence", ["active", "deleting"])
-def test_a_conversation_without_a_queue_row_binds_the_students_fence(table, fence):
+def test_a_conversation_without_a_queue_row_cannot_be_taken(table):
+    # Account deletion reaches a chat request through its queue row, so a
+    # teacher bound to a conversation without one could never be removed from
+    # it (#72 audit). Such escalations predate queue rows; none are taken.
     _dispatch_to(table, TEACHER)
     del table.rows[QUESTION_KEY]
-    table.rows[(f"USER#{STUDENT}", "ACCOUNT_FENCE")]["status"] = fence
+    before = dict(_conv(table))
 
-    response = _set_status(_client(), "in_progress")
+    for attempt in (
+        _set_status(_client(), "in_progress"),
+        _set_status(_client(), "resolved"),
+        _reply(_client()),
+    ):
+        assert attempt.status_code == 409
 
-    if fence == "active":
-        assert response.status_code == 200
-        assert _conv(table)["teacher_id"] == TEACHER
-    else:
-        assert response.status_code == 409
-        assert "teacher_id" not in _conv(table)
+    assert _conv(table) == before
 
 
 def test_a_teacher_assigned_to_the_student_keeps_the_conversation_only_write(table, monkeypatch):
@@ -507,27 +509,26 @@ def test_a_teacher_assigned_to_the_student_keeps_the_conversation_only_write(tab
     assert _question(table) == question_before
 
 
-@pytest.mark.parametrize("queue_row", [True, False], ids=["with_queue_row", "without_queue_row"])
+@pytest.mark.parametrize("queue_row_live", [False, True], ids=["both_expired", "only_conversation_expired"])
 def test_an_offer_that_expires_between_the_check_and_the_write_is_refused(
-    table, monkeypatch, queue_row
+    table, monkeypatch, queue_row_live
 ):
     # The policy saw a live offer on its own clock; the write happens after the
     # deadline. Found by the second independent audit: the deadline was checked
     # by the policy only, so the late write still took the offer. Both rows bind
-    # it; without a queue row, the conversation's condition is the only one.
+    # it; keeping the queue row's offer live leaves the conversation's condition
+    # as the only one that can refuse.
     _dispatch_to(table, TEACHER)
-    if not queue_row:
-        del table.rows[QUESTION_KEY]
+    if queue_row_live:
+        _question(table)["dispatch_deadline_at"] = "2100-01-01T00:00:00+00:00"
     assert _conv(table)["dispatch_deadline_at"] < "2099"
     monkeypatch.setattr(teachers, "_now", lambda: "2099-01-01T00:00:00+00:00")
-    before = dict(_conv(table))
+    before = (dict(_conv(table)), dict(_question(table)))
 
     for attempt in (_set_status(_client(), "in_progress"), _reply(_client())):
         assert attempt.status_code == 409
 
-    assert _conv(table) == before
-    if queue_row:
-        assert _question(table)["status"] == "escalated"
+    assert _unchanged(table, before)
 
 
 def test_accepting_refuses_when_only_the_queue_rows_offer_has_expired(table):
@@ -683,3 +684,104 @@ def test_a_conversation_that_moves_during_the_scrub_is_retried_not_overwritten(
     assert _conv(table)["escalation_status"] == "resolved"
     assert "teacher_id" not in _conv(table)
     assert "teacher_id" not in _question(table)
+
+
+def _race_once(monkeypatch, mutate) -> list:
+    """Apply `mutate(table)` once, just before the scrub's transaction lands."""
+    real_transact = account_deletion_repo.transact
+    fired = []
+
+    def transact(operations, *, table=None):
+        scrubbing = any(
+            (op.get("ConditionCheck") or {}).get("ExpressionAttributeValues", {}).get(":pending")
+            == "deletion_pending"
+            for op in operations
+        )
+        if scrubbing and not fired:
+            fired.append(True)
+            mutate(table)
+        return real_transact(operations, table=table)
+
+    monkeypatch.setattr(account_deletion_repo, "transact", transact)
+    return fired
+
+
+def test_a_queue_row_that_moves_during_the_scrub_is_retried(table, monkeypatch):
+    _dispatch_to(table, TEACHER)
+    assert _reply(_client()).status_code in {200, 201}
+
+    def bump(t):
+        t.rows[QUESTION_KEY]["version"] = t.rows[QUESTION_KEY]["version"] + 1
+
+    fired = _race_once(monkeypatch, bump)
+    results = _delete_teacher(table)
+
+    assert fired
+    assert results[0].status == "retryable"
+    assert results[0].debt_counts.get("row_conflict") == 1
+    assert results[-1].status == "complete", [asdict(r) for r in results]
+    _assert_waiting_without(table, TEACHER)
+
+
+def test_a_conversation_re_offered_to_another_teacher_during_the_scrub_keeps_that_offer(
+    table, monkeypatch
+):
+    # Between the scrub's read and its write, the conversation is offered to
+    # another teacher. The write is bound to the teacher it read, so it is
+    # refused, and the new offer is not wiped.
+    _dispatch_to(table, TEACHER)
+
+    def reoffer(t):
+        t.rows[CONV_KEY]["dispatched_teacher_id"] = OTHER_TEACHER
+        t.rows[CONV_KEY]["dispatch_id"] = "an-offer-to-someone-else"
+
+    fired = _race_once(monkeypatch, reoffer)
+    results = _delete_teacher(table)
+
+    assert fired
+    assert results[0].status == "retryable"
+    assert results[0].debt_counts.get("row_conflict") == 1
+    assert results[-1].status == "complete", [asdict(r) for r in results]
+    conv = _conv(table)
+    assert conv["dispatched_teacher_id"] == OTHER_TEACHER
+    assert conv["dispatch_id"] == "an-offer-to-someone-else"
+    assert TEACHER not in (conv.get("teacher_id"), _question(table).get("dispatched_teacher_id"))
+
+
+def test_a_queue_row_left_open_beside_a_resolved_conversation_is_closed(table):
+    # The residue #66 was opened for: the conversation was resolved on its own
+    # while the queue row still waits on the teacher. Deleting that teacher
+    # closes the queue row with the conversation instead of reopening it.
+    _dispatch_to(table, TEACHER)
+    _conv(table)["escalation_status"] = "resolved"
+
+    results = _delete_teacher(table)
+
+    assert results[-1].status == "complete", [asdict(r) for r in results]
+    assert _conv(table)["escalation_status"] == "resolved"
+    assert _question(table)["status"] == "resolved"
+    assert _question(table)["dispatch_status"] == "revoked"
+    assert "dispatched_teacher_id" not in _question(table)
+    _nothing_waits()
+
+
+def test_a_conversation_the_students_deletion_tombstoned_counts_as_gone(table):
+    # A student's deletion replaced the conversation first; the teacher's
+    # deletion must not wait forever on an identity it can no longer match.
+    _dispatch_to(table, TEACHER)
+    table.rows[CONV_KEY] = {
+        "PK": f"CONV#{CONV}",
+        "SK": "CONV",
+        "owner_id": STUDENT,
+        "student_id": STUDENT,
+        "status": "deleted",
+        "owner_deletion_generation": 1,
+        "deleted_at": CREATED,
+    }
+    tombstone = dict(table.rows[CONV_KEY])
+
+    results = _delete_teacher(table)
+
+    assert results[-1].status == "complete", [asdict(r) for r in results]
+    assert table.rows[CONV_KEY] == tombstone
+    assert "dispatched_teacher_id" not in _question(table)
