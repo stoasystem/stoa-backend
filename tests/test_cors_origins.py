@@ -17,8 +17,7 @@ from stoa.main import app
 
 ALLOWED_ORIGINS = (
     "https://app.stoaedu.ch",
-    "https://app.stoaedu-planet.ch",
-    "https://app.stoaedu-cute.ch",
+    "https://app-planet.stoaedu.ch",
 )
 
 # Every verb the frontend's httpClient issues against the API.
@@ -31,17 +30,19 @@ FRONTEND_HEADERS = ("authorization", "content-type", "accept-language", "idempot
 
 REJECTED_ORIGINS = (
     "https://evil.example",
-    "https://app.stoaedu-planet.ch.evil.example",
-    "https://app.stoaedu-cute.ch.evil.example",
+    "https://app-planet.stoaedu.ch.evil.example",
     "https://app.stoaedu.ch.evil.example",
-    "http://app.stoaedu-planet.ch",
-    "http://app.stoaedu-cute.ch",
+    "http://app-planet.stoaedu.ch",
     "http://app.stoaedu.ch",
-    "https://app.stoaedu-cute.ch:8443",
-    "https://evil.app.stoaedu-planet.ch",
-    # The preview hostnames the ticket replaced; they were never meant to stay.
+    "https://app-planet.stoaedu.ch:8443",
+    "https://evil.app-planet.stoaedu.ch",
+    # A sibling subdomain must not ride on the wildcard certificate into CORS.
+    "https://app-cute.stoaedu.ch",
+    # Preview hostnames that were planned and then replaced.
     "https://planet.stoaedu.ch",
     "https://cute.stoaedu.ch",
+    "https://app.stoaedu-planet.ch",
+    "https://app.stoaedu-cute.ch",
 )
 
 
