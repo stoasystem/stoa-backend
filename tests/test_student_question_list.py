@@ -84,3 +84,19 @@ def test_the_question_history_leaks_no_teacher_dispatch_or_storage_field(table):
     served = json.dumps(response.json())
     for secret in (lifecycle.TEACHER, "teacher-who-timed-out", "dispatch", "version", "PK", "fence"):
         assert secret not in served, secret
+
+
+def test_a_parent_sees_the_same_safe_history(table):
+    # Parents reach this route through PARENT_OVERSIGHT; the response model is
+    # the same for every role.
+    app = FastAPI()
+    app.include_router(students.router, prefix="/students")
+    install_actor_overrides(app, {"sub": "parent-66", "role": "parent"})
+
+    response = TestClient(app).get(f"/students/{lifecycle.STUDENT}/questions")
+
+    assert response.status_code == 200, response.text
+    assert [item["question_id"] for item in response.json()["items"]] == [lifecycle.REQUEST]
+    served = json.dumps(response.json())
+    for secret in (lifecycle.TEACHER, "teacher-who-timed-out", "dispatch", "PK"):
+        assert secret not in served, secret
