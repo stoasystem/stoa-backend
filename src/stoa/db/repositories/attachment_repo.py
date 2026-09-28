@@ -736,6 +736,11 @@ def _valid_conversation_cursor(cursor: object) -> dict[str, str] | None:
 
 
 def _is_owned_conversation_private_row(item: dict[str, object], owner_id: str) -> bool:
+    # A tombstone keeps its owner, so without this the deletion branch found
+    # its own tombstones on every pass, never had a clean one, and a student
+    # with a conversation could never be deleted (stoasystem/stoa-backend#78).
+    if account_deletion_repo.is_conversation_tombstone(item):
+        return False
     if item.get("owner_id") == owner_id or item.get("student_id") == owner_id:
         pk, sk = str(item.get("PK") or ""), str(item.get("SK") or "")
         return (

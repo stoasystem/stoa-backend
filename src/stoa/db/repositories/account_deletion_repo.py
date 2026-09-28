@@ -1083,7 +1083,7 @@ def scrub_teacher_chat_help_request(
     except Exception as exc:  # noqa: BLE001 - an unread conversation is retried
         raise AccountDeletionRowConflict("chat conversation could not be read") from exc
     conversation = response.get("Item") if isinstance(response, dict) else None
-    if conversation is not None and _is_conversation_tombstone(conversation):
+    if conversation is not None and is_conversation_tombstone(conversation):
         # The student's deletion got there first; only the queue row is left.
         conversation = None
     if conversation is not None and (
@@ -1181,8 +1181,12 @@ def scrub_teacher_chat_help_request(
         ) from exc
 
 
-def _is_conversation_tombstone(conversation: Mapping[str, Any]) -> bool:
-    """Whether a CONV row is what a student's deletion left in its place."""
+def is_conversation_tombstone(conversation: Mapping[str, Any]) -> bool:
+    """Whether a CONV# row is what a student's deletion left in its place.
+
+    `attachment_repo._conversation_tombstone` keeps the row's keys and its
+    owner, and marks it `status=deleted` with the deletion's generation.
+    """
     return (
         conversation.get("status") == "deleted"
         and conversation.get("owner_deletion_generation") is not None

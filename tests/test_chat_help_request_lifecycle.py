@@ -958,11 +958,18 @@ def test_deleting_the_student_removes_the_teachers_replies_from_their_conversati
     table.rows[(f"USER#{STUDENT}", "ACCOUNT_FENCE")]["status"] = "deletion_pending"
     branch = account_deletion_service.BRANCH_HANDLERS["conversation_messages"]
 
-    # One pass of the real branch reaches the reply. (The branch cannot yet run
-    # to `complete`: it re-scans its own tombstones, stoasystem/stoa-backend#78.)
-    result = branch(command={"user_id": STUDENT, "generation": 1}, previous={})
+    # The real branch, over the real scan, runs until it seals (#78: it used to
+    # re-scan its own tombstones and never finish).
+    results, previous = [], {}
+    for _ in range(8):
+        result = branch(command={"user_id": STUDENT, "generation": 1}, previous=previous)
+        results.append((result.status, result.epoch))
+        previous = asdict(result)
+        if result.status == "complete":
+            break
 
-    assert result.debt_counts.get("processed", 0) >= 3, asdict(result)  # conversation, message, note
+    assert results[-1] == ("complete", 2), results
+    assert result.quiescent is True
     (note,) = _notes(table)
     assert "content" not in note
     assert "teacher_name" not in note
