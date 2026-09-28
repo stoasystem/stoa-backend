@@ -333,19 +333,31 @@ def update_teacher_availability(
     subjects: list[str],
     weekly_availability: list[Mapping[str, object]],
     updated_at: str,
+    status: str | None = None,
 ) -> UserItem:
+    """Save a teacher's subjects and hours, and whether they take dispatch.
+
+    `status` is written as given. Omitted, the stored status is kept, so editing
+    hours never puts a paused teacher back on dispatch; a teacher who has never
+    had one becomes `available`, which is what saving has always meant.
+    """
+    availability = (
+        ":availability"
+        if status is not None
+        else "if_not_exists(dispatch_availability, :availability)"
+    )
     return update_profile_fields(
         user_id,
         update_expression=(
             "SET subjects = :subjects, primary_subjects = :subjects, "
             "dispatch_subjects = :subjects, weekly_availability = :weekly_availability, "
-            "weeklyAvailability = :weekly_availability, availability_status = :availability, "
-            "dispatch_availability = :availability, updated_at = :updated_at"
+            f"weeklyAvailability = :weekly_availability, availability_status = {availability}, "
+            f"dispatch_availability = {availability}, updated_at = :updated_at"
         ),
         expression_attribute_values={
             ":subjects": subjects,
             ":weekly_availability": weekly_availability,
-            ":availability": "available",
+            ":availability": status or "available",
             ":updated_at": updated_at,
         },
     )

@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, NamedTuple, Protocol, runtime_checkable
+from typing import Any, Literal, NamedTuple, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -772,6 +772,9 @@ class TeacherAvailabilitySlot(BaseModel):
 class TeacherAvailability(BaseModel):
     weeklyAvailability: list[TeacherAvailabilitySlot] = Field(default_factory=list)
     subjects: list[str] = Field(default_factory=list)
+    # Whether this teacher takes dispatch. Omitted on a save, the stored value is
+    # kept; `null` in a response means the teacher has never set it.
+    status: Literal["available", "paused"] | None = None
 
 
 class TeacherProfile(BaseModel):
@@ -1053,7 +1056,11 @@ def _availability_response(profile: dict[str, Any] | None) -> TeacherAvailabilit
         and slot.get("startTime")
         and slot.get("endTime")
     ]
-    return TeacherAvailability(subjects=subjects, weeklyAvailability=slots)
+    return TeacherAvailability(
+        subjects=subjects,
+        weeklyAvailability=slots,
+        status=teacher_dispatch_service.teacher_availability_status(profile),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1118,6 +1125,7 @@ async def update_my_availability(
         subjects=[subject.strip() for subject in body.subjects if subject.strip()],
         weekly_availability=[slot.model_dump() for slot in body.weeklyAvailability],
         updated_at=_now(),
+        status=body.status,
     )
     return _availability_response(updated)
 

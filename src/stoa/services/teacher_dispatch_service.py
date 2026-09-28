@@ -545,6 +545,24 @@ def teacher_availability_summary(
     }
 
 
+TEACHER_AVAILABILITY_STATUSES = ("available", "paused")
+
+
+def teacher_availability_status(profile: dict[str, Any] | None) -> str | None:
+    """Whether a teacher is on dispatch, read the way the planner reads it.
+
+    `available` and `paused` are what a teacher sets; the older stored words map
+    onto them. A teacher who has never saved availability has no status, which
+    the planner treats as not available.
+    """
+    availability = _normalize_teacher_profile(dict(profile or {}))["availability"]
+    if availability in AVAILABLE_STATES:
+        return "available"
+    if availability in PAUSED_STATES:
+        return "paused"
+    return None
+
+
 def student_dispatch_status(question: dict[str, Any]) -> str:
     """Return a simple student-safe dispatch status."""
     if question.get("status") == QuestionStatus.RESOLVED.value:

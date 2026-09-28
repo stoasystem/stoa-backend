@@ -97,13 +97,14 @@ def test_teacher_availability_get_and_patch_persist_profile_fields(monkeypatch):
     )
     monkeypatch.setattr(teachers, "_now", lambda: "2026-07-09T12:00:00+00:00")
 
-    def update_availability(user_id, *, subjects, weekly_availability, updated_at):
+    def update_availability(user_id, *, subjects, weekly_availability, updated_at, status):
         updates.append(
             {
                 "user_id": user_id,
                 "subjects": subjects,
                 "weekly_availability": weekly_availability,
                 "updated_at": updated_at,
+                "status": status,
             }
         )
         return {
@@ -141,6 +142,7 @@ def test_teacher_availability_get_and_patch_persist_profile_fields(monkeypatch):
                 {"dayOfWeek": "tuesday", "startTime": "17:00", "endTime": "19:00"}
             ],
             "updated_at": "2026-07-09T12:00:00+00:00",
+            "status": None,
         }
     ]
 
@@ -285,3 +287,123 @@ def test_help_request_authorization_outage_returns_503_before_mutation(monkeypat
 
     assert response.status_code == 503
     assert updates == []
+
+
+# --- A teacher can go off dispatch and come back (stoasystem/stoa-backend#67) ---
+#
+# These run the real route and the real `user_repo` against the shared table
+# double, then ask the real dispatch planner what it now thinks of the teacher.
+# Stubbing the repository is how "every save writes `available`" went unseen.
+
+from fakes.dynamodb import FakeTable  # noqa: E402
+
+from stoa.db.repositories import account_deletion_repo, user_repo  # noqa: E402
+
+_TEACHER = "teacher-67"
+_QUESTION = {"question_id": "q-67", "subject": "physics", "status": "escalated"}
+
+
+def _availability_table(monkeypatch, **profile_fields) -> FakeTable:
+    table = FakeTable()
+    table.seed(
+        {
+            "PK": f"USER#{_TEACHER}",
+            "SK": "PROFILE",
+            "user_id": _TEACHER,
+            "role": "teacher",
+            "account_status": "active",
+            "version": 1,
+            **profile_fields,
+        },
+        {
+            "PK": f"USER#{_TEACHER}",
+            "SK": "ACCOUNT_FENCE",
+            "status": "active",
+            "generation": 1,
+        },
+    )
+    for module in (user_repo, account_deletion_repo, teacher_dispatch_service):
+        monkeypatch.setattr(module, "get_table", lambda table=table: table)
+    return table
+
+
+def _teacher_client() -> TestClient:
+    return _client(teachers.router, "/teachers", {"sub": _TEACHER, "role": "teacher"})
+
+
+def _save(client: TestClient, **extra):
+    body = {
+        "subjects": ["physics"],
+        "weeklyAvailability": [
+            {"dayOfWeek": "monday", "startTime": "16:00", "endTime": "18:00"}
+        ],
+        **extra,
+    }
+    return client.patch("/teachers/me/availability", json=body)
+
+
+def _planner_verdict() -> str:
+    plan = teacher_dispatch_service.plan_dispatch(dict(_QUESTION))
+    if plan["selected"]:
+        return "selected"
+    return plan["refused"][0]["refusalCode"]
+
+
+def test_first_save_without_status_still_puts_a_new_teacher_on_dispatch(monkeypatch):
+    # The deployed editor sends no status; saving must keep working as it did.
+    _availability_table(monkeypatch)
+    client = _teacher_client()
+    assert client.get("/teachers/me/availability").json()["status"] is None
+
+    response = _save(client)
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "available"
+    assert _planner_verdict() == "selected"
+
+
+def test_paused_teacher_is_refused_by_dispatch_and_can_come_back(monkeypatch):
+    table = _availability_table(monkeypatch)
+    client = _teacher_client()
+    assert _save(client).json()["status"] == "available"
+
+    paused = _save(client, status="paused")
+
+    assert paused.status_code == 200
+    assert paused.json()["status"] == "paused"
+    stored = table.rows[(f"USER#{_TEACHER}", "PROFILE")]
+    assert stored["dispatch_availability"] == "paused"
+    assert stored["availability_status"] == "paused"
+    assert _planner_verdict() == "not_available"
+    assert teacher_dispatch_service.teacher_availability_summary()["online"] is False
+
+    back = _save(client, status="available")
+
+    assert back.json()["status"] == "available"
+    assert _planner_verdict() == "selected"
+
+
+def test_editing_the_schedule_without_status_keeps_a_paused_teacher_paused(monkeypatch):
+    _availability_table(monkeypatch)
+    client = _teacher_client()
+    _save(client, status="paused")
+
+    edited = client.patch(
+        "/teachers/me/availability",
+        json={"subjects": ["physics", "chemistry"], "weeklyAvailability": []},
+    )
+
+    assert edited.status_code == 200
+    assert edited.json()["status"] == "paused"
+    assert edited.json()["subjects"] == ["physics", "chemistry"]
+    assert _planner_verdict() == "not_available"
+
+
+def test_availability_status_accepts_only_available_or_paused(monkeypatch):
+    table = _availability_table(monkeypatch)
+    before = dict(table.rows[(f"USER#{_TEACHER}", "PROFILE")])
+
+    response = _save(_teacher_client(), status="busy")
+
+    assert response.status_code == 422
+    assert table.rows[(f"USER#{_TEACHER}", "PROFILE")] == before
