@@ -13,6 +13,7 @@ repositories and the teacher policy are real, over the shared table double.
 
 from __future__ import annotations
 
+import json
 import sys
 
 from fastapi import FastAPI
@@ -906,3 +907,63 @@ def test_one_reconciler_run_leaves_both_rows_on_the_same_offer(table):
     assert conv["dispatch_id"] == question["dispatch_id"]
     assert _set_status(_client(OTHER_TEACHER), "resolved").status_code == 200
     _nothing_waits()
+
+
+# --- A teacher's reply belongs to the student's conversation (#74) ---
+#
+# NOTE# rows carried no owner, so deleting the student left the teacher's
+# replies about them in the table. They are now stamped like every other
+# conversation row and written behind the student's account fence, so the
+# student's deletion removes them and cannot be outrun by a late reply. On a
+# teacher's deletion they are kept as they are (user decision, 2026-09-28).
+
+
+def _notes(table: FakeTable) -> list[dict]:
+    return [row for key, row in table.rows.items() if key[0] == f"CONV#{CONV}" and key[1].startswith("NOTE#")]
+
+
+@pytest.mark.parametrize("held", [False, True], ids=["reply_accepts", "holder_replies"])
+def test_a_reply_is_stamped_as_the_students_conversation_row(table, held):
+    _dispatch_to(table, TEACHER)
+    client = _client()
+    if held:
+        assert _set_status(client, "in_progress").status_code == 200
+
+    assert _reply(client).status_code in {200, 201}
+
+    (note,) = _notes(table)
+    assert note["entity_type"] == "conversation_teacher_note"
+    assert note["owner_id"] == note["student_id"] == STUDENT
+    assert int(note["account_fence_generation"]) == 1
+    assert note["teacher_id"] == TEACHER  # kept, per the user's decision
+
+
+def test_a_holders_reply_is_refused_once_the_students_deletion_has_begun(table):
+    # Without the fence a reply written after the deletion swept the
+    # conversation would bring the student's data back.
+    _dispatch_to(table, TEACHER)
+    client = _client()
+    assert _set_status(client, "in_progress").status_code == 200
+    table.rows[(f"USER#{STUDENT}", "ACCOUNT_FENCE")]["status"] = "deletion_pending"
+    rows_before = set(table.rows)
+
+    assert _reply(client).status_code == 409
+
+    assert set(table.rows) == rows_before
+
+
+def test_deleting_the_student_removes_the_teachers_replies_from_their_conversation(table):
+    _dispatch_to(table, TEACHER)
+    assert _reply(_client(), "Probier jetzt 15 : 5.").status_code in {200, 201}
+    table.rows[(f"USER#{STUDENT}", "ACCOUNT_FENCE")]["status"] = "deletion_pending"
+    branch = account_deletion_service.BRANCH_HANDLERS["conversation_messages"]
+
+    # One pass of the real branch reaches the reply. (The branch cannot yet run
+    # to `complete`: it re-scans its own tombstones, stoasystem/stoa-backend#78.)
+    result = branch(command={"user_id": STUDENT, "generation": 1}, previous={})
+
+    assert result.debt_counts.get("processed", 0) >= 3, asdict(result)  # conversation, message, note
+    (note,) = _notes(table)
+    assert "content" not in note
+    assert "teacher_name" not in note
+    assert "Probier" not in json.dumps(note, default=str)

@@ -10,7 +10,7 @@ from boto3.dynamodb.conditions import Attr, Key
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from stoa.db.repositories import question_repo, user_repo
+from stoa.db.repositories import account_deletion_repo, attachment_repo, question_repo, user_repo
 from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
@@ -1637,9 +1637,17 @@ async def add_note(
     except teacher_reply_service.TeacherReplyValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    # A reply belongs to the student's conversation: stamped with the student
+    # as owner and written behind their account fence, so the student's
+    # deletion removes it and a late reply cannot bring it back (#74). The
+    # teacher's identity stays on it when the teacher is deleted (user
+    # decision, 2026-09-28).
+    student_id = _text(conv.get("student_id"))
+    generation = stored_int(conv.get("account_fence_generation")) or 1
     note_item = {
         "PK": _conv_pk(conv_id),
         "SK": f"NOTE#{note_id}",
+        "entity_type": "conversation_teacher_note",
         "note_id": note_id,
         "conversation_id": conv_id,
         "teacher_id": teacher_id,
@@ -1654,7 +1662,6 @@ async def add_note(
     # (conversations._validate_history_message). Without it the student could
     # no longer open the conversation once a teacher replied (#66, 2026-09-28).
     msg_id = str(uuid.uuid4())
-    student_id = _text(conv.get("student_id"))
     message_item = {
         "PK": _conv_pk(conv_id),
         "SK": f"MSG#{msg_id}",
@@ -1664,7 +1671,7 @@ async def add_note(
         "conversation_id": conv_id,
         "student_id": student_id,
         "owner_id": student_id,
-        "account_fence_generation": stored_int(conv.get("account_fence_generation")) or 1,
+        "account_fence_generation": generation,
         "role": "teacher",
         "content": reply_fields["teacher_response"],
         "teacher_response_rich": reply_fields["teacher_response_rich"],
@@ -1683,8 +1690,12 @@ async def add_note(
                 teacher_id=teacher_id,
                 target="in_progress",
                 now=now,
+                # The queue row's CAS already carries the student's fence, and one
+                # transaction cannot check the same fence row twice.
                 extra_operations=tuple(
-                    {"Put": {"Item": item, "ConditionExpression": "attribute_not_exists(PK)"}}
+                    attachment_repo.build_conversation_write_transaction(
+                        item=item, owner_id=student_id, generation=generation
+                    )[1]
                     for item in (note_item, message_item)
                 ),
                 table=table,
@@ -1694,8 +1705,21 @@ async def add_note(
                 status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
             ) from exc
     else:
-        _teacher_put(table, Item=note_item)
-        _teacher_put(table, Item=message_item)
+        # The holder's reply: both rows behind the student's account fence.
+        operations = attachment_repo.build_conversation_write_transaction(
+            item=note_item, owner_id=student_id, generation=generation
+        )
+        operations.append(
+            attachment_repo.build_conversation_write_transaction(
+                item=message_item, owner_id=student_id, generation=generation
+            )[1]
+        )
+        try:
+            account_deletion_repo.transact(operations, table=table)
+        except account_deletion_repo.AccountDeletionConflict as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
+            ) from exc
 
     return TeacherNoteOut(
         id=note_id,

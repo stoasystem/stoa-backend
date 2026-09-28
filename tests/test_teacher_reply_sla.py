@@ -339,6 +339,13 @@ def test_teacher_note_accepts_rich_teacher_reply_payload(monkeypatch):
         },
     )
     monkeypatch.setattr(teachers.user_repo, "get_user", lambda user_id, **_kwargs: {"name": "Teacher One"})
+    # The holder's reply is one transaction behind the student's fence (#74).
+    captured: list[dict] = []
+    monkeypatch.setattr(
+        teachers.account_deletion_repo,
+        "transact",
+        lambda operations, *, table=None: captured.extend(operations),
+    )
 
     client = _app(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"})
     response = client.post(
@@ -358,8 +365,10 @@ def test_teacher_note_accepts_rich_teacher_reply_payload(monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["richContent"]["blocks"][1] == {"type": "formula", "latex": "3x = 15"}
-    assert table.put_items[0]["teacher_response_format"] == "stoa_teacher_reply_v1"
-    assert table.put_items[1]["teacher_response_rich"]["blocks"][1]["type"] == "formula"
+    assert captured[0]["ConditionCheck"]["Key"] == {"PK": "USER#student-1", "SK": "ACCOUNT_FENCE"}
+    note, message = (op["Put"]["Item"] for op in captured[1:])
+    assert note["teacher_response_format"] == "stoa_teacher_reply_v1"
+    assert message["teacher_response_rich"]["blocks"][1]["type"] == "formula"
 
 
 def test_teacher_help_requests_expose_sla_and_average_response(monkeypatch):
