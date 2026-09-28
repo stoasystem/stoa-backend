@@ -507,17 +507,24 @@ def test_a_teacher_assigned_to_the_student_keeps_the_conversation_only_write(tab
     assert _question(table) == question_before
 
 
-def test_an_offer_that_expires_between_the_check_and_the_write_is_refused(table, monkeypatch):
+@pytest.mark.parametrize("queue_row", [True, False], ids=["with_queue_row", "without_queue_row"])
+def test_an_offer_that_expires_between_the_check_and_the_write_is_refused(
+    table, monkeypatch, queue_row
+):
     # The policy saw a live offer on its own clock; the write happens after the
     # deadline. Found by the second independent audit: the deadline was checked
-    # by the policy only, so the late write still took the offer.
+    # by the policy only, so the late write still took the offer. Both rows bind
+    # it; without a queue row, the conversation's condition is the only one.
     _dispatch_to(table, TEACHER)
-    deadline = _conv(table)["dispatch_deadline_at"]
+    if not queue_row:
+        del table.rows[QUESTION_KEY]
+    assert _conv(table)["dispatch_deadline_at"] < "2099"
     monkeypatch.setattr(teachers, "_now", lambda: "2099-01-01T00:00:00+00:00")
-    before = (dict(_conv(table)), dict(_question(table)))
-    assert deadline < "2099"
+    before = dict(_conv(table))
 
     for attempt in (_set_status(_client(), "in_progress"), _reply(_client())):
         assert attempt.status_code == 409
 
-    assert _unchanged(table, before)
+    assert _conv(table) == before
+    if queue_row:
+        assert _question(table)["status"] == "escalated"
