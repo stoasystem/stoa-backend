@@ -528,3 +528,14 @@ def test_an_offer_that_expires_between_the_check_and_the_write_is_refused(
     assert _conv(table) == before
     if queue_row:
         assert _question(table)["status"] == "escalated"
+
+
+def test_accepting_refuses_when_only_the_queue_rows_offer_has_expired(table):
+    # The conversation still shows a live offer, but the queue row's own
+    # deadline has passed: the queue row's condition alone must refuse.
+    _dispatch_to(table, TEACHER)
+    _question(table)["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
+    before = (dict(_conv(table)), dict(_question(table)))
+
+    assert _set_status(_client(), "in_progress").status_code == 409
+    assert _unchanged(table, before)
