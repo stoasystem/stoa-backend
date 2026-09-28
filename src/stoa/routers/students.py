@@ -460,9 +460,56 @@ class SummaryResponse(BaseModel):
     weak_knowledge_points: list[str]
 
 
+class QuestionListItem(BaseModel):
+    """One question in a student's history: what they asked and where it stands.
+
+    Built from named fields, never from the stored row, which carries dispatch
+    teachers, timed-out teachers, dispatch ids, versions and table keys (#76).
+    """
+
+    question_id: str
+    subject: str = ""
+    content: str = ""
+    status: str
+    has_image: bool = False
+    student_feedback: Optional[int] = None
+    created_at: str
+    resolved_at: Optional[str] = None
+
+
 class QuestionListResponse(BaseModel):
-    items: list[dict]
+    items: list[QuestionListItem]
     next_token: Optional[str] = None
+
+
+def _question_list_items(rows: list[dict[str, object]]) -> list[QuestionListItem]:
+    """Question rows only: `GSI-StudentId` also returns conversations and messages."""
+    items: list[QuestionListItem] = []
+    for row in rows:
+        question_id = row.get("question_id")
+        if (
+            row.get("SK") != "META"
+            or not isinstance(question_id, str)
+            or row.get("PK") != f"QUESTION#{question_id}"
+        ):
+            continue
+        feedback = row.get("student_feedback")
+        resolved_at = row.get("resolved_at")
+        items.append(
+            QuestionListItem(
+                question_id=question_id,
+                subject=str(row.get("subject") or ""),
+                content=str(row.get("content") or ""),
+                status=str(row.get("status") or ""),
+                has_image=bool(
+                    row.get("attachment_id") or row.get("image_s3_key") or row.get("has_image")
+                ),
+                student_feedback=int(feedback) if isinstance(feedback, (int, Decimal)) else None,
+                created_at=str(row.get("created_at") or ""),
+                resolved_at=str(resolved_at) if resolved_at else None,
+            )
+        )
+    return items
 
 
 class LearningSubjectDefinition(BaseModel):
@@ -582,7 +629,7 @@ async def list_questions(
             raise HTTPException(status_code=400, detail="Invalid next_token")
 
     result = question_repo.list_by_student(student_id, limit=limit, last_key=last_key)
-    items = _question_rows(result.get("Items", []), correlation_id)
+    items = _question_list_items(_question_rows(result.get("Items", []), correlation_id))
 
     new_token = None
     if "LastEvaluatedKey" in result:
