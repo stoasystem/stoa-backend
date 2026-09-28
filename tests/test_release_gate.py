@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import errno
 from hashlib import sha256
 import io
 import importlib.util
@@ -2337,17 +2338,95 @@ def test_system_web_launcher_kills_normal_return_orphan_process_group(
     assert not marker.exists()
 
 
+class _GroupProbeClock:
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.now += seconds
+        assert self.now < 10.0, "still polling long after the deadline"
+
+
 def test_system_web_launcher_fails_closed_when_group_cannot_be_confirmed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A group whose state is refused all the way to the deadline is a failure.
+
+    A refusal is only taken as final once the deadline has passed, because one
+    on its own is not an answer; the momentary-EPERM test below says why.
+    """
     gate = _load_gate()
+    clock = _GroupProbeClock()
 
     def denied_killpg(process_group: int, signal_number: int) -> None:
         raise PermissionError(process_group, signal_number)
 
     monkeypatch.setattr(gate.os, "killpg", denied_killpg)
+    monkeypatch.setattr(gate, "time", clock)
     with pytest.raises(gate.GatePolicyError, match="process group state"):
         gate._confirm_web_process_group_stopped(47488)
+    assert clock.now >= 5.0
+
+
+def test_system_web_launcher_fails_closed_at_once_on_any_other_group_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = _load_gate()
+    clock = _GroupProbeClock()
+
+    def broken_killpg(process_group: int, signal_number: int) -> None:
+        raise OSError(errno.EINVAL, "Invalid argument")
+
+    monkeypatch.setattr(gate.os, "killpg", broken_killpg)
+    monkeypatch.setattr(gate, "time", clock)
+    with pytest.raises(gate.GatePolicyError, match="process group state"):
+        gate._confirm_web_process_group_stopped(47488)
+    assert clock.now == 0.0
+
+
+def test_system_web_launcher_fails_when_group_outlives_the_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = _load_gate()
+    clock = _GroupProbeClock()
+
+    def live_killpg(process_group: int, signal_number: int) -> None:
+        return None
+
+    monkeypatch.setattr(gate.os, "killpg", live_killpg)
+    monkeypatch.setattr(gate, "time", clock)
+    with pytest.raises(gate.GatePolicyError, match="did not stop"):
+        gate._confirm_web_process_group_stopped(47488)
+    assert clock.now >= 5.0
+
+
+def test_system_web_launcher_waits_out_a_momentary_eperm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Darwin refuses to answer for a moment while a killed group is torn down.
+
+    Asked about a group it has just SIGKILLed, macOS sometimes answers EPERM
+    for a few milliseconds and then ESRCH. How often depends on load: probes on
+    one Mac saw it in a few percent of kills when idle and in about one in six
+    with every core busy, and never once saw it stay or turn back into a live
+    group. The gate used to read that first EPERM as final and fail a run whose
+    group was already dying, which is what still made the timeout test below go
+    red about one run in fifty after its margin was widened.
+    """
+    gate = _load_gate()
+    clock = _GroupProbeClock()
+    answers: list[type[OSError]] = [PermissionError, PermissionError, ProcessLookupError]
+
+    def dying_killpg(process_group: int, signal_number: int) -> None:
+        raise answers.pop(0)(process_group, signal_number)
+
+    monkeypatch.setattr(gate.os, "killpg", dying_killpg)
+    monkeypatch.setattr(gate, "time", clock)
+    gate._confirm_web_process_group_stopped(47488)
+    assert answers == []
 
 
 def test_system_web_launcher_kills_process_group_on_timeout(tmp_path: Path) -> None:
@@ -2364,6 +2443,11 @@ def test_system_web_launcher_kills_process_group_on_timeout(tmp_path: Path) -> N
     to fail by seconds to be reported as failing. The started marker is the
     control: without it this passes just as well when the grandchild never ran,
     which is the shape the old one could also have had.
+
+    Widening the margin was not the whole story: it still went red about one run
+    in fifty, every time on the gate reading a momentary EPERM from the dying
+    group as final. That was the gate, not this test; see the momentary-EPERM
+    test above.
     """
     gate = _load_gate()
     started = tmp_path / "timeout-child-started"

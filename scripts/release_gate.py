@@ -2519,10 +2519,15 @@ def _confirm_web_process_group_stopped(process_group: int) -> None:
             os.killpg(process_group, 0)
         except ProcessLookupError:
             return
+        except PermissionError as exc:
+            # Darwin answers EPERM for a moment while a killed group is torn down.
+            if time.monotonic() >= deadline:
+                raise GatePolicyError("Web gate process group state is unavailable") from exc
         except OSError as exc:
             raise GatePolicyError("Web gate process group state is unavailable") from exc
-        if time.monotonic() >= deadline:
-            raise GatePolicyError("Web gate process group did not stop")
+        else:
+            if time.monotonic() >= deadline:
+                raise GatePolicyError("Web gate process group did not stop")
         time.sleep(0.01)
 
 
