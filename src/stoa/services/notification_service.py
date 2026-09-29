@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -19,6 +20,8 @@ from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, notification_repo
 from stoa.services import websocket_service
 from stoa.security.identity import Actor
+
+logger = logging.getLogger(__name__)
 
 
 EVENT_TYPES = {
@@ -746,11 +749,23 @@ def create_event(
 
 
 def create_event_safe(**kwargs: Any) -> dict[str, Any] | None:
+    """Create a notification without ever failing the caller.
+
+    A failure is logged with the event type and the exception type only:
+    swallowed silently, a notification failing in production would go
+    unnoticed (stoasystem/stoa-backend#79). No title, summary or metadata
+    is logged, since they can carry a student's content.
+    """
     if _best_effort_disabled():
         return None
     try:
         return create_event(**kwargs)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001 - best effort by contract
+        logger.warning(
+            "Best-effort notification failed: event_type=%s error=%s",
+            kwargs.get("event_type"),
+            type(exc).__name__,
+        )
         return None
 
 
