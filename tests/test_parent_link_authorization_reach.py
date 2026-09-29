@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
+from stoa.routers.conversations import ConversationListPage
 from stoa.db.repositories import parent_link_repo, question_repo, user_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import adaptive, questions, students
@@ -106,6 +107,11 @@ def table(
         user_repo, "get_student_parent_binding", lambda _student_id, _parent_id: None
     )
     monkeypatch.setattr(question_repo, "list_by_student", lambda *_a, **_k: {"Items": []})
+    # The student summary also counts resolved chat help requests (#77).
+    monkeypatch.setattr(
+        "stoa.routers.conversations._list_conversations",
+        lambda *_a, **_k: ConversationListPage([], False),
+    )
     monkeypatch.setattr(
         question_repo, "get_question", lambda question_id: deepcopy(QUESTIONS.get(question_id))
     )

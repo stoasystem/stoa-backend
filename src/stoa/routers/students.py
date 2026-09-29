@@ -33,6 +33,7 @@ from stoa.services import (
     locale_service,
     parent_link_service,
 )
+from stoa.routers import conversations as conversation_routes
 from stoa.routers.parents import (
     admit_parent_link_request,
     parent_link_http_error,
@@ -567,6 +568,13 @@ async def get_summary(
 
     ai_resolved = sum(1 for q in questions if q.get("status") == "ai_answered")
     teacher_resolved = sum(1 for q in questions if q.get("status") == "resolved")
+    # A chat help request is not a question (#77); a resolved one is counted
+    # through its conversation (user decision, 2026-09-29).
+    teacher_resolved += sum(
+        1
+        for conversation in conversation_routes._list_conversations(student_id).items
+        if conversation.get("escalated") and conversation.get("escalation_status") == "resolved"
+    )
 
     kp_counter: Counter = Counter()
     for q in questions:

@@ -111,3 +111,15 @@ def test_a_parent_sees_the_same_safe_history(table):
     served = json.dumps(response.json())
     for secret in (lifecycle.TEACHER, "teacher-who-timed-out", "dispatch", "PK"):
         assert secret not in served, secret
+
+
+def test_the_summary_counts_a_resolved_chat_help_request_once_through_its_conversation(table):
+    # A chat help request's queue row is not a question (#77), so the summary
+    # counts it through its conversation (user decision, 2026-09-29): once in
+    # teacher_resolved, never in total_questions.
+    assert lifecycle._set_status(lifecycle._client(), "resolved").status_code == 200
+
+    summary = _student().get(f"/students/{lifecycle.STUDENT}/summary").json()
+
+    assert summary["total_questions"] == 1  # the question-lane question only
+    assert summary["teacher_resolved"] == 1  # the resolved chat help request

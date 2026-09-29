@@ -62,6 +62,12 @@ def _profiles(monkeypatch):
     monkeypatch.setattr(
         students.question_repo, "list_by_student", lambda *_args, **_kwargs: {"Items": []}
     )
+    # The summary also counts resolved chat help requests from conversations (#77).
+    monkeypatch.setattr(
+        students.conversation_routes,
+        "_list_conversations",
+        lambda *_args, **_kwargs: students.conversation_routes.ConversationListPage([], False),
+    )
     return profiles
 
 
