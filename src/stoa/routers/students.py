@@ -558,7 +558,7 @@ async def get_summary(
     """Return aggregated learning stats for a student (student, parent, admin)."""
     student_id = authorized.ref.student_id
 
-    result = question_repo.list_by_student(student_id, limit=500)
+    result = question_repo.list_questions_by_student(student_id, limit=500)
     questions = [
         row
         for row in _question_rows(result.get("Items", []), correlation_id)

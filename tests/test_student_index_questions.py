@@ -105,3 +105,23 @@ def test_a_parents_activity_feed_shows_questions_not_every_message(monkeypatch):
     activities = parents._question_history_events(STUDENT, limit=100)
 
     assert sorted(activity.id for activity in activities) == ["q0", "q1", "q2"]
+
+
+def test_questions_are_found_behind_more_than_one_page_of_other_rows(monkeypatch):
+    # With few other rows one index page is enough; the loop only matters once
+    # a student's messages outnumber a page. 120 messages newer than the oldest
+    # question sit between it and the rest.
+    table = _table(monkeypatch)
+    table.seed(
+        *[
+            {"PK": "CONV#c2", "SK": f"MSG#{i:03d}", "entity_type": "conversation_message",
+             "student_id": STUDENT, "owner_id": STUDENT, "role": "student", "content": "m",
+             "created_at": f"2026-09-15T{i // 60:02d}:{i % 60:02d}:00+00:00"}
+            for i in range(120)
+        ]
+    )
+
+    # One call returns a full page, however many index pages it takes.
+    page = question_repo.list_questions_by_student(STUDENT, limit=3)
+
+    assert [q["question_id"] for q in page["Items"]] == ["q2", "q1", "q0"]

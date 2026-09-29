@@ -1465,7 +1465,7 @@ async def get_child_summary(
 
     questions = [
         row
-        for row in _response_items(question_repo.list_by_student(child_id, limit=500))
+        for row in _response_items(question_repo.list_questions_by_student(child_id, limit=500))
         if question_repo.is_question_record(row)
     ]
     progress = practice_repo.get_progress(child_id)
@@ -1542,7 +1542,7 @@ async def get_child_learning_profile(
 
     questions = [
         row
-        for row in _response_items(question_repo.list_by_student(child_id, limit=500))
+        for row in _response_items(question_repo.list_questions_by_student(child_id, limit=500))
         if question_repo.is_question_record(row)
     ]
     mistakes = practice_repo.get_mistakes(child_id)
