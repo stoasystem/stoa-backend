@@ -596,7 +596,7 @@ async def get_learning_profile(
     student_id = authorized.ref.student_id
 
     questions = _question_rows(
-        question_repo.list_by_student(student_id, limit=500).get("Items", []),
+        question_repo.list_questions_by_student(student_id, limit=500).get("Items", []),
         correlation_id,
     )
     mistakes = practice_repo.get_mistakes(student_id)
@@ -628,7 +628,7 @@ async def list_questions(
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid next_token")
 
-    result = question_repo.list_by_student(student_id, limit=limit, last_key=last_key)
+    result = question_repo.list_questions_by_student(student_id, limit=limit, last_key=last_key)
     items = _question_list_items(_question_rows(result.get("Items", []), correlation_id))
 
     new_token = None

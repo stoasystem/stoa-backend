@@ -626,7 +626,54 @@ def is_question_record(row: object) -> bool:
     """
     if not isinstance(row, Mapping):
         return False
-    return row.get("SK") == "META" and str(row.get("PK", "")).startswith("QUESTION#")
+    return (
+        row.get("SK") == "META"
+        and str(row.get("PK", "")).startswith("QUESTION#")
+        # A chat help request's queue row is shaped like a question but is not
+        # one: it is counted and shown through its conversation (user
+        # decision on #77, 2026-09-29).
+        and row.get("source") != "conversation_escalation"
+    )
+
+
+QUESTION_READ_MAX_PAGES = 10
+
+
+def list_questions_by_student(
+    student_id: str,
+    *,
+    limit: int = 20,
+    last_key: QuestionItem | None = None,
+    max_pages: int = QUESTION_READ_MAX_PAGES,
+) -> QuestionItem:
+    """Up to `limit` of a student's questions, newest first, read past other rows.
+
+    `GSI-StudentId` is shared with every row carrying a student_id, and
+    `Limit` counts rows read, so one page of it was often empty of questions
+    while more waited. This reads on, at most `max_pages` pages, until
+    `limit` questions are in hand. `LastEvaluatedKey` resumes right after the
+    last question returned, or where reading stopped (#77).
+    """
+    items: list[QuestionItem] = []
+    cursor = last_key
+    for _page in range(max_pages):
+        page = list_by_student(student_id, limit=max(limit, 50), last_key=cursor)
+        raw = page.get("Items", []) if isinstance(page, Mapping) else []
+        for row in raw if isinstance(raw, list) else []:
+            if not is_question_record(row):
+                continue
+            items.append(row)
+            if len(items) == limit:
+                return {"Items": items, "LastEvaluatedKey": _student_index_key(row)}
+        cursor = page.get("LastEvaluatedKey") if isinstance(page, Mapping) else None
+        if not cursor:
+            return {"Items": items}
+    return {"Items": items, "LastEvaluatedKey": cursor}
+
+
+def _student_index_key(row: Mapping[str, object]) -> QuestionItem:
+    """The GSI-StudentId position of a row, to resume a query right after it."""
+    return {field: row[field] for field in ("PK", "SK", "student_id", "created_at") if field in row}
 
 
 def list_by_student(

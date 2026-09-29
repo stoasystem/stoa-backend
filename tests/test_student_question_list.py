@@ -39,6 +39,15 @@ def table(monkeypatch):
             "content": "Step 2 makes no sense to me.",
             "created_at": lifecycle.CREATED,
         },
+        # A question-lane question, dispatched and with a teacher who lapsed.
+        {
+            "PK": "QUESTION#q-lane", "SK": "META", "entity_type": "question", "question_id": "q-lane",
+            "student_id": lifecycle.STUDENT, "owner_id": lifecycle.STUDENT, "status": "escalated",
+            "subject": "physics", "content": "Why does the ball fall?", "version": 4,
+            "account_fence_generation": 1, "dispatch_status": "dispatched", "dispatch_id": "d-1",
+            "dispatched_teacher_id": lifecycle.TEACHER, "previous_dispatch_teacher_ids": ["teacher-who-timed-out"],
+            "created_at": "2026-09-27T09:00:00+00:00",
+        },
         # Rows that carry the question's id without being the question.
         {
             "PK": "TEACHER_ESCALATION#op-1",
@@ -64,7 +73,9 @@ def test_the_question_history_lists_question_rows_only(table):
 
     assert response.status_code == 200, response.text
     items = response.json()["items"]
-    assert [item["question_id"] for item in items] == [lifecycle.REQUEST]
+    # The chat help request's queue row is not a question (#77); it is shown
+    # through its conversation.
+    assert [item["question_id"] for item in items] == ["q-lane"]
 
 
 def test_the_question_history_leaks_no_teacher_dispatch_or_storage_field(table):
@@ -72,13 +83,13 @@ def test_the_question_history_leaks_no_teacher_dispatch_or_storage_field(table):
 
     (item,) = response.json()["items"]
     assert item == {
-        "question_id": lifecycle.REQUEST,
-        "subject": "mathematics",
-        "content": "Step 2 makes no sense to me.",
+        "question_id": "q-lane",
+        "subject": "physics",
+        "content": "Why does the ball fall?",
         "status": "escalated",
         "has_image": False,
         "student_feedback": None,
-        "created_at": lifecycle.CREATED,
+        "created_at": "2026-09-27T09:00:00+00:00",
         "resolved_at": None,
     }
     served = json.dumps(response.json())
@@ -96,7 +107,7 @@ def test_a_parent_sees_the_same_safe_history(table):
     response = TestClient(app).get(f"/students/{lifecycle.STUDENT}/questions")
 
     assert response.status_code == 200, response.text
-    assert [item["question_id"] for item in response.json()["items"]] == [lifecycle.REQUEST]
+    assert [item["question_id"] for item in response.json()["items"]] == ["q-lane"]
     served = json.dumps(response.json())
     for secret in (lifecycle.TEACHER, "teacher-who-timed-out", "dispatch", "PK"):
         assert secret not in served, secret

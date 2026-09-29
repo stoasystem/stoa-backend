@@ -43,7 +43,7 @@ def now_iso() -> str:
 
 
 def _question_rows(student_id: str) -> list[dict[str, Any]]:
-    response = question_repo.list_by_student(student_id, limit=500)
+    response = question_repo.list_questions_by_student(student_id, limit=500)
     raw_items = response.get("Items")
     if not isinstance(raw_items, list) or any(not isinstance(item, Mapping) for item in raw_items):
         raise HTTPException(status_code=503, detail="Question history is temporarily unavailable")

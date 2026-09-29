@@ -230,9 +230,11 @@ def _install_learning_sources(monkeypatch):
     monkeypatch.setattr(
         adaptive_learning_service.question_repo,
         "list_by_student",
-        lambda student_id, limit=500: {
+        lambda student_id, limit=500, **_kwargs: {
             "Items": [
                 {
+                    "PK": "QUESTION#question-1",
+                    "SK": "META",
                     "question_id": "question-1",
                     "student_id": student_id,
                     "status": "ai_answered",
@@ -739,9 +741,11 @@ def test_assignment_automation_execute_returns_partial_batch_results(monkeypatch
     monkeypatch.setattr(
         adaptive_learning_service.question_repo,
         "list_by_student",
-        lambda student_id, limit=500: {
+        lambda student_id, limit=500, **_kwargs: {
             "Items": [
                 {
+                    "PK": "QUESTION#question-linear",
+                    "SK": "META",
                     "question_id": "question-linear",
                     "student_id": student_id,
                     "status": "ai_answered",
@@ -751,6 +755,8 @@ def test_assignment_automation_execute_returns_partial_batch_results(monkeypatch
                     "created_at": "2026-06-09T10:00:00+00:00",
                 },
                 {
+                    "PK": "QUESTION#question-fractions",
+                    "SK": "META",
                     "question_id": "question-fractions",
                     "student_id": student_id,
                     "status": "ai_answered",
@@ -911,9 +917,11 @@ def test_assignment_automation_execute_preserves_subject_scope_and_parent_visibi
     monkeypatch.setattr(
         adaptive_learning_service.question_repo,
         "list_by_student",
-        lambda student_id, limit=500: {
+        lambda student_id, limit=500, **_kwargs: {
             "Items": [
                 {
+                    "PK": "QUESTION#question-math",
+                    "SK": "META",
                     "question_id": "question-math",
                     "student_id": student_id,
                     "status": "ai_answered",
@@ -923,6 +931,8 @@ def test_assignment_automation_execute_preserves_subject_scope_and_parent_visibi
                     "created_at": "2026-06-09T10:00:00+00:00",
                 },
                 {
+                    "PK": "QUESTION#question-german",
+                    "SK": "META",
                     "question_id": "question-german",
                     "student_id": student_id,
                     "status": "ai_answered",

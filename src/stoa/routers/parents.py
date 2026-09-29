@@ -1030,7 +1030,7 @@ def _sort_activities(activities: list[ParentChildActivity], limit: int) -> list[
 
 
 def _question_history_events(child_id: str, limit: int = 100) -> list[ParentChildActivity]:
-    result = question_repo.list_by_student(child_id, limit=limit)
+    result = question_repo.list_questions_by_student(child_id, limit=limit)
     return [
         activity
         for question in _response_items(result)

@@ -290,7 +290,7 @@ def test_learning_profile_aggregates_subject_activity_and_topic_seeds(monkeypatc
     monkeypatch.setattr(
         students.question_repo,
         "list_by_student",
-        lambda student_id, limit=500: {"Items": questions_for_student},
+        lambda student_id, limit=500, **_kwargs: {"Items": questions_for_student},
     )
     monkeypatch.setattr(
         students.practice_repo,
@@ -335,7 +335,7 @@ def test_parent_child_learning_profile_requires_owned_child(monkeypatch):
     monkeypatch.setattr(
         parents.question_repo,
         "list_by_student",
-        lambda student_id, limit=500: {
+        lambda student_id, limit=500, **_kwargs: {
             "Items": [
                 {
                     "PK": "QUESTION#q1",
