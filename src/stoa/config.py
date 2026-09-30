@@ -132,9 +132,14 @@ class Settings(BaseSettings):
 
     # App
     environment: str = "development"
+    # Exact origins only. The preview hostname serves the frontend redesign
+    # against this same API; it is listed here rather than through
+    # CORS_ORIGINS because that variable replaces the whole list, and a list
+    # written without the production origin shuts production out.
     cors_origins: List[str] = [
         "http://localhost:5173",
         "https://app.stoaedu.ch",
+        "https://app-planet.stoaedu.ch",
     ]
     # Origin used to build links inside outbound email. Must be an exact origin so a
     # misconfigured value cannot redirect an activation link to an attacker host.
