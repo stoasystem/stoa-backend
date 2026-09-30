@@ -512,6 +512,11 @@ class AuthorizationFactRepository(Protocol):
     ) -> AuthorizationFacts: ...
 
 
+# A status only this projection uses: a link whose parent side says active but
+# which `active_link` did not confirm. No row is ever stored with it.
+UNCONFIRMED_LINK_STATUS = "unconfirmed"
+
+
 def _parent_link_facts(parent_id: str, student_id: str) -> ParentAuthorizationFacts | None:
     """Project a many-to-many parent link onto the legacy binding fact contract.
 
@@ -537,11 +542,22 @@ def _parent_link_facts(parent_id: str, student_id: str) -> ParentAuthorizationFa
         return None
     if link is None:
         return None
+    # `known_link` reports the parent side's status. When `active_link` did not
+    # confirm the pair - the two sides disagree, or an account is not usable -
+    # that side can still say active, and copying it here made the projection
+    # match (#85). No writer leaves the sides disagreeing today, so this was
+    # latent. An unconfirmed link is still reported, so a party that knows it
+    # keeps the refusal rather than a 404, but never as active.
+    status = str(link.get("status") or "pending")
+    if confirmed is not None:
+        status = "active"
+    elif status == "active":
+        status = UNCONFIRMED_LINK_STATUS
     row = {
         "parent_id": parent_id,
         "student_id": student_id,
         "relationship": link.get("relationship") or "child",
-        "status": "active" if confirmed is not None else str(link.get("status") or "pending"),
+        "status": status,
         "version": 1,
     }
     return ParentAuthorizationFacts(

@@ -478,9 +478,6 @@ def pending_requests_for_student(student_id: str, *, now: str | None = None) -> 
 RELATIONSHIP_SOURCE_LINK: Final = parent_link_repo.ENTITY_TYPE
 RELATIONSHIP_SOURCE_BINDING: Final = "parent_student_binding"
 
-# The coordinates both legacy rows must agree on before either is believed.
-_BINDING_COORDINATES: Final = ("parent_id", "student_id", "relationship", "version")
-
 
 def _relationship(
     row: Mapping[str, Any], source: str, parent_id: str, student_id: str
@@ -495,20 +492,27 @@ def _relationship(
 
 
 def _active_legacy_binding(parent_id: str, student_id: str) -> LinkItem | None:
-    """The legacy binding, only when both rows agree and both accounts are usable."""
+    """The legacy binding, only when both rows agree and both accounts are usable.
+
+    Judged by `ParentAuthorizationFacts.matches`, the authorization engine's own
+    rule, so the two cannot drift apart (#34): this used to restate it field by
+    field.
+    """
+    from stoa.security.authorization import ParentAuthorizationFacts
+
     forward = user_repo.get_parent_student_binding(parent_id, student_id)
     reverse = user_repo.get_student_parent_binding(student_id, parent_id)
     if not forward or not reverse:
+        # `matches` refuses this too; returning first keeps the profile reads
+        # off a pair that has no binding at all, as before.
         return None
-    if forward.get("status") != STATUS_ACTIVE or reverse.get("status") != STATUS_ACTIVE:
-        return None
-    if any(forward.get(key) != reverse.get(key) for key in _BINDING_COORDINATES):
-        return None
-    if forward.get("parent_id") != parent_id or forward.get("student_id") != student_id:
-        return None
-    if not _usable_account(user_repo.get_user(parent_id), parent_id, ROLE_PARENT):
-        return None
-    if not _usable_account(user_repo.get_user(student_id), student_id, ROLE_STUDENT):
+    facts = ParentAuthorizationFacts(
+        forward=forward,
+        reverse=reverse,
+        parent_account=user_repo.get_user(parent_id),
+        student_account=user_repo.get_user(student_id),
+    )
+    if not facts.matches(parent_id, student_id):
         return None
     return dict(forward)
 

@@ -849,9 +849,21 @@ def relationship_authority(
     """Name the table that authorizes this pair right now: profile binding, then link.
 
     Every downstream reader goes through here, so entitlement, allowance and
-    grant writing cannot disagree about one pair. The two binding rows are
-    deliberately not read: the admission path cannot pay for a second read, and
-    it is the transaction's ConditionChecks that assert those rows.
+    grant writing cannot disagree about one pair.
+
+    For a profile binding the two binding rows are deliberately not read here
+    (#34). What stands behind the profile's word:
+
+    - The teacher-support admission asserts, in its transaction, both binding
+      rows (at the versions the grant recorded, or the live ones when the grant
+      recorded the link table), the profile's `parent_id` and
+      `parent_binding_status`, the parent profile, and both account fences.
+    - Writing a grant reads and checks both rows.
+    - The student entitlement resolver is fenced by nothing. It takes this
+      verdict as the parent of record, reads only the forward binding row, and
+      from them picks the grant, the billing row and tier it reports, and the
+      binding status it shows. A stale profile cannot create a grant, but it
+      can make that read show a parent whose binding has ended.
     """
     if not parent_id or not student_id:
         return None
