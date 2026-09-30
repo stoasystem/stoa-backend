@@ -187,3 +187,39 @@ def test_every_run_step_is_valid_bash() -> None:
                 check=True,
                 capture_output=True,
             )
+
+
+def test_the_live_release_is_verified_after_the_aliases_move() -> None:
+    _, workflow = _workflow()
+    steps = _steps(workflow["jobs"]["deploy"])
+    names = [step.get("name") for step in steps]
+    aliases = names.index("Point production aliases at the new versions")
+    verify = names.index("Verify live production release")
+    assert verify == aliases + 1
+    command = steps[verify]["run"]
+    assert "scripts/verify_live_release.py" in command
+    assert "--phase post-deploy" in command
+    # Compared against this run's own build, not only against its commit.
+    assert "--local-dist dist" in command
+    assert '"$(git rev-parse HEAD)"' in command
+    # A failed check must fail the run, not be waved through.
+    assert "continue-on-error" not in steps[verify]
+    assert "|| true" not in command
+
+
+def test_the_release_record_is_kept_whatever_the_check_found() -> None:
+    _, workflow = _workflow()
+    steps = _steps(workflow["jobs"]["deploy"])
+    names = [step.get("name") for step in steps]
+    verify = names.index("Verify live production release")
+    summary = steps[names.index("Publish release record to run summary")]
+    upload = steps[names.index("Upload release record")]
+    assert names.index("Publish release record to run summary") > verify
+    assert names.index("Upload release record") > verify
+    assert summary["if"] == "always()"
+    assert upload["if"] == "always()"
+    assert "actions/upload-artifact@" in upload["uses"]
+    assert upload["with"]["retention-days"] == 90
+    # A re-run attempt uploads its own record instead of colliding with the first.
+    assert "github.run_attempt" in upload["with"]["name"]
+    assert upload["with"]["path"] == "${{ runner.temp }}/release-record/"

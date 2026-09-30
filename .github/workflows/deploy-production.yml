@@ -199,3 +199,46 @@ jobs:
               --query AliasArn \
               --output text
           done
+
+      # Reads back what the five production aliases now serve and checks it is
+      # this run's build: one observation bounded by two alias reads, not a lock.
+      # It only reports; nothing here moves an alias back.
+      - name: Verify live production release
+        run: |
+          set -euo pipefail
+          expected_sha="$(git rev-parse HEAD)"
+          python scripts/verify_live_release.py \
+            --expected-sha "$expected_sha" \
+            --phase post-deploy \
+            --local-dist dist \
+            --output-dir "${RUNNER_TEMP}/release-record"
+
+      - name: Publish release record to run summary
+        if: always()
+        run: |
+          set -euo pipefail
+          record="${RUNNER_TEMP}/release-record/release.json"
+          if [ ! -s "$record" ]; then
+            echo "No release record was produced." >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "## Live release record"
+            echo
+            echo '```json'
+            cat "$record"
+            echo '```'
+            echo
+            echo '```'
+            cat "${record}.sha256"
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      - name: Upload release record
+        if: always()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: release-record-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-record/
+          if-no-files-found: warn
+          retention-days: 90
