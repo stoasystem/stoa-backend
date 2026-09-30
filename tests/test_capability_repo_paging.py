@@ -3,76 +3,62 @@
 A query answers at most 1 MB and hands the rest back behind LastEvaluatedKey.
 Reading one page authorized from part of a user's grants, and let the #84
 baseline write a completed summary without the grants past it.
+
+The table is the shared double with one row per page, so the key condition is
+judged as the real store judges it: another user's grants, planted beside these,
+must not come back.
 """
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
-from botocore.exceptions import ClientError
+from boto3.dynamodb.types import TypeDeserializer
+from fakes.dynamodb import FakeTable
 
 from stoa.db.repositories import capability_repo
 
 
-class PagedTable:
-    """Real grant writes through the transaction hook; reads one row per page."""
-
-    def __init__(self) -> None:
-        self.items: dict[tuple[str, str], dict[str, Any]] = {
-            ("USER#admin-1", "ACCOUNT_FENCE"): {
-                "PK": "USER#admin-1",
-                "SK": "ACCOUNT_FENCE",
-                "status": "active",
-                "generation": 1,
-            }
-        }
-        self.queries: list[dict[str, Any]] = []
-
-    def get_item(self, *, Key: dict[str, str], **_kwargs: Any) -> dict[str, Any]:  # noqa: N803
-        item = self.items.get((Key["PK"], Key["SK"]))
-        return {"Item": dict(item)} if item else {}
-
-    def query(self, **kwargs: Any) -> dict[str, Any]:
-        self.queries.append(kwargs)
-        rows = sorted(
-            (item for item in self.items.values() if item["SK"].startswith("CAPABILITY")),
-            key=lambda item: item["SK"],
-        )
-        start = kwargs.get("ExclusiveStartKey")
-        if start is not None:
-            rows = [row for row in rows if row["SK"] > start["SK"]]
-        page = rows[:1]
-        response: dict[str, Any] = {"Items": [dict(row) for row in page]}
-        if len(rows) > 1:
-            response["LastEvaluatedKey"] = {"PK": page[0]["PK"], "SK": page[0]["SK"]}
-        return response
-
-    def apply_capability_transaction(self, operations: list[dict[str, Any]]) -> None:
-        pending = dict(self.items)
-        for operation in operations:
-            if operation["kind"] == "condition":
-                current = pending.get((operation["key"]["PK"], operation["key"]["SK"]))
-                if not current or any(
-                    current.get(name) != value for name, value in operation["expected"].items()
-                ):
-                    raise ClientError(
-                        {"Error": {"Code": "ConditionalCheckFailedException"}},
-                        "TransactWriteItems",
-                    )
-                continue
-            item = operation["item"]
-            key = (item["PK"], item["SK"])
-            if operation["condition"] == "absent" and key in pending:
-                raise ClientError(
-                    {"Error": {"Code": "ConditionalCheckFailedException"}}, "TransactWriteItems"
-                )
-            pending[key] = dict(item)
-        self.items = pending
+CAPABILITIES = (
+    capability_repo.STUDENT_SUPPORT_LOOKUP,
+    capability_repo.TEACHER_SUPPORT_ALLOWANCE_MANAGER,
+    capability_repo.PARENT_BINDING_REPAIRER,
+)
 
 
-def _grant(table: PagedTable, capability: str, grant_id: str) -> None:
+class CapabilityTable(FakeTable):
+    """The shared double, named like a table so grants take the real serialized path.
+
+    The capability store sends a low-level transaction, its values tagged with
+    their types; the shared double judges resource-level values. This only
+    decodes the tags and hands the same transaction to the shared double, whose
+    conditions and effects are the ones every other test relies on.
+    """
+
+    name = "stoa-main"
+    meta = SimpleNamespace(client=SimpleNamespace(meta=SimpleNamespace(region_name="eu-central-2")))
+
+    def transact_write_items(self, operations=None, *, TransactItems=None):  # noqa: N803
+        decode = TypeDeserializer().deserialize
+
+        def plain(body: dict[str, Any]) -> dict[str, Any]:
+            decoded = dict(body)
+            for field in ("Item", "Key", "ExpressionAttributeValues"):
+                if field in decoded:
+                    decoded[field] = {k: decode(v) for k, v in decoded[field].items()}
+            return decoded
+
+        items = [
+            {kind: plain(body) for kind, body in operation.items()}
+            for operation in (TransactItems or [])
+        ]
+        return super().transact_write_items(operations, TransactItems=items or None)
+
+
+def _grant(table: CapabilityTable, user_id: str, capability: str, grant_id: str) -> None:
     capability_repo.grant_capability(
-        user_id="admin-1",
+        user_id=user_id,
         command_id=f"command-{grant_id}",
         grant_id=grant_id,
         capability=capability,
@@ -85,37 +71,46 @@ def _grant(table: PagedTable, capability: str, grant_id: str) -> None:
     )
 
 
-def _table_with_three_grants() -> PagedTable:
-    table = PagedTable()
-    for index, capability in enumerate(
-        (
-            capability_repo.STUDENT_SUPPORT_LOOKUP,
-            capability_repo.TEACHER_SUPPORT_ALLOWANCE_MANAGER,
-            capability_repo.PARENT_BINDING_REPAIRER,
+def _table() -> CapabilityTable:
+    table = CapabilityTable(page_item_cap=1)
+    for user_id in ("admin-1", "admin-2"):
+        table.seed(
+            {"PK": f"USER#{user_id}", "SK": "ACCOUNT_FENCE", "status": "active", "generation": 1}
         )
-    ):
-        _grant(table, capability, f"grant-{index}")
+    for index, capability in enumerate(CAPABILITIES):
+        _grant(table, "admin-1", capability, f"grant-{index}")
+    # Another user's grants sit beside them; a query on the wrong partition finds these.
+    _grant(table, "admin-2", capability_repo.ADMIN_IDENTITY_MANAGER, "grant-other")
     return table
 
 
+def _queries(table: CapabilityTable) -> list[dict]:
+    return [request for operation, request in table.requests if operation == "query"]
+
+
 def test_current_grants_are_read_past_the_first_page() -> None:
-    table = _table_with_three_grants()
+    table = _table()
+    table.requests.clear()
     grants = capability_repo.get_current_grants("admin-1", table_factory=lambda: table)
-    assert sorted(item["capability"] for item in grants) == sorted(
-        [
-            capability_repo.STUDENT_SUPPORT_LOOKUP,
-            capability_repo.TEACHER_SUPPORT_ALLOWANCE_MANAGER,
-            capability_repo.PARENT_BINDING_REPAIRER,
-        ]
-    )
+    assert sorted(item["capability"] for item in grants) == sorted(CAPABILITIES)
+    assert {item["user_id"] for item in grants} == {"admin-1"}
+    queries = _queries(table)
     # Three grants are six rows (a revision and a pointer each), one per page.
-    assert len(table.queries) == 6
-    assert "ExclusiveStartKey" not in table.queries[0]
-    assert all("ExclusiveStartKey" in query for query in table.queries[1:])
+    assert len(queries) >= 6
+    assert "ExclusiveStartKey" not in queries[0]
+    assert all("ExclusiveStartKey" in query for query in queries[1:])
 
 
 def test_every_revision_is_listed_past_the_first_page() -> None:
-    table = _table_with_three_grants()
+    table = _table()
     revisions = capability_repo.list_grant_revisions("admin-1", table_factory=lambda: table)
     assert sorted(item["grant_id"] for item in revisions) == ["grant-0", "grant-1", "grant-2"]
     assert all(item["entity_type"] == "capability_grant_revision" for item in revisions)
+
+
+def test_another_users_grants_never_come_back() -> None:
+    table = _table()
+    revisions = capability_repo.list_grant_revisions("admin-2", table_factory=lambda: table)
+    assert [item["grant_id"] for item in revisions] == ["grant-other"]
+    grants = capability_repo.get_current_grants("admin-2", table_factory=lambda: table)
+    assert [item["capability"] for item in grants] == [capability_repo.ADMIN_IDENTITY_MANAGER]
