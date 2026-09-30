@@ -129,6 +129,18 @@ class ParentAuthorizationFacts:
     student_account: Mapping[str, object] | None = None
 
     def matches(self, parent_id: str, student_id: str) -> bool:
+        return (
+            self.rows_match(parent_id, student_id)
+            and active_account(self.parent_account, parent_id, CanonicalRole.PARENT)
+            and active_account(self.student_account, student_id, CanonicalRole.STUDENT)
+        )
+
+    def rows_match(self, parent_id: str, student_id: str) -> bool:
+        """The relationship rows alone: both active, agreeing, and about this pair.
+
+        Split out so a reader that has not loaded the accounts yet can stop
+        before loading them, as `parent_link_service` does (#85).
+        """
         rows = (self.forward, self.reverse)
         if any(not row or row.get("status") != "active" for row in rows):
             return False
@@ -137,11 +149,7 @@ class ParentAuthorizationFacts:
         coordinates = ("parent_id", "student_id", "relationship", "version")
         if any(forward.get(key) != reverse.get(key) for key in coordinates):
             return False
-        if forward.get("parent_id") != parent_id or forward.get("student_id") != student_id:
-            return False
-        return _active_account(
-            self.parent_account, parent_id, CanonicalRole.PARENT
-        ) and _active_account(self.student_account, student_id, CanonicalRole.STUDENT)
+        return forward.get("parent_id") == parent_id and forward.get("student_id") == student_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -912,6 +920,13 @@ async def authorize_and_resolve(
             correlation_id,
             internal_detail=type(exc).__name__,
         ) from exc
+
+
+def active_account(
+    account: Mapping[str, object] | None, user_id: str, role: CanonicalRole
+) -> bool:
+    """An account that is this user's, holds this role, and is active."""
+    return _active_account(account, user_id, role)
 
 
 def _active_account(

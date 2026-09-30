@@ -275,3 +275,53 @@ def test_a_confirmed_link_is_still_projected_as_active(world: AgreementWorld) ->
     _link(world)
     facts = authorization._parent_link_facts(PARENT, STUDENT)
     assert facts is not None and facts.matches(PARENT, STUDENT) is True
+
+
+class ProfileStoreDown(RuntimeError):
+    pass
+
+
+@pytest.mark.parametrize(
+    "arrange",
+    [
+        pytest.param(_binding_revoked, id="binding revoked"),
+        pytest.param(_coordinates_disagree, id="binding rows disagree"),
+        pytest.param(_binding_parent_suspended, id="parent suspended"),
+    ],
+)
+def test_a_refused_binding_never_reads_the_student_profile(
+    world: AgreementWorld,
+    monkeypatch: pytest.MonkeyPatch,
+    arrange: Callable[[AgreementWorld], None],
+) -> None:
+    # Refused on its rows or on its parent, a pair must stay refused even when
+    # the student's profile cannot be read: the old judge stopped before that
+    # read, and one that reads it first turns `None` into an error (#85).
+    arrange(world)
+    profiles = world.profiles
+
+    def get_user(user_id: str, **_kwargs: object) -> dict | None:
+        if user_id == STUDENT:
+            raise ProfileStoreDown("student profile unavailable")
+        return deepcopy(profiles.get(user_id))
+
+    monkeypatch.setattr(user_repo, "get_user", get_user)
+    assert parent_link_service.current_relationship(PARENT, STUDENT) is None
+
+
+def test_a_valid_binding_still_needs_the_student_profile(
+    world: AgreementWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The other side of the test above: a pair that would be allowed does
+    # reach the student's profile, so a failure there is not silently a "no".
+    _bind(world)
+    profiles = world.profiles
+
+    def get_user(user_id: str, **_kwargs: object) -> dict | None:
+        if user_id == STUDENT:
+            raise ProfileStoreDown("student profile unavailable")
+        return deepcopy(profiles.get(user_id))
+
+    monkeypatch.setattr(user_repo, "get_user", get_user)
+    with pytest.raises(ProfileStoreDown):
+        parent_link_service.current_relationship(PARENT, STUDENT)

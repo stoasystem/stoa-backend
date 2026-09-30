@@ -859,11 +859,15 @@ def relationship_authority(
       recorded the link table), the profile's `parent_id` and
       `parent_binding_status`, the parent profile, and both account fences.
     - Writing a grant reads and checks both rows.
-    - The student entitlement resolver is fenced by nothing. It takes this
-      verdict as the parent of record, reads only the forward binding row, and
-      from them picks the grant, the billing row and tier it reports, and the
-      binding status it shows. A stale profile cannot create a grant, but it
-      can make that read show a parent whose binding has ended.
+
+    The one exception is `entitlement_service._relationship_of_record`, which
+    no transaction fences. It takes this verdict as the parent of record, reads
+    only the forward binding row, and from them picks the grant, the billing
+    row and tier it reports, and the binding status it shows. A stale profile
+    cannot create a grant there, but it can make that read show a parent whose
+    binding has ended, and an existing grant of that parent. #34 accepted this
+    only because payments are frozen and no grant exists: when payments are
+    unfrozen, that reader has to judge the pair as the admission does.
     """
     if not parent_id or not student_id:
         return None

@@ -494,26 +494,26 @@ def _relationship(
 def _active_legacy_binding(parent_id: str, student_id: str) -> LinkItem | None:
     """The legacy binding, only when both rows agree and both accounts are usable.
 
-    Judged by `ParentAuthorizationFacts.matches`, the authorization engine's own
-    rule, so the two cannot drift apart (#34): this used to restate it field by
-    field.
+    Judged by the authorization engine's own rule, so the two cannot drift apart
+    (#34): this used to restate it field by field. The rule is taken in its
+    parts, in the order that stops earliest - rows, then the parent's account,
+    then the student's - so a pair refused on its rows or its parent never
+    reads the next profile, and a failure reading it cannot turn that refusal
+    into an error (#85).
     """
-    from stoa.security.authorization import ParentAuthorizationFacts
+    from stoa.security.authorization import ParentAuthorizationFacts, active_account
+    from stoa.security.identity import CanonicalRole
 
     forward = user_repo.get_parent_student_binding(parent_id, student_id)
     reverse = user_repo.get_student_parent_binding(student_id, parent_id)
-    if not forward or not reverse:
-        # `matches` refuses this too; returning first keeps the profile reads
-        # off a pair that has no binding at all, as before.
+    rows = ParentAuthorizationFacts(forward=forward, reverse=reverse)
+    if not rows.rows_match(parent_id, student_id):
         return None
-    facts = ParentAuthorizationFacts(
-        forward=forward,
-        reverse=reverse,
-        parent_account=user_repo.get_user(parent_id),
-        student_account=user_repo.get_user(student_id),
-    )
-    if not facts.matches(parent_id, student_id):
+    if not active_account(user_repo.get_user(parent_id), parent_id, CanonicalRole.PARENT):
         return None
+    if not active_account(user_repo.get_user(student_id), student_id, CanonicalRole.STUDENT):
+        return None
+    assert forward is not None
     return dict(forward)
 
 
