@@ -14,9 +14,10 @@ import importlib.util
 from pathlib import Path
 from typing import Any
 
+from botocore.exceptions import ClientError
 import pytest
 
-from stoa.db.repositories import capability_repo
+from stoa.db.repositories import capability_repo, security_audit_repo
 
 
 def _load_script():
@@ -47,7 +48,7 @@ class FakeTable:
         self.rows: dict[tuple[str, str], dict[str, Any]] = {}
         self.puts: list[dict[str, Any]] = []
 
-    def get_item(self, Key: dict[str, str]) -> dict[str, Any]:  # noqa: N803 - boto3 shape
+    def get_item(self, Key: dict[str, str], **_kwargs: Any) -> dict[str, Any]:  # noqa: N803
         if Key["SK"] == "PROFILE":
             profile = self.profiles.get(Key["PK"].removeprefix("USER#"))
             return {"Item": dict(profile)} if profile else {}
@@ -57,7 +58,10 @@ class FakeTable:
     def put_item(self, Item: dict[str, Any], ConditionExpression: str) -> None:  # noqa: N803
         assert ConditionExpression == "attribute_not_exists(PK) AND attribute_not_exists(SK)"
         key = (Item["PK"], Item["SK"])
-        assert key not in self.rows, "conditional put refused"
+        if key in self.rows:
+            raise ClientError(
+                {"Error": {"Code": "ConditionalCheckFailedException"}}, "PutItem"
+            )
         self.rows[key] = dict(Item)
         self.puts.append(dict(Item))
 
@@ -83,11 +87,16 @@ def _grant_row(
 
 @pytest.fixture
 def repo(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    state: dict[str, Any] = {"current": [], "grants": [], "generation": 0}
+    state: dict[str, Any] = {"current": [], "revisions": [], "grants": [], "generation": 0}
     monkeypatch.setattr(
         script.capability_repo,
         "get_current_grants",
         lambda user_id, table_factory=None: [dict(item) for item in state["current"]],
+    )
+    monkeypatch.setattr(
+        script.capability_repo,
+        "list_grant_revisions",
+        lambda user_id, table_factory=None: [dict(item) for item in state["revisions"]],
     )
     monkeypatch.setattr(
         script.capability_repo,
@@ -122,7 +131,22 @@ def _grant(
     *,
     dry_run: bool = False,
     scope: str = "global",
+    expires_at: str | None = None,
 ) -> str:
+    status, _repaired = _grant_and_repair(
+        table, capability, dry_run=dry_run, scope=scope, expires_at=expires_at
+    )
+    return status
+
+
+def _grant_and_repair(
+    table: FakeTable,
+    capability: str = ALLOWANCE,
+    *,
+    dry_run: bool = False,
+    scope: str = "global",
+    expires_at: str | None = None,
+) -> tuple[str, int]:
     return script.grant(
         table,
         user_id=ADMIN,
@@ -130,8 +154,23 @@ def _grant(
         scope=scope,
         incident_reason="card 028 follow-up",
         dry_run=dry_run,
+        expires_at=expires_at,
         now=lambda: NOW,
     )
+
+
+def _operator_revision(grant_id: str, *, version: int = 1, status: str = "active") -> dict[str, Any]:
+    return {
+        **_grant_row(
+            ALLOWANCE,
+            grant_id=grant_id,
+            grantor_id="operator:operator_capability",
+            status=status,
+            version=version,
+        ),
+        "command_id": f"operator-{grant_id}",
+        "effective_at": "2026-09-30T09:00:00+00:00",
+    }
 
 
 def test_an_offline_grant_issues_the_capability_and_records_it(repo: dict[str, Any]) -> None:
@@ -183,23 +222,35 @@ def test_a_run_cut_short_after_the_grant_writes_the_missing_row_on_rerun(
     repo: dict[str, Any],
 ) -> None:
     table = FakeTable()
-    repo["current"] = [
-        {
-            **_grant_row(
-                ALLOWANCE, grant_id="grant-x", grantor_id="operator:operator_capability"
-            ),
-            "effective_at": "2026-09-30T09:00:00+00:00",
-        }
-    ]
-    assert _grant(table) == "present_audit_written"
+    repo["revisions"] = [_operator_revision("grant-x")]
+    repo["current"] = [_operator_revision("grant-x")]
+    assert _grant_and_repair(table) == ("present", 1)
     [event] = table.puts
     assert event["SK"] == "EVENT#event_operator_grant_grant-x"
     assert event["evidence_reference"] == "capability-grant:grant-x"
+    assert event["command_id"] == "operator-grant-x"
+    # Dated when the grant took effect, not when the gap was noticed.
     assert event["created_at"] == "2026-09-30T09:00:00+00:00"
     assert repo["grants"] == []
     # And the next rerun finds the row and writes nothing more.
-    assert _grant(table) == "present"
+    assert _grant_and_repair(table) == ("present", 0)
     assert len(table.puts) == 1
+
+
+def test_a_grant_revoked_before_the_rerun_still_gets_its_row(repo: dict[str, Any]) -> None:
+    # Granted, row lost, revoked, then rerun: the rerun issues a new grant, and
+    # the first one's grant must not stay unrecorded.
+    table = FakeTable()
+    repo["revisions"] = [
+        _operator_revision("grant-x"),
+        _operator_revision("grant-x", version=2, status="revoked"),
+    ]
+    assert _grant_and_repair(table) == ("issued", 1)
+    references = sorted(row["evidence_reference"] for row in table.puts)
+    [issued] = repo["grants"]
+    assert references == sorted(
+        ["capability-grant:grant-x", f"capability-grant:{issued['grant_id']}"]
+    )
 
 
 @pytest.mark.parametrize("grantor_id", ["admin-0", "bootstrap:first_admin", ""])
@@ -207,20 +258,29 @@ def test_a_grant_this_script_did_not_issue_gets_no_row_from_it(
     repo: dict[str, Any], grantor_id: str
 ) -> None:
     table = FakeTable()
+    repo["revisions"] = [_grant_row(ALLOWANCE, grant_id="grant-x", grantor_id=grantor_id)]
     repo["current"] = [_grant_row(ALLOWANCE, grant_id="grant-x", grantor_id=grantor_id)]
-    assert _grant(table) == "present"
+    assert _grant_and_repair(table) == ("present", 0)
     assert table.puts == []
 
 
-def test_a_dry_run_rerun_reports_the_missing_row_without_writing_it(
+def test_a_dry_run_counts_the_missing_rows_without_writing_them(
     repo: dict[str, Any],
 ) -> None:
     table = FakeTable()
-    repo["current"] = [
-        _grant_row(ALLOWANCE, grant_id="grant-x", grantor_id="operator:operator_capability")
-    ]
-    assert _grant(table, dry_run=True) == "present_audit_pending"
+    repo["revisions"] = [_operator_revision("grant-x"), _operator_revision("grant-y")]
+    assert _grant_and_repair(table, dry_run=True) == ("pending", 2)
     assert table.puts == []
+
+
+def test_a_row_written_twice_is_refused_as_a_duplicate(repo: dict[str, Any]) -> None:
+    # Two reruns racing: the loser's conditional put fails and nothing is doubled.
+    table = FakeTable()
+    item = _operator_revision("grant-x")
+    script._record_grant(table, ADMIN, item, NOW)
+    with pytest.raises(security_audit_repo.DuplicateSecurityAuditEvent):
+        script._record_grant(table, ADMIN, item, NOW)
+    assert len(table.puts) == 1
 
 
 def test_a_revoked_grant_does_not_count_as_held(repo: dict[str, Any]) -> None:
@@ -269,6 +329,68 @@ def test_only_an_active_administrator_can_be_granted(
 def test_an_empty_scope_is_refused(repo: dict[str, Any]) -> None:
     with pytest.raises(script.OperatorCapabilityError, match="scope"):
         _grant(FakeTable(), scope="  ")
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_a_break_glass_grant_without_an_expiry_is_refused_even_on_a_dry_run(
+    repo: dict[str, Any], dry_run: bool
+) -> None:
+    with pytest.raises(script.OperatorCapabilityError, match="--expires-at"):
+        _grant(FakeTable(), capability_repo.STUDENT_DATA_BREAK_GLASS, dry_run=dry_run)
+    assert repo["grants"] == []
+
+
+@pytest.mark.parametrize(
+    ("expires_at", "reason"),
+    [
+        ("tomorrow", "not an ISO 8601 time"),
+        ("2026-10-01T12:00:00", "needs a timezone"),
+        ("2026-09-30T11:00:00+00:00", "not in the future"),
+    ],
+)
+def test_an_unusable_expiry_is_refused(
+    repo: dict[str, Any], expires_at: str, reason: str
+) -> None:
+    with pytest.raises(script.OperatorCapabilityError, match=reason):
+        _grant(FakeTable(), capability_repo.STUDENT_DATA_BREAK_GLASS, expires_at=expires_at)
+
+
+def test_a_break_glass_grant_with_an_expiry_carries_it_to_the_store(
+    repo: dict[str, Any],
+) -> None:
+    table = FakeTable()
+    expiry = "2026-10-01T12:00:00+00:00"
+    assert _grant(table, capability_repo.STUDENT_DATA_BREAK_GLASS, expires_at=expiry) == "issued"
+    [issued] = repo["grants"]
+    assert issued["expires_at"] == expiry
+
+
+def test_an_ordinary_grant_has_no_expiry(repo: dict[str, Any]) -> None:
+    _grant(FakeTable())
+    [issued] = repo["grants"]
+    assert issued["expires_at"] is None
+
+
+def test_the_grant_transaction_runs_on_the_verified_session() -> None:
+    # The store opens an ambient-credential client unless the table carries
+    # its own transact_write_items; the session table does, bound to the
+    # client made from the session the SSO guard verified.
+    calls: list[dict[str, Any]] = []
+
+    class Client:
+        def transact_write_items(self, **kwargs: Any) -> dict[str, Any]:
+            calls.append(kwargs)
+            return {}
+
+    class Resource:
+        name = "stoa-main"
+        meta = object()
+
+    session_table = script.SessionTable(Resource(), Client())
+    assert capability_repo._transact_client(session_table) is session_table
+    assert session_table.name == "stoa-main"
+    session_table.transact_write_items(TransactItems=[{"Put": {}}])
+    assert calls == [{"TransactItems": [{"Put": {}}]}]
 
 
 def _baseline(table: FakeTable, *, dry_run: bool = False) -> tuple[str, int]:
@@ -363,6 +485,7 @@ def _args(**overrides: Any) -> Namespace:
         "incident_reason": "card 028 follow-up",
         "capability": ALLOWANCE,
         "scope": "global",
+        "expires_at": "",
         "dry_run": False,
         "profile": "stoa",
         "region": "eu-central-2",
@@ -409,12 +532,39 @@ def test_no_sso_operator_session_means_no_write(
 
 
 class _Session:
+    def __init__(self) -> None:
+        self.clients: list[str] = []
+
     def resource(self, name: str, region_name: str) -> Any:
         class Resource:
-            def Table(self, name: str) -> FakeTable:  # noqa: N802 - boto3 shape
-                return FakeTable()
+            def Table(self, name: str) -> Any:  # noqa: N802 - boto3 shape
+                table = FakeTable()
+                table.name = name
+                table.meta = object()
+                return table
 
         return Resource()
+
+    def client(self, name: str, region_name: str) -> Any:
+        self.clients.append(name)
+        return object()
+
+
+def test_main_binds_the_table_to_the_verified_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    session = _Session()
+    seen: list[Any] = []
+    monkeypatch.setattr(script, "require_sso_operator_session", lambda **kwargs: session)
+    monkeypatch.setattr(script, "parse_args", lambda: _args())
+
+    def grant(table: Any, **kwargs: Any) -> tuple[str, int]:
+        seen.append(table)
+        return "issued", 0
+
+    monkeypatch.setattr(script, "grant", grant)
+    assert script.main() == 0
+    [table] = seen
+    assert isinstance(table, script.SessionTable)
+    assert session.clients == ["dynamodb"]
 
 
 @pytest.mark.parametrize(

@@ -522,7 +522,10 @@ def project_audit_event(event: Mapping[str, object]) -> AuditItem:
     return projected
 
 
-def append_event(stream_id: str, event: Mapping[str, object]) -> AuditItem:
+def append_event(
+    stream_id: str, event: Mapping[str, object], *, table: object | None = None
+) -> AuditItem:
+    """Append one immutable event; `table` for callers bound to their own session."""
     safe = project_audit_event(event)
     row = {
         "PK": f"SECURITY_AUDIT#{stream_id}",
@@ -532,7 +535,7 @@ def append_event(stream_id: str, event: Mapping[str, object]) -> AuditItem:
     }
     try:
         _put_item(
-            get_table(),
+            table if table is not None else get_table(),
             Item=row,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )

@@ -48,6 +48,11 @@ HAND_WRITTEN_DOUBLES: dict[str, str] = {
         "table fails here instead of reaching the real one"
     ),
     "test_billing_fact_repo.py::AtomicBillingTable": "repo",
+    "test_capability_repo_paging.py::PagedTable": (
+        "script: answers one row per page so the capability repository's reads are "
+        "driven past LastEvaluatedKey; its writes go through the repository's own "
+        "transaction hook"
+    ),
     "test_conversations.py::_PagedIndexTable": "script",
     "test_identity_authorization.py::FakeTable": "repo",
     "test_parent_link_paid_downstream.py::ConditionalTable": "repo",

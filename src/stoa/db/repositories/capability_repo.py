@@ -633,19 +633,46 @@ def _revision_for_pointer(
 
 
 def _query_user_capabilities(table: object, user_id: str) -> list[CapabilityItem]:
+    """Every capability row of the user, all pages.
+
+    One query answers at most 1 MB; the rest comes back behind
+    `LastEvaluatedKey`. Reading only the first page would authorize from part
+    of a user's grants and let a baseline call itself complete without the rest.
+    """
     if not isinstance(table, _CapabilityQueryTable):
         raise RuntimeError("capability repository query is unavailable")
-    response = _mapping(
-        table.query(
-            KeyConditionExpression=Key("PK").eq(_pk(user_id))
+    items: list[CapabilityItem] = []
+    start_key: object = None
+    while True:
+        kwargs: dict[str, object] = {
+            "KeyConditionExpression": Key("PK").eq(_pk(user_id))
             & Key("SK").begins_with("CAPABILITY"),
-            ConsistentRead=True,
-        )
-    )
-    raw_items = response.get("Items", [])
-    if not isinstance(raw_items, list):
-        raise ValueError("malformed capability repository response")
-    return [_mapping(item) for item in raw_items]
+            "ConsistentRead": True,
+        }
+        if start_key is not None:
+            kwargs["ExclusiveStartKey"] = start_key
+        response = _mapping(table.query(**kwargs))
+        raw_items = response.get("Items", [])
+        if not isinstance(raw_items, list):
+            raise ValueError("malformed capability repository response")
+        items.extend(_mapping(item) for item in raw_items)
+        start_key = response.get("LastEvaluatedKey")
+        if not start_key:
+            return items
+
+
+def list_grant_revisions(
+    user_id: str,
+    *,
+    table_factory: Callable[[], object] | None = None,
+) -> list[CapabilityItem]:
+    """Every revision of every grant the user has held, revoked ones included."""
+    table = (table_factory or get_table)()
+    return [
+        item
+        for item in _query_user_capabilities(table, user_id)
+        if item.get("entity_type") == "capability_grant_revision"
+    ]
 
 
 def _get(table: object, key: Mapping[str, str]) -> CapabilityItem | None:

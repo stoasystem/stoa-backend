@@ -7,7 +7,9 @@ trust domain, behind the same SSO operator guard as the bootstrap script: a
 stolen administrator session cannot reach it.
 
 `grant` issues one registered capability to one active administrator and
-records who did it. `baseline` records, one audit row per grant plus a closing
+records it. It first writes the row of any earlier grant of this script that
+has none, revoked or not: a grant and its row are two writes, and a run can
+stop between them. `baseline` records, one audit row per grant plus a closing
 summary, every grant the administrator holds now; the grants issued before
 per-grant audit rows existed have none. Neither command touches Cognito.
 
@@ -59,17 +61,37 @@ def _require_active_admin(table: Any, user_id: str) -> None:
         raise OperatorCapabilityError(f"{user_id} is not an active administrator.")
 
 
+class SessionTable:
+    """The table, with every write on the verified operator session.
+
+    The capability store opens its own low-level client for transactions, and
+    that client comes from ambient credentials, not from this session. Given a
+    table that carries `transact_write_items`, it uses that instead, so the
+    grant lands in the account the SSO guard checked, as the reads and the
+    audit rows do.
+    """
+
+    def __init__(self, table: Any, client: Any) -> None:
+        self._table = table
+        self._client = client
+        self.name = table.name
+        self.meta = table.meta
+
+    def get_item(self, **kwargs: Any) -> Any:
+        return self._table.get_item(**kwargs)
+
+    def put_item(self, **kwargs: Any) -> Any:
+        return self._table.put_item(**kwargs)
+
+    def query(self, **kwargs: Any) -> Any:
+        return self._table.query(**kwargs)
+
+    def transact_write_items(self, **kwargs: Any) -> Any:
+        return self._client.transact_write_items(**kwargs)
+
+
 def _append_audit(table: Any, user_id: str, event: dict[str, Any]) -> None:
-    safe = security_audit_repo.project_audit_event(event)
-    table.put_item(
-        Item={
-            "PK": f"SECURITY_AUDIT#{user_id}",
-            "SK": f"EVENT#{safe['event_id']}",
-            "entity_type": "security_audit_event",
-            **safe,
-        },
-        ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
-    )
+    security_audit_repo.append_event(user_id, event, table=table)
 
 
 def _active(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -83,7 +105,28 @@ def _grant_event_id(grant_id: str) -> str:
 
 def _audit_row_exists(table: Any, user_id: str, event_id: str) -> bool:
     key = {"PK": f"SECURITY_AUDIT#{user_id}", "SK": f"EVENT#{event_id}"}
-    return bool(table.get_item(Key=key).get("Item"))
+    return bool(table.get_item(Key=key, ConsistentRead=True).get("Item"))
+
+
+def _repair_missing_grant_rows(table: Any, user_id: str, *, dry_run: bool) -> int:
+    """Write the row of every grant this script issued that has none.
+
+    The grant and its row are two writes; a run cut short between them leaves
+    a grant with no row. That grant may since have been revoked, so the repair
+    reads every grant's first revision, not only the grants still held.
+    """
+    missing = [
+        item
+        for item in capability_repo.list_grant_revisions(user_id, table_factory=lambda: table)
+        if item.get("grantor_id") == OPERATOR_ID
+        and int(item.get("version") or 0) == 1
+        and not _audit_row_exists(table, user_id, _grant_event_id(str(item.get("grant_id") or "")))
+    ]
+    if not dry_run:
+        for item in missing:
+            # Dated when the grant took effect, not when the gap was noticed.
+            _record_grant(table, user_id, item, str(item.get("effective_at") or now_iso()))
+    return len(missing)
 
 
 def _record_grant(table: Any, user_id: str, item: dict[str, Any], timestamp: str) -> None:
@@ -116,39 +159,43 @@ def grant(
     scope: str,
     incident_reason: str,
     dry_run: bool,
+    expires_at: str | None = None,
     now: Callable[[], str] = now_iso,
-) -> str:
-    """Issue the capability once; `present` when it is already held in that scope.
+) -> tuple[str, int]:
+    """Issue the capability once, after repairing any row an earlier run left out.
 
-    The grant and its audit row are two writes. A run cut short between them
-    leaves a grant this script issued with no row; the rerun finds the grant,
-    sees the row missing and writes it (`present_audit_written`).
+    Returns the grant's status (`issued`, `present`, or `pending` on a dry run)
+    and how many missing audit rows were, or on a dry run would be, written.
     """
     if capability not in capability_repo.KNOWN_CAPABILITIES:
         raise OperatorCapabilityError(f"{capability!r} is not a registered capability.")
     scope = scope.strip()
     if not scope:
         raise OperatorCapabilityError("A non-empty --scope is required.")
+    expires_at = (expires_at or "").strip() or None
+    # Checked here, not left to the store, so a dry run cannot say `pending`
+    # for a grant the store would refuse.
+    if capability == capability_repo.STUDENT_DATA_BREAK_GLASS and not expires_at:
+        raise OperatorCapabilityError("A break-glass grant needs --expires-at.")
+    if expires_at is not None:
+        try:
+            expiry = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise OperatorCapabilityError("--expires-at is not an ISO 8601 time.") from exc
+        if expiry.tzinfo is None:
+            raise OperatorCapabilityError("--expires-at needs a timezone.")
+        if expiry <= datetime.fromisoformat(now()):
+            raise OperatorCapabilityError("--expires-at is not in the future.")
     _require_active_admin(table, user_id)
+    repaired = _repair_missing_grant_rows(table, user_id, dry_run=dry_run)
     held = _active(capability_repo.get_current_grants(user_id, table_factory=lambda: table))
-    matching = [
-        item
+    if any(
+        item.get("capability") == capability and str(item.get("scope") or "").strip() == scope
         for item in held
-        if item.get("capability") == capability and str(item.get("scope") or "").strip() == scope
-    ]
-    if matching:
-        item = matching[0]
-        if item.get("grantor_id") != OPERATOR_ID or _audit_row_exists(
-            table, user_id, _grant_event_id(str(item.get("grant_id") or ""))
-        ):
-            return "present"
-        if dry_run:
-            return "present_audit_pending"
-        # Dated when the grant took effect, not when the missing row was noticed.
-        _record_grant(table, user_id, item, str(item.get("effective_at") or now()))
-        return "present_audit_written"
+    ):
+        return "present", repaired
     if dry_run:
-        return "pending"
+        return "pending", repaired
 
     command_id = f"operator-{uuid.uuid4().hex[:16]}"
     timestamp = now()
@@ -161,13 +208,14 @@ def grant(
         grantor_id=OPERATOR_ID,
         reason=incident_reason,
         effective_at=timestamp,
+        expires_at=expires_at,
         expected_generation=capability_repo.current_lineage_generation(
             user_id, capability, scope, table_factory=lambda: table
         ),
         table_factory=lambda: table,
     )
     _record_grant(table, user_id, {**item, "command_id": command_id}, timestamp)
-    return "issued"
+    return "issued", repaired
 
 
 def baseline(
@@ -241,6 +289,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--capability", default="", help="grant: a registered capability.")
     parser.add_argument("--scope", default="global", help="grant: the grant scope.")
     parser.add_argument(
+        "--expires-at", default="", help="grant: ISO 8601 expiry; required for break-glass."
+    )
+    parser.add_argument(
         "--incident-reason", default="", help="grant: why; stored on the grant, not the audit row."
     )
     parser.add_argument("--region", default=os.environ.get("AWS_REGION", "eu-central-2"))
@@ -283,17 +334,25 @@ def main() -> int:
             region_name=args.region,
             expected_account_id=args.account_id,
         )
-        table = session.resource("dynamodb", region_name=args.region).Table(args.table_name)
+        table = SessionTable(
+            session.resource("dynamodb", region_name=args.region).Table(args.table_name),
+            session.client("dynamodb", region_name=args.region),
+        )
         if args.command == "grant":
-            status = grant(
+            status, repaired = grant(
                 table,
                 user_id=args.user_id,
                 capability=args.capability.strip(),
                 scope=args.scope,
                 incident_reason=args.incident_reason.strip(),
                 dry_run=args.dry_run,
+                expires_at=args.expires_at,
             )
-            print(f"capability={args.capability.strip()} scope={args.scope.strip()} status={status}")
+            print(
+                f"capability={args.capability.strip()} scope={args.scope.strip()} "
+                f"status={status} missing_audit_rows={'would_write' if args.dry_run else 'wrote'}"
+                f":{repaired}"
+            )
         else:
             snapshot_id, count = baseline(
                 table,
