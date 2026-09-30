@@ -123,6 +123,7 @@ def grant_capability(
     *, actor: dict[str, Any], target_id: str, reason: str, **grant: Any
 ) -> dict[str, Any]:
     _require_manager(actor)
+    _refuse_self_grant(actor, target_id, grant)
     item = capability_repo.grant_capability(
         user_id=target_id,
         grantor_id=_actor_id(actor),
@@ -238,6 +239,41 @@ def _mark_provider_failed(command: dict[str, Any], timestamp: str) -> None:
         evidence_reference=f"privileged-identity:{command['command_id']}",
     )
     _audit(command, status="provider_failed", timestamp=timestamp, provider_complete=False)
+
+
+def _refuse_self_grant(actor: dict[str, Any], target_id: str, grant: dict[str, Any]) -> None:
+    """#48: holding `admin_identity_manager` must not mean holding everything.
+
+    Without this, the holder can give itself any capability with no second
+    person involved. The refusal is recorded before it is returned, as the
+    self-deactivation and peer-password refusals are. A lone administrator is
+    not locked out: `scripts/operator_capability.py grant` issues a grant from
+    an SSO operator session, a separate trust domain that a stolen administrator
+    session cannot reach.
+    """
+    actor_id = _actor_id(actor).strip()
+    if actor_id != str(target_id).strip():
+        return
+    security_audit_repo.append_event(
+        actor_id,
+        {
+            "event_id": f"event_{uuid4().hex}",
+            "event_type": "capability_grant_denied",
+            "actor_id": actor_id,
+            "actor_role": "admin",
+            "target_id": actor_id,
+            "target_type": "capability_grant",
+            "action": "grant_capability",
+            "reason_code": "capability_self_grant_forbidden",
+            "evidence_reference": (
+                "capability_grant_denied:capability_self_grant_forbidden:"
+                f"{str(grant.get('capability') or '')[:100]}"
+            ),
+            "command_id": str(grant.get("command_id") or "")[:200] or None,
+            "created_at": _now(None),
+        },
+    )
+    raise HTTPException(status_code=409, detail={"code": "capability_self_grant_forbidden"})
 
 
 def _require_manager(actor: dict[str, Any]) -> None:
