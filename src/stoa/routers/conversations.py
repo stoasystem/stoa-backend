@@ -3596,7 +3596,7 @@ async def withdraw_teacher_help_request(
         withdrawn = teacher_dispatch_service.withdraw_help_request(
             conversation_id, student_id=authorized.ref.student_id
         )
-    except teacher_dispatch_service.HelpRequestWithdrawalRefused as refused:
+    except teacher_dispatch_service.HelpRequestEndingRefused as refused:
         code = refused.code
         raise HTTPException(
             status_code=(
@@ -3606,7 +3606,7 @@ async def withdraw_teacher_help_request(
             ),
             detail={"code": code},
         ) from refused
-    except teacher_dispatch_service.HelpRequestWithdrawalUnavailable as unavailable:
+    except teacher_dispatch_service.HelpRequestEndingUnavailable as unavailable:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={

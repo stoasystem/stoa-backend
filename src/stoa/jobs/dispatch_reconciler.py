@@ -28,12 +28,13 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
 
     logger.info(
         "Dispatch reconciliation: %s reassigned, %s questions waiting, "
-        "%s re-offered, %s chats waiting, %s chats re-offered",
+        "%s re-offered, %s chats waiting, %s chats re-offered, %s chats expired",
         outcome["reassigned"],
         outcome["waiting"],
         len(outcome["dispatched"]),
         outcome.get("conversationsWaiting", 0),
         len(outcome.get("conversationsDispatched", [])),
+        len(outcome.get("conversationsExpired", [])),
     )
     return {
         "status": "completed",
@@ -43,5 +44,6 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         "conversationSweep": outcome.get("conversationSweep", "completed"),
         "conversationsWaiting": outcome.get("conversationsWaiting", 0),
         "conversationsDispatched": len(outcome.get("conversationsDispatched", [])),
+        "conversationsExpired": len(outcome.get("conversationsExpired", [])),
         "generatedAt": outcome["generatedAt"],
     }

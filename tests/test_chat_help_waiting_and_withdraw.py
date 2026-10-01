@@ -36,8 +36,10 @@ from test_chat_help_request_lifecycle import (
 
 @pytest.fixture
 def table(monkeypatch) -> FakeTable:
-    # The lifecycle tests' production-shaped rows.
-    return lifecycle.build_table(monkeypatch)
+    # The lifecycle tests' production-shaped rows, left waiting by the sweep.
+    built = lifecycle.build_table(monkeypatch)
+    lifecycle.keep_waiting(monkeypatch)
+    return built
 
 
 def _at(minutes: int) -> str:

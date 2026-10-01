@@ -6,17 +6,28 @@ import logging
 
 import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol, cast
 
 from stoa.db.dynamodb import get_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, practice_repo, question_repo, user_repo
-from stoa.models.question import QuestionStatus
-from stoa.services import teacher_reply_service, teacher_support_allowance_service
+from stoa.config import settings
+from stoa.models.question import ENDED_WITHOUT_TEACHER, QuestionStatus
+from stoa.services import (
+    notification_service,
+    teacher_reply_service,
+    teacher_support_allowance_service,
+)
 
 
 logger = logging.getLogger(__name__)
+
+# How a request no teacher took ends; the conversation's escalation and its
+# queue row end in the same words.
+_WITHDRAWN = QuestionStatus.WITHDRAWN.value
+_EXPIRED = QuestionStatus.EXPIRED.value
 
 DISPATCH_ACCEPT_TIMEOUT_SECONDS = 10 * 60
 DISPATCH_SLA_RISK_SECONDS = teacher_reply_service.TAKEOVER_TARGET_SECONDS
@@ -89,7 +100,7 @@ def list_teacher_dispatch_questions(limit: int = 200) -> list[dict[str, Any]]:
         # A withdrawn request is over and nobody waits on it (#86); left in, the
         # board showed it as a request still waiting for a teacher.
         accept_item=lambda item: item
-        if item.get("status") != QuestionStatus.WITHDRAWN.value
+        if item.get("status") not in ENDED_WITHOUT_TEACHER
         and (
             item.get("teacher_requested_at")
             or item.get("queue_visible_at")
@@ -660,20 +671,25 @@ def student_help_status(conversation: dict[str, Any], *, now: str | None = None)
 HELP_REQUEST_STATUSES = ("in_progress", "resolved")
 
 
-class HelpRequestWithdrawalRefused(Exception):
-    """The request cannot be withdrawn; ``code`` says why, for the response."""
+class HelpRequestEndingRefused(Exception):
+    """The request cannot be ended this way; ``code`` says why, for the response."""
 
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
 
 
-class HelpRequestWithdrawalUnavailable(Exception):
-    """The withdrawal could not be completed now; trying again is safe."""
+class HelpRequestEndingUnavailable(Exception):
+    """Ending the request could not be completed now; trying again is safe."""
 
 
-# The conversation's escalation and its queue row end in the same word.
-_WITHDRAWN = QuestionStatus.WITHDRAWN.value
+@dataclass(frozen=True)
+class _Ending:
+    conversation: dict[str, Any]
+    # False when the request had already ended this way: nothing was written.
+    changed: bool
+    refund: Any = None
+    refund_week: str | None = None
 
 
 def withdraw_help_request(
@@ -693,6 +709,85 @@ def withdraw_help_request(
     accepting at the same moment makes this a refusal, never a split.
 
     Withdrawing twice returns the withdrawn request and writes nothing.
+    """
+    return _end_unaccepted_request(
+        conversation_id, outcome=_WITHDRAWN, student_id=student_id, now=now, table=table
+    ).conversation
+
+
+def expire_help_request(
+    conversation_id: str,
+    *,
+    escalated_before: str,
+    now: str | None = None,
+    table: Any | None = None,
+) -> dict[str, Any] | None:
+    """End a chat help request no teacher took within the waiting limit (#87).
+
+    The same ending as a withdrawal - both rows, offers off, the case given
+    back to the week it was asked in, one transaction - but to `expired`,
+    decided by the sweep, and only for a request asked for before
+    ``escalated_before``. A teacher who accepts first wins and the request is
+    left alone. The student is told once, and only by the sweep that ended it.
+
+    Returns the expired conversation, or ``None`` when this call expired
+    nothing (taken, already ended, or not yet due).
+    """
+    timestamp = now or _now()
+    try:
+        ending = _end_unaccepted_request(
+            conversation_id,
+            outcome=_EXPIRED,
+            escalated_before=escalated_before,
+            now=timestamp,
+            table=table,
+        )
+    except HelpRequestEndingRefused as refused:
+        if refused.code not in _ORDINARY_EXPIRY_REFUSALS:
+            # Not a teacher, not an ended request, not too young: something is
+            # wrong with the rows, and the request would otherwise wait for ever.
+            logger.warning("Expiry of %s refused: %s", conversation_id, refused.code)
+        return None
+    if not ending.changed:
+        return None
+    observed = _parse_timestamp(timestamp) or datetime.now(timezone.utc)
+    notification_service.emit_teacher_help_expired(
+        conversation=ending.conversation,
+        case_returned=(
+            ending.refund is teacher_support_allowance_service.TeacherSupportRefundDisposition.REFUNDED
+            and ending.refund_week
+            == teacher_support_allowance_service.current_week_identity(observed)
+        ),
+    )
+    return ending.conversation
+
+
+_ORDINARY_EXPIRY_REFUSALS = frozenset(
+    {"teacher_help_already_accepted", "teacher_help_request_closed", "teacher_help_request_not_due"}
+)
+
+
+def _asked_at(conversation: dict[str, Any], question: dict[str, Any] | None) -> datetime | None:
+    """When the student asked: the conversation's stamp, else the queue row's."""
+    return _parse_timestamp(conversation.get("escalated_at")) or _parse_timestamp(
+        (question or {}).get("teacher_requested_at")
+    )
+
+
+def _end_unaccepted_request(
+    conversation_id: str,
+    *,
+    outcome: str,
+    student_id: str | None = None,
+    escalated_before: str | None = None,
+    now: str | None = None,
+    table: Any | None = None,
+) -> _Ending:
+    """End both rows of a request no teacher has taken, and give its case back.
+
+    ``student_id`` is the withdrawing student, checked against the row; the
+    sweep passes none and acts for the row's own student. ``escalated_before``
+    limits an expiry to requests old enough.
 
     Each pass reads both rows afresh and makes one attempt; a refused write is
     followed by a new read, never by the same write again.
@@ -706,37 +801,50 @@ def withdraw_help_request(
         try:
             conversation = store.get_item(Key=conversation_key, ConsistentRead=True).get("Item")
         except Exception as exc:  # noqa: BLE001 - unknown is not absent
-            raise HelpRequestWithdrawalUnavailable(conversation_id) from exc
-        if not conversation or conversation.get("student_id") != student_id:
-            raise HelpRequestWithdrawalRefused("teacher_help_request_not_found")
+            raise HelpRequestEndingUnavailable(conversation_id) from exc
+        if not conversation:
+            raise HelpRequestEndingRefused("teacher_help_request_not_found")
+        owner = str(conversation.get("student_id") or "")
+        if not owner or (student_id is not None and owner != student_id):
+            raise HelpRequestEndingRefused("teacher_help_request_not_found")
         request_id = str(conversation.get("escalation_request_id") or "")
         if not request_id:
-            raise HelpRequestWithdrawalRefused("teacher_help_request_not_found")
+            raise HelpRequestEndingRefused("teacher_help_request_not_found")
         current = str(conversation.get("escalation_status") or "pending")
-        if current == _WITHDRAWN:
-            return dict(conversation)
-        if conversation.get("teacher_id") or current != "pending":
-            raise HelpRequestWithdrawalRefused("teacher_help_already_accepted")
+        if current == outcome:
+            return _Ending(dict(conversation), changed=False)
+        if conversation.get("teacher_id") or current in {"in_progress", "resolved"}:
+            raise HelpRequestEndingRefused("teacher_help_already_accepted")
+        if current != "pending":
+            raise HelpRequestEndingRefused("teacher_help_request_closed")
         try:
             question = _escalated_question_row(store, request_id)
         except QueueRowUnavailable as exc:
-            raise HelpRequestWithdrawalUnavailable(conversation_id) from exc
+            raise HelpRequestEndingUnavailable(conversation_id) from exc
+        if escalated_before is not None:
+            asked = _asked_at(conversation, question)
+            cutoff = _parse_timestamp(escalated_before)
+            if asked is None:
+                logger.warning("Cannot tell when %s was asked for; not expiring it", conversation_id)
+                raise HelpRequestEndingRefused("teacher_help_request_not_due")
+            if cutoff is None or asked > cutoff:
+                raise HelpRequestEndingRefused("teacher_help_request_not_due")
         if (
             question is None
             or not is_chat_question_row(question)
             or question.get("status") != QuestionStatus.ESCALATED.value
             or str(question.get("conversation_id") or "") != conversation_id
-            or question.get("student_id") != student_id
+            or question.get("student_id") != owner
             or question.get("teacher_id")
         ):
-            raise HelpRequestWithdrawalRefused("teacher_help_request_not_withdrawable")
+            raise HelpRequestEndingRefused("teacher_help_request_not_withdrawable")
 
         conversation_update = {
             "Update": {
-                "Key": {"PK": f"CONV#{conversation_id}", "SK": "CONV"},
+                "Key": conversation_key,
                 "UpdateExpression": (
-                    "SET escalation_status = :withdrawn, dispatch_status = :withdrawn, "
-                    "escalation_withdrawn_at = :now, updated_at = :now REMOVE "
+                    "SET escalation_status = :outcome, dispatch_status = :outcome, "
+                    f"escalation_{outcome}_at = :now, updated_at = :now REMOVE "
                     + ", ".join((*_OFFER_FIELDS, *_NO_CANDIDATE_FIELDS))
                 ),
                 # A conversation escalated before the status was written has
@@ -748,9 +856,9 @@ def withdraw_help_request(
                     "AND attribute_not_exists(teacher_id)"
                 ),
                 "ExpressionAttributeValues": {
-                    ":withdrawn": _WITHDRAWN,
+                    ":outcome": outcome,
                     ":now": timestamp,
-                    ":student": student_id,
+                    ":student": owner,
                     ":request": request_id,
                     ":pending": "pending",
                 },
@@ -759,12 +867,12 @@ def withdraw_help_request(
         # The queue row's CAS carries the student's fence.
         queue_operations = question_repo.build_question_update_transaction(
             question,
-            status=QuestionStatus.WITHDRAWN.value,
+            status=outcome,
             expected_generation=int(_int(question.get("account_fence_generation"), 1)),
             condition_expression="attribute_not_exists(teacher_id)",
             extra_attrs={
-                "dispatch_status": _WITHDRAWN,
-                "withdrawn_at": timestamp,
+                "dispatch_status": outcome,
+                f"{outcome}_at": timestamp,
                 "dispatch_updated_at": timestamp,
                 "dispatch_no_candidate_reason": None,
                 **dict.fromkeys(_OFFER_FIELDS),
@@ -782,8 +890,8 @@ def withdraw_help_request(
         result = allowance.refund_teacher_support_case(
             support_case_id=conversation_id,
             case_kind="conversation",
-            beneficiary_id=student_id,
-            reason=_WITHDRAWN,
+            beneficiary_id=owner,
+            reason=outcome,
             persist_refund=persist,
             observed_at=observed,
             table=store,
@@ -798,13 +906,18 @@ def withdraw_help_request(
             # What the write left, read back rather than rebuilt here.
             try:
                 written = store.get_item(Key=conversation_key, ConsistentRead=True).get("Item")
-            except Exception:  # noqa: BLE001 - the withdrawal itself is committed
+            except Exception:  # noqa: BLE001 - the ending itself is committed
                 written = None
-            return dict(written or {**conversation, "escalation_status": _WITHDRAWN})
+            return _Ending(
+                dict(written or {**conversation, "escalation_status": outcome}),
+                changed=True,
+                refund=result.disposition,
+                refund_week=result.week_identity,
+            )
         if result.disposition is Disposition.IDEMPOTENCY_CONFLICT:
-            raise HelpRequestWithdrawalRefused("teacher_help_request_not_withdrawable")
+            raise HelpRequestEndingRefused("teacher_help_request_not_withdrawable")
         # Retryable: something moved (a teacher, the counter). Read again.
-    raise HelpRequestWithdrawalUnavailable(conversation_id)
+    raise HelpRequestEndingUnavailable(conversation_id)
 
 
 class HelpRequestConflict(Exception):
@@ -1379,7 +1492,12 @@ def list_escalated_conversations(limit: int = 200) -> list[dict[str, Any]]:
         table,
         filter_expression="entity_type = :conversation AND escalated = :yes",
         expression_attribute_values={":conversation": "conversation", ":yes": True},
-        accept_item=lambda item: item if item.get("conversation_id") else None,
+        # Only those still waiting: ended ones counted against the limit, and
+        # once enough had ended, a waiting one past them was never reached.
+        accept_item=lambda item: item
+        if item.get("conversation_id")
+        and str(item.get("escalation_status") or "pending") == "pending"
+        else None,
         limit=limit,
     )
 
@@ -1430,11 +1548,29 @@ def reconcile_dispatches(
     # dispatch on the conversation rather than on a question.
     conversations_waiting = 0
     conversations_dispatched: list[dict[str, Any]] = []
+    conversations_expired: list[str] = []
     conversation_sweep = "completed"
+    expire_before = _expiry_cutoff(timestamp)
     try:
         for conversation in list_escalated_conversations():
             if str(conversation.get("escalation_status") or "") not in {"", "pending"}:
                 continue
+            # Before any re-offer: a request nobody took in time ends here (#87),
+            # an outstanding offer with it.
+            if _due_to_expire(conversation, expire_before):
+                conversation_id = str(conversation.get("conversation_id") or "")
+                try:
+                    expired = expire_help_request(
+                        conversation_id, escalated_before=expire_before, now=timestamp
+                    )
+                except Exception:  # noqa: BLE001 - one row must not stop the sweep
+                    # Still pending, so offering it again is safe; the next
+                    # sweep tries the expiry again.
+                    logger.warning("Expiry of %s deferred", conversation_id, exc_info=True)
+                    expired = None
+                if expired is not None:
+                    conversations_expired.append(conversation_id)
+                    continue
             if (
                 conversation.get("dispatch_status") == "dispatched"
                 and conversation.get("dispatched_teacher_id")
@@ -1466,5 +1602,25 @@ def reconcile_dispatches(
         "conversationSweep": conversation_sweep,
         "conversationsWaiting": conversations_waiting,
         "conversationsDispatched": conversations_dispatched,
+        "conversationsExpired": conversations_expired,
         "generatedAt": timestamp,
     }
+
+
+def _expiry_cutoff(now: str) -> str:
+    """Requests asked for before this moment have waited past the limit."""
+    parsed = _parse_timestamp(now) or datetime.now(timezone.utc)
+    return (parsed - timedelta(seconds=settings.teacher_help_expiry_seconds)).isoformat()
+
+
+def _due_to_expire(conversation: dict[str, Any], cutoff: str) -> bool:
+    """A cheap first look; the ending decides on a fresh read of both rows.
+
+    A conversation whose own stamp cannot be read is passed on, so the ending
+    can fall back to the queue row's - left out here, it would never expire.
+    """
+    if conversation.get("teacher_id"):
+        return False
+    asked = _parse_timestamp(conversation.get("escalated_at"))
+    limit = _parse_timestamp(cutoff)
+    return asked is None or (limit is not None and asked <= limit)

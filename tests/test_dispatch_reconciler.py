@@ -169,7 +169,7 @@ def test_the_scheduled_job_reports_what_it_did(monkeypatch):
     assert result == {
         "status": "completed", "reassigned": 2, "waiting": 3, "dispatched": 1,
         "conversationSweep": "completed",
-        "conversationsWaiting": 1, "conversationsDispatched": 1,
+        "conversationsWaiting": 1, "conversationsDispatched": 1, "conversationsExpired": 0,
         "generatedAt": stamp(),
     }
 
@@ -294,3 +294,22 @@ def test_the_conversation_lister_asks_for_conversations_that_were_escalated(monk
     assert callable(seen["accept_item"])
     assert seen["accept_item"]({"conversation_id": "c-1"}) == {"conversation_id": "c-1"}
     assert seen["accept_item"]({"no_id": True}) is None
+
+
+def test_the_conversation_lister_leaves_out_requests_that_have_ended(monkeypatch):
+    # The limit counts what is accepted, so an ended request accepted here took
+    # the place of a waiting one; enough of them and the sweep never reached it.
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(
+        dispatch, "_scan_filtered_items", lambda table, **kwargs: seen.update(kwargs) or []
+    )
+    monkeypatch.setattr(dispatch, "get_table", lambda: object())
+    dispatch.list_escalated_conversations()
+    accept = seen["accept_item"]
+    for status in ("expired", "withdrawn", "resolved", "in_progress"):
+        assert accept({"conversation_id": "c-1", "escalation_status": status}) is None, status
+    for row in (
+        {"conversation_id": "c-1", "escalation_status": "pending"},
+        {"conversation_id": "c-1"},
+    ):
+        assert accept(row) == row

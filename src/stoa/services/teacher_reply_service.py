@@ -6,7 +6,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from stoa.models.question import QuestionStatus
+from stoa.models.question import ENDED_WITHOUT_TEACHER
 
 REPLY_FORMAT = "stoa_teacher_reply_v1"
 FIRST_REPLY_TARGET_SECONDS = 30 * 60
@@ -117,8 +117,8 @@ def aggregate_teacher_sla(questions: list[dict[str, Any]]) -> dict[str, Any]:
     teacher_questions = [
         item
         for item in questions
-        # A withdrawn request was never a teacher's to answer (#86).
-        if item.get("status") != QuestionStatus.WITHDRAWN.value
+        # A withdrawn or expired request was never a teacher's to answer (#86, #87).
+        if item.get("status") not in ENDED_WITHOUT_TEACHER
         and (
             item.get("teacher_requested_at")
             or item.get("queue_visible_at")

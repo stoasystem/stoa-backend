@@ -86,6 +86,14 @@ class TeacherSupportRefundDisposition(StrEnum):
 @dataclass(frozen=True, slots=True)
 class TeacherSupportRefundResult:
     disposition: TeacherSupportRefundDisposition
+    # The Zurich week the case belongs to, when there is one: a refund goes
+    # back there, which is the current week only if the week has not turned.
+    week_identity: str | None = None
+
+
+def current_week_identity(observed_at: datetime | None = None) -> str:
+    """The Zurich week a case spent at ``observed_at`` would be counted in."""
+    return _week_identity(allowance_service.zurich_week(_aware(observed_at, "observed_at")))
 
 
 @dataclass(frozen=True, slots=True)
@@ -1113,7 +1121,8 @@ def refund_teacher_support_case(
             seen = _refund_seen_check(receipt_key, "attribute_exists(refunded_at)")
             if _persisted(persist_refund, (seen,), what="refund"):
                 return TeacherSupportRefundResult(
-                    TeacherSupportRefundDisposition.ALREADY_REFUNDED
+                    TeacherSupportRefundDisposition.ALREADY_REFUNDED,
+                    str(receipt.get("week_identity") or "") or None,
                 )
             continue
 
@@ -1181,7 +1190,10 @@ def refund_teacher_support_case(
             },
         )
         if _persisted(persist_refund, operations, what="refund"):
-            return TeacherSupportRefundResult(TeacherSupportRefundDisposition.REFUNDED)
+            return TeacherSupportRefundResult(
+                TeacherSupportRefundDisposition.REFUNDED,
+                str(receipt.get("week_identity") or "") or None,
+            )
     return TeacherSupportRefundResult(TeacherSupportRefundDisposition.RETRYABLE)
 
 
@@ -1245,6 +1257,7 @@ __all__ = [
     "TeacherSupportRefundResult",
     "TeacherSupportCaseAdmission",
     "admit_teacher_support_case",
+    "current_week_identity",
     "get_teacher_support_projection",
     "refund_teacher_support_case",
 ]

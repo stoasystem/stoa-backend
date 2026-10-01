@@ -152,6 +152,10 @@ class Settings(BaseSettings):
     # DynamoDB
     dynamodb_table_name: str = "stoa-main"
 
+    # A chat help request no teacher took within this long is ended by the
+    # dispatch sweep and its weekly case given back (#87).
+    teacher_help_expiry_seconds: int = 24 * 60 * 60
+
     # S3
     s3_images_bucket: str = "stoa-images"
     s3_reports_bucket: str = LOCAL_REPORTS_BUCKET_PLACEHOLDER

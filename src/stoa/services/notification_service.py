@@ -28,6 +28,7 @@ EVENT_TYPES = {
     "teacher_requested",
     "teacher_takeover",
     "teacher_reply",
+    "teacher_help_expired",
     "moderation_case_update",
     "subscription_request_update",
     "learning_profile_update",
@@ -49,6 +50,7 @@ EVENT_CATEGORY_BY_TYPE = {
     "teacher_requested": "teacher_responses",
     "teacher_takeover": "teacher_responses",
     "teacher_reply": "teacher_responses",
+    "teacher_help_expired": "teacher_responses",
     "moderation_case_update": "admin_operations",
     "subscription_request_update": "admin_operations",
     "learning_profile_update": "learning_updates",
@@ -1037,6 +1039,36 @@ def emit_teacher_reply(*, question: dict[str, Any], teacher_id: str) -> None:
         actor_role="teacher",
         owner_id=str(question.get("student_id") or ""),
         account_fence_generation=question.get("account_fence_generation"),
+    )
+
+
+def emit_teacher_help_expired(*, conversation: Mapping[str, Any], case_returned: bool) -> None:
+    """Tell the student their request for a teacher expired (#87), once.
+
+    The event's id is the request's, so a second call is refused by the store.
+    It says the week's case came back only when it went back into the current
+    week: a request that crossed into a new week returns its case to the week
+    it was asked in, which the student can no longer use.
+    """
+    student_id = str(conversation.get("student_id") or "")
+    request_id = str(conversation.get("escalation_request_id") or "")
+    create_event_safe(
+        recipient_id=student_id,
+        recipient_role="student",
+        event_type="teacher_help_expired",
+        target_type="conversation",
+        target_id=str(conversation.get("conversation_id") or ""),
+        title="No teacher was available",
+        summary=(
+            "Your request for a teacher expired. This week's teacher help was given back."
+            if case_returned
+            else "Your request for a teacher expired."
+        ),
+        metadata={"request_id": request_id},
+        actor_role="system",
+        owner_id=student_id,
+        account_fence_generation=conversation.get("account_fence_generation"),
+        event_id=f"teacher-help-expired-{request_id}",
     )
 
 

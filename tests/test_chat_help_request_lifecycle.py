@@ -117,9 +117,23 @@ def build_table(monkeypatch) -> FakeTable:
     return table
 
 
+def keep_waiting(monkeypatch) -> None:
+    """Let the sweep, on the real clock, leave these fixed-date rows waiting.
+
+    They were asked for on a fixed date, so past the waiting limit the sweep
+    would expire them (#87). A test that is not about expiry opts in to this;
+    the expiry tests set the clock and the limit themselves.
+    """
+    from stoa.config import settings
+
+    monkeypatch.setattr(settings, "teacher_help_expiry_seconds", 10 * 365 * 24 * 60 * 60)
+
+
 @pytest.fixture
 def table(monkeypatch) -> FakeTable:
-    return build_table(monkeypatch)
+    built = build_table(monkeypatch)
+    keep_waiting(monkeypatch)
+    return built
 
 
 def _dispatch_to(table: FakeTable, teacher_id: str) -> None:
