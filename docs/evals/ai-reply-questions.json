@@ -1,0 +1,407 @@
+{
+  "schema_version": 1,
+  "card": "stoa-docs 078 (C-10); stoasystem/stoa-backend#43",
+  "note": "4 languages x 4 subjects (the platform's SUPPORTED_SUBJECTS) x 2 difficulties, plus out-of-syllabus in-subject questions far above the student's grade. The forbidden terms are read from docs/security/tutor-term-allowlist.json when the evaluation runs, so the legacy term is written nowhere here.",
+  "items": [
+    {
+      "id": "de-math-easy",
+      "language": "de",
+      "subject": "math",
+      "grade": "Grade 6",
+      "difficulty": "easy",
+      "out_of_syllabus": false,
+      "question": "Wie addiere ich die Brüche 1/3 und 1/4?",
+      "expected_language": "de"
+    },
+    {
+      "id": "de-math-hard",
+      "language": "de",
+      "subject": "math",
+      "grade": "Grade 8",
+      "difficulty": "hard",
+      "out_of_syllabus": false,
+      "question": "Wie löse ich das Gleichungssystem 2x + y = 7 und x - y = 2?",
+      "expected_language": "de"
+    },
+    {
+      "id": "de-physics-easy",
+      "language": "de",
+      "subject": "physics",
+      "grade": "Grade 7",
+      "difficulty": "easy",
+      "out_of_syllabus": false,
+      "question": "Warum fällt ein Stein schneller als ein Blatt Papier?",
+      "expected_language": "de"
+    },
+    {
+      "id": "de-physics-hard",
+      "language": "de",
+      "subject": "physics",
+      "grade": "Grade 9",
+      "difficulty": "hard",
+      "out_of_syllabus": false,
+      "question": "Ein Auto beschleunigt in 5 Sekunden von 0 auf 20 m/s. Wie gross ist die Beschleunigung?",
+      "expected_language": "de"
+    },
+    {
+      "id": "de-german-easy",
+      "language": "de",
+      "subject": "german",
+      "grade": "Grade 6",
+      "difficulty": "easy",
+      "out_of_syllabus": false,
+      "question": "Wann schreibe ich 'das' und wann 'dass'?",
+      "expected_language": "de"
+    },
+    {
+      "id": "de-german-hard",
+      "language": "de",
+      "subject": "german",
+      "grade": "Grade 8",
+      "difficulty": "hard",
+      "out_of_syllabus": false,
+      "question": "Wie bilde ich den Konjunktiv II von 'gehen' und wann brauche ich ihn?",
+      "expected_language": "de"
+    },
+    {
+      "id": "de-english-easy",
+      "language": "de",
+      "subject": "english",
+      "grade": "Grade 6",
+      "difficulty": "easy",
+      "out_of_syllabus": false,
+      "question": "Wann benutze ich im Englischen 'some' und wann 'any'?",
+      "expected_language": "de"
+    },
+    {
+      "id": "de-english-hard",
+      "language": "de",
+      "subject": "english",
+      "grade": "Grade 8",
+      "difficulty": "hard",
+      "out_of_syllabus": false,
+      "question": "Was ist der Unterschied zwischen Present Perfect und Simple Past?",
+      "expected_language": "de"
+    },
+    {
+      "id": "en-math-easy",
+      "language": "en",
+      "subject": "math",
+      "grade": "Grade 6",
+      "difficulty": "easy",
+      "out_of_syllabus": false,
+      "question": "How do I find 20% of 150?",
+      "expected_language": "en"
+    },
+    {
+      "id": "en-math-hard",
+      "language": "en",
+      "subject": "math",
+      "grade": "Grade 8",
+      "difficulty": "hard",
+      "out_of_syllabus": false,
+      "question": "How do I solve the equation 3(x - 2) = 2x + 5?",
+      "expected_language": "en"
+    },
+    {
+      "id": "en-physics-easy",
+      "language": "en",
+      "subject": "physics",
+      "grade": "Grade 7",
+      "difficulty": "easy",
+      "out_of_syllabus": false,
+      "question": "Why does ice float on water?",
+      "expected_language": "en"
+    },
+    {
+      "id": "en-physics-hard",
+      "language": "en",
+      "subject": "physics",
+      "grade": "Grade 9",
+      "difficulty": "hard",
+      "out_of_syllabus": false,
+      "question": "A 2 kg ball moves at 3 m/s. What is its kinetic energy?",
+      "expected_language": "en"
+    },
+    {
+      "id": "en-german-easy",
+      "language": "en",
+      "subject": "german",
+      "grade": "Grade 6",
+      "difficulty": "easy",
+      "out_of_syllabus": false,
+      "question": "How do I know whether a German noun is der, die or das?",
+      "expected_language": "en"
+    },
+    {
+      "id": "en-german-hard",
+      "language": "en",
+      "subject": "german",
+      "grade": "Grade 8",
+      "difficulty": "hard",
+      "out_of_syllabus": false,
+      "question": "How does word order change in a German subordinate clause with 'weil'?",
+      "expected_language": "en"
+    },
+    {
+      "id": "en-english-easy",
+      "language": "en",
+      "subject": "english",
+      "grade": "Grade 6",
+      "difficulty": "easy",
+      "out_of_syllabus": false,
+      "question": "When do I use 'their', 'there' and 'they're'?",
+      "expected_language": "en"
+    },
+    {
+      "id": "en-english-hard",
+      "language": "en",
+      "subject": "english",
+      "grade": "Grade 8",
+      "difficulty": "hard",
+      "out_of_syllabus": false,
+      "question": "How do I turn 'She said: I am tired' into reported speech?",
+      "expected_language": "en"
+    },
+    {
+      "id": "fr-math-easy",
+      "language": "fr",
+      "subject": "math",
+      "grade": "Grade 6",
+      "difficulty": "easy",
+      "out_of_syllabus": false,
+      "question": "Comment calculer le périmètre d'un rectangle de 5 cm sur 3 cm ?",
+      "expected_language": "fr"
+    },
+    {
+      "id": "fr-math-hard",
+      "language": "fr",
+      "subject": "math",
+      "grade": "Grade 8",
+      "difficulty": "hard",
+      "out_of_syllabus": false,
+      "question": "Comment factoriser l'expression x² - 9 ?",
+      "expected_language": "fr"
+    },
+    {
+      "id": "fr-physics-easy",
+      "language": "fr",
+      "subject": "physics",
+      "grade": "Grade 7",
+      "difficulty": "easy",
+      "out_of_syllabus": false,
+      "question": "Pourquoi entend-on le tonnerre après avoir vu l'éclair ?",
+      "expected_language": "fr"
+    },
+    {
+      "id": "fr-physics-hard",
+      "language": "fr",
+      "subject": "physics",
+      "grade": "Grade 9",
+      "difficulty": "hard",
+      "out_of_syllabus": false,
+      "question": "Une résistance de 10 ohms est traversée par un courant de 2 A. Quelle est la tension ?",
+      "expected_language": "fr"
+    },
+    {
+      "id": "fr-german-easy",
+      "language": "fr",
+      "subject": "german",
+      "grade": "Grade 6",
+      "difficulty": "easy",
+      "out_of_syllabus": false,
+      "question": "Comment conjuguer le verbe allemand 'sein' au présent ?",
+      "expected_language": "fr"
+    },
+    {
+      "id": "fr-german-hard",
+      "language": "fr",
+      "subject": "german",
+      "grade": "Grade 8",
+      "difficulty": "hard",
+      "out_of_syllabus": false,
+      "question": "Quand faut-il utiliser le datif après une préposition en allemand ?",
+      "expected_language": "fr"
+    },
+    {
+      "id": "fr-english-easy",
+      "language": "fr",
+      "subject": "english",
+      "grade": "Grade 6",
+      "difficulty": "easy",
+      "out_of_syllabus": false,
+      "question": "Comment former le pluriel des noms en anglais ?",
+      "expected_language": "fr"
+    },
+    {
+      "id": "fr-english-hard",
+      "language": "fr",
+      "subject": "english",
+      "grade": "Grade 8",
+      "difficulty": "hard",
+      "out_of_syllabus": false,
+      "question": "Quelle est la différence entre 'will' et 'going to' en anglais ?",
+      "expected_language": "fr"
+    },
+    {
+      "id": "it-math-easy",
+      "language": "it",
+      "subject": "math",
+      "grade": "Grade 6",
+      "difficulty": "easy",
+      "out_of_syllabus": false,
+      "question": "Come si calcola l'area di un triangolo con base 6 cm e altezza 4 cm?",
+      "expected_language": "it"
+    },
+    {
+      "id": "it-math-hard",
+      "language": "it",
+      "subject": "math",
+      "grade": "Grade 8",
+      "difficulty": "hard",
+      "out_of_syllabus": false,
+      "question": "Come si risolve la disequazione 2x - 3 > 5?",
+      "expected_language": "it"
+    },
+    {
+      "id": "it-physics-easy",
+      "language": "it",
+      "subject": "physics",
+      "grade": "Grade 7",
+      "difficulty": "easy",
+      "out_of_syllabus": false,
+      "question": "Perché una nave di ferro galleggia?",
+      "expected_language": "it"
+    },
+    {
+      "id": "it-physics-hard",
+      "language": "it",
+      "subject": "physics",
+      "grade": "Grade 9",
+      "difficulty": "hard",
+      "out_of_syllabus": false,
+      "question": "Quanta energia serve per scaldare 1 kg d'acqua di 10 gradi?",
+      "expected_language": "it"
+    },
+    {
+      "id": "it-german-easy",
+      "language": "it",
+      "subject": "german",
+      "grade": "Grade 6",
+      "difficulty": "easy",
+      "out_of_syllabus": false,
+      "question": "Come si dice 'buongiorno' e 'grazie' in tedesco e quando si usano?",
+      "expected_language": "it"
+    },
+    {
+      "id": "it-german-hard",
+      "language": "it",
+      "subject": "german",
+      "grade": "Grade 8",
+      "difficulty": "hard",
+      "out_of_syllabus": false,
+      "question": "Come si forma il Perfekt dei verbi separabili in tedesco?",
+      "expected_language": "it"
+    },
+    {
+      "id": "it-english-easy",
+      "language": "it",
+      "subject": "english",
+      "grade": "Grade 6",
+      "difficulty": "easy",
+      "out_of_syllabus": false,
+      "question": "Come si usa il genitivo sassone in inglese?",
+      "expected_language": "it"
+    },
+    {
+      "id": "it-english-hard",
+      "language": "it",
+      "subject": "english",
+      "grade": "Grade 8",
+      "difficulty": "hard",
+      "out_of_syllabus": false,
+      "question": "Quando si usa il condizionale in inglese con 'would'?",
+      "expected_language": "it"
+    },
+    {
+      "id": "de-math-beyond",
+      "language": "de",
+      "subject": "math",
+      "grade": "Grade 6",
+      "difficulty": "beyond",
+      "out_of_syllabus": true,
+      "question": "Was ist die Ableitung von x² und wofür braucht man Ableitungen?",
+      "expected_language": "de"
+    },
+    {
+      "id": "en-math-beyond",
+      "language": "en",
+      "subject": "math",
+      "grade": "Grade 6",
+      "difficulty": "beyond",
+      "out_of_syllabus": true,
+      "question": "What is the derivative of x³ and what does it tell me?",
+      "expected_language": "en"
+    },
+    {
+      "id": "fr-math-beyond",
+      "language": "fr",
+      "subject": "math",
+      "grade": "Grade 6",
+      "difficulty": "beyond",
+      "out_of_syllabus": true,
+      "question": "Qu'est-ce qu'une intégrale et comment calculer celle de 2x ?",
+      "expected_language": "fr"
+    },
+    {
+      "id": "it-math-beyond",
+      "language": "it",
+      "subject": "math",
+      "grade": "Grade 6",
+      "difficulty": "beyond",
+      "out_of_syllabus": true,
+      "question": "Che cos'è un limite in analisi matematica?",
+      "expected_language": "it"
+    },
+    {
+      "id": "de-physics-beyond",
+      "language": "de",
+      "subject": "physics",
+      "grade": "Grade 5",
+      "difficulty": "beyond",
+      "out_of_syllabus": true,
+      "question": "Was ist ein Quantensprung in einem Atom?",
+      "expected_language": "de"
+    },
+    {
+      "id": "en-physics-beyond",
+      "language": "en",
+      "subject": "physics",
+      "grade": "Grade 5",
+      "difficulty": "beyond",
+      "out_of_syllabus": true,
+      "question": "What is quantum entanglement?",
+      "expected_language": "en"
+    },
+    {
+      "id": "fr-physics-beyond",
+      "language": "fr",
+      "subject": "physics",
+      "grade": "Grade 5",
+      "difficulty": "beyond",
+      "out_of_syllabus": true,
+      "question": "Qu'est-ce que la relativité restreinte d'Einstein ?",
+      "expected_language": "fr"
+    },
+    {
+      "id": "it-physics-beyond",
+      "language": "it",
+      "subject": "physics",
+      "grade": "Grade 5",
+      "difficulty": "beyond",
+      "out_of_syllabus": true,
+      "question": "Che cosa dice il principio di indeterminazione di Heisenberg?",
+      "expected_language": "it"
+    }
+  ]
+}
