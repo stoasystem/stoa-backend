@@ -75,6 +75,19 @@ class TeacherSupportAdmissionResult:
     admission: TeacherSupportCaseAdmission | None = None
 
 
+class TeacherSupportRefundDisposition(StrEnum):
+    REFUNDED = "refunded"
+    ALREADY_REFUNDED = "already_refunded"
+    NOT_ADMITTED = "not_admitted"
+    IDEMPOTENCY_CONFLICT = "idempotency_conflict"
+    RETRYABLE = "retryable"
+
+
+@dataclass(frozen=True, slots=True)
+class TeacherSupportRefundResult:
+    disposition: TeacherSupportRefundDisposition
+
+
 @dataclass(frozen=True, slots=True)
 class _ResolvedScope:
     beneficiary_id: str
@@ -1030,19 +1043,162 @@ def admit_teacher_support_case(
             },
             counter_condition,
         )
-        try:
-            committed = bool(persist_case(tuple(operations)))
-        except Exception:
-            # A contended transaction is expected and the loop retries it, but
-            # swallowing the reason left the student a 503 and nobody a cause.
-            logger.warning("Teacher-support case did not commit", exc_info=True)
-            committed = False
-        if committed:
+        if _persisted(persist_case, tuple(operations), what="case"):
             return TeacherSupportAdmissionResult(
                 TeacherSupportAdmissionDisposition.ADMITTED,
                 _admission_from_item(receipt),
             )
     return TeacherSupportAdmissionResult(TeacherSupportAdmissionDisposition.RETRYABLE)
+
+
+def refund_teacher_support_case(
+    *,
+    support_case_id: str,
+    case_kind: str,
+    beneficiary_id: str,
+    reason: str,
+    persist_refund: PersistCase,
+    observed_at: datetime | None = None,
+    table: object | None = None,
+    attempts: int = 4,
+) -> TeacherSupportRefundResult:
+    """Give an admitted case back, once, to the week it was taken from (#86).
+
+    The admission run backwards. The receipt is marked refunded under its own
+    version, and the counter of the receipt's week - not the current week - is
+    lowered by one under the same compare-and-set an admission writes it with,
+    so a refund and an admission racing for one counter cannot both win.
+
+    ``persist_refund`` is called exactly once per attempt and must commit the
+    caller's own writes in the same transaction. A caller whose own writes were
+    built from a read of its own passes ``attempts=1`` and retries itself, so a
+    refused write is followed by a fresh read rather than the same stale one. A case that was never
+    admitted, or was already refunded, is still handed over as a check on what
+    was seen, so the caller's row moves commit either way.
+    """
+    case_id = _required_text(support_case_id, "support_case_id")
+    kind = _required_text(case_kind, "case_kind", maximum=20)
+    beneficiary = _required_text(beneficiary_id, "beneficiary_id")
+    refund_reason = _required_text(reason, "reason", maximum=40)
+    if kind not in _CASE_KINDS:
+        raise ValueError("case_kind is invalid")
+    if not callable(persist_refund):
+        raise ValueError("persist_refund is required")
+    observed = _aware(observed_at, "observed_at")
+    target = table or get_table()
+    receipt_key = _case_key(kind, case_id)
+
+    for _ in range(max(1, attempts)):
+        try:
+            receipt = _strong_get(target, receipt_key)
+        except _DependencyFailure:
+            logger.warning("Teacher-support refund deferred", exc_info=True)
+            return TeacherSupportRefundResult(TeacherSupportRefundDisposition.RETRYABLE)
+
+        if receipt is None:
+            seen = _refund_seen_check(receipt_key, "attribute_not_exists(PK)")
+            if _persisted(persist_refund, (seen,), what="refund"):
+                return TeacherSupportRefundResult(TeacherSupportRefundDisposition.NOT_ADMITTED)
+            continue
+        if (
+            receipt.get("beneficiary_id") != beneficiary
+            or receipt.get("case_kind") != kind
+            or receipt.get("support_case_id") != case_id
+        ):
+            logger.error("Teacher-support refund refused: the receipt names another case")
+            return TeacherSupportRefundResult(
+                TeacherSupportRefundDisposition.IDEMPOTENCY_CONFLICT
+            )
+        if receipt.get("refunded_at"):
+            seen = _refund_seen_check(receipt_key, "attribute_exists(refunded_at)")
+            if _persisted(persist_refund, (seen,), what="refund"):
+                return TeacherSupportRefundResult(
+                    TeacherSupportRefundDisposition.ALREADY_REFUNDED
+                )
+            continue
+
+        try:
+            _admission_from_item(receipt)
+            receipt_version = _positive_integer(receipt.get("state_version"), "state_version")
+            counter_key = _counter_key(
+                _required_text(receipt.get("support_scope_id"), "support_scope_id"),
+                _required_text(receipt.get("week_identity"), "week_identity", maximum=8),
+            )
+            counter = _strong_get(target, counter_key)
+            if (
+                counter is None
+                or counter.get("entity_type") != "teacher_support_counter"
+                or counter.get("support_scope_id") != receipt.get("support_scope_id")
+                or counter.get("week_identity") != receipt.get("week_identity")
+            ):
+                raise _DependencyFailure("teacher-support counter is missing for a receipt")
+            admitted = _stored_nonnegative_integer(
+                counter.get("admitted_cases"), "admitted_cases"
+            )
+            counter_version = _positive_integer(counter.get("state_version"), "state_version")
+            if admitted < 1:
+                raise _DependencyFailure("teacher-support counter has no case to give back")
+        except (_DependencyFailure, ValueError):
+            # A receipt with no case on its counter is damage, not a race: the
+            # refund waits for a repair rather than inventing a count.
+            logger.error("Teacher-support refund refused on damaged rows", exc_info=True)
+            return TeacherSupportRefundResult(TeacherSupportRefundDisposition.RETRYABLE)
+
+        stamp = _timestamp(observed)
+        operations = (
+            {
+                "Put": {
+                    "Item": {
+                        **receipt,
+                        "refunded_at": stamp,
+                        "refund_reason": refund_reason,
+                        "state_version": receipt_version + 1,
+                    },
+                    "ConditionExpression": (
+                        "state_version = :receipt_version "
+                        "AND attribute_not_exists(refunded_at)"
+                    ),
+                    "ExpressionAttributeValues": {":receipt_version": receipt_version},
+                }
+            },
+            {
+                "Put": {
+                    "Item": {
+                        **counter,
+                        "admitted_cases": admitted - 1,
+                        "state_version": counter_version + 1,
+                        "updated_at": stamp,
+                    },
+                    "ConditionExpression": (
+                        "state_version = :expected_state_version "
+                        "AND admitted_cases = :expected_admitted_cases"
+                    ),
+                    "ExpressionAttributeValues": {
+                        ":expected_state_version": counter_version,
+                        ":expected_admitted_cases": admitted,
+                    },
+                }
+            },
+        )
+        if _persisted(persist_refund, operations, what="refund"):
+            return TeacherSupportRefundResult(TeacherSupportRefundDisposition.REFUNDED)
+    return TeacherSupportRefundResult(TeacherSupportRefundDisposition.RETRYABLE)
+
+
+def _refund_seen_check(key: Mapping[str, str], condition: str) -> AdmissionOperation:
+    return {"ConditionCheck": {"Key": dict(key), "ConditionExpression": condition}}
+
+
+def _persisted(
+    persist: PersistCase, operations: tuple[AdmissionOperation, ...], *, what: str
+) -> bool:
+    try:
+        return bool(persist(operations))
+    except Exception:
+        # A contended transaction is expected and the caller retries it, but
+        # swallowing the reason left the student a 503 and nobody a cause.
+        logger.warning("Teacher-support %s did not commit", what, exc_info=True)
+        return False
 
 
 def get_teacher_support_projection(
@@ -1085,7 +1241,10 @@ def get_teacher_support_projection(
 __all__ = [
     "TeacherSupportAdmissionDisposition",
     "TeacherSupportAdmissionResult",
+    "TeacherSupportRefundDisposition",
+    "TeacherSupportRefundResult",
     "TeacherSupportCaseAdmission",
     "admit_teacher_support_case",
     "get_teacher_support_projection",
+    "refund_teacher_support_case",
 ]

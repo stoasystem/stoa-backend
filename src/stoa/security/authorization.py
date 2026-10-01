@@ -255,7 +255,7 @@ class TeacherAuthorizationFacts:
                 )
             return dispatch_status in {"", "unassigned", "pending"}
 
-        if dispatch_status in {"timed_out", "reassigned", "revoked"}:
+        if dispatch_status in {"timed_out", "reassigned", "revoked", "withdrawn"}:
             return False
         if action in {
             AuthorizationAction.RESPOND,

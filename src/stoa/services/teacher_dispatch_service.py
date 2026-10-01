@@ -13,7 +13,7 @@ from stoa.db.dynamodb import get_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, practice_repo, question_repo, user_repo
 from stoa.models.question import QuestionStatus
-from stoa.services import teacher_reply_service
+from stoa.services import teacher_reply_service, teacher_support_allowance_service
 
 
 logger = logging.getLogger(__name__)
@@ -86,8 +86,11 @@ def list_teacher_dispatch_questions(limit: int = 200) -> list[dict[str, Any]]:
         table,
         filter_expression="SK = :meta",
         expression_attribute_values={":meta": "META"},
+        # A withdrawn request is over and nobody waits on it (#86); left in, the
+        # board showed it as a request still waiting for a teacher.
         accept_item=lambda item: item
-        if (
+        if item.get("status") != QuestionStatus.WITHDRAWN.value
+        and (
             item.get("teacher_requested_at")
             or item.get("queue_visible_at")
             or item.get("dispatch_status")
@@ -494,10 +497,12 @@ def dispatch_conversation(
         )
     plan = plan_dispatch(planned, now=timestamp)
     if not plan["selected"]:
+        reason = plan["summary"]["noCandidateReason"] or "no_eligible_teacher"
+        _record_no_candidate(conversation, reason=reason, now=timestamp, table=target)
         return {
             "conversationId": conversation_id,
             "status": "no_candidate",
-            "reason": plan["summary"]["noCandidateReason"] or "no_eligible_teacher",
+            "reason": reason,
         }
 
     candidate = plan["selected"][0]
@@ -531,7 +536,8 @@ def dispatch_conversation(
                         "UpdateExpression": (
                             "SET dispatched_teacher_id=:teacher, dispatch_status=:dispatched, "
                             "dispatch_id=:dispatch_id, dispatch_deadline_at=:deadline, "
-                            "dispatch_attempt_count=:attempts, dispatch_updated_at=:now"
+                            "dispatch_attempt_count=:attempts, dispatch_updated_at=:now "
+                            "REMOVE " + ", ".join(_NO_CANDIDATE_FIELDS)
                         ),
                         "ConditionExpression": (
                             "attribute_exists(PK) AND escalation_status=:pending"
@@ -562,7 +568,243 @@ def dispatch_conversation(
     }
 
 
+# What an offer writes on a conversation, and what finding nobody writes. Each
+# write that ends one of them removes exactly these.
+_OFFER_FIELDS = ("dispatched_teacher_id", "dispatch_id", "dispatch_deadline_at")
+_NO_CANDIDATE_FIELDS = ("dispatch_no_candidate_reason", "dispatch_no_candidate_since")
+
+
+def _record_no_candidate(
+    conversation: dict[str, Any], *, reason: str, now: str, table: Any
+) -> None:
+    """Say on the conversation that nobody could be offered it, and since when (#86).
+
+    Finding nobody used to write nothing, so the student read `pending` whether
+    a teacher held the offer or no teacher existed. Written only when something
+    changes - not on every sweep - and `since` keeps the first time, which the
+    long-wait alert (#88) reads. An offer that lapsed is taken off at the same
+    time: left on, the student was shown its teacher long after it was gone.
+
+    Only the conversation is written. The queue row keeps the lapsed offer as
+    `timed_out`, which is the history that keeps the planner from offering the
+    case to the same teacher again.
+
+    Best effort: the sweep runs again, and a conversation that moved on in the
+    meantime (a new offer, a teacher, a withdrawal) is left as it is.
+    """
+    conversation_id = str(conversation.get("conversation_id") or "")
+    request_id = str(conversation.get("escalation_request_id") or "")
+    if not conversation_id or not request_id:
+        return
+    offer = str(conversation.get("dispatch_id") or "")
+    if (
+        conversation.get("dispatch_status") == "no_candidate"
+        and conversation.get("dispatch_no_candidate_reason") == reason
+        and not offer
+    ):
+        return
+    condition = (
+        "attribute_exists(PK) AND escalation_request_id = :request "
+        "AND escalation_status = :pending AND attribute_not_exists(teacher_id) AND "
+        + ("dispatch_id = :offer" if offer else "attribute_not_exists(dispatch_id)")
+    )
+    values: dict[str, Any] = {
+        ":request": request_id,
+        ":pending": "pending",
+        ":no_candidate": "no_candidate",
+        ":reason": reason,
+        ":now": now,
+    }
+    if offer:
+        values[":offer"] = offer
+    try:
+        table.update_item(
+            Key={"PK": f"CONV#{conversation_id}", "SK": "CONV"},
+            UpdateExpression=(
+                "SET dispatch_status = :no_candidate, dispatch_no_candidate_reason = :reason, "
+                "dispatch_no_candidate_since = if_not_exists(dispatch_no_candidate_since, :now), "
+                "dispatch_updated_at = :now REMOVE " + ", ".join(_OFFER_FIELDS)
+            ),
+            ConditionExpression=condition,
+            ExpressionAttributeValues=values,
+        )
+    except Exception:  # noqa: BLE001 - the conversation moved on; the next sweep looks again
+        logger.info("No-candidate record skipped for %s", conversation_id, exc_info=True)
+
+
+def student_help_status(conversation: dict[str, Any], *, now: str | None = None) -> tuple[str, str]:
+    """What a waiting student is told, and which teacher (if any) to name (#86).
+
+    Returns ``(status, teacher_id)``. A teacher is named only while it actually
+    holds the request: it accepted it, or its offer has not lapsed.
+    """
+    timestamp = now or _now()
+    stored = str(conversation.get("escalation_status") or "pending")
+    holder = str(conversation.get("teacher_id") or "")
+    if stored != "pending":
+        return stored, holder
+    if holder:
+        return "assigned", holder
+    offered = str(conversation.get("dispatched_teacher_id") or "")
+    if (
+        offered
+        and conversation.get("dispatch_status") == "dispatched"
+        and not _deadline_expired(conversation.get("dispatch_deadline_at"), timestamp)
+    ):
+        return "assigned", offered
+    if conversation.get("dispatch_status") == "no_candidate":
+        return "waiting_no_teacher", ""
+    return "pending", ""
+
+
 HELP_REQUEST_STATUSES = ("in_progress", "resolved")
+
+
+class HelpRequestWithdrawalRefused(Exception):
+    """The request cannot be withdrawn; ``code`` says why, for the response."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+class HelpRequestWithdrawalUnavailable(Exception):
+    """The withdrawal could not be completed now; trying again is safe."""
+
+
+# The conversation's escalation and its queue row end in the same word.
+_WITHDRAWN = QuestionStatus.WITHDRAWN.value
+
+
+def withdraw_help_request(
+    conversation_id: str,
+    *,
+    student_id: str,
+    now: str | None = None,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """The student takes back a chat help request no teacher has taken (#86).
+
+    Both rows end in one transaction with the refund of the week's case: the
+    conversation and its queue row move to `withdrawn`, any offer is taken off
+    both, and the case goes back to the week it was taken from. Every condition
+    the decision rested on is in that transaction - still pending, still no
+    teacher, the queue row's version and the student's fence - so a teacher
+    accepting at the same moment makes this a refusal, never a split.
+
+    Withdrawing twice returns the withdrawn request and writes nothing.
+
+    Each pass reads both rows afresh and makes one attempt; a refused write is
+    followed by a new read, never by the same write again.
+    """
+    allowance = teacher_support_allowance_service
+    store = table or get_table()
+    timestamp = now or _now()
+    observed = _parse_timestamp(timestamp) or datetime.now(timezone.utc)
+    conversation_key = {"PK": f"CONV#{conversation_id}", "SK": "CONV"}
+    for _ in range(4):
+        try:
+            conversation = store.get_item(Key=conversation_key, ConsistentRead=True).get("Item")
+        except Exception as exc:  # noqa: BLE001 - unknown is not absent
+            raise HelpRequestWithdrawalUnavailable(conversation_id) from exc
+        if not conversation or conversation.get("student_id") != student_id:
+            raise HelpRequestWithdrawalRefused("teacher_help_request_not_found")
+        request_id = str(conversation.get("escalation_request_id") or "")
+        if not request_id:
+            raise HelpRequestWithdrawalRefused("teacher_help_request_not_found")
+        current = str(conversation.get("escalation_status") or "pending")
+        if current == _WITHDRAWN:
+            return dict(conversation)
+        if conversation.get("teacher_id") or current != "pending":
+            raise HelpRequestWithdrawalRefused("teacher_help_already_accepted")
+        try:
+            question = _escalated_question_row(store, request_id)
+        except QueueRowUnavailable as exc:
+            raise HelpRequestWithdrawalUnavailable(conversation_id) from exc
+        if (
+            question is None
+            or not is_chat_question_row(question)
+            or question.get("status") != QuestionStatus.ESCALATED.value
+            or str(question.get("conversation_id") or "") != conversation_id
+            or question.get("student_id") != student_id
+            or question.get("teacher_id")
+        ):
+            raise HelpRequestWithdrawalRefused("teacher_help_request_not_withdrawable")
+
+        conversation_update = {
+            "Update": {
+                "Key": {"PK": f"CONV#{conversation_id}", "SK": "CONV"},
+                "UpdateExpression": (
+                    "SET escalation_status = :withdrawn, dispatch_status = :withdrawn, "
+                    "escalation_withdrawn_at = :now, updated_at = :now REMOVE "
+                    + ", ".join((*_OFFER_FIELDS, *_NO_CANDIDATE_FIELDS))
+                ),
+                # A conversation escalated before the status was written has
+                # none, and is pending all the same.
+                "ConditionExpression": (
+                    "attribute_exists(PK) AND student_id = :student "
+                    "AND escalation_request_id = :request "
+                    "AND (escalation_status = :pending OR attribute_not_exists(escalation_status)) "
+                    "AND attribute_not_exists(teacher_id)"
+                ),
+                "ExpressionAttributeValues": {
+                    ":withdrawn": _WITHDRAWN,
+                    ":now": timestamp,
+                    ":student": student_id,
+                    ":request": request_id,
+                    ":pending": "pending",
+                },
+            }
+        }
+        # The queue row's CAS carries the student's fence.
+        queue_operations = question_repo.build_question_update_transaction(
+            question,
+            status=QuestionStatus.WITHDRAWN.value,
+            expected_generation=int(_int(question.get("account_fence_generation"), 1)),
+            condition_expression="attribute_not_exists(teacher_id)",
+            extra_attrs={
+                "dispatch_status": _WITHDRAWN,
+                "withdrawn_at": timestamp,
+                "dispatch_updated_at": timestamp,
+                "dispatch_no_candidate_reason": None,
+                **dict.fromkeys(_OFFER_FIELDS),
+            },
+        )
+        rows = [conversation_update, *queue_operations]
+
+        def persist(refund_operations: tuple[dict[str, Any], ...]) -> bool:
+            try:
+                account_deletion_repo.transact([*rows, *refund_operations], table=store)
+            except Exception:  # noqa: BLE001 - every refusal means something moved
+                return False
+            return True
+
+        result = allowance.refund_teacher_support_case(
+            support_case_id=conversation_id,
+            case_kind="conversation",
+            beneficiary_id=student_id,
+            reason=_WITHDRAWN,
+            persist_refund=persist,
+            observed_at=observed,
+            table=store,
+            attempts=1,
+        )
+        Disposition = allowance.TeacherSupportRefundDisposition
+        if result.disposition in {
+            Disposition.REFUNDED,
+            Disposition.ALREADY_REFUNDED,
+            Disposition.NOT_ADMITTED,
+        }:
+            # What the write left, read back rather than rebuilt here.
+            try:
+                written = store.get_item(Key=conversation_key, ConsistentRead=True).get("Item")
+            except Exception:  # noqa: BLE001 - the withdrawal itself is committed
+                written = None
+            return dict(written or {**conversation, "escalation_status": _WITHDRAWN})
+        if result.disposition is Disposition.IDEMPOTENCY_CONFLICT:
+            raise HelpRequestWithdrawalRefused("teacher_help_request_not_withdrawable")
+        # Retryable: something moved (a teacher, the counter). Read again.
+    raise HelpRequestWithdrawalUnavailable(conversation_id)
 
 
 class HelpRequestConflict(Exception):
@@ -602,7 +844,12 @@ def advance_help_request(
     conversation_id = str(conversation.get("conversation_id") or "")
     current = str(conversation.get("escalation_status") or "pending")
     holder = str(conversation.get("teacher_id") or "")
-    if not conversation_id or current == "resolved" or (holder and holder != teacher_id):
+    # Only an open request moves; a withdrawn one is as closed as a resolved one.
+    if (
+        not conversation_id
+        or current not in {"pending", "in_progress"}
+        or (holder and holder != teacher_id)
+    ):
         raise HelpRequestConflict("help request is not open to this teacher")
     accepting = not holder
 

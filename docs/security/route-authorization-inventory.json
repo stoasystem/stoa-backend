@@ -4048,6 +4048,22 @@
     ],
     "classification": "authorized",
     "family": "teacher-help",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/teacher-help/conversations/{conv_id}/request/withdraw",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "conversation"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teacher-help",
     "identifiers": [
       "conversationId"
     ],

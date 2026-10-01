@@ -6,6 +6,8 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
+from stoa.models.question import QuestionStatus
+
 REPLY_FORMAT = "stoa_teacher_reply_v1"
 FIRST_REPLY_TARGET_SECONDS = 30 * 60
 FIRST_REPLY_AT_RISK_SECONDS = 20 * 60
@@ -115,11 +117,15 @@ def aggregate_teacher_sla(questions: list[dict[str, Any]]) -> dict[str, Any]:
     teacher_questions = [
         item
         for item in questions
-        if item.get("teacher_requested_at")
-        or item.get("queue_visible_at")
-        or item.get("teacher_taken_over_at")
-        or item.get("teacher_first_replied_at")
-        or item.get("status") in {"escalated", "teacher_active", "resolved"}
+        # A withdrawn request was never a teacher's to answer (#86).
+        if item.get("status") != QuestionStatus.WITHDRAWN.value
+        and (
+            item.get("teacher_requested_at")
+            or item.get("queue_visible_at")
+            or item.get("teacher_taken_over_at")
+            or item.get("teacher_first_replied_at")
+            or item.get("status") in {"escalated", "teacher_active", "resolved"}
+        )
     ]
     first_reply_values = _numeric_values(
         item.get("sla_request_to_first_reply_seconds") for item in teacher_questions

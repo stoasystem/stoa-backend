@@ -932,8 +932,11 @@ def _dispatch_escalated_conversation(
     subject: object,
     now: str,
     table: Any,
-) -> str | None:
-    """Assign a teacher to a fresh escalation and return that teacher's name.
+) -> tuple[str, str | None]:
+    """Offer a fresh escalation to a teacher; return what the student is told.
+
+    Returns ``(status, teacher name)``: `assigned` with the teacher it went to,
+    `waiting_no_teacher` when nobody could be offered it (#86), or `pending`.
 
     Dispatch is best effort so a transient planner failure never rejects an
     escalation that has already consumed the student's weekly allowance. An
@@ -958,13 +961,13 @@ def _dispatch_escalated_conversation(
         )
     except Exception:
         logger.exception("conversation teacher dispatch failed")
-        return None
+        return "pending", None
+    if result.get("status") == "no_candidate":
+        return "waiting_no_teacher", None
     teacher_id = str(result.get("teacherId") or "")
     if result.get("status") != "dispatched" or not teacher_id:
-        return None
-    profile = user_repo.get_user(teacher_id)
-    name = (profile or {}).get("name") or (profile or {}).get("email")
-    return str(name) if name else None
+        return "pending", None
+    return "assigned", _teacher_name(teacher_id)
 
 
 class TeacherHelpResponse(BaseModel):
@@ -3517,7 +3520,7 @@ async def request_teacher_help(
             fallback_created_at=now,
         )
 
-    dispatch = _dispatch_escalated_conversation(
+    dispatch_status, teacher_name = _dispatch_escalated_conversation(
         conversation_id=body.conversationId,
         conversation=conv,
         student_id=student_id,
@@ -3534,8 +3537,8 @@ async def request_teacher_help(
     return TeacherHelpResponse(
         requestId=request_id,
         conversationId=body.conversationId,
-        status="assigned" if dispatch else "pending",
-        teacherName=dispatch,
+        status=dispatch_status,
+        teacherName=teacher_name,
         createdAt=now,
         updatedAt=now,
     )
@@ -3549,17 +3552,12 @@ def _teacher_help_response(
     fallback_created_at: str,
 ) -> TeacherHelpResponse:
     """Describe an escalation the way the waiting student should read it."""
-    teacher_name = _teacher_name(conv.get("dispatched_teacher_id"))
-    escalation_status = str(conv.get("escalation_status") or "pending")
-    # A bound teacher outranks the stored label, which stays 'pending' until the
-    # teacher opens the case, so the student would otherwise never see progress.
-    if teacher_name and escalation_status == "pending":
-        escalation_status = "assigned"
+    escalation_status, teacher_id = teacher_dispatch_service.student_help_status(conv)
     return TeacherHelpResponse(
         requestId=request_id,
         conversationId=conversation_id,
         status=escalation_status,
-        teacherName=teacher_name,
+        teacherName=_teacher_name(teacher_id),
         createdAt=str(
             conv.get("escalated_at") or conv.get("created_at") or fallback_created_at
         ),
@@ -3573,6 +3571,56 @@ def _teacher_name(teacher_id: object) -> str | None:
     profile = user_repo.get_user(teacher_id) or {}
     name = profile.get("name") or profile.get("email")
     return str(name) if name else None
+
+
+@teacher_help_router.post(
+    "/conversations/{conv_id}/request/withdraw", response_model=TeacherHelpResponse
+)
+async def withdraw_teacher_help_request(
+    authorized: AuthorizedResource = Depends(
+        authorized_conversation_dependency(
+            action=AuthorizationAction.UPDATE,
+            purposes=STUDENT_SELF,
+            resolver=lambda conversation_id: _get_conversation(conversation_id),
+        )
+    ),
+):
+    """Take back a teacher-help request no teacher has taken yet (#86).
+
+    Both rows end and the week's case is given back, in one write. Once a
+    teacher has taken the request it can no longer be withdrawn. Asking again
+    in the same conversation is not possible afterwards; a new chat is.
+    """
+    conversation_id = authorized.ref.resource_id
+    try:
+        withdrawn = teacher_dispatch_service.withdraw_help_request(
+            conversation_id, student_id=authorized.ref.student_id
+        )
+    except teacher_dispatch_service.HelpRequestWithdrawalRefused as refused:
+        code = refused.code
+        raise HTTPException(
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+                if code == "teacher_help_request_not_found"
+                else status.HTTP_409_CONFLICT
+            ),
+            detail={"code": code},
+        ) from refused
+    except teacher_dispatch_service.HelpRequestWithdrawalUnavailable as unavailable:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "teacher_help_withdrawal_unavailable",
+                "message": "Withdrawing is briefly unavailable. Please try again.",
+                "action": "retry_same_case",
+            },
+        ) from unavailable
+    return _teacher_help_response(
+        withdrawn,
+        request_id=str(withdrawn.get("escalation_request_id") or ""),
+        conversation_id=conversation_id,
+        fallback_created_at="",
+    )
 
 
 @teacher_help_router.get(

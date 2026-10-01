@@ -13,6 +13,9 @@ class QuestionStatus(str, Enum):
     ESCALATED = "escalated"
     TEACHER_ACTIVE = "teacher_active"
     RESOLVED = "resolved"
+    # A chat help request the student took back before any teacher took it
+    # (#86). Terminal: not dispatched, not resolved, not counted as answered.
+    WITHDRAWN = "withdrawn"
 
 
 class QuestionSubmissionErrorCode(StrEnum):

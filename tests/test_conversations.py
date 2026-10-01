@@ -183,7 +183,11 @@ def test_repeat_teacher_help_replays_the_existing_escalation(monkeypatch):
             "student_id": "student-1",
             "escalation_request_id": "req-1",
             "escalation_status": "pending",
+            # Dispatch writes the teacher, the status and the deadline together;
+            # a teacher is named only while that offer is live (#86).
             "dispatched_teacher_id": "teacher-1",
+            "dispatch_status": "dispatched",
+            "dispatch_deadline_at": "2999-01-01T00:00:00+00:00",
             "escalated_at": "2026-08-24T08:00:00+00:00",
             "updated_at": "2026-08-24T08:05:00+00:00",
         },

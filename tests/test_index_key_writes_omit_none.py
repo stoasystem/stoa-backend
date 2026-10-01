@@ -414,7 +414,7 @@ def test_a_repeat_conversation_help_request_after_a_failed_ledger_write_records_
     monkeypatch.setattr(
         conversations,
         "_dispatch_escalated_conversation",
-        lambda **kwargs: dispatches.append(str(kwargs["request_id"])) or None,
+        lambda **kwargs: dispatches.append(str(kwargs["request_id"])) or ("pending", None),
     )
     monkeypatch.setattr(conversations.user_repo, "get_user", lambda *_args, **_kwargs: None)
     refusals = {"left": 1}

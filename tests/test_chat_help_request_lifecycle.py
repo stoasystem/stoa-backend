@@ -52,8 +52,8 @@ def _teacher_rows(teacher_id: str) -> list[dict]:
     ]
 
 
-@pytest.fixture
-def table(monkeypatch) -> FakeTable:
+def build_table(monkeypatch) -> FakeTable:
+    """The production-shaped rows these tests share; other files build on it too."""
     table = FakeTable()
     table.seed(
         {
@@ -115,6 +115,11 @@ def table(monkeypatch) -> FakeTable:
         if name.startswith("stoa.") and hasattr(module, "get_table"):
             monkeypatch.setattr(module, "get_table", lambda table=table: table)
     return table
+
+
+@pytest.fixture
+def table(monkeypatch) -> FakeTable:
+    return build_table(monkeypatch)
 
 
 def _dispatch_to(table: FakeTable, teacher_id: str) -> None:
@@ -598,10 +603,12 @@ def _delete_teacher(table: FakeTable, teacher_id: str = TEACHER) -> list:
     return results
 
 
-def _assert_waiting_without(table: FakeTable, teacher_id: str) -> None:
+def _assert_waiting_without(
+    table: FakeTable, teacher_id: str, *, conversation_dispatch: str = "unassigned"
+) -> None:
     conv, question = _conv(table), _question(table)
     assert conv["escalation_status"] == "pending"
-    assert conv["dispatch_status"] == "unassigned"
+    assert conv["dispatch_status"] == conversation_dispatch
     assert question["status"] == "escalated"
     assert question["dispatch_status"] == "unassigned"
     for field in _TEACHER_FIELDS_ON_CONVERSATION:
@@ -642,10 +649,14 @@ def test_deleting_the_teacher_after_a_timeout_clears_the_lapsed_offer(table):
     teacher_dispatch_service.reconcile_dispatches()
     assert TEACHER in _question(table)["previous_dispatch_teacher_ids"]
 
+    # The sweep found nobody else and took the lapsed offer off the conversation
+    # itself (#86), so the scrub has only the queue row's history left to clear.
+    assert _conv(table)["dispatch_status"] == "no_candidate"
+
     results = _delete_teacher(table)
 
     assert results[-1].status == "complete", [asdict(r) for r in results]
-    _assert_waiting_without(table, TEACHER)
+    _assert_waiting_without(table, TEACHER, conversation_dispatch="no_candidate")
 
 
 def test_deleting_the_teacher_keeps_a_resolved_request_resolved(table):
