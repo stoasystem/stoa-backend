@@ -155,6 +155,9 @@ class Settings(BaseSettings):
     # A chat help request no teacher took within this long is ended by the
     # dispatch sweep and its weekly case given back (#87).
     teacher_help_expiry_seconds: int = 24 * 60 * 60
+    # One nobody could be offered, waiting longer than this, is reported to
+    # operations by every dispatch sweep until it is taken or ends (#88).
+    teacher_help_alert_after_seconds: int = 30 * 60
 
     # S3
     s3_images_bucket: str = "stoa-images"

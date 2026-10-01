@@ -24,6 +24,9 @@ _EVENTS = frozenset(
         "question_ocr_failed",
         "question_ai_failed",
         "message_replay_wait_exhausted",
+        # A chat help request nobody could be offered, waiting past the alert
+        # limit (#88). stoa-infra pages stoa-alerts on this exact string.
+        "teacher_help_waiting_no_candidate",
     }
 )
 _SAFE_TOKEN = re.compile(r"[^A-Za-z0-9._:-]")
@@ -44,6 +47,7 @@ def emit_private_event(
     attachment_count: int | None = None,
     correlation_id: str | None = None,
     issue_count: int | None = None,
+    wait_minutes: int | None = None,
     level: int = logging.INFO,
 ) -> None:
     """Emit only closed categories, class names, numeric sizes, and opaque IDs."""
@@ -60,6 +64,7 @@ def emit_private_event(
         ("output_size", output_size),
         ("attachment_count", attachment_count),
         ("issue_count", issue_count),
+        ("wait_minutes", wait_minutes),
     ):
         if value is not None:
             fields.append(f"{name}={max(0, int(value))}")

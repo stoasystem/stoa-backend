@@ -15,6 +15,7 @@ from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, practice_repo, question_repo, user_repo
 from stoa.config import settings
 from stoa.models.question import ENDED_WITHOUT_TEACHER, QuestionStatus
+from stoa.security.private_telemetry import emit_private_event
 from stoa.services import (
     notification_service,
     teacher_reply_service,
@@ -23,6 +24,11 @@ from stoa.services import (
 
 
 logger = logging.getLogger(__name__)
+
+# Logged for each request nobody could be offered that has waited past the
+# alert limit (#88). stoa-infra's metric filter matches this exact string, and
+# its test reads it from here.
+TEACHER_HELP_WAITING_EVENT = "teacher_help_waiting_no_candidate"
 
 # How a request no teacher took ends; the conversation's escalation and its
 # queue row end in the same words.
@@ -592,8 +598,9 @@ def _record_no_candidate(
 
     Finding nobody used to write nothing, so the student read `pending` whether
     a teacher held the offer or no teacher existed. Written only when something
-    changes - not on every sweep - and `since` keeps the first time, which the
-    long-wait alert (#88) reads. An offer that lapsed is taken off at the same
+    changes - not on every sweep - and `since` keeps the first time; the
+    long-wait alert (#88) measures from it when the request has no stamp of
+    its own. An offer that lapsed is taken off at the same
     time: left on, the student was shown its teacher long after it was gone.
 
     Only the conversation is written. The queue row keeps the lapsed offer as
@@ -1590,6 +1597,8 @@ def reconcile_dispatches(
                 conversations_dispatched.append(
                     {"conversationId": conversation_id, "status": result["status"]}
                 )
+            if result.get("status") == "no_candidate":
+                _report_long_wait(conversation, now=timestamp)
     except Exception:  # noqa: BLE001
         logger.warning("Conversation sweep failed", exc_info=True)
         conversation_sweep = "failed"
@@ -1605,6 +1614,36 @@ def reconcile_dispatches(
         "conversationsExpired": conversations_expired,
         "generatedAt": timestamp,
     }
+
+
+def _report_long_wait(conversation: dict[str, Any], *, now: str) -> None:
+    """Tell operations a student has waited past the limit with nobody to ask (#88).
+
+    One closed telemetry line per sweep: the request id and the minutes waited,
+    nothing about the student. An alarm counts these lines; it stays raised
+    while they keep coming and SNS writes only when its state changes.
+    """
+    # When the student asked; a conversation without that stamp is measured
+    # from when nobody could first be found, which it has waited at least.
+    asked = _parse_timestamp(conversation.get("escalated_at")) or _parse_timestamp(
+        conversation.get("dispatch_no_candidate_since")
+    )
+    moment = _parse_timestamp(now)
+    if asked is None or moment is None:
+        logger.warning(
+            "Cannot tell how long %s has waited; not reported",
+            conversation.get("conversation_id"),
+        )
+        return
+    waited = (moment - asked).total_seconds()
+    if waited < settings.teacher_help_alert_after_seconds:
+        return
+    emit_private_event(
+        TEACHER_HELP_WAITING_EVENT,
+        correlation_id=str(conversation.get("escalation_request_id") or ""),
+        wait_minutes=int(waited // 60),
+        level=logging.WARNING,
+    )
 
 
 def _expiry_cutoff(now: str) -> str:
