@@ -304,6 +304,26 @@ def test_the_report_keeps_the_whole_reply_so_it_can_be_read_again() -> None:
     assert reading.reply == {"steps": steps, "answer": "Done."}
 
 
+def test_a_saved_reply_read_again_gives_the_same_reading() -> None:
+    # A French hint in an English reply, and a hand-over: both are read from
+    # fields beside steps and answer, and must survive the report.
+    item = _item(language="en", expected_language="en", out_of_syllabus=True)
+    content = {
+        "steps": ["A derivative tells you how fast something changes.",
+                  "Think of the speedometer: it shows how fast the distance changes."],
+        "answer": "It is the rate of change.",
+        "hints": ["Pense à la vitesse d'une voiture qui roule sur la route."],
+        "similar_exercises": [], "knowledge_points": ["rate of change"],
+        "suggest_teacher": True,
+    }
+    first = evaluation.read_reply(item, content)
+    saved = json.loads(json.dumps(first.reply))
+    again = evaluation.read_reply(item, saved)
+    assert first.mixed and first.suggested_teacher
+    assert (again.mixed, again.suggested_teacher, again.refused, again.language_ok) == (
+        first.mixed, first.suggested_teacher, first.refused, first.language_ok)
+
+
 def test_saying_it_is_advanced_and_then_explaining_is_not_a_refusal() -> None:
     # What a reply that follows E1 does with a question far above the grade.
     reading = evaluation.read_reply(

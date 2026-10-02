@@ -147,7 +147,8 @@ class Reading:
     input_tokens: int = 0
     output_tokens: int = 0
     excerpt: str = ""
-    # The whole reply, so a reading can be checked or redone without paying again.
+    # Everything the model returned, so a reading can be checked or redone
+    # without paying again: the readings use more fields than steps and answer.
     reply: dict[str, Any] = field(default_factory=dict)
 
 
@@ -243,7 +244,7 @@ def read_reply(
         expected_language=expected,
         out_of_syllabus=bool(item.get("out_of_syllabus")),
         excerpt=text[:240],
-        reply={"steps": content.get("steps"), "answer": content.get("answer")},
+        reply=dict(content),
     )
     reading.detected_language = detect_language(text)
     reading.language_ok = reading.detected_language == expected
