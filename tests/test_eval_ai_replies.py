@@ -270,6 +270,34 @@ def test_a_reply_that_declines_over_several_steps_counts_as_a_refusal() -> None:
     assert reading.refused
 
 
+MEASURED = json.loads(
+    (Path(__file__).parent / "fixtures" / "ai_reply_out_of_syllabus_2026-10-02.json").read_text(
+        encoding="utf-8"
+    )
+)
+# it-physics-beyond under pre-E1 only steers back to the grade's topics,
+# without a declining phrase; reading it would need more than phrases.
+STEERED_AWAY_WITHOUT_DECLINING = {"it-physics-beyond"}
+
+
+@pytest.mark.parametrize("reply", MEASURED["declined"], ids=lambda reply: reply["id"])
+def test_every_measured_pre_e1_reply_that_declines_counts_as_a_refusal(reply) -> None:
+    if reply["id"] in STEERED_AWAY_WITHOUT_DECLINING:
+        pytest.skip("declines by steering away, not by a phrase")
+    reading = evaluation.read_reply(
+        _item(expected_language=reply["expected_language"], out_of_syllabus=True), reply
+    )
+    assert reading.refused
+
+
+@pytest.mark.parametrize("reply", MEASURED["explained"], ids=lambda reply: reply["id"])
+def test_no_measured_reply_that_explains_counts_as_a_refusal(reply) -> None:
+    reading = evaluation.read_reply(
+        _item(expected_language=reply["expected_language"], out_of_syllabus=True), reply
+    )
+    assert not reading.refused
+
+
 def test_the_report_keeps_the_whole_reply_so_it_can_be_read_again() -> None:
     steps = ["Step one says a lot more than two hundred and forty characters. " * 5, "Two."]
     reading = evaluation.read_reply(_item(), {"steps": steps, "answer": "Done."})

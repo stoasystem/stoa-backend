@@ -110,13 +110,18 @@ STOPWORDS: dict[str, frozenset[str]] = {
 # advanced" or "outside": a reply that follows E1 says those before it explains.
 # A heuristic all the same, so the report lists every reply, for a person to check.
 REFUSAL_PHRASES: dict[str, tuple[str, ...]] = {
+    # The second line of each is what the pre-E1 replies of 2026-10-02 said (#43).
     "de": ("kann ich nicht beantworten", "kann ich leider nicht", "nicht beantworten",
-           "beantworte nur fragen", "nur fragen zu"),
+           "beantworte nur fragen", "nur fragen zu",
+           "nicht helfen", "keine vollständige erklärung geben"),
     "en": ("i can't answer", "i cannot answer", "i can only answer", "only answer questions",
-           "not able to answer", "unable to answer"),
+           "not able to answer", "unable to answer",
+           "not able to cover", "i can only help"),
     "fr": ("je ne peux pas répondre", "je ne peux pas t'aider", "je réponds uniquement",
-           "seulement aux questions"),
-    "it": ("non posso rispondere", "non posso aiutarti", "rispondo solo", "solo a domande"),
+           "seulement aux questions",
+           "pas t'expliquer", "je ne peux t'aider qu"),
+    "it": ("non posso rispondere", "non posso aiutarti", "rispondo solo", "solo a domande",
+           "posso aiutarti solo"),
 }
 _LATEX = re.compile(r"\$\$.*?\$\$|\$[^$]*\$", re.DOTALL)
 _WORD = re.compile(r"[^\W\d_]+(?:'[^\W\d_]+)?", re.UNICODE)

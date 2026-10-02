@@ -1,0 +1,181 @@
+{
+ "source": "#43 rerun 2026-10-02: the eight out-of-syllabus questions under the current prompt (explained) and under the pre-E1 prompt (declined), read by hand",
+ "explained": [
+  {
+   "id": "de-math-beyond",
+   "expected_language": "de",
+   "steps": [
+    "Das ist eine tolle Frage – aber Ableitungen gehören zur Mathematik der Oberstufe (etwa Klasse 11–12) und werden in der 6. Klasse noch nicht behandelt.",
+    "Hier ist trotzdem eine kurze Erklärung, damit du eine Idee bekommst: Eine Ableitung beschreibt, wie steil eine Kurve an einem bestimmten Punkt ist – also wie schnell sich etwas verändert. Zum Beispiel: Wenn ein Auto fährt, sagt die Ableitung des Weges, wie schnell es gerade in diesem Moment ist (die Geschwindigkeit).",
+    "Für $x^2$ ist die Ableitung $2x$ – das bedeutet: Je größer $x$ ist, desto steiler wird die Kurve der Parabel.",
+    "Um Ableitungen wirklich zu verstehen, braucht man zuerst: Funktionen und ihre Graphen, den Umgang mit Variablen und Termen, sowie das Konzept von Steigung (z. B. bei Geraden).",
+    "In der 6. Klasse lernst du gerade die Grundlagen, die dich später genau dahin führen!"
+   ],
+   "answer": "Die Ableitung von $x^2$ ist $2x$. Ableitungen beschreiben, wie stark sich eine Funktion an einem Punkt verändert – zum Beispiel die Geschwindigkeit eines Autos. Dieses Thema kommt aber erst in der Oberstufe. In der 6. Klasse baust du jetzt die Grundlagen dafür auf."
+  },
+  {
+   "id": "en-math-beyond",
+   "expected_language": "en",
+   "steps": [
+    "This topic belongs to calculus, which is studied several years after Grade 6. Here is a short, friendly peek so the idea makes sense:",
+    "A **derivative** measures how fast something changes. Imagine you are cycling: your position changes over time, and the derivative tells you your speed at any moment.",
+    "For the function $x^3$, the derivative is $3x^2$. This was found using a rule called the **Power Rule**: if you have $x^n$, the derivative is $n \\cdot x^{n-1}$. So for $x^3$: multiply by the exponent (3), then lower the exponent by 1 → $3x^2$.",
+    "What does $3x^2$ tell you? It tells you **how steeply the graph of $x^3$ is rising or falling** at any point $x$. For example, at $x = 2$, the steepness is $3 \\times 2^2 = 12$.",
+    "Before reaching derivatives, you would need to be comfortable with: **exponents and powers**, **algebraic expressions**, **coordinate graphs**, **functions**, and **limits** (a concept from later in high school)."
+   ],
+   "answer": "The derivative of $x^3$ is $3x^2$. It describes how quickly the value of $x^3$ is changing at each point — in other words, the steepness (slope) of its graph at any value of $x$."
+  },
+  {
+   "id": "fr-math-beyond",
+   "expected_language": "fr",
+   "steps": [
+    "Une intégrale est un concept des mathématiques avancées (lycée/université) qui permet de calculer des aires sous des courbes. C'est au-delà du programme de 6e, mais voici une idée simple pour comprendre.",
+    "Imagine que tu veux mesurer l'aire d'une forme avec des bords courbes. L'intégrale, c'est un peu comme découper cette forme en millions de petits rectangles très fins et additionner toutes leurs aires.",
+    "Pour calculer l'intégrale de $2x$, on utilise une règle appelée « primitives » : on cherche quelle fonction, quand on la dérive, donne $2x$. La réponse est $x^2$ (car la dérivée de $x^2$ est $2x$). Donc : $$\\int 2x \\, dx = x^2 + C$$ où $C$ est une constante.",
+    "Pour bien comprendre les intégrales, tu aurais besoin d'abord de maîtriser : les fonctions et leurs graphiques, les puissances et exposants, puis les dérivées."
+   ],
+   "answer": "L'intégrale de $2x$ est $x^2 + C$. Mais ce sujet appartient aux mathématiques du lycée et au-delà. En 6e, tu peux déjà poser de bonnes bases en travaillant les fractions, les proportions et les premières notions de géométrie !"
+  },
+  {
+   "id": "it-math-beyond",
+   "expected_language": "it",
+   "steps": [
+    "Ottima curiosità! Il concetto di **limite** appartiene all'analisi matematica, un argomento che si studia al liceo (generalmente in 4ª o 5ª superiore).",
+    "Per capirlo serve prima conoscere bene: le funzioni, i grafici cartesiani, le frazioni algebriche e il concetto di infinito — argomenti che affronterai negli anni successivi.",
+    "In parole semplici, un limite risponde alla domanda: *'A quale valore si avvicina una funzione quando la variabile $x$ si avvicina a un certo numero?'* Per esempio, immagina di camminare verso una porta senza mai toccarla: il limite descrive il punto a cui ti stai avvicinando.",
+    "Per ora, in quinta elementare/prima media, la cosa più importante è consolidare le basi: frazioni, proporzioni, equazioni semplici. Queste sono le fondamenta su cui si costruirà il concetto di limite!"
+   ],
+   "answer": "Il limite è un concetto avanzato dell'analisi matematica, studiato al liceo. Descrive il valore a cui si avvicina una funzione quando la variabile si avvicina a un certo punto. È ancora lontano dal programma di 6ª elementare, ma è bello essere curiosi!"
+  },
+  {
+   "id": "de-physics-beyond",
+   "expected_language": "de",
+   "steps": [
+    "Ein Atom besteht aus einem Kern in der Mitte und Elektronen, die darum herumfliegen.",
+    "Stell dir vor, die Elektronen dürfen nur auf bestimmten 'Stufen' (wie Treppenstufen) um den Kern kreisen – nicht dazwischen.",
+    "Wenn ein Elektron von einer Stufe auf eine andere springt, nennt man das einen Quantensprung.",
+    "Springt es auf eine höhere Stufe, braucht es Energie (zum Beispiel aus Licht). Springt es auf eine tiefere Stufe, gibt es Energie als Licht wieder ab.",
+    "Das ist ein bisschen wie ein Ball, der eine Treppe hochspringt oder herunterfällt – aber er kann nur auf ganzen Stufen landen, nie dazwischen."
+   ],
+   "answer": "Ein Quantensprung ist der Sprung eines Elektrons von einer Energiestufe im Atom auf eine andere. Dabei wird Energie aufgenommen oder abgegeben. Dieses Thema gehört eigentlich zur weiterführenden Physik (Quantenphysik), aber die Grundidee – Elektronen dürfen nur auf bestimmten 'Stufen' sein – kann man sich gut wie eine Treppe vorstellen."
+  },
+  {
+   "id": "en-physics-beyond",
+   "expected_language": "en",
+   "steps": [
+    "Quantum entanglement is a concept from advanced physics (quantum mechanics), which is studied much later than Grade 5 — usually in university!",
+    "Here is a simple way to think about it: imagine you have two magic coins. Whenever you flip one and it lands on heads, the other one — no matter how far away it is — instantly lands on tails. They are 'linked' in a mysterious way.",
+    "In real physics, tiny particles (like electrons or photons, which are particles of light) can become 'entangled'. This means measuring one particle instantly tells you something about the other, even if they are very far apart.",
+    "This happens because of the rules of quantum mechanics — a set of rules that describe how very, very tiny things behave. These rules are very different from everyday physics!"
+   ],
+   "answer": "Quantum entanglement is when two tiny particles are linked so that what happens to one instantly affects the other, no matter how far apart they are. It is a real phenomenon, but it belongs to advanced physics called quantum mechanics, studied at university level."
+  },
+  {
+   "id": "fr-physics-beyond",
+   "expected_language": "fr",
+   "steps": [
+    "La relativité restreinte est une théorie avancée, mais voici l'idée principale de façon simple !",
+    "Einstein a proposé en 1905 que la vitesse de la lumière est toujours la même pour tout le monde : environ $300\\,000$ km/s, peu importe si tu bouges ou non.",
+    "Imagine que tu es dans un train très rapide et que tu allumes une lampe de poche vers l'avant. La lumière avance quand même à $300\\,000$ km/s, pas plus vite !",
+    "De cette idée étrange, Einstein a découvert des choses surprenantes : le temps peut s'écouler plus lentement si on va très vite (on appelle ça la *dilatation du temps*), et les objets peuvent sembler plus courts à grande vitesse.",
+    "Il a aussi trouvé la formule célèbre : $$E = mc^2$$ qui dit que la matière contient une énorme quantité d'énergie cachée.",
+    "Pour bien comprendre la relativité restreinte, il faudrait d'abord maîtriser : la notion de vitesse, les référentiels (points de vue d'observation), et les bases de l'énergie — des sujets que tu exploreras progressivement !"
+   ],
+   "answer": "La relativité restreinte est la théorie d'Einstein qui dit que la vitesse de la lumière est la même pour tout le monde, et que cela entraîne des effets étonnants : le temps ralentit à grande vitesse, et matière et énergie sont liées par $E = mc^2$."
+  },
+  {
+   "id": "it-physics-beyond",
+   "expected_language": "it",
+   "steps": [
+    "Il principio di indeterminazione di Heisenberg appartiene alla fisica quantistica, che si studia in genere alle scuole superiori o all'università. È un argomento molto avanzato rispetto alla quinta elementare, ma posso darti un'idea semplice di cosa significa!",
+    "Immagina di voler sapere esattamente dove si trova una pallina e quanto veloce va nello stesso momento. Nella vita di tutti i giorni, puoi misurare entrambe le cose senza problemi.",
+    "Nel mondo dei 'pezzi' piccolissimi come gli elettroni (molto più piccoli di un atomo!), succede qualcosa di strano: più cerchi di sapere con precisione *dove* si trova una particella, meno puoi sapere con precisione *quanto veloce* va, e viceversa. Questo non dipende dagli strumenti, è proprio come funziona la natura!",
+    "In formula si scrive così: $$\\Delta x \\cdot \\Delta p \\geq \\frac{h}{4\\pi}$$ dove $\\Delta x$ è l'incertezza sulla posizione, $\\Delta p$ è l'incertezza sulla quantità di moto (legata alla velocità) e $h$ è una costantina chiamata 'costante di Planck'.",
+    "Per capire bene questo principio avresti bisogno prima di studiare: le onde e la luce, gli atomi e le particelle subatomiche, il concetto di quantità di moto."
+   ],
+   "answer": "Il principio di indeterminazione di Heisenberg dice che è impossibile conoscere allo stesso tempo, con precisione perfetta, sia la posizione sia la velocità di una particella molto piccola (come un elettrone). Più sai una cosa, meno puoi sapere l'altra. È una legge fondamentale della natura, non un limite degli strumenti!"
+  }
+ ],
+ "declined": [
+  {
+   "id": "de-math-beyond",
+   "expected_language": "de",
+   "steps": [
+    "Das Thema 'Ableitung' gehört zur Mathematik der Oberstufe (z. B. Klasse 10–12) und geht über den Lernstoff der 6. Klasse hinaus.",
+    "In der 6. Klasse beschäftigen wir uns mit Themen wie Bruchrechnung, Geometrie, Verhältnisse und einfache Gleichungen.",
+    "Ich kann dir leider bei dieser Frage nicht helfen, aber ich unterstütze dich gerne bei einem Thema aus dem 6.-Klasse-Stoff!"
+   ],
+   "answer": "Diese Frage liegt außerhalb des Lernstoffs der 6. Klasse. Bitte frag mich etwas aus dem Mathematikunterricht der 6. Klasse – ich helfe dir gerne!"
+  },
+  {
+   "id": "en-math-beyond",
+   "expected_language": "en",
+   "steps": [
+    "This question is about derivatives, which is a topic from calculus — a subject studied in high school or university, not at Grade 6 level.",
+    "At Grade 6, we focus on topics like fractions, decimals, percentages, ratios, basic geometry, and introductory algebra.",
+    "I can only help you with Grade 6 mathematics, so I am not able to answer this question."
+   ],
+   "answer": "I cannot answer this question because derivatives are not part of the Grade 6 mathematics curriculum. If you have a question about fractions, multiplication, geometry, or another Grade 6 topic, I am happy to help!"
+  },
+  {
+   "id": "fr-math-beyond",
+   "expected_language": "fr",
+   "steps": [
+    "Ce sujet (les intégrales) appartient au calcul différentiel et intégral, qui est étudié au lycée ou à l'université, pas en 6e année.",
+    "En 6e, on travaille plutôt sur des thèmes comme les fractions, les pourcentages, les aires et périmètres, les équations simples, etc.",
+    "Je ne peux donc pas t'expliquer ce concept ici, car il dépasse le programme de ta classe."
+   ],
+   "answer": "Je suis désolé, mais les intégrales ne font pas partie du programme de mathématiques de 6e année. Je suis là pour t'aider uniquement sur les sujets de ton niveau scolaire."
+  },
+  {
+   "id": "it-math-beyond",
+   "expected_language": "it",
+   "steps": [
+    "Questa domanda riguarda l'analisi matematica, un argomento che va ben oltre il programma di matematica di classe 6ª.",
+    "Il concetto di limite si studia tipicamente alle scuole superiori o all'università.",
+    "Non posso rispondere a questa domanda perché è fuori dal mio ambito: mi occupo solo di matematica per la classe 6ª."
+   ],
+   "answer": "Mi dispiace, ma posso aiutarti solo con argomenti di matematica di classe 6ª, come frazioni, percentuali, geometria di base, numeri interi e simili. Il concetto di limite appartiene all'analisi matematica avanzata e non rientra nel mio ambito. Ti consiglio di chiedere al tuo insegnante!"
+  },
+  {
+   "id": "de-physics-beyond",
+   "expected_language": "de",
+   "steps": [
+    "Du fragst nach dem Quantensprung in einem Atom – das ist ein spannendes Thema, aber es gehört zur Quantenphysik, die erst in der Oberstufe (Gymnasium) behandelt wird.",
+    "Für die 5. Klasse ist dieses Thema leider zu fortgeschritten. Ich kann dir deshalb keine vollständige Erklärung geben, ohne dich zu verwirren.",
+    "Was ich dir sagen kann: In der 5. Klasse lernst du zunächst grundlegende Dinge über Materie, Energie und einfache physikalische Kräfte – das ist die wichtige Basis für später!"
+   ],
+   "answer": "Der Quantensprung gehört zur Quantenphysik und ist für die 5. Klasse zu fortgeschritten. Bitte frage deine Lehrperson, wenn du mehr darüber wissen möchtest – sie kann dir erklären, wann ihr dieses Thema im Unterricht behandeln werdet."
+  },
+  {
+   "id": "en-physics-beyond",
+   "expected_language": "en",
+   "steps": [
+    "Quantum entanglement is a topic from advanced physics — it is studied at university level, not at Grade 5 physics.",
+    "At Grade 5, we focus on topics like forces, motion, energy, light, sound, and simple machines.",
+    "This question is outside the scope of Grade 5 physics, so I am not able to cover it here."
+   ],
+   "answer": "Quantum entanglement is beyond the Grade 5 physics curriculum. I can only help with Grade 5 physics topics such as forces, energy, light, and sound. Please ask me about one of those!"
+  },
+  {
+   "id": "fr-physics-beyond",
+   "expected_language": "fr",
+   "steps": [
+    "Cette question porte sur la relativité restreinte d'Einstein, qui est un sujet de physique avancée (lycée ou université).",
+    "Ce concept dépasse le programme de physique de 5e année.",
+    "Je ne peux t'aider qu'avec des sujets de physique adaptés à ton niveau scolaire, comme les forces, le mouvement, la lumière, la chaleur ou l'électricité de base."
+   ],
+   "answer": "La relativité restreinte est un sujet trop avancé pour le niveau 5e année. Je ne peux pas t'expliquer ce concept ici, mais tu peux en parler avec ton professeur de sciences !"
+  },
+  {
+   "id": "it-physics-beyond",
+   "expected_language": "it",
+   "steps": [
+    "Questa è una domanda molto interessante, ma riguarda la fisica quantistica avanzata, che va ben oltre il programma di fisica di quinta elementare.",
+    "Il principio di indeterminazione di Heisenberg è un argomento universitario, non adatto al livello scolastico attuale.",
+    "Per ora, in quinta elementare si studiano concetti come forze, movimento, energia, calore e luce — argomenti più adatti alla tua età!"
+   ],
+   "answer": "Mi dispiace, ma il principio di indeterminazione di Heisenberg non rientra nel programma di fisica per la quinta elementare. Ti invito a fare domande su argomenti come le forze, il movimento, l'energia o la luce!"
+  }
+ ]
+}
