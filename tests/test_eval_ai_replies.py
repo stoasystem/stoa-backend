@@ -255,6 +255,27 @@ def test_a_one_step_reply_that_declines_counts_as_a_refusal() -> None:
     assert reading.refused
 
 
+def test_a_reply_that_declines_over_several_steps_counts_as_a_refusal() -> None:
+    # The pre-E1 run of 2026-10-02 (#43): fr-math-beyond declined in its
+    # second of three steps and was read as an explanation.
+    reading = evaluation.read_reply(
+        _item(language="fr", expected_language="fr", out_of_syllabus=True),
+        {"steps": ["Ce sujet dépasse le programme de mathématiques de 6e année. Les intégrales "
+                   "sont un concept du lycée avancé ou de l'université.",
+                   "Je suis ici pour t'aider avec les mathématiques de niveau 6e. Je ne peux pas "
+                   "répondre à cette question.",
+                   "Essaie de poser une question sur les fractions ou la géométrie."],
+         "answer": "Pose-moi une question de ton niveau !"},
+    )
+    assert reading.refused
+
+
+def test_the_report_keeps_the_whole_reply_so_it_can_be_read_again() -> None:
+    steps = ["Step one says a lot more than two hundred and forty characters. " * 5, "Two."]
+    reading = evaluation.read_reply(_item(), {"steps": steps, "answer": "Done."})
+    assert reading.reply == {"steps": steps, "answer": "Done."}
+
+
 def test_saying_it_is_advanced_and_then_explaining_is_not_a_refusal() -> None:
     # What a reply that follows E1 does with a question far above the grade.
     reading = evaluation.read_reply(

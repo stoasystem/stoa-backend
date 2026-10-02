@@ -142,6 +142,8 @@ class Reading:
     input_tokens: int = 0
     output_tokens: int = 0
     excerpt: str = ""
+    # The whole reply, so a reading can be checked or redone without paying again.
+    reply: dict[str, Any] = field(default_factory=dict)
 
 
 def load_questions(path: Path = QUESTIONS) -> list[dict[str, Any]]:
@@ -236,6 +238,7 @@ def read_reply(
         expected_language=expected,
         out_of_syllabus=bool(item.get("out_of_syllabus")),
         excerpt=text[:240],
+        reply={"steps": content.get("steps"), "answer": content.get("answer")},
     )
     reading.detected_language = detect_language(text)
     reading.language_ok = reading.detected_language == expected
@@ -253,8 +256,9 @@ def read_reply(
     steps = content.get("steps")
     step_count = len([s for s in steps if str(s).strip()]) if isinstance(steps, list) else 0
     declined = any(phrase in lowered for phrase in REFUSAL_PHRASES.get(expected, ()))
-    # No steps at all is a refusal; one step is one only if it also declines.
-    reading.refused = step_count == 0 or (step_count < 2 and declined)
+    # No steps at all is a refusal, and so is a declining phrase in any step:
+    # before E1 the model declined over several steps (#43, 2026-10-02).
+    reading.refused = step_count == 0 or declined
     # Before E1 the prompt said to "suggest teacher intervention" for a hard
     # question: the model may explain and hand over rather than decline, so
     # this is read beside the refusals.
