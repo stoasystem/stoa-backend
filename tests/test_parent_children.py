@@ -812,7 +812,7 @@ def test_report_repo_put_recovery_job_audit_event_uses_conditional_append(monkey
 
 
 def test_report_repo_recovery_job_page_token_round_trips_job_key():
-    key = {"PK": "REPORT_RECOVERY_JOB#job-1", "SK": "TARGET#00000#report-1"}
+    key = {"PK": "REPORT_RECOVERY_JOB#job-1", "SK": "SUMMARY"}
 
     token = report_repo.encode_recovery_job_page_token(key)
 
@@ -820,11 +820,31 @@ def test_report_repo_recovery_job_page_token_round_trips_job_key():
     assert report_repo.decode_recovery_job_page_token(token) == key
 
 
-def test_report_repo_recovery_job_page_token_rejects_report_key():
-    token = report_repo.encode_recovery_job_page_token({"PK": "REPORT#report-1", "SK": "SUMMARY"})
+def test_report_repo_recovery_job_page_token_continues_from_any_row_the_scan_stopped_on():
+    # #90: the job list is a filtered scan, so its page may end on a report row.
+    key = {"PK": "REPORT#report-1", "SK": "SUMMARY"}
 
+    token = report_repo.encode_recovery_job_page_token(key)
+
+    assert report_repo.decode_recovery_job_page_token(token) == key
+
+
+def test_report_repo_recovery_job_target_token_stays_within_its_job():
+    key = {"PK": "REPORT_RECOVERY_JOB#job-1", "SK": "TARGET#00000#report-1"}
+    token = report_repo.encode_recovery_job_target_page_token(key)
+
+    assert report_repo.decode_recovery_job_target_page_token(token, "job-1") == key
     with pytest.raises(ValueError):
-        report_repo.decode_recovery_job_page_token(token)
+        report_repo.decode_recovery_job_target_page_token(token, "job-2")
+    with pytest.raises(ValueError):
+        report_repo.decode_recovery_job_target_page_token(
+            report_repo.encode_recovery_job_target_page_token({"PK": "REPORT#report-1", "SK": "SUMMARY"}),
+            "job-1",
+        )
+    with pytest.raises(ValueError):
+        report_repo.decode_recovery_job_target_page_token(
+            report_repo.encode_recovery_job_page_token(key), "job-1"
+        )
 
 
 def test_report_repo_put_recovery_job_persists_summary_and_targets(monkeypatch):

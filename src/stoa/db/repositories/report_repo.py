@@ -1627,6 +1627,42 @@ def decode_recovery_job_page_token(token: str | None) -> ReportItem | None:
     raise ValueError("Invalid pagination token")
 
 
+def encode_recovery_job_target_page_token(last_key: ReportItem | None) -> str | None:
+    """Encode the key one job's target results stopped at."""
+    if not last_key:
+        return None
+    raw = json.dumps(
+        {"scope": "recovery_job_targets", "key": last_key},
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    return base64.urlsafe_b64encode(raw).decode()
+
+
+def decode_recovery_job_target_page_token(token: str | None, job_id: str) -> ReportItem | None:
+    """Decode a target results token, which may only continue within `job_id`.
+
+    The results are a query on the job's partition: a key from anywhere else
+    would make DynamoDB refuse the request instead of the token.
+    """
+    if not token:
+        return None
+    try:
+        raw = base64.urlsafe_b64decode(token.encode()).decode()
+        decoded = _pagination_mapping(json.loads(raw))
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise ValueError("Invalid pagination token") from exc
+    key = decoded.get("key") if decoded.get("scope") == "recovery_job_targets" else None
+    if (
+        isinstance(key, dict)
+        and key.get("PK") == f"REPORT_RECOVERY_JOB#{job_id}"
+        and isinstance(key.get("SK"), str)
+        and key["SK"].startswith("TARGET#")
+    ):
+        return _pagination_mapping(key)
+    raise ValueError("Invalid pagination token")
+
+
 def encode_support_handoff_delivery_page_token(
     last_key: ReportItem | None,
 ) -> str | None:
@@ -1866,9 +1902,11 @@ def _is_valid_recovery_job_page_payload(decoded: object) -> bool:
     key = decoded.get("key")
     if not isinstance(key, dict):
         return False
+    # The job list is a filtered scan: it stops on whatever row its page ends
+    # at, a job or not (#90). The filter, not the key, keeps the list to jobs.
     pk = key.get("PK")
     sk = key.get("SK")
-    return isinstance(pk, str) and pk.startswith("REPORT_RECOVERY_JOB#") and isinstance(sk, str)
+    return isinstance(pk, str) and isinstance(sk, str)
 
 
 def _is_valid_support_handoff_delivery_page_payload(decoded: object) -> bool:

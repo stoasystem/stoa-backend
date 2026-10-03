@@ -12,6 +12,7 @@ from stoa.security import admin_authorization
 from stoa.services import report_recovery_job_service
 from stoa.services import report_recovery_service
 from actor_helpers import install_actor_overrides
+from fakes.dynamodb import FakeTable
 
 
 def _app_for_user(user: dict, settings: Settings | None = None) -> FastAPI:
@@ -1489,3 +1490,75 @@ def _patch_support_delivery_repo(monkeypatch):
     return delivery_rows, delivery_audits
 
 
+def _table_with_jobs_after_other_rows(job_ids, target_count=0):
+    # Rows sort by key, and "PROFILE#" and "QUESTION#" come before
+    # "REPORT_RECOVERY_JOB#": a scan reads them first, as on the real table.
+    table = FakeTable()
+    for index in range(6):
+        table.seed({"PK": f"PROFILE#user-{index}", "SK": "PROFILE", "entity_type": "user"})
+        table.seed({"PK": f"QUESTION#q-{index}", "SK": "SUMMARY", "entity_type": "question"})
+    for job_id in job_ids:
+        table.seed({
+            "PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": "SUMMARY",
+            "entity_type": "REPORT_RECOVERY_JOB", "job_id": job_id,
+            "job_type": "resend_email", "status": "completed",
+        })
+        for index in range(target_count):
+            table.seed({
+                "PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": f"TARGET#{index:05d}#t-{index}",
+                "entity_type": "REPORT_RECOVERY_JOB_TARGET", "job_id": job_id,
+                "target_id": f"t-{index}", "target_index": index, "status": "success",
+            })
+    return table
+
+
+def test_every_recovery_job_can_be_listed_page_by_page_behind_other_rows(monkeypatch):
+    # #90: a page that stops on a row that is not a job used to hand out a
+    # token the next request refused.
+    table = _table_with_jobs_after_other_rows(["job-a", "job-b", "job-c"])
+    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    seen, token, pages = [], None, 0
+    while True:
+        params = {"limit": 4, **({"next_token": token} if token else {})}
+        response = client.get("/admin/reports/recovery-jobs", params=params)
+        assert response.status_code == 200, response.text
+        body = response.json()
+        seen.extend(item["job_id"] for item in body["items"])
+        token, pages = body["next_token"], pages + 1
+        if token is None:
+            break
+        assert pages < 20
+
+    assert sorted(seen) == ["job-a", "job-b", "job-c"]
+
+
+def test_a_results_page_token_only_continues_within_its_own_job(monkeypatch):
+    table = _table_with_jobs_after_other_rows(["job-a", "job-b"], target_count=3)
+    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+    first = client.get("/admin/reports/recovery-jobs/job-a/results", params={"limit": 2})
+    assert first.status_code == 200, first.text
+    token = first.json()["next_token"]
+    assert token
+
+    rest = client.get(
+        "/admin/reports/recovery-jobs/job-a/results", params={"limit": 2, "next_token": token}
+    )
+    assert rest.status_code == 200, rest.text
+    targets = [item["target_id"] for item in first.json()["items"] + rest.json()["items"]]
+    assert targets == ["t-0", "t-1", "t-2"]
+
+    elsewhere = client.get(
+        "/admin/reports/recovery-jobs/job-b/results", params={"limit": 2, "next_token": token}
+    )
+    assert elsewhere.status_code == 400
+
+    listing = client.get("/admin/reports/recovery-jobs", params={"limit": 4}).json()["next_token"]
+    assert listing
+    mixed = client.get(
+        "/admin/reports/recovery-jobs/job-a/results", params={"limit": 2, "next_token": listing}
+    )
+    assert mixed.status_code == 400

@@ -3867,7 +3867,7 @@ async def list_recovery_job_results(
     if not report_repo.get_recovery_job(job_id):
         raise HTTPException(status_code=404, detail="Recovery job not found")
     try:
-        last_key = report_repo.decode_recovery_job_page_token(next_token)
+        last_key = report_repo.decode_recovery_job_target_page_token(next_token, job_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
     result = report_repo.list_recovery_job_targets(job_id, limit=limit, last_key=last_key)
@@ -3875,7 +3875,7 @@ async def list_recovery_job_results(
     return RecoveryJobTargetsResponse(
         items=items,
         count=len(items),
-        next_token=report_repo.encode_recovery_job_page_token(_admin_cursor(result)),
+        next_token=report_repo.encode_recovery_job_target_page_token(_admin_cursor(result)),
     )
 
 
