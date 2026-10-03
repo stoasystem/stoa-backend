@@ -106,7 +106,8 @@ def test_only_the_deploy_job_can_obtain_aws_credentials() -> None:
     assert jobs["verify"].get("permissions") is None
     assert jobs["deploy"]["permissions"] == {"contents": "read", "id-token": "write"}
     # No GitHub environment: stoa-github-backend-deploy trusts only the subject
-    # repo:stoasystem/*:ref:refs/heads/main. Declaring an environment rewrites the
+    # repo:stoasystem/stoa-backend:ref:refs/heads/main (narrowed from the whole
+    # organisation on 2026-10-02, #82). Declaring an environment rewrites the
     # OIDC subject to :environment:<name> and the role stops being assumable.
     assert "environment" not in jobs["deploy"]
     assert raw.count("id-token") == 1

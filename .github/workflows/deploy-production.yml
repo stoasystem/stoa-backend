@@ -80,7 +80,8 @@ jobs:
     # natively importable and the handler boot smoke test actually executes.
     runs-on: ubuntu-24.04-arm
     # Deliberately no `environment:`. The deploy role trusts the subject
-    # repo:stoasystem/*:ref:refs/heads/main; naming an environment rewrites the
+    # repo:stoasystem/stoa-backend:ref:refs/heads/main and no other (narrowed from
+    # the whole organisation on 2026-10-02, #82); naming an environment rewrites the
     # OIDC subject to :environment:<name> and AssumeRoleWithWebIdentity is denied.
     permissions:
       contents: read
