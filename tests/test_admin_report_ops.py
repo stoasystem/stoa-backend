@@ -874,7 +874,7 @@ def test_report_audit_timeline_returns_metadata_only(monkeypatch):
     data = response.json()
     assert data["scope"] == "report"
     assert data["count"] == 1
-    assert report_repo.decode_audit_page_token(data["next_token"]) == next_key
+    assert report_repo.decode_audit_page_token(data["next_token"], next_key["PK"]) == next_key
     assert data["items"][0]["action"] == "resend_email"
     assert data["items"][0]["before"] == {"status": "email_failed"}
     assert data["items"][0]["after"]["email_error_message"] == (
@@ -1562,3 +1562,62 @@ def test_a_results_page_token_only_continues_within_its_own_job(monkeypatch):
         "/admin/reports/recovery-jobs/job-a/results", params={"limit": 2, "next_token": listing}
     )
     assert mixed.status_code == 400
+
+
+def _table_with_audit_timelines():
+    table = FakeTable()
+    for job_id in ("job-a", "job-b"):
+        # Admin authorization looks the job up before the route runs.
+        table.seed({
+            "PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": "SUMMARY",
+            "entity_type": "REPORT_RECOVERY_JOB", "job_id": job_id, "filters": {},
+        })
+    for owner in ("REPORT#report-a", "REPORT#report-b", "REPORT_RECOVERY_JOB#job-a", "REPORT_RECOVERY_JOB#job-b"):
+        for index in range(3):
+            table.seed({
+                "PK": owner, "SK": f"AUDIT#2026-06-0{index + 1}T10:00:00+00:00#event-{index}",
+                "entity_type": "REPORT_AUDIT_EVENT", "event_id": f"event-{index}",
+                "event_at": f"2026-06-0{index + 1}T10:00:00+00:00", "action": "resend_email",
+                "result": "started",
+            })
+    return table
+
+
+def _audit_client(monkeypatch, table):
+    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    monkeypatch.setattr(
+        report_repo,
+        "get_report_for_child_by_week",
+        lambda parent_id, student_id, week_start: {**_report(), "report_id": f"report-{student_id}"},
+    )
+    return TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+
+
+def test_an_audit_page_token_only_continues_the_timeline_it_came_from(monkeypatch):
+    # #91: the token was checked only for its prefixes, so one timeline's token
+    # reached DynamoDB as the start of another's query.
+    client = _audit_client(monkeypatch, _table_with_audit_timelines())
+    report_a = "/admin/reports/parent-1/a/2026-06-01/audit"
+    report_b = "/admin/reports/parent-1/b/2026-06-01/audit"
+    job_a = "/admin/reports/recovery-jobs/job-a/audit"
+    job_b = "/admin/reports/recovery-jobs/job-b/audit"
+
+    report_token = client.get(report_a, params={"limit": 2}).json()["next_token"]
+    job_token = client.get(job_a, params={"limit": 2}).json()["next_token"]
+    assert report_token and job_token
+
+    rest = client.get(report_a, params={"limit": 2, "next_token": report_token})
+    assert rest.status_code == 200, rest.text
+    assert rest.json()["count"] == 1
+    rest = client.get(job_a, params={"limit": 2, "next_token": job_token})
+    assert rest.status_code == 200, rest.text
+    assert rest.json()["count"] == 1
+
+    for path, token in (
+        (report_b, report_token),
+        (job_b, job_token),
+        (job_a, report_token),
+        (report_a, job_token),
+    ):
+        response = client.get(path, params={"limit": 2, "next_token": token})
+        assert response.status_code == 400, (path, response.text)

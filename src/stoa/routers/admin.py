@@ -4009,12 +4009,12 @@ async def list_report_audit_events(
 ):
     """List append-only audit events for one report recovery timeline."""
     report = _get_report_or_404(parent_id, student_id, week_start)
+    report_id = _admin_required_text(report.get("report_id"))
     try:
-        last_key = report_repo.decode_audit_page_token(next_token)
+        last_key = report_repo.decode_audit_page_token(next_token, f"REPORT#{report_id}")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
 
-    report_id = _admin_required_text(report.get("report_id"))
     result = report_repo.list_report_audit_events(report_id, limit=limit, last_key=last_key)
     items = [_report_audit_event_response(item) for item in _admin_items(result)]
     return ReportAuditListResponse(
@@ -4037,7 +4037,7 @@ async def list_recovery_job_audit_events(
 ):
     """List append-only audit events for a report recovery job timeline."""
     try:
-        last_key = report_repo.decode_audit_page_token(next_token)
+        last_key = report_repo.decode_audit_page_token(next_token, f"REPORT_RECOVERY_JOB#{job_id}")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
 

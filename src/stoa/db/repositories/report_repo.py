@@ -1587,8 +1587,14 @@ def encode_audit_page_token(last_key: ReportItem | None) -> str | None:
     return base64.urlsafe_b64encode(raw).decode()
 
 
-def decode_audit_page_token(token: str | None) -> ReportItem | None:
-    """Decode an audit timeline page token into an ExclusiveStartKey."""
+def decode_audit_page_token(token: str | None, partition: str) -> ReportItem | None:
+    """Decode an audit timeline page token into an ExclusiveStartKey.
+
+    A timeline is a query on one partition (`REPORT#<id>` or
+    `REPORT_RECOVERY_JOB#<id>`), and a token may only continue that one:
+    another timeline's key would reach DynamoDB as a start key outside the
+    query and be refused there instead of here (#91).
+    """
     if not token:
         return None
     try:
@@ -1597,7 +1603,9 @@ def decode_audit_page_token(token: str | None) -> ReportItem | None:
     except (ValueError, json.JSONDecodeError) as exc:
         raise ValueError("Invalid pagination token") from exc
     if _is_valid_audit_page_payload(decoded):
-        return _pagination_mapping(decoded.get("key"))
+        key = _pagination_mapping(decoded.get("key"))
+        if key.get("PK") == partition:
+            return key
     raise ValueError("Invalid pagination token")
 
 

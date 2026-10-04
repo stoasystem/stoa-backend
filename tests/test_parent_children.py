@@ -719,7 +719,7 @@ def test_report_repo_audit_page_token_round_trips_report_key():
     token = report_repo.encode_audit_page_token(key)
 
     assert isinstance(token, str)
-    assert report_repo.decode_audit_page_token(token) == key
+    assert report_repo.decode_audit_page_token(token, "REPORT#report-1") == key
 
 
 def test_report_repo_audit_page_token_round_trips_recovery_job_key():
@@ -727,14 +727,24 @@ def test_report_repo_audit_page_token_round_trips_recovery_job_key():
 
     token = report_repo.encode_audit_page_token(key)
 
-    assert report_repo.decode_audit_page_token(token) == key
+    assert report_repo.decode_audit_page_token(token, "REPORT_RECOVERY_JOB#job-1") == key
 
 
 def test_report_repo_audit_page_token_rejects_summary_key():
     token = report_repo.encode_audit_page_token({"PK": "REPORT#report-1", "SK": "SUMMARY"})
 
     with pytest.raises(ValueError):
-        report_repo.decode_audit_page_token(token)
+        report_repo.decode_audit_page_token(token, "REPORT#report-1")
+
+
+def test_report_repo_audit_page_token_rejects_another_timeline():
+    # #91: a token continues only the partition it came from.
+    key = {"PK": "REPORT#report-1", "SK": "AUDIT#2026-06-04T10:00:00+00:00#event-1"}
+    token = report_repo.encode_audit_page_token(key)
+
+    for partition in ("REPORT#report-2", "REPORT_RECOVERY_JOB#report-1"):
+        with pytest.raises(ValueError):
+            report_repo.decode_audit_page_token(token, partition)
 
 
 def test_report_repo_put_report_audit_event_uses_conditional_append(monkeypatch):
