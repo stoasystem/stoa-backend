@@ -38,3 +38,40 @@ def test_the_right_answers_of_a_lesson_are_read_across_every_page(monkeypatch) -
     monkeypatch.setattr(practice_repo, "get_table", lambda: table)
 
     assert practice_repo.challenges_answered_right("student-1", "lesson-1") == {"c-0", "c-2"}
+
+
+class _LaggingReplicaTable(FakeTable):
+    """A table whose newest writes only a strongly consistent read sees yet.
+
+    DynamoDB reads are eventually consistent unless asked otherwise: the last
+    exercise's right answer, saved a moment before completion is requested,
+    may still be missing from the replica an ordinary query reads.
+    """
+
+    def __init__(self, *, fresh: set[tuple[str, str]], **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.fresh = fresh
+
+    def query(self, **kwargs):
+        if kwargs.get("ConsistentRead") is True:
+            return super().query(**kwargs)
+        hidden = {key: self.rows.pop(key) for key in list(self.rows) if key in self.fresh}
+        try:
+            return super().query(**kwargs)
+        finally:
+            self.rows.update(hidden)
+
+
+def test_a_right_answer_saved_just_before_completion_is_read(monkeypatch) -> None:
+    # Review of 5aa22b80: without a strongly consistent read the last right
+    # answer could be missed and the lesson refused with 409.
+    last = _attempt("student-1", 2, lesson="lesson-1", challenge="c-2", correct=True)
+    table = _LaggingReplicaTable(fresh={(last["PK"], last["SK"])})
+    table.seed(
+        _attempt("student-1", 0, lesson="lesson-1", challenge="c-0", correct=True),
+        _attempt("student-1", 1, lesson="lesson-1", challenge="c-1", correct=True),
+        last,
+    )
+    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+
+    assert practice_repo.challenges_answered_right("student-1", "lesson-1") == {"c-0", "c-1", "c-2"}

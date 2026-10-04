@@ -666,8 +666,9 @@ def list_student_attempts(student_id: str, *, correct: bool | None = None) -> li
 def challenges_answered_right(student_id: str, lesson_id: str) -> set[str]:
     """The exercises of `lesson_id` the student has answered right at least once.
 
-    Reads every page of the student's attempts: completing a lesson depends on
-    it, and a right answer on a later page must not read as missing (#83).
+    Reads every page of the student's attempts, strongly consistent: completing
+    a lesson depends on it, and the last right answer, saved a moment before
+    completion is asked, must not read as missing (#83).
     """
     table = get_table()
     items = _query_all_challenge_pages(
@@ -676,6 +677,7 @@ def challenges_answered_right(student_id: str, lesson_id: str) -> set[str]:
             Key("PK").eq(f"ATTEMPTS#{student_id}") & Key("SK").begins_with("ATTEMPT#")
         ),
         FilterExpression=Attr("lesson_id").eq(lesson_id) & Attr("correct").eq(True),
+        ConsistentRead=True,
     )
     return {
         str(item["challenge_id"])
