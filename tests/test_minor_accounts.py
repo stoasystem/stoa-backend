@@ -512,7 +512,12 @@ def _student_app(student_id: str) -> FastAPI:
     return app
 
 
-def test_未成年学生在接口上确认关联收到_403(world: LinkWorld) -> None:
+def test_未成年学生在接口上确认关联收到_403(
+    world: LinkWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The request was made at NOW; on the real clock it expired fourteen days
+    # later (2026-10-04) and the route answered 409 before the age check.
+    monkeypatch.setattr(parent_link_service, "_now", lambda: NOW)
     world.add("parent-a", "parent", ADULT)
     world.add("student-b", "student", MINOR)
     world.pending(parent_id="parent-a", student_id="student-b", created_by="parent-a")
