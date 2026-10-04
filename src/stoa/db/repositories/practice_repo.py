@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Any, Protocol, runtime_checkable
 import uuid
 
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -661,6 +661,27 @@ def list_student_attempts(student_id: str, *, correct: bool | None = None) -> li
     if correct is not None:
         items = [item for item in items if bool(item.get("correct")) is correct]
     return items
+
+
+def challenges_answered_right(student_id: str, lesson_id: str) -> set[str]:
+    """The exercises of `lesson_id` the student has answered right at least once.
+
+    Reads every page of the student's attempts: completing a lesson depends on
+    it, and a right answer on a later page must not read as missing (#83).
+    """
+    table = get_table()
+    items = _query_all_challenge_pages(
+        table,
+        KeyConditionExpression=(
+            Key("PK").eq(f"ATTEMPTS#{student_id}") & Key("SK").begins_with("ATTEMPT#")
+        ),
+        FilterExpression=Attr("lesson_id").eq(lesson_id) & Attr("correct").eq(True),
+    )
+    return {
+        str(item["challenge_id"])
+        for item in items
+        if item.get("correct") is True and isinstance(item.get("challenge_id"), str)
+    }
 
 
 def record_attempt(

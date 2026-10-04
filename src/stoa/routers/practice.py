@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.config import settings
@@ -787,13 +787,42 @@ async def get_lesson(
     return practice_projection_service.build_lesson_preview(lesson, challenges, st, locale=_actor_locale(actor))
 
 
-@router.post("/lessons/{lesson_id}/complete")
+@router.post(
+    "/lessons/{lesson_id}/complete",
+    responses={
+        status.HTTP_409_CONFLICT: {
+            "description": (
+                "`lesson_exercises_unanswered`: an exercise of the lesson has never been "
+                "answered right; `unansweredCount` says how many."
+            )
+        }
+    },
+)
 async def complete_lesson(
     lesson_id: str,
     actor: Actor = Depends(_practice_update),
     authorized_lesson: AuthorizedResource = Depends(_authorized_lesson_update),
 ):
     lesson = dict(authorized_lesson.value)
+
+    # A lesson is complete once every exercise in it has been answered right at
+    # least once (#83). The frontend held to this alone; any client could
+    # mark any lesson complete. A lesson without exercises has nothing to answer.
+    answered_right = practice_repo.challenges_answered_right(actor.user_id, lesson_id)
+    unanswered = [
+        challenge
+        for challenge in practice_repo.get_challenges(lesson_id)
+        if str(challenge.get("challenge_id")) not in answered_right
+    ]
+    if unanswered:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "lesson_exercises_unanswered",
+                "message": "Answer every exercise of this lesson right before completing it.",
+                "unansweredCount": len(unanswered),
+            },
+        )
 
     progress_row = practice_repo.mark_lesson_completed(actor.user_id, lesson)
     curriculum_analytics_service.record_lesson_completed(student_id=actor.user_id, lesson=lesson)

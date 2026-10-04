@@ -95,6 +95,9 @@ def test_lesson_completion_records_aggregate_signal(monkeypatch):
         "order": 1,
     }
     monkeypatch.setattr(practice.practice_repo, "get_lesson", lambda lesson_id: dict(lesson))
+    # Every exercise of the lesson answered right, so completion goes through (#83).
+    monkeypatch.setattr(practice.practice_repo, "get_challenges", lambda lesson_id: [{"challenge_id": "c-1"}])
+    monkeypatch.setattr(practice.practice_repo, "challenges_answered_right", lambda student_id, lesson_id: {"c-1"})
     monkeypatch.setattr(practice.practice_repo, "mark_lesson_completed", lambda *args, **kwargs: None)
     monkeypatch.setattr(practice.practice_repo, "get_lessons", lambda topic_id=None: [dict(lesson)])
     monkeypatch.setattr(
@@ -169,6 +172,9 @@ def test_lesson_completion_records_usage_ledger(monkeypatch):
         "order": 1,
     }
     monkeypatch.setattr(practice.practice_repo, "get_lesson", lambda lesson_id: dict(lesson))
+    # Every exercise of the lesson answered right, so completion goes through (#83).
+    monkeypatch.setattr(practice.practice_repo, "get_challenges", lambda lesson_id: [{"challenge_id": "c-1"}])
+    monkeypatch.setattr(practice.practice_repo, "challenges_answered_right", lambda student_id, lesson_id: {"c-1"})
     monkeypatch.setattr(practice.practice_repo, "mark_lesson_completed", lambda *args, **kwargs: None)
     monkeypatch.setattr(practice.practice_repo, "get_lessons", lambda topic_id=None: [dict(lesson)])
     monkeypatch.setattr(practice.practice_repo, "get_progress", lambda user_id: [{"lesson_id": "lesson-1", "status": "completed"}])

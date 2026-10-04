@@ -66,6 +66,12 @@ def test_practice_completion_uses_actor_and_authorized_lesson_once(monkeypatch):
 
     monkeypatch.setattr(practice.practice_repo, "get_lesson", get_lesson)
     monkeypatch.setattr(
+        practice.practice_repo, "get_challenges", lambda _lesson_id: [{"challenge_id": "c-1"}]
+    )
+    monkeypatch.setattr(
+        practice.practice_repo, "challenges_answered_right", lambda student_id, lesson_id: {"c-1"}
+    )
+    monkeypatch.setattr(
         practice.practice_repo,
         "mark_lesson_completed",
         lambda student_id, item: calls["write"].append((student_id, item)),
@@ -434,3 +440,53 @@ def test_a_late_evening_completion_counts_as_the_zurich_day():
     progress = [{"status": "completed", "completed_at": "2026-08-24T23:30:00+00:00"}]
 
     assert curriculum_service.completed_days(progress) == {date(2026, 8, 25)}
+
+
+def _completion_world(monkeypatch, *, answered_right):
+    """A lesson of three exercises, of which the student answered `answered_right`."""
+    lesson = {"lesson_id": "lesson-1", "subject_id": "math", "topic_id": "algebra"}
+    writes = []
+    monkeypatch.setattr(practice.practice_repo, "get_lesson", lambda _lesson_id: lesson)
+    monkeypatch.setattr(
+        practice.practice_repo,
+        "get_challenges",
+        lambda _lesson_id: [{"challenge_id": f"c-{index}", "lesson_id": "lesson-1"} for index in range(3)],
+    )
+    monkeypatch.setattr(
+        practice.practice_repo,
+        "challenges_answered_right",
+        lambda student_id, lesson_id: set(answered_right),
+    )
+    monkeypatch.setattr(
+        practice.practice_repo,
+        "mark_lesson_completed",
+        lambda student_id, item: writes.append((student_id, item["lesson_id"])),
+    )
+    monkeypatch.setattr(practice.practice_repo, "get_lessons", lambda **_kwargs: [lesson])
+    monkeypatch.setattr(practice.practice_repo, "get_progress", lambda student_id, *_args: [])
+    monkeypatch.setattr(
+        practice.curriculum_analytics_service, "record_lesson_completed", lambda **_kwargs: None
+    )
+    monkeypatch.setattr(practice, "_record_practice_usage", lambda **_kwargs: None)
+    return writes
+
+
+def test_a_lesson_with_an_exercise_never_answered_right_cannot_be_completed(monkeypatch):
+    # #83: completing a lesson was only the frontend's word for it.
+    writes = _completion_world(monkeypatch, answered_right={"c-0", "c-2"})
+
+    response = _client().post("/practice/lessons/lesson-1/complete")
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "lesson_exercises_unanswered"
+    assert response.json()["detail"]["unansweredCount"] == 1
+    assert writes == []
+
+
+def test_a_lesson_whose_every_exercise_was_answered_right_is_completed(monkeypatch):
+    writes = _completion_world(monkeypatch, answered_right={"c-0", "c-1", "c-2"})
+
+    response = _client().post("/practice/lessons/lesson-1/complete")
+
+    assert response.status_code == 200
+    assert writes == [("student-1", "lesson-1")]
