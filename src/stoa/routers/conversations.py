@@ -48,6 +48,7 @@ from stoa.security.authorization import (
 from stoa.security.identity import Actor
 from stoa.models.allowance import ProviderUsageEvidence
 from stoa.models.attachment import AttachmentReference, AttachmentSummary
+from stoa.models.error import AttachmentErrorResponse, NotFoundResponse
 from stoa.models.question import QuestionStatus
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.request_correlation import get_request_correlation_id
@@ -1543,7 +1544,19 @@ def _command_generation_state(
     return state
 
 
-@router.get("/{conv_id}/generation", response_model=GenerationProgressResponse)
+@router.get(
+    "/{conv_id}/generation",
+    response_model=GenerationProgressResponse,
+    responses={
+        status.HTTP_409_CONFLICT: {
+            "model": AttachmentErrorResponse,
+            "description": (
+                "`message_command_not_found`: no message command of this caller "
+                "has this idempotency key."
+            ),
+        }
+    },
+)
 async def get_generation_progress(
     authorized: AuthorizedResource = Depends(
         authorized_conversation_dependency(
@@ -3624,7 +3637,17 @@ async def withdraw_teacher_help_request(
 
 
 @teacher_help_router.get(
-    "/conversations/{conv_id}/request", response_model=TeacherHelpResponse
+    "/conversations/{conv_id}/request",
+    response_model=TeacherHelpResponse,
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "model": NotFoundResponse,
+            "description": (
+                "The conversation was never escalated to a teacher (a sentence), "
+                "or the caller may not see it (`resource_not_found`)."
+            ),
+        }
+    },
 )
 async def get_teacher_help_status(
     authorized: AuthorizedResource = Depends(

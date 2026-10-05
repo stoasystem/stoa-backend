@@ -1275,3 +1275,38 @@ def test_adaptive_authorization_outage_prevents_assignment_mutation(monkeypatch)
 
     assert response.status_code == 503
     assert writes == []
+
+
+@pytest.mark.parametrize(
+    ("user", "method", "path"),
+    [
+        ({"sub": "student-1", "role": "student"}, "get", "/adaptive/students/me/memory"),
+        ({"sub": "parent-1", "role": "parent"}, "get", "/adaptive/students/student-1/memory"),
+        ({"sub": "teacher-1", "role": "teacher"}, "get", "/adaptive/students/student-1/memory"),
+        ({"sub": "admin-1", "role": "admin"}, "get", "/adaptive/students/student-1/memory"),
+        ({"sub": "teacher-1", "role": "teacher"}, "post", "/adaptive/students/student-1/memory/refresh"),
+    ],
+)
+def test_memory_summary_model_holds_what_the_service_returns(monkeypatch, user, method, path):
+    # The response model is what OpenAPI shows the frontend (#81). Checking the
+    # service's own dict, not the filtered response, keeps the two from drifting:
+    # a key added, dropped or renamed in the service fails here.
+    _install_memory_repo(monkeypatch)
+    _install_learning_sources(monkeypatch)
+    returned = []
+    original = adaptive_learning_service.get_memory_summary
+
+    def _capture(**kwargs):
+        summary = original(**kwargs)
+        returned.append(summary)
+        return summary
+
+    monkeypatch.setattr(adaptive_learning_service, "get_memory_summary", _capture)
+
+    response = getattr(_app(user), method)(path)
+
+    assert response.status_code == 200
+    (summary,) = returned
+    model = adaptive.MemorySummaryResponse.model_validate(summary)
+    assert model.model_dump(mode="json", by_alias=True) == response.json()
+    assert set(response.json()) == set(summary)

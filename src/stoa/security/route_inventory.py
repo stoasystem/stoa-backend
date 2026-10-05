@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 from types import UnionType
 from typing import (
     Annotated,
+    Any,
     Callable,
     Iterable,
     Literal,
@@ -22,6 +23,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
+from stoa.models.error import UnauthenticatedResponse
 from stoa.security.admin_authorization import AdminRoutePolicy, AdminTargetProvider
 from stoa.security.authorization import AuthorizationSpec, ResourceType
 
@@ -588,6 +590,25 @@ def inventory_projection(app: FastAPI) -> list[dict[str, object]]:
     return [item.projection() for item in inventory_application(app)]
 
 
+def _unauthenticated_response(schema: dict[str, Any]) -> dict[str, Any]:
+    """Register the shared 401 body as components and return the response for it."""
+    body = UnauthenticatedResponse.model_json_schema(
+        by_alias=True, ref_template="#/components/schemas/{model}"
+    )
+    schemas = schema.setdefault("components", {}).setdefault("schemas", {})
+    for name, definition in body.pop("$defs", {}).items():
+        schemas.setdefault(name, definition)
+    schemas[UnauthenticatedResponse.__name__] = body
+    return {
+        "description": "No usable bearer token",
+        "content": {
+            "application/json": {
+                "schema": {"$ref": f"#/components/schemas/{UnauthenticatedResponse.__name__}"}
+            }
+        },
+    }
+
+
 def install_authorization_openapi(app: FastAPI) -> None:
     """Install one OpenAPI projection backed by the same validated inventory."""
 
@@ -597,8 +618,15 @@ def install_authorization_openapi(app: FastAPI) -> None:
         schema = get_openapi(
             title=app.title, version=app.version, description=app.description, routes=app.routes
         )
+        unauthenticated = _unauthenticated_response(schema)
         for item in inventory_application(app):
             operation = schema["paths"][item.path][item.method.lower()]
+            # `security` is set exactly where the bearer scheme is in the
+            # dependency tree, which is what answers 401. That is every
+            # classification but "public", and one public command
+            # (teacher activation) that takes a verified token but no Actor.
+            if operation.get("security"):
+                operation.setdefault("responses", {})["401"] = unauthenticated
             extension: dict[str, object] = {
                 "classification": item.classification,
                 "identifiers": list(item.identifiers),

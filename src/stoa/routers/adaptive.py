@@ -109,6 +109,53 @@ class AssignmentAutomationExecuteRequest(BaseModel):
     subject: str | None = None
 
 
+# The memory summary as `adaptive_learning_service._memory_response` builds it.
+# Closed at the top level so a key added there fails the model test rather than
+# vanishing from the response; the list items stay open because their keys
+# differ by role (a parent sees less of each snapshot and weak topic).
+class _MemoryModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class MemoryLocale(_MemoryModel):
+    effective_locale: str = Field(alias="effectiveLocale")
+    content_language: str = Field(alias="contentLanguage")
+    supported_locales: list[str] = Field(alias="supportedLocales")
+    canonical_values_stable: bool = Field(alias="canonicalValuesStable")
+
+
+class MemorySequencingSummary(_MemoryModel):
+    recommended_count: int = Field(alias="recommendedCount")
+    top_candidate_type: str | None = Field(alias="topCandidateType")
+    top_topic_id: str | None = Field(alias="topTopicId")
+    top_confidence: str | None = Field(alias="topConfidence")
+    active_assignments: int = Field(alias="activeAssignments")
+    completed_assignments: int = Field(alias="completedAssignments")
+    skipped_assignments: int = Field(alias="skippedAssignments")
+    archived_assignments: int = Field(alias="archivedAssignments")
+    explanation: str
+
+
+class MemoryFreshness(_MemoryModel):
+    status: str
+    stale_count: int = Field(alias="staleCount")
+
+
+class MemorySummaryResponse(_MemoryModel):
+    student_id: str = Field(alias="studentId")
+    role_view: str = Field(alias="roleView")
+    locale: MemoryLocale
+    subjects: list[dict[str, Any]]
+    subject_activity: list[dict[str, Any]] = Field(alias="subjectActivity")
+    weak_topics: list[dict[str, Any]] = Field(alias="weakTopics")
+    strength_topics: list[dict[str, Any]] = Field(alias="strengthTopics")
+    memory_snapshots: list[dict[str, Any]] = Field(alias="memorySnapshots")
+    recommendations: list[dict[str, Any]]
+    sequencing_summary: MemorySequencingSummary = Field(alias="sequencingSummary")
+    freshness: MemoryFreshness
+    updated_at: str = Field(alias="updatedAt")
+
+
 _ADAPTIVE_READ = {
     CanonicalRole.STUDENT: AuthorizationPurpose.SELF_SERVICE,
     CanonicalRole.PARENT: AuthorizationPurpose.PARENT_OVERSIGHT,
@@ -313,7 +360,7 @@ _authorized_assignment_create.authorization_specs = tuple(  # type: ignore[attr-
 )
 
 
-@router.get("/students/me/memory")
+@router.get("/students/me/memory", response_model=MemorySummaryResponse)
 async def get_my_memory(
     subject: str | None = Query(default=None),
     actor: Actor = Depends(get_actor),
@@ -341,7 +388,7 @@ async def list_my_assignments(
     )
 
 
-@router.get("/students/{student_id}/memory")
+@router.get("/students/{student_id}/memory", response_model=MemorySummaryResponse)
 async def get_student_memory(
     student_id: str,
     subject: str | None = Query(default=None),
@@ -356,7 +403,7 @@ async def get_student_memory(
     )
 
 
-@router.post("/students/{student_id}/memory/refresh")
+@router.post("/students/{student_id}/memory/refresh", response_model=MemorySummaryResponse)
 async def refresh_student_memory(
     student_id: str,
     subject: str | None = Query(default=None),
