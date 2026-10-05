@@ -3582,8 +3582,10 @@ def _teacher_name(teacher_id: object) -> str | None:
     if not isinstance(teacher_id, str) or not teacher_id:
         return None
     profile = user_repo.get_user(teacher_id) or {}
-    name = profile.get("name") or profile.get("email")
-    return str(name) if name else None
+    # Never the email: a student sees this name (#65). Without one the
+    # frontend says "teacher".
+    name = profile.get("name")
+    return name.strip() or None if isinstance(name, str) else None
 
 
 @teacher_help_router.post(

@@ -87,6 +87,38 @@ def test_teacher_help_status_names_the_teacher_dispatch_actually_bound(monkeypat
     assert body["status"] == "assigned"
 
 
+def test_a_teacher_without_a_name_is_not_shown_to_the_student_by_email(monkeypatch):
+    # #65: with no name on the teacher's profile the status card showed the
+    # teacher's email address to the student.
+    monkeypatch.setattr(
+        conversations,
+        "_get_conversation",
+        lambda conv_id: {
+            "conversation_id": conv_id,
+            "student_id": "student-1",
+            "escalation_request_id": "req-1",
+            "escalation_status": "pending",
+            "dispatch_status": "dispatched",
+            "dispatched_teacher_id": "teacher-1",
+            "escalated_at": "2026-08-24T08:00:00+00:00",
+            "updated_at": "2026-08-24T08:00:00+00:00",
+        },
+    )
+    monkeypatch.setattr(
+        conversations.user_repo,
+        "get_user",
+        lambda _id, **_kwargs: {"name": "", "email": "frau.keller@example.com"},
+    )
+
+    response = _client(conversations.teacher_help_router, "/teacher-help").get(
+        "/teacher-help/conversations/conv-1/request"
+    )
+
+    assert response.status_code == 200
+    assert response.json()["teacherName"] is None
+    assert "frau.keller@example.com" not in response.text
+
+
 def test_teacher_help_status_is_absent_before_any_escalation(monkeypatch):
     monkeypatch.setattr(
         conversations,
