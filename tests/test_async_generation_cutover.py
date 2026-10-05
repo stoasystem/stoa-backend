@@ -359,3 +359,37 @@ def test_any_refusal_of_the_first_message_with_a_structured_body_names_the_conve
     detail = response.json()["detail"]
     assert detail["code"] == "some_conflict"
     assert conversations._get_conversation(detail["conversationId"])
+
+
+def test_the_daily_message_limit_refusing_a_first_message_names_the_conversation(
+    monkeypatch: pytest.MonkeyPatch, table, model, invokes, switched_on, stub_memory_summary
+) -> None:
+    # The refusal a first message really meets (review of 3bef709d): the daily
+    # message limit raises an attachment decision, not an HTTP error, and the
+    # request answered 500 with the conversation left behind.
+    before = {row["conversation_id"] for row in table.rows.values() if row.get("SK") == "CONV"}
+    daily_limit = conversations._chat_limit_for_student
+    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 0)
+
+    response = _client().post(
+        "/conversations",
+        json={"subject": "Mathematik", "grade": "Grade 6", "initialMessage": QUESTION},
+    )
+
+    assert response.status_code == 429, response.text
+    from stoa.models.error import FirstMessageRefusalResponse
+
+    FirstMessageRefusalResponse.model_validate(response.json())
+    detail = response.json()["detail"]
+    assert detail["code"] == "message_daily_limit"
+    assert detail["correlationId"]
+    made = {row["conversation_id"] for row in table.rows.values() if row.get("SK") == "CONV"} - before
+    assert made == {detail["conversationId"]}
+
+    monkeypatch.setattr(conversations, "_chat_limit_for_student", daily_limit)
+    retry = _client().post(
+        f"/conversations/{detail['conversationId']}/messages/stream",
+        json={"content": QUESTION, "idempotencyKey": f"initial-{detail['conversationId']}"},
+    )
+    assert retry.status_code == 202, retry.text
+    assert retry.json()["conversationId"] == detail["conversationId"]

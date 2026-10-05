@@ -67,3 +67,22 @@ class NotFoundResponse(_ErrorModel):
 
 class AttachmentErrorResponse(_ErrorModel):
     detail: AttachmentErrorBody
+
+
+class FirstMessageRefusalBody(_ErrorModel):
+    """A new conversation's first message was refused; the conversation exists (#61).
+
+    The refusal is the allowance's (`action`) or an attachment decision's
+    (`correlationId`) body, with the id of the conversation already made, so a
+    client sends the message again into it under the key `initial-<id>`.
+    """
+
+    code: str
+    message: str
+    conversation_id: str = Field(alias="conversationId")
+    correlation_id: str | None = Field(default=None, alias="correlationId")
+    action: str | None = None
+
+
+class FirstMessageRefusalResponse(_ErrorModel):
+    detail: FirstMessageRefusalBody

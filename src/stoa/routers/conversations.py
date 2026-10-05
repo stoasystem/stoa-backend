@@ -48,7 +48,11 @@ from stoa.security.authorization import (
 from stoa.security.identity import Actor
 from stoa.models.allowance import ProviderUsageEvidence
 from stoa.models.attachment import AttachmentReference, AttachmentSummary
-from stoa.models.error import AttachmentErrorResponse, NotFoundResponse
+from stoa.models.error import (
+    AttachmentErrorResponse,
+    FirstMessageRefusalResponse,
+    NotFoundResponse,
+)
 from stoa.models.question import QuestionStatus
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.request_correlation import get_request_correlation_id
@@ -1380,7 +1384,19 @@ def _naming_the_conversation(refusal: HTTPException, conv_id: str) -> HTTPExcept
     )
 
 
-@router.post("", response_model=ConversationDetail, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ConversationDetail,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        code: {"model": FirstMessageRefusalResponse}
+        for code in (
+            status.HTTP_409_CONFLICT,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    },
+)
 async def create_conversation(
     body: CreateConversationRequest,
     actor: Actor = Depends(student_create_actor_dependency(ResourceType.CONVERSATION)),
@@ -1442,6 +1458,13 @@ async def create_conversation(
                     error,
                     correlation_id=correlation_id,
                 )
+            except HTTPException as refusal:
+                raise _naming_the_conversation(refusal, conv_id) from error
+        except AttachmentDecisionError as error:
+            # The daily message limit, among others: the same conversion the
+            # message routes make, then the conversation's id.
+            try:
+                _raise_attachment(error, correlation_id)
             except HTTPException as refusal:
                 raise _naming_the_conversation(refusal, conv_id) from error
         except HTTPException as refusal:

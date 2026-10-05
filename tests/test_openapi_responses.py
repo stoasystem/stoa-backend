@@ -279,3 +279,14 @@ def test_sign_in_operations_declare_the_refused_issued_token(monkeypatch, path, 
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "token_expired"
     _declared_401_model(path).model_validate(response.json())
+
+
+def test_creating_a_conversation_declares_the_first_message_refusal_naming_it() -> None:
+    # #61: a refused first message names the conversation already made.
+    schema = app.openapi()
+    responses = schema["paths"]["/conversations"]["post"]["responses"]
+    for code in ("409", "429", "503"):
+        ref = responses[code]["content"]["application/json"]["schema"]["$ref"]
+        assert ref.endswith("/FirstMessageRefusalResponse"), (code, ref)
+    body = schema["components"]["schemas"]["FirstMessageRefusalBody"]
+    assert {"code", "message", "conversationId"} <= set(body["required"])

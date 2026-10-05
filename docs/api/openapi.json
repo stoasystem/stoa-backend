@@ -4105,6 +4105,66 @@
         "title": "FeedbackRequest",
         "type": "object"
       },
+      "FirstMessageRefusalBody": {
+        "additionalProperties": false,
+        "description": "A new conversation's first message was refused; the conversation exists (#61).\n\nThe refusal is the allowance's (`action`) or an attachment decision's\n(`correlationId`) body, with the id of the conversation already made, so a\nclient sends the message again into it under the key `initial-<id>`.",
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "conversationId": {
+            "title": "Conversationid",
+            "type": "string"
+          },
+          "correlationId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlationid"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "conversationId"
+        ],
+        "title": "FirstMessageRefusalBody",
+        "type": "object"
+      },
+      "FirstMessageRefusalResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/FirstMessageRefusalBody"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "FirstMessageRefusalResponse",
+        "type": "object"
+      },
       "ForgotPasswordRequest": {
         "additionalProperties": false,
         "properties": {
@@ -23538,6 +23598,16 @@
             },
             "description": "No usable bearer token"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirstMessageRefusalResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -23547,6 +23617,26 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirstMessageRefusalResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirstMessageRefusalResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "security": [
