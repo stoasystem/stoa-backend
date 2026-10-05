@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
 from decimal import Decimal
+import json
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from pydantic import ValidationError
 import pytest
 
 from stoa.deps import get_actor, get_authorization_audit_sink
@@ -1277,6 +1279,31 @@ def test_adaptive_authorization_outage_prevents_assignment_mutation(monkeypatch)
     assert writes == []
 
 
+def _capture_memory_summaries(monkeypatch) -> list[dict]:
+    returned: list[dict] = []
+    original = adaptive_learning_service.get_memory_summary
+
+    def _capture(**kwargs):
+        summary = original(**kwargs)
+        returned.append(summary)
+        return summary
+
+    monkeypatch.setattr(adaptive_learning_service, "get_memory_summary", _capture)
+    return returned
+
+
+def _without_response_model(summary: dict) -> object:
+    """What the memory routes sent before they declared a response model."""
+    bare = FastAPI()
+    bare.get("/memory")(lambda: summary)
+    return TestClient(bare).get("/memory").json()
+
+
+def _typed(value: object) -> str:
+    # JSON text tells 14 from 14.0 and from "14"; == on decoded values does not.
+    return json.dumps(value, sort_keys=True)
+
+
 @pytest.mark.parametrize(
     ("user", "method", "path"),
     [
@@ -1290,23 +1317,69 @@ def test_adaptive_authorization_outage_prevents_assignment_mutation(monkeypatch)
 def test_memory_summary_model_holds_what_the_service_returns(monkeypatch, user, method, path):
     # The response model is what OpenAPI shows the frontend (#81). Checking the
     # service's own dict, not the filtered response, keeps the two from drifting:
-    # a key added, dropped or renamed in the service fails here.
+    # a key added, dropped or renamed in the service fails here, and so does a
+    # value whose JSON type the model changes.
     _install_memory_repo(monkeypatch)
     _install_learning_sources(monkeypatch)
-    returned = []
-    original = adaptive_learning_service.get_memory_summary
-
-    def _capture(**kwargs):
-        summary = original(**kwargs)
-        returned.append(summary)
-        return summary
-
-    monkeypatch.setattr(adaptive_learning_service, "get_memory_summary", _capture)
+    returned = _capture_memory_summaries(monkeypatch)
 
     response = getattr(_app(user), method)(path)
 
     assert response.status_code == 200
     (summary,) = returned
-    model = adaptive.MemorySummaryResponse.model_validate(summary)
-    assert model.model_dump(mode="json", by_alias=True) == response.json()
-    assert set(response.json()) == set(summary)
+    adaptive.MemorySummaryResponse.model_validate(summary)
+    assert _typed(response.json()) == _typed(_without_response_model(summary))
+
+
+@pytest.mark.parametrize(
+    ("user", "path"),
+    [
+        ({"sub": "student-1", "role": "student"}, "/adaptive/students/me/memory"),
+        ({"sub": "parent-1", "role": "parent"}, "/adaptive/students/student-1/memory"),
+        ({"sub": "teacher-1", "role": "teacher"}, "/adaptive/students/student-1/memory"),
+    ],
+)
+def test_stored_memory_keeps_the_number_types_it_had_without_a_response_model(
+    monkeypatch, user, path
+):
+    # A refreshed snapshot is read back from the table with Decimal numbers.
+    # Without a response model FastAPI sent those as JSON numbers; the model must
+    # not turn them into strings (#81 review).
+    snapshots, _ = _install_memory_repo(monkeypatch)
+    _install_learning_sources(monkeypatch)
+    refresh = _app({"sub": "teacher-1", "role": "teacher"}).post(
+        "/adaptive/students/student-1/memory/refresh"
+    )
+    assert refresh.status_code == 200
+    assert isinstance(snapshots[0]["freshness"]["staleAfterDays"], Decimal)
+    returned = _capture_memory_summaries(monkeypatch)
+
+    response = _app(user).get(path)
+
+    assert response.status_code == 200
+    (summary,) = returned
+    stale_after = response.json()["memorySnapshots"][0]["freshness"]["staleAfterDays"]
+    assert stale_after == 14 and type(stale_after) is int
+    assert _typed(response.json()) == _typed(_without_response_model(summary))
+
+
+@pytest.mark.parametrize(
+    "field", ["subjects", "subjectActivity", "weakTopics", "recommendations"]
+)
+def test_memory_summary_model_rejects_list_items_without_their_stable_fields(
+    monkeypatch, field
+):
+    _install_memory_repo(monkeypatch)
+    _install_learning_sources(monkeypatch)
+    returned = _capture_memory_summaries(monkeypatch)
+    assert _app({"sub": "teacher-1", "role": "teacher"}).get(
+        "/adaptive/students/student-1/memory"
+    ).status_code == 200
+    (summary,) = returned
+    assert summary[field], f"the fixture should produce {field}"
+    adaptive.MemorySummaryResponse.model_validate(summary)
+
+    summary[field] = [{"unrelated": 42}]
+
+    with pytest.raises(ValidationError):
+        adaptive.MemorySummaryResponse.model_validate(summary)

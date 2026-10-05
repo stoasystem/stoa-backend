@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi.encoders import jsonable_encoder
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from stoa.db.repositories import adaptive_learning_repo, user_repo
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
@@ -111,10 +112,65 @@ class AssignmentAutomationExecuteRequest(BaseModel):
 
 # The memory summary as `adaptive_learning_service._memory_response` builds it.
 # Closed at the top level so a key added there fails the model test rather than
-# vanishing from the response; the list items stay open because their keys
-# differ by role (a parent sees less of each snapshot and weak topic).
+# vanishing from the response. List items declare the fields the service always
+# writes and the frontend reads, and keep any others as they are: a parent's
+# weak topics leave out the evidence, and snapshots differ by role, so the
+# frontend treats snapshots and strength topics as opaque.
 class _MemoryModel(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+
+class _MemoryItem(BaseModel):
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+
+class MemorySubject(_MemoryItem):
+    id: str
+    label: str
+    rollout_state: str = Field(alias="rolloutState")
+
+
+class MemorySubjectActivity(_MemoryItem):
+    subject: str
+    label: str
+    rollout_state: str = Field(alias="rolloutState")
+    question_count: int = Field(alias="questionCount")
+    ai_resolved_count: int = Field(alias="aiResolvedCount")
+    teacher_escalation_count: int = Field(alias="teacherEscalationCount")
+    feedback_average: float | None = Field(alias="feedbackAverage")
+
+
+class MemoryWeakTopic(_MemoryItem):
+    subject: str
+    topic_id: str = Field(alias="topicId")
+    label: str
+    count: int
+    latest_evidence_at: str | None = Field(alias="latestEvidenceAt")
+    # Absent, not null, in a parent's view; the routes leave unset fields out.
+    evidence_question_ids: list[str] | None = Field(default=None, alias="evidenceQuestionIds")
+
+
+class MemoryRecommendationFreshness(_MemoryItem):
+    status: str
+    last_evidence_at: str | None = Field(alias="lastEvidenceAt")
+    source: str
+
+
+class MemoryRecommendation(_MemoryItem):
+    candidate_id: str = Field(alias="candidateId")
+    type: str
+    source_type: str = Field(alias="sourceType")
+    source_id: str = Field(alias="sourceId")
+    subject: str
+    topic_id: str = Field(alias="topicId")
+    label: str
+    rationale: str
+    confidence: Literal["high", "medium", "low"]
+    freshness: MemoryRecommendationFreshness
+    source_signals: dict[str, Any] = Field(alias="sourceSignals")
+    review_required: bool = Field(alias="reviewRequired")
+    autonomous_decision: bool = Field(alias="autonomousDecision")
+    review_flags: list[str] = Field(alias="reviewFlags")
 
 
 class MemoryLocale(_MemoryModel):
@@ -145,15 +201,23 @@ class MemorySummaryResponse(_MemoryModel):
     student_id: str = Field(alias="studentId")
     role_view: str = Field(alias="roleView")
     locale: MemoryLocale
-    subjects: list[dict[str, Any]]
-    subject_activity: list[dict[str, Any]] = Field(alias="subjectActivity")
-    weak_topics: list[dict[str, Any]] = Field(alias="weakTopics")
+    subjects: list[MemorySubject]
+    subject_activity: list[MemorySubjectActivity] = Field(alias="subjectActivity")
+    weak_topics: list[MemoryWeakTopic] = Field(alias="weakTopics")
     strength_topics: list[dict[str, Any]] = Field(alias="strengthTopics")
     memory_snapshots: list[dict[str, Any]] = Field(alias="memorySnapshots")
-    recommendations: list[dict[str, Any]]
+    recommendations: list[MemoryRecommendation]
     sequencing_summary: MemorySequencingSummary = Field(alias="sequencingSummary")
     freshness: MemoryFreshness
     updated_at: str = Field(alias="updatedAt")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _as_sent_without_a_model(cls, data: Any) -> Any:
+        # Stored snapshots come back from DynamoDB with Decimal numbers. Before
+        # this model, FastAPI's encoder sent them as JSON numbers; Pydantic would
+        # send a Decimal inside an open dict as a string. Encode first, as then.
+        return jsonable_encoder(data) if isinstance(data, dict) else data
 
 
 _ADAPTIVE_READ = {
@@ -360,7 +424,11 @@ _authorized_assignment_create.authorization_specs = tuple(  # type: ignore[attr-
 )
 
 
-@router.get("/students/me/memory", response_model=MemorySummaryResponse)
+@router.get(
+    "/students/me/memory",
+    response_model=MemorySummaryResponse,
+    response_model_exclude_unset=True,
+)
 async def get_my_memory(
     subject: str | None = Query(default=None),
     actor: Actor = Depends(get_actor),
@@ -388,7 +456,11 @@ async def list_my_assignments(
     )
 
 
-@router.get("/students/{student_id}/memory", response_model=MemorySummaryResponse)
+@router.get(
+    "/students/{student_id}/memory",
+    response_model=MemorySummaryResponse,
+    response_model_exclude_unset=True,
+)
 async def get_student_memory(
     student_id: str,
     subject: str | None = Query(default=None),
@@ -403,7 +475,11 @@ async def get_student_memory(
     )
 
 
-@router.post("/students/{student_id}/memory/refresh", response_model=MemorySummaryResponse)
+@router.post(
+    "/students/{student_id}/memory/refresh",
+    response_model=MemorySummaryResponse,
+    response_model_exclude_unset=True,
+)
 async def refresh_student_memory(
     student_id: str,
     subject: str | None = Query(default=None),

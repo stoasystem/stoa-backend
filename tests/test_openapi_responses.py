@@ -84,6 +84,68 @@ def test_teacher_help_status_declares_never_escalated_as_not_found():
     assert any(_is_error_body(item) for item in variants)
 
 
+def _item_schema(schema: dict, body: dict, field: str) -> dict:
+    return _resolve(schema, body["properties"][field]["items"])
+
+
+@pytest.mark.parametrize(
+    ("field", "required"),
+    [
+        ("subjects", {"id", "label", "rolloutState"}),
+        (
+            "subjectActivity",
+            {
+                "subject",
+                "label",
+                "rolloutState",
+                "questionCount",
+                "aiResolvedCount",
+                "teacherEscalationCount",
+                "feedbackAverage",
+            },
+        ),
+        # evidenceQuestionIds is declared but not required: a parent's view
+        # leaves it out.
+        ("weakTopics", {"subject", "topicId", "label", "count", "latestEvidenceAt"}),
+        (
+            "recommendations",
+            {
+                "candidateId",
+                "type",
+                "sourceType",
+                "sourceId",
+                "subject",
+                "topicId",
+                "label",
+                "rationale",
+                "confidence",
+                "freshness",
+                "sourceSignals",
+                "reviewRequired",
+                "autonomousDecision",
+                "reviewFlags",
+            },
+        ),
+    ],
+)
+def test_memory_summary_lists_declare_their_stable_item_fields(field, required):
+    schema = _schema()
+    body = _body(schema, "/adaptive/students/me/memory", "get", "200")
+    item = _item_schema(schema, body, field)
+
+    assert set(item.get("required", [])) == required
+    assert required <= set(item["properties"])
+
+
+def test_memory_weak_topics_declare_the_evidence_a_parent_does_not_see():
+    schema = _schema()
+    body = _body(schema, "/adaptive/students/me/memory", "get", "200")
+    item = _item_schema(schema, body, "weakTopics")
+
+    assert "evidenceQuestionIds" in item["properties"]
+    assert "evidenceQuestionIds" not in item["required"]
+
+
 def test_bearer_operations_declare_401_and_tokenless_ones_do_not():
     schema = _schema()
     declared = []
