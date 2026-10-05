@@ -20,6 +20,7 @@ from stoa.deps import (
     security,
 )
 from stoa.jobs.account_deletion import continue_deletion_command
+from stoa.models.error import SecurityErrorBody, SignInUnauthorizedResponse
 from stoa.models.user import PublicRegistrationRole, RegisterRequest
 from stoa.services import (
     account_provisioning_service,
@@ -381,7 +382,19 @@ async def register(body: RegisterRequest):
     raise _decommissioned("public_registration_closed")
 
 
-@router.post("/login", response_model=AuthResponse)
+@router.post(
+    "/login",
+    response_model=AuthResponse,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "model": SignInUnauthorizedResponse,
+            "description": (
+                "`invalid_credentials` at the top level for a wrong email or password; "
+                "inside `detail` when the issued token does not verify."
+            ),
+        }
+    },
+)
 @explicit_route_classification("public", "credential authentication entry point")
 async def login(
     body: LoginRequest,
@@ -968,7 +981,19 @@ async def confirm_password_change(
     return PasswordChangeConfirmResponse()
 
 
-@router.post("/refresh", response_model=AuthResponse)
+@router.post(
+    "/refresh",
+    response_model=AuthResponse,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "model": SignInUnauthorizedResponse,
+            "description": (
+                "`invalid_token` at the top level for a refused refresh token; "
+                "inside `detail` when the issued token does not verify."
+            ),
+        }
+    },
+)
 @explicit_route_classification("public", "refresh-token authentication entry point")
 async def refresh(
     body: RefreshRequest,
@@ -1011,7 +1036,16 @@ async def refresh(
     )
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "model": SecurityErrorBody,
+            "description": "`invalid_token` at the top level: the provider refused the sign-out.",
+        }
+    },
+)
 @explicit_route_classification("public", "token invalidation entry point")
 async def logout(
     body: LogoutRequest,

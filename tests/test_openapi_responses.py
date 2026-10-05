@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+from botocore.exceptions import ClientError
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 import pytest
 
+from stoa.config import Settings, get_settings
 from stoa.main import app
+from stoa.models import error as error_models
+from stoa.routers import auth
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.route_inventory import inventory_application
 
 
@@ -146,22 +153,17 @@ def test_memory_weak_topics_declare_the_evidence_a_parent_does_not_see():
     assert "evidenceQuestionIds" not in item["required"]
 
 
-def test_bearer_operations_declare_401_and_tokenless_ones_do_not():
+def test_bearer_operations_declare_the_shared_401():
     schema = _schema()
     declared = []
     for item in inventory_application(app):
         operation = schema["paths"][item.path][item.method.lower()]
-        needs_token = bool(operation.get("security"))
-        assert ("401" in operation["responses"]) is needs_token, (
-            f"{item.method} {item.path} ({item.classification})"
-        )
-        if needs_token:
+        if operation.get("security"):
+            assert "401" in operation["responses"], f"{item.method} {item.path}"
             declared.append(operation["responses"]["401"]["content"]["application/json"]["schema"])
-        else:
-            assert item.classification == "public", f"{item.method} {item.path}"
 
     # One shared component, not a copy per operation.
-    assert declared and all(ref == declared[0] for ref in declared)
+    assert declared and all(ref == {"$ref": "#/components/schemas/UnauthenticatedResponse"} for ref in declared)
     body = _resolve(schema, declared[0])
     variants = _detail_variants(schema, body)
     # HTTPBearer answers a missing header with a sentence; the token verifier
@@ -171,16 +173,109 @@ def test_bearer_operations_declare_401_and_tokenless_ones_do_not():
 
 
 @pytest.mark.parametrize(
-    ("path", "method", "expected"),
+    ("path", "method"),
     [
-        ("/adaptive/students/me/memory", "get", True),
-        ("/practice/subjects", "get", True),
-        ("/auth/me", "get", True),
-        ("/teacher-applications/activation/consume", "post", True),
-        ("/auth/login", "post", False),
-        ("/health", "get", False),
+        ("/adaptive/students/me/memory", "get"),
+        ("/practice/subjects", "get"),
+        ("/auth/me", "get"),
+        ("/teacher-applications/activation/consume", "post"),
     ],
 )
-def test_sample_routes_declare_401_only_where_a_token_is_required(path, method, expected):
+def test_sample_bearer_routes_declare_401(path, method):
     operation = _schema()["paths"][path][method]
-    assert ("401" in operation["responses"]) is expected
+    assert "401" in operation["responses"]
+
+
+def test_a_route_that_never_answers_401_declares_none():
+    assert "401" not in _schema()["paths"]["/health"]["get"]["responses"]
+
+
+# ── 401 from the tokenless sign-in operations ─────────────────────────────────
+#
+# These answer a refusal from the identity provider with the security body at the
+# top level (no `detail` envelope), so they cannot share the bearer 401.
+
+
+def _auth_settings() -> Settings:
+    return Settings(
+        aws_region="eu-central-2",
+        cognito_user_pool_id="offline-pool",
+        cognito_student_client_id="student-client",
+        cognito_parent_client_id="parent-client",
+        cognito_teacher_client_id="teacher-client",
+        cognito_admin_client_id="admin-client",
+    )
+
+
+def _auth_client() -> TestClient:
+    bare = FastAPI()
+    bare.include_router(auth.router, prefix="/auth")
+    bare.dependency_overrides[get_settings] = _auth_settings
+    return TestClient(bare)
+
+
+class _Cognito:
+    """Refuses with one provider code, or signs in with an opaque token."""
+
+    def __init__(self, refusal: str | None = None):
+        self.refusal = refusal
+
+    def _answer(self, operation: str):
+        if self.refusal:
+            raise ClientError({"Error": {"Code": self.refusal, "Message": "refused"}}, operation)
+        return {"AuthenticationResult": {"AccessToken": "opaque-access-token"}}
+
+    def initiate_auth(self, **_kwargs):
+        return self._answer("InitiateAuth")
+
+    def global_sign_out(self, **_kwargs):
+        return self._answer("GlobalSignOut")
+
+
+def _declared_401_model(path: str):
+    operation = _schema()["paths"][path]["post"]
+    assert "401" in operation["responses"], f"POST {path} does not declare 401"
+    ref = operation["responses"]["401"]["content"]["application/json"]["schema"]["$ref"]
+    return getattr(error_models, ref.rsplit("/", 1)[-1])
+
+
+@pytest.mark.parametrize(
+    ("path", "payload", "code"),
+    [
+        ("/auth/login", {"email": "student@example.com", "password": "wrong-password"}, "invalid_credentials"),
+        ("/auth/refresh", {"refresh_token": "revoked-refresh"}, "invalid_token"),
+        ("/auth/logout", {"access_token": "revoked-access"}, "invalid_token"),
+    ],
+)
+def test_sign_in_operations_declare_the_provider_refusal_they_send(monkeypatch, path, payload, code):
+    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: _Cognito("NotAuthorizedException"))
+
+    response = _auth_client().post(path, json=payload)
+
+    assert response.status_code == 401
+    assert response.json()["code"] == code
+    _declared_401_model(path).model_validate(response.json())
+
+
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        ("/auth/login", {"email": "student@example.com", "password": "ValidPass123!"}),
+        ("/auth/refresh", {"refresh_token": "valid-refresh"}),
+    ],
+)
+def test_sign_in_operations_declare_the_refused_issued_token(monkeypatch, path, payload):
+    # The provider accepted, but the token it issued does not verify here: the
+    # route answers with the security body inside `detail`.
+    monkeypatch.setattr(auth, "_get_cognito", lambda _settings: _Cognito())
+
+    async def _refuse(*_args, **_kwargs):
+        raise SecurityDecisionError(SecurityErrorCode.TOKEN_EXPIRED)
+
+    monkeypatch.setattr(auth.public_identity_service, "resolve_account_access_token", _refuse)
+
+    response = _auth_client().post(path, json=payload)
+
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "token_expired"
+    _declared_401_model(path).model_validate(response.json())
