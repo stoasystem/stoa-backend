@@ -1362,6 +1362,24 @@ def _adopt_question_as_title(
     )
 
 
+def _naming_the_conversation(refusal: HTTPException, conv_id: str) -> HTTPException:
+    """The first message's refusal, saying which conversation was already made (#61).
+
+    The conversation is stored before its first message is committed, so a
+    refused first message leaves it behind. With its id the client can send the
+    message again into it, under the same key `initial-<id>`, instead of making
+    another. Only a structured body can carry it; a plain-text one is left as it
+    is, and neither helps a client that never received the response.
+    """
+    if not isinstance(refusal.detail, dict):
+        return refusal
+    return HTTPException(
+        status_code=refusal.status_code,
+        detail={**refusal.detail, "conversationId": conv_id},
+        headers=refusal.headers,
+    )
+
+
 @router.post("", response_model=ConversationDetail, status_code=status.HTTP_201_CREATED)
 async def create_conversation(
     body: CreateConversationRequest,
@@ -1419,10 +1437,15 @@ async def create_conversation(
                 },
             )
         except _ConversationAllowanceFailure as error:
-            _raise_conversation_allowance_failure(
-                error,
-                correlation_id=correlation_id,
-            )
+            try:
+                _raise_conversation_allowance_failure(
+                    error,
+                    correlation_id=correlation_id,
+                )
+            except HTTPException as refusal:
+                raise _naming_the_conversation(refusal, conv_id) from error
+        except HTTPException as refusal:
+            raise _naming_the_conversation(refusal, conv_id) from refusal
         messages = (
             # The answer follows; it is read at /generation with this key.
             [result.studentMessage]

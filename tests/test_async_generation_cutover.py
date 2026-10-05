@@ -302,3 +302,60 @@ def test_the_invoke_is_asynchronous_and_names_the_worker_alias(
     assert config.retries["max_attempts"] <= 1
     assert call["InvocationType"] == "Event"
     assert json.loads(call["Payload"]) == {"conversation_id": CONV, "idempotency_key": "k"}
+
+
+def test_a_new_conversation_whose_first_message_failed_names_itself_for_the_retry(
+    monkeypatch: pytest.MonkeyPatch, table, model, invokes, switched_on
+) -> None:
+    # #61: the conversation is stored before its first message is committed.
+    # When that fails the error must say which conversation was made, so the
+    # student's retry continues it instead of leaving it empty and making another.
+    real_commit = conversations.commit_message_command
+
+    def refused(**kwargs: Any) -> Any:
+        raise conversations._ConversationAllowanceFailure(
+            "allowance_finalization_recoverable",
+            "This answer is safely recoverable while token accounting finishes.",
+            "retry_same_message",
+            503,
+        )
+
+    monkeypatch.setattr(conversations, "commit_message_command", refused)
+    response = _client().post(
+        "/conversations",
+        json={"subject": "Mathematik", "grade": "Grade 6", "initialMessage": QUESTION},
+    )
+
+    assert response.status_code == 503, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "allowance_finalization_recoverable"
+    conversation_id = detail["conversationId"]
+    assert conversations._get_conversation(conversation_id)["student_id"]
+
+    monkeypatch.setattr(conversations, "commit_message_command", real_commit)
+    retry = _client().post(
+        f"/conversations/{conversation_id}/messages/stream",
+        json={"content": QUESTION, "idempotencyKey": f"initial-{conversation_id}"},
+    )
+    assert retry.status_code == 202, retry.text
+    assert retry.json()["conversationId"] == conversation_id
+
+
+def test_any_refusal_of_the_first_message_with_a_structured_body_names_the_conversation(
+    monkeypatch: pytest.MonkeyPatch, table, model, invokes, switched_on
+) -> None:
+    from fastapi import HTTPException
+
+    def refused(**kwargs: Any) -> Any:
+        raise HTTPException(status_code=409, detail={"code": "some_conflict", "message": "No."})
+
+    monkeypatch.setattr(conversations, "commit_message_command", refused)
+    response = _client().post(
+        "/conversations",
+        json={"subject": "Mathematik", "grade": "Grade 6", "initialMessage": QUESTION},
+    )
+
+    assert response.status_code == 409, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "some_conflict"
+    assert conversations._get_conversation(detail["conversationId"])
