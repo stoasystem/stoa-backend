@@ -4710,6 +4710,124 @@
         "title": "MemoryLocale",
         "type": "object"
       },
+      "MemoryRecommendation": {
+        "additionalProperties": true,
+        "properties": {
+          "autonomousDecision": {
+            "title": "Autonomousdecision",
+            "type": "boolean"
+          },
+          "candidateId": {
+            "title": "Candidateid",
+            "type": "string"
+          },
+          "confidence": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/MemoryRecommendationFreshness"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "rationale": {
+            "title": "Rationale",
+            "type": "string"
+          },
+          "reviewFlags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reviewflags",
+            "type": "array"
+          },
+          "reviewRequired": {
+            "title": "Reviewrequired",
+            "type": "boolean"
+          },
+          "sourceId": {
+            "title": "Sourceid",
+            "type": "string"
+          },
+          "sourceSignals": {
+            "additionalProperties": true,
+            "title": "Sourcesignals",
+            "type": "object"
+          },
+          "sourceType": {
+            "title": "Sourcetype",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "topicId": {
+            "title": "Topicid",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidateId",
+          "type",
+          "sourceType",
+          "sourceId",
+          "subject",
+          "topicId",
+          "label",
+          "rationale",
+          "confidence",
+          "freshness",
+          "sourceSignals",
+          "reviewRequired",
+          "autonomousDecision",
+          "reviewFlags"
+        ],
+        "title": "MemoryRecommendation",
+        "type": "object"
+      },
+      "MemoryRecommendationFreshness": {
+        "additionalProperties": true,
+        "properties": {
+          "lastEvidenceAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastevidenceat"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "lastEvidenceAt",
+          "source"
+        ],
+        "title": "MemoryRecommendationFreshness",
+        "type": "object"
+      },
       "MemorySequencingSummary": {
         "additionalProperties": false,
         "properties": {
@@ -4785,6 +4903,81 @@
         "title": "MemorySequencingSummary",
         "type": "object"
       },
+      "MemorySubject": {
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "rolloutState": {
+            "title": "Rolloutstate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "rolloutState"
+        ],
+        "title": "MemorySubject",
+        "type": "object"
+      },
+      "MemorySubjectActivity": {
+        "additionalProperties": true,
+        "properties": {
+          "aiResolvedCount": {
+            "title": "Airesolvedcount",
+            "type": "integer"
+          },
+          "feedbackAverage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedbackaverage"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "questionCount": {
+            "title": "Questioncount",
+            "type": "integer"
+          },
+          "rolloutState": {
+            "title": "Rolloutstate",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "teacherEscalationCount": {
+            "title": "Teacherescalationcount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "subject",
+          "label",
+          "rolloutState",
+          "questionCount",
+          "aiResolvedCount",
+          "teacherEscalationCount",
+          "feedbackAverage"
+        ],
+        "title": "MemorySubjectActivity",
+        "type": "object"
+      },
       "MemorySummaryResponse": {
         "additionalProperties": false,
         "properties": {
@@ -4804,8 +4997,7 @@
           },
           "recommendations": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/MemoryRecommendation"
             },
             "title": "Recommendations",
             "type": "array"
@@ -4831,16 +5023,14 @@
           },
           "subjectActivity": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/MemorySubjectActivity"
             },
             "title": "Subjectactivity",
             "type": "array"
           },
           "subjects": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/MemorySubject"
             },
             "title": "Subjects",
             "type": "array"
@@ -4851,8 +5041,7 @@
           },
           "weakTopics": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/MemoryWeakTopic"
             },
             "title": "Weaktopics",
             "type": "array"
@@ -4873,6 +5062,61 @@
           "updatedAt"
         ],
         "title": "MemorySummaryResponse",
+        "type": "object"
+      },
+      "MemoryWeakTopic": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "evidenceQuestionIds": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidencequestionids"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "latestEvidenceAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latestevidenceat"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "topicId": {
+            "title": "Topicid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject",
+          "topicId",
+          "label",
+          "count",
+          "latestEvidenceAt"
+        ],
+        "title": "MemoryWeakTopic",
         "type": "object"
       },
       "MessageAcceptedResponse": {
@@ -10698,6 +10942,19 @@
         "title": "SecurityErrorCode",
         "type": "string"
       },
+      "SecurityErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/SecurityErrorBody"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "title": "SecurityErrorResponse",
+        "type": "object"
+      },
       "SendMessageRequest": {
         "additionalProperties": false,
         "properties": {
@@ -10750,6 +11007,18 @@
         ],
         "title": "SendMessageResponse",
         "type": "object"
+      },
+      "SignInUnauthorizedResponse": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SecurityErrorBody"
+          },
+          {
+            "$ref": "#/components/schemas/SecurityErrorResponse"
+          }
+        ],
+        "description": "401 from sign-in and refresh, which take no bearer token.\n\nThe identity provider's refusal (`invalid_credentials`, `invalid_token`) is\nsent by `public_auth_error_response` as the security body itself, with no\n`detail` envelope. A token the provider issued that then fails verification\nhere is refused inside `detail`, like any other route.",
+        "title": "SignInUnauthorizedResponse"
       },
       "StatsResponse": {
         "properties": {
@@ -22565,6 +22834,16 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInUnauthorizedResponse"
+                }
+              }
+            },
+            "description": "`invalid_credentials` at the top level for a wrong email or password; inside `detail` when the issued token does not verify."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -22698,6 +22977,16 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityErrorBody"
+                }
+              }
+            },
+            "description": "`invalid_token` at the top level: the provider refused the sign-out."
           },
           "422": {
             "content": {
@@ -23013,6 +23302,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInUnauthorizedResponse"
+                }
+              }
+            },
+            "description": "`invalid_token` at the top level for a refused refresh token; inside `detail` when the issued token does not verify."
           },
           "422": {
             "content": {
