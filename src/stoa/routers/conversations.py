@@ -52,6 +52,7 @@ from stoa.models.error import (
     AttachmentErrorResponse,
     FirstMessageRefusalResponse,
     NotFoundResponse,
+    SecurityErrorResponse,
 )
 from stoa.models.question import QuestionStatus
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
@@ -1389,12 +1390,13 @@ def _naming_the_conversation(refusal: HTTPException, conv_id: str) -> HTTPExcept
     response_model=ConversationDetail,
     status_code=status.HTTP_201_CREATED,
     responses={
-        code: {"model": FirstMessageRefusalResponse}
-        for code in (
-            status.HTTP_409_CONFLICT,
-            status.HTTP_429_TOO_MANY_REQUESTS,
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-        )
+        # 409 and 503 also come from the identity check, before any
+        # conversation exists, with no conversationId to give.
+        status.HTTP_409_CONFLICT: {"model": SecurityErrorResponse | FirstMessageRefusalResponse},
+        status.HTTP_429_TOO_MANY_REQUESTS: {"model": FirstMessageRefusalResponse},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "model": SecurityErrorResponse | FirstMessageRefusalResponse
+        },
     },
 )
 async def create_conversation(

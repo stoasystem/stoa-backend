@@ -23602,7 +23602,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FirstMessageRefusalResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SecurityErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/FirstMessageRefusalResponse"
+                    }
+                  ],
+                  "title": "Response 409 Create Conversation Conversations Post"
                 }
               }
             },
@@ -23632,7 +23640,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FirstMessageRefusalResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SecurityErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/FirstMessageRefusalResponse"
+                    }
+                  ],
+                  "title": "Response 503 Create Conversation Conversations Post"
                 }
               }
             },

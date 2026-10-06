@@ -285,8 +285,59 @@ def test_creating_a_conversation_declares_the_first_message_refusal_naming_it() 
     # #61: a refused first message names the conversation already made.
     schema = app.openapi()
     responses = schema["paths"]["/conversations"]["post"]["responses"]
-    for code in ("409", "429", "503"):
-        ref = responses[code]["content"]["application/json"]["schema"]["$ref"]
-        assert ref.endswith("/FirstMessageRefusalResponse"), (code, ref)
+    assert _declared_models(responses, 429) == [error_models.FirstMessageRefusalResponse]
+    for code in (409, 503):
+        assert error_models.FirstMessageRefusalResponse in _declared_models(responses, code)
     body = schema["components"]["schemas"]["FirstMessageRefusalBody"]
     assert {"code", "message", "conversationId"} <= set(body["required"])
+
+
+def _declared_models(responses: dict, code: int) -> list[type]:
+    schema = responses[str(code)]["content"]["application/json"]["schema"]
+    refs = [item["$ref"] for item in schema.get("anyOf", [schema])]
+    return [getattr(error_models, ref.rsplit("/", 1)[-1]) for ref in refs]
+
+
+@pytest.mark.parametrize("outage, expected", [(False, 409), (True, 503)])
+def test_creating_a_conversation_declares_the_identity_refusal_made_before_it(
+    monkeypatch: pytest.MonkeyPatch, outage: bool, expected: int
+) -> None:
+    # Review of 862988d7: before any conversation exists the identity check
+    # answers 409 (no binding) or 503 (store unavailable), with no conversationId.
+    from pydantic import TypeAdapter, ValidationError
+
+    from stoa.deps import get_identity_repository, get_verified_token
+    from stoa.routers import conversations
+    from stoa.security.tokens import VerifiedAccessToken
+
+    class _Repository:
+        async def get_binding(self, issuer: str, subject: str) -> None:
+            if outage:
+                raise TimeoutError("identity store unavailable")
+            return None
+
+    created: list[bool] = []
+    monkeypatch.setattr(conversations, "get_table", lambda: created.append(True))
+    route_app = FastAPI()
+    route_app.include_router(conversations.router, prefix="/conversations")
+    route_app.dependency_overrides[get_verified_token] = lambda: VerifiedAccessToken(
+        issuer="https://identity.test/primary",
+        subject="subject-1",
+        client_id="student-client",
+        groups=("students",),
+    )
+    route_app.dependency_overrides[get_identity_repository] = _Repository
+
+    response = TestClient(route_app).post(
+        "/conversations",
+        json={"subject": "Mathematik", "grade": "Grade 6", "initialMessage": "Help"},
+    )
+
+    assert response.status_code == expected, response.text
+    assert created == []
+    declared = _declared_models(app.openapi()["paths"]["/conversations"]["post"]["responses"], expected)
+    assert set(declared) == {error_models.SecurityErrorResponse, error_models.FirstMessageRefusalResponse}
+    union = TypeAdapter(error_models.SecurityErrorResponse | error_models.FirstMessageRefusalResponse)
+    union.validate_python(response.json())
+    with pytest.raises(ValidationError):
+        error_models.FirstMessageRefusalResponse.model_validate(response.json())
