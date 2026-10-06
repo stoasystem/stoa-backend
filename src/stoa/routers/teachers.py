@@ -638,16 +638,34 @@ def _get_messages(conv_id: str) -> list[TeacherItem]:
     return _teacher_items(resp)
 
 
+# A ceiling on the pages one read may follow; the table is far from it.
+_ESCALATED_CONVERSATION_PAGE_LIMIT = 1000
+
+
 def _get_escalated_conversations() -> list[TeacherItem]:
-    """Scan conversations that have been escalated to a teacher."""
-    resp = _teacher_scan(
-        get_table(),
-        FilterExpression=(
-            Attr("entity_type").eq("conversation")
-            & Attr("escalated").eq(True)
+    """Every conversation escalated to a teacher, from every page of the table.
+
+    A filtered scan stops at a page of the table, not at the matches: one page
+    read the first 1604 rows in production and missed a request dispatched a
+    minute earlier, so the teacher could not see it, take it or answer it (#95).
+    """
+    table = get_table()
+    request: dict[str, object] = {
+        "FilterExpression": (
+            Attr("entity_type").eq("conversation") & Attr("escalated").eq(True)
         ),
-    )
-    return _teacher_items(resp)
+    }
+    items: list[TeacherItem] = []
+    for _page in range(_ESCALATED_CONVERSATION_PAGE_LIMIT):
+        result = _teacher_scan(table, **request)
+        items.extend(_teacher_items(result))
+        cursor = result.get("LastEvaluatedKey")
+        if cursor is None:
+            return items
+        if not isinstance(cursor, dict) or not cursor or cursor == request.get("ExclusiveStartKey"):
+            raise RuntimeError("teacher data dependency unavailable")
+        request["ExclusiveStartKey"] = cursor
+    raise RuntimeError("teacher data dependency unavailable")
 
 
 def _resolve_help_request(request_id: str) -> TeacherItem | None:
