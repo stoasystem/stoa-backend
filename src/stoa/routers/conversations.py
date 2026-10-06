@@ -883,6 +883,9 @@ class ChatMessage(BaseModel):
     createdAt: str
     status: str = "sent"
     attachments: list[AttachmentSummary] = Field(default_factory=list)
+    # A teacher message's author, as named when it was written (#65); absent
+    # on every other message and on teacher messages written before.
+    authorName: str | None = None
 
 
 class SendMessageResponse(BaseModel):
@@ -1517,6 +1520,7 @@ async def get_conversation(
                 for value in m.get("attachment_ids", [])
                 if value in attachment_summaries
             ],
+            authorName=_author_name(m),
         )
         for m in raw_messages
     ]
@@ -3624,6 +3628,14 @@ def _teacher_help_response(
         ),
         updatedAt=str(conv.get("updated_at") or fallback_created_at),
     )
+
+
+def _author_name(message: Mapping[str, Any]) -> str | None:
+    """The name a teacher message was written under; no other message has one."""
+    name = message.get("author_name")
+    if message.get("role") != "teacher" or not isinstance(name, str):
+        return None
+    return name.strip() or None
 
 
 def _teacher_name(teacher_id: object) -> str | None:

@@ -1697,6 +1697,12 @@ async def add_note(
         "teacher_response_format": reply_fields["teacher_response_format"],
         "created_at": now,
     }
+    # The student sees who wrote each reply, as named when it was written (#65):
+    # the profile's name only, never the email; without one the frontend says
+    # "teacher".
+    author_name = (teacher_profile or {}).get("name")
+    if isinstance(author_name, str) and author_name.strip():
+        message_item["author_name"] = author_name.strip()
 
     if not _takes_two_row_path(conv, teacher_id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_NOT_HELD)
