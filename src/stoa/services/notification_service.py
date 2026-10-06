@@ -1042,6 +1042,60 @@ def emit_teacher_reply(*, question: dict[str, Any], teacher_id: str) -> None:
     )
 
 
+def emit_teacher_help_takeover(*, conversation: Mapping[str, Any], teacher_id: str) -> None:
+    """Tell the student a teacher took their chat help request (#65), once.
+
+    The event's id names the request and the teacher, so taking it again, or a
+    retried write, is refused by the store rather than announced twice.
+    """
+    student_id = str(conversation.get("student_id") or "")
+    request_id = str(conversation.get("escalation_request_id") or "")
+    create_event_safe(
+        recipient_id=student_id,
+        recipient_role="student",
+        event_type="teacher_takeover",
+        target_type="conversation",
+        target_id=str(conversation.get("conversation_id") or ""),
+        title="A teacher joined your conversation",
+        summary="A teacher has started working on your request.",
+        metadata={"request_id": request_id, "teacher_id": teacher_id},
+        actor_id=teacher_id,
+        actor_role="teacher",
+        owner_id=student_id,
+        account_fence_generation=conversation.get("account_fence_generation"),
+        event_id=f"teacher-help-takeover-{request_id}-{teacher_id}",
+    )
+
+
+def emit_teacher_help_reply(
+    *, conversation: Mapping[str, Any], teacher_id: str, reply_id: str
+) -> None:
+    """Tell the student a teacher answered in their conversation (#65), once per reply.
+
+    A reply that takes the request in the same write is this one event: the
+    student hears about the answer, not separately about the take-over.
+    """
+    student_id = str(conversation.get("student_id") or "")
+    create_event_safe(
+        recipient_id=student_id,
+        recipient_role="student",
+        event_type="teacher_reply",
+        target_type="conversation",
+        target_id=str(conversation.get("conversation_id") or ""),
+        title="Your teacher replied",
+        summary="Your teacher answered in your conversation.",
+        metadata={
+            "request_id": str(conversation.get("escalation_request_id") or ""),
+            "teacher_id": teacher_id,
+        },
+        actor_id=teacher_id,
+        actor_role="teacher",
+        owner_id=student_id,
+        account_fence_generation=conversation.get("account_fence_generation"),
+        event_id=f"teacher-help-reply-{reply_id}",
+    )
+
+
 def emit_teacher_help_expired(*, conversation: Mapping[str, Any], case_returned: bool) -> None:
     """Tell the student their request for a teacher expired (#87), once.
 

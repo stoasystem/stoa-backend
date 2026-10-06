@@ -146,7 +146,8 @@ def test_a_request_a_teacher_has_taken_does_not_expire(table, notices) -> None:
     assert outcome["conversationsExpired"] == []
     assert _conv(table)["escalation_status"] == "in_progress"
     assert _spent(table) == 1
-    assert notices == []
+    # A teacher took it, which tells the student (#65); no expiry notice.
+    assert [notice for notice in notices if notice["event_type"] == "teacher_help_expired"] == []
 
 
 def test_a_teacher_accepting_at_the_same_moment_wins(table, notices, monkeypatch) -> None:
@@ -161,7 +162,8 @@ def test_a_teacher_accepting_at_the_same_moment_wins(table, notices, monkeypatch
     assert _conv(table)["escalation_status"] == "in_progress"
     assert _question(table)["status"] == "teacher_active"
     assert _spent(table) == 1
-    assert notices == []
+    # A teacher took it, which tells the student (#65); no expiry notice.
+    assert [notice for notice in notices if notice["event_type"] == "teacher_help_expired"] == []
 
 
 def test_an_expired_request_is_not_offered_again(table, notices) -> None:

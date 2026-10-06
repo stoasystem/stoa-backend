@@ -1579,6 +1579,8 @@ async def update_help_request(
     """
     now = _now()
     conv = dict(authorized.value)
+    # Taken now, by this write: the teacher did not hold it before.
+    takes_it = body.status == "in_progress" and not conv.get("teacher_id")
     if _takes_two_row_path(conv, actor.user_id):
         try:
             conv = teacher_dispatch_service.advance_help_request(
@@ -1594,6 +1596,8 @@ async def update_help_request(
             ) from exc
     else:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_NOT_HELD)
+    if takes_it:
+        notification_service.emit_teacher_help_takeover(conversation=conv, teacher_id=actor.user_id)
 
     conv_id = _required_text(conv.get("conversation_id"))
     student_name = _get_student_name(_text(conv.get("student_id")))
@@ -1736,6 +1740,10 @@ async def add_note(
                 status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
             ) from exc
 
+    # One notification for the reply, also when the reply took the request.
+    notification_service.emit_teacher_help_reply(
+        conversation=conv, teacher_id=teacher_id, reply_id=note_id
+    )
     return TeacherNoteOut(
         id=note_id,
         note=reply_fields["teacher_response"],
