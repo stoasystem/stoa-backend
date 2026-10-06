@@ -1579,8 +1579,9 @@ async def update_help_request(
     """
     now = _now()
     conv = dict(authorized.value)
-    # Taken now, by this write: the teacher did not hold it before.
-    takes_it = body.status == "in_progress" and not conv.get("teacher_id")
+    # Taken now, by this write: nobody held it before. Finishing an offer
+    # straight away takes it too, in the same write.
+    takes_it = not conv.get("teacher_id")
     if _takes_two_row_path(conv, actor.user_id):
         try:
             conv = teacher_dispatch_service.advance_help_request(

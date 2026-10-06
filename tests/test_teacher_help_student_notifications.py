@@ -52,6 +52,28 @@ def test_a_teacher_taking_the_request_tells_the_student_once(table, sent) -> Non
     _for_the_student(sent[0])
 
 
+def test_resolving_straight_from_the_offer_takes_it_and_tells_the_student(table, sent) -> None:
+    # Review of 030cc8db: finishing an offer the teacher never took also takes
+    # it, in the same write, and the student heard nothing.
+    _dispatch_to(table, TEACHER)
+
+    response = _set_status(_client(), "resolved")
+
+    assert response.status_code == 200, response.text
+    assert [event["event_type"] for event in sent] == ["teacher_takeover"]
+    _for_the_student(sent[0])
+
+
+def test_a_teacher_already_holding_the_request_is_not_announced_again(table, sent) -> None:
+    _dispatch_to(table, TEACHER)
+    assert _set_status(_client(), "in_progress").status_code == 200
+    sent.clear()
+
+    assert _set_status(_client(), "resolved").status_code == 200
+
+    assert sent == []
+
+
 def test_each_reply_tells_the_student_once(table, sent) -> None:
     _dispatch_to(table, TEACHER)
     assert _set_status(_client(), "in_progress").status_code == 200
