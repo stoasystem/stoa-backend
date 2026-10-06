@@ -660,9 +660,11 @@ def _get_escalated_conversations() -> list[TeacherItem]:
         result = _teacher_scan(table, **request)
         items.extend(_teacher_items(result))
         cursor = result.get("LastEvaluatedKey")
-        if cursor is None:
+        # No key, or an empty one, is the end of the table (DynamoDB's Scan
+        # contract allows both).
+        if cursor is None or cursor == {}:
             return items
-        if not isinstance(cursor, dict) or not cursor or cursor == request.get("ExclusiveStartKey"):
+        if not isinstance(cursor, dict) or cursor == request.get("ExclusiveStartKey"):
             raise RuntimeError("teacher data dependency unavailable")
         request["ExclusiveStartKey"] = cursor
     raise RuntimeError("teacher data dependency unavailable")
