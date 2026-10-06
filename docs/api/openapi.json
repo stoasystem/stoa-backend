@@ -12763,6 +12763,15 @@
           },
           "status": {
             "default": "pending",
+            "enum": [
+              "pending",
+              "waiting_no_teacher",
+              "assigned",
+              "in_progress",
+              "resolved",
+              "withdrawn",
+              "expired"
+            ],
             "title": "Status",
             "type": "string"
           },

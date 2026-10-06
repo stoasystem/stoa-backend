@@ -2294,3 +2294,49 @@ def test_an_escalation_made_before_the_queue_row_existed_is_not_dispatched(monke
     assert result["reason"] == "no_queue_row"
     assert (f"QUESTION#{request_id}", "META") not in table.rows
     assert table.rows[("CONV#conv-1", "CONV")]["dispatch_status"] == "unassigned"
+
+
+_STUDENT_HELP_STATES = {
+    "pending": {},
+    "waiting_no_teacher": {"dispatch_status": "no_candidate"},
+    "assigned": {"teacher_id": "teacher-1"},
+    "in_progress": {"escalation_status": "in_progress", "teacher_id": "teacher-1"},
+    "resolved": {"escalation_status": "resolved", "teacher_id": "teacher-1"},
+    "withdrawn": {"escalation_status": "withdrawn"},
+    "expired": {"escalation_status": "expired"},
+}
+
+
+@pytest.mark.parametrize("state, fields", list(_STUDENT_HELP_STATES.items()))
+def test_every_help_state_a_student_can_be_in_is_one_the_contract_names(
+    monkeypatch, state, fields
+):
+    # #65: the status card reads this field only, so it is a closed set.
+    monkeypatch.setattr(
+        conversations,
+        "_get_conversation",
+        lambda conv_id: {
+            "conversation_id": conv_id,
+            "student_id": "student-1",
+            "escalation_request_id": "req-1",
+            "escalation_status": "pending",
+            "escalated_at": "2026-08-24T08:00:00+00:00",
+            "updated_at": "2026-08-24T08:00:00+00:00",
+            **fields,
+        },
+    )
+    monkeypatch.setattr(conversations.user_repo, "get_user", lambda _id, **_kwargs: {"name": "T"})
+
+    response = _client(conversations.teacher_help_router, "/teacher-help").get(
+        "/teacher-help/conversations/conv-1/request"
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == state
+
+
+def test_the_help_status_contract_names_exactly_the_states_a_student_meets():
+    from stoa.main import app
+
+    schema = app.openapi()["components"]["schemas"]["TeacherHelpResponse"]["properties"]["status"]
+    assert set(schema["enum"]) == set(_STUDENT_HELP_STATES)

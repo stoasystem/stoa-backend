@@ -979,10 +979,25 @@ def _dispatch_escalated_conversation(
     return "assigned", _teacher_name(teacher_id)
 
 
+# What a student's request for a teacher can be, as the status card reads it
+# (#65): `teacher_dispatch_service.student_help_status` derives the first three,
+# the teacher's writes give in_progress and resolved, withdrawing and expiry
+# the last two.
+StudentHelpStatus = Literal[
+    "pending",
+    "waiting_no_teacher",
+    "assigned",
+    "in_progress",
+    "resolved",
+    "withdrawn",
+    "expired",
+]
+
+
 class TeacherHelpResponse(BaseModel):
     requestId: str
     conversationId: str
-    status: str = "pending"
+    status: StudentHelpStatus = "pending"
     teacherName: str | None = None
     createdAt: str
     updatedAt: str | None = None
