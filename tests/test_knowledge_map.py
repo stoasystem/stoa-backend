@@ -7,6 +7,7 @@ against whatever that double permits.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from stoa.services import knowledge_map_service as km
@@ -188,7 +189,11 @@ def test_two_stars_of_one_nebula_do_not_land_on_top_of_each_other() -> None:
     )
 
     a, b = result["stars"]
-    assert (a["x"], a["y"]) != (b["x"], b["y"])
+    # `!=` is not enough: audit measured two stars 0.001 apart in a 50-star
+    # nebula, which is 1.7 px on a 1600 px canvas — distinct numbers, one dot
+    # on screen. Assert a distance a reader could actually resolve.
+    distance = math.dist((a["x"], a["y"]), (b["x"], b["y"]))
+    assert distance > 0.004, f"two stars {distance:.5f} apart read as one"
 
 
 def test_nebulae_of_one_subject_stay_together_along_the_band() -> None:
@@ -253,3 +258,38 @@ def test_an_empty_sky_answers_with_empty_lists_not_an_error() -> None:
 
     assert result["galaxies"] == [] and result["nebulae"] == [] and result["stars"] == []
     assert result["summary"]["total"] == 0
+
+
+def test_the_recommendation_follows_the_chapter_order_not_the_spelling_of_its_id() -> None:
+    """Found by audit on the real seed: `geometrie` sorts before `gleichungen`.
+
+    A student who finished chapter 1 was sent to chapter 3, past an untouched
+    chapter 2 — on the one affordance the student's home screen has.
+    """
+    chapters = [("brueche", 1), ("gleichungen", 2), ("geometrie", 3)]
+    result = build(
+        catalog=catalog(
+            topics=[
+                {"id": name, "subjectId": "math", "title": name, "order": order}
+                for name, order in chapters
+            ],
+            units=[
+                {"id": f"{name}-u1", "subjectId": "math", "topicId": name, "title": name, "order": 0}
+                for name, _ in chapters
+            ],
+        ),
+        unit_states={
+            "brueche-u1": judged("brueche-u1", mastery.LearningState.LIT, topic_id="brueche", lessons_done=1),
+            "gleichungen-u1": judged("gleichungen-u1", mastery.LearningState.READY, topic_id="gleichungen"),
+            "geometrie-u1": judged("geometrie-u1", mastery.LearningState.READY, topic_id="geometrie"),
+        },
+    )
+
+    assert [star["unitId"] for star in result["stars"]] == [
+        "brueche-u1",
+        "gleichungen-u1",
+        "geometrie-u1",
+    ], "stars follow the band, which follows topic.order"
+    assert [star["unitId"] for star in result["stars"] if star["recommendation"]] == [
+        "gleichungen-u1"
+    ]

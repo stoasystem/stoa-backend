@@ -663,6 +663,32 @@ def list_student_attempts(student_id: str, *, correct: bool | None = None) -> li
     return items
 
 
+def all_challenges_answered_right(student_id: str) -> set[str]:
+    """Every exercise this student has ever answered right, across all pages.
+
+    The star map judges a knowledge point lit partly on this (#57), so a
+    truncated read puts out stars the student has earned - and it gets worse
+    the more they practise, which is the opposite of what a learning product
+    should do. `list_student_attempts` reads one page; this follows them all,
+    the way `challenges_answered_right` does for one lesson (#83).
+    """
+    table = get_table()
+    items = _query_all_challenge_pages(
+        table,
+        KeyConditionExpression=(
+            Key("PK").eq(f"ATTEMPTS#{student_id}") & Key("SK").begins_with("ATTEMPT#")
+        ),
+        FilterExpression=Attr("correct").eq(True),
+        ConsistentRead=True,
+    )
+    found: set[str] = set()
+    for item in items:
+        challenge_id = str(item.get("challenge_id") or item.get("exercise_id") or "")
+        if challenge_id:
+            found.add(challenge_id)
+    return found
+
+
 def challenges_answered_right(student_id: str, lesson_id: str) -> set[str]:
     """The exercises of `lesson_id` the student has answered right at least once.
 

@@ -24,6 +24,7 @@ mastery judgement is: it can be tested without a table double.
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 from datetime import datetime, timezone
 from collections.abc import Mapping, Sequence
@@ -31,6 +32,8 @@ from typing import Any
 
 from stoa.db.repositories import practice_repo, review_repo
 from stoa.services import curriculum_service, knowledge_mastery_service
+
+logger = logging.getLogger(__name__)
 
 #: Where a nebula's stars sit relative to its centre, as a share of the sky.
 NEBULA_RADIUS = 0.055
@@ -131,13 +134,20 @@ def build_map(
         for index, topic in enumerate(ordered_topics)
     ]
 
+    # The band's own order, so a star sorts by the chapter it is in rather than
+    # by how its topic id happens to spell. Sorting by the id put "geometrie"
+    # before "gleichungen", and the recommendation - the one affordance on the
+    # student's home screen - then pointed at chapter 3 while chapter 2 stood
+    # untouched.
+    chapter_order = {nebula["topicId"]: nebula["order"] for nebula in nebulae}
+
     stars: list[dict[str, Any]] = []
     for unit in sorted(
         units,
         key=lambda item: (
-            str(item.get("subjectId") or ""),
-            str(item.get("topicId") or ""),
+            chapter_order.get(str(item.get("topicId") or ""), len(chapter_order)),
             int(item.get("order") or 0),
+            str(item.get("id") or ""),
         ),
     ):
         unit_id = str(unit.get("id") or "")
@@ -176,10 +186,11 @@ def build_map(
             }
         )
 
+    subject_of_nebula = _subject_index(nebulae)
     galaxies: list[dict[str, Any]] = []
     for subject in sorted(subjects, key=lambda item: int(item.get("order") or 0)):
         sid = str(subject.get("id") or "")
-        mine = [star for star in stars if _subject_of(star, nebulae) == sid]
+        mine = [star for star in stars if _subject_of(star, subject_of_nebula) == sid]
         galaxies.append(
             {
                 "subjectId": sid,
@@ -191,13 +202,13 @@ def build_map(
         )
 
     for galaxy in galaxies:
-        mine = [star for star in stars if _subject_of(star, nebulae) == galaxy["subjectId"]]
+        mine = [star for star in stars if _subject_of(star, subject_of_nebula) == galaxy["subjectId"]]
         recommended = _recommended_unit(mine)
         for star in mine:
             if star["unitId"] == recommended:
                 star["recommendation"] = {"source": "system"}
 
-    focused = [star for star in stars if _subject_of(star, nebulae) == subject_id]
+    focused = [star for star in stars if _subject_of(star, subject_of_nebula) == subject_id]
     return {
         "subjectId": subject_id,
         "galaxies": galaxies,
@@ -214,11 +225,12 @@ def build_map(
     }
 
 
-def _subject_of(star: Mapping[str, Any], nebulae: Sequence[Mapping[str, Any]]) -> str:
-    for nebula in nebulae:
-        if nebula["topicId"] == star["nebulaId"]:
-            return str(nebula["subjectId"])
-    return ""
+def _subject_index(nebulae: Sequence[Mapping[str, Any]]) -> dict[str, str]:
+    return {str(nebula["topicId"]): str(nebula["subjectId"]) for nebula in nebulae}
+
+
+def _subject_of(star: Mapping[str, Any], subject_of_nebula: Mapping[str, str]) -> str:
+    return subject_of_nebula.get(str(star["nebulaId"]), "")
 
 
 def _review_due_by_unit(student_id: str, lessons: Sequence[Mapping[str, Any]]) -> dict[str, int]:
@@ -230,10 +242,16 @@ def _review_due_by_unit(student_id: str, lessons: Sequence[Mapping[str, Any]]) -
         # The repository's default limit is a page for a review session; this
         # is a count across the whole sky, so it asks for the ceiling the map
         # can draw. Above it the badge under-reports rather than misleads.
+        #
+        # The real ceiling is lower than this number: `list_cards` reads one
+        # DynamoDB page (1 MB) without following `LastEvaluatedKey`, so past a
+        # page the "soonest first" ordering is only over that first slice.
         cards = review_repo.list_due_cards(
             student_id, now=datetime.now(timezone.utc), limit=REVIEW_COUNT_CEILING
         )
     except Exception:  # noqa: BLE001
+        # Silently zeroing every review badge would look like "nothing due".
+        logger.warning("Review counts unavailable for the star map", exc_info=True)
         return {}
     counts: dict[str, int] = {}
     for card in cards:

@@ -27462,7 +27462,7 @@
     },
     "/practice/knowledge-map": {
       "get": {
-        "description": "The star map: every subject, topic and knowledge point with its state.\n\nRegistered above `/{subject_id}/{topic_id}/roadmap` on purpose - that\npattern would otherwise swallow nothing here, but a two-segment sibling\nadded later could, and the order is the only thing preventing it.",
+        "description": "The star map: every subject, topic and knowledge point with its state.\n\nThe language comes from the request the way every other curriculum read\nhere takes it, not from a query parameter with German wired in as the\ndefault: the names on this map are galaxy, nebula and knowledge-point\ntitles, and a French student reading a sky labelled in German is the same\ndefect as any other untranslated screen.\n\nThe student is `authorized_student.ref.student_id` and nothing else. The\n`studentId` query parameter belongs to the authorization dependency, which\ndeclares and checks it; reading one here would be a way around the check.",
         "operationId": "get_knowledge_map_practice_knowledge_map_get",
         "parameters": [
           {
@@ -27495,16 +27495,6 @@
                 }
               ],
               "title": "Studentid"
-            }
-          },
-          {
-            "in": "query",
-            "name": "locale",
-            "required": false,
-            "schema": {
-              "default": "de",
-              "title": "Locale",
-              "type": "string"
             }
           }
         ],

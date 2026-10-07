@@ -7,6 +7,13 @@ lessons is not enough on its own - a student can finish a lesson with a wrong
 answer, and a unit that lit on lesson completion alone would claim knowledge
 the evidence does not support.
 
+**Known deviation from #9: lighting here is derived, not persisted.** #9 says
+a first lighting is stored and never goes out. This judges from the content as
+it stands, so adding an active lesson to a unit a student has already lit -
+or turning an archived one back on - drops that unit back to `in_progress`
+and takes a point off their subject's count. Persisting `litAt` is
+stoa-backend#71; until it lands, a content change can put a star out.
+
 The states are ordered: lit > in_progress > ready > locked. `locked` needs a
 prerequisite that is not lit yet; until stoa-backend#56 stores prerequisites,
 nothing is locked, which is what #9 point 7 asks for ("no prerequisite edge,
@@ -146,15 +153,11 @@ def _exercises_answered_right(student_id: str) -> frozenset[str]:
 
     Read once for the whole map rather than per unit: the same attempt list
     answers every knowledge point, and a per-unit read would turn one page of
-    the star map into a request per knowledge point.
+    the star map into a request per knowledge point. Every page of it, too -
+    a truncated read puts out stars the student earned, and does so more the
+    more they practise.
     """
-    attempts = practice_repo.list_student_attempts(student_id, correct=True)
-    found: set[str] = set()
-    for attempt in attempts:
-        challenge_id = str(attempt.get("challenge_id") or attempt.get("exercise_id") or "")
-        if challenge_id:
-            found.add(challenge_id)
-    return frozenset(found)
+    return frozenset(practice_repo.all_challenges_answered_right(student_id))
 
 
 def _active_exercise_ids(lesson_id: str) -> list[str]:
