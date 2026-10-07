@@ -48,6 +48,7 @@ from stoa.security.route_authorization import (
     student_actor_dependency,
 )
 from stoa.services import (
+    knowledge_map_service,
     curriculum_analytics_service,
     curriculum_service,
     entitlement_service,
@@ -620,6 +621,26 @@ async def get_curriculum_progress(
 ):
     resolved_student_id = authorized_student.ref.student_id
     return curriculum_service.get_progress_summary(resolved_student_id, subject_id=subject_id)
+
+
+@router.get("/knowledge-map")
+async def get_knowledge_map(
+    subject_id: str | None = Query(default=None, alias="subjectId"),
+    student_id: str | None = Query(default=None, alias="studentId"),
+    locale: str = Query(default="de"),
+    authorized_student: AuthorizedResource = Depends(_practice_progress),
+):
+    """The star map: every subject, topic and knowledge point with its state.
+
+    Registered above `/{subject_id}/{topic_id}/roadmap` on purpose - that
+    pattern would otherwise swallow nothing here, but a two-segment sibling
+    added later could, and the order is the only thing preventing it.
+    """
+    del student_id
+    resolved_student_id = authorized_student.ref.student_id
+    return knowledge_map_service.knowledge_map(
+        resolved_student_id, subject_id=subject_id, locale=locale
+    )
 
 
 @router.get("/{subject_id}/{topic_id}/roadmap")

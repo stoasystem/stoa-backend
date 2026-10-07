@@ -27460,6 +27460,127 @@
         }
       }
     },
+    "/practice/knowledge-map": {
+      "get": {
+        "description": "The star map: every subject, topic and knowledge point with its state.\n\nRegistered above `/{subject_id}/{topic_id}/roadmap` on purpose - that\npattern would otherwise swallow nothing here, but a two-segment sibling\nadded later could, and the order is the only thing preventing it.",
+        "operationId": "get_knowledge_map_practice_knowledge_map_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "subjectId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subjectid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "studentId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Studentid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "locale",
+            "required": false,
+            "schema": {
+              "default": "de",
+              "title": "Locale",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Knowledge Map",
+        "tags": [
+          "practice"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "learning_assignment",
+              "resource_type": "student"
+            },
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "parent_oversight",
+              "resource_type": "student"
+            },
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "student"
+            },
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "support",
+              "resource_type": "student"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": [
+            "studentId"
+          ]
+        }
+      }
+    },
     "/practice/lessons/{lesson_id}": {
       "get": {
         "operationId": "get_lesson_practice_lessons__lesson_id__get",
