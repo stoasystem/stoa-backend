@@ -27460,6 +27460,117 @@
         }
       }
     },
+    "/practice/knowledge-map": {
+      "get": {
+        "description": "The star map: every subject, topic and knowledge point with its state.\n\nThe language comes from the request the way every other curriculum read\nhere takes it, not from a query parameter with German wired in as the\ndefault: the names on this map are galaxy, nebula and knowledge-point\ntitles, and a French student reading a sky labelled in German is the same\ndefect as any other untranslated screen.\n\nThe student is `authorized_student.ref.student_id` and nothing else. The\n`studentId` query parameter belongs to the authorization dependency, which\ndeclares and checks it; reading one here would be a way around the check.",
+        "operationId": "get_knowledge_map_practice_knowledge_map_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "subjectId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subjectid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "studentId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Studentid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Knowledge Map",
+        "tags": [
+          "practice"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "learning_assignment",
+              "resource_type": "student"
+            },
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "parent_oversight",
+              "resource_type": "student"
+            },
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "student"
+            },
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "support",
+              "resource_type": "student"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": [
+            "studentId"
+          ]
+        }
+      }
+    },
     "/practice/lessons/{lesson_id}": {
       "get": {
         "operationId": "get_lesson_practice_lessons__lesson_id__get",

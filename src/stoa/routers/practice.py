@@ -48,6 +48,7 @@ from stoa.security.route_authorization import (
     student_actor_dependency,
 )
 from stoa.services import (
+    knowledge_map_service,
     curriculum_analytics_service,
     curriculum_service,
     entitlement_service,
@@ -620,6 +621,31 @@ async def get_curriculum_progress(
 ):
     resolved_student_id = authorized_student.ref.student_id
     return curriculum_service.get_progress_summary(resolved_student_id, subject_id=subject_id)
+
+
+@router.get("/knowledge-map")
+async def get_knowledge_map(
+    subject_id: str | None = Query(default=None, alias="subjectId"),
+    authorized_student: AuthorizedResource = Depends(_practice_progress),
+    actor: Actor = Depends(get_actor),
+):
+    """The star map: every subject, topic and knowledge point with its state.
+
+    The language comes from the request the way every other curriculum read
+    here takes it, not from a query parameter with German wired in as the
+    default: the names on this map are galaxy, nebula and knowledge-point
+    titles, and a French student reading a sky labelled in German is the same
+    defect as any other untranslated screen.
+
+    The student is `authorized_student.ref.student_id` and nothing else. The
+    `studentId` query parameter belongs to the authorization dependency, which
+    declares and checks it; reading one here would be a way around the check.
+    """
+    return knowledge_map_service.knowledge_map(
+        authorized_student.ref.student_id,
+        subject_id=subject_id,
+        locale=_actor_locale(actor),
+    )
 
 
 @router.get("/{subject_id}/{topic_id}/roadmap")
