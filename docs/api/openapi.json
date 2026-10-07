@@ -2064,6 +2064,17 @@
             ],
             "title": "Onboardingstatus"
           },
+          "refreshToken": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refreshtoken"
+          },
           "user": {
             "$ref": "#/components/schemas/UserOut"
           },
