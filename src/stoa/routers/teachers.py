@@ -732,11 +732,17 @@ async def _current_help_requests(
 
 
 def _get_student_name(student_id: str) -> str:
+    """What a teacher is shown in place of a student's name.
+
+    It fell back to the student's email address, so a student who had not
+    filled in a name had their email shown to every teacher who saw the
+    request — a contact detail nobody asked to share, in a field that means
+    "what to call this person" (#94, user's decision 2026-10-06). A name of
+    spaces is no name either.
+    """
     profile = user_repo.get_user(student_id)
-    if profile:
-        name = profile.get("name") or profile.get("email")
-        return name if isinstance(name, str) and name else "Student"
-    return "Student"
+    name = profile.get("name") if profile else None
+    return name.strip() if isinstance(name, str) and name.strip() else "Student"
 
 
 def _sla_snapshot(conv: Mapping[str, object]) -> dict[str, int | str | None]:
