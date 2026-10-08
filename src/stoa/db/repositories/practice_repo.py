@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -934,8 +934,13 @@ def _practice_owned(item: Mapping[str, Any], owner_id: str) -> bool:
 STUDY_DAY_PREFIX = "DAY#"
 
 
-def study_day_partition(student_id: str) -> str:
+def activity_partition(student_id: str) -> str:
+    """One partition for what a student did, rather than what the content is."""
     return f"ACTIVITY#{student_id}"
+
+
+def study_day_partition(student_id: str) -> str:
+    return activity_partition(student_id)
 
 
 def record_study_day(
@@ -1002,3 +1007,149 @@ def list_study_days(student_id: str, *, table: Any | None = None) -> list[str]:
         for item in _response_items(response.get("Items", []))
         if item.get("day")
     ]
+
+
+LIT_UNIT_PREFIX = "LIT#"
+LIT_LEDGER_SK = "LIT_LEDGER"
+LIT_SK_PREFIX = "LIT"
+
+
+def read_lit_ledger(student_id: str, *, table: Any | None = None) -> dict[str, Any]:
+    """This student's lighting ledger: whether it is open, and the rows in it.
+
+    One query for both, because the ledger marker and the lightings share a
+    sort-key prefix. Which of the two a row is decides nothing less than
+    whether a lighting may be celebrated, so reading them apart would let the
+    two answers come from different moments.
+    """
+    target = table or get_table()
+    response = _query(
+        target,
+        KeyConditionExpression=(
+            Key("PK").eq(activity_partition(student_id))
+            & Key("SK").begins_with(LIT_SK_PREFIX)
+        ),
+    )
+    items = _response_items(response.get("Items", []))
+    return {
+        "open": any(item.get("entity_type") == "lit_ledger" for item in items),
+        "units": [item for item in items if item.get("entity_type") == "lit_unit"],
+    }
+
+
+def _activity_write(
+    student_id: str,
+    item: dict[str, Any],
+    *,
+    account_fence_generation: int | None,
+    table: Any | None,
+) -> dict[str, Any]:
+    """Put one activity row once, behind the account fence."""
+    target = table or get_table()
+    generation = _write_generation(student_id, account_fence_generation, target)
+    operations = build_practice_write_transaction(
+        item=item, owner_id=student_id, generation=generation
+    )
+    if _atomic_table(target):
+        account_deletion_repo.transact(operations, table=target)
+    else:
+        _put_item(
+            target,
+            Item=operations[1]["Put"]["Item"],
+            ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+        )
+    item.update(owner_id=student_id, account_fence_generation=generation)
+    return item
+
+
+def record_lit_unit(
+    student_id: str,
+    unit_id: str,
+    *,
+    lit_at: str,
+    source: str,
+    account_fence_generation: int | None = None,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Write one lighting down. The write refuses to overwrite an existing one."""
+    item = {
+        "PK": activity_partition(student_id),
+        "SK": f"{LIT_UNIT_PREFIX}{unit_id}",
+        "entity_type": "lit_unit",
+        "student_id": student_id,
+        "user_id": student_id,
+        "unit_id": unit_id,
+        "lit_at": lit_at,
+        "lit_at_source": source,
+    }
+    return _activity_write(
+        student_id, item, account_fence_generation=account_fence_generation, table=table
+    )
+
+
+def open_lit_ledger(
+    student_id: str,
+    *,
+    at: str | None = None,
+    account_fence_generation: int | None = None,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Mark the point from which a lighting is an event rather than history."""
+    item = {
+        "PK": activity_partition(student_id),
+        "SK": LIT_LEDGER_SK,
+        "entity_type": "lit_ledger",
+        "student_id": student_id,
+        "user_id": student_id,
+        "opened_at": at or datetime.now(timezone.utc).isoformat(),
+    }
+    return _activity_write(
+        student_id, item, account_fence_generation=account_fence_generation, table=table
+    )
+
+
+def acknowledge_lit_units(
+    student_id: str,
+    unit_ids: Sequence[str],
+    *,
+    at: str | None = None,
+    account_fence_generation: int | None = None,
+    table: Any | None = None,
+) -> list[str]:
+    """Confirm these lightings for this student, and say which were confirmed.
+
+    The key is built from `student_id`, so a unit id naming a lighting this
+    student does not own addresses a row that is not there and the conditional
+    write declines it. There is no path from the unit id to anybody else's
+    partition.
+    """
+    target = table or get_table()
+    generation = _write_generation(student_id, account_fence_generation, target)
+    moment = at or datetime.now(timezone.utc).isoformat()
+    confirmed: list[str] = []
+    for unit_id in unit_ids:
+        if not unit_id:
+            continue
+        operations = build_practice_write_transaction(
+            item={
+                "PK": activity_partition(student_id),
+                "SK": f"{LIT_UNIT_PREFIX}{unit_id}",
+            },
+            owner_id=student_id,
+            generation=generation,
+            mode="update",
+            updates={"acknowledged_at": moment},
+        )
+        update = operations[1]["Update"]
+        try:
+            if _atomic_table(target):
+                account_deletion_repo.transact(operations, table=target)
+            else:
+                target.update_item(**update)
+        except Exception:  # noqa: BLE001
+            # A lighting that is not there is not an error to the caller: the
+            # client confirms what it was shown, and the sky may have been read
+            # before this student ever lit that unit.
+            continue
+        confirmed.append(unit_id)
+    return confirmed

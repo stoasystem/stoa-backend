@@ -4596,6 +4596,21 @@
         "title": "LegacyAnswerState",
         "type": "string"
       },
+      "LitAcknowledgement": {
+        "description": "The knowledge points whose lighting has now been shown to the student.",
+        "properties": {
+          "unitIds": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Unitids",
+            "type": "array"
+          }
+        },
+        "title": "LitAcknowledgement",
+        "type": "object"
+      },
       "LocalePreferenceResponse": {
         "properties": {
           "effectiveLocale": {
@@ -27579,6 +27594,73 @@
           "identifiers": [
             "studentId"
           ]
+        }
+      }
+    },
+    "/practice/knowledge-map/acknowledged-lit": {
+      "post": {
+        "description": "Confirm that these lightings have been celebrated, so they stop coming back.\n\nThe student is `actor.user_id`, and the request carries no student\nidentifier at all - there is no field here that could name somebody else's\nsky, and the row the write addresses is built from the actor's own\npartition. A unit id belonging to another student's lighting therefore\naddresses a row that does not exist and confirms nothing.",
+        "operationId": "acknowledge_lit_knowledge_points_practice_knowledge_map_acknowledged_lit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LitAcknowledgement"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Acknowledge Lit Knowledge Points",
+        "tags": [
+          "practice"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "update",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "practice"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": []
         }
       }
     },

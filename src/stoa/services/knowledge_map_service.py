@@ -106,8 +106,10 @@ def build_map(
     streak_days: int,
     score: int,
     enrolled_subject_ids: frozenset[str],
+    lit_facts: Mapping[str, knowledge_mastery_service.LitFact] | None = None,
 ) -> dict[str, Any]:
     """One sky from facts already read. Pure; no I/O."""
+    facts = lit_facts or {}
     subjects = [item for item in catalog.get("subjects") or () if isinstance(item, Mapping)]
     topics = [item for item in catalog.get("topics") or () if isinstance(item, Mapping)]
     units = [item for item in catalog.get("units") or () if isinstance(item, Mapping)]
@@ -157,6 +159,7 @@ def build_map(
             continue
         topic_id = str(unit.get("topicId") or "")
         x, y = _star_position(unit_id, centres.get(topic_id, (0.5, 0.5)))
+        fact = facts.get(unit_id)
         stars.append(
             {
                 "unitId": unit_id,
@@ -164,6 +167,8 @@ def build_map(
                 "nebulaId": topic_id,
                 "order": int(unit.get("order") or 0),
                 "state": judged.state.value,
+                "litAt": fact.lit_at if fact else None,
+                "litAtSource": fact.source.value if fact else None,
                 "progress": round(judged.progress, 4),
                 "unmetExercises": judged.unmet_exercises,
                 "reviewDue": int(review_due_by_unit.get(unit_id, 0)),
@@ -215,6 +220,11 @@ def build_map(
         "nebulae": nebulae,
         "stars": stars,
         "prerequisites": [],  # stoa-backend#56
+        "unacknowledgedLit": list(
+            knowledge_mastery_service.unacknowledged_lit(
+                facts, among=[star["unitId"] for star in stars]
+            )
+        ),
         "summary": {
             "lit": sum(1 for star in focused if star["state"] == "lit"),
             "total": len(focused),
@@ -261,6 +271,74 @@ def _review_due_by_unit(student_id: str, lessons: Sequence[Mapping[str, Any]]) -
     return counts
 
 
+def _stored_lit_facts(rows: Sequence[Mapping[str, Any]]) -> dict[str, knowledge_mastery_service.LitFact]:
+    facts: dict[str, knowledge_mastery_service.LitFact] = {}
+    for row in rows:
+        unit_id = str(row.get("unit_id") or "")
+        if not unit_id:
+            continue
+        try:
+            source = knowledge_mastery_service.LitSource(str(row.get("lit_at_source") or ""))
+        except ValueError:
+            # A row whose source cannot be read is treated as history. Guessing
+            # `observed` here would celebrate a lighting nobody watched happen.
+            source = knowledge_mastery_service.LitSource.BACKFILLED
+        facts[unit_id] = knowledge_mastery_service.LitFact(
+            unit_id=unit_id,
+            lit_at=str(row.get("lit_at") or ""),
+            source=source,
+            acknowledged=bool(row.get("acknowledged_at")),
+        )
+    return facts
+
+
+def _lit_facts(
+    student_id: str, states: Mapping[str, knowledge_mastery_service.UnitMastery]
+) -> dict[str, knowledge_mastery_service.LitFact]:
+    """Read this student's lightings, and write down the ones not seen before.
+
+    The read model is where a lighting is first noticed, because it is the only
+    place that holds the whole judgement. The writes are the new ones only, so a
+    sky with nothing new in it costs no write at all.
+
+    The ledger is opened **last**. If the lighting rows fail to write, the next
+    read finds the ledger still shut and records them as history - a missed
+    celebration. Opening it first and then failing would record them as
+    `observed` on the next read and celebrate lightings from before the student
+    ever had this feature.
+    """
+    ledger = practice_repo.read_lit_ledger(student_id)
+    facts, fresh = knowledge_mastery_service.resolve_lit_facts(
+        lit_unit_ids=sorted(knowledge_mastery_service.lit_unit_ids(states.values())),
+        stored=_stored_lit_facts(ledger["units"]),
+        ledger_open=bool(ledger["open"]),
+        now=datetime.now(timezone.utc).isoformat(),
+    )
+    try:
+        for fact in fresh:
+            practice_repo.record_lit_unit(
+                student_id, fact.unit_id, lit_at=fact.lit_at, source=fact.source.value
+            )
+        if not ledger["open"]:
+            practice_repo.open_lit_ledger(student_id)
+    except Exception:  # noqa: BLE001
+        # A sky that will not draw is worse than one whose celebration is late.
+        logger.warning("Lighting facts could not be recorded", exc_info=True)
+    return facts
+
+
+def acknowledge_lit(student_id: str, unit_ids: Sequence[str]) -> dict[str, Any]:
+    """Record that this student has been shown these lightings.
+
+    Kept on the server and keyed by the student, so a refresh does not replay
+    the celebration and a second device does not play it again.
+    """
+    confirmed = practice_repo.acknowledge_lit_units(
+        student_id, [str(unit_id) for unit_id in unit_ids if unit_id]
+    )
+    return {"acknowledged": confirmed}
+
+
 def knowledge_map(
     student_id: str,
     *,
@@ -291,4 +369,5 @@ def knowledge_map(
         streak_days=int(summary.get("studyStreak") or 0),
         score=0,
         enrolled_subject_ids=enrolled,
+        lit_facts=_lit_facts(student_id, states),
     )

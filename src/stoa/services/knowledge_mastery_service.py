@@ -7,12 +7,13 @@ lessons is not enough on its own - a student can finish a lesson with a wrong
 answer, and a unit that lit on lesson completion alone would claim knowledge
 the evidence does not support.
 
-**Known deviation from #9: lighting here is derived, not persisted.** #9 says
-a first lighting is stored and never goes out. This judges from the content as
-it stands, so adding an active lesson to a unit a student has already lit -
-or turning an archived one back on - drops that unit back to `in_progress`
-and takes a point off their subject's count. Persisting `litAt` is
-stoa-backend#71; until it lands, a content change can put a star out.
+**The `state` here is still derived, not persisted.** This judges from the
+content as it stands, so adding an active lesson to a unit a student has
+already lit - or turning an archived one back on - drops that unit back to
+`in_progress` and takes a point off their subject's count. What #71 persists is
+the *lighting fact* beside it (`LitFact`): once a unit has lit, `litAt` and
+`litAtSource` stay, so the first lighting can be celebrated exactly once even
+though the drawn state may move again.
 
 The states are ordered: lit > in_progress > ready > locked. `locked` needs a
 prerequisite that is not lit yet; until stoa-backend#56 stores prerequisites,
@@ -45,6 +46,78 @@ class LearningState(StrEnum):
     IN_PROGRESS = "in_progress"
     READY = "ready"
     LOCKED = "locked"
+
+
+class LitSource(StrEnum):
+    """Where a stored lighting came from (#9 point 3).
+
+    `observed` means this lighting became true while the ledger was already
+    open, so it is a real first lighting and may be celebrated. `backfilled`
+    means it was already true when the ledger opened: history, not an event.
+    """
+
+    OBSERVED = "observed"
+    BACKFILLED = "backfilled"
+
+
+@dataclass(frozen=True, slots=True)
+class LitFact:
+    """One lighting, as it is kept for this student."""
+
+    unit_id: str
+    lit_at: str
+    source: LitSource
+    acknowledged: bool = False
+
+
+def resolve_lit_facts(
+    *,
+    lit_unit_ids: Iterable[str],
+    stored: Mapping[str, LitFact],
+    ledger_open: bool,
+    now: str,
+) -> tuple[dict[str, LitFact], tuple[LitFact, ...]]:
+    """Every lighting this student owns, and the ones first seen just now. Pure.
+
+    A lighting already recorded keeps the time and the source it was written
+    with: #9 says a lighting never goes out, and rewriting it would move the
+    moment and bring a celebration back after it was confirmed.
+
+    `ledger_open` is the whole distinction between the two sources. Before the
+    ledger exists nothing can be known about when a unit lit, so everything
+    already lit is `backfilled`; afterwards a lighting that was not there last
+    time is one that happened since.
+    """
+    facts = dict(stored)
+    fresh: list[LitFact] = []
+    source = LitSource.OBSERVED if ledger_open else LitSource.BACKFILLED
+    for unit_id in lit_unit_ids:
+        if not unit_id or unit_id in facts:
+            continue
+        fact = LitFact(unit_id=unit_id, lit_at=now, source=source)
+        facts[unit_id] = fact
+        fresh.append(fact)
+    return facts, tuple(fresh)
+
+
+def unacknowledged_lit(
+    facts: Mapping[str, LitFact], *, among: Iterable[str] | None = None
+) -> tuple[str, ...]:
+    """Lightings this student saw happen and has not confirmed yet. Pure.
+
+    Only `observed` ones. A backfilled lighting is never in here, whatever the
+    student has or has not confirmed, so an account that arrives with a hundred
+    lit knowledge points gets no celebrations rather than a hundred.
+    """
+    visible = None if among is None else frozenset(among)
+    chosen = [
+        fact
+        for fact in facts.values()
+        if fact.source is LitSource.OBSERVED
+        and not fact.acknowledged
+        and (visible is None or fact.unit_id in visible)
+    ]
+    return tuple(fact.unit_id for fact in sorted(chosen, key=lambda f: (f.lit_at, f.unit_id)))
 
 
 @dataclass(frozen=True, slots=True)

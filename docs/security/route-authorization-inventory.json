@@ -3850,6 +3850,22 @@
     "family": "practice",
     "identifiers": [],
     "method": "POST",
+    "path": "/practice/knowledge-map/acknowledged-lit",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      }
+    ],
+    "classification": "authorized",
+    "family": "practice",
+    "identifiers": [],
+    "method": "POST",
     "path": "/practice/lessons/{lesson_id}/complete",
     "sensitive": true
   },
