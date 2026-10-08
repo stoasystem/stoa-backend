@@ -8,7 +8,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 from typing import Any
 
-from stoa.db.repositories import practice_repo
+from stoa.db.repositories import curriculum_ops_repo, practice_repo
 from stoa.services import practice_projection_service
 from stoa.services.curriculum_translations import translated_title
 
@@ -265,6 +265,25 @@ def _build_unit(raw: dict[str, Any], locale: str = "de") -> dict[str, Any]:
         "description": raw.get("description", ""),
         "rolloutState": _content_state(raw),
         "order": _as_int(raw.get("order", 0)),
+        "prerequisiteUnitIds": _prerequisite_unit_ids(raw),
+    }
+
+
+def _prerequisite_unit_ids(raw: dict[str, Any]) -> list[str]:
+    value = raw.get("prerequisite_unit_ids")
+    if not isinstance(value, list | tuple):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def get_prerequisites(subject_id: str) -> dict[str, list[str]]:
+    """The unit prerequisite graph of one subject, one entry per unit of that subject."""
+    subject = _normal_subject_id(subject_id)
+    return {
+        str(unit.get("unit_id") or ""): _prerequisite_unit_ids(unit)
+        for unit in curriculum_ops_repo.list_practice_units()
+        if _normal_subject_id(str(unit.get("subject_id") or "")) == subject
+        and str(unit.get("unit_id") or "")
     }
 
 

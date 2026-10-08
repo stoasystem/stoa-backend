@@ -40,7 +40,7 @@ from stoa.services import (
     teacher_support_allowance_service,
     usage_ledger_service,
 )
-from test_curriculum_ops import _draft_payload, _operator_user
+from test_curriculum_ops import DRAFT_UNIT, _draft_payload, _operator_user
 from test_conversations import _client as _conversation_client
 from test_questions import _actor
 
@@ -108,6 +108,7 @@ def test_a_curriculum_draft_is_stored_without_a_review_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     table = FakeTable()
+    table.seed({"PK": "PRACTICE", "SK": f"UNIT#{DRAFT_UNIT['unit_id']}", **DRAFT_UNIT})
     monkeypatch.setattr(curriculum_ops_repo, "get_table", lambda: table)
 
     created = curriculum_ops_service.create_lesson_draft(

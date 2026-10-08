@@ -48,6 +48,15 @@ def _draft_payload(public_id: str = "lesson-linear-ops") -> dict:
     }
 
 
+DRAFT_UNIT = {
+    "unit_id": "unit-linear",
+    "topic_id": "linear-equations",
+    "subject_id": "math",
+    "title": "Linear equations",
+    "prerequisite_unit_ids": [],
+}
+
+
 def _install_curriculum_ops_repo(monkeypatch, active_refs=None):
     versions: dict[tuple[str, str], dict] = {}
     pointers: dict[str, dict] = {}
@@ -123,6 +132,13 @@ def _install_curriculum_ops_repo(monkeypatch, active_refs=None):
         ][:limit],
     )
     monkeypatch.setattr(repo, "list_active_assignment_refs", lambda public_id: list(refs))
+    # The draft's unit has to exist for the attribution check the lesson now carries.
+    monkeypatch.setattr(
+        repo,
+        "get_practice_unit",
+        lambda unit_id: dict(DRAFT_UNIT) if unit_id == DRAFT_UNIT["unit_id"] else None,
+    )
+    monkeypatch.setattr(repo, "list_practice_units", lambda: [dict(DRAFT_UNIT)])
     return {
         "versions": versions,
         "pointers": pointers,

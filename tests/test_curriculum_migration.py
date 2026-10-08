@@ -120,6 +120,19 @@ def _install_curriculum_repo(monkeypatch):
     monkeypatch.setattr(repo, "append_audit_event", lambda public_id, event: audits.append((public_id, dict(event))))
     monkeypatch.setattr(repo, "put_migration_evidence", lambda item: evidence.update({item["migration_id"]: dict(item)}))
     monkeypatch.setattr(repo, "get_migration_evidence", lambda migration_id: evidence.get(migration_id))
+    # The migrated lesson's unit has to exist for the attribution check it now carries.
+    unit = {
+        "unit_id": "unit-linear",
+        "topic_id": "linear-equations",
+        "subject_id": "math",
+        "prerequisite_unit_ids": [],
+    }
+    monkeypatch.setattr(
+        repo,
+        "get_practice_unit",
+        lambda unit_id: dict(unit) if unit_id == unit["unit_id"] else None,
+    )
+    monkeypatch.setattr(repo, "list_practice_units", lambda: [dict(unit)])
     monkeypatch.setattr(
         curriculum_migration_service.curriculum_analytics_service,
         "record_publish_event",
