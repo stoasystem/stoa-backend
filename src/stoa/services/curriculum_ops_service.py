@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
-from stoa.db.repositories import curriculum_ops_repo
+from stoa.db.repositories import curriculum_ops_repo, practice_repo
 from stoa.services import curriculum_analytics_service
 
 
@@ -51,7 +51,9 @@ LESSON_FIELD_ALIASES = {
     "media_references": "media_references",
     "mediaReferences": "media_references",
     "tags": "tags",
-    "prerequisites": "prerequisites",
+    "prerequisites": "prerequisite_lesson_ids",
+    "prerequisiteLessonIds": "prerequisite_lesson_ids",
+    "prerequisite_lesson_ids": "prerequisite_lesson_ids",
     "locale_metadata": "locale_metadata",
     "localeMetadata": "locale_metadata",
 }
@@ -376,7 +378,18 @@ def _lesson_payload(public_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         "difficulty": str(payload.get("difficulty") or "practice").strip(),
         "estimated_minutes": int(payload.get("estimated_minutes") or payload.get("estimatedMinutes") or 10),
         "language": str(payload.get("language") or payload.get("locale") or "neutral").strip(),
+        "prerequisite_lesson_ids": _normalized_ids(
+            payload.get("prerequisite_lesson_ids")
+            or payload.get("prerequisiteLessonIds")
+            or payload.get("prerequisites")
+        ),
     }
+
+
+def _normalized_ids(value: Any) -> list[str]:
+    if not isinstance(value, list | tuple):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
 
 
 def _exercise_payloads(public_id: str, exercises: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -572,6 +585,8 @@ def _validation_issues(
     for key in ["lesson_id", "title", "objective", "subject_id", "topic_id", "grade_level"]:
         if not lesson.get(key):
             issues.append(_validation_issue(key, "Required lesson field is missing."))
+    issues.extend(_attribution_issues(lesson))
+    issues.extend(_lesson_prerequisite_issues(lesson))
     if level in {"review", "publish"} and not exercises:
         issues.append(_validation_issue("exercises", "At least one exercise is required."))
     if level == "publish":
@@ -585,6 +600,136 @@ def _validation_issues(
                         )
                     )
     return issues
+
+
+def _attribution_issues(lesson: dict[str, Any]) -> list[dict[str, Any]]:
+    """A lesson belongs to the unit it names, and inherits that unit's topic and subject."""
+    unit_id = str(lesson.get("unit_id") or "").strip()
+    if not unit_id:
+        return [_validation_issue("unit_id", "A lesson must name the unit it belongs to.")]
+    unit = curriculum_ops_repo.get_practice_unit(unit_id)
+    if unit is None:
+        return [_validation_issue("unit_id", "The named unit does not exist.")]
+    issues = []
+    if str(unit.get("topic_id") or "") != str(lesson.get("topic_id") or ""):
+        issues.append(_validation_issue("topic_id", "The topic must be the unit's topic."))
+    if not practice_repo.same_subject(unit.get("subject_id", ""), lesson.get("subject_id", "")):
+        issues.append(_validation_issue("subject_id", "The subject must be the unit's subject."))
+    return issues
+
+
+def _lesson_prerequisite_issues(lesson: dict[str, Any]) -> list[dict[str, Any]]:
+    references = _normalized_ids(lesson.get("prerequisite_lesson_ids"))
+    if not references:
+        return []
+    lesson_id = str(lesson.get("lesson_id") or "")
+    known = {str(item.get("lesson_id") or ""): item for item in practice_repo.get_lessons()}
+    reason = None
+    for reference in references:
+        related = known.get(reference)
+        if reference == lesson_id or related is None:
+            reason = "Every prerequisite must be another existing lesson."
+            break
+        if str(related.get("unit_id") or "") != str(lesson.get("unit_id") or "") and str(
+            related.get("topic_id") or ""
+        ) != str(lesson.get("topic_id") or ""):
+            reason = "A prerequisite must share this lesson's unit or topic."
+            break
+    if reason is None:
+        graph = {
+            known_id: _normalized_ids(item.get("prerequisite_lesson_ids"))
+            for known_id, item in known.items()
+        }
+        graph[lesson_id] = references
+        if _closes_a_cycle(graph, lesson_id):
+            reason = "Prerequisites must not close a cycle."
+    if reason is None:
+        return []
+    return [_validation_issue("prerequisite_lesson_ids", reason)]
+
+
+def _closes_a_cycle(graph: dict[str, list[str]], start: str) -> bool:
+    """Whether `start` is reachable from its own prerequisites."""
+    seen: set[str] = set()
+    pending = list(graph.get(start, []))
+    while pending:
+        current = pending.pop()
+        if current == start:
+            return True
+        if current in seen:
+            continue
+        seen.add(current)
+        pending.extend(graph.get(current, []))
+    return False
+
+
+def patch_unit_prerequisites(
+    unit_id: str,
+    payload: dict[str, Any],
+    user: dict[str, Any],
+) -> dict[str, Any]:
+    """Replace one unit's prerequisite list. Units themselves come from the seed."""
+    _require_capability(user, AUTHOR_CAPABILITY)
+    unit_id = _clean_id(unit_id)
+    unit = curriculum_ops_repo.get_practice_unit(unit_id)
+    if unit is None:
+        raise HTTPException(status_code=404, detail="curriculum_unit_not_found")
+    references = _normalized_ids(
+        payload.get("prerequisite_unit_ids") or payload.get("prerequisiteUnitIds")
+    )
+    units = {
+        str(item.get("unit_id") or ""): item for item in curriculum_ops_repo.list_practice_units()
+    }
+    _validate_unit_prerequisites(unit_id, unit, references, units)
+    updated = curriculum_ops_repo.set_unit_prerequisites(
+        unit_id=unit_id,
+        prerequisite_unit_ids=references,
+        actor_id=_actor_id(user),
+        updated_at=_now(),
+    )
+    _audit(unit_id, user, "patch_unit_prerequisites", None, None, None, None)
+    return _unit_response(updated)
+
+
+def _validate_unit_prerequisites(
+    unit_id: str,
+    unit: dict[str, Any],
+    references: list[str],
+    units: dict[str, dict[str, Any]],
+) -> None:
+    valid = len(set(references)) == len(references)
+    for reference in references:
+        related = units.get(reference)
+        if reference == unit_id or related is None:
+            valid = False
+            break
+        if not practice_repo.same_subject(related.get("subject_id", ""), unit.get("subject_id", "")):
+            valid = False
+            break
+    if valid:
+        graph = {
+            known_id: _normalized_ids(item.get("prerequisite_unit_ids"))
+            for known_id, item in units.items()
+        }
+        graph[unit_id] = references
+        valid = not _closes_a_cycle(graph, unit_id)
+    if not valid:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "validation_failed", "fields": ["prerequisite_unit_ids"]},
+        )
+
+
+def _unit_response(unit: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "unitId": unit.get("unit_id"),
+        "subjectId": practice_repo.normal_subject_id(unit.get("subject_id", "")),
+        "topicId": unit.get("topic_id"),
+        "title": unit.get("title") or unit.get("unit_id"),
+        "prerequisiteUnitIds": _normalized_ids(unit.get("prerequisite_unit_ids")),
+        "updatedAt": unit.get("updated_at"),
+        "updatedBy": unit.get("updated_by"),
+    }
 
 
 def _validation_issue(field: str, message: str) -> dict[str, Any]:

@@ -3484,6 +3484,77 @@
         "title": "CurriculumReviewNoteRequest",
         "type": "object"
       },
+      "CurriculumUnitPrerequisitesRequest": {
+        "properties": {
+          "prerequisiteUnitIds": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Prerequisiteunitids",
+            "type": "array"
+          }
+        },
+        "title": "CurriculumUnitPrerequisitesRequest",
+        "type": "object"
+      },
+      "CurriculumUnitResponse": {
+        "properties": {
+          "prerequisiteUnitIds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Prerequisiteunitids",
+            "type": "array"
+          },
+          "subjectId": {
+            "title": "Subjectid",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "topicId": {
+            "title": "Topicid",
+            "type": "string"
+          },
+          "unitId": {
+            "title": "Unitid",
+            "type": "string"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedat"
+          },
+          "updatedBy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedby"
+          }
+        },
+        "required": [
+          "unitId",
+          "subjectId",
+          "topicId",
+          "title"
+        ],
+        "title": "CurriculumUnitResponse",
+        "type": "object"
+      },
       "CurriculumValidationIssueResponse": {
         "properties": {
           "field": {
@@ -17104,6 +17175,86 @@
             {
               "action": "create",
               "capability": "migration_operator|curriculum_publisher",
+              "purpose": "curriculum_operations",
+              "resource_type": "operator_resource"
+            }
+          ],
+          "classification": "admin-capability",
+          "identifiers": []
+        }
+      }
+    },
+    "/admin/curriculum/units/{unit_id}": {
+      "patch": {
+        "description": "Replace one unit's prerequisite relations; units are created by the seed only.",
+        "operationId": "patch_curriculum_unit_prerequisites_admin_curriculum_units__unit_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "unit_id",
+            "required": true,
+            "schema": {
+              "title": "Unit Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CurriculumUnitPrerequisitesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurriculumUnitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Patch Curriculum Unit Prerequisites",
+        "tags": [
+          "admin"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "curriculum_mutation",
+              "capability": "curriculum_author",
               "purpose": "curriculum_operations",
               "resource_type": "operator_resource"
             }

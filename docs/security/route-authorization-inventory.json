@@ -2113,6 +2113,22 @@
   {
     "authorization": [
       {
+        "action": "curriculum_mutation",
+        "capability": "curriculum_author",
+        "purpose": "curriculum_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "PATCH",
+    "path": "/admin/curriculum/units/{unit_id}",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
         "action": "update",
         "capability": "student_safety_review",
         "purpose": "moderation_operations",

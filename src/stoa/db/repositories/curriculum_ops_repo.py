@@ -288,6 +288,54 @@ def put_published_projection(version: CurriculumItem, manifest: CurriculumItem) 
         )
 
 
+def get_practice_unit(unit_id: str) -> CurriculumItem | None:
+    table = get_table()
+    resp = _get_item(table, Key={"PK": "PRACTICE", "SK": f"UNIT#{unit_id}"})
+    item = resp.get("Item")
+    return _mapping(item) if item is not None else None
+
+
+def list_practice_units() -> list[CurriculumItem]:
+    table = get_table()
+    resp = _query(
+        table,
+        KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("UNIT#")),
+    )
+    return _items(resp.get("Items", []))
+
+
+def set_unit_prerequisites(
+    *,
+    unit_id: str,
+    prerequisite_unit_ids: list[str],
+    actor_id: str,
+    updated_at: str,
+) -> CurriculumItem:
+    """Replace one unit's prerequisite list; the unit itself is never created here."""
+    table = get_table()
+    resp = _update_item(
+        table,
+        Key={"PK": "PRACTICE", "SK": f"UNIT#{unit_id}"},
+        UpdateExpression=(
+            "SET #prerequisite_unit_ids = :prerequisite_unit_ids, "
+            "#updated_by = :updated_by, #updated_at = :updated_at"
+        ),
+        ConditionExpression="attribute_exists(SK)",
+        ExpressionAttributeNames={
+            "#prerequisite_unit_ids": "prerequisite_unit_ids",
+            "#updated_by": "updated_by",
+            "#updated_at": "updated_at",
+        },
+        ExpressionAttributeValues={
+            ":prerequisite_unit_ids": list(prerequisite_unit_ids),
+            ":updated_by": actor_id,
+            ":updated_at": updated_at,
+        },
+        ReturnValues="ALL_NEW",
+    )
+    return _mapping(resp.get("Attributes", {}))
+
+
 def append_audit_event(public_id: str, event: CurriculumItem) -> None:
     table = get_table()
     _put_item(

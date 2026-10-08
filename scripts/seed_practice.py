@@ -86,11 +86,11 @@ def _brueche_data():
         {"unit_id": f"{tid}-u1", "topic_id": tid, "subject_id": sid, "grade_level": gl,
          "title": "Brüche verstehen und kürzen",
          "description": "Brüche lesen, darstellen und auf die einfachste Form bringen.",
-         "order": 1},
+         "order": 1, "prerequisite_unit_ids": []},
         {"unit_id": f"{tid}-u2", "topic_id": tid, "subject_id": sid, "grade_level": gl,
          "title": "Brüche rechnen",
          "description": "Brüche addieren, subtrahieren und multiplizieren.",
-         "order": 2},
+         "order": 2, "prerequisite_unit_ids": ["brueche-u1"]},
     ]
 
     lessons = [
@@ -213,11 +213,11 @@ def _gleichungen_data():
         {"unit_id": f"{tid}-u1", "topic_id": tid, "subject_id": sid, "grade_level": gl,
          "title": "Einfache Gleichungen lösen",
          "description": "Gleichungen mit einer Unbekannten, ein- und zweistellig.",
-         "order": 1},
+         "order": 1, "prerequisite_unit_ids": ["brueche-u2"]},
         {"unit_id": f"{tid}-u2", "topic_id": tid, "subject_id": sid, "grade_level": gl,
          "title": "Gleichungen aus Sachaufgaben",
          "description": "Sachsituationen als Gleichungen formulieren und lösen.",
-         "order": 2},
+         "order": 2, "prerequisite_unit_ids": ["gleichungen-u1"]},
     ]
 
     lessons = [
@@ -342,11 +342,11 @@ def _geometrie_data():
         {"unit_id": f"{tid}-u1", "topic_id": tid, "subject_id": sid, "grade_level": gl,
          "title": "Fläche und Umfang",
          "description": "Fläche und Umfang von Rechteck, Dreieck, Kreis.",
-         "order": 1},
+         "order": 1, "prerequisite_unit_ids": ["brueche-u2"]},
         {"unit_id": f"{tid}-u2", "topic_id": tid, "subject_id": sid, "grade_level": gl,
          "title": "Volumen und Oberfläche",
          "description": "Quader- und Würfelvolumen, Pythagoras.",
-         "order": 2},
+         "order": 2, "prerequisite_unit_ids": ["geometrie-u1"]},
     ]
 
     lessons = [
@@ -467,11 +467,11 @@ def _prozent_data():
         {"unit_id": f"{tid}-u1", "topic_id": tid, "subject_id": sid, "grade_level": gl,
          "title": "Prozentwert berechnen",
          "description": "Prozentzahl, Grundwert und Prozentwert berechnen.",
-         "order": 1},
+         "order": 1, "prerequisite_unit_ids": ["brueche-u2"]},
         {"unit_id": f"{tid}-u2", "topic_id": tid, "subject_id": sid, "grade_level": gl,
          "title": "Verhältnisse und Proportionalität",
          "description": "Verhältnisse, direkte und indirekte Proportionalität.",
-         "order": 2},
+         "order": 2, "prerequisite_unit_ids": ["prozentrechnung-u1"]},
     ]
 
     lessons = [
@@ -592,11 +592,11 @@ def _textaufgaben_data():
         {"unit_id": f"{tid}-u1", "topic_id": tid, "subject_id": sid, "grade_level": gl,
          "title": "Kombinierte Sachaufgaben",
          "description": "Mathematische Probleme aus dem Alltag lösen.",
-         "order": 1},
+         "order": 1, "prerequisite_unit_ids": ["gleichungen-u2", "prozentrechnung-u2"]},
         {"unit_id": f"{tid}-u2", "topic_id": tid, "subject_id": sid, "grade_level": gl,
          "title": "ZAP-Prüfungsaufgaben",
          "description": "Originalnahe Aufgaben aus den ZAP-Prüfungsarchiven.",
-         "order": 2},
+         "order": 2, "prerequisite_unit_ids": ["textaufgaben-u1", "geometrie-u2"]},
     ]
 
     lessons = [
