@@ -1041,10 +1041,18 @@ async def get_mistakes(actor: Actor = Depends(_practice_read)):
 
 
 @router.get("/review/due", response_model=ReviewDueResponse)
-async def get_due_review(actor: Actor = Depends(_practice_read)):
-    """The questions this student is due to see again."""
+async def get_due_review(
+    unit_id: str | None = Query(default=None, alias="unitId"),
+    actor: Actor = Depends(_practice_read),
+):
+    """The questions this student is due to see again.
+
+    With `unitId`, the session is one knowledge point's cards and `dueCount` is
+    how many that knowledge point has due, which is the number the star map
+    shows on it. Without it, the answer is unchanged.
+    """
     return ReviewDueResponse.model_validate(
-        review_service.due_review(student_id=actor.user_id)
+        review_service.due_review(student_id=actor.user_id, unit_id=unit_id)
     )
 
 
