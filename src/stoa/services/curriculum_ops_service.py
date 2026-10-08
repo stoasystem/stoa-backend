@@ -10,7 +10,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from stoa.db.repositories import curriculum_ops_repo, practice_repo
-from stoa.services import curriculum_analytics_service
+from stoa.services import curriculum_analytics_service, curriculum_translations
 
 
 AUTHOR_CAPABILITY = "curriculum_author"
@@ -143,6 +143,7 @@ def patch_lesson_draft(
         updated.get("exercises") or [],
         payload,
     )
+    _validate_skills(updated["lesson"], updated["exercises"])
     updated["updated_by"] = _actor_id(user)
     updated["updated_at"] = _now()
     curriculum_ops_repo.put_version(updated)
@@ -599,6 +600,7 @@ def _validation_issues(
                             "Required exercise field is missing.",
                         )
                     )
+    issues.extend(_skill_issues(lesson, exercises))
     return issues
 
 
@@ -730,6 +732,49 @@ def _unit_response(unit: dict[str, Any]) -> dict[str, Any]:
         "updatedAt": unit.get("updated_at"),
         "updatedBy": unit.get("updated_by"),
     }
+
+
+def _skill_issues(
+    lesson: dict[str, Any],
+    exercises: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Every skill must be in the vocabulary and owned by this lesson's unit (#58).
+
+    Belonging is checked the same way the lesson's own topic and subject are:
+    a skill that names another unit would put the same skill point under two
+    stars, which stoa-frontend#9 point 12 rules out.
+    """
+    unit_id = str(lesson.get("unit_id") or "")
+    issues: list[dict[str, Any]] = []
+    for index, exercise in enumerate(exercises):
+        raw = exercise.get("skills") or []
+        if not isinstance(raw, list | tuple):
+            issues.append(_validation_issue(f"exercises[{index}].skills", "Skills must be a list."))
+            continue
+        for skill in raw:
+            owner = curriculum_translations.skill_unit_id(str(skill))
+            if owner is None:
+                issues.append(
+                    _validation_issue(
+                        f"exercises[{index}].skills",
+                        f"Unknown skill '{skill}'.",
+                    )
+                )
+            elif unit_id and owner != unit_id:
+                issues.append(
+                    _validation_issue(
+                        f"exercises[{index}].skills",
+                        f"Skill '{skill}' belongs to unit '{owner}', not '{unit_id}'.",
+                    )
+                )
+    return issues
+
+
+def _validate_skills(lesson: dict[str, Any], exercises: list[dict[str, Any]]) -> None:
+    issues = _skill_issues(lesson, exercises)
+    if issues:
+        fields = list(dict.fromkeys(issue["field"] for issue in issues))
+        raise HTTPException(status_code=422, detail={"code": "validation_failed", "fields": fields})
 
 
 def _validation_issue(field: str, message: str) -> dict[str, Any]:

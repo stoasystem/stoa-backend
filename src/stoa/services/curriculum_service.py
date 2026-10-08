@@ -10,6 +10,7 @@ from typing import Any
 
 from stoa.db.repositories import curriculum_ops_repo, practice_repo
 from stoa.services import practice_projection_service
+from stoa.services import curriculum_translations
 from stoa.services.curriculum_translations import translated_title
 
 ZURICH = ZoneInfo("Europe/Zurich")
@@ -97,6 +98,48 @@ def list_exercises(
         and (difficulty is None or str(item.get("difficulty", "")).lower() == difficulty.lower())
     ]
     return {"items": items, "count": len(items)}
+
+
+def skill_unit_ids(*, subject_id: str | None = None) -> dict[str, str]:
+    """Every skill in the vocabulary mapped to the one unit it hangs under (#58).
+
+    A skill claimed by two units is refused rather than resolved: merging the
+    per-subject maps would silently keep the last one, and the star map would
+    then draw the same skill point under two stars.
+    """
+    found: dict[str, str] = {}
+    for subject, skills in curriculum_translations.SKILL_UNITS.items():
+        if subject_id and _normal_subject_id(subject) != _normal_subject_id(subject_id):
+            continue
+        for skill_id, unit_id in skills.items():
+            if found.get(skill_id, unit_id) != unit_id:
+                raise ValueError(f"skill {skill_id} is declared under more than one unit")
+            found[skill_id] = unit_id
+    return found
+
+
+def list_skills(*, subject_id: str | None = None, locale: str = "de") -> dict[str, Any]:
+    """The skill vocabulary, named in the requested locale."""
+    items = [
+        {
+            "id": skill_id,
+            "subjectId": _normal_subject_id(subject),
+            "unitId": unit_id,
+            "name": curriculum_translations.skill_title(skill_id, locale),
+        }
+        for subject, skills in curriculum_translations.SKILL_UNITS.items()
+        if not subject_id or _normal_subject_id(subject) == _normal_subject_id(subject_id)
+        for skill_id, unit_id in skills.items()
+    ]
+    return {"items": items, "count": len(items)}
+
+
+def skill_ids_by_unit(*, subject_id: str | None = None) -> dict[str, list[str]]:
+    """The skills each unit owns, in vocabulary order."""
+    by_unit: dict[str, list[str]] = {}
+    for skill_id, unit_id in skill_unit_ids(subject_id=subject_id).items():
+        by_unit.setdefault(unit_id, []).append(skill_id)
+    return by_unit
 
 
 def completed_days(progress: list[dict[str, Any]]) -> set[date]:
