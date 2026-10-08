@@ -30,7 +30,7 @@ never need a double cannot join them.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence, Set as AbstractSet
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -321,16 +321,42 @@ def unit_states(
     completed = _completed_lesson_ids(student_id, subject_id)
     answered_right = _exercises_answered_right(student_id)
 
-    return {
-        str(unit.get("id") or ""): judge_unit(
+    def judge(unit: Mapping[str, Any], unlit_prerequisites: int = 0) -> UnitMastery:
+        return judge_unit(
             unit=unit,
             lessons=lessons_by_unit.get(str(unit.get("id") or ""), []),
             exercises_by_lesson=exercises_by_lesson,
             completed_lesson_ids=completed,
             exercises_answered_right=answered_right,
+            unlit_prerequisites=unlit_prerequisites,
         )
+
+    # Two passes, because a lock depends on what is lit and lighting does not
+    # depend on locks: a unit lights when its lessons are done and its
+    # exercises are right, whether or not anything was supposed to come first.
+    # Judging once with no prerequisites settles that, and the second pass can
+    # then count how many of each unit's prerequisites are still dark.
+    lit = {
+        str(unit.get("id") or "")
+        for unit in units
+        if judge(unit).state is LearningState.LIT
+    }
+    return {
+        str(unit.get("id") or ""): judge(unit, _unlit_prerequisites(unit, lit))
         for unit in units
     }
+
+
+def _unlit_prerequisites(unit: Mapping[str, Any], lit: AbstractSet[str]) -> int:
+    """How many of this unit's prerequisites are not lit yet (#56).
+
+    No prerequisites means no lock: the decision is that locking comes only
+    from a stated relation, never from a unit's position in an order.
+    """
+    stated = unit.get("prerequisiteUnitIds")
+    if not isinstance(stated, list | tuple):
+        return 0
+    return sum(1 for item in stated if str(item) and str(item) not in lit)
 
 
 def skill_states(

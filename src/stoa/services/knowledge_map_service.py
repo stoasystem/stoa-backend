@@ -31,7 +31,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from stoa.db.repositories import practice_repo, review_repo
-from stoa.services import curriculum_service, knowledge_mastery_service
+from stoa.services import curriculum_translations, curriculum_service, knowledge_mastery_service
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +107,8 @@ def build_map(
     score: int,
     enrolled_subject_ids: frozenset[str],
     lit_facts: Mapping[str, knowledge_mastery_service.LitFact] | None = None,
+    skill_states: Mapping[str, knowledge_mastery_service.SkillMastery] | None = None,
+    locale: str = "de",
 ) -> dict[str, Any]:
     """One sky from facts already read. Pure; no I/O."""
     facts = lit_facts or {}
@@ -158,7 +160,10 @@ def build_map(
             # Units with no active lesson are never sent (model contract).
             continue
         topic_id = str(unit.get("topicId") or "")
-        x, y = _star_position(unit_id, centres.get(topic_id, (0.5, 0.5)))
+        # The offline layout wins when the row has been given one (#60); the
+        # arrangement below is the stand-in for a map that has not been laid
+        # out yet, not a second implementation of it.
+        x, y = _laid_out(unit) or _star_position(unit_id, centres.get(topic_id, (0.5, 0.5)))
         fact = facts.get(unit_id)
         stars.append(
             {
@@ -175,7 +180,7 @@ def build_map(
                 "recommendation": None,
                 "x": round(x, 5),
                 "y": round(y, 5),
-                "skills": [],  # stoa-backend#58
+                "skills": _skills_of(unit_id, skill_states or {}, locale),
                 "chapter": {
                     "lessonCount": judged.lesson_count,
                     "lessonsDone": judged.lessons_done,
@@ -219,7 +224,7 @@ def build_map(
         "galaxies": galaxies,
         "nebulae": nebulae,
         "stars": stars,
-        "prerequisites": [],  # stoa-backend#56
+        "prerequisites": _prerequisite_edges(units),
         "unacknowledgedLit": list(
             knowledge_mastery_service.unacknowledged_lit(
                 facts, among=[star["unitId"] for star in stars]
@@ -370,4 +375,54 @@ def knowledge_map(
         score=0,
         enrolled_subject_ids=enrolled,
         lit_facts=_lit_facts(student_id, states),
+        skill_states=knowledge_mastery_service.skill_states(
+            student_id, locale=locale, catalog=catalog
+        ),
+        locale=locale,
     )
+
+
+def _laid_out(row: Mapping[str, Any]) -> tuple[float, float] | None:
+    """The coordinates the layout script wrote on this row, if it has run."""
+    x, y = row.get("x"), row.get("y")
+    if isinstance(x, (int, float)) and isinstance(y, (int, float)):
+        return float(x), float(y)
+    return None
+
+
+def _skills_of(
+    unit_id: str,
+    states: Mapping[str, knowledge_mastery_service.SkillMastery],
+    locale: str,
+) -> list[dict[str, Any]]:
+    """The skill points around one star, in a fixed order (#58)."""
+    mine = [state for state in states.values() if state.unit_id == unit_id]
+    return [
+        {
+            "skillId": state.skill_id,
+            "name": curriculum_translations.skill_title(state.skill_id, locale),
+            "lit": state.lit,
+        }
+        for state in sorted(mine, key=lambda state: state.skill_id)
+    ]
+
+
+def _prerequisite_edges(units: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
+    """What has to come first, as edges the map can draw (#56).
+
+    Only edges whose both ends are units this map knows about: a reference to
+    a unit that has been archived or removed would otherwise be drawn as a
+    line to nowhere.
+    """
+    known = {str(unit.get("id") or "") for unit in units}
+    edges: list[dict[str, str]] = []
+    for unit in sorted(units, key=lambda item: str(item.get("id") or "")):
+        unit_id = str(unit.get("id") or "")
+        stated = unit.get("prerequisiteUnitIds")
+        if not isinstance(stated, list | tuple):
+            continue
+        for item in stated:
+            before = str(item or "")
+            if before and before in known and before != unit_id:
+                edges.append({"from": before, "to": unit_id})
+    return edges

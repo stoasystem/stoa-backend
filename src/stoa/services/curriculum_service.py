@@ -294,7 +294,26 @@ def _build_topic(raw: dict[str, Any], locale: str = "de") -> dict[str, Any]:
         "description": raw.get("description", ""),
         "rolloutState": _content_state(raw),
         "order": _as_int(raw.get("order", 0)),
+        **_placement(raw, "radius"),
     }
+
+
+def _placement(raw: dict[str, Any], *extra: str) -> dict[str, Any]:
+    """The offline layout's coordinates, when the row has been given them (#60).
+
+    Absent until the layout script has run, and the read model falls back to
+    its own arrangement — so a row without them is not an error, it is a map
+    that has not been laid out yet.
+    """
+    placed: dict[str, Any] = {}
+    for key in ("x", "y", *extra):
+        value = raw.get(key)
+        if isinstance(value, (int, float, Decimal)) and not isinstance(value, bool):
+            placed[key] = float(value)
+    version = raw.get("layout_version")
+    if isinstance(version, str) and version:
+        placed["layoutVersion"] = version
+    return placed
 
 
 def _build_unit(raw: dict[str, Any], locale: str = "de") -> dict[str, Any]:
@@ -309,6 +328,7 @@ def _build_unit(raw: dict[str, Any], locale: str = "de") -> dict[str, Any]:
         "rolloutState": _content_state(raw),
         "order": _as_int(raw.get("order", 0)),
         "prerequisiteUnitIds": _prerequisite_unit_ids(raw),
+        **_placement(raw),
     }
 
 
