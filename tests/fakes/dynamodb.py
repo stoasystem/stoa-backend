@@ -413,7 +413,12 @@ def _object_condition_holds(condition: Any, item: dict[str, Any]) -> bool:
         low, high = as_stored(values[1]), as_stored(values[2])
         return stored is not None and low <= stored <= high
     if operator == "IN":
-        return stored in [as_stored(value) for value in values[1:]]
+        # `Attr(...).is_in([...])` puts the whole list in one slot, so reading
+        # `values[1:]` compared the stored value against a list and never
+        # matched: every `is_in` filter in this suite quietly returned nothing,
+        # and the readers behind them looked tested.
+        options = values[1] if isinstance(values[1], (list, tuple, set)) else values[1:]
+        return stored in [as_stored(value) for value in options]
     if operator == "attribute_type":
         return _matches_type(stored, str(values[1]))
     expected = as_stored(values[1])

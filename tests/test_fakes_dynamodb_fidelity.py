@@ -924,3 +924,26 @@ def test_every_round_trip_is_counted() -> None:
     table.scan()
 
     assert table.calls == {"get_item": 1, "scan": 2}
+
+
+def test_is_in_matches_any_of_the_listed_values() -> None:
+    """`Attr(...).is_in([...])` keeps its whole list in one slot.
+
+    Read as `values[1:]`, the stored value was compared against a list and
+    never matched: every `is_in` filter in this suite returned nothing, and
+    `curriculum_ops_repo.list_active_assignment_refs` — which asks whether a
+    lesson still has live assignments — looked covered while being answered
+    "no" by the double no matter what the table held.
+    """
+    table = FakeTable()
+    table.seed(
+        {"PK": "A#1", "SK": "META", "status": "assigned"},
+        {"PK": "A#2", "SK": "META", "status": "finished"},
+    )
+
+    matched = table.scan(
+        FilterExpression=Attr("status").is_in(["recommended", "assigned", "started"])
+    )
+
+    assert [row["PK"] for row in matched["Items"]] == ["A#1"]
+    assert table.scan(FilterExpression=Attr("status").is_in(["cancelled"]))["Items"] == []

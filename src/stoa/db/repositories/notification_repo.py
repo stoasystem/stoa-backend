@@ -13,7 +13,7 @@ from uuid import uuid4
 from boto3.dynamodb.conditions import Attr, ConditionBase
 from botocore.exceptions import ClientError
 
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import get_table, scan_every_page, stored_int
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -861,9 +861,11 @@ def update_event(
 
 
 def list_events(limit: int = 100) -> list[NotificationItem]:
-    response = _scan(
+    response = scan_every_page(
+        _scan,
         get_table(),
-        FilterExpression=Attr("entity_type").eq(NOTIFICATION_ENTITY), Limit=limit
+        want=limit,
+        FilterExpression=Attr("entity_type").eq(NOTIFICATION_ENTITY),
     )
     return _response_items(response)
 
@@ -922,7 +924,7 @@ def list_push_tokens(
     expression: ConditionBase = filters[0]
     for filter_expression in filters[1:]:
         expression = expression & filter_expression
-    response = _scan(get_table(), FilterExpression=expression, Limit=limit)
+    response = scan_every_page(_scan, get_table(), want=limit, FilterExpression=expression)
     return _response_items(response)
 
 

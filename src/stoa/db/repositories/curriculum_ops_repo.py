@@ -8,7 +8,7 @@ from typing import Protocol, SupportsInt, runtime_checkable
 from boto3.dynamodb.conditions import Attr, ConditionBase, Key
 from botocore.exceptions import ClientError
 
-from stoa.db.dynamodb import get_table, omit_none_attributes
+from stoa.db.dynamodb import get_table, omit_none_attributes, scan_every_page
 
 
 VERSION_ENTITY = "curriculum_version"
@@ -319,20 +319,26 @@ def list_worklist(status: str | None = None, limit: int = 100) -> list[Curriculu
     filter_expr: ConditionBase = Attr("entity_type").eq(VERSION_ENTITY)
     if status:
         filter_expr = filter_expr & Attr("state").eq(status)
-    resp = _scan(table, FilterExpression=filter_expr, Limit=limit)
+    # Sorted first, cut second: with the cut first the list was whichever
+    # versions came off the front of the table, not the ones last touched.
+    resp = scan_every_page(_scan, table, FilterExpression=filter_expr)
     items = _items(resp.get("Items", []))
-    return sorted(items, key=lambda item: str(item.get("updated_at", "")), reverse=True)
+    newest = sorted(items, key=lambda item: str(item.get("updated_at", "")), reverse=True)
+    return newest[:limit]
 
 
 def list_active_assignment_refs(public_id: str, limit: int = 100) -> list[CurriculumItem]:
     table = get_table()
-    resp = _scan(
+    # This one answers "is anything still using this lesson?". A miss here
+    # does not shorten a list; it turns a no into a yes.
+    resp = scan_every_page(
+        _scan,
         table,
+        want=limit,
         FilterExpression=(
             Attr("entity_type").eq("learning_assignment")
             & Attr("lesson_id").eq(public_id)
             & Attr("status").is_in(["recommended", "assigned", "started"])
         ),
-        Limit=limit,
     )
     return _items(resp.get("Items", []))

@@ -7,7 +7,7 @@ from typing import Any, Mapping, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
 
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import get_table, scan_every_page, stored_int
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -477,16 +477,17 @@ def list_case_events(case_id: str, limit: int = 100) -> list[dict[str, Any]]:
 
 def list_cases(limit: int = 50) -> list[dict[str, Any]]:
     table = get_table()
-    resp = _scan(
-        table,
-        FilterExpression=Attr("entity_type").eq("moderation_case"),
-        Limit=limit,
+    # The cap is applied after the privacy filter, not before it: a page of
+    # deleted cases must not be what a reader gets instead of live ones.
+    resp = scan_every_page(
+        _scan, table, FilterExpression=Attr("entity_type").eq("moderation_case")
     )
-    return [
+    cases = [
         dict(item)
         for item in resp.get("Items", [])
         if isinstance(item, Mapping) and item.get("privacy_deleted") is not True
     ]
+    return cases[:limit]
 
 
 def update_case(

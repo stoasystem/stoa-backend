@@ -8,7 +8,7 @@ from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr
 
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import get_table, scan_every_page, stored_int
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -256,9 +256,11 @@ def delete_connection(connection_id: str) -> None:
 
 
 def list_connections(limit: int = 200) -> list[ConnectionItem]:
-    response = _scan(
+    response = scan_every_page(
+        _scan,
         get_table(),
-        FilterExpression=Attr("entity_type").eq(CONNECTION_ENTITY), Limit=limit
+        want=limit,
+        FilterExpression=Attr("entity_type").eq(CONNECTION_ENTITY),
     )
     return _response_items(response)
 
