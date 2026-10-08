@@ -13,8 +13,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from stoa.db.repositories import practice_repo, review_repo
-from stoa.services import review_scheduler
-from stoa.services.curriculum_service import ZURICH
+from stoa.services import curriculum_service, review_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +48,7 @@ def record_answer(
         # reason a student comes back to clear a review.
         practice_repo.record_study_day(
             student_id,
-            now.astimezone(ZURICH).date().isoformat(),
+            now.astimezone(curriculum_service.ZURICH).date().isoformat(),
             kind="practice",
             at=now.isoformat(),
         )
@@ -79,12 +78,53 @@ def record_answer(
         return None
 
 
+def _unit_of_lesson() -> dict[str, str]:
+    """Which unit each lesson of the active curriculum sits under."""
+    catalog = curriculum_service.list_catalog()
+    return {
+        _text(lesson.get("id")): _text(lesson.get("unitId"))
+        for lesson in catalog.get("lessons") or ()
+        if isinstance(lesson, Mapping)
+    }
+
+
+def _card_unit(card: Mapping[str, Any], unit_of_lesson: Mapping[str, str]) -> str:
+    """The unit a card belongs to, by the rule the star map's reviewDue uses.
+
+    The card's own `lesson_id` decides; only a card that carries none is placed
+    through its question. A card that lands outside the active curriculum
+    belongs to no unit and is counted nowhere.
+    """
+    lesson_id = _text(card.get("lesson_id"))
+    if not lesson_id:
+        challenge = practice_repo.get_challenge(_text(card.get("challenge_id")))
+        lesson_id = _text(challenge.get("lesson_id")) if challenge else ""
+    return unit_of_lesson.get(lesson_id, "") if lesson_id else ""
+
+
 def due_review(
-    *, student_id: str, now: datetime | None = None, limit: int = DEFAULT_DUE_LIMIT
+    *,
+    student_id: str,
+    now: datetime | None = None,
+    limit: int = DEFAULT_DUE_LIMIT,
+    unit_id: str | None = None,
 ) -> dict[str, Any]:
     """The questions waiting for this student, with the content to attempt them."""
     moment = now or datetime.now(timezone.utc)
-    cards = review_repo.list_due_cards(student_id, now=moment, limit=limit)
+    selected: list[dict[str, Any]] | None = None
+    if unit_id:
+        # Before the page is cut, not after: a knowledge point whose cards sort
+        # behind a fuller one would otherwise hand back an empty session while
+        # its badge on the map says there is work.
+        unit_of_lesson = _unit_of_lesson()
+        selected = [
+            card
+            for card in review_repo.due_cards(student_id, now=moment)
+            if _card_unit(card, unit_of_lesson) == unit_id
+        ]
+        cards = selected[:limit]
+    else:
+        cards = review_repo.list_due_cards(student_id, now=moment, limit=limit)
 
     items: list[dict[str, Any]] = []
     for card in cards:
@@ -111,7 +151,10 @@ def due_review(
 
     return {
         "items": items,
-        "dueCount": len(items),
+        # For a selected unit this is the whole set, so it matches the map's
+        # reviewDue even when a question has since been withdrawn and cannot be
+        # offered. Unselected, it stays the page count it has always been.
+        "dueCount": len(items) if selected is None else len(selected),
         "generatedAt": moment.astimezone(timezone.utc).isoformat(),
     }
 

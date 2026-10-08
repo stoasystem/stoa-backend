@@ -134,14 +134,25 @@ def list_cards(student_id: str, *, table: Any | None = None) -> list[dict[str, A
     return _response_items(response.get("Items", []))
 
 
+def due_cards(
+    student_id: str, *, now: datetime, table: Any | None = None
+) -> list[dict[str, Any]]:
+    """Every card whose time has come, soonest first.
+
+    Unpaged, so a caller that selects a subset can select before it cuts a
+    page; cutting first would hide a knowledge point behind a fuller one.
+    """
+    moment = now.astimezone(timezone.utc).isoformat()
+    due = [card for card in list_cards(student_id, table=table) if str(card.get("due_at", "")) <= moment]
+    due.sort(key=lambda card: str(card.get("due_at", "")))
+    return due
+
+
 def list_due_cards(
     student_id: str, *, now: datetime, limit: int = 20, table: Any | None = None
 ) -> list[dict[str, Any]]:
     """Cards whose time has come, soonest first."""
-    moment = now.astimezone(timezone.utc).isoformat()
-    due = [card for card in list_cards(student_id, table=table) if str(card.get("due_at", "")) <= moment]
-    due.sort(key=lambda card: str(card.get("due_at", "")))
-    return due[:limit]
+    return due_cards(student_id, now=now, table=table)[:limit]
 
 
 def save_card(

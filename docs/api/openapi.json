@@ -27816,8 +27816,26 @@
     },
     "/practice/review/due": {
       "get": {
-        "description": "The questions this student is due to see again.",
+        "description": "The questions this student is due to see again.\n\nWith `unitId`, the session is one knowledge point's cards and `dueCount` is\nhow many that knowledge point has due, which is the number the star map\nshows on it. Without it, the answer is unchanged.",
         "operationId": "get_due_review_practice_review_due_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "unitId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Unitid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -27838,6 +27856,16 @@
               }
             },
             "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
