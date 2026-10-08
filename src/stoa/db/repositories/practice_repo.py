@@ -1127,7 +1127,12 @@ def acknowledge_lit_units(
     generation = _write_generation(student_id, account_fence_generation, target)
     moment = at or datetime.now(timezone.utc).isoformat()
     confirmed: list[str] = []
+    seen: set[str] = set()
     for unit_id in unit_ids:
+        # The same id twice is one confirmation, not two writes.
+        if unit_id in seen:
+            continue
+        seen.add(unit_id)
         if not unit_id:
             continue
         operations = build_practice_write_transaction(

@@ -653,7 +653,10 @@ class LitAcknowledgement(BaseModel):
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    unit_ids: list[str] = Field(default_factory=list, alias="unitIds", max_length=200)
+    # Ten units exist today and a sky is not going to hold hundreds. The cap
+    # was 200, and every id in a request costs a conditional write whether or
+    # not it names anything — a refused write is billed like any other.
+    unit_ids: list[str] = Field(default_factory=list, alias="unitIds", max_length=50)
 
 
 @router.post("/knowledge-map/acknowledged-lit")
