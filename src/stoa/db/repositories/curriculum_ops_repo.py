@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from decimal import Decimal
 from typing import Protocol, SupportsInt, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, ConditionBase, Key
@@ -342,3 +343,68 @@ def list_active_assignment_refs(public_id: str, limit: int = 100) -> list[Curric
         ),
     )
     return _items(resp.get("Items", []))
+
+
+# ── Starmap layout (stoasystem/stoa-backend#60) ───────────────────────────
+
+
+PRACTICE_PK = "PRACTICE"
+PRACTICE_PAGE_BUDGET = 50
+
+
+def _storable(value: object) -> object:
+    """One value in the form the table accepts; it refuses a float."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, Mapping):
+        return {str(key): _storable(member) for key, member in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_storable(member) for member in value]
+    return value
+
+
+def list_practice_rows() -> list[CurriculumItem]:
+    """Every row in the practice content partition, across every page.
+
+    The starmap layout reads subjects, topics, units, lessons and skills in one
+    pass. A first-page-only read would drop whichever of them the table hands
+    back last, and a layout computed from part of a subject is wrong everywhere,
+    not just where the rows went missing.
+    """
+    table = get_table()
+    items: list[CurriculumItem] = []
+    request: CurriculumItem = {"KeyConditionExpression": Key("PK").eq(PRACTICE_PK)}
+    for _page in range(PRACTICE_PAGE_BUDGET):
+        resp = _query(table, **request)
+        items.extend(_items(resp.get("Items", [])))
+        cursor = resp.get("LastEvaluatedKey")
+        if not cursor:
+            return items
+        if not isinstance(cursor, Mapping) or cursor == request.get("ExclusiveStartKey"):
+            raise RuntimeError("practice pagination did not move forward")
+        request["ExclusiveStartKey"] = dict(cursor)
+    raise RuntimeError("practice pagination exceeded the bounded page limit")
+
+
+def set_practice_attributes(sort_key: str, attributes: Mapping[str, object]) -> None:
+    """Write layout attributes onto one practice row that already exists."""
+    if not attributes:
+        return
+    table = get_table()
+    names: dict[str, str] = {}
+    values: CurriculumItem = {}
+    assignments: list[str] = []
+    for index, name in enumerate(sorted(attributes)):
+        names[f"#a{index}"] = name
+        values[f":a{index}"] = _storable(attributes[name])
+        assignments.append(f"#a{index} = :a{index}")
+    _update_item(
+        table,
+        Key={"PK": PRACTICE_PK, "SK": sort_key},
+        UpdateExpression="SET " + ", ".join(assignments),
+        ConditionExpression="attribute_exists(SK)",
+        ExpressionAttributeNames=names,
+        ExpressionAttributeValues=values,
+    )
