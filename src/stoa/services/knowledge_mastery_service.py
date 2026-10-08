@@ -54,6 +54,15 @@ class NextLesson:
 
 
 @dataclass(frozen=True, slots=True)
+class SkillMastery:
+    """One skill point under a knowledge point: lit or not (#58)."""
+
+    skill_id: str
+    unit_id: str
+    lit: bool
+
+
+@dataclass(frozen=True, slots=True)
 class UnitMastery:
     """One knowledge point, as the star map needs it."""
 
@@ -143,6 +152,39 @@ def judge_unit(
     )
 
 
+def judge_skills(
+    *,
+    unit_id: str,
+    skill_ids: Sequence[str],
+    skills_by_exercise: Mapping[str, Sequence[str]],
+    exercises_answered_right: frozenset[str],
+    already_lit: frozenset[str] = frozenset(),
+) -> list[SkillMastery]:
+    """One unit's skill points from facts already read. Pure; no I/O.
+
+    #9 point 12: one right answer on any exercise carrying the skill lights it,
+    and it only goes forwards. `already_lit` carries a lighting that was earned
+    under content that has since changed, so moving an exercise out of a unit
+    cannot take back evidence the student produced.
+
+    The unit's own learning state does not read this; `judge_unit` is unchanged.
+    """
+    lit_now = {
+        skill
+        for exercise_id, skills in skills_by_exercise.items()
+        if exercise_id in exercises_answered_right
+        for skill in skills
+    }
+    return [
+        SkillMastery(
+            skill_id=skill_id,
+            unit_id=unit_id,
+            lit=skill_id in already_lit or skill_id in lit_now,
+        )
+        for skill_id in skill_ids
+    ]
+
+
 def _completed_lesson_ids(student_id: str, subject_id: str | None) -> frozenset[str]:
     summary = curriculum_service.get_progress_summary(student_id, subject_id=subject_id)
     return frozenset(str(item) for item in summary.get("completedLessonIds") or () if item)
@@ -160,12 +202,20 @@ def _exercises_answered_right(student_id: str) -> frozenset[str]:
     return frozenset(practice_repo.all_challenges_answered_right(student_id))
 
 
-def _active_exercise_ids(lesson_id: str) -> list[str]:
+def _active_exercises(lesson_id: str) -> list[Mapping[str, Any]]:
     return [
-        str(challenge.get("challenge_id") or challenge.get("id") or "")
+        challenge
         for challenge in practice_repo.get_challenges(lesson_id)
         if practice_projection_service.content_state(challenge) != "archived"
     ]
+
+
+def _exercise_id(challenge: Mapping[str, Any]) -> str:
+    return str(challenge.get("challenge_id") or challenge.get("id") or "")
+
+
+def _active_exercise_ids(lesson_id: str) -> list[str]:
+    return [_exercise_id(challenge) for challenge in _active_exercises(lesson_id)]
 
 
 def unit_states(
@@ -208,6 +258,46 @@ def unit_states(
         )
         for unit in units
     }
+
+
+def skill_states(
+    student_id: str,
+    *,
+    subject_id: str | None = None,
+    locale: str = "de",
+    catalog: Mapping[str, Any] | None = None,
+) -> dict[str, SkillMastery]:
+    """Every skill point's state for one student, keyed by skill id.
+
+    Taking the data only; the judgement is `judge_skills`.
+    """
+    content = catalog if catalog is not None else curriculum_service.list_catalog(
+        subject_id=subject_id, locale=locale
+    )
+    units = [unit for unit in content.get("units") or () if isinstance(unit, Mapping)]
+    lessons = [lesson for lesson in content.get("lessons") or () if isinstance(lesson, Mapping)]
+
+    skills_by_unit = curriculum_service.skill_ids_by_unit(subject_id=subject_id)
+    skills_by_exercise: dict[str, dict[str, list[str]]] = {}
+    for lesson in lessons:
+        unit_id = str(lesson.get("unitId") or "")
+        for challenge in _active_exercises(str(lesson.get("id") or "")):
+            skills = [str(skill) for skill in challenge.get("skills") or () if skill]
+            skills_by_exercise.setdefault(unit_id, {})[_exercise_id(challenge)] = skills
+
+    answered_right = _exercises_answered_right(student_id)
+
+    states: dict[str, SkillMastery] = {}
+    for unit in units:
+        unit_id = str(unit.get("id") or "")
+        for judged in judge_skills(
+            unit_id=unit_id,
+            skill_ids=skills_by_unit.get(unit_id, []),
+            skills_by_exercise=skills_by_exercise.get(unit_id, {}),
+            exercises_answered_right=answered_right,
+        ):
+            states[judged.skill_id] = judged
+    return states
 
 
 def lit_unit_ids(states: Iterable[UnitMastery]) -> frozenset[str]:

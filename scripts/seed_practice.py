@@ -40,6 +40,87 @@ SUBJECT = {
     "order": 1,
 }
 
+# ── Skill points ──────────────────────────────────────────────────────────
+#
+# Which skills each exercise trains (stoa-backend#58). The ids and their unit
+# ownership live in stoa.services.curriculum_translations.SKILL_UNITS; this
+# table only says which exercise carries which of them, read by challenge id so
+# the sixty call sites below stay as they are. Every skill named here hangs
+# under the unit its exercise sits in, which the suite checks rather than
+# trusts.
+
+CHALLENGE_SKILLS = {
+    "brueche-l1-c1": ["brueche-kuerzen"],
+    "brueche-l1-c2": ["brueche-kuerzen"],
+    "brueche-l1-c3": ["brueche-vergleichen"],
+    "brueche-l2-c1": ["brueche-erweitern"],
+    "brueche-l2-c2": ["brueche-erweitern"],
+    "brueche-l2-c3": ["brueche-erweitern"],
+    "brueche-l3-c1": ["brueche-addieren"],
+    "brueche-l3-c2": ["brueche-subtrahieren"],
+    "brueche-l3-c3": ["brueche-addieren"],
+    "brueche-l4-c1": ["brueche-multiplizieren"],
+    "brueche-l4-c2": ["brueche-multiplizieren"],
+    "brueche-l4-c3": ["brueche-anteil-einer-menge"],
+    "gleichungen-l1-c1": ["gleichungen-einstufig"],
+    "gleichungen-l1-c2": ["gleichungen-einstufig"],
+    "gleichungen-l1-c3": ["gleichungen-probe"],
+    "gleichungen-l2-c1": ["gleichungen-zweistufig"],
+    "gleichungen-l2-c2": ["gleichungen-zweistufig"],
+    "gleichungen-l2-c3": ["gleichungen-zweistufig"],
+    "gleichungen-l3-c1": ["gleichungen-aufstellen"],
+    "gleichungen-l3-c2": ["gleichungen-aufstellen"],
+    "gleichungen-l3-c3": ["gleichungen-aufstellen"],
+    "gleichungen-l4-c1": ["gleichungen-klammer"],
+    "gleichungen-l4-c2": ["gleichungen-textaufgabe"],
+    "gleichungen-l4-c3": ["gleichungen-textaufgabe"],
+    "geometrie-l1-c1": ["geometrie-umfang-rechteck"],
+    "geometrie-l1-c2": ["geometrie-flaeche-rechteck"],
+    "geometrie-l1-c3": ["geometrie-flaeche-dreieck"],
+    "geometrie-l2-c1": ["geometrie-kreis-umfang"],
+    "geometrie-l2-c2": ["geometrie-kreis-flaeche"],
+    "geometrie-l2-c3": ["geometrie-kreis-radius"],
+    "geometrie-l3-c1": ["geometrie-volumen-quader"],
+    "geometrie-l3-c2": ["geometrie-volumen-wuerfel"],
+    "geometrie-l3-c3": ["geometrie-volumen-quader", "geometrie-volumen-einheiten"],
+    "geometrie-l4-c1": ["geometrie-pythagoras-hypotenuse"],
+    "geometrie-l4-c2": ["geometrie-pythagoras-kathete"],
+    "geometrie-l4-c3": ["geometrie-pythagoras-kathete"],
+    "prozentrechnung-l1-c1": ["prozentrechnung-prozentwert"],
+    "prozentrechnung-l1-c2": ["prozentrechnung-prozentsatz"],
+    "prozentrechnung-l1-c3": ["prozentrechnung-grundwert"],
+    "prozentrechnung-l2-c1": ["prozentrechnung-rabatt"],
+    "prozentrechnung-l2-c2": ["prozentrechnung-rabatt", "prozentrechnung-grundwert"],
+    "prozentrechnung-l2-c3": ["prozentrechnung-mehrwertsteuer"],
+    "prozentrechnung-l3-c1": ["prozentrechnung-verhaeltnis-teilen"],
+    "prozentrechnung-l3-c2": ["prozentrechnung-indirekte-proportionalitaet"],
+    "prozentrechnung-l3-c3": ["prozentrechnung-direkte-proportionalitaet"],
+    "prozentrechnung-l4-c1": ["prozentrechnung-anwendung"],
+    "prozentrechnung-l4-c2": ["prozentrechnung-anwendung"],
+    "prozentrechnung-l4-c3": ["prozentrechnung-verhaeltnis-teilen"],
+    "textaufgaben-l1-c1": ["textaufgaben-geld-rechnen"],
+    "textaufgaben-l1-c2": ["textaufgaben-geld-rechnen"],
+    "textaufgaben-l1-c3": ["textaufgaben-preis-pro-einheit"],
+    "textaufgaben-l2-c1": ["textaufgaben-geschwindigkeit"],
+    "textaufgaben-l2-c2": ["textaufgaben-fahrzeit"],
+    "textaufgaben-l2-c3": ["textaufgaben-zeitspanne"],
+    "textaufgaben-l3-c1": ["textaufgaben-zap-flaeche"],
+    "textaufgaben-l3-c2": ["textaufgaben-zap-verhaeltnis"],
+    "textaufgaben-l3-c3": ["textaufgaben-zap-mehrschritt"],
+    "textaufgaben-l4-c1": ["textaufgaben-zap-flaeche"],
+    "textaufgaben-l4-c2": ["textaufgaben-zap-mehrschritt"],
+    "textaufgaben-l4-c3": ["textaufgaben-zap-kreis"],
+}
+
+
+def challenge_skills(challenge_id: str) -> list[str]:
+    """The skills one exercise carries. Missing is an error, not an empty list."""
+    skills = CHALLENGE_SKILLS.get(challenge_id)
+    if not skills:
+        raise ValueError(f"no skills declared for {challenge_id}")
+    return list(skills)
+
+
 # ── Question bank ─────────────────────────────────────────────────────────
 
 def _mc(lesson_id, topic_id, subject_id, grade_level, topic_title,
@@ -47,7 +128,8 @@ def _mc(lesson_id, topic_id, subject_id, grade_level, topic_title,
         correct_feedback=None, incorrect_feedback=None):
     cid = f"{lesson_id}-c{order}"
     return {
-        "challenge_id": cid, "lesson_id": lesson_id, "unit_id": unit_id,
+        "challenge_id": cid, "skills": challenge_skills(cid),
+        "lesson_id": lesson_id, "unit_id": unit_id,
         "topic_id": topic_id, "subject_id": subject_id, "grade_level": grade_level,
         "topic_title": topic_title, "order": order, "type": "multiple_choice",
         "prompt": prompt, "options": options, "correct_answer": correct,
@@ -63,7 +145,8 @@ def _input(lesson_id, topic_id, subject_id, grade_level, topic_title,
            correct_feedback=None, incorrect_feedback=None):
     cid = f"{lesson_id}-c{order}"
     return {
-        "challenge_id": cid, "lesson_id": lesson_id, "unit_id": unit_id,
+        "challenge_id": cid, "skills": challenge_skills(cid),
+        "lesson_id": lesson_id, "unit_id": unit_id,
         "topic_id": topic_id, "subject_id": subject_id, "grade_level": grade_level,
         "topic_title": topic_title, "order": order, "type": "text_input",
         "prompt": prompt, "correct_answer": correct,
