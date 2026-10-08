@@ -6,4 +6,4 @@ Issues live in [stoasystem/stoa-backend](https://github.com/stoasystem/stoa-back
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context: `CONTEXT.md` at the repo root; the architecture decisions are in the docs repo, `stoa-docs/ADR.md`. See `docs/agents/domain.md`.

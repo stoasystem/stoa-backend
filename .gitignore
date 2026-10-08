@@ -17,3 +17,6 @@ htmlcov/
 
 # agent 工作树，不入库
 .claude/
+
+# Codex 测试的本地工作文件与运行证据，不入库
+.scratch/
