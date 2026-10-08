@@ -1152,6 +1152,125 @@ def test_adaptive_locale_metadata_does_not_change_canonical_values(monkeypatch):
     assert german_body["freshness"]["status"] == english_body["freshness"]["status"]
 
 
+def _two_exercise_lesson(monkeypatch, *, answered_right: set[str]) -> tuple[list[str], list[dict]]:
+    """A lesson of two exercises, and what the backend has judged right so far."""
+    completed_lessons: list[str] = []
+    attempts: list[dict] = []
+    monkeypatch.setattr(
+        adaptive_learning_service.practice_repo,
+        "get_challenge",
+        lambda challenge_id: {
+            "challenge_id": challenge_id,
+            "lesson_id": "lesson-1",
+            "subject_id": "math",
+            "topic_id": "algebra",
+            "prompt": "Solve x + 1 = 2",
+            "correct_answer": "1",
+        },
+    )
+    monkeypatch.setattr(
+        adaptive_learning_service.practice_repo,
+        "get_lesson",
+        lambda lesson_id: {"lesson_id": lesson_id, "subject_id": "math", "topic_id": "algebra"},
+    )
+    monkeypatch.setattr(
+        adaptive_learning_service.practice_repo,
+        "get_challenges",
+        lambda lesson_id: [{"challenge_id": "challenge-1"}, {"challenge_id": "challenge-2"}],
+    )
+    monkeypatch.setattr(
+        adaptive_learning_service.practice_repo,
+        "challenges_answered_right",
+        lambda student_id, lesson_id: set(answered_right),
+    )
+    monkeypatch.setattr(
+        adaptive_learning_service.practice_repo,
+        "mark_lesson_completed",
+        lambda student_id, lesson: completed_lessons.append(lesson["lesson_id"]),
+    )
+    monkeypatch.setattr(
+        adaptive_learning_service.practice_repo,
+        "record_attempt",
+        lambda *args, **kwargs: attempts.append({"args": args, **kwargs}),
+    )
+    return completed_lessons, attempts
+
+
+def _complete_one_assignment(correct: bool) -> None:
+    created = _app({"sub": "admin-1", "role": "admin"}).post(
+        "/adaptive/assignments",
+        json={
+            "studentId": "student-1",
+            "sourceType": "curriculum_exercise",
+            "sourceId": "challenge-1",
+            "title": "Linear equation check",
+        },
+    )
+    assert created.status_code == 200, created.text
+    assignment_id = created.json()["assignmentId"]
+    done = _app({"sub": "student-1", "role": "student"}).post(
+        f"/adaptive/assignments/{assignment_id}/complete",
+        json={"studentAnswer": "1", "correct": correct},
+    )
+    assert done.status_code == 200, done.text
+
+
+def test_one_assignment_reported_right_does_not_finish_a_two_exercise_lesson(monkeypatch):
+    """The bypass: `correct: true` from the client completed the whole lesson.
+
+    No other exercise had to be answered, and nothing judged the answer -- the
+    client supplied the verdict. #83 had already required every exercise of a
+    lesson to be answered right before it may be completed; this path went
+    round it (#93).
+    """
+    _install_memory_repo(monkeypatch)
+    completed_lessons, _ = _two_exercise_lesson(monkeypatch, answered_right={"challenge-1"})
+
+    _complete_one_assignment(correct=True)
+
+    assert completed_lessons == []
+
+
+def test_the_lesson_finishes_once_every_exercise_has_been_judged_right(monkeypatch):
+    _install_memory_repo(monkeypatch)
+    completed_lessons, _ = _two_exercise_lesson(
+        monkeypatch, answered_right={"challenge-1", "challenge-2"}
+    )
+
+    _complete_one_assignment(correct=True)
+
+    assert completed_lessons == ["lesson-1"]
+
+
+def test_a_right_answer_is_saved_too_and_marked_unjudged(monkeypatch):
+    """Only wrong answers were saved, so nothing of the adaptive path counted.
+
+    It is saved now, and marked `self_reported`, which is what keeps it out of
+    the reads that complete a lesson and light a knowledge point: the backend
+    did not check it.
+    """
+    _install_memory_repo(monkeypatch)
+    _, attempts = _two_exercise_lesson(monkeypatch, answered_right=set())
+
+    _complete_one_assignment(correct=True)
+
+    assert len(attempts) == 1
+    assert attempts[0]["args"][2] is True
+    assert attempts[0]["self_reported"] is True
+    assert attempts[0]["lesson_id"] == "lesson-1"
+
+
+def test_a_wrong_answer_is_still_saved_and_still_marked(monkeypatch):
+    _install_memory_repo(monkeypatch)
+    _, attempts = _two_exercise_lesson(monkeypatch, answered_right=set())
+
+    _complete_one_assignment(correct=False)
+
+    assert len(attempts) == 1
+    assert attempts[0]["args"][2] is False
+    assert attempts[0]["self_reported"] is True
+
+
 def test_curriculum_assignment_completion_updates_progress_once(monkeypatch):
     _install_memory_repo(monkeypatch)
     completed_lessons: list[str] = []
@@ -1176,6 +1295,17 @@ def test_curriculum_assignment_completion_updates_progress_once(monkeypatch):
         adaptive_learning_service.practice_repo,
         "mark_lesson_completed",
         lambda student_id, lesson: completed_lessons.append(lesson["lesson_id"]),
+    )
+    # Nothing in this lesson has a backend-judged right answer.
+    monkeypatch.setattr(
+        adaptive_learning_service.practice_repo,
+        "unanswered_challenge_ids",
+        lambda student_id, lesson_id: ["challenge-1"],
+    )
+    monkeypatch.setattr(
+        adaptive_learning_service.practice_repo,
+        "record_attempt",
+        lambda *args, **kwargs: None,
     )
 
     created = _app({"sub": "admin-1", "role": "admin"}).post(
@@ -1208,7 +1338,9 @@ def test_curriculum_assignment_completion_updates_progress_once(monkeypatch):
     assert second.json()["studentAnswer"] == "1"
     assert second.json()["completionResult"] == {"correct": True, "attemptCount": 1}
     assert second.json()["sequencingFeedback"] == first.json()["sequencingFeedback"]
-    assert completed_lessons == ["lesson-1"]
+    # Not any more: the client saying "right" is no longer a reason to mark a
+    # lesson done. Nothing here has been judged by the backend (#93).
+    assert completed_lessons == []
 
 
 def test_adaptive_unassigned_teacher_is_hidden_before_service_reads(monkeypatch):

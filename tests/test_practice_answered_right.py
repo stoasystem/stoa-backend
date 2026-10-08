@@ -75,3 +75,57 @@ def test_a_right_answer_saved_just_before_completion_is_read(monkeypatch) -> Non
     monkeypatch.setattr(practice_repo, "get_table", lambda: table)
 
     assert practice_repo.challenges_answered_right("student-1", "lesson-1") == {"c-0", "c-1", "c-2"}
+
+
+def _self_reported(student: str, index: int, *, lesson: str, challenge: str) -> dict:
+    row = _attempt(student, index, lesson=lesson, challenge=challenge, correct=True)
+    row["self_reported"] = True
+    return row
+
+
+def test_an_answer_the_backend_never_judged_does_not_count(monkeypatch) -> None:
+    """The adaptive assignment path takes the client's word for `correct`.
+
+    Keeping that answer is right — an answer nobody saved is worse than one
+    marked unchecked — but counting it would hand back the bypass it replaced:
+    the client would again be able to finish a lesson by saying so (#93).
+    """
+    table = FakeTable()
+    table.seed(
+        _attempt("student-1", 0, lesson="lesson-1", challenge="c-0", correct=True),
+        _self_reported("student-1", 1, lesson="lesson-1", challenge="c-1"),
+    )
+    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+
+    assert practice_repo.challenges_answered_right("student-1", "lesson-1") == {"c-0"}
+    assert practice_repo.all_challenges_answered_right("student-1") == {"c-0"}
+
+
+def test_a_lesson_is_unfinished_while_one_exercise_is_only_self_reported(monkeypatch) -> None:
+    table = FakeTable()
+    table.seed(
+        _attempt("student-1", 0, lesson="lesson-1", challenge="c-0", correct=True),
+        _self_reported("student-1", 1, lesson="lesson-1", challenge="c-1"),
+    )
+    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    monkeypatch.setattr(
+        practice_repo,
+        "get_challenges",
+        lambda lesson_id: [{"challenge_id": "c-0"}, {"challenge_id": "c-1"}],
+    )
+
+    assert practice_repo.unanswered_challenge_ids("student-1", "lesson-1") == ["c-1"]
+
+
+def test_an_attempt_is_only_marked_when_it_was_not_judged(monkeypatch) -> None:
+    table = FakeTable()
+    table.seed_active_account("student-1")
+    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+
+    judged = practice_repo.put_attempt("student-1", "c-0", "4", True, lesson_id="lesson-1")
+    unchecked = practice_repo.put_attempt(
+        "student-1", "c-1", "4", True, lesson_id="lesson-1", self_reported=True
+    )
+
+    assert "self_reported" not in judged
+    assert unchecked["self_reported"] is True

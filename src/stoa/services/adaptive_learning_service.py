@@ -1440,26 +1440,39 @@ def _assignment_source(source_type: str, source_id: str, student_id: str, *, use
 
 
 def _record_assignment_progress(item: dict[str, Any], *, correct: bool | None, student_answer: str | None) -> None:
+    """Keep the answer, and let the lesson's own rule decide about the lesson.
+
+    `correct` here is the client's word: this endpoint is given a verdict, not
+    an answer to judge. It used to be enough to mark the *whole lesson* done --
+    one exercise reported right finished a lesson of any length, and the right
+    answer itself was never saved, so only the wrong ones were (#93).
+
+    Both outcomes are saved now, marked `self_reported` so no read that matters
+    counts them, and the lesson is completed only when every one of its
+    exercises has a right answer the backend itself judged (#83).
+    """
+    student_id = str(item["student_id"])
     exercise_id = item.get("exercise_id")
-    lesson_id = item.get("lesson_id")
-    if not exercise_id:
-        return
-    if correct is True and lesson_id:
-        lesson = practice_repo.get_lesson(str(lesson_id))
-        if lesson:
-            practice_repo.mark_lesson_completed(str(item["student_id"]), lesson)
-        return
-    if correct is not False:
+    lesson_id = str(item.get("lesson_id") or "")
+    if not exercise_id or correct is None:
         return
     practice_repo.record_attempt(
-        str(item["student_id"]),
+        student_id,
         str(exercise_id),
-        False,
+        bool(correct),
         subject_id=str(item.get("subject") or ""),
-        lesson_id=str(lesson_id or ""),
+        lesson_id=lesson_id,
         topic_id=str((item.get("topic_ids") or [""])[0]),
         attempt_id=f"assignment-{item.get('assignment_id')}",
+        student_answer=student_answer or "",
+        self_reported=True,
     )
+    if not correct or not lesson_id:
+        return
+    lesson = practice_repo.get_lesson(lesson_id)
+    if not lesson or practice_repo.unanswered_challenge_ids(student_id, lesson_id):
+        return
+    practice_repo.mark_lesson_completed(student_id, lesson)
 
 
 def _next_practice_recommendations(

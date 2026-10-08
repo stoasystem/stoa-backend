@@ -834,12 +834,7 @@ async def complete_lesson(
     # A lesson is complete once every exercise in it has been answered right at
     # least once (#83). The frontend held to this alone; any client could
     # mark any lesson complete. A lesson without exercises has nothing to answer.
-    answered_right = practice_repo.challenges_answered_right(actor.user_id, lesson_id)
-    unanswered = [
-        challenge
-        for challenge in practice_repo.get_challenges(lesson_id)
-        if str(challenge.get("challenge_id")) not in answered_right
-    ]
+    unanswered = practice_repo.unanswered_challenge_ids(actor.user_id, lesson_id)
     if unanswered:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

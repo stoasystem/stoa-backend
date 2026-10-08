@@ -584,8 +584,16 @@ def put_attempt(
     attempt_id: str | None = None,
     created_at: str | None = None,
     account_fence_generation: int | None = None,
+    self_reported: bool = False,
 ) -> dict:
-    """Immutably record every answer and return its durable owner receipt."""
+    """Immutably record every answer and return its durable owner receipt.
+
+    `self_reported` marks an answer the backend did not judge -- the adaptive
+    assignment path takes the client's word for `correct`. It is kept, because
+    an answer nobody saved is worse than one marked as unchecked, and it is
+    excluded from the reads that decide whether a lesson may be completed and
+    whether a knowledge point lights (#93).
+    """
     from stoa.services.practice_projection_service import (
         PRACTICE_SUBMITTED_ANSWER_SCHEMA_VERSION,
         normalize_submitted_answer,
@@ -612,6 +620,10 @@ def put_attempt(
         "correct": bool(correct),
         "created_at": created_at or datetime.now(timezone.utc).isoformat(),
     }
+    if self_reported:
+        # Only the unchecked ones carry a mark: every row already in the table
+        # was written by the backend's own judge, so absence means judged.
+        item["self_reported"] = True
     snapshot_fields = {
         "challenge_version": challenge_version,
         "challenge_content_hash": challenge_content_hash,
@@ -683,6 +695,8 @@ def all_challenges_answered_right(student_id: str) -> set[str]:
     )
     found: set[str] = set()
     for item in items:
+        if item.get("self_reported") is True:
+            continue
         challenge_id = str(item.get("challenge_id") or item.get("exercise_id") or "")
         if challenge_id:
             found.add(challenge_id)
@@ -708,8 +722,25 @@ def challenges_answered_right(student_id: str, lesson_id: str) -> set[str]:
     return {
         str(item["challenge_id"])
         for item in items
-        if item.get("correct") is True and isinstance(item.get("challenge_id"), str)
+        if item.get("correct") is True
+        and item.get("self_reported") is not True
+        and isinstance(item.get("challenge_id"), str)
     }
+
+
+def unanswered_challenge_ids(student_id: str, lesson_id: str) -> list[str]:
+    """The exercises of `lesson_id` still without a right answer from this student.
+
+    The one place that rule lives: `POST /practice/lessons/{id}/complete` asks
+    it, and so does the adaptive assignment path, which used to complete a
+    whole lesson because the client said one exercise was right (#93).
+    """
+    answered_right = challenges_answered_right(student_id, lesson_id)
+    return [
+        str(challenge.get("challenge_id"))
+        for challenge in get_challenges(lesson_id)
+        if str(challenge.get("challenge_id")) not in answered_right
+    ]
 
 
 def record_attempt(
@@ -721,6 +752,7 @@ def record_attempt(
     topic_id: str = "",
     attempt_id: str | None = None,
     student_answer: Any = "",
+    self_reported: bool = False,
 ) -> dict:
     """Compatibility wrapper for callers migrating to the all-attempt contract."""
     return put_attempt(
@@ -732,6 +764,7 @@ def record_attempt(
         lesson_id=lesson_id,
         topic_id=topic_id,
         attempt_id=attempt_id,
+        self_reported=self_reported,
     )
 
 
