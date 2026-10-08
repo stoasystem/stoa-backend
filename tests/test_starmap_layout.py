@@ -18,6 +18,7 @@ import pytest
 from fakes.dynamodb import FakeTable
 from scripts import layout_starmap, seed_practice
 from stoa.db.repositories import curriculum_ops_repo
+from stoa.services import curriculum_service
 
 
 def _seed_rows() -> list[dict[str, Any]]:
@@ -167,6 +168,24 @@ def test_related_nebulae_sit_closer_than_unrelated_ones(monkeypatch: pytest.Monk
     for unrelated in ("c", "d"):
         assert linked < math.dist(centres["a"][:2], centres[unrelated][:2])
         assert linked < math.dist(centres["b"][:2], centres[unrelated][:2])
+
+
+def test_the_prerequisite_reader_is_used_once_it_exists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#56 adds `curriculum_service.get_prerequisites`; the links come from it then."""
+    _table(monkeypatch, _made_up_rows({"a": 2, "b": 2, "c": 2, "d": 2}))
+    monkeypatch.setattr(
+        curriculum_service,
+        "get_prerequisites",
+        lambda _subject: {"b-u1": ["a-u1"], "b-u2": ["a-u1", "a-u2"]},
+        raising=False,
+    )
+    centres = _centres(layout_starmap.run("math").layout)
+
+    linked = math.dist(centres["a"][:2], centres["b"][:2])
+    assert linked < math.dist(centres["a"][:2], centres["c"][:2])
+    assert linked < math.dist(centres["a"][:2], centres["d"][:2])
 
 
 def test_a_unit_with_no_active_lesson_is_not_laid_out(monkeypatch: pytest.MonkeyPatch) -> None:
