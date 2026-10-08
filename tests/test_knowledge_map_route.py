@@ -120,3 +120,44 @@ def test_the_language_is_not_taken_from_the_query_string(monkeypatch: pytest.Mon
 
     assert response.status_code == 200, response.text
     assert seen == ["fr"], "the request's language wins; `?locale=` is not read"
+
+
+@pytest.fixture
+def _confirmations(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, list[str]]]:
+    """Record who confirmed which lightings, and write nothing."""
+    seen: list[tuple[str, list[str]]] = []
+
+    def acknowledge_lit(student_id: str, unit_ids: Any) -> dict[str, Any]:
+        seen.append((student_id, list(unit_ids)))
+        return {"acknowledged": list(unit_ids)}
+
+    monkeypatch.setattr(practice.knowledge_map_service, "acknowledge_lit", acknowledge_lit)
+    return seen
+
+
+def test_a_student_confirms_their_own_lighting(
+    _sky: list[str], _confirmations: list[tuple[str, list[str]]]
+) -> None:
+    response = _client({"sub": "student-1", "role": "student"}).post(
+        "/practice/knowledge-map/acknowledged-lit", json={"unitIds": ["u1"]}
+    )
+
+    assert response.status_code == 200, response.text
+    assert _confirmations == [("student-1", ["u1"])]
+
+
+def test_a_confirmation_can_only_ever_be_for_the_caller(
+    _sky: list[str], _confirmations: list[tuple[str, list[str]]]
+) -> None:
+    """The route takes no student identifier, so none can be smuggled in.
+
+    A body key naming somebody else is ignored rather than honoured: the
+    student the write lands on is the authenticated actor and nothing else.
+    """
+    response = _client({"sub": "student-1", "role": "student"}).post(
+        "/practice/knowledge-map/acknowledged-lit",
+        json={"unitIds": ["u1"], "studentId": "student-2", "userId": "student-2"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert _confirmations == [("student-1", ["u1"])]

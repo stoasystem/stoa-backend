@@ -648,6 +648,30 @@ async def get_knowledge_map(
     )
 
 
+class LitAcknowledgement(BaseModel):
+    """The knowledge points whose lighting has now been shown to the student."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    unit_ids: list[str] = Field(default_factory=list, alias="unitIds", max_length=200)
+
+
+@router.post("/knowledge-map/acknowledged-lit")
+async def acknowledge_lit_knowledge_points(
+    body: LitAcknowledgement,
+    actor: Actor = Depends(_practice_update),
+):
+    """Confirm that these lightings have been celebrated, so they stop coming back.
+
+    The student is `actor.user_id`, and the request carries no student
+    identifier at all - there is no field here that could name somebody else's
+    sky, and the row the write addresses is built from the actor's own
+    partition. A unit id belonging to another student's lighting therefore
+    addresses a row that does not exist and confirms nothing.
+    """
+    return knowledge_map_service.acknowledge_lit(actor.user_id, body.unit_ids)
+
+
 @router.get("/{subject_id}/{topic_id}/roadmap")
 async def get_roadmap(
     subject_id: str,
