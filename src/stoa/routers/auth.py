@@ -77,6 +77,11 @@ class UserOut(BaseModel):
 
 class AuthResponse(BaseModel):
     accessToken: str
+    #: Exchanged at `/auth/refresh` for a fresh access token. Cognito has
+    #: issued one on every sign-in all along; it was read off the result and
+    #: dropped, so the refresh route existed with nothing able to call it and
+    #: every reader was signed out the moment their access token expired.
+    refreshToken: str | None = None
     user: UserOut
     onboardingStatus: str | None = None
     verificationStatus: str | None = None
@@ -329,10 +334,12 @@ def _auth_response_for_profile(
     profile: dict,
     onboarding_status: str | None = None,
     verification_status: str | None = None,
+    refresh_token: str | None = None,
 ) -> AuthResponse:
     verification = account_verification_service.public_state(profile)
     return AuthResponse(
         accessToken=access_token,
+        refreshToken=refresh_token,
         user=_build_user_out(profile),
         onboardingStatus=onboarding_status,
         verificationStatus=verification_status,
@@ -419,6 +426,9 @@ async def login(
         )
 
     access_token = resp["AuthenticationResult"]["AccessToken"]
+    # Absent when the pool is configured without one; the reader then behaves
+    # exactly as before rather than being handed an empty string to send back.
+    refresh_token = resp["AuthenticationResult"].get("RefreshToken")
 
     try:
         _, profile = await public_identity_service.resolve_account_access_token(
@@ -435,6 +445,7 @@ async def login(
         access_token=access_token,
         profile=profile,
         onboarding_status="completed",
+        refresh_token=refresh_token,
     )
 
 
@@ -1019,6 +1030,9 @@ async def refresh(
 
     result = resp["AuthenticationResult"]
     access_token = result["AccessToken"]
+    # REFRESH_TOKEN_AUTH does not reissue one, so the caller keeps the token
+    # it sent; echoing it keeps the response the same shape as sign-in's.
+    refresh_token = result.get("RefreshToken") or body.refresh_token
     try:
         _, profile = await public_identity_service.resolve_account_access_token(
             access_token,
@@ -1033,6 +1047,7 @@ async def refresh(
         access_token=access_token,
         profile=profile,
         onboarding_status="completed",
+        refresh_token=refresh_token,
     )
 
 

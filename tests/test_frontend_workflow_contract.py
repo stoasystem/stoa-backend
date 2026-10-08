@@ -510,11 +510,47 @@ def test_frontend_root_resolution_rejects_zero_multiple_and_symlink_matches(
         _resolve_frontend_root(backend)
 
 
+#: The only workflows that may publish to the production web surface.
+DELIVERY_WORKFLOWS = ("deploy-production.yml", "deploy.yml", "frontend-ci.yml")
+#: What publishing to production looks like, whatever the workflow calls itself.
+PRODUCTION_TARGETS = ("stoa-frontend-562923011260", "E27CVAMQHDMW80")
+
+
 def test_frontend_has_exactly_the_formal_and_delivery_workflows() -> None:
+    """The three delivery workflows are present, and nothing else delivers.
+
+    This used to pin the directory listing to exactly those three names. The
+    redesign branch adds a branch gate and a preview publisher, both of which
+    are legitimate and neither of which touches production — but an exact
+    listing cannot tell the difference between those and a second route to
+    `app.stoaedu.ch`, and it goes red for the harmless case while a cleverly
+    named addition would read as just another entry.
+
+    So it checks the thing actually worth defending: the three are there, and
+    every other workflow is free of the production bucket and distribution.
+    """
     assert not WORKFLOW_DIR.is_symlink()
     assert WORKFLOW_DIR.is_dir()
     entries = sorted(WORKFLOW_DIR.iterdir(), key=lambda path: path.name)
-    assert [path.name for path in entries] == ["deploy-production.yml", "deploy.yml", "frontend-ci.yml"]
+    names = [path.name for path in entries]
+    assert set(DELIVERY_WORKFLOWS) <= set(names), f"a delivery workflow is missing: {names}"
+
+    for path in entries:
+        if path.name in DELIVERY_WORKFLOWS:
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            for target in PRODUCTION_TARGETS:
+                if target not in line:
+                    continue
+                # Naming it to refuse it is the point of the guard in
+                # `deploy-preview.yml`; naming it anywhere else is a second
+                # route to production.
+                assert "!=" in line, (
+                    f"{path.name}:{number} names the production {target} "
+                    f"outside a refusal; only {DELIVERY_WORKFLOWS} may "
+                    "publish to app.stoaedu.ch"
+                )
+
     assert WORKFLOW_PATH.is_file()
     assert not WORKFLOW_PATH.is_symlink()
     assert DELIVERY_WORKFLOW_PATH.is_file()
