@@ -209,6 +209,10 @@ def test_t472_02_dependency_path_denies_suspension_next_request_without_mutation
             self.status = "active"
             self.calls = []
 
+        async def get_session_revocation(self, _issuer, _subject, _origin_jti):
+            """No sign-in of this fixture was ever signed out."""
+            return None
+
         async def get_binding(self, issuer, subject):
             self.calls.append(("get_binding", issuer, subject))
             return {"status": "active", "user_id": "student-1"}
@@ -556,6 +560,10 @@ class _DynamoShapedIdentityRepository:
             "subject": subject,
         }
         self.revocations: list[tuple[str, str, int]] = []
+
+    async def get_session_revocation(self, _issuer, _subject, _origin_jti):
+        """No sign-in of this fixture was ever signed out."""
+        return None
 
     async def get_binding(self, issuer, subject):
         if (issuer, subject) != (self.binding["issuer"], self.binding["subject"]):

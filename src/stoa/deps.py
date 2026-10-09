@@ -248,7 +248,10 @@ async def get_deletion_command(
     """
     try:
         binding = await repository.get_binding(verified.issuer, verified.subject)
-        enforce_session_not_revoked(verified, binding)
+        revocation = await repository.get_session_revocation(
+            verified.issuer, verified.subject, verified.origin_jti
+        )
+        enforce_session_not_revoked(verified, binding, revocation)
         user_id = (
             str(binding.get("user_id") or "").strip()
             if binding and binding.get("status") == "active"

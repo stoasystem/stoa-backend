@@ -1,6 +1,7 @@
 """Authentication routes — aligned with frontend API contract."""
 from datetime import UTC, datetime, timezone
 import hashlib
+import logging
 from typing import Any
 
 import boto3
@@ -11,7 +12,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
-from stoa.db.repositories import user_repo
+from stoa.db.repositories import identity_repo, user_repo
 from stoa.deps import (
     get_current_user,
     get_deletion_command,
@@ -31,7 +32,7 @@ from stoa.services import (
     public_identity_service,
 )
 from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD
-from stoa.security.tokens import verify_access_token
+from stoa.security.tokens import VerifiedAccessToken, verify_access_token
 from stoa.security.route_inventory import explicit_route_classification
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.public_auth_errors import (
@@ -44,6 +45,8 @@ from stoa.services.account_deletion_service import DeletionReceipt
 from stoa.services.teacher_identity_provider import CognitoTeacherIdentityProvider
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -248,6 +251,106 @@ def _get_cognito(settings: Settings):
     return boto3.client("cognito-idp", region_name=settings.aws_region)
 
 
+async def _verified_sign_in(
+    access_token: str, settings: Settings, key_provider
+) -> VerifiedAccessToken | None:
+    """Return the verified claims of a token, or None when it does not verify.
+
+    Sign-out and sign-in both need the `origin_jti` naming the sign-in, and both
+    have to carry on when it is unavailable: sign-out still has a provider call
+    to make, sign-in has already succeeded. Neither may fail on it.
+    """
+    try:
+        return await verify_access_token(
+            access_token,
+            allowed_issuers=settings.allowed_cognito_issuers,
+            allowed_client_ids=settings.allowed_cognito_access_clients,
+            key_provider=key_provider,
+        )
+    except SecurityDecisionError:
+        return None
+
+
+async def _remember_sign_in_refresh_token(
+    *,
+    identity_repository,
+    user_id: str,
+    verified: VerifiedAccessToken | None,
+    token_to_hold: str | None,
+) -> None:
+    """Keep this sign-in's refresh token so signing out can revoke just this one.
+
+    Best effort, and that is a judgement rather than laziness: the refusal that
+    matters is the application-side revocation record, which sign-out writes from
+    the access token alone. Losing custody of the refresh token costs the
+    provider-side RevokeToken, which this service does not depend on - a token
+    minted from that refresh token carries the same `origin_jti` and is refused
+    at every route, `/auth/refresh` included. Failing the sign-in over it would
+    trade a working session for a defence in depth.
+    """
+    if not verified or not verified.origin_jti or not token_to_hold or not user_id:
+        return
+    try:
+        await identity_repository.put_sign_in_refresh_token(
+            user_id,
+            verified.origin_jti,
+            token_to_hold,
+            int(datetime.now(UTC).timestamp()) + identity_repo.SIGN_IN_SESSION_TTL_SECONDS,
+        )
+    except Exception as exc:  # noqa: BLE001 - never block a successful sign-in
+        logger.warning(
+            "sign-in refresh token custody failed: %s", type(exc).__name__
+        )
+
+
+async def _revoke_sign_in_at_provider(
+    *,
+    cognito,
+    settings: Settings,
+    identity_repository,
+    verified: VerifiedAccessToken,
+) -> None:
+    """Revoke only the refresh token of the sign-in being ended.
+
+    Nothing happens when custody of it was lost. That is the point: the fallback
+    available here is `global_sign_out`, which would end every other device's
+    sign-in too - exactly the behaviour this route exists to stop - so no provider
+    call is the correct provider call.
+
+    A repository failure while looking the token up is answered the same way,
+    and deliberately does not fail the request: the revocation record is already
+    written, so the sign-in is over whatever happens here, and a 503 would tell
+    the caller the opposite of the truth.
+
+    The held row is dropped only after the provider has accepted. Dropping it
+    first made a refused provider call unrepeatable - a second sign-out found
+    nothing to revoke and said 204 without calling the provider at all, leaving
+    the provider's copy of the refresh token alive for its full thirty days.
+    """
+    try:
+        binding = await identity_repository.get_binding(verified.issuer, verified.subject)
+        user_id = str((binding or {}).get("user_id") or "").strip()
+        refresh_token = (
+            await identity_repository.get_sign_in_refresh_token(
+                user_id, verified.origin_jti
+            )
+            if user_id
+            else None
+        )
+    except Exception as exc:  # noqa: BLE001 - the sign-in is already revoked locally
+        logger.warning("sign-in refresh token lookup failed: %s", type(exc).__name__)
+        return
+    if not refresh_token:
+        return
+    cognito.revoke_token(Token=refresh_token, ClientId=_public_client_id(settings))
+    try:
+        await identity_repository.discard_sign_in_refresh_token(
+            user_id, verified.origin_jti
+        )
+    except Exception as exc:  # noqa: BLE001 - the token it held is already revoked
+        logger.warning("sign-in refresh token discard failed: %s", type(exc).__name__)
+
+
 def _build_user_out(profile: dict) -> UserOut:
     role = profile.get("role", "student")
     effective_locale = locale_service.effective_locale(profile)
@@ -431,7 +534,7 @@ async def login(
     refresh_token = resp["AuthenticationResult"].get("RefreshToken")
 
     try:
-        _, profile = await public_identity_service.resolve_account_access_token(
+        actor, profile = await public_identity_service.resolve_account_access_token(
             access_token,
             allowed_issuers=settings.allowed_cognito_issuers,
             allowed_client_ids=settings.allowed_cognito_access_clients,
@@ -441,6 +544,12 @@ async def login(
     except SecurityDecisionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.public_body()) from exc
 
+    await _remember_sign_in_refresh_token(
+        identity_repository=identity_repository,
+        user_id=actor.user_id,
+        verified=await _verified_sign_in(access_token, settings, key_provider),
+        token_to_hold=refresh_token,
+    )
     return _auth_response_for_profile(
         access_token=access_token,
         profile=profile,
@@ -1034,7 +1143,7 @@ async def refresh(
     # it sent; echoing it keeps the response the same shape as sign-in's.
     refresh_token = result.get("RefreshToken") or body.refresh_token
     try:
-        _, profile = await public_identity_service.resolve_account_access_token(
+        actor, profile = await public_identity_service.resolve_account_access_token(
             access_token,
             allowed_issuers=settings.allowed_cognito_issuers,
             allowed_client_ids=settings.allowed_cognito_access_clients,
@@ -1043,6 +1152,15 @@ async def refresh(
         )
     except SecurityDecisionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.public_body()) from exc
+    # The renewed token carries the sign-in's `origin_jti`, so this refreshes
+    # custody of the same sign-in rather than opening a second one; a pool that
+    # rotates refresh tokens replaces the stored one here and nowhere else.
+    await _remember_sign_in_refresh_token(
+        identity_repository=identity_repository,
+        user_id=actor.user_id,
+        verified=await _verified_sign_in(access_token, settings, key_provider),
+        token_to_hold=refresh_token,
+    )
     return _auth_response_for_profile(
         access_token=access_token,
         profile=profile,
@@ -1069,36 +1187,44 @@ async def logout(
     key_provider=Depends(get_jwks_key_provider),
     identity_repository=Depends(get_identity_repository),
 ):
-    """Revoke the access token globally and locally.
+    """End one sign-in: this login and every token it went on to mint.
 
-    Cognito's global_sign_out kills the refresh token but leaves an already
-    issued access token passing signature and expiry checks, so the backend
-    records its own cut-off first. The local write happens before the provider
-    call: if the provider fails the session is already dead here, whereas the
-    reverse order would leave a live token behind whenever the write failed.
+    Cognito leaves an already issued access token passing signature and expiry
+    checks whatever is done to the refresh token, so the backend records the
+    refusal itself, and records it first: if the provider call then fails the
+    sign-in is already dead here, whereas the reverse order would leave a live
+    token behind whenever the write failed.
 
-    A token that does not verify gets no cut-off because there is nothing to
+    What is recorded is the sign-in, named by the token's `origin_jti`. The
+    per-account cut-off this route used to write is scoped by time, and time is
+    not a property of a sign-in: a token issued earlier belongs to whichever
+    device signed in earlier, so that cut-off ended every session the account
+    had, and ended any session it opened while the request was still in flight.
+    Tokens with no `origin_jti` keep the old cut-off, because for them there is
+    nothing else to scope by; they predate the claim and expire within the hour.
+
+    A token that does not verify records nothing because there is nothing to
     revoke - every protected route refuses it already - and the provider call
     still runs so its failure taxonomy is unchanged.
     """
-    verified = None
-    try:
-        verified = await verify_access_token(
-            body.access_token,
-            allowed_issuers=settings.allowed_cognito_issuers,
-            allowed_client_ids=settings.allowed_cognito_access_clients,
-            key_provider=key_provider,
-        )
-    except SecurityDecisionError:
-        verified = None
+    verified = await _verified_sign_in(body.access_token, settings, key_provider)
 
     if verified is not None:
         try:
-            await identity_repository.record_session_revocation(
-                verified.issuer,
-                verified.subject,
-                int(datetime.now(UTC).timestamp()) + 1,
-            )
+            if verified.origin_jti:
+                await identity_repository.record_sign_in_revocation(
+                    verified.issuer,
+                    verified.subject,
+                    verified.origin_jti,
+                    int(datetime.now(UTC).timestamp())
+                    + identity_repo.SIGN_IN_REVOCATION_TTL_SECONDS,
+                )
+            else:
+                await identity_repository.record_session_revocation(
+                    verified.issuer,
+                    verified.subject,
+                    int(datetime.now(UTC).timestamp()) + 1,
+                )
         except Exception as exc:
             error = SecurityDecisionError(
                 SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
@@ -1110,7 +1236,15 @@ async def logout(
 
     cognito = _get_cognito(settings)
     try:
-        cognito.global_sign_out(AccessToken=body.access_token)
+        if verified is not None and verified.origin_jti:
+            await _revoke_sign_in_at_provider(
+                cognito=cognito,
+                settings=settings,
+                identity_repository=identity_repository,
+                verified=verified,
+            )
+        else:
+            cognito.global_sign_out(AccessToken=body.access_token)
     except ClientError as e:
         return public_auth_error_response(
             normalize_cognito_failure(PublicAuthOperation.LOGOUT, e, correlation_id)

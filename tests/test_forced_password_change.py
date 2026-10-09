@@ -140,6 +140,10 @@ class ProfileBackedIdentityRepository:
     def __init__(self, user_id: str) -> None:
         self.user_id = user_id
 
+    async def get_session_revocation(self, _issuer, _subject, _origin_jti):
+        """No sign-in of this fixture was ever signed out."""
+        return None
+
     async def get_binding(self, issuer: str, subject: str) -> dict[str, Any]:
         return {"status": "active", "user_id": self.user_id}
 

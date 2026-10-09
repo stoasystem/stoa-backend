@@ -51,6 +51,10 @@ class _IdentityFacts:
         self.fence = fence
         self.reads: list[str] = []
 
+    async def get_session_revocation(self, _issuer, _subject, _origin_jti):
+        """No sign-in of this fixture was ever signed out."""
+        return None
+
     async def get_binding(self, _issuer: str, _subject: str) -> dict[str, Any]:
         self.reads.append("binding")
         return {"status": "active", "user_id": STUDENT_ID}

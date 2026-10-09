@@ -40,9 +40,29 @@ def session_revocation_cutoff(binding: Mapping[str, object] | None) -> int:
 
 
 def enforce_session_not_revoked(
-    token: VerifiedAccessToken, binding: Mapping[str, object] | None
+    token: VerifiedAccessToken,
+    binding: Mapping[str, object] | None,
+    revocation: Mapping[str, object] | None = None,
 ) -> None:
-    """Refuse any token issued before the account's session revocation cut-off."""
+    """Refuse a token whose sign-in was ended, or one older than the account cut-off.
+
+    Two checks, and which one answers depends on what the token carries:
+
+    * `revocation` is the record written for exactly this `origin_jti`, so it is
+      already scoped to one sign-in. Its mere presence ends that sign-in and every
+      token the same refresh token minted - the tabs sharing it included - while
+      saying nothing about the account's other sign-ins.
+    * The per-account cut-off stays for tokens with no `origin_jti` to be scoped by.
+      It is the transition rule: those tokens keep the behaviour they were issued
+      under rather than being let through because the new record cannot exist for
+      them. It is deliberately not consulted for a session-scoped token, because
+      "issued before an instant" is a statement about the account, not the sign-in,
+      and that is the whole defect being repaired here.
+    """
+    if revocation:
+        raise SecurityDecisionError(SecurityErrorCode.INVALID_TOKEN)
+    if token.origin_jti:
+        return
     cutoff = session_revocation_cutoff(binding)
     if cutoff <= 0:
         return
@@ -127,6 +147,26 @@ class IdentityRepository(Protocol):
         self, issuer: str, subject: str, revoked_before: int
     ) -> int: ...
 
+    async def get_session_revocation(
+        self, issuer: str, subject: str, origin_jti: str | None
+    ) -> Mapping[str, object] | None: ...
+
+    async def record_sign_in_revocation(
+        self, issuer: str, subject: str, origin_jti: str, expires_at: int
+    ) -> None: ...
+
+    async def put_sign_in_refresh_token(
+        self, user_id: str, origin_jti: str, refresh_token: str, expires_at: int
+    ) -> None: ...
+
+    async def get_sign_in_refresh_token(
+        self, user_id: str, origin_jti: str
+    ) -> str | None: ...
+
+    async def discard_sign_in_refresh_token(
+        self, user_id: str, origin_jti: str
+    ) -> None: ...
+
 
 _GROUP_ROLES = {
     "students": CanonicalRole.STUDENT,
@@ -175,7 +215,10 @@ async def resolve_actor(
         user_id = str(binding.get("user_id") or "").strip()
         if not user_id:
             raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
-        enforce_session_not_revoked(token, binding)
+        revocation = await repository.get_session_revocation(
+            token.issuer, token.subject, token.origin_jti
+        )
+        enforce_session_not_revoked(token, binding, revocation)
 
         fence = await repository.get_account_fence(user_id)
         raw_generation = fence.get("generation") if fence else None

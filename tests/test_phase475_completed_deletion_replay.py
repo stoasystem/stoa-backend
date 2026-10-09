@@ -36,6 +36,10 @@ class _IdentityRepository:
     def __init__(self) -> None:
         self.active = True
 
+    async def get_session_revocation(self, _issuer, _subject, _origin_jti):
+        """No sign-in of this fixture was ever signed out."""
+        return None
+
     async def get_binding(self, _issuer: str, _subject: str) -> dict[str, str] | None:
         if not self.active:
             return None

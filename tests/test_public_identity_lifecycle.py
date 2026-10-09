@@ -118,6 +118,10 @@ def test_interrupted_binding_repairs_only_matching_reverse_inventory(monkeypatch
 @pytest.mark.asyncio
 async def test_pending_public_profile_cannot_construct_actor():
     class Repository:
+        async def get_session_revocation(self, _issuer, _subject, _origin_jti):
+            """No sign-in of this fixture was ever signed out."""
+            return None
+
         async def get_binding(self, issuer, subject):
             return {"status": "active", "user_id": "student-1"}
 
@@ -225,6 +229,10 @@ async def test_register_confirm_converges_one_subject_bound_actor(monkeypatch, r
     assert active["account_status"] == "active"
 
     class Repository:
+        async def get_session_revocation(self, _issuer, _subject, _origin_jti):
+            """No sign-in of this fixture was ever signed out."""
+            return None
+
         async def get_binding(self, issuer, provider_subject):
             return identity_repo.get_identity_binding(issuer, provider_subject)
 
@@ -377,6 +385,10 @@ async def test_verified_token_binding_ignores_duplicate_email_decoy(
         def __init__(self):
             self.reads = []
 
+        async def get_session_revocation(self, _issuer, _subject, _origin_jti):
+            """No sign-in of this fixture was ever signed out."""
+            return None
+
         async def get_binding(self, issuer, subject):
             self.reads.append(("binding", issuer, subject))
             return {"status": "active", "user_id": "student-1"}
@@ -424,6 +436,10 @@ async def test_verified_token_binding_ignores_duplicate_email_decoy(
 
 def _identity_repository(profile: dict):
     class Repository:
+        async def get_session_revocation(self, _issuer, _subject, _origin_jti):
+            """No sign-in of this fixture was ever signed out."""
+            return None
+
         async def get_binding(self, issuer, subject):
             return {"status": "active", "user_id": profile["user_id"]}
 
@@ -564,6 +580,10 @@ async def test_token_response_denies_identity_conflicts(rsa_jwks_keysets, case):
     keyset, _ = rsa_jwks_keysets
 
     class Repository:
+        async def get_session_revocation(self, _issuer, _subject, _origin_jti):
+            """No sign-in of this fixture was ever signed out."""
+            return None
+
         async def get_binding(self, issuer, subject):
             if case == "missing_binding":
                 return None

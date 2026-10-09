@@ -21,6 +21,12 @@ class VerifiedAccessToken:
     # Compared against the account's session revocation cut-off. The default is
     # deliberately out of range so a token built without it fails closed.
     issued_at: int = 0
+    # Cognito's identifier for the sign-in this token belongs to. Every token the
+    # same refresh token mints carries the same value, so it is the one claim that
+    # means "this login" rather than "this account" or "this token". Absent on
+    # tokens issued before the pool emitted it; those fall back to the per-account
+    # cut-off, which is the transition rule and not a weaker check.
+    origin_jti: str | None = None
 
 
 async def verify_access_token(
@@ -76,8 +82,10 @@ async def verify_access_token(
     verified_email = None
     if claims.get("email_verified") is True and isinstance(claims.get("email"), str):
         verified_email = claims["email"].strip().casefold() or None
+    raw_origin = claims.get("origin_jti")
+    origin_jti = raw_origin.strip() or None if isinstance(raw_origin, str) else None
     return VerifiedAccessToken(
-        issuer, subject, client_id, tuple(groups), verified_email, issued_at
+        issuer, subject, client_id, tuple(groups), verified_email, issued_at, origin_jti
     )
 
 
