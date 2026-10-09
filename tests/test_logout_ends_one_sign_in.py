@@ -21,7 +21,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from fastapi import Depends, FastAPI
+from botocore.exceptions import ClientError
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from jose import jwt
 import pytest
@@ -30,9 +31,11 @@ from fakes.dynamodb import FakeTable
 from security.conftest import FakeAsyncJwksTransport
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import identity_repo
+from stoa import deps
 from stoa.deps import get_actor, get_identity_repository, get_jwks_key_provider
 from stoa.routers import auth
 from stoa.security.jwks import JwksKeyProvider
+from stoa.security.tokens import VerifiedAccessToken
 
 
 ISSUER_SUBJECT = "subject-1"
@@ -56,6 +59,8 @@ class _Provider:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.sign_in_result: dict[str, Any] = {}
         self.refresh_result: dict[str, Any] = {}
+        # How many of the next `revoke_token` calls refuse before one succeeds.
+        self.revoke_failures = 0
 
     def initiate_auth(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("initiate_auth", kwargs))
@@ -65,6 +70,12 @@ class _Provider:
 
     def revoke_token(self, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("revoke_token", kwargs))
+        if self.revoke_failures:
+            self.revoke_failures -= 1
+            raise ClientError(
+                {"Error": {"Code": "TooManyRequestsException", "Message": "slow down"}},
+                "RevokeToken",
+            )
         return {}
 
     def global_sign_out(self, **kwargs: Any) -> dict[str, Any]:
@@ -138,10 +149,13 @@ class _IdentityRepository:
             expires_at=expires_at,
         )
 
-    async def take_sign_in_refresh_token(
+    async def get_sign_in_refresh_token(
         self, user_id: str, origin_jti: str
     ) -> str | None:
-        return identity_repo.take_sign_in_refresh_token(user_id, origin_jti)
+        return identity_repo.get_sign_in_refresh_token(user_id, origin_jti)
+
+    async def discard_sign_in_refresh_token(self, user_id: str, origin_jti: str) -> None:
+        identity_repo.discard_sign_in_refresh_token(user_id, origin_jti)
 
 
 def _settings(keyset) -> Settings:
@@ -410,6 +424,125 @@ def test_the_dynamo_repository_answers_every_method_the_resolver_calls():
         "get_session_revocation",
         "record_sign_in_revocation",
         "put_sign_in_refresh_token",
-        "take_sign_in_refresh_token",
+        "get_sign_in_refresh_token",
+        "discard_sign_in_refresh_token",
     ):
         assert callable(getattr(repository, name, None)), name
+
+
+# ---------------------------------------------------------------------------
+# A provider that refused must still be retriable. Reading the held token and
+# dropping its row used to be one step, so a refused revoke left nothing for the
+# next sign-out to retry with, and the provider's copy of the refresh token
+# outlived the sign-out by thirty days.
+# ---------------------------------------------------------------------------
+
+
+def test_a_refused_provider_revoke_is_retried_by_the_next_sign_out(session_app):
+    client, keyset, provider, _repository, table = session_app
+    now = int(datetime.now(UTC).timestamp())
+
+    access, refresh = _sign_in(
+        client, provider, keyset, origin_jti="sign-in-retry", issued_at=now - 60
+    )
+    provider.revoke_failures = 1
+
+    first = client.post("/auth/logout", json={"access_token": access})
+    assert first.status_code != 204, "a refused provider call is still reported"
+    # The sign-in is over here regardless, which is what makes the retry safe.
+    assert _reach(client, access) == 401
+    assert [
+        row for row in table.rows.values() if row.get("entity_type") == "auth_sign_in_session"
+    ] != [], "the held row is what the retry needs; a refusal may not consume it"
+
+    second = client.post("/auth/logout", json={"access_token": access})
+    assert second.status_code == 204, second.text
+    assert provider.operations().count("revoke_token") == 2, (
+        "the second sign-out has to reach the provider again, not answer 204 "
+        "having found nothing left to revoke"
+    )
+    assert [kwargs["Token"] for operation, kwargs in provider.calls if operation == "revoke_token"] == [
+        refresh,
+        refresh,
+    ]
+    # Only the accepted call spends the row.
+    assert [
+        row for row in table.rows.values() if row.get("entity_type") == "auth_sign_in_session"
+    ] == []
+
+
+# ---------------------------------------------------------------------------
+# `DELETE /auth/me` resolves no Actor, so it carries its own copy of the
+# revocation check. Nothing pinned that copy: the whole suite stayed green with
+# the revocation argument replaced by None.
+# ---------------------------------------------------------------------------
+
+
+class _DeletionRepository:
+    """Binding and sign-in state only; the deletion command itself is stubbed."""
+
+    def __init__(self, issuer: str, *, revoked: bool) -> None:
+        self.issuer = issuer
+        self.revoked = revoked
+
+    async def get_binding(self, issuer: str, subject: str) -> dict[str, Any]:
+        return {"status": "active", "user_id": USER_ID, "issuer": issuer, "subject": subject}
+
+    async def get_session_revocation(
+        self, issuer: str, subject: str, origin_jti: str | None
+    ) -> dict[str, Any] | None:
+        if not self.revoked or not origin_jti:
+            return None
+        return {"origin_jti": origin_jti, "expires_at": Decimal(2_000_000_000)}
+
+
+def _deletion_token(issuer: str) -> VerifiedAccessToken:
+    return VerifiedAccessToken(
+        issuer=issuer,
+        subject=ISSUER_SUBJECT,
+        client_id="student-client",
+        groups=("students",),
+        issued_at=10_000,
+        origin_jti="sign-in-closing",
+    )
+
+
+@pytest.mark.asyncio
+async def test_closing_the_account_is_refused_once_that_sign_in_was_signed_out(
+    rsa_jwks_keysets, monkeypatch
+):
+    keyset, _ = rsa_jwks_keysets
+    built: list[str] = []
+    monkeypatch.setattr(
+        deps, "begin_or_replay_deletion", lambda **kwargs: built.append(kwargs["user_id"])
+    )
+
+    with pytest.raises(HTTPException) as refused:
+        await deps.get_deletion_command(
+            verified=_deletion_token(keyset.issuer),
+            repository=_DeletionRepository(keyset.issuer, revoked=True),
+        )
+
+    assert refused.value.status_code == 401
+    assert refused.value.detail["code"] == "invalid_token"
+    assert built == [], "the command must not be built for a signed-out sign-in"
+
+
+@pytest.mark.asyncio
+async def test_closing_the_account_still_works_for_a_sign_in_that_was_not_signed_out(
+    rsa_jwks_keysets, monkeypatch
+):
+    """Negative control: the refusal above has to come from the revocation, not
+    from the fixture refusing everything."""
+    keyset, _ = rsa_jwks_keysets
+    built: list[str] = []
+    monkeypatch.setattr(
+        deps, "begin_or_replay_deletion", lambda **kwargs: built.append(kwargs["user_id"])
+    )
+
+    await deps.get_deletion_command(
+        verified=_deletion_token(keyset.issuer),
+        repository=_DeletionRepository(keyset.issuer, revoked=False),
+    )
+
+    assert built == [USER_ID]

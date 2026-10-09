@@ -159,9 +159,13 @@ class IdentityRepository(Protocol):
         self, user_id: str, origin_jti: str, refresh_token: str, expires_at: int
     ) -> None: ...
 
-    async def take_sign_in_refresh_token(
+    async def get_sign_in_refresh_token(
         self, user_id: str, origin_jti: str
     ) -> str | None: ...
+
+    async def discard_sign_in_refresh_token(
+        self, user_id: str, origin_jti: str
+    ) -> None: ...
 
 
 _GROUP_ROLES = {

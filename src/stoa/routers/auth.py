@@ -321,12 +321,17 @@ async def _revoke_sign_in_at_provider(
     and deliberately does not fail the request: the revocation record is already
     written, so the sign-in is over whatever happens here, and a 503 would tell
     the caller the opposite of the truth.
+
+    The held row is dropped only after the provider has accepted. Dropping it
+    first made a refused provider call unrepeatable - a second sign-out found
+    nothing to revoke and said 204 without calling the provider at all, leaving
+    the provider's copy of the refresh token alive for its full thirty days.
     """
     try:
         binding = await identity_repository.get_binding(verified.issuer, verified.subject)
         user_id = str((binding or {}).get("user_id") or "").strip()
         refresh_token = (
-            await identity_repository.take_sign_in_refresh_token(
+            await identity_repository.get_sign_in_refresh_token(
                 user_id, verified.origin_jti
             )
             if user_id
@@ -338,6 +343,12 @@ async def _revoke_sign_in_at_provider(
     if not refresh_token:
         return
     cognito.revoke_token(Token=refresh_token, ClientId=_public_client_id(settings))
+    try:
+        await identity_repository.discard_sign_in_refresh_token(
+            user_id, verified.origin_jti
+        )
+    except Exception as exc:  # noqa: BLE001 - the token it held is already revoked
+        logger.warning("sign-in refresh token discard failed: %s", type(exc).__name__)
 
 
 def _build_user_out(profile: dict) -> UserOut:

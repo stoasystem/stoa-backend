@@ -369,26 +369,42 @@ def put_sign_in_refresh_token(
     )
 
 
-def take_sign_in_refresh_token(user_id: str, origin_jti: str) -> str | None:
-    """Read the sign-in's refresh token and drop the row in the same breath.
+def get_sign_in_refresh_token(user_id: str, origin_jti: str) -> str | None:
+    """Read the refresh token held for one sign-in, without spending it.
 
-    Dropping it is not tidying: once sign-out has the token in hand the row is a
-    stored credential with nothing left to do, and the provider call that follows
-    is the last use it will ever have.
+    Reading and dropping used to be one step, and that made a failed provider
+    call unrepeatable: the row was already gone, so a second sign-out found
+    nothing to revoke and the provider's copy of the refresh token lived out its
+    full thirty days. The drop is now a separate call the caller makes only once
+    the provider has accepted.
     """
     if not user_id or not origin_jti or not origin_jti.strip():
         return None
-    key = _sign_in_session_key(user_id, origin_jti)
-    table = get_table()
-    response = _get_item(table, Key=key, ConsistentRead=True)
+    response = _get_item(
+        get_table(),
+        Key=_sign_in_session_key(user_id, origin_jti),
+        ConsistentRead=True,
+    )
     item = _optional_item(response.get("Item"))
     if not item:
         return None
-    if not isinstance(table, _DeleteTable):
-        raise ValueError("identity repository dependency is unavailable")
-    table.delete_item(Key=key)
     token = item.get("refresh_token")
     return token if isinstance(token, str) and token else None
+
+
+def discard_sign_in_refresh_token(user_id: str, origin_jti: str) -> None:
+    """Drop the row once the provider has revoked the token it held.
+
+    Not tidying: a refresh token the provider has already revoked is a stored
+    credential with nothing left to do, so the row only has to survive long
+    enough for the provider call to succeed.
+    """
+    if not user_id or not origin_jti or not origin_jti.strip():
+        return
+    table = get_table()
+    if not isinstance(table, _DeleteTable):
+        raise ValueError("identity repository dependency is unavailable")
+    table.delete_item(Key=_sign_in_session_key(user_id, origin_jti))
 
 
 def get_current_capability_grants(user_id: str) -> list[IdentityItem]:
@@ -445,12 +461,17 @@ class DynamoIdentityRepository:
             )
         )
 
-    async def take_sign_in_refresh_token(
+    async def get_sign_in_refresh_token(
         self, user_id: str, origin_jti: str
     ) -> str | None:
         return await asyncio.to_thread(
-            take_sign_in_refresh_token, user_id, origin_jti
+            get_sign_in_refresh_token, user_id, origin_jti
         )
+
+    async def discard_sign_in_refresh_token(
+        self, user_id: str, origin_jti: str
+    ) -> None:
+        await asyncio.to_thread(discard_sign_in_refresh_token, user_id, origin_jti)
 
 
 def _get_account_fence(user_id: str) -> IdentityItem | None:
