@@ -3532,11 +3532,19 @@
         "capability": null,
         "purpose": "self_service",
         "resource_type": "conversation"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
       }
     ],
     "classification": "authorized",
     "family": "conversations",
-    "identifiers": [],
+    "identifiers": [
+      "challengeId"
+    ],
     "method": "POST",
     "path": "/conversations",
     "sensitive": true
@@ -3556,6 +3564,12 @@
         "resource_type": "conversation"
       },
       {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      },
+      {
         "action": "update",
         "capability": null,
         "purpose": "self_service",
@@ -3566,6 +3580,7 @@
     "family": "conversations",
     "identifiers": [
       "attachmentId",
+      "challengeId",
       "uploadId"
     ],
     "method": "POST",
@@ -3587,6 +3602,12 @@
         "resource_type": "conversation"
       },
       {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "practice"
+      },
+      {
         "action": "update",
         "capability": null,
         "purpose": "self_service",
@@ -3597,6 +3618,7 @@
     "family": "conversations",
     "identifiers": [
       "attachmentId",
+      "challengeId",
       "uploadId"
     ],
     "method": "POST",

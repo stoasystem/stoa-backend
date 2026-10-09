@@ -2398,6 +2398,16 @@
             "title": "Id",
             "type": "string"
           },
+          "quote": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageQuote"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "role": {
             "title": "Role",
             "type": "string"
@@ -2669,6 +2679,16 @@
               }
             ],
             "title": "Initialmessage"
+          },
+          "practiceContext": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PracticeContextReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "subject": {
             "title": "Subject",
@@ -5392,6 +5412,52 @@
           "createdAt"
         ],
         "title": "MessageOut",
+        "type": "object"
+      },
+      "MessageQuote": {
+        "additionalProperties": false,
+        "description": "A passage the student highlighted and is asking about (#61).",
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/MessageQuoteSource"
+          },
+          "text": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "source"
+        ],
+        "title": "MessageQuote",
+        "type": "object"
+      },
+      "MessageQuoteSource": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "challenge",
+              "message"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "MessageQuoteSource",
         "type": "object"
       },
       "ModerationCaseListResponse": {
@@ -8585,6 +8651,37 @@
         "title": "PracticeAttemptResult",
         "type": "object"
       },
+      "PracticeContextReference": {
+        "additionalProperties": false,
+        "description": "The exercise a question is asked beside, named by id only (#61).\n\n`extra=\"forbid\"` is the rule itself, not tidiness: the wording of a question\nis read from the store by these ids, and a client that sends its own is\nrefused rather than believed.",
+        "properties": {
+          "challengeId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Challengeid",
+            "type": "string"
+          },
+          "lessonId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Lessonid",
+            "type": "string"
+          },
+          "unitId": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Unitid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "challengeId",
+          "lessonId",
+          "unitId"
+        ],
+        "title": "PracticeContextReference",
+        "type": "object"
+      },
       "PracticeHintRequest": {
         "description": "One hint request with an explicit logical-operation identity.",
         "properties": {
@@ -11186,6 +11283,26 @@
             "pattern": "^[A-Za-z0-9._~-]+$",
             "title": "Idempotencykey",
             "type": "string"
+          },
+          "practiceContext": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PracticeContextReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageQuote"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -23903,10 +24020,18 @@
               "capability": null,
               "purpose": "self_service",
               "resource_type": "conversation"
+            },
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "practice"
             }
           ],
           "classification": "authorized",
-          "identifiers": []
+          "identifiers": [
+            "challengeId"
+          ]
         }
       }
     },
@@ -24204,6 +24329,12 @@
               "resource_type": "conversation"
             },
             {
+              "action": "read",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "practice"
+            },
+            {
               "action": "update",
               "capability": null,
               "purpose": "self_service",
@@ -24213,6 +24344,7 @@
           "classification": "authorized",
           "identifiers": [
             "attachmentId",
+            "challengeId",
             "uploadId"
           ]
         }
@@ -24307,6 +24439,12 @@
               "resource_type": "conversation"
             },
             {
+              "action": "read",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "practice"
+            },
+            {
               "action": "update",
               "capability": null,
               "purpose": "self_service",
@@ -24316,6 +24454,7 @@
           "classification": "authorized",
           "identifiers": [
             "attachmentId",
+            "challengeId",
             "uploadId"
           ]
         }

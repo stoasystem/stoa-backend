@@ -35,6 +35,7 @@ from stoa.db.repositories import (
     account_deletion_repo,
     allowance_repo,
     attachment_repo,
+    practice_repo,
     question_repo,
     user_repo,
 )
@@ -77,6 +78,7 @@ from stoa.services import (
     entitlement_service,
     learning_profile_service,
     locale_service,
+    practice_context_service,
     runtime_budget_service,
     teacher_dispatch_service,
     teacher_support_allowance_service,
@@ -732,12 +734,44 @@ class _ConversationAllowanceBedrockClient:
 
 # ── Request / Response models ──────────────────────────────────────────────────
 
+class PracticeContextReference(BaseModel):
+    """The exercise a question is asked beside, named by id only (#61).
+
+    `extra="forbid"` is the rule itself, not tidiness: the wording of a question
+    is read from the store by these ids, and a client that sends its own is
+    refused rather than believed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    challengeId: str = Field(min_length=1, max_length=128)
+    lessonId: str = Field(min_length=1, max_length=128)
+    unitId: str = Field(min_length=1, max_length=128)
+
+
+class MessageQuoteSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["challenge", "message"]
+    id: str = Field(min_length=1, max_length=128)
+
+
+class MessageQuote(BaseModel):
+    """A passage the student highlighted and is asking about (#61)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=ai_service.QUOTE_MAX_CHARS)
+    source: MessageQuoteSource
+
+
 class CreateConversationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     subject: str
     grade: str
     initialMessage: str | None = Field(default=None, min_length=1, max_length=10_000)
+    practiceContext: PracticeContextReference | None = None
 
 
 def _active_conversation_generation(owner_id: str, table: Any) -> int:
@@ -761,6 +795,8 @@ class SendMessageRequest(BaseModel):
     content: str
     idempotencyKey: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9._~-]+$")
     attachmentIds: list[AttachmentReference] | None = Field(default=None, max_length=8)
+    practiceContext: PracticeContextReference | None = None
+    quote: MessageQuote | None = None
 
     @model_validator(mode="after")
     def unique_attachments(self) -> "SendMessageRequest":
@@ -770,6 +806,46 @@ class SendMessageRequest(BaseModel):
         if len(identities) != len(set(identities)):
             raise ValueError("attachment references must be unique")
         return self
+
+
+def _resolved_practice_context(
+    student_id: str, requested: PracticeContextReference | None
+) -> dict[str, object] | None:
+    """Look the exercise up by its ids, or refuse the request (#61).
+
+    Nothing the client wrote about the exercise is kept: these three ids are
+    the whole of what it may say. An id that names nothing this student can be
+    shown is a 422, not an answer about an exercise nobody can see.
+    """
+    if requested is None:
+        return None
+    try:
+        return practice_context_service.resolve(
+            student_id,
+            challenge_id=requested.challengeId,
+            lesson_id=requested.lessonId,
+            unit_id=requested.unitId,
+            locale=_student_locale(student_id),
+        )
+    except practice_context_service.PracticeContextUnresolved:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="practiceContext does not name an exercise available to this student",
+        ) from None
+
+
+def _stored_quote(value: object) -> MessageQuote | None:
+    """A quote as it was stored beside a message, or nothing if it is not one."""
+    if not isinstance(value, Mapping):
+        return None
+    try:
+        return MessageQuote.model_validate(dict(value))
+    except ValueError:
+        return None
+
+
+def _quote_payload(quote: MessageQuote | None) -> dict[str, object] | None:
+    return None if quote is None else quote.model_dump(mode="json")
 
 
 def _conversation_repository_call(
@@ -812,6 +888,9 @@ async def _message_command_dependency(
     correlation_id: str = Depends(get_request_correlation_id),
 ) -> dict:
     """Stage A: compute and compare the command before attachment resolution."""
+    # First of all: an exercise this student cannot be shown is refused before
+    # the command is looked up, let alone claimed.
+    practice_context = _resolved_practice_context(actor.user_id, body.practiceContext)
     fingerprint = message_request_fingerprint(body)
     try:
         state = _conversation_repository_call(
@@ -835,11 +914,27 @@ async def _message_command_dependency(
         "fingerprint": fingerprint,
         "state": state,
         "existing": state.command,
+        "practice_context": practice_context,
     }
 
 
 async def _attachment_inventory_resolver(resource_id: str):
     return {"student_id": resource_id}
+
+
+async def _practice_context_challenge_resolver(resource_id: str):
+    return practice_repo.get_challenge(resource_id)
+
+
+# A message may now name the exercise it was asked beside (#61), so these
+# routes read a practice resource and say so. The reading itself is narrow:
+# `practice_context_service` only resolves content the student can be shown.
+_PRACTICE_CONTEXT_SPEC = AuthorizationSpec(
+    ResourceType.PRACTICE,
+    AuthorizationAction.READ,
+    AuthorizationPurpose.SELF_SERVICE,
+    _practice_context_challenge_resolver,
+)
 
 
 _message_command_dependency.authorization_specs = (  # type: ignore[attr-defined]
@@ -855,11 +950,37 @@ _message_command_dependency.authorization_specs = (  # type: ignore[attr-defined
         AuthorizationPurpose.SELF_SERVICE,
         _attachment_inventory_resolver,
     ),
+    _PRACTICE_CONTEXT_SPEC,
 )
 
 
+def _conversation_create_dependency():
+    """The create route's actor, plus the practice read a `practiceContext` is."""
+    base = student_create_actor_dependency(ResourceType.CONVERSATION)
+
+    async def dependency(actor: Actor = Depends(base)) -> Actor:
+        return actor
+
+    dependency.authorization_specs = (_PRACTICE_CONTEXT_SPEC,)  # type: ignore[attr-defined]
+    return dependency
+
+
+_conversation_create_actor = _conversation_create_dependency()
+
+
+def _frame(framed: bytearray, value: str) -> None:
+    encoded = value.encode("utf-8")
+    framed.extend(struct.pack(">I", len(encoded)))
+    framed.extend(encoded)
+
+
 def message_request_fingerprint(body: SendMessageRequest) -> str:
-    """Canonical v1 fingerprint over exact UTF-8 content and ordered typed IDs."""
+    """Canonical v1 fingerprint over exact UTF-8 content and ordered typed IDs.
+
+    The practice context and the quote (#61) are appended only when the request
+    carries them, so a request without them frames exactly the bytes it framed
+    before they existed and a command in flight over a deploy still replays.
+    """
     content = body.content.encode("utf-8")
     framed = bytearray(b"stoa.conversation.send.v1")
     framed.extend(struct.pack(">I", len(content)))
@@ -872,6 +993,16 @@ def message_request_fingerprint(body: SendMessageRequest) -> str:
         framed.extend(type_byte)
         framed.extend(struct.pack(">I", len(opaque_id)))
         framed.extend(opaque_id)
+    if body.practiceContext is not None:
+        framed.extend(b"\x10")
+        _frame(framed, body.practiceContext.challengeId)
+        _frame(framed, body.practiceContext.lessonId)
+        _frame(framed, body.practiceContext.unitId)
+    if body.quote is not None:
+        framed.extend(b"\x11")
+        _frame(framed, body.quote.text)
+        _frame(framed, body.quote.source.kind)
+        _frame(framed, body.quote.source.id)
     return hashlib.sha256(bytes(framed)).hexdigest()
 
 
@@ -886,6 +1017,9 @@ class ChatMessage(BaseModel):
     # A teacher message's author, as named when it was written (#65); absent
     # on every other message and on teacher messages written before.
     authorName: str | None = None
+    # The passage the student highlighted when they asked (#61); absent on
+    # every other message and on messages sent before quoting existed.
+    quote: MessageQuote | None = None
 
 
 class SendMessageResponse(BaseModel):
@@ -1419,10 +1553,13 @@ def _naming_the_conversation(refusal: HTTPException, conv_id: str) -> HTTPExcept
 )
 async def create_conversation(
     body: CreateConversationRequest,
-    actor: Actor = Depends(student_create_actor_dependency(ResourceType.CONVERSATION)),
+    actor: Actor = Depends(_conversation_create_actor),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     student_id = actor.user_id
+    # Before anything is written: an id that names no exercise this student can
+    # be shown leaves no half-opened conversation behind.
+    practice_context = _resolved_practice_context(student_id, body.practiceContext)
     conv_id = str(uuid.uuid4())
     now = _now()
     title = (
@@ -1457,6 +1594,7 @@ async def create_conversation(
         request = SendMessageRequest(
             content=body.initialMessage,
             idempotencyKey=f"initial-{conv_id}",
+            practiceContext=body.practiceContext,
         )
         try:
             result = _submit_message_command(
@@ -1470,6 +1608,7 @@ async def create_conversation(
                     "fingerprint": message_request_fingerprint(request),
                     "existing": None,
                     "account_fence_generation": generation,
+                    "practice_context": practice_context,
                 },
             )
         except _ConversationAllowanceFailure as error:
@@ -1536,6 +1675,7 @@ async def get_conversation(
                 if value in attachment_summaries
             ],
             authorName=_author_name(m),
+            quote=_stored_quote(m.get("quote")),
         )
         for m in raw_messages
     ]
@@ -2126,11 +2266,13 @@ def _stored_student_message(
     created_at: str,
     expected_content: str | None,
     table: Any,
-) -> tuple[str, list, list[AttachmentSummary]]:
+    expected_quote: MessageQuote | None = None,
+) -> tuple[str, list, list[AttachmentSummary], MessageQuote | None]:
     """Read back a committed student message and its attachments, checked.
 
-    Returns its content, the attachments as generation prepares them, and their
-    summaries. `expected_content` is the request's, when there is a request.
+    Returns its content, the attachments as generation prepares them, their
+    summaries and the quote stored with it. `expected_content` and
+    `expected_quote` are the request's, when there is a request.
     """
     stored_student = _conversation_repository_call(
         lambda: table.get_item(
@@ -2194,7 +2336,13 @@ def _stored_student_message(
     attachments = attachment_service.attachment_summaries_for_records(
         attachment_ids, stored_attachments
     )
-    return str(stored_student["content"]), prepared, attachments
+    raw_quote = stored_student.get("quote")
+    quote = _stored_quote(raw_quote)
+    if (raw_quote is not None and quote is None) or (
+        expected_quote is not None and quote != expected_quote
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return str(stored_student["content"]), prepared, attachments, quote
 
 
 def _generation_worker_name() -> str:
@@ -2296,6 +2444,7 @@ def _submit_message_command(
             createdAt=str(command["created_at"]),
             status="sent",
             attachments=committed.attachments,
+            quote=committed.quote,
         ),
     )
 
@@ -2337,18 +2486,30 @@ class CommittedMessage:
     prior_messages: list[dict]
     prepared: list
     attachments: list[AttachmentSummary]
+    quote: MessageQuote | None = None
 
 
 def _resolve_generation_context(
-    student_id: str, actor: Actor, subject: str, grade: str
+    student_id: str,
+    actor: Actor,
+    subject: str,
+    grade: str,
+    practice_context: dict[str, object] | None = None,
 ) -> dict[str, object]:
-    """What the answer depends on that only the request knows, resolved once."""
+    """What the answer depends on that only the request knows, resolved once.
+
+    The practice context rides here rather than being looked up again when the
+    answer is generated: the worker would otherwise read whatever the
+    curriculum and the student's attempts say by then, not what they said when
+    the question was asked.
+    """
     return {
         "schema_version": "generation-context.v1",
         "locale": _student_locale(student_id),
         "subject": _SUBJECT_ALIASES.get(subject, "math"),
         "grade": grade,
         "memory_context": _memory_context_for_student(student_id, actor, subject),
+        "practice_context": practice_context,
     }
 
 
@@ -2373,6 +2534,7 @@ def _generation_context_without_request(
         "subject": _SUBJECT_ALIASES.get(str(conversation.get("subject") or ""), "math"),
         "grade": _conversation_grade(conversation),
         "memory_context": None,
+        "practice_context": None,
     }
 
 
@@ -2405,7 +2567,7 @@ def load_committed_message(command: dict) -> CommittedMessage:
             table=table,
         )
     )
-    content, prepared, attachments = _stored_student_message(
+    content, prepared, attachments, quote = _stored_student_message(
         conv_id=conv_id,
         student_id=student_id,
         student_msg_id=str(command["student_message_id"]),
@@ -2433,6 +2595,7 @@ def load_committed_message(command: dict) -> CommittedMessage:
         prior_messages=prior_messages,
         prepared=prepared,
         attachments=attachments,
+        quote=quote,
     )
 
 
@@ -2591,10 +2754,18 @@ def commit_message_command(
     # Resolved before the claim: the lookups span several table reads, and the
     # answer's language is the one this request asked in, not whichever request
     # happens to be around when the answer is generated.
+    requested_practice_context = command_context.get("practice_context")
+    practice_context = (
+        dict(requested_practice_context)
+        if isinstance(requested_practice_context, Mapping)
+        else None
+    )
     generation_context = (
         None
         if existing
-        else _resolve_generation_context(student_id, actor, subject, grade)
+        else _resolve_generation_context(
+            student_id, actor, subject, grade, practice_context
+        )
     )
     command = existing or {
         "entity_type": "message_command",
@@ -2651,15 +2822,17 @@ def commit_message_command(
         and existing.get("status") in {"message_committed", "ai_running", "failed"}
     )
     if resume_after_message:
-        _, prepared, attachments = _stored_student_message(
+        _, prepared, attachments, quote = _stored_student_message(
             conv_id=conv_id,
             student_id=student_id,
             student_msg_id=student_msg_id,
             created_at=created_at,
             expected_content=body.content,
             table=table,
+            expected_quote=body.quote,
         )
     else:
+        quote = body.quote
         # Stage B is entered only for an absent command, or to resume a claimed
         # command lost before its deterministic message transaction.
         prepared = _conversation_repository_call(
@@ -2734,6 +2907,10 @@ def commit_message_command(
             "content": body.content,
             "created_at": created_at,
         }
+        if body.quote is not None:
+            # Stored beside the message, so reading the conversation back shows
+            # the quote above the question exactly as it was asked.
+            student_item["quote"] = _quote_payload(body.quote)
         command_attachment_ids = command.get("deterministic_attachment_ids")
         if not isinstance(command_attachment_ids, list) or any(
             not isinstance(value, str) or not value
@@ -2819,6 +2996,7 @@ def commit_message_command(
                     "actor": actor,
                     "fingerprint": fingerprint,
                     "existing": raced,
+                    "practice_context": practice_context,
                 },
             )
 
@@ -2845,7 +3023,9 @@ def commit_message_command(
     if not isinstance(command.get("generation_context"), Mapping):
         # A command claimed before its context was stored with it (E19) takes
         # the context of the request resuming it.
-        resumed_context = _resolve_generation_context(student_id, actor, subject, grade)
+        resumed_context = _resolve_generation_context(
+            student_id, actor, subject, grade, practice_context
+        )
         command["generation_context"] = _conversation_repository_call(
             lambda: attachment_repo.record_message_generation_context(
                 conversation_id=conv_id,
@@ -2862,6 +3042,7 @@ def commit_message_command(
         prior_messages=prior_messages,
         prepared=prepared,
         attachments=attachments,
+        quote=quote,
     )
 
 
@@ -2894,9 +3075,16 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         or not isinstance(context.get("subject"), str)
         or not isinstance(context.get("grade"), str)
         or not isinstance(context.get("memory_context"), (str, type(None)))
+        or not isinstance(context.get("practice_context"), (Mapping, type(None)))
     ):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     memory_context = context["memory_context"]
+    stored_practice_context = context.get("practice_context")
+    practice_context = (
+        dict(stored_practice_context)
+        if isinstance(stored_practice_context, Mapping)
+        else None
+    )
 
     lease_owner = str(uuid.uuid4())
     now_epoch = int(datetime.now(timezone.utc).timestamp())
@@ -3065,6 +3253,8 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 history=prior_messages,
                 attachment_context=attachment_context,
                 memory_context=memory_context,
+                practice_context=practice_context,
+                quote=_quote_payload(committed.quote),
                 correlation_id=command_id,
                 deadline_monotonic=ai_deadline,
                 effect_id=allowance_client.allowance_effect_id,
@@ -3207,6 +3397,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         createdAt=created_at,
         status="sent",
         attachments=attachments,
+        quote=committed.quote,
     )
     assistant_message = ChatMessage(
         id=assistant_msg_id,
