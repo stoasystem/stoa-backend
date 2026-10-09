@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import json
 import re
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -18,6 +19,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from audit_helpers import MemoryAuthorizationAuditSink
+from fakes.dynamodb import as_stored
 from stoa.db.repositories import attachment_repo, practice_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import conversations
@@ -62,30 +64,86 @@ def _client(router, prefix: str = "/conversations", actor=None) -> TestClient:
 
 # ── The curriculum these tests resolve against ───────────────────────────────
 
+# `practice_repo.get_challenge` hands back the whole stored row, answers and
+# all. A fixture without them cannot notice a leak, which is how the coin-toss
+# answer-leak test (f6a92546) got through; every one of these is asserted
+# absent from the resolved context and from the body sent to the model.
+EXERCISE_SECRETS: dict[str, Any] = {
+    "correct_answer": "ZWEIVIERTEL-GEKUERZT",
+    "answer_key": "SCHLUESSEL-EINHALB",
+    "standard_answer": "MUSTERLOESUNG-EINHALB",
+    "explanation": "Zaehler addieren, dann kuerzen: ERKLAERUNGSTEXT.",
+    "correct_feedback": "RICHTIG-RUECKMELDUNG",
+    "incorrect_feedback": "FALSCH-RUECKMELDUNG",
+    "hints": ["HINWEIS-EINS", "HINWEIS-ZWEI"],
+    "solution_steps": ["LOESUNGSSCHRITT-EINS", "LOESUNGSSCHRITT-ZWEI"],
+}
+
+# Exactly what the resolved context is allowed to carry. A new key has to be
+# added here deliberately, so nobody widens the projection by accident.
+PRACTICE_CONTEXT_KEYS = frozenset(
+    {
+        "schemaVersion",
+        "challengeId",
+        "lessonId",
+        "unitId",
+        "subjectId",
+        "challengeType",
+        "challengePrompt",
+        "lessonTitle",
+        "unitTitle",
+        "topicId",
+        "topicTitle",
+        "state",
+        "recommendation",
+        "reviewDue",
+        "recentMistakes",
+    }
+)
+
+RECENT_MISTAKE_KEYS = frozenset({"challengeId", "prompt", "studentAnswer", "createdAt"})
+
+
+def _unit(unit_id: str, title: str, order: int) -> dict[str, Any]:
+    return {
+        "id": unit_id,
+        "topicId": "topic-1",
+        "subjectId": "math",
+        "title": title,
+        "order": order,
+    }
+
+
+def _lesson(lesson_id: str, unit_id: str, title: str, order: int) -> dict[str, Any]:
+    return {
+        "id": lesson_id,
+        "unitId": unit_id,
+        "topicId": "topic-1",
+        "subjectId": "math",
+        "title": title,
+        "order": order,
+    }
+
+
 def _catalog() -> dict[str, Any]:
     return {
         "subjects": [{"id": "math", "name": "Mathematik", "order": 0}],
         "topics": [{"id": "topic-1", "subjectId": "math", "title": "Brüche", "order": 0}],
-        "units": [
-            {
-                "id": "unit-1",
-                "topicId": "topic-1",
-                "subjectId": "math",
-                "title": "Brüche addieren",
-                "order": 0,
-            }
-        ],
-        "lessons": [
-            {
-                "id": "lesson-1",
-                "unitId": "unit-1",
-                "topicId": "topic-1",
-                "subjectId": "math",
-                "title": "Gleichnamige Brüche",
-                "order": 0,
-            }
-        ],
+        "units": [_unit("unit-1", "Brüche addieren", 0)],
+        "lessons": [_lesson("lesson-1", "unit-1", "Gleichnamige Brüche", 0)],
     }
+
+
+def _two_lesson_catalog() -> dict[str, Any]:
+    """Two knowledge points a student can see, each with its own lesson.
+
+    Both visible on purpose: it is the only way to tell the exercise-belongs-to-
+    this-lesson check apart from the catalog lookup that follows it.
+    """
+    catalog = _catalog()
+    catalog["units"].append(_unit("unit-2", "Brüche kürzen", 1))
+    catalog["lessons"].append(_lesson("lesson-2", "unit-2", "Ungleichnamige Brüche", 1))
+    return catalog
 
 
 def _challenge(**overrides: Any) -> dict[str, Any]:
@@ -98,42 +156,57 @@ def _challenge(**overrides: Any) -> dict[str, Any]:
         "type": "text_input",
         "prompt": "Wie viel ist 1/4 + 1/4?",
         "order": 0,
+        **EXERCISE_SECRETS,
     }
     challenge.update(overrides)
     return challenge
 
 
-def _stub_curriculum(monkeypatch, *, challenge=None, mistakes=(), review_due=None, state=None):
-    monkeypatch.setattr(
-        practice_repo,
-        "get_challenge",
-        lambda challenge_id: (
-            _challenge() if challenge is None else challenge
-        )
-        if challenge_id == "challenge-1"
-        else None,
-    )
-    monkeypatch.setattr(curriculum_service, "list_catalog", lambda **_kwargs: _catalog())
-    monkeypatch.setattr(practice_repo, "get_mistakes", lambda _student: list(mistakes))
-    monkeypatch.setattr(
-        knowledge_map_service,
-        "_review_due_by_unit",
-        lambda _student, _lessons: dict(review_due or {}),
-    )
-    judged = knowledge_mastery_service.UnitMastery(
-        unit_id="unit-1",
+def _mastery(unit_id: str, state) -> knowledge_mastery_service.UnitMastery:
+    return knowledge_mastery_service.UnitMastery(
+        unit_id=unit_id,
         topic_id="topic-1",
         subject_id="math",
-        state=state or knowledge_mastery_service.LearningState.IN_PROGRESS,
+        state=state,
         progress=0.5,
         unmet_exercises=2,
         lesson_count=2,
         lessons_done=1,
         next_lesson=None,
     )
+
+
+def _stub_curriculum(
+    monkeypatch,
+    *,
+    challenge=None,
+    challenges=None,
+    mistakes=(),
+    review_due=None,
+    state=None,
+    catalog=None,
+):
+    rows = challenges or {
+        "challenge-1": _challenge() if challenge is None else challenge
+    }
+    monkeypatch.setattr(practice_repo, "get_challenge", lambda cid: rows.get(cid))
     monkeypatch.setattr(
-        knowledge_mastery_service, "unit_states", lambda *_a, **_k: {"unit-1": judged}
+        curriculum_service,
+        "list_catalog",
+        lambda **_kwargs: _catalog() if catalog is None else catalog,
     )
+    monkeypatch.setattr(practice_repo, "get_mistakes", lambda _student: list(mistakes))
+    monkeypatch.setattr(
+        knowledge_map_service,
+        "_review_due_by_unit",
+        lambda _student, _lessons: dict(review_due or {}),
+    )
+    judged = state or knowledge_mastery_service.LearningState.IN_PROGRESS
+    states = {
+        str(unit.get("id")): _mastery(str(unit.get("id")), judged)
+        for unit in (catalog or _catalog())["units"]
+    }
+    monkeypatch.setattr(knowledge_mastery_service, "unit_states", lambda *_a, **_k: states)
 
 
 # ── Request contract ─────────────────────────────────────────────────────────
@@ -849,3 +922,197 @@ def test_a_quoted_message_is_read_back_with_its_quote(monkeypatch):
     messages = response.json()["messages"]
     assert messages[0]["quote"] == quote
     assert messages[1]["quote"] is None
+
+
+# ── The exercise's answers stay in the store ─────────────────────────────────
+
+def _fenced_payload(turn: str, tag: str) -> str:
+    """The text between one fence's tags, found by the nonce the block used."""
+    opener = re.search(rf"<{tag}-([0-9a-f]{{16}})>", turn)
+    assert opener is not None, f"no {tag} fence in the turn"
+    nonce = opener.group(1)
+    return turn.split(f"<{tag}-{nonce}>", 1)[1].split(f"</{tag}-{nonce}>", 1)[0]
+
+
+def _user_turn(body: dict) -> str:
+    """The student's turn as the model receives it, not as JSON escapes it."""
+    turns = [item for item in body["messages"] if item["role"] == "user"]
+    assert turns, "no user turn was sent"
+    return str(turns[-1]["content"])
+
+
+def _secret_values() -> list[str]:
+    values: list[str] = []
+    for value in EXERCISE_SECRETS.values():
+        values.extend(value if isinstance(value, list) else [value])
+    return values
+
+
+def test_the_resolved_context_carries_exactly_the_declared_keys(monkeypatch):
+    """The projection is a whitelist, not whatever the stored row happened to hold."""
+    _stub_curriculum(monkeypatch, mistakes=[_mistake(1, created_at="2026-10-01T00:00:00+00:00")])
+    resolved = practice_context_service.resolve(
+        STUDENT, challenge_id="challenge-1", lesson_id="lesson-1", unit_id="unit-1"
+    )
+    assert set(resolved) == PRACTICE_CONTEXT_KEYS
+    for item in resolved["recentMistakes"]:
+        assert set(item) == RECENT_MISTAKE_KEYS
+
+
+def test_no_answer_bearing_field_of_the_exercise_reaches_the_resolved_context(monkeypatch):
+    """Every answer field on the stored row, by name and by value."""
+    _stub_curriculum(monkeypatch)
+    resolved = practice_context_service.resolve(
+        STUDENT, challenge_id="challenge-1", lesson_id="lesson-1", unit_id="unit-1"
+    )
+    blob = json.dumps(resolved, ensure_ascii=False)
+    leaked = [name for name in EXERCISE_SECRETS if name in blob]
+    leaked += [value for value in _secret_values() if value in blob]
+    assert leaked == [], f"the practice context carries {leaked}: {blob}"
+
+
+def test_no_answer_bearing_field_of_the_exercise_reaches_the_model(monkeypatch):
+    """The same whole-set check against the body actually sent to Bedrock."""
+    _stub_curriculum(monkeypatch)
+    resolved = practice_context_service.resolve(
+        STUDENT, challenge_id="challenge-1", lesson_id="lesson-1", unit_id="unit-1"
+    )
+    body = _sent(practice_context=resolved)
+    whole = json.dumps(body, ensure_ascii=False)
+    fenced = _fenced_payload(_user_turn(body), "practice_context")
+
+    # Field names are checked inside the fence only: "hints" and "explanation"
+    # are words the system prompt uses for its own purposes.
+    assert [name for name in EXERCISE_SECRETS if name in fenced] == []
+    # Values are checked against everything that leaves for the provider.
+    assert [value for value in _secret_values() if value in whole] == []
+    assert "Wie viel ist 1/4 + 1/4?" in fenced, "the question itself must still be there"
+
+
+def test_a_leaked_answer_would_be_visible_in_what_is_sent(monkeypatch):
+    """The negative control for the two checks above.
+
+    They only mean something if a value planted in the context does show up;
+    without this, a block that silently dropped everything would pass them.
+    """
+    _stub_curriculum(monkeypatch)
+    resolved = practice_context_service.resolve(
+        STUDENT, challenge_id="challenge-1", lesson_id="lesson-1", unit_id="unit-1"
+    )
+    planted = dict(resolved, challengePrompt=EXERCISE_SECRETS["correct_answer"])
+    whole = json.dumps(_sent(practice_context=planted), ensure_ascii=False)
+    assert EXERCISE_SECRETS["correct_answer"] in whole
+
+
+# ── An exercise cannot be hung on somebody else's lesson ─────────────────────
+
+def _two_lesson_rows() -> dict[str, Any]:
+    return {
+        "challenge-1": _challenge(),
+        "challenge-2": _challenge(
+            challenge_id="challenge-2", lesson_id="lesson-2", unit_id="unit-2"
+        ),
+    }
+
+
+def test_both_lessons_of_the_two_lesson_catalog_resolve_on_their_own(monkeypatch):
+    """The control for the test below: neither pairing is refused by accident."""
+    _stub_curriculum(monkeypatch, challenges=_two_lesson_rows(), catalog=_two_lesson_catalog())
+    for challenge_id, lesson_id, unit_id in (
+        ("challenge-1", "lesson-1", "unit-1"),
+        ("challenge-2", "lesson-2", "unit-2"),
+    ):
+        resolved = practice_context_service.resolve(
+            STUDENT, challenge_id=challenge_id, lesson_id=lesson_id, unit_id=unit_id
+        )
+        assert resolved["challengeId"] == challenge_id
+
+
+def test_an_exercise_cannot_be_declared_under_a_lesson_it_does_not_belong_to(monkeypatch):
+    """lesson-2 and unit-2 are real, visible and agree with each other.
+
+    Only the exercise does not belong there. Left unchecked, a student could
+    hang any question on any knowledge point and the assistant would answer
+    holding the wrong lesson title, the wrong mastery state and the wrong
+    mistakes.
+    """
+    _stub_curriculum(monkeypatch, challenges=_two_lesson_rows(), catalog=_two_lesson_catalog())
+    with pytest.raises(practice_context_service.PracticeContextUnresolved):
+        practice_context_service.resolve(
+            STUDENT, challenge_id="challenge-1", lesson_id="lesson-2", unit_id="unit-2"
+        )
+
+
+def test_the_same_mismatch_is_four_twenty_two_over_http(monkeypatch):
+    _stub_curriculum(monkeypatch, challenges=_two_lesson_rows(), catalog=_two_lesson_catalog())
+    monkeypatch.setattr(
+        conversations,
+        "_get_conversation",
+        lambda conv_id: {
+            "conversation_id": conv_id,
+            "student_id": STUDENT,
+            "subject": "math",
+            "grade": "Sek1",
+            "title": "t",
+            "updated_at": "2026-10-09T00:00:00+00:00",
+        },
+    )
+    response = _client(conversations.router).post(
+        "/conversations/conv-1/messages",
+        json={
+            "content": "warum?",
+            "idempotencyKey": "key-cross-lesson",
+            "practiceContext": {
+                "challengeId": "challenge-1",
+                "lessonId": "lesson-2",
+                "unitId": "unit-2",
+            },
+        },
+    )
+    assert response.status_code == 422
+
+
+# ── The worker reads the context back out of DynamoDB ────────────────────────
+
+def test_the_table_double_really_does_hand_numbers_back_as_decimal():
+    """The control for the two round-trip tests below.
+
+    They are only evidence while the double keeps doing what the real resource
+    interface does; if it ever stopped, they would pass for the wrong reason.
+    """
+    assert isinstance(as_stored({"reviewDue": 3})["reviewDue"], Decimal)
+
+
+@pytest.mark.parametrize("review_due", [0, 3])
+def test_the_fenced_block_is_built_from_the_context_as_the_table_returns_it(
+    monkeypatch, review_due
+):
+    """#61 audit A1: the worker re-reads the stored context, where every number
+    comes back a `Decimal`. Serialising one raises, and then the answer to every
+    situated question fails - `reviewDue: 0` included."""
+    _stub_curriculum(monkeypatch, review_due={"unit-1": review_due} if review_due else {})
+    resolved = practice_context_service.resolve(
+        STUDENT, challenge_id="challenge-1", lesson_id="lesson-1", unit_id="unit-1"
+    )
+    stored = as_stored(resolved)
+    assert isinstance(stored["reviewDue"], Decimal)
+
+    block = ai_service.build_practice_context_block(stored)
+    payload = json.loads(_fenced_payload(block, "practice_context"))
+    assert payload["reviewDue"] == review_due
+    assert type(payload["reviewDue"]) is int
+
+
+@pytest.mark.parametrize("review_due", [0, 3])
+def test_get_ai_answer_accepts_the_context_in_the_shape_the_worker_holds(
+    monkeypatch, review_due
+):
+    """One level up: the entry point `generate_for_command` actually calls."""
+    _stub_curriculum(monkeypatch, review_due={"unit-1": review_due} if review_due else {})
+    resolved = practice_context_service.resolve(
+        STUDENT, challenge_id="challenge-1", lesson_id="lesson-1", unit_id="unit-1"
+    )
+    body = _sent(practice_context=as_stored(resolved))
+    payload = json.loads(_fenced_payload(_user_turn(body), "practice_context"))
+    assert payload["reviewDue"] == review_due
+    assert type(payload["reviewDue"]) is int
