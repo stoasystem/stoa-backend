@@ -247,8 +247,27 @@ def test_completing_without_a_credential_still_needs_every_exercise_right(monkey
 
 # ── Taking the quiz ─────────────────────────────────────────────────────────
 
+# What the client may be shown of an exercise. Anything the paper is marked
+# against must not be in it, and a response is checked against the whole set
+# of answers rather than one of them: the paper is shuffled, so naming a
+# single answer makes the assertion a coin toss that passes two times in
+# three (found by the independent audit of #92).
+QUIZ_EXERCISE_KEYS = {
+    "challengeId",
+    "hintAvailable",
+    "lessonId",
+    "options",
+    "prompt",
+    "subjectId",
+    "topicId",
+    "type",
+    "unitId",
+}
+
+
 def test_a_quiz_never_hands_the_client_the_answer(monkeypatch):
-    _world(monkeypatch, exercises=[_exercise(index) for index in range(3)])
+    exercises = [_exercise(index) for index in range(3)]
+    _world(monkeypatch, exercises=exercises)
 
     started = _client().post("/practice/lessons/lesson-1/quiz", json={"kind": "skip"})
 
@@ -256,8 +275,35 @@ def test_a_quiz_never_hands_the_client_the_answer(monkeypatch):
     body = started.json()
     assert body["remaining"] == 3
     assert body["heartsLeft"] == lesson_quiz_service.QUIZ_HEARTS
-    assert "answer-0" not in started.text
+    # Not "the first one's answer is absent": every answer, whichever was
+    # shuffled to the front.
+    for exercise in exercises:
+        assert exercise["correct_answer"] not in started.text
+    # And nothing beyond the agreed fields, so a new one cannot arrive
+    # carrying something the paper is marked against. A subset, because a
+    # text answer has no options to offer.
+    assert set(body["exercise"]) <= QUIZ_EXERCISE_KEYS
     assert body["exercise"]["hintAvailable"] is False
+
+
+def test_marking_an_answer_never_hands_back_the_one_it_marked_against(monkeypatch):
+    exercises = [_exercise(index) for index in range(3)]
+    _world(monkeypatch, exercises=exercises)
+    client = _client()
+    started = client.post("/practice/lessons/lesson-1/quiz", json={"kind": "skip"})
+    quiz_id = started.json()["quizId"]
+
+    marked = client.post(
+        f"/practice/lessons/lesson-1/quiz/{quiz_id}/answer",
+        json={"answer": "not the answer"},
+    )
+
+    assert marked.status_code == 200
+    assert marked.json()["correct"] is False
+    for exercise in exercises:
+        assert exercise["correct_answer"] not in marked.text
+    if marked.json().get("exercise"):
+        assert set(marked.json()["exercise"]) <= QUIZ_EXERCISE_KEYS
 
 
 def test_a_quiz_forgives_one_wrong_answer_and_is_lost_on_the_second(monkeypatch):
