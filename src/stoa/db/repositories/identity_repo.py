@@ -35,6 +35,11 @@ class _UpdateTable(Protocol):
     def update_item(self, **kwargs: object) -> object: ...
 
 
+@runtime_checkable
+class _DeleteTable(Protocol):
+    def delete_item(self, **kwargs: object) -> object: ...
+
+
 def _response_mapping(value: object) -> IdentityItem:
     if not isinstance(value, Mapping):
         raise ValueError("malformed identity repository response")
@@ -244,6 +249,148 @@ def record_session_revocation(issuer: str, subject: str, revoked_before: int) ->
     return cutoff
 
 
+# One sign-in, named by the `origin_jti` Cognito puts on every access token the
+# same refresh token mints. Two rows hang off it and they are deliberately in
+# different partitions:
+#
+#   IDENTITY#{issuer}#{subject} / SIGNIN_REVOKED#{origin_jti}
+#       the application-side fact that this sign-in is over. Keyed by what the
+#       token itself carries, so the authorization path can read it without
+#       first resolving a user id, and so it still answers when the binding is
+#       gone.
+#   USER#{user_id} / SIGNIN#{origin_jti}
+#       custody of that sign-in's refresh token, which is the only thing that
+#       lets sign-out call the provider's RevokeToken for one sign-in instead of
+#       signing every device out.
+SIGN_IN_REVOCATION_SK_PREFIX = "SIGNIN_REVOKED#"
+SIGN_IN_SESSION_SK_PREFIX = "SIGNIN#"
+
+# How long a revocation record has to outlive the sign-in it ends. Not the access
+# token's hour: the refresh token held by whoever was signed out can keep minting
+# access tokens carrying the same `origin_jti` for as long as the pool allows,
+# and RevokeToken is best effort - the row is what makes the refusal certain. So
+# the record has to outlast the refresh token, not the access token, or the TTL
+# itself becomes the way back in. This is the pool's 30 days plus a day of slack,
+# and it is the number to raise if that setting is raised.
+SIGN_IN_REVOCATION_TTL_SECONDS = 31 * 24 * 60 * 60
+
+# The refresh token in custody dies with the provider's copy, so the row may not
+# outlive it: a row nobody can act on is only a stored credential.
+SIGN_IN_SESSION_TTL_SECONDS = SIGN_IN_REVOCATION_TTL_SECONDS
+
+
+def _sign_in_identity_key(issuer: str, subject: str, origin_jti: str) -> dict[str, str]:
+    normalized = origin_jti.strip()
+    if not normalized:
+        raise ValueError("origin_jti is required")
+    return {
+        "PK": f"IDENTITY#{issuer_hash(issuer)}#{subject.strip()}",
+        "SK": f"{SIGN_IN_REVOCATION_SK_PREFIX}{normalized}",
+    }
+
+
+def _sign_in_session_key(user_id: str, origin_jti: str) -> dict[str, str]:
+    normalized_user = user_id.strip()
+    normalized_jti = origin_jti.strip()
+    if not normalized_user or not normalized_jti:
+        raise ValueError("user_id and origin_jti are required")
+    return {
+        "PK": f"USER#{normalized_user}",
+        "SK": f"{SIGN_IN_SESSION_SK_PREFIX}{normalized_jti}",
+    }
+
+
+def get_sign_in_revocation(
+    issuer: str, subject: str, origin_jti: str | None
+) -> IdentityItem | None:
+    """Read the record that ends exactly one sign-in.
+
+    A token with no `origin_jti` has no sign-in to look up: it predates the pool
+    emitting one. It is not refused here - the per-account cut-off is what still
+    judges it - so this answers None rather than guessing at a key.
+    """
+    if not origin_jti or not origin_jti.strip():
+        return None
+    response = _get_item(
+        get_table(),
+        Key=_sign_in_identity_key(issuer, subject, origin_jti),
+        ConsistentRead=True,
+    )
+    return _optional_item(response.get("Item"))
+
+
+def record_sign_in_revocation(
+    issuer: str, subject: str, origin_jti: str, expires_at: int
+) -> None:
+    """Write the sign-in's own end, touching no other sign-in of this account.
+
+    Unconditional on purpose: a second sign-out of the same sign-in has to land
+    on the same fact, and there is nothing a later write could say that would be
+    weaker than the earlier one.
+    """
+    ttl = int(expires_at)
+    if ttl <= 0:
+        raise ValueError("session revocation expiry must be positive")
+    _put_item(
+        get_table(),
+        Item={
+            **_sign_in_identity_key(issuer, subject, origin_jti),
+            "entity_type": "auth_sign_in_revocation",
+            "origin_jti": origin_jti.strip(),
+            "expires_at": ttl,
+        },
+    )
+
+
+def put_sign_in_refresh_token(
+    *, user_id: str, origin_jti: str, refresh_token: str, expires_at: int
+) -> None:
+    """Take custody of one sign-in's refresh token so sign-out can revoke it.
+
+    It is stored because the alternative was handing it to the browser, and it is
+    stored under the sign-in rather than the account so that reading it back can
+    never reach another device's token.
+    """
+    token = refresh_token.strip()
+    ttl = int(expires_at)
+    if not token:
+        raise ValueError("refresh token is required")
+    if ttl <= 0:
+        raise ValueError("session expiry must be positive")
+    _put_item(
+        get_table(),
+        Item={
+            **_sign_in_session_key(user_id, origin_jti),
+            "entity_type": "auth_sign_in_session",
+            "origin_jti": origin_jti.strip(),
+            "refresh_token": token,
+            "expires_at": ttl,
+        },
+    )
+
+
+def take_sign_in_refresh_token(user_id: str, origin_jti: str) -> str | None:
+    """Read the sign-in's refresh token and drop the row in the same breath.
+
+    Dropping it is not tidying: once sign-out has the token in hand the row is a
+    stored credential with nothing left to do, and the provider call that follows
+    is the last use it will ever have.
+    """
+    if not user_id or not origin_jti or not origin_jti.strip():
+        return None
+    key = _sign_in_session_key(user_id, origin_jti)
+    table = get_table()
+    response = _get_item(table, Key=key, ConsistentRead=True)
+    item = _optional_item(response.get("Item"))
+    if not item:
+        return None
+    if not isinstance(table, _DeleteTable):
+        raise ValueError("identity repository dependency is unavailable")
+    table.delete_item(Key=key)
+    token = item.get("refresh_token")
+    return token if isinstance(token, str) and token else None
+
+
 def get_current_capability_grants(user_id: str) -> list[IdentityItem]:
     from stoa.db.repositories import capability_repo
 
@@ -270,6 +417,39 @@ class DynamoIdentityRepository:
     ) -> int:
         return await asyncio.to_thread(
             record_session_revocation, issuer, subject, revoked_before
+        )
+
+    async def get_session_revocation(
+        self, issuer: str, subject: str, origin_jti: str | None
+    ) -> IdentityItem | None:
+        return await asyncio.to_thread(
+            get_sign_in_revocation, issuer, subject, origin_jti
+        )
+
+    async def record_sign_in_revocation(
+        self, issuer: str, subject: str, origin_jti: str, expires_at: int
+    ) -> None:
+        await asyncio.to_thread(
+            record_sign_in_revocation, issuer, subject, origin_jti, expires_at
+        )
+
+    async def put_sign_in_refresh_token(
+        self, user_id: str, origin_jti: str, refresh_token: str, expires_at: int
+    ) -> None:
+        await asyncio.to_thread(
+            lambda: put_sign_in_refresh_token(
+                user_id=user_id,
+                origin_jti=origin_jti,
+                refresh_token=refresh_token,
+                expires_at=expires_at,
+            )
+        )
+
+    async def take_sign_in_refresh_token(
+        self, user_id: str, origin_jti: str
+    ) -> str | None:
+        return await asyncio.to_thread(
+            take_sign_in_refresh_token, user_id, origin_jti
         )
 
 

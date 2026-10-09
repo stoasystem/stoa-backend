@@ -311,6 +311,10 @@ def test_creating_a_conversation_declares_the_identity_refusal_made_before_it(
     from stoa.security.tokens import VerifiedAccessToken
 
     class _Repository:
+        async def get_session_revocation(self, _issuer, _subject, _origin_jti):
+            """No sign-in of this fixture was ever signed out."""
+            return None
+
         async def get_binding(self, issuer: str, subject: str) -> None:
             if outage:
                 raise TimeoutError("identity store unavailable")

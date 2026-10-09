@@ -33,6 +33,10 @@ class FakeIdentityRepository:
         self.error = error
         self.reads = []
 
+    async def get_session_revocation(self, _issuer, _subject, _origin_jti):
+        """No sign-in of this fixture was ever signed out."""
+        return None
+
     async def get_binding(self, issuer, subject):
         self.reads.append(("binding", issuer, subject))
         if self.error:
