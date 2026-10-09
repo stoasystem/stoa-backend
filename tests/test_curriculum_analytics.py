@@ -178,6 +178,9 @@ def test_lesson_completion_records_usage_ledger(monkeypatch):
     monkeypatch.setattr(practice.practice_repo, "mark_lesson_completed", lambda *args, **kwargs: None)
     monkeypatch.setattr(practice.practice_repo, "get_lessons", lambda topic_id=None: [dict(lesson)])
     monkeypatch.setattr(practice.practice_repo, "get_progress", lambda user_id: [{"lesson_id": "lesson-1", "status": "completed"}])
+    # Completion asks whether the lesson's unit is locked (#83); this one states
+    # no prerequisite, so the question is settled without a star map.
+    monkeypatch.setattr(practice.curriculum_service, "get_prerequisites", lambda subject_id: {})
     monkeypatch.setattr(
         practice.usage_ledger_service,
         "record_usage_event",

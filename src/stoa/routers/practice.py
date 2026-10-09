@@ -6,9 +6,9 @@ Student progress is stored under PK=PROGRESS#{user_id}.
 """
 import logging
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -52,6 +52,7 @@ from stoa.services import (
     curriculum_analytics_service,
     curriculum_service,
     entitlement_service,
+    lesson_quiz_service,
     locale_service,
     usage_ledger_service,
 )
@@ -85,6 +86,24 @@ class PracticeHintRequest(BaseModel):
         min_length=1,
         max_length=64,
         pattern=r"^[A-Za-z0-9._~-]+$",
+    )
+
+
+class LessonQuizStartRequest(BaseModel):
+    """Which of the two quizzes the student is taking (#92)."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    kind: Literal["skip", "testOut"] = "skip"
+
+
+class LessonCompletionRequest(BaseModel):
+    """The credential a passed quiz issued, when that is how the lesson is finished."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    quiz_credential: str | None = Field(
+        default=None, alias="quizCredential", max_length=200
     )
 
 
@@ -840,37 +859,290 @@ async def get_lesson(
     return practice_projection_service.build_lesson_preview(lesson, challenges, st, locale=_actor_locale(actor))
 
 
+def _quiz_conflict(code: str, message: str, **extra: Any) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={"code": code, "message": message, **extra},
+    )
+
+
+def _refuse_locked_lesson(student_id: str, lesson: Mapping[str, Any]) -> None:
+    """Keep a lesson behind an unlit prerequisite shut (#83 step 1)."""
+    if lesson_quiz_service.lesson_is_locked(student_id, lesson):
+        raise _quiz_conflict(
+            "lesson_locked",
+            "Finish what comes before this knowledge point first.",
+        )
+
+
+def _spend_quiz_credential(student_id: str, lesson_id: str, credential: str) -> None:
+    """Take one credential out of circulation, or refuse the completion."""
+    stored = practice_repo.get_quiz_credential(student_id, credential)
+    if not stored or str(stored.get("lesson_id") or "") != lesson_id:
+        raise _quiz_conflict(
+            "lesson_quiz_credential_invalid",
+            "This quiz credential cannot complete this lesson.",
+        )
+    if _as_int(stored.get("expires_at")) <= int(datetime.now(timezone.utc).timestamp()):
+        practice_repo.consume_quiz_credential(student_id, credential, lesson_id=lesson_id)
+        raise _quiz_conflict(
+            "lesson_quiz_credential_expired",
+            "This quiz credential has expired. Take the quiz again.",
+        )
+    if not practice_repo.consume_quiz_credential(student_id, credential, lesson_id=lesson_id):
+        raise _quiz_conflict(
+            "lesson_quiz_credential_invalid",
+            "This quiz credential cannot complete this lesson.",
+        )
+
+
+def _quiz_exercise_preview(challenge_id: str) -> dict[str, Any] | None:
+    challenge = practice_repo.get_challenge(challenge_id)
+    if not challenge:
+        return None
+    return practice_projection_service.build_challenge_preview(challenge)
+
+
+def _quiz_view(
+    session: Mapping[str, Any],
+    *,
+    queue: list[str],
+    mistakes: int,
+    quiz_status: str,
+) -> dict[str, Any]:
+    exercise = (
+        _quiz_exercise_preview(queue[0])
+        if queue and quiz_status == lesson_quiz_service.IN_PROGRESS
+        else None
+    )
+    return {
+        "quizId": str(session.get("quiz_id") or ""),
+        "lessonId": str(session.get("lesson_id") or ""),
+        "kind": str(session.get("kind") or lesson_quiz_service.SKIP_QUIZ),
+        "status": quiz_status,
+        "heartsLeft": lesson_quiz_service.hearts_left(mistakes),
+        "mistakesAllowed": lesson_quiz_service.QUIZ_MAX_MISTAKES,
+        "remaining": len(queue),
+        "expiresAt": str(session.get("expires_at_iso") or ""),
+        "exercise": exercise,
+    }
+
+
+@router.post(
+    "/lessons/{lesson_id}/quiz",
+    responses={
+        status.HTTP_409_CONFLICT: {
+            "description": (
+                "`lesson_locked`: the lesson's knowledge point still has an unlit "
+                "prerequisite; `lesson_quiz_unavailable`: the lesson has no exercise "
+                "to draw a quiz from."
+            )
+        }
+    },
+)
+async def start_lesson_quiz(
+    lesson_id: str,
+    body: LessonQuizStartRequest | None = None,
+    actor: Actor = Depends(_practice_update),
+    authorized_lesson: AuthorizedResource = Depends(_authorized_lesson_update),
+):
+    """Draw the short quiz that can complete this lesson (#92).
+
+    The exercises are drawn here and kept in a row of this student's own, so
+    what the quiz asks and how many mistakes are left are facts the client
+    cannot restate. Nothing in the answer-free projection carries the answer.
+    """
+    lesson = dict(authorized_lesson.value)
+    _refuse_locked_lesson(actor.user_id, lesson)
+
+    kind = body.kind if body else lesson_quiz_service.SKIP_QUIZ
+    exercise_ids = [
+        str(challenge.get("challenge_id"))
+        for challenge in practice_repo.get_challenges(lesson_id)
+        if challenge.get("challenge_id")
+    ]
+    queue = lesson_quiz_service.compose_quiz(
+        kind,
+        exercise_ids=exercise_ids,
+        answered_right=practice_repo.challenges_answered_right(actor.user_id, lesson_id),
+    )
+    if not queue:
+        raise _quiz_conflict(
+            "lesson_quiz_unavailable",
+            "This lesson has no exercise a quiz could ask.",
+        )
+
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(seconds=lesson_quiz_service.QUIZ_SESSION_TTL_SECONDS)
+    quiz_id = lesson_quiz_service.new_token()
+    session = practice_repo.put_quiz_session(
+        actor.user_id,
+        quiz_id=quiz_id,
+        lesson_id=lesson_id,
+        kind=kind,
+        queue=queue,
+        expires_at=int(expires.timestamp()),
+        expires_at_iso=expires.isoformat(),
+        created_at=now.isoformat(),
+    )
+    return _quiz_view(
+        session, queue=queue, mistakes=0, quiz_status=lesson_quiz_service.IN_PROGRESS
+    )
+
+
+@router.post(
+    "/lessons/{lesson_id}/quiz/{quiz_id}/answer",
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "description": "`lesson_quiz_not_found`: this student has no such open quiz."
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": (
+                "`lesson_quiz_expired`: the quiz is past its expiry; "
+                "`lesson_quiz_finished`: it was already passed or lost; "
+                "`lesson_quiz_unavailable`: the exercise it asked is gone."
+            )
+        },
+    },
+)
+async def answer_lesson_quiz(
+    lesson_id: str,
+    quiz_id: str,
+    body: PracticeAnswerSubmission,
+    actor: Actor = Depends(_practice_update),
+    authorized_lesson: AuthorizedResource = Depends(_authorized_lesson_update),
+    correlation_id: str = Depends(get_request_correlation_id),
+):
+    """Judge one quiz answer. No hint, no Ask, no skip - and no second slip.
+
+    A wrong answer costs a heart and sends the exercise to the back of the
+    queue; the second one loses the quiz. Quiz answers are not recorded as
+    attempts: passing completes the lesson and nothing more, so a knowledge
+    point still lights only on exercises answered right in the ordinary way (#9).
+    """
+    session = practice_repo.get_quiz_session(actor.user_id, quiz_id)
+    if not session or str(session.get("lesson_id") or "") != lesson_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "lesson_quiz_not_found",
+                "message": "This quiz is not open.",
+            },
+        )
+    if str(session.get("status") or "") != lesson_quiz_service.IN_PROGRESS:
+        raise _quiz_conflict("lesson_quiz_finished", "This quiz is already over.")
+    if _as_int(session.get("expires_at")) <= int(datetime.now(timezone.utc).timestamp()):
+        raise _quiz_conflict("lesson_quiz_expired", "This quiz has expired. Start a new one.")
+
+    queue = [str(item) for item in (session.get("queue") or [])]
+    if not queue:
+        raise _quiz_conflict("lesson_quiz_finished", "This quiz is already over.")
+    challenge = practice_repo.get_challenge(queue[0])
+    if not challenge:
+        raise _quiz_conflict(
+            "lesson_quiz_unavailable",
+            "This quiz asked an exercise that is no longer available.",
+        )
+
+    try:
+        student_answer = practice_projection_service.normalize_submitted_answer(body.answer)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "practice_answer_invalid",
+                "message": "Your answer is not supported or is too large.",
+                "correlationId": correlation_id,
+            },
+        ) from error
+
+    correct = lesson_quiz_service.judge_answer(
+        student_answer, challenge.get("correct_answer", "")
+    )
+    mistakes = _as_int(session.get("mistakes"))
+    asked, queue = queue[0], queue[1:]
+    if not correct:
+        mistakes += 1
+        queue = [*queue, asked]
+
+    if lesson_quiz_service.quiz_lost(mistakes):
+        quiz_status, queue = lesson_quiz_service.FAILED, []
+    elif not queue:
+        quiz_status = lesson_quiz_service.PASSED
+    else:
+        quiz_status = lesson_quiz_service.IN_PROGRESS
+
+    practice_repo.update_quiz_session(
+        actor.user_id, quiz_id, queue=queue, mistakes=mistakes, status=quiz_status
+    )
+
+    view = _quiz_view(session, queue=queue, mistakes=mistakes, quiz_status=quiz_status)
+    view["correct"] = correct
+    view["credential"] = None
+    view["credentialExpiresAt"] = None
+    if quiz_status == lesson_quiz_service.PASSED:
+        expires = datetime.now(timezone.utc) + timedelta(
+            seconds=lesson_quiz_service.QUIZ_CREDENTIAL_TTL_SECONDS
+        )
+        credential = lesson_quiz_service.new_token()
+        practice_repo.put_quiz_credential(
+            actor.user_id,
+            credential_id=credential,
+            lesson_id=lesson_id,
+            quiz_id=quiz_id,
+            expires_at=int(expires.timestamp()),
+            expires_at_iso=expires.isoformat(),
+        )
+        view["credential"] = credential
+        view["credentialExpiresAt"] = expires.isoformat()
+    return view
+
+
 @router.post(
     "/lessons/{lesson_id}/complete",
     responses={
         status.HTTP_409_CONFLICT: {
             "description": (
-                "`lesson_exercises_unanswered`: an exercise of the lesson has never been "
-                "answered right; `unansweredCount` says how many."
+                "`lesson_locked`: the lesson's knowledge point still has an unlit "
+                "prerequisite; `lesson_exercises_unanswered`: an exercise of the lesson "
+                "has never been answered right and no quiz credential was sent, "
+                "`unansweredCount` says how many; `lesson_quiz_credential_invalid`: the "
+                "credential is unknown, already spent, or belongs to another student or "
+                "lesson; `lesson_quiz_credential_expired`: the credential is past its "
+                "expiry."
             )
         }
     },
 )
 async def complete_lesson(
     lesson_id: str,
+    body: LessonCompletionRequest | None = None,
     actor: Actor = Depends(_practice_update),
     authorized_lesson: AuthorizedResource = Depends(_authorized_lesson_update),
 ):
     lesson = dict(authorized_lesson.value)
+    _refuse_locked_lesson(actor.user_id, lesson)
 
-    # A lesson is complete once every exercise in it has been answered right at
-    # least once (#83). The frontend held to this alone; any client could
-    # mark any lesson complete. A lesson without exercises has nothing to answer.
-    unanswered = practice_repo.unanswered_challenge_ids(actor.user_id, lesson_id)
-    if unanswered:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "code": "lesson_exercises_unanswered",
-                "message": "Answer every exercise of this lesson right before completing it.",
-                "unansweredCount": len(unanswered),
-            },
-        )
+    credential = (body.quiz_credential or "").strip() if body else ""
+    if credential:
+        # Either road to completion, never both: a client that presents a
+        # credential is judged on that credential, so a forged one cannot be
+        # waved through by exercises that happened to be answered anyway.
+        _spend_quiz_credential(actor.user_id, lesson_id, credential)
+    else:
+        # A lesson is complete once every exercise in it has been answered right at
+        # least once (#83). The frontend held to this alone; any client could
+        # mark any lesson complete. A lesson without exercises has nothing to answer.
+        unanswered = practice_repo.unanswered_challenge_ids(actor.user_id, lesson_id)
+        if unanswered:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "lesson_exercises_unanswered",
+                    "message": "Answer every exercise of this lesson right before completing it.",
+                    "unansweredCount": len(unanswered),
+                },
+            )
 
     progress_row = practice_repo.mark_lesson_completed(actor.user_id, lesson)
     curriculum_analytics_service.record_lesson_completed(student_id=actor.user_id, lesson=lesson)
@@ -947,14 +1219,7 @@ async def submit_answer(
             },
         ) from error
     correct_answer = challenge.get("correct_answer", "")
-
-    # Normalise for comparison
-    def _norm(v: Any) -> str:
-        if isinstance(v, list):
-            return "|".join(str(x).strip().lower() for x in v)
-        return str(v).strip().lower()
-
-    correct = _norm(student_answer) == _norm(correct_answer)
+    correct = lesson_quiz_service.judge_answer(student_answer, correct_answer)
 
     versioned_challenge = practice_repo.version_challenge(challenge)
     lesson_id = str(versioned_challenge.get("lesson_id") or "")

@@ -4667,6 +4667,41 @@
         "title": "LegacyAnswerState",
         "type": "string"
       },
+      "LessonCompletionRequest": {
+        "description": "The credential a passed quiz issued, when that is how the lesson is finished.",
+        "properties": {
+          "quizCredential": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quizcredential"
+          }
+        },
+        "title": "LessonCompletionRequest",
+        "type": "object"
+      },
+      "LessonQuizStartRequest": {
+        "description": "Which of the two quizzes the student is taking (#92).",
+        "properties": {
+          "kind": {
+            "default": "skip",
+            "enum": [
+              "skip",
+              "testOut"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "title": "LessonQuizStartRequest",
+        "type": "object"
+      },
       "LitAcknowledgement": {
         "description": "The knowledge points whose lighting has now been shown to the student.",
         "properties": {
@@ -27896,6 +27931,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LessonCompletionRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -27916,7 +27968,7 @@
             "description": "No usable bearer token"
           },
           "409": {
-            "description": "`lesson_exercises_unanswered`: an exercise of the lesson has never been answered right; `unansweredCount` says how many."
+            "description": "`lesson_locked`: the lesson's knowledge point still has an unlit prerequisite; `lesson_exercises_unanswered`: an exercise of the lesson has never been answered right and no quiz credential was sent, `unansweredCount` says how many; `lesson_quiz_credential_invalid`: the credential is unknown, already spent, or belongs to another student or lesson; `lesson_quiz_credential_expired`: the credential is past its expiry."
           },
           "422": {
             "content": {
@@ -27935,6 +27987,187 @@
           }
         ],
         "summary": "Complete Lesson",
+        "tags": [
+          "practice"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "update",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "practice"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": []
+        }
+      }
+    },
+    "/practice/lessons/{lesson_id}/quiz": {
+      "post": {
+        "description": "Draw the short quiz that can complete this lesson (#92).\n\nThe exercises are drawn here and kept in a row of this student's own, so\nwhat the quiz asks and how many mistakes are left are facts the client\ncannot restate. Nothing in the answer-free projection carries the answer.",
+        "operationId": "start_lesson_quiz_practice_lessons__lesson_id__quiz_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lesson_id",
+            "required": true,
+            "schema": {
+              "title": "Lesson Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LessonQuizStartRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "409": {
+            "description": "`lesson_locked`: the lesson's knowledge point still has an unlit prerequisite; `lesson_quiz_unavailable`: the lesson has no exercise to draw a quiz from."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Lesson Quiz",
+        "tags": [
+          "practice"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "update",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "practice"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": []
+        }
+      }
+    },
+    "/practice/lessons/{lesson_id}/quiz/{quiz_id}/answer": {
+      "post": {
+        "description": "Judge one quiz answer. No hint, no Ask, no skip - and no second slip.\n\nA wrong answer costs a heart and sends the exercise to the back of the\nqueue; the second one loses the quiz. Quiz answers are not recorded as\nattempts: passing completes the lesson and nothing more, so a knowledge\npoint still lights only on exercises answered right in the ordinary way (#9).",
+        "operationId": "answer_lesson_quiz_practice_lessons__lesson_id__quiz__quiz_id__answer_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lesson_id",
+            "required": true,
+            "schema": {
+              "title": "Lesson Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "quiz_id",
+            "required": true,
+            "schema": {
+              "title": "Quiz Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PracticeAnswerSubmission"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "404": {
+            "description": "`lesson_quiz_not_found`: this student has no such open quiz."
+          },
+          "409": {
+            "description": "`lesson_quiz_expired`: the quiz is past its expiry; `lesson_quiz_finished`: it was already passed or lost; `lesson_quiz_unavailable`: the exercise it asked is gone."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Answer Lesson Quiz",
         "tags": [
           "practice"
         ],

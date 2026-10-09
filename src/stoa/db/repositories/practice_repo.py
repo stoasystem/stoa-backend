@@ -36,9 +36,19 @@ _POINTER_FIELDS = {
 }
 _MAX_CHALLENGE_PAGES = 1000
 
-PRACTICE_PRIVATE_ROW_REGISTRY = frozenset({"progress", "attempt", "legacy_mistake", "usage"})
+PRACTICE_PRIVATE_ROW_REGISTRY = frozenset(
+    {"progress", "attempt", "legacy_mistake", "usage", "quiz_session", "quiz_credential"}
+)
 PRACTICE_WRITER_REGISTRY = frozenset(
-    {"mark_lesson_completed", "put_attempt", "record_attempt", "usage_counter"}
+    {
+        "mark_lesson_completed",
+        "put_attempt",
+        "record_attempt",
+        "usage_counter",
+        "put_quiz_session",
+        "update_quiz_session",
+        "put_quiz_credential",
+    }
 )
 PRACTICE_PRIVATE_FIELDS = frozenset(
     {
@@ -920,6 +930,7 @@ def _practice_owned(item: Mapping[str, Any], owner_id: str) -> bool:
         f"ACTIVITY#{owner_id}",
         f"USAGE#{owner_id}",
         f"USAGE_LEDGER#{owner_id}",
+        f"QUIZ#{owner_id}",
     }:
         return True
     if owner_id not in {
@@ -1158,3 +1169,188 @@ def acknowledge_lit_units(
             continue
         confirmed.append(unit_id)
     return confirmed
+
+
+# ── Lesson quiz sessions and completion credentials (#92) ───────────────────
+
+QUIZ_SESSION_PREFIX = "SESSION#"
+QUIZ_CREDENTIAL_PREFIX = "CREDENTIAL#"
+QUIZ_SESSION_ENTITY = "practice_quiz_session"
+QUIZ_CREDENTIAL_ENTITY = "practice_quiz_credential"
+
+
+def quiz_partition(student_id: str) -> str:
+    """One partition per student for everything a lesson quiz writes.
+
+    The key is built from the authenticated student alone, so a quiz id or a
+    credential issued to somebody else addresses a row that is not in this
+    partition and is simply not found.
+    """
+    return f"QUIZ#{student_id}"
+
+
+def _quiz_write(
+    student_id: str,
+    item: dict[str, Any],
+    *,
+    account_fence_generation: int | None,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    target = table or get_table()
+    generation = _write_generation(student_id, account_fence_generation, target)
+    operations = build_practice_write_transaction(
+        item=item, owner_id=student_id, generation=generation
+    )
+    if _atomic_table(target):
+        account_deletion_repo.transact(operations, table=target)
+    else:
+        _put_item(target, Item=operations[1]["Put"]["Item"])
+    return dict(operations[1]["Put"]["Item"])
+
+
+def put_quiz_session(
+    student_id: str,
+    *,
+    quiz_id: str,
+    lesson_id: str,
+    kind: str,
+    queue: Sequence[str],
+    expires_at: int,
+    expires_at_iso: str,
+    created_at: str | None = None,
+    account_fence_generation: int | None = None,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    item = {
+        "PK": quiz_partition(student_id),
+        "SK": f"{QUIZ_SESSION_PREFIX}{quiz_id}",
+        "entity_type": QUIZ_SESSION_ENTITY,
+        "student_id": student_id,
+        "quiz_id": quiz_id,
+        "lesson_id": lesson_id,
+        "kind": kind,
+        "queue": list(queue),
+        "mistakes": 0,
+        "status": "inProgress",
+        "created_at": created_at or datetime.now(timezone.utc).isoformat(),
+        "expires_at": expires_at,
+        "expires_at_iso": expires_at_iso,
+    }
+    return _quiz_write(
+        student_id, item, account_fence_generation=account_fence_generation, table=table
+    )
+
+
+def get_quiz_session(student_id: str, quiz_id: str, *, table: Any | None = None) -> dict | None:
+    """Read one quiz of this student, strongly: the answer just before it wrote."""
+    target = table or get_table()
+    response = _get_item(
+        target,
+        Key={"PK": quiz_partition(student_id), "SK": f"{QUIZ_SESSION_PREFIX}{quiz_id}"},
+        ConsistentRead=True,
+    )
+    return _optional_item(response.get("Item"))
+
+
+def update_quiz_session(
+    student_id: str,
+    quiz_id: str,
+    *,
+    queue: Sequence[str],
+    mistakes: int,
+    status: str,
+    account_fence_generation: int | None = None,
+    table: Any | None = None,
+) -> None:
+    target = table or get_table()
+    generation = _write_generation(student_id, account_fence_generation, target)
+    operations = build_practice_write_transaction(
+        item={
+            "PK": quiz_partition(student_id),
+            "SK": f"{QUIZ_SESSION_PREFIX}{quiz_id}",
+        },
+        owner_id=student_id,
+        generation=generation,
+        mode="update",
+        updates={"queue": list(queue), "mistakes": int(mistakes), "status": status},
+    )
+    if _atomic_table(target):
+        account_deletion_repo.transact(operations, table=target)
+    else:
+        target.update_item(**operations[1]["Update"])
+
+
+def put_quiz_credential(
+    student_id: str,
+    *,
+    credential_id: str,
+    lesson_id: str,
+    quiz_id: str,
+    expires_at: int,
+    expires_at_iso: str,
+    created_at: str | None = None,
+    account_fence_generation: int | None = None,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    item = {
+        "PK": quiz_partition(student_id),
+        "SK": f"{QUIZ_CREDENTIAL_PREFIX}{credential_id}",
+        "entity_type": QUIZ_CREDENTIAL_ENTITY,
+        "student_id": student_id,
+        "lesson_id": lesson_id,
+        "quiz_id": quiz_id,
+        "created_at": created_at or datetime.now(timezone.utc).isoformat(),
+        "expires_at": expires_at,
+        "expires_at_iso": expires_at_iso,
+    }
+    return _quiz_write(
+        student_id, item, account_fence_generation=account_fence_generation, table=table
+    )
+
+
+def get_quiz_credential(
+    student_id: str, credential_id: str, *, table: Any | None = None
+) -> dict | None:
+    target = table or get_table()
+    response = _get_item(
+        target,
+        Key={
+            "PK": quiz_partition(student_id),
+            "SK": f"{QUIZ_CREDENTIAL_PREFIX}{credential_id}",
+        },
+        ConsistentRead=True,
+    )
+    return _optional_item(response.get("Item"))
+
+
+def consume_quiz_credential(
+    student_id: str,
+    credential_id: str,
+    *,
+    lesson_id: str,
+    table: Any | None = None,
+) -> bool:
+    """Spend the credential once, and say whether this caller was the one.
+
+    One conditional delete is the whole of "single use": DynamoDB settles the
+    condition and the removal together, so two requests racing with the same
+    credential cannot both be told yes. The condition also names the student
+    and the lesson, so a row reached by any route other than this student's
+    own partition is still not spent here.
+    """
+    target = table or get_table()
+    try:
+        target.delete_item(
+            Key={
+                "PK": quiz_partition(student_id),
+                "SK": f"{QUIZ_CREDENTIAL_PREFIX}{credential_id}",
+            },
+            ConditionExpression=(
+                "attribute_exists(PK) AND attribute_exists(SK) "
+                "AND student_id=:student AND lesson_id=:lesson"
+            ),
+            ExpressionAttributeValues={":student": student_id, ":lesson": lesson_id},
+        )
+    except Exception:  # noqa: BLE001
+        return False
+    return True
