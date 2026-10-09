@@ -12,7 +12,7 @@ from stoa.routers import practice
 from stoa.security.authorization import AuthorizationFacts
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.route_authorization import get_authorization_fact_repository
-from stoa.services import knowledge_mastery_service, lesson_quiz_service
+from stoa.services import knowledge_mastery_service, lesson_quiz_service, usage_ledger_service
 
 
 LESSON = {
@@ -507,3 +507,106 @@ def test_a_quiz_credential_is_bound_to_the_student_in_the_row_it_is_stored_as(mo
     assert row["student_id"] == "student-1"
     assert row["lesson_id"] == "lesson-1"
     assert int(row["expires_at"]) > 0
+
+
+# ── what the independent audit found (#92) ─────────────────────────────────
+
+
+def test_an_exercise_the_catalog_cannot_resolve_is_dropped_rather_than_asked(monkeypatch):
+    """A paper used to stop dead on one unresolvable exercise.
+
+    The queue was left untouched, so the retry, and every new paper, asked the
+    same unanswerable question — and `complete` was shut for the same reason.
+    Both ways out were closed at once.
+    """
+    exercises = [_exercise(index) for index in range(3)]
+    _world(monkeypatch, exercises=exercises)
+    # The catalog lists all three; the first one does not resolve. The paper is
+    # shuffled, so the order is fixed here rather than hoped for — the same
+    # trap the audit found in the answer-leak test.
+    monkeypatch.setattr(
+        practice.lesson_quiz_service, "compose_quiz", lambda *_a, **_k: ["c-0", "c-1", "c-2"]
+    )
+    resolvable = {item["challenge_id"]: item for item in exercises[1:]}
+    monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda item_id: resolvable.get(item_id))
+    client = _client()
+    quiz_id = client.post("/practice/lessons/lesson-1/quiz", json={"kind": "skip"}).json()["quizId"]
+
+    answered = client.post(
+        f"/practice/lessons/lesson-1/quiz/{quiz_id}/answer", json={"answer": "answer-1"}
+    )
+
+    # c-0 is gone from the paper and c-1 was asked and answered right.
+    assert answered.status_code == 200, answered.text
+    assert answered.json()["correct"] is True
+    assert answered.json()["status"] == lesson_quiz_service.IN_PROGRESS
+
+
+def test_a_paper_of_nothing_but_unresolvable_exercises_ends_instead_of_hanging(monkeypatch):
+    exercises = [_exercise(index) for index in range(3)]
+    _world(monkeypatch, exercises=exercises)
+    monkeypatch.setattr(practice.practice_repo, "get_challenge", lambda _item_id: None)
+    client = _client()
+    quiz_id = client.post("/practice/lessons/lesson-1/quiz", json={"kind": "skip"}).json()["quizId"]
+
+    first = client.post(f"/practice/lessons/lesson-1/quiz/{quiz_id}/answer", json={"answer": "a"})
+    again = client.post(f"/practice/lessons/lesson-1/quiz/{quiz_id}/answer", json={"answer": "a"})
+
+    assert first.status_code == 409
+    assert first.json()["detail"]["code"] == "lesson_quiz_unavailable"
+    # Over, rather than open for ever on a question nobody can answer.
+    assert again.json()["detail"]["code"] == "lesson_quiz_finished"
+
+
+def test_a_credential_that_names_no_quiz_completes_nothing(monkeypatch):
+    """`quiz_id` was written and never read, which made it decoration.
+
+    A credential is earned by one paper; one that cannot say which paper is
+    not a credential, it is a bearer token for a lesson.
+    """
+    exercises = [_exercise(0)]
+    _world(monkeypatch, exercises=exercises)
+    client = _client()
+    quiz_id = client.post("/practice/lessons/lesson-1/quiz", json={"kind": "skip"}).json()["quizId"]
+    passed = client.post(
+        f"/practice/lessons/lesson-1/quiz/{quiz_id}/answer", json={"answer": "answer-0"}
+    ).json()
+    stored = practice.practice_repo.get_quiz_credential("student-1", passed["credential"])
+    assert stored
+    nameless = "credential-with-no-quiz"
+    practice.practice_repo.put_quiz_credential(
+        "student-1",
+        credential_id=nameless,
+        lesson_id="lesson-1",
+        quiz_id="",
+        expires_at=int(stored["expires_at"]),
+        expires_at_iso=str(stored["expires_at_iso"]),
+    )
+
+    done = client.post("/practice/lessons/lesson-1/complete", json={"quizCredential": nameless})
+
+    assert done.status_code == 409
+    assert done.json()["detail"]["code"] == "lesson_quiz_credential_invalid"
+
+
+def test_answering_in_a_quiz_leaves_a_trace_in_the_ledger(monkeypatch):
+    """It was the one answering route that recorded nothing.
+
+    A reader's quizzes were invisible to the ledger the parent's and the
+    teacher's reports are built from.
+    """
+    recorded: list[str] = []
+    _world(monkeypatch, exercises=[_exercise(0)])
+    # After `_world`, which silences the ledger for every other test here.
+    monkeypatch.setattr(
+        practice, "_record_practice_usage", lambda **kwargs: recorded.append(str(kwargs["action"]))
+    )
+    client = _client()
+    quiz_id = client.post("/practice/lessons/lesson-1/quiz", json={"kind": "skip"}).json()["quizId"]
+
+    answered = client.post(
+        f"/practice/lessons/lesson-1/quiz/{quiz_id}/answer", json={"answer": "answer-0"}
+    )
+
+    assert answered.status_code == 200, answered.text
+    assert usage_ledger_service.PRACTICE_QUIZ_ANSWER_ACTION in recorded

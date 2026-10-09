@@ -119,6 +119,12 @@ def lesson_is_locked(student_id: str, lesson: Mapping[str, Any]) -> bool:
     settled from the prerequisite graph alone rather than by building the whole
     star map - which reads every lesson's exercises and every attempt - on each
     completion.
+
+    That short cut reads a different table from the map: the graph comes from
+    the units of one subject, the map from the catalog's topics. They agree on
+    real data and disagree on broken data - a lesson row with no subject, or a
+    unit the graph does not carry, is never locked here while the map may draw
+    it locked (independent audit of #92).
     """
     unit_id = str(lesson.get("unit_id") or "")
     if not unit_id:

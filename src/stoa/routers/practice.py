@@ -878,6 +878,11 @@ def _refuse_locked_lesson(student_id: str, lesson: Mapping[str, Any]) -> None:
 def _spend_quiz_credential(student_id: str, lesson_id: str, credential: str) -> None:
     """Take one credential out of circulation, or refuse the completion."""
     stored = practice_repo.get_quiz_credential(student_id, credential)
+    # The quiz it was issued for has to be the one it names: without this the
+    # field is decoration, and a credential is a bearer token for a lesson
+    # rather than for the paper that earned it.
+    if stored and not str(stored.get("quiz_id") or ""):
+        stored = None
     if not stored or str(stored.get("lesson_id") or "") != lesson_id:
         raise _quiz_conflict(
             "lesson_quiz_credential_invalid",
@@ -1037,8 +1042,26 @@ async def answer_lesson_quiz(
     queue = [str(item) for item in (session.get("queue") or [])]
     if not queue:
         raise _quiz_conflict("lesson_quiz_finished", "This quiz is already over.")
-    challenge = practice_repo.get_challenge(queue[0])
+    # An exercise the catalog lists but cannot resolve used to end here with
+    # the queue untouched, so every retry and every new paper asked the same
+    # unanswerable question: the quiz and `complete` were both shut, with no
+    # way out. It is dropped from the paper instead, and the quiz goes on
+    # with what is left (independent audit of #92).
+    challenge = None
+    while queue:
+        challenge = practice_repo.get_challenge(queue[0])
+        if challenge:
+            break
+        dropped, queue = queue[0], queue[1:]
+        logger.warning("Quiz dropped an exercise it could not resolve", extra={"challenge_id": dropped})
     if not challenge:
+        practice_repo.update_quiz_session(
+            actor.user_id,
+            quiz_id,
+            queue=[],
+            mistakes=_as_int(session.get("mistakes")),
+            status=lesson_quiz_service.FAILED,
+        )
         raise _quiz_conflict(
             "lesson_quiz_unavailable",
             "This quiz asked an exercise that is no longer available.",
@@ -1074,6 +1097,18 @@ async def answer_lesson_quiz(
 
     practice_repo.update_quiz_session(
         actor.user_id, quiz_id, queue=queue, mistakes=mistakes, status=quiz_status
+    )
+
+    # Answering in a quiz is practice too. It was the one answering route that
+    # left no trace, so a reader's quizzes were invisible to the ledger a
+    # parent's and a teacher's reports are built from, and nothing counted
+    # how often a paper was taken (independent audit of #92).
+    _record_practice_usage(
+        student_id=actor.user_id,
+        action=usage_ledger_service.PRACTICE_QUIZ_ANSWER_ACTION,
+        resource_id=lesson_id,
+        metadata={"quizId": quiz_id, "correct": correct, "status": quiz_status},
+        account_fence_generation=None,
     )
 
     view = _quiz_view(session, queue=queue, mistakes=mistakes, quiz_status=quiz_status)
