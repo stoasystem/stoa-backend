@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 from enum import StrEnum
 import hashlib
 import json
@@ -395,13 +396,27 @@ def build_student_quote_block(quote: Mapping[str, Any]) -> str:
 
 
 def _escaped_tree(value: Any) -> Any:
+    """Escape every string and make every value something `json.dumps` accepts.
+
+    The generation worker reads this context back out of DynamoDB, where the
+    resource interface returns every stored number as `Decimal`: a count that
+    went in as `0` comes back as `Decimal('0')`, and serialising it raises. A
+    block that cannot be built fails the whole answer, so anything else
+    unexpected is written as its text rather than allowed to raise here.
+    """
+    if isinstance(value, bool) or value is None:
+        return value
     if isinstance(value, str):
         return _escape_fenced(value)
+    if isinstance(value, Decimal):
+        return int(value) if value == value.to_integral_value() else float(value)
+    if isinstance(value, (int, float)):
+        return value
     if isinstance(value, Mapping):
         return {str(key): _escaped_tree(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, (list, tuple, set, frozenset)):
         return [_escaped_tree(item) for item in value]
-    return value
+    return _escape_fenced(str(value))
 
 
 def build_practice_context_block(context: Mapping[str, Any]) -> str:
