@@ -293,3 +293,120 @@ def test_the_recommendation_follows_the_chapter_order_not_the_spelling_of_its_id
     assert [star["unitId"] for star in result["stars"] if star["recommendation"]] == [
         "gleichungen-u1"
     ]
+
+
+# ── a subject the catalog does not have (#124) ─────────────────────────────
+
+
+FULL_CATALOG = {
+    "subjects": [{"id": "math", "name": "Mathematik", "order": 0}],
+    "topics": [{"id": "t1", "subjectId": "math", "title": "Brüche", "order": 0}],
+    "units": [{"id": "u1", "subjectId": "math", "topicId": "t1", "title": "Kürzen", "order": 0}],
+    "lessons": [],
+    # What the curriculum says it teaches, whether or not content exists yet.
+    "rolloutSubjects": ["english", "german", "math", "physics"],
+}
+
+
+def wire(monkeypatch, *, enrolled: set[str] = frozenset({"math"})) -> None:
+    """`knowledge_map` over a fixed catalog, with every read of its own stubbed."""
+    from stoa.services import curriculum_service, knowledge_mastery_service
+
+    monkeypatch.setattr(curriculum_service, "list_catalog", lambda **_: FULL_CATALOG)
+    monkeypatch.setattr(
+        knowledge_mastery_service,
+        "unit_states",
+        lambda *a, **k: {"u1": judged("u1", mastery.LearningState.READY)},
+    )
+    monkeypatch.setattr(knowledge_mastery_service, "skill_states", lambda *a, **k: {})
+    monkeypatch.setattr(curriculum_service, "get_progress_summary", lambda *a, **k: {"studyStreak": 3})
+    monkeypatch.setattr(km, "_review_due_by_unit", lambda *a, **k: {})
+    monkeypatch.setattr(km, "_lit_facts", lambda *a, **k: {})
+    monkeypatch.setattr(
+        km.practice_repo,
+        "get_progress",
+        lambda *a, **k: [{"subject_id": subject} for subject in sorted(enrolled)],
+    )
+
+
+def test_every_subject_the_catalog_knows_is_accepted(monkeypatch) -> None:
+    """The whole accepted set, not one example of it.
+
+    Content-bearing or not, enrolled or not: `physics` has no units on the
+    platform and the student has not started `english`, and both are still
+    real galaxies to look at.
+    """
+    wire(monkeypatch)
+    known = set(FULL_CATALOG["rolloutSubjects"]) | {
+        subject["id"] for subject in FULL_CATALOG["subjects"]
+    }
+
+    accepted = {
+        subject
+        for subject in known
+        if km.knowledge_map("student-1", subject_id=subject)["subjectId"] == subject
+    }
+
+    assert accepted == known
+
+
+def test_the_aliases_of_a_known_subject_are_accepted_too(monkeypatch) -> None:
+    """`mathematics` is how the content rows spell `math`; both name a galaxy."""
+    wire(monkeypatch)
+    spellings = {"math", "mathematics", "Mathematik", "MATHEMATICS"}
+
+    accepted = {
+        spelling
+        for spelling in spellings
+        if km.knowledge_map("student-1", subject_id=spelling)["subjectId"] == spelling
+    }
+
+    assert accepted == spellings
+
+
+def test_no_subject_outside_the_catalog_is_echoed_back(monkeypatch) -> None:
+    """The negative control: a name nobody teaches is refused, every one of them.
+
+    Without this an implementation that accepts everything passes the test
+    above, which is exactly the state #124 found in production: `chemistry`
+    came back 200 with `"subjectId": "chemistry"` over a sky of mathematics.
+    """
+    wire(monkeypatch)
+    strangers = {"chemistry", "biology", "latin", "math-2", "", " ", "null", "undefined"}
+    known = set(FULL_CATALOG["rolloutSubjects"])
+
+    refused = set()
+    for stranger in strangers:
+        try:
+            km.knowledge_map("student-1", subject_id=stranger)
+        except km.UnknownSubject:
+            refused.add(stranger)
+
+    # The blank ones are not subjects at all; they fall back to the first
+    # galaxy exactly as an absent parameter does.
+    assert refused == {stranger for stranger in strangers if stranger.strip()}
+    assert not refused & known
+
+
+def test_asking_for_no_subject_at_all_is_untouched(monkeypatch) -> None:
+    """Byte for byte what it was: the first galaxy in the catalog, in focus.
+
+    `focus = subject_id or (first subject)` is the behaviour the refusal must
+    not have disturbed, so this pins the whole response against the same map
+    built with that first subject named explicitly.
+    """
+    wire(monkeypatch)
+    first = FULL_CATALOG["subjects"][0]["id"]
+
+    assert km.knowledge_map("student-1") == km.knowledge_map("student-1", subject_id=first)
+    assert km.knowledge_map("student-1")["subjectId"] == first
+
+
+def test_a_subject_the_student_has_not_started_is_not_refused(monkeypatch) -> None:
+    """Browsing a galaxy before enrolling in it is what the map is for."""
+    wire(monkeypatch, enrolled={"math"})
+
+    sky = km.knowledge_map("student-1", subject_id="physics")
+
+    assert sky["subjectId"] == "physics"
+    assert {galaxy["subjectId"] for galaxy in sky["galaxies"]} == {"math"}

@@ -15,7 +15,13 @@ from typing import Any
 from fakes.dynamodb import FakeTable
 
 from stoa.db.repositories import review_repo
-from stoa.services import curriculum_service, knowledge_map_service, review_service
+from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
+from stoa.services import (
+    curriculum_service,
+    knowledge_map_service,
+    practice_projection_service,
+    review_service,
+)
 from stoa.services.review_scheduler import CardState
 
 NOW = datetime(2026, 3, 2, 9, 0, tzinfo=timezone.utc)
@@ -187,3 +193,99 @@ def test_without_a_unit_the_answer_is_what_it_always_was(monkeypatch) -> None:
     ]
     assert result["dueCount"] == 20
     assert result["generatedAt"] == NOW.isoformat()
+
+
+# ── a question with no stored type is the same kind on both pages (#124) ──
+
+
+def _typeless(challenge_id: str, lesson_id: str) -> dict[str, Any]:
+    """A curriculum row exactly as 60 of the 120 in production stand: no `type`.
+
+    No `options` either, which is why a `multiple_choice` default made it
+    unanswerable: a choice question with nothing to choose from.
+    """
+    return {
+        "challenge_id": challenge_id,
+        "lesson_id": lesson_id,
+        "subject_id": "math",
+        "topic_id": "t1",
+        "unit_id": "unit-a",
+        "grade_level": "Sek1",
+        "prompt": f"Frage {challenge_id}",
+    }
+
+
+def _review_types(monkeypatch, challenges: dict[str, dict[str, Any]]) -> dict[str, str]:
+    use_table(monkeypatch)
+    use_challenges(monkeypatch, challenges)
+    for challenge_id, raw in challenges.items():
+        put_card(challenge_id, due_at=NOW - timedelta(hours=1), lesson_id=raw["lesson_id"])
+    due = review_service.due_review(student_id=STUDENT, now=NOW)
+    return {item["challengeId"]: item["type"] for item in due["items"]}
+
+
+def _lesson_types(challenges: dict[str, dict[str, Any]]) -> dict[str, str]:
+    return {
+        challenge_id: practice_projection_service.build_challenge_preview(raw)["type"]
+        for challenge_id, raw in challenges.items()
+    }
+
+
+def test_a_question_is_the_same_kind_on_the_review_page_as_in_its_lesson(monkeypatch) -> None:
+    """The two paths compared with each other, not with a literal.
+
+    Asserting either side equals `"text_input"` leaves the other free to drift,
+    which is the state this found: the lesson stage said `text_input` and the
+    review page said `multiple_choice` for the same row.
+    """
+    challenges = {
+        "c-none": _typeless("c-none", "lesson-a"),
+        "c-text": {**_typeless("c-text", "lesson-a"), "type": "text_input"},
+        "c-choice": {
+            **_typeless("c-choice", "lesson-a"),
+            "type": "multiple_choice",
+            "options": ["1", "2"],
+        },
+        "c-blank": {**_typeless("c-blank", "lesson-a"), "type": ""},
+    }
+
+    assert _review_types(monkeypatch, challenges) == _lesson_types(challenges)
+
+
+def test_the_two_paths_are_not_agreeing_by_saying_nothing(monkeypatch) -> None:
+    """The negative control.
+
+    Two implementations that both returned `""` - or both dropped the field -
+    would satisfy the comparison above. The kinds actually produced have to be
+    the kinds the rows asked for, and a row with no type has to come out as
+    the shared default rather than as a choice question.
+    """
+    challenges = {
+        "c-none": _typeless("c-none", "lesson-a"),
+        "c-choice": {
+            **_typeless("c-choice", "lesson-a"),
+            "type": "multiple_choice",
+            "options": ["1", "2"],
+        },
+    }
+
+    produced = _review_types(monkeypatch, challenges)
+
+    assert produced == {
+        "c-none": DEFAULT_CHALLENGE_TYPE,
+        "c-choice": "multiple_choice",
+    }
+    assert DEFAULT_CHALLENGE_TYPE != "multiple_choice"
+
+
+def test_a_question_with_no_type_is_never_sent_as_a_choice_with_no_choices(monkeypatch) -> None:
+    """What the student actually hits: nothing to choose from and no way to answer."""
+    challenges = {"c-none": _typeless("c-none", "lesson-a")}
+
+    use_table(monkeypatch)
+    use_challenges(monkeypatch, challenges)
+    put_card("c-none", due_at=NOW - timedelta(hours=1), lesson_id="lesson-a")
+    item = review_service.due_review(student_id=STUDENT, now=NOW)["items"][0]
+
+    assert item["options"] == []
+    assert item["type"] != "multiple_choice"

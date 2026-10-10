@@ -7,6 +7,7 @@ import json
 from typing import Any
 
 from stoa.models.practice import (
+    DEFAULT_CHALLENGE_TYPE,
     CurriculumLessonPreview,
     DirectionalHintTemplateId,
     HintNonDerivabilityDecision,
@@ -120,7 +121,7 @@ def build_challenge_preview(raw: Mapping[str, Any]) -> dict[str, Any]:
             topicId=raw.get("topic_id"),
             topic=raw.get("topic_title"),
             difficulty=raw.get("difficulty"),
-            type=raw.get("type", "text_input"),
+            type=raw.get("type") or DEFAULT_CHALLENGE_TYPE,
             prompt=raw["prompt"],
             options=raw.get("options"),
             hintAvailable=approved_directional_hint(raw) is not None,
@@ -160,7 +161,7 @@ def build_exercise_preview(raw: Mapping[str, Any]) -> dict[str, Any]:
             lessonId=raw["lesson_id"],
             subjectId=_normal_subject_id(raw["subject_id"]),
             topicId=raw["topic_id"],
-            type=raw.get("type", "text_input"),
+            type=raw.get("type") or DEFAULT_CHALLENGE_TYPE,
             prompt=raw["prompt"],
             choices=raw.get("options"),
             difficulty=raw.get("difficulty", "practice"),

@@ -11011,7 +11011,7 @@
             "type": "string"
           },
           "type": {
-            "default": "multiple_choice",
+            "default": "text_input",
             "title": "Type",
             "type": "string"
           }
@@ -27813,7 +27813,7 @@
     },
     "/practice/knowledge-map": {
       "get": {
-        "description": "The star map: every subject, topic and knowledge point with its state.\n\nThe language comes from the request the way every other curriculum read\nhere takes it, not from a query parameter with German wired in as the\ndefault: the names on this map are galaxy, nebula and knowledge-point\ntitles, and a French student reading a sky labelled in German is the same\ndefect as any other untranslated screen.\n\nThe student is `authorized_student.ref.student_id` and nothing else. The\n`studentId` query parameter belongs to the authorization dependency, which\ndeclares and checks it; reading one here would be a way around the check.",
+        "description": "The star map: every subject, topic and knowledge point with its state.\n\nThe language comes from the request the way every other curriculum read\nhere takes it, not from a query parameter with German wired in as the\ndefault: the names on this map are galaxy, nebula and knowledge-point\ntitles, and a French student reading a sky labelled in German is the same\ndefect as any other untranslated screen.\n\nThe student is `authorized_student.ref.student_id` and nothing else. The\n`studentId` query parameter belongs to the authorization dependency, which\ndeclares and checks it; reading one here would be a way around the check.\n\nA `subjectId` naming no subject the curriculum has is a 422 rather than a\nsky labelled with it (#124). One the student has not started is not: the\nmap is there to be browsed ahead of enrolment.",
         "operationId": "get_knowledge_map_practice_knowledge_map_get",
         "parameters": [
           {

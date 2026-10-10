@@ -51,6 +51,8 @@ from stoa.services import (
     allowance_service,
     billing_reconciliation_service,
     learning_profile_service,
+    locale_service,
+    message_catalog,
     parent_link_service,
     subscription_service,
     teacher_support_allowance_service,
@@ -951,9 +953,13 @@ def _question_activity(question: dict[str, Any]) -> ParentChildActivity | None:
     if created_at is None or not _parse_iso_datetime(created_at):
         return None
     status = question.get("status", "")
-    title = "Question answered" if status == "ai_answered" else "Question asked"
+    # The parent is the reader, and these are labels this backend writes rather
+    # than anything the student wrote, so they follow the request's language.
+    locale = locale_service.resolve_locale(None)
+    key = "activity.question_answered" if status == "ai_answered" else "activity.question_asked"
     if status in ("escalated", "teacher_requested"):
-        title = "Teacher help requested"
+        key = "activity.teacher_help_requested"
+    title = message_catalog.text(key, locale)
     return ParentChildActivity(
         id=_response_text(question.get("question_id") or question.get("id")) or f"question-{created_at}",
         type="teacher_help" if status in ("escalated", "teacher_requested") else "question",
@@ -977,7 +983,12 @@ def _practice_activity(item: dict[str, Any], event_type: str) -> ParentChildActi
     )
     if created_at is None or not _parse_iso_datetime(created_at):
         return None
-    title = "Practice lesson completed" if event_type == "practice" else "Practice mistake logged"
+    title = message_catalog.text(
+        "activity.practice_lesson_completed"
+        if event_type == "practice"
+        else "activity.practice_mistake_logged",
+        locale_service.resolve_locale(None),
+    )
     return ParentChildActivity(
         id=_response_text(item.get("lesson_id") or item.get("challenge_id")) or f"{event_type}-{created_at}",
         type=event_type,
@@ -996,7 +1007,10 @@ def _conversation_activity(item: dict[str, Any]) -> ParentChildActivity | None:
     return ParentChildActivity(
         id=_response_text(item.get("conversation_id")) or f"conversation-{created_at}",
         type="teacher_help" if escalated else "conversation",
-        title="Teacher help requested" if escalated else "AI conversation",
+        title=message_catalog.text(
+            "activity.teacher_help_requested" if escalated else "activity.ai_conversation",
+            locale_service.resolve_locale(None),
+        ),
         summary=_response_text(item.get("last_message_preview") or item.get("title")) or "",
         subject=_response_text(item.get("subject")),
         createdAt=created_at,
@@ -1014,7 +1028,9 @@ def _report_activity(report: dict[str, Any]) -> ParentChildActivity | None:
     return ParentChildActivity(
         id=_response_text(report.get("report_id")) or f"report-{created_at}",
         type="report",
-        title="Weekly report available",
+        title=message_catalog.text(
+            "activity.weekly_report_available", locale_service.resolve_locale(None)
+        ),
         summary=_response_text(report.get("summary") or report.get("recommendations")) or "",
         subject=None,
         createdAt=created_at,

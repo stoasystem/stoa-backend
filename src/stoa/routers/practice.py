@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.config import settings
-from stoa.db.repositories import practice_repo, user_repo
+from stoa.db.repositories import practice_repo
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.security.authorization import (
@@ -350,16 +350,11 @@ def _actor_locale(actor: Actor) -> str:
     Falls back to German (the stored content language, so nothing looks
     broken) if the profile read fails, the same way recorded_study_days()
     treats a non-critical lookup as best-effort rather than fatal.
+
+    The policy itself lives in `locale_service.reader_locale`, so this and
+    `conversations._student_locale` cannot drift from each other (#124).
     """
-    requested = locale_service.request_locale()
-    if requested:
-        return requested
-    try:
-        profile = user_repo.get_user(actor.user_id) or {}
-    except Exception:  # noqa: BLE001
-        logger.warning("User profile unavailable; curriculum titles fall back to German")
-        return locale_service.DEFAULT_LOCALE
-    return locale_service.effective_locale(profile)
+    return locale_service.reader_locale(actor.user_id)
 
 
 def _build_unit(raw: dict, lessons: list[dict], locale: str = "de") -> dict:
@@ -659,12 +654,22 @@ async def get_knowledge_map(
     The student is `authorized_student.ref.student_id` and nothing else. The
     `studentId` query parameter belongs to the authorization dependency, which
     declares and checks it; reading one here would be a way around the check.
+
+    A `subjectId` naming no subject the curriculum has is a 422 rather than a
+    sky labelled with it (#124). One the student has not started is not: the
+    map is there to be browsed ahead of enrolment.
     """
-    return knowledge_map_service.knowledge_map(
-        authorized_student.ref.student_id,
-        subject_id=subject_id,
-        locale=_actor_locale(actor),
-    )
+    try:
+        return knowledge_map_service.knowledge_map(
+            authorized_student.ref.student_id,
+            subject_id=subject_id,
+            locale=_actor_locale(actor),
+        )
+    except knowledge_map_service.UnknownSubject:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="subjectId does not name a subject in the curriculum",
+        ) from None
 
 
 class LitAcknowledgement(BaseModel):

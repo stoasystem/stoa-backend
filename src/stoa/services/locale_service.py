@@ -8,9 +8,12 @@ for the preference write to land before content comes back translated.
 
 from __future__ import annotations
 
+import logging
 import re
 from contextvars import ContextVar
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED_LOCALES = frozenset({"de", "en", "fr", "it"})
 DEFAULT_LOCALE = "de"
@@ -100,3 +103,41 @@ def request_locale() -> str | None:
 def resolve_locale(profile: dict[str, Any] | None) -> str:
     """The language to answer this request in: what was asked, else what was stored."""
     return request_locale() or effective_locale(profile)
+
+
+def _stored_profile(user_id: str | None) -> dict[str, Any] | None:
+    """One user's durable profile, or nothing when it cannot be read.
+
+    Imported here rather than at module scope: `user_repo` opens a table on
+    import in some entry points, and this module is pulled in by code that has
+    no table at all.
+    """
+    if not user_id:
+        return None
+    from stoa.db.repositories import user_repo
+
+    try:
+        return user_repo.get_user(str(user_id))
+    except Exception:  # noqa: BLE001 - a language is never worth a failed request
+        logger.warning("locale_profile_unavailable", exc_info=True)
+        return None
+
+
+def reader_locale(user_id: str | None) -> str:
+    """The language to answer **this request** in, for the person making it.
+
+    What the client is rendering right now wins over the stored preference, so
+    switching language in the UI does not wait for the preference write.
+    """
+    return resolve_locale(_stored_profile(user_id))
+
+
+def stored_locale(user_id: str | None) -> str:
+    """The language one person stored, ignoring whose request is running.
+
+    For anything written **for** somebody rather than **to** the caller - a
+    notification, a message left in another person's thread - the request's
+    language names the wrong actor entirely (#124).
+    """
+    return effective_locale(_stored_profile(user_id))
+

@@ -10,6 +10,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from stoa.db.repositories import curriculum_ops_repo, practice_repo
+from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
 from stoa.services import curriculum_analytics_service, curriculum_translations
 
 
@@ -409,7 +410,7 @@ def _exercise_payloads(public_id: str, exercises: list[dict[str, Any]]) -> list[
             "challenge_id": exercise_id,
             "lesson_id": public_id,
             "prompt": str(exercise.get("prompt") or "").strip(),
-            "type": str(exercise.get("type") or "text_input").strip(),
+            "type": str(exercise.get("type") or DEFAULT_CHALLENGE_TYPE).strip(),
             "difficulty": str(exercise.get("difficulty") or "practice").strip(),
             "order": int(exercise.get("order") or index),
             "answer_key": str(answer_key or "").strip(),
