@@ -1094,15 +1094,20 @@ def build_message_command_claim_transaction(
     # of a comparator must be a document path, so asking it to check the limit
     # here made every claim fail validation. What this must enforce is that no
     # concurrent claim moved the counter, which is the compare-and-set below.
+    # A 0 the caller read is either no row or a row holding 0: compensating a
+    # rejected first message leaves the latter (1 -> 0), and conditioning on a
+    # missing attribute alone refused every claim for the rest of that day
+    # (#102). The question counter takes both the same way.
     counter_condition = (
-        "#count=:expected" if expected_exists else "attribute_not_exists(#count)"
+        "#count=:expected"
+        if expected_exists
+        else "attribute_not_exists(#count) OR #count=:expected"
     )
     values: dict[str, object] = {
         ":next": expected_counter + 1,
         ":expires": expires_at,
+        ":expected": expected_counter,
     }
-    if expected_exists:
-        values[":expected"] = expected_counter
     return [
         TransactionOperation(
             TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
