@@ -18,6 +18,7 @@ from fakes.dynamodb import as_stored as _as_stored
 from stoa.db.repositories import attachment_repo, question_repo, user_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.config import Settings
+from stoa.services import locale_service, message_catalog
 from stoa.routers import conversations
 from stoa.models.attachment import AttachmentStatus, AttachmentSummary
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
@@ -1664,6 +1665,115 @@ def test_only_the_placeholder_title_is_replaced(monkeypatch):
     assert len(updates) == 1
 
 
+# ── an untitled conversation is named by its first question (#124) ─────────
+
+
+def test_a_conversation_opened_without_a_question_is_left_untitled():
+    """No subject id and no grade spelling anywhere in the stored title.
+
+    `Mathematik – Grade 6` filled the sidebar with the same row repeated: a
+    stored id and a grade spelling, neither of them a name, neither of them in
+    the language the student reads. The client has `ask.list.untitled` in all
+    four locales, so the phrase is its job.
+    """
+    titles = {
+        conversations._default_conversation_title(subject, grade)
+        for subject, grade in (
+            ("math", "Grade 6"),
+            ("physics", "Sek1"),
+            ("german", ""),
+            ("english", "14"),
+        )
+    }
+
+    assert titles == {""}
+
+
+def test_the_first_question_names_an_untitled_conversation(monkeypatch):
+    """The behaviour that must survive: empty now, the question afterwards."""
+    updates = []
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "retitle_conversation",
+        lambda conversation_id, **kwargs: updates.append(kwargs) or True,
+    )
+
+    conversations._adopt_question_as_title(
+        "conv-1",
+        {"title": "", "subject": "math", "grade": "Grade 6"},
+        "Wie loese ich 2x + 3 = 11?",
+    )
+
+    assert updates == [
+        {
+            "title": "Wie loese ich 2x + 3 = 11?",
+            "expected_title": "",
+            "now_iso": updates[0]["now_iso"],
+        }
+    ]
+
+
+def test_every_placeholder_a_conversation_has_ever_carried_is_still_claimable(monkeypatch):
+    """The whole set of placeholder spellings, not whichever one is current.
+
+    Rows written before #124 hold `subject – grade`; rows written after hold
+    nothing. Both are the platform's own placeholder and both must give way to
+    the student's question.
+    """
+    updates = []
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "retitle_conversation",
+        lambda conversation_id, **kwargs: updates.append(kwargs) or True,
+    )
+    placeholders = conversations._placeholder_conversation_titles("math", "Grade 6")
+
+    for placeholder in placeholders:
+        conversations._adopt_question_as_title(
+            "conv-1",
+            {"title": placeholder, "subject": "math", "grade": "Grade 6"},
+            "Wie loese ich 2x + 3 = 11?",
+        )
+
+    assert {update["expected_title"] for update in updates} == set(placeholders)
+    assert len(updates) == len(placeholders)
+
+
+def test_a_name_the_student_chose_is_never_taken_by_a_question(monkeypatch):
+    """The negative control for the set above.
+
+    Without it an `_adopt_question_as_title` that retitles unconditionally
+    passes every assertion in this section.
+    """
+    updates = []
+    monkeypatch.setattr(
+        conversations.attachment_repo,
+        "retitle_conversation",
+        lambda conversation_id, **kwargs: updates.append(kwargs) or True,
+    )
+
+    for chosen in ("Meine Bruch-Notizen", " ", "math", "math – Grade 7"):
+        conversations._adopt_question_as_title(
+            "conv-1",
+            {"title": chosen, "subject": "math", "grade": "Grade 6"},
+            "Wie loese ich 2x + 3 = 11?",
+        )
+
+    assert updates == []
+
+
+def test_an_untitled_conversation_can_still_be_read_back():
+    """The `_conversation_grade` defect, not repeated for the title.
+
+    Creation accepted a blank grade and every later read refused it, so the
+    conversation existed in a state it could not be read out of. An empty
+    title is written on purpose now, so the read has to accept it.
+    """
+    assert conversations._conversation_title({"title": ""}) == ""
+    assert conversations._conversation_title({}) == ""
+    assert conversations._conversation_title({"title": "Meine Frage"}) == "Meine Frage"
+
+
 def test_only_whole_steps_are_published(monkeypatch):
     """A student is shown a step once it is whole, never a fragment of JSON."""
     published = []
@@ -2340,3 +2450,51 @@ def test_the_help_status_contract_names_exactly_the_states_a_student_meets():
 
     schema = app.openapi()["components"]["schemas"]["TeacherHelpResponse"]["properties"]["status"]
     assert set(schema["enum"]) == set(_STUDENT_HELP_STATES)
+
+
+# ── the line that opens a help request (#124) ─────────────────────────────
+
+
+def test_a_help_request_opens_in_the_student_s_own_language():
+    """All four languages, compared as a set against the catalog.
+
+    What the teacher read was `Teacher help requested. Bitte hilf mir beim
+    Dividieren.` - one hardcoded English sentence welded onto the front of the
+    student's German. The student's words are untouched; only the line in
+    front of them follows the language.
+    """
+    asked = "Bitte hilf mir beim Dividieren."
+
+    opened = {
+        locale: conversations._teacher_help_system_message(asked, locale)
+        for locale in locale_service.SUPPORTED_LOCALES
+    }
+
+    assert opened == {
+        locale: (
+            message_catalog.TEXT["teacher_help.system_message.prefix"][locale] + " " + asked
+        )
+        for locale in locale_service.SUPPORTED_LOCALES
+    }
+    # Four distinct openings: a hardcoded prefix collapses them to one.
+    assert len(set(opened.values())) == len(locale_service.SUPPORTED_LOCALES)
+    # And the student's own words survive every one of them, unaltered.
+    assert all(line.endswith(asked) for line in opened.values())
+
+
+def test_a_help_request_with_nothing_written_is_the_line_alone():
+    """No trailing space, no empty second half: the negative control."""
+    for empty in (None, "", "   "):
+        assert conversations._teacher_help_system_message(empty, "de") == (
+            message_catalog.TEXT["teacher_help.system_message.prefix"]["de"]
+        )
+
+
+def test_the_opening_line_is_never_the_untranslated_fallback_in_every_language():
+    """A locale the catalog does not carry falls back; the four it does do not."""
+    rendered = {
+        conversations._teacher_help_system_message("x", locale)
+        for locale in locale_service.SUPPORTED_LOCALES
+    }
+
+    assert len(rendered) == len(locale_service.SUPPORTED_LOCALES)

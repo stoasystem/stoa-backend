@@ -78,6 +78,7 @@ from stoa.services import (
     entitlement_service,
     learning_profile_service,
     locale_service,
+    message_catalog,
     practice_context_service,
     runtime_budget_service,
     teacher_dispatch_service,
@@ -139,6 +140,22 @@ def _conversation_grade(record: Mapping[str, object]) -> str:
     type is still refused.
     """
     value = record.get("grade")
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return value
+
+
+def _conversation_title(record: Mapping[str, object]) -> str:
+    """The name the conversation has, which is none until a question gives it one.
+
+    A conversation opened without a first message is stored untitled and the
+    client names it in the language it is drawn in (#124). Refusing an empty
+    title here would be the `_conversation_grade` defect again: accepted at the
+    door and unreadable ever after. A value of the wrong type is still refused.
+    """
+    value = record.get("title")
     if value is None:
         return ""
     if not isinstance(value, str):
@@ -1410,7 +1427,10 @@ async def list_conversations(
     summaries = [
         ConversationSummary(
             id=item["conversation_id"],
-            title=item.get("title", item.get("subject", "")),
+            # An untitled conversation stays untitled: falling back to the
+            # subject id put the stored `math` in the sidebar as if it were a
+            # name, which is the placeholder #124 removed.
+            title=_conversation_title(item),
             subject=item.get("subject", ""),
             grade=item.get("grade", ""),
             updatedAt=item.get("updated_at", item.get("created_at", _now())),
@@ -1466,13 +1486,19 @@ def _subject_display_label(subject: object) -> str:
 
 
 def _default_conversation_title(subject: object, grade: object) -> str:
-    """The placeholder keeps the stored subject id; the client localises it.
+    """No title at all until the student's first question names the conversation.
 
-    Writing the display label here left the client matching on the id form and
-    finding nothing, so the placeholder survived untranslated. Only `math`
-    showed it — the other subjects' labels happen to lowercase into their ids.
+    It used to be `subject – grade`, which filled the sidebar with
+    `Mathematik – Grade 6` repeated: a stored id and a grade spelling, neither
+    of which is a name. The client already renders an untitled conversation in
+    the language it is drawn in (`ask.list.untitled`, four locales), so the
+    neutral phrase belongs there and not in a German string shipped from a
+    backend that does not know what language the reader is in (#124).
+
+    The arguments are kept: `_placeholder_conversation_titles` still needs the
+    subject and grade to recognise the rows written before this.
     """
-    return f"{subject} – {grade}"
+    return ""
 
 
 def _placeholder_conversation_titles(subject: object, grade: object) -> tuple[str, ...]:
@@ -1484,6 +1510,24 @@ def _placeholder_conversation_titles(subject: object, grade: object) -> tuple[st
                 f"{subject} – {grade}",
             )
         )
+    )
+
+
+def _teacher_help_system_message(message: object, locale: str) -> str:
+    """The line that opens a help request, in the student's own language.
+
+    It used to be a hardcoded `Teacher help requested.` glued onto the front of
+    the student's German question, which is what the teacher then read (#124).
+    The row also carries `system_event`, so a client can draw its own label
+    without this stored text ever being rewritten.
+    """
+    return " ".join(
+        part
+        for part in (
+            message_catalog.text("teacher_help.system_message.prefix", locale),
+            str(message or "").strip(),
+        )
+        if part
     )
 
 
@@ -1682,7 +1726,7 @@ async def get_conversation(
 
     return ConversationDetail(
         id=conv_id,
-        title=_required_conversation_text(conv, "title"),
+        title=_conversation_title(conv),
         subject=_required_conversation_text(conv, "subject"),
         grade=_conversation_grade(conv),
         updatedAt=_required_conversation_text(conv, "updated_at"),
@@ -2021,16 +2065,11 @@ def _student_locale(student_id: str) -> str:
     The language the student is reading the app in right now arrives on the
     request, so it wins over the stored preference — an answer should come back
     in the language the question was asked in.
+
+    The policy itself lives in `locale_service.reader_locale`; this keeps the
+    name the rest of the module calls it by (#124).
     """
-    requested = locale_service.request_locale()
-    if requested:
-        return requested
-    try:
-        profile = user_repo.get_user(student_id)
-    except Exception:
-        logger.warning("student_locale_fetch_failed", exc_info=True)
-        return locale_service.DEFAULT_LOCALE
-    return locale_service.effective_locale(profile)
+    return locale_service.reader_locale(student_id)
 
 
 def _completed_command_response(command: dict) -> SendMessageResponse | None:
@@ -3590,6 +3629,9 @@ async def request_teacher_help(
     )
     now = _now()
     observed_at = datetime.fromisoformat(now.replace("Z", "+00:00"))
+    # The request is the student's own, so the language they are reading in
+    # right now is the one the system message is written in (#124).
+    student_locale = _student_locale(student_id)
 
     def record_help_usage(
         *, escalation: Mapping[str, object], request_id: str, generation: int | None = None
@@ -3675,7 +3717,8 @@ async def request_teacher_help(
                     "owner_id": student_id,
                     "account_fence_generation": generation,
                     "role": "system",
-                    "content": f"Teacher help requested. {body.message or ''}".strip(),
+                    "content": _teacher_help_system_message(body.message, student_locale),
+                    "system_event": "teacher_help_requested",
                     "escalation_message": body.message,
                     "created_at": now,
                 },

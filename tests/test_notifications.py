@@ -5,7 +5,14 @@ from fastapi.testclient import TestClient
 
 from stoa.config import Settings
 from stoa.routers import notifications, questions, teachers
-from stoa.services import notification_service, teacher_assistance_service, websocket_service
+from stoa.db.repositories import user_repo
+from stoa.services import (
+    locale_service,
+    message_catalog,
+    notification_service,
+    teacher_assistance_service,
+    websocket_service,
+)
 from actor_helpers import install_actor_overrides
 
 
@@ -857,3 +864,291 @@ def test_teacher_can_build_assistance_summary_seed(monkeypatch):
     assert body["weakTopics"] == ["Forces and friction", "free-body diagrams"]
     assert "Forces and friction" in body["suggestedFocus"]
     assert stored[0]["entity_type"] == "teacher_assistance_summary_seed"
+
+
+# ── notification copy follows the reader's language (#124) ────────────────
+
+
+def _profiles(monkeypatch, locales: dict):
+    """Give each user id a stored language preference, and nothing else."""
+    # Best-effort notifications are off outside production unless asked for.
+    monkeypatch.setenv("STOA_ENABLE_BEST_EFFORT_NOTIFICATIONS", "true")
+    monkeypatch.setattr(
+        user_repo,
+        "get_user",
+        lambda user_id, **_kwargs: (
+            {"user_id": user_id, "preferred_locale": locales[user_id]}
+            if user_id in locales
+            else None
+        ),
+    )
+
+
+def test_every_line_of_notification_copy_exists_in_every_supported_language():
+    """The whole table against the whole locale set, not one line in one language.
+
+    A key that gained a German sentence and no French one would otherwise hide
+    behind the fallback until a French student read it.
+    """
+    supported = locale_service.SUPPORTED_LOCALES
+
+    assert {
+        key: set(variants) for key, variants in message_catalog.TEXT.items()
+    } == {key: set(supported) for key in message_catalog.TEXT}
+    assert all(
+        text.strip()
+        for variants in message_catalog.TEXT.values()
+        for text in variants.values()
+    )
+
+
+def test_no_line_is_one_language_copied_into_all_four_slots():
+    """The negative control for the table.
+
+    A key holding the English string under all four locales would satisfy the
+    test above while putting English in a German panel exactly as production
+    did. Two locales genuinely sharing a word is allowed - `Questions` is the
+    same in English and French - so what is refused is a key with no variation
+    in it at all.
+    """
+    unvaried = {
+        key
+        for key, variants in message_catalog.TEXT.items()
+        if len(set(variants.values())) < 2
+    }
+
+    assert unvaried == set()
+    # German is the fallback and must never be the English line by accident.
+    assert {
+        key
+        for key, variants in message_catalog.TEXT.items()
+        if variants["de"] == variants["en"]
+    } == set()
+
+
+def test_an_expired_teacher_request_is_written_in_the_student_s_language(monkeypatch):
+    """All four languages driven, and the four results compared as a set.
+
+    The student reads the panel in their own language while the request that
+    expired the case was somebody else's - a scheduled job's - so the copy
+    can only come from the recipient's stored preference.
+    """
+    events, _ = _install_notification_repo(monkeypatch)
+    locales = {f"student-{locale}": locale for locale in locale_service.SUPPORTED_LOCALES}
+    _profiles(monkeypatch, locales)
+
+    titles = {}
+    for student_id, locale in locales.items():
+        events.clear()
+        notification_service.emit_teacher_help_expired(
+            conversation={
+                "student_id": student_id,
+                "conversation_id": f"conv-{locale}",
+                "escalation_request_id": f"req-{locale}",
+                "account_fence_generation": 1,
+            },
+            case_returned=True,
+        )
+        stored = list(events.values())[0]
+        titles[locale] = (stored["title"], stored["summary"])
+
+    expected = {
+        locale: (
+            message_catalog.TEXT["teacher_help.expired.title"][locale],
+            message_catalog.TEXT["teacher_help.expired.summary_returned"][locale],
+        )
+        for locale in locales.values()
+    }
+    assert titles == expected
+    # Four distinct pairs: a locale-blind implementation collapses them to one.
+    assert len(set(titles.values())) == len(locales)
+
+
+def test_the_week_s_case_coming_back_is_said_only_when_it_did(monkeypatch):
+    """The two summaries are different sentences, in every language."""
+    events, _ = _install_notification_repo(monkeypatch)
+    _profiles(monkeypatch, {"student-1": "de"})
+
+    said = {}
+    for case_returned in (True, False):
+        events.clear()
+        notification_service.emit_teacher_help_expired(
+            conversation={
+                "student_id": "student-1",
+                "conversation_id": "conv-1",
+                "escalation_request_id": f"req-{case_returned}",
+                "account_fence_generation": 1,
+            },
+            case_returned=case_returned,
+        )
+        said[case_returned] = list(events.values())[0]["summary"]
+
+    assert said[True] != said[False]
+    assert said[True] == message_catalog.TEXT[
+        "teacher_help.expired.summary_returned"
+    ]["de"]
+    assert said[False] == message_catalog.TEXT[
+        "teacher_help.expired.summary"
+    ]["de"]
+
+
+def test_the_reader_s_stored_language_wins_over_the_request_s(monkeypatch):
+    """A teacher answering in English must not write the student an English line.
+
+    `locale_service.request_locale()` is the language of whoever is making the
+    request, which for a notification is never the person who will read it.
+    """
+    events, _ = _install_notification_repo(monkeypatch)
+    _profiles(monkeypatch, {"student-1": "fr"})
+    locale_service.set_request_locale("en")
+    try:
+        notification_service.emit_teacher_help_reply(
+            conversation={
+                "student_id": "student-1",
+                "conversation_id": "conv-1",
+                "escalation_request_id": "req-1",
+                "account_fence_generation": 1,
+            },
+            teacher_id="teacher-1",
+            reply_id="reply-1",
+        )
+    finally:
+        locale_service.set_request_locale(None)
+
+    stored = list(events.values())[0]
+    assert stored["title"] == message_catalog.TEXT[
+        "teacher_help.reply.title"
+    ]["fr"]
+
+
+def test_a_reader_with_no_stored_language_still_gets_a_notification(monkeypatch):
+    """A profile that cannot be read costs the language, never the message."""
+    events, _ = _install_notification_repo(monkeypatch)
+
+    def refuse(_user_id, **_kwargs):
+        raise RuntimeError("profile table unavailable")
+
+    monkeypatch.setenv("STOA_ENABLE_BEST_EFFORT_NOTIFICATIONS", "true")
+    monkeypatch.setattr(user_repo, "get_user", refuse)
+
+    notification_service.emit_teacher_help_takeover(
+        conversation={
+            "student_id": "student-1",
+            "conversation_id": "conv-1",
+            "escalation_request_id": "req-1",
+            "account_fence_generation": 1,
+        },
+        teacher_id="teacher-1",
+    )
+
+    stored = list(events.values())[0]
+    assert stored["title"] == message_catalog.TEXT[
+        "teacher_help.takeover.title"
+    ][locale_service.DEFAULT_LOCALE]
+
+
+def test_notifications_already_written_are_left_as_they_were(monkeypatch):
+    """History is not re-rendered: a stored row is what somebody was told."""
+    events, _ = _install_notification_repo(monkeypatch)
+    _profiles(monkeypatch, {"student-1": "it"})
+    events["notif-old"] = {
+        "event_id": "notif-old",
+        "recipient_id": "student-1",
+        "title": "No teacher was available",
+        "summary": "Your request for a teacher expired.",
+    }
+
+    assert notification_service.notification_repo.get_event("notif-old")["title"] == (
+        "No teacher was available"
+    )
+
+
+# ── what a teacher is shown beside a help request (#124) ──────────────────
+
+
+def _seed_in(monkeypatch, locale: str, question: dict) -> dict:
+    """One assistance seed, built for a teacher reading in `locale`."""
+    from stoa.security.authorization import AuthorizedResource
+
+    monkeypatch.setattr(
+        teacher_assistance_service.notification_repo, "put_summary_seed", lambda item: item
+    )
+    monkeypatch.setattr(
+        user_repo, "get_user", lambda user_id, **_k: {"user_id": user_id, "preferred_locale": locale}
+    )
+    locale_service.set_request_locale(None)
+    authorized = AuthorizedResource(
+        ref=type("Ref", (), {"resource_id": "question-1", "student_id": "student-1"})(),
+        value=question,
+    )
+    actor = type("Actor", (), {"user_id": "teacher-1"})()
+    return teacher_assistance_service.build_summary_seed(authorized, actor)
+
+
+def _bare_question() -> dict:
+    return {
+        "student_id": "student-1",
+        "subject": "mathematics",
+        "content": "Bitte hilf mir beim Dividieren.",
+        "account_fence_generation": 1,
+    }
+
+
+def test_the_seed_is_written_in_the_language_of_the_teacher_reading_it(monkeypatch):
+    """All four languages driven, and the four results compared as a set.
+
+    The seed is rebuilt on every request by the teacher about to read it, so
+    the reader is known at generation time and no second rendering pass is
+    needed. Four distinct results: a hardcoded sentence collapses them to one.
+    """
+    produced = {
+        locale: (
+            _seed_in(monkeypatch, locale, _bare_question())["studentContextSummary"],
+            _seed_in(monkeypatch, locale, _bare_question())["suggestedFocus"],
+        )
+        for locale in sorted(locale_service.SUPPORTED_LOCALES)
+    }
+
+    assert produced == {
+        locale: (
+            message_catalog.text(
+                "assistance.context.without_topics", locale, subject="mathematics"
+            ),
+            message_catalog.text("assistance.focus.default", locale),
+        )
+        for locale in locale_service.SUPPORTED_LOCALES
+    }
+    assert len(set(produced.values())) == len(locale_service.SUPPORTED_LOCALES)
+
+
+def test_every_branch_of_the_seed_has_its_own_sentence(monkeypatch):
+    """The negative control: four different situations, four different lines.
+
+    Without it a `_suggested_focus` that returned the same sentence whatever
+    the question held would pass the locale test above.
+    """
+    cases = {
+        "bare": _bare_question(),
+        "with_topics": {**_bare_question(), "topic_seeds": [{"label": "Brüche"}]},
+        "after_reply": {**_bare_question(), "teacher_response": {"answer": "..."}},
+    }
+
+    produced = {
+        name: (
+            _seed_in(monkeypatch, "de", question)["studentContextSummary"],
+            _seed_in(monkeypatch, "de", question)["suggestedFocus"],
+        )
+        for name, question in cases.items()
+    }
+
+    assert len(set(produced.values())) == len(cases)
+
+
+def test_the_student_s_own_words_are_passed_through_not_rewritten(monkeypatch):
+    """Content is not copy: the question and the topic labels go through as they are."""
+    question = {**_bare_question(), "topic_seeds": [{"label": "Brüche"}]}
+
+    seed = _seed_in(monkeypatch, "fr", question)
+
+    assert seed["questionSummary"] == "Bitte hilf mir beim Dividieren."
+    assert seed["weakTopics"] == ["Brüche"]

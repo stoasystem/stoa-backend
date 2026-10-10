@@ -31,6 +31,7 @@ from stoa.services import (
     entitlement_service,
     learning_profile_service,
     locale_service,
+    message_catalog,
     parent_link_service,
 )
 from stoa.routers import conversations as conversation_routes
@@ -237,6 +238,10 @@ def _question_history_items(student_id: str) -> list[LearningHistoryItem]:
     """
     result = question_repo.list_by_student(student_id, limit=200)
     items = []
+    # The same policy its sibling `_practice_history_items` already uses: the
+    # language the client is rendering in right now. These entries are labels
+    # this backend writes, not content, so they follow the reader (#124).
+    locale = locale_service.resolve_locale(None)
     for row in result.get("Items", []):
         if not isinstance(row, Mapping):
             continue
@@ -248,14 +253,20 @@ def _question_history_items(student_id: str) -> list[LearningHistoryItem]:
             items.append(
                 LearningHistoryItem(
                     id=_history_text(row.get("conversation_id")) or f"conversation-{created_at}",
-                    subject=_history_text(row.get("subject")) or "General",
-                    title="Teacher help requested" if escalated else "Question asked",
+                    subject=_history_text(row.get("subject"))
+                    or message_catalog.text("activity.subject.unknown", locale),
+                    title=message_catalog.text(
+                        "activity.teacher_help_requested"
+                        if escalated
+                        else "activity.question_asked",
+                        locale,
+                    ),
                     summary=(
                         _history_text(row.get("escalation_message"))
                         or _history_text(row.get("title"))
                     ),
                     createdAt=created_at,
-                    sourceLabel="Questions",
+                    sourceLabel=message_catalog.text("activity.source.questions", locale),
                     kind="teacher_help" if escalated else "question_asked",
                     source="questions",
                 )
@@ -266,13 +277,19 @@ def _question_history_items(student_id: str) -> list[LearningHistoryItem]:
             items.append(
                 LearningHistoryItem(
                     id=_history_text(row.get("question_id")) or f"question-{created_at}",
-                    subject=_history_text(row.get("subject")) or "General",
-                    title="Question answered" if answered else "Question asked",
+                    subject=_history_text(row.get("subject"))
+                    or message_catalog.text("activity.subject.unknown", locale),
+                    title=message_catalog.text(
+                        "activity.question_answered"
+                        if answered
+                        else "activity.question_asked",
+                        locale,
+                    ),
                     summary=(
                         _history_text(row.get("summary")) or _history_text(row.get("prompt"))
                     ),
                     createdAt=created_at,
-                    sourceLabel="Questions",
+                    sourceLabel=message_catalog.text("activity.source.questions", locale),
                     kind="question_answered" if answered else "question_asked",
                     source="questions",
                 )
@@ -322,12 +339,12 @@ def _practice_history_items(student_id: str) -> list[LearningHistoryItem]:
                     if subject_id
                     else "Practice"
                 ),
-                title="Practice Path lesson",
+                title=message_catalog.text("activity.practice_path_lesson", locale),
                 # The lesson name is curriculum content, so it gets the same
                 # title translation the roadmap and the lesson header use.
                 summary=translated_title(lesson_id, stored_title, locale),
                 createdAt=created_at,
-                sourceLabel="Practice Path",
+                sourceLabel=message_catalog.text("activity.source.practice_path", locale),
                 kind="practice_lesson",
                 source="practice_path",
             )

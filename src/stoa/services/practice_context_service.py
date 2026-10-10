@@ -19,6 +19,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from stoa.db.repositories import practice_repo
+from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
 from stoa.services import (
     curriculum_service,
     knowledge_map_service,
@@ -86,7 +87,7 @@ def resolve(
         "lessonId": lesson_id,
         "unitId": unit_id,
         "subjectId": str(unit.get("subjectId") or ""),
-        "challengeType": str(challenge.get("type") or "text_input"),
+        "challengeType": str(challenge.get("type") or DEFAULT_CHALLENGE_TYPE),
         "challengePrompt": _bounded(challenge.get("prompt"), _MAX_PROMPT_CHARS),
         "lessonTitle": _bounded(lesson.get("title"), _MAX_PROMPT_CHARS),
         "unitTitle": _bounded(unit.get("title"), _MAX_PROMPT_CHARS),

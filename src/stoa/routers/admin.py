@@ -36,6 +36,7 @@ from stoa.security.admin_authorization import (
 )
 from stoa.security.errors import normalize_correlation_id
 from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD
+from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
 from stoa.models.question import QuestionStatus
 from stoa.models.moderation import (
     ModerationCaseListResponse,
@@ -937,7 +938,7 @@ class CurriculumExerciseDraftRequest(BaseModel):
 
     exercise_id: str | None = Field(default=None, alias="exerciseId", max_length=200)
     prompt: str = Field(..., min_length=1, max_length=2000)
-    type: str = Field(default="text_input", min_length=1, max_length=50)
+    type: str = Field(default=DEFAULT_CHALLENGE_TYPE, min_length=1, max_length=50)
     difficulty: str = Field(default="practice", min_length=1, max_length=80)
     order: int | None = Field(default=None, ge=1, le=200)
     answer_key: str | None = Field(default=None, alias="answerKey", max_length=2000)

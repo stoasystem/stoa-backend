@@ -9,6 +9,7 @@ from uuid import uuid4
 from stoa.db.repositories import notification_repo
 from stoa.security.authorization import AuthorizedResource
 from stoa.security.identity import Actor
+from stoa.services import locale_service, message_catalog
 
 
 def now_iso() -> str:
@@ -23,6 +24,11 @@ def build_summary_seed(
     question_id = authorized.ref.resource_id
 
     created_at = now_iso()
+    # The seed is rebuilt on every request, by the teacher who is about to read
+    # it, so the reader is known here and the sentences can be written in their
+    # language straight away (#124). What is stored stays a record of what that
+    # teacher was shown; nothing re-renders it afterwards.
+    locale = locale_service.reader_locale(actor.user_id)
     topic_labels = _topic_labels(question)
     raw_ai_response = question.get("ai_response")
     ai_response: dict[str, Any] = raw_ai_response if isinstance(raw_ai_response, dict) else {}
@@ -32,11 +38,11 @@ def build_summary_seed(
         "question_id": question_id,
         "student_id": question.get("student_id"),
         "subject": question.get("subject") or "general",
-        "student_context_summary": _student_context_summary(question, topic_labels),
+        "student_context_summary": _student_context_summary(question, topic_labels, locale),
         "question_summary": _preview(question.get("content"), limit=360),
         "ai_answer_summary": _preview(ai_response.get("answer"), limit=360),
         "weak_topics": topic_labels,
-        "suggested_focus": _suggested_focus(question, topic_labels),
+        "suggested_focus": _suggested_focus(question, topic_labels, locale),
         "source_count": _source_count(question),
         "created_at": created_at,
         "created_by": actor.user_id,
@@ -65,19 +71,28 @@ def summary_seed_response(seed: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _student_context_summary(question: dict[str, Any], topics: list[str]) -> str:
+def _student_context_summary(question: dict[str, Any], topics: list[str], locale: str) -> str:
+    # The subject id and the topic labels are the values the rows carry, not
+    # copy: they go in as they are, the way `{status}` does elsewhere.
     subject = question.get("subject") or "general"
     if topics:
-        return f"Student has active {subject} evidence around {', '.join(topics[:3])}."
-    return f"Student has an active {subject} help request without enough topic evidence yet."
+        return message_catalog.text(
+            "assistance.context.with_topics",
+            locale,
+            subject=subject,
+            topics=", ".join(topics[:3]),
+        )
+    return message_catalog.text(
+        "assistance.context.without_topics", locale, subject=subject
+    )
 
 
-def _suggested_focus(question: dict[str, Any], topics: list[str]) -> str:
+def _suggested_focus(question: dict[str, Any], topics: list[str], locale: str) -> str:
     if question.get("teacher_response"):
-        return "Review the previous teacher reply and continue from the student's unresolved step."
+        return message_catalog.text("assistance.focus.after_reply", locale)
     if topics:
-        return f"Clarify the core misconception around {topics[0]} before giving final steps."
-    return "Ask one diagnostic question, then explain the smallest next step."
+        return message_catalog.text("assistance.focus.with_topics", locale, topic=topics[0])
+    return message_catalog.text("assistance.focus.default", locale)
 
 
 def _topic_labels(question: dict[str, Any]) -> list[str]:

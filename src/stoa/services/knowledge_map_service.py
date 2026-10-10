@@ -35,6 +35,14 @@ from stoa.services import curriculum_translations, curriculum_service, knowledge
 
 logger = logging.getLogger(__name__)
 
+class UnknownSubject(Exception):
+    """The request named a subject the catalog has never heard of (#124).
+
+    Raised instead of an HTTP error so the read model stays free of the web
+    layer; `routers/practice.py` turns it into the 422.
+    """
+
+
 #: Where a nebula's stars sit relative to its centre, as a share of the sky.
 NEBULA_RADIUS = 0.055
 #: How far the band of galaxies is inset from the edges, so labels have room.
@@ -352,6 +360,10 @@ def knowledge_map(
 ) -> dict[str, Any]:
     """The whole sky for one student, with `subject_id` as the galaxy in focus."""
     catalog = curriculum_service.list_catalog(locale=locale)
+    # Blank is absent, whether it arrived as no parameter at all or as one with
+    # nothing in it; either way the first galaxy takes the focus as it always has.
+    requested = str(subject_id or "").strip()
+    _require_known_subject(requested, catalog)
     states = knowledge_mastery_service.unit_states(
         student_id, locale=locale, catalog=catalog
     )
@@ -359,7 +371,7 @@ def knowledge_map(
     summary = curriculum_service.get_progress_summary(student_id)
 
     subjects = [item for item in catalog.get("subjects") or () if isinstance(item, Mapping)]
-    focus = subject_id or (str(subjects[0].get("id") or "") if subjects else "")
+    focus = requested or (str(subjects[0].get("id") or "") if subjects else "")
 
     enrolled = frozenset(
         str(item.get("subject_id") or "")
@@ -380,6 +392,42 @@ def knowledge_map(
         ),
         locale=locale,
     )
+
+
+def _known_subject_ids(catalog: Mapping[str, Any]) -> frozenset[str]:
+    """Every subject this catalog knows of, in canonical form.
+
+    Both the subjects that carry content today and the ones the curriculum
+    declares it teaches: a galaxy with nothing in it yet is still a real
+    galaxy, and `rolloutSubjects` is where the catalog says so.
+    """
+    known = {
+        practice_repo.normal_subject_id(subject.get("id"))
+        for subject in catalog.get("subjects") or ()
+        if isinstance(subject, Mapping)
+    }
+    known.update(
+        practice_repo.normal_subject_id(subject)
+        for subject in catalog.get("rolloutSubjects") or ()
+    )
+    return frozenset(known - {""})
+
+
+def _require_known_subject(subject_id: str | None, catalog: Mapping[str, Any]) -> None:
+    """Refuse a subject nobody teaches rather than echo it back as the focus (#124).
+
+    `chemistry` came back 200 with `"subjectId": "chemistry"` on a sky made
+    entirely of mathematics, so the response agreed with a request that named
+    nothing. A subject the student has simply not started is **not** refused:
+    browsing a galaxy before enrolling in it is what the map is for.
+
+    No subject at all is also not refused — that is the whole sky with the
+    first galaxy in focus, and it keeps working exactly as before.
+    """
+    if not subject_id:
+        return
+    if practice_repo.normal_subject_id(subject_id) not in _known_subject_ids(catalog):
+        raise UnknownSubject(str(subject_id))
 
 
 def _laid_out(row: Mapping[str, Any]) -> tuple[float, float] | None:

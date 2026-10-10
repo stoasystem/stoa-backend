@@ -10,6 +10,16 @@ from typing import Annotated, Any, Mapping
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, StringConstraints
 
 
+#: What a challenge is, when the stored row does not say.
+#:
+#: A row with no `type` has no `options` either - all 60 such rows in the
+#: curriculum today - so the only kind it can be answered as is a typed answer.
+#: The review path used to default to `multiple_choice` instead, which handed
+#: the client a choice question with nothing to choose from: the same question
+#: was answerable inside its lesson and unanswerable on the review page. One
+#: definition, so the two paths cannot drift apart again (#124).
+DEFAULT_CHALLENGE_TYPE = "text_input"
+
 NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 OpaqueAttemptId = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
@@ -201,7 +211,7 @@ class ReviewCard(_PracticeContract):
     topic_id: str = Field(default="", alias="topicId")
     prompt: str = ""
     options: list[str] = Field(default_factory=list)
-    type: str = "multiple_choice"
+    type: str = DEFAULT_CHALLENGE_TYPE
     due_at: str = Field(default="", alias="dueAt")
     lapses: int = 0
     reps: int = 0

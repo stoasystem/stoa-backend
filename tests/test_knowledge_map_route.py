@@ -122,6 +122,34 @@ def test_the_language_is_not_taken_from_the_query_string(monkeypatch: pytest.Mon
     assert seen == ["fr"], "the request's language wins; `?locale=` is not read"
 
 
+def test_a_subject_the_curriculum_does_not_have_is_refused_at_the_route(
+    monkeypatch: pytest.MonkeyPatch, _sky: list[str]
+) -> None:
+    """The read model's refusal reaches the client as a 422 (#124).
+
+    Both directions in one test: the names the service refuses all come back
+    422, the names it accepts all come back 200. Without the second half an
+    endpoint that refused everything would pass.
+    """
+    refused = {"chemistry", "biology", "latin"}
+
+    def knowledge_map(_student_id: str, *, subject_id: str | None = None, **_kw: Any):
+        if subject_id in refused:
+            raise practice.knowledge_map_service.UnknownSubject(subject_id)
+        return {"subjectId": subject_id or "math", "stars": []}
+
+    monkeypatch.setattr(practice.knowledge_map_service, "knowledge_map", knowledge_map)
+    client = _client({"sub": "student-1", "role": "student"})
+
+    codes = {
+        subject: client.get("/practice/knowledge-map", params={"subjectId": subject}).status_code
+        for subject in refused | {"math", "physics"}
+    }
+
+    assert {subject for subject, code in codes.items() if code == 422} == refused
+    assert {subject for subject, code in codes.items() if code == 200} == {"math", "physics"}
+
+
 @pytest.fixture
 def _confirmations(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, list[str]]]:
     """Record who confirmed which lightings, and write nothing."""

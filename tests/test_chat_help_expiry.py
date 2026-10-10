@@ -20,7 +20,7 @@ from fakes.dynamodb import FakeTable
 import pytest
 
 from stoa.config import settings
-from stoa.services import notification_service, teacher_dispatch_service
+from stoa.services import message_catalog, notification_service, teacher_dispatch_service
 
 import test_chat_help_request_lifecycle as lifecycle
 from test_chat_help_request_lifecycle import CONV, CREATED, TEACHER, _conv, _dispatch_to
@@ -276,11 +276,24 @@ def test_an_expiry_landing_during_a_withdrawal_gives_back_one_case(
     assert len(notices) == 1
 
 
+def _which_expiry_sentence(notice: dict) -> str:
+    """Which of the two expiry sentences this is, in whatever language it came.
+
+    The copy follows the reader's language now (#124), so matching on an
+    English fragment tested the test's own locale rather than the decision
+    about the week's case.
+    """
+    for key in ("teacher_help.expired.summary_returned", "teacher_help.expired.summary"):
+        if notice["summary"] in message_catalog.TEXT[key].values():
+            return key
+    return ""
+
+
 def test_a_request_whose_case_was_never_spent_does_not_claim_one_back(table, notices) -> None:
     _nobody_available(table)
     _sweep(_after(DAY + 60))
     [notice] = notices
-    assert "given back" not in notice["summary"]
+    assert _which_expiry_sentence(notice) == "teacher_help.expired.summary"
 
 
 def test_a_case_spent_this_week_is_said_to_come_back(table, notices) -> None:
@@ -288,7 +301,7 @@ def test_a_case_spent_this_week_is_said_to_come_back(table, notices) -> None:
     _nobody_available(table)
     _sweep(_after(DAY + 60))
     [notice] = notices
-    assert "given back" in notice["summary"]
+    assert _which_expiry_sentence(notice) == "teacher_help.expired.summary_returned"
 
 
 def test_a_case_from_a_week_that_has_ended_goes_back_there_and_is_not_promised(
@@ -300,7 +313,7 @@ def test_a_case_from_a_week_that_has_ended_goes_back_there_and_is_not_promised(
     _sweep(_after(8 * DAY))
     assert _spent(table) == 0
     [notice] = notices
-    assert "given back" not in notice["summary"]
+    assert _which_expiry_sentence(notice) == "teacher_help.expired.summary"
 
 
 def test_a_request_whose_rows_disagree_is_left_said_and_not_announced(

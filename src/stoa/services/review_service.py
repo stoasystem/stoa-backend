@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from stoa.db.repositories import practice_repo, review_repo
+from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
 from stoa.services import curriculum_service, review_scheduler
 
 logger = logging.getLogger(__name__)
@@ -142,7 +143,10 @@ def due_review(
                 "topicId": _text(card.get("topic_id")) or _text(challenge.get("topic_id")),
                 "prompt": _text(challenge.get("prompt")),
                 "options": [str(option) for option in (challenge.get("options") or [])],
-                "type": _text(challenge.get("type")) or "multiple_choice",
+                # The same default as the lesson stage, from the same
+                # definition: a question with no stored type must be the same
+                # kind of question on both pages (#124).
+                "type": _text(challenge.get("type")) or DEFAULT_CHALLENGE_TYPE,
                 "dueAt": _text(card.get("due_at")),
                 "lapses": review_repo.as_int(card.get("lapses")),
                 "reps": review_repo.as_int(card.get("reps")),

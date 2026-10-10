@@ -18,7 +18,7 @@ from fastapi import HTTPException
 from stoa.config import settings
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, notification_repo
-from stoa.services import websocket_service
+from stoa.services import locale_service, message_catalog, websocket_service
 from stoa.security.identity import Actor
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,16 @@ EVENT_CATEGORY_BY_TYPE = {
     "assignment_update": "assignments",
     "weekly_report_update": "weekly_reports",
 }
+
+
+def _recipient_locale(recipient_id: str | None) -> str:
+    """The language the reader stored, not the language of the request.
+
+    A notification is written by somebody else's request - a teacher's reply, a
+    job that found a request expired - so the request's language names the
+    wrong person here (#124).
+    """
+    return locale_service.stored_locale(recipient_id)
 
 
 def now_iso() -> str:
@@ -774,6 +784,12 @@ def create_event_safe(**kwargs: Any) -> dict[str, Any] | None:
 def emit_teacher_requested(
     *, question_id: str, student_id: str, subject: str, account_fence_generation: int | None = None
 ) -> None:
+    """Tell whoever is on duty that a student asked for a person.
+
+    One row per role, read by everybody holding it, so there is no reader whose
+    language it could be written in. It stays in one language until the console
+    renders these by key instead of by stored text (#124).
+    """
     for recipient_role in ("teacher", "admin"):
         create_event_safe(
             recipient_id=None,
@@ -948,6 +964,7 @@ def ensure_teacher_takeover_notification(
             raise account_deletion_repo.AccountDeletionConflict(
                 "takeover notification identity changed"
             )
+        locale = _recipient_locale(student_id)
         try:
             create_event(
                 recipient_id=student_id,
@@ -955,8 +972,8 @@ def ensure_teacher_takeover_notification(
                 event_type="teacher_takeover",
                 target_type="question",
                 target_id=question_id,
-                title="Teacher joined your question",
-                summary="A teacher has started working on your question.",
+                title=message_catalog.text("teacher_takeover.question.title", locale),
+                summary=message_catalog.text("teacher_takeover.question.summary", locale),
                 metadata=metadata,
                 actor_id=teacher_id,
                 actor_role="teacher",
@@ -1009,35 +1026,39 @@ def ensure_teacher_takeover_notification(
 
 
 def emit_teacher_takeover(*, question: dict[str, Any], teacher_id: str) -> None:
+    student_id = str(question.get("student_id") or "")
+    locale = _recipient_locale(student_id)
     create_event_safe(
-        recipient_id=str(question.get("student_id") or ""),
+        recipient_id=student_id,
         recipient_role="student",
         event_type="teacher_takeover",
         target_type="question",
         target_id=str(question.get("question_id") or ""),
-        title="Teacher joined your question",
-        summary="A teacher has started working on your question.",
+        title=message_catalog.text("teacher_takeover.question.title", locale),
+        summary=message_catalog.text("teacher_takeover.question.summary", locale),
         metadata={"subject": question.get("subject"), "teacher_id": teacher_id},
         actor_id=teacher_id,
         actor_role="teacher",
-        owner_id=str(question.get("student_id") or ""),
+        owner_id=student_id,
         account_fence_generation=question.get("account_fence_generation"),
     )
 
 
 def emit_teacher_reply(*, question: dict[str, Any], teacher_id: str) -> None:
+    student_id = str(question.get("student_id") or "")
+    locale = _recipient_locale(student_id)
     create_event_safe(
-        recipient_id=str(question.get("student_id") or ""),
+        recipient_id=student_id,
         recipient_role="student",
         event_type="teacher_reply",
         target_type="question",
         target_id=str(question.get("question_id") or ""),
-        title="Teacher replied",
-        summary="Your teacher added a reply to your question.",
+        title=message_catalog.text("teacher_reply.question.title", locale),
+        summary=message_catalog.text("teacher_reply.question.summary", locale),
         metadata={"subject": question.get("subject"), "teacher_id": teacher_id},
         actor_id=teacher_id,
         actor_role="teacher",
-        owner_id=str(question.get("student_id") or ""),
+        owner_id=student_id,
         account_fence_generation=question.get("account_fence_generation"),
     )
 
@@ -1050,14 +1071,15 @@ def emit_teacher_help_takeover(*, conversation: Mapping[str, Any], teacher_id: s
     """
     student_id = str(conversation.get("student_id") or "")
     request_id = str(conversation.get("escalation_request_id") or "")
+    locale = _recipient_locale(student_id)
     create_event_safe(
         recipient_id=student_id,
         recipient_role="student",
         event_type="teacher_takeover",
         target_type="conversation",
         target_id=str(conversation.get("conversation_id") or ""),
-        title="A teacher joined your conversation",
-        summary="A teacher has started working on your request.",
+        title=message_catalog.text("teacher_help.takeover.title", locale),
+        summary=message_catalog.text("teacher_help.takeover.summary", locale),
         metadata={"request_id": request_id, "teacher_id": teacher_id},
         actor_id=teacher_id,
         actor_role="teacher",
@@ -1076,14 +1098,15 @@ def emit_teacher_help_reply(
     student hears about the answer, not separately about the take-over.
     """
     student_id = str(conversation.get("student_id") or "")
+    locale = _recipient_locale(student_id)
     create_event_safe(
         recipient_id=student_id,
         recipient_role="student",
         event_type="teacher_reply",
         target_type="conversation",
         target_id=str(conversation.get("conversation_id") or ""),
-        title="Your teacher replied",
-        summary="Your teacher answered in your conversation.",
+        title=message_catalog.text("teacher_help.reply.title", locale),
+        summary=message_catalog.text("teacher_help.reply.summary", locale),
         metadata={
             "request_id": str(conversation.get("escalation_request_id") or ""),
             "teacher_id": teacher_id,
@@ -1106,17 +1129,19 @@ def emit_teacher_help_expired(*, conversation: Mapping[str, Any], case_returned:
     """
     student_id = str(conversation.get("student_id") or "")
     request_id = str(conversation.get("escalation_request_id") or "")
+    locale = _recipient_locale(student_id)
     create_event_safe(
         recipient_id=student_id,
         recipient_role="student",
         event_type="teacher_help_expired",
         target_type="conversation",
         target_id=str(conversation.get("conversation_id") or ""),
-        title="No teacher was available",
-        summary=(
-            "Your request for a teacher expired. This week's teacher help was given back."
+        title=message_catalog.text("teacher_help.expired.title", locale),
+        summary=message_catalog.text(
+            "teacher_help.expired.summary_returned"
             if case_returned
-            else "Your request for a teacher expired."
+            else "teacher_help.expired.summary",
+            locale,
         ),
         metadata={"request_id": request_id},
         actor_role="system",
@@ -1136,14 +1161,20 @@ def emit_moderation_update(
 ) -> None:
     _require_moderation_owner(owner_id, privacy_generation)
     if case_item.get("reporter_id") and case_item.get("reporter_role") != "admin":
+        reporter_id = str(case_item["reporter_id"])
+        locale = _recipient_locale(reporter_id)
         create_event_safe(
-            recipient_id=str(case_item["reporter_id"]),
+            recipient_id=reporter_id,
             recipient_role=str(case_item.get("reporter_role") or "student"),
             event_type="moderation_case_update",
             target_type="moderation_case",
             target_id=str(case_item.get("case_id") or ""),
-            title="Moderation case updated",
-            summary=f"Moderation case status is {case_item.get('status', 'updated')}.",
+            title=message_catalog.text("moderation.update.title", locale),
+            summary=message_catalog.text(
+                "moderation.update.summary",
+                locale,
+                status=case_item.get("status", "updated"),
+            ),
             metadata={
                 "question_id": case_item.get("question_id"),
                 "status": case_item.get("status"),
@@ -1166,6 +1197,8 @@ def emit_moderation_created(
     privacy_generation: int,
 ) -> None:
     _require_moderation_owner(owner_id, privacy_generation)
+    # Addressed to the admin role rather than to one administrator, so there is
+    # no reader whose language this could be written in (#124).
     create_event_safe(
         recipient_id=None,
         recipient_role="admin",
@@ -1214,14 +1247,19 @@ def emit_subscription_update(
         or recipient_id
         or ""
     )
+    locale = _recipient_locale(recipient_id)
     create_event_safe(
         recipient_id=recipient_id,
         recipient_role=recipient_role,
         event_type="subscription_request_update",
         target_type="subscription_request",
         target_id=str(request_item.get("request_id") or ""),
-        title="Subscription request updated",
-        summary=f"Subscription request status is {request_item.get('status', 'updated')}.",
+        title=message_catalog.text("subscription.update.title", locale),
+        summary=message_catalog.text(
+            "subscription.update.summary",
+            locale,
+            status=request_item.get("status", "updated"),
+        ),
         metadata={
             "requested_tier": request_item.get("requested_tier"),
             "request_type": request_item.get("request_type"),
