@@ -371,7 +371,15 @@ def knowledge_map(
     summary = curriculum_service.get_progress_summary(student_id)
 
     subjects = [item for item in catalog.get("subjects") or () if isinstance(item, Mapping)]
-    focus = requested or (str(subjects[0].get("id") or "") if subjects else "")
+    # Normalised, because the galaxies carry the catalog's own ids: asking for
+    # `mathematics` matched no galaxy named `math`, so the sky came back whole
+    # with a summary of 0 of 0 (#124). An alias names the subject it is an
+    # alias of; it does not name a subject with nothing in it.
+    focus = (
+        practice_repo.normal_subject_id(requested)
+        if requested
+        else (str(subjects[0].get("id") or "") if subjects else "")
+    )
 
     enrolled = frozenset(
         str(item.get("subject_id") or "")

@@ -350,18 +350,23 @@ def test_every_subject_the_catalog_knows_is_accepted(monkeypatch) -> None:
     assert accepted == known
 
 
-def test_the_aliases_of_a_known_subject_are_accepted_too(monkeypatch) -> None:
-    """`mathematics` is how the content rows spell `math`; both name a galaxy."""
+def test_every_spelling_of_a_subject_opens_the_same_sky(monkeypatch) -> None:
+    """`mathematics` is how the content rows spell `math`; both name a galaxy.
+
+    Accepting an alias is not enough: the galaxies carry the catalog's own ids,
+    so a focus left at `mathematics` matched no galaxy and the sky came back
+    whole with a summary of 0 of 0 (#124). Asking four ways has to give one
+    answer, so this compares the whole map rather than the status code.
+    """
     wire(monkeypatch)
-    spellings = {"math", "mathematics", "Mathematik", "MATHEMATICS"}
+    spellings = ["math", "mathematics", "Mathematik", "MATHEMATICS"]
 
-    accepted = {
-        spelling
-        for spelling in spellings
-        if km.knowledge_map("student-1", subject_id=spelling)["subjectId"] == spelling
-    }
+    maps = [km.knowledge_map("student-1", subject_id=spelling) for spelling in spellings]
 
-    assert accepted == spellings
+    assert all(one == maps[0] for one in maps)
+    assert maps[0]["subjectId"] == "math"
+    # The negative control: equal-but-empty would satisfy the line above.
+    assert maps[0]["summary"]["total"] > 0
 
 
 def test_no_subject_outside_the_catalog_is_echoed_back(monkeypatch) -> None:
