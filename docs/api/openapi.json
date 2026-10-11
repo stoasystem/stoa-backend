@@ -13795,6 +13795,11 @@
             ],
             "title": "Accountactivationstatus"
           },
+          "accountNumber": {
+            "default": "",
+            "title": "Accountnumber",
+            "type": "string"
+          },
           "effectiveLocale": {
             "title": "Effectivelocale",
             "type": "string"

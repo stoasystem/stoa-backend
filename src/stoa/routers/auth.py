@@ -76,6 +76,12 @@ class UserOut(BaseModel):
     # True after an administrator reset: the sign-in succeeds and every route but
     # the password change is refused until the account picks its own password.
     mustChangePassword: bool = False
+    # The account's own number, the way an administrator reads it back. A parent
+    # whose child is not linked yet has to be found by whoever links them, and
+    # until now the number existed only on administrator routes: the person it
+    # belongs to could not read it off their own screen (#124 follow-up). Empty
+    # for an account opened before numbers were allocated.
+    accountNumber: str = ""
 
 
 class AuthResponse(BaseModel):
@@ -368,6 +374,7 @@ def _build_user_out(profile: dict) -> UserOut:
         emailVerificationStatus=verification["emailVerificationStatus"],
         emailVerificationRequired=verification["emailVerificationRequired"],
         accountActivationStatus=verification["accountActivationStatus"],
+        accountNumber=str(profile.get("account_number") or ""),
         mustChangePassword=bool(profile.get(MUST_CHANGE_PASSWORD_FIELD)),
     )
 
