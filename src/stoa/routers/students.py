@@ -440,6 +440,16 @@ async def update_my_profile(
     expr_values: dict = {":u": now}
 
     if body.grade is not None:
+        # Still stored as sent, on purpose. `learning_profile_service` now has
+        # the closed set and `normalize_grade` to judge a write against it, but
+        # refusing here today would break the client that is live: the grade box
+        # is a free-text field whose own hint tells the student to type
+        # "6. Klasse" / "Year 6" / "6e année" / "6ª classe", and every one of
+        # those would come back 422 as "not saved, try again" - a permanent
+        # failure dressed as a retryable one. The prompt is safe meanwhile
+        # without this door: anything the code set cannot account for is named
+        # to the model as unreadable rather than passed through. The door goes
+        # in once the client sends codes from a dropdown.
         update_expr_parts.append("grade = :g")
         expr_values[":g"] = body.grade
 

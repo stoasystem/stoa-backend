@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from stoa.services import ai_service
+from stoa.services import ai_service, learning_profile_service
 
 
 class _CapturingBedrockClient:
@@ -53,7 +53,7 @@ def _invoke(**kwargs) -> dict:
     ai_service.get_ai_answer(
         content=kwargs.pop("content", "how do I add fractions?"),
         subject=kwargs.pop("subject", "math"),
-        grade=kwargs.pop("grade", "Grade 6"),
+        grade=kwargs.pop("grade", "grade_6_primary"),
         client=client,
         effect_id=kwargs.pop("effect_id", "effect-test-1"),
         **kwargs,
@@ -182,8 +182,8 @@ _DEPTH_GUIDE = "never to decide whether a question deserves an answer"
 @pytest.mark.parametrize(
     ("subject", "grade", "content"),
     [
-        ("math", "Grade 6", "Was ist eine Ableitung?"),
-        ("physics", "Grade 5", "Was ist Quantenphysik?"),
+        ("math", "grade_6_primary", "Was ist eine Ableitung?"),
+        ("physics", "grade_5_primary", "Was ist Quantenphysik?"),
     ],
 )
 def test_a_question_above_the_grade_is_steered_to_an_explanation(subject, grade, content):
@@ -194,12 +194,15 @@ def test_a_question_above_the_grade_is_steered_to_an_explanation(subject, grade,
     read as permission to refuse. This only proves what the prompt says; it
     cannot measure how often the real model refuses.
     """
+    named = learning_profile_service.grade_label(grade, "de")
     prompt = _system_prompt(subject=subject, grade=grade, content=content, language="de")
-    assert f"ONLY answer questions related to {subject} at {grade} level" not in prompt
-    assert f"The student is in {grade}" in prompt
+    assert f"ONLY answer questions related to {subject} at {named} level" not in prompt
+    assert f"The student is in {named}" in prompt
     assert _DEPTH_GUIDE in prompt
-    assert f"far above {grade}, first give a short accessible explanation" in prompt
+    assert f"far above {named}, first give a short accessible explanation" in prompt
     assert "question is too complex" not in prompt
+    # The code is how the row is stored, never how the model is addressed.
+    assert grade not in prompt
 
 
 @pytest.mark.parametrize("grade", ["", "   "])
@@ -220,14 +223,14 @@ def test_a_blank_grade_is_sent_as_unknown_not_as_nothing(grade):
 
 
 def test_a_question_within_the_grade_keeps_the_same_scope_and_depth_guide():
-    prompt = _system_prompt(subject="math", grade="Grade 6", content="how do I add fractions?")
+    prompt = _system_prompt(subject="math", grade="grade_6_primary", content="how do I add fractions?")
     assert "You ONLY answer questions related to math." in prompt
     assert _DEPTH_GUIDE in prompt
     assert "Never give the final answer directly. Always explain step-by-step." in prompt
 
 
 def test_a_question_outside_the_subject_is_still_rejected():
-    prompt = _system_prompt(subject="math", grade="Grade 6", content="Wer war Napoleon?")
+    prompt = _system_prompt(subject="math", grade="grade_6_primary", content="Wer war Napoleon?")
     assert "You ONLY answer questions related to math." in prompt
     assert "Stay strictly within the subject scope. Reject unrelated questions politely." in prompt
     assert "Reject only questions outside math." in prompt

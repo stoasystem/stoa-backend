@@ -39,6 +39,16 @@ logger = logging.getLogger(__name__)
 # the web client sends a blank grade as blank rather than inventing one.
 UNKNOWN_GRADE = "an unknown year group (none was given; pitch it at lower secondary school)"
 
+# A grade that is neither blank nor a year group this platform knows. Production
+# rows hold "14" - an age typed into a year-group box - and the model was told
+# "The student is in 14". The stored value never reaches the prompt now, and the
+# sentence above cannot stand in for it either: it says none was given, which
+# would be a lie about a row that holds something.
+UNREADABLE_GRADE = (
+    "an unrecorded year group (the profile holds no year group this platform "
+    "recognises; pitch it at lower secondary school)"
+)
+
 SYSTEM_PROMPT = """You are a controlled educational AI assistant for STOA, a Swiss after-school \
 learning platform. You ONLY answer questions related to {subject}. The student is in {grade}: \
 use that to choose the depth of the explanation, the examples and the prerequisites you point to, \
@@ -87,6 +97,22 @@ def language_name(language: str) -> str:
     """The plain name of the answer language, for the prompt to refer to."""
     base = str(language or "").strip().replace("_", "-").split("-", 1)[0].lower()
     return _LANGUAGE_NAMES.get(base, DEFAULT_LANGUAGE_NAME)
+
+
+def grade_for_prompt(grade: str | None, language: str) -> str:
+    """What `{grade}` becomes: a year group the model can read, never a stored value.
+
+    A code is written out in the language the answer is written in, so the
+    student's year group is named the way the student's own school names it. A
+    blank grade keeps the #50 sentence exactly as it was; anything the code set
+    cannot account for is said to be unreadable rather than passed through.
+    """
+    code = learning_profile_service.resolve_grade_code(grade)
+    if code is None:
+        return UNREADABLE_GRADE
+    if not code:
+        return UNKNOWN_GRADE
+    return learning_profile_service.grade_label(code, language)
 
 
 # Memory-aware variant — appended when the caller supplies a non-empty weak-concept summary.
@@ -766,8 +792,10 @@ def get_ai_answer(
     Args:
         content:        The student's latest message (will be sanitised).
         subject:        Normalised subject string (e.g. "math", "german").
-        grade:          Grade/level string (e.g. "Grade 8"). May be blank when the
-                        profile has none; it is then sent as UNKNOWN_GRADE.
+        grade:          Year-group code (e.g. "grade_6_primary"). May be blank
+                        when the profile has none; it is then sent as
+                        UNKNOWN_GRADE. The model is shown the code's label in
+                        `language`, never the stored value.
         language:       ISO language hint for the response ("de", "en", "fr").
         history:        Optional list of previous raw message dicts from DynamoDB,
                         each with keys ``role`` and ``content``.  The most recent
@@ -787,7 +815,7 @@ def get_ai_answer(
     base_prompt = SYSTEM_PROMPT.format(
         subject=normalized_subject,
         subject_context=learning_profile_service.subject_prompt_context(normalized_subject),
-        grade=grade.strip() or UNKNOWN_GRADE,
+        grade=grade_for_prompt(grade, language),
         language=language,
         language_name=language_name(language),
     )

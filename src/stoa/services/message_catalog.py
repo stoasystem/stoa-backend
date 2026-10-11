@@ -246,6 +246,83 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Général",
         "it": "Generale",
     },
+    # ── year groups, named for the assistant in the answer's language ────
+    #
+    # `learning_profile_service.GRADE_LEVEL_CODES` is the set; these are the
+    # only place each code is written out as something a person says, and the
+    # system prompt reads them. A code with no line here would reach the model
+    # as nothing at all, so the suite checks the two tables against each other
+    # rather than trusting this list to stay complete.
+    # Each line is the SAME year of compulsory school said four ways, not the
+    # German one translated word for word. The anchor is the HarmoS year in
+    # `learning_profile_service.GRADE_LEVEL_HARMOS_YEARS`, and the three
+    # language areas number that year differently: the German labels count
+    # Zurich's way (HarmoS year minus the two kindergarten years), the French
+    # ones count HarmoS itself, as Romandie now does, and the Italian ones
+    # follow Ticino's 5 years of elementare and 4 of media. Translating
+    # literally produces a year that is not the student's (6e année primaire is
+    # two years younger than 6. Primarklasse) or one that does not exist at all
+    # (Ticino has no 6ª elementare, and its media stops at 4ª).
+    "grade.grade_1_primary": {
+        "de": "1. Primarklasse",
+        "en": "year 1 of primary school",
+        "fr": "3e année primaire (3P)",
+        "it": "1ª elementare",
+    },
+    "grade.grade_2_primary": {
+        "de": "2. Primarklasse",
+        "en": "year 2 of primary school",
+        "fr": "4e année primaire (4P)",
+        "it": "2ª elementare",
+    },
+    "grade.grade_3_primary": {
+        "de": "3. Primarklasse",
+        "en": "year 3 of primary school",
+        "fr": "5e année primaire (5P)",
+        "it": "3ª elementare",
+    },
+    "grade.grade_4_primary": {
+        "de": "4. Primarklasse",
+        "en": "year 4 of primary school",
+        "fr": "6e année primaire (6P)",
+        "it": "4ª elementare",
+    },
+    "grade.grade_5_primary": {
+        "de": "5. Primarklasse",
+        "en": "year 5 of primary school",
+        "fr": "7e année primaire (7P)",
+        "it": "5ª elementare",
+    },
+    "grade.grade_6_primary": {
+        "de": "6. Primarklasse",
+        "en": "year 6 of primary school",
+        "fr": "8e année primaire (8P)",
+        "it": "1ª media",
+    },
+    "grade.grade_7_secondary": {
+        "de": "7. Klasse (Sekundarstufe I)",
+        "en": "year 7, lower secondary school",
+        "fr": "9e année (secondaire I)",
+        "it": "2ª media",
+    },
+    "grade.grade_8_secondary": {
+        "de": "8. Klasse (Sekundarstufe I)",
+        "en": "year 8, lower secondary school",
+        "fr": "10e année (secondaire I)",
+        "it": "3ª media",
+    },
+    "grade.grade_9_secondary": {
+        "de": "9. Klasse (Sekundarstufe I)",
+        "en": "year 9, lower secondary school",
+        "fr": "11e année (secondaire I)",
+        "it": "4ª media",
+    },
+    "grade.grade_secondary_i": {
+        "de": "Sekundarstufe I (Schuljahr nicht angegeben)",
+        "en": "lower secondary school (no year given)",
+        "fr": "degré secondaire I (année non précisée)",
+        "it": "scuola media (anno non indicato)",
+    },
 }
 
 
