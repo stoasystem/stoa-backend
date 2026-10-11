@@ -71,6 +71,76 @@ def test_every_code_is_written_out_in_all_four_languages():
         assert len(set(variants.values())) == len(LOCALES), code
 
 
+# ── The four languages name the same school year, not four different ones ────
+#
+# "Four entries, all different" is satisfied by four different wrong years, and
+# that is exactly what shipped first: `6e année primaire` is two years younger
+# than `6. Primarklasse`, and `6ª elementare` is a year Ticino does not have.
+#
+# So the judgement is the HarmoS year - the one numbering the whole country
+# shares - and each language area's own rule for saying it. The rules are
+# written out here rather than read back from the catalog, so a label that
+# disagrees with the anchor fails even though it is a perfectly good French
+# sentence. What this still cannot prove is the anchor itself: that
+# `grade_6_primary` is HarmoS 8 is sourced in the comment above
+# `GRADE_LEVEL_HARMOS_YEARS`, not derived here.
+
+def _expected_labels(harmos: int) -> dict[str, str]:
+    """The same HarmoS year, as each language area numbers it."""
+    zurich = harmos - 2  # Zurich does not count the two kindergarten years.
+    if harmos <= 8:
+        de = f"{zurich}. Primarklasse"
+        en = f"year {zurich} of primary school"
+        fr = f"{harmos}e année primaire ({harmos}P)"  # Romandie counts HarmoS.
+    else:
+        de = f"{zurich}. Klasse (Sekundarstufe I)"
+        en = f"year {zurich}, lower secondary school"
+        fr = f"{harmos}e année (secondaire I)"
+    # Ticino: five years of elementare (HarmoS 3-7), four of media (8-11).
+    it = f"{harmos - 2}ª elementare" if harmos <= 7 else f"{harmos - 7}ª media"
+    return {"de": de, "en": en, "fr": fr, "it": it}
+
+
+def test_the_anchor_covers_the_code_set_and_nothing_else():
+    assert set(learning_profile_service.GRADE_LEVEL_HARMOS_YEARS) == set(
+        learning_profile_service.GRADE_LEVEL_CODES
+    )
+
+
+def test_each_language_names_the_year_its_own_school_system_calls_it():
+    for code, harmos in learning_profile_service.GRADE_LEVEL_HARMOS_YEARS.items():
+        if harmos is None:
+            continue
+        assert message_catalog.TEXT[f"grade.{code}"] == _expected_labels(harmos), code
+
+
+def test_the_year_groups_run_from_the_first_primary_year_to_the_last_compulsory_one():
+    """The anchor is a straight run, so no year is skipped or counted twice."""
+    years = [
+        harmos
+        for harmos in learning_profile_service.GRADE_LEVEL_HARMOS_YEARS.values()
+        if harmos is not None
+    ]
+    assert years == list(range(3, 12))
+
+
+@pytest.mark.parametrize(
+    ("locale", "stage", "unsaid"),
+    [
+        ("de", "Sekundarstufe I", "nicht angegeben"),
+        ("en", "lower secondary school", "no year given"),
+        ("fr", "secondaire I", "non précisée"),
+        ("it", "scuola media", "non indicato"),
+    ],
+)
+def test_the_stage_band_names_a_stage_and_says_the_year_is_missing(locale, stage, unsaid):
+    label = message_catalog.TEXT["grade.grade_secondary_i"][locale]
+    assert stage in label
+    assert unsaid in label
+    # Negative control: it must not claim a year it was never told.
+    assert not any(character.isdigit() for character in label)
+
+
 def test_the_catalog_holds_no_year_group_the_code_set_disowns():
     """Neither table may grow a member the other has never heard of."""
     catalogued = {
@@ -124,7 +194,12 @@ def test_a_value_no_one_can_read_is_reported_as_such(stored):
 
 # ── The closed set at the door ───────────────────────────────────────────────
 
-def test_a_write_may_carry_any_code_and_nothing_else():
+def test_the_judgement_a_write_will_be_held_to_once_the_client_sends_codes():
+    """`normalize_grade` is the door for the next change; nothing calls it yet.
+
+    It is specified and tested now so the step that adds it to the route is a
+    one-line change, and so the set it judges against cannot quietly drift.
+    """
     for code in learning_profile_service.GRADE_LEVEL_CODES:
         assert learning_profile_service.normalize_grade(code) == code
     for refused in ("Grade 6", "Sek1", "14", "6. Klasse", "grade_6", "GRADE_6_PRIMARY"):
@@ -194,25 +269,54 @@ def test_every_code_is_accepted_by_the_profile_route(profile_client):
     assert len(writes) == len(learning_profile_service.GRADE_LEVEL_CODES)
 
 
-@pytest.mark.parametrize("refused", ["Grade 6", "Sek1", "14", "6. Klasse", "grade_6"])
-def test_free_text_is_refused_and_nothing_is_written(profile_client, refused):
+@pytest.mark.parametrize(
+    "typed",
+    # Word for word what the live client's own hint asks the student to type,
+    # in each of its four languages.
+    ["6. Klasse", "Year 6", "6e année", "6ª classe", "Sek1", "14"],
+)
+def test_the_text_the_live_client_asks_for_is_still_accepted(profile_client, typed):
+    """The closed set is not yet enforced at this door, and must not be.
+
+    The grade box on the web client is free text whose hint says 'Zum Beispiel
+    «6. Klasse»'. Refusing that here answers a student who did exactly as asked
+    with "not saved, try again" - a permanent failure worded as a retryable one
+    - every time, for as long as that client is the one deployed. The door
+    closes in the same change that gives the client a dropdown.
+    """
     client, writes = profile_client
-    response = client.patch("/students/me/profile", json={"grade": refused})
-    assert response.status_code == 422
-    assert response.json()["detail"] == (
-        "grade does not name a year group this platform supports"
-    )
-    assert writes == []
+    response = client.patch("/students/me/profile", json={"grade": typed})
+    assert response.status_code == 200
+    assert response.json()["grade"] == typed
+    assert [write["expression_attribute_values"][":g"] for write in writes] == [typed]
+
+
+@pytest.mark.parametrize("typed", ["6. Klasse", "Year 6", "14", "<script>alert(1)</script>"])
+def test_what_that_door_lets_through_still_cannot_reach_the_model(typed):
+    """Which is why the open door is safe: the prompt refuses it, not the write.
+
+    Every one of these is stored as sent and none of them is said to the model.
+    """
+    prompt = _system_prompt(grade=typed)
+    assert typed not in prompt
+    assert f"The student is in {ai_service.UNREADABLE_GRADE}:" in prompt
 
 
 @pytest.mark.parametrize("blank", ["", "   "])
 def test_a_student_who_has_not_said_may_still_save_their_profile(profile_client, blank):
-    """#50: the grade is asked for later than the account is opened."""
+    """#50: the grade is asked for later than the account is opened.
+
+    Stored as sent, whitespace included, because this step does not touch the
+    write. What matters downstream is that both reach the model as the same
+    "nobody said" sentence, which `resolve_grade_code` decides and the prompt
+    tests pin.
+    """
     client, writes = profile_client
     response = client.patch("/students/me/profile", json={"grade": blank})
     assert response.status_code == 200
-    assert response.json()["grade"] == ""
-    assert [write["expression_attribute_values"][":g"] for write in writes] == [""]
+    assert response.json()["grade"] == blank
+    assert [write["expression_attribute_values"][":g"] for write in writes] == [blank]
+    assert learning_profile_service.resolve_grade_code(blank) == ""
 
 
 def test_a_stored_legacy_grade_is_still_readable(profile_client):
@@ -412,6 +516,36 @@ def test_running_it_twice_changes_nothing_the_second_time():
 
     assert second.rewrite == []
     assert _grades(table) == settled
+
+
+@pytest.mark.parametrize("page_item_cap", [1, 2, 7, 44])
+def test_every_page_of_the_table_is_read(page_item_cap):
+    """A scan that stops at the first page reports a sample as if it were the census.
+
+    The production table holds conversations and messages beside the profiles,
+    so this scan pages whatever the profiles cost. Nothing else in the suite
+    notices: with the loop cut down to `return profiles` the fixtures above are
+    small enough to arrive in one page and stay green.
+    """
+    table = FakeTable(page_item_cap=page_item_cap)
+    for index in range(45):
+        user_id = f"student-{index:03d}"
+        table.rows[(f"USER#{user_id}", "PROFILE")] = as_stored(
+            {
+                "PK": f"USER#{user_id}",
+                "SK": "PROFILE",
+                "user_id": user_id,
+                "role": "student",
+                "grade": "Grade 6",
+            }
+        )
+
+    result = backfill.run(table, apply=False)
+
+    assert len(backfill.scan_profiles(table)) == 45
+    assert len(result.rewrite) == 45
+    # And it really did take more than one request to get them.
+    assert table.calls["scan"] > 1
 
 
 def test_the_backfill_only_writes_what_the_read_path_already_understands():

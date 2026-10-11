@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import logging
 from typing import NoReturn, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.db.repositories import parent_link_repo, practice_repo, question_repo, user_repo
@@ -126,24 +126,6 @@ def _optional_profile_text(
     if not isinstance(value, str):
         _invalid_stored_student_response(correlation_id, field)
     return value
-
-
-def _stored_grade(grade: str) -> str:
-    """The year group this write may store, or a refusal.
-
-    The grade box used to take free text and the table shows what that bought:
-    "Grade 6", "Sek1", two spaces, and "14" - an age. The closed set is the
-    cure, so a value outside it is refused here rather than written and
-    discovered later in a prompt. Not saying is still allowed, whitespace
-    included: the student has not reached that question yet (#50).
-    """
-    try:
-        return learning_profile_service.normalize_grade(grade)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="grade does not name a year group this platform supports",
-        ) from None
 
 
 def _guardian_status(profile: Mapping[str, object]) -> str:
@@ -458,8 +440,18 @@ async def update_my_profile(
     expr_values: dict = {":u": now}
 
     if body.grade is not None:
+        # Still stored as sent, on purpose. `learning_profile_service` now has
+        # the closed set and `normalize_grade` to judge a write against it, but
+        # refusing here today would break the client that is live: the grade box
+        # is a free-text field whose own hint tells the student to type
+        # "6. Klasse" / "Year 6" / "6e année" / "6ª classe", and every one of
+        # those would come back 422 as "not saved, try again" - a permanent
+        # failure dressed as a retryable one. The prompt is safe meanwhile
+        # without this door: anything the code set cannot account for is named
+        # to the model as unreadable rather than passed through. The door goes
+        # in once the client sends codes from a dropdown.
         update_expr_parts.append("grade = :g")
-        expr_values[":g"] = _stored_grade(body.grade)
+        expr_values[":g"] = body.grade
 
     if body.primarySubjects is not None:
         update_expr_parts.append("primary_subjects = :s")

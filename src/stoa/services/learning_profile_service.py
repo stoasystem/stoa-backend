@@ -99,6 +99,39 @@ GRADE_LEVEL_CODES: tuple[str, ...] = (
     "grade_secondary_i",
 )
 
+# Which year of compulsory school each code is, counted the one way the whole
+# country agrees on: the HarmoS year, 1 to 11, kindergarten included. It is the
+# anchor the four languages are translated against, because each language area
+# numbers its own years differently and translating the German label word for
+# word produces a year that does not exist (Ticino has no 6ª elementare) or a
+# different one (Romandie's 6e année primaire is two years younger).
+#
+#   HarmoS 3-8  = Zurich 1.-6. Primarklasse = Romandie 3P-8P
+#                 = Ticino 1ª-5ª elementare (3-7) and 1ª media (8)
+#   HarmoS 9-11 = Zurich 1.-3. Sek (7.-9. Klasse) = Romandie 9e-11e
+#                 = Ticino 2ª-4ª media
+#
+# Sources: zh.ch / Lehrplan 21 "Gliederung der Volksschule" (Zyklus 2 = school
+# years 5-8 = 3.-6. Primarklasse, Zyklus 3 = 9-11 = Sekundarstufe I); PER /
+# HarmoS degree tables for Romandie (3H = 1re primaire ... 8H = 8P, 11-12 years
+# old); DECS Ticino HarmoS structure note (1ª elementare = 3H ... 5ª elementare
+# = 7H, 1ª media = 8H ... 4ª media = 11H, Ticino keeping 5+4 under a derogation).
+# The seed's own label, "6. Primarklasse (ZAP)", is the ZAP year, ~12 years old,
+# and lands on HarmoS 8 in all three.
+GRADE_LEVEL_HARMOS_YEARS: dict[str, int | None] = {
+    "grade_1_primary": 3,
+    "grade_2_primary": 4,
+    "grade_3_primary": 5,
+    "grade_4_primary": 6,
+    "grade_5_primary": 7,
+    "grade_6_primary": 8,
+    "grade_7_secondary": 9,
+    "grade_8_secondary": 10,
+    "grade_9_secondary": 11,
+    # The band names a stage, so it has no single year: HarmoS 9 to 11.
+    "grade_secondary_i": None,
+}
+
 # What the free text already in the table means. Read-only: a row written before
 # the codes existed is still understood, so a student who typed one of these
 # keeps a usable prompt without waiting for the backfill. The write path never
@@ -120,6 +153,13 @@ def normalize_grade(grade: str | None) -> str:
     Nothing and whitespace are the same thing and both mean "not said", which
     stays legal: a grade is asked for on the learning profile, not when an
     account is opened (#50). Anything else must already be a code.
+
+    **Not yet wired into the profile route.** The live client's grade box is
+    free text and its own hint asks the student for "6. Klasse", so refusing
+    that today would turn a working field into a permanent 422 shown as "try
+    again". `students.py` stores what it is sent until the client sends codes;
+    the prompt is held safe in the meantime by `resolve_grade_code`, which is
+    where an unreadable value stops being passed on.
     """
     value = str(grade or "").strip()
     if not value:
