@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import logging
 from typing import NoReturn, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.db.repositories import parent_link_repo, practice_repo, question_repo, user_repo
@@ -126,6 +126,24 @@ def _optional_profile_text(
     if not isinstance(value, str):
         _invalid_stored_student_response(correlation_id, field)
     return value
+
+
+def _stored_grade(grade: str) -> str:
+    """The year group this write may store, or a refusal.
+
+    The grade box used to take free text and the table shows what that bought:
+    "Grade 6", "Sek1", two spaces, and "14" - an age. The closed set is the
+    cure, so a value outside it is refused here rather than written and
+    discovered later in a prompt. Not saying is still allowed, whitespace
+    included: the student has not reached that question yet (#50).
+    """
+    try:
+        return learning_profile_service.normalize_grade(grade)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="grade does not name a year group this platform supports",
+        ) from None
 
 
 def _guardian_status(profile: Mapping[str, object]) -> str:
@@ -441,7 +459,7 @@ async def update_my_profile(
 
     if body.grade is not None:
         update_expr_parts.append("grade = :g")
-        expr_values[":g"] = body.grade
+        expr_values[":g"] = _stored_grade(body.grade)
 
     if body.primarySubjects is not None:
         update_expr_parts.append("primary_subjects = :s")

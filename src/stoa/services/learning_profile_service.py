@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from stoa.db.dynamodb import stored_int
+from stoa.services import locale_service, message_catalog
 
 
 SUPPORTED_SUBJECTS: dict[str, dict[str, str]] = {
@@ -65,6 +66,92 @@ def subject_prompt_context(subject: str) -> str:
         f"Subject behavior: {meta['prompt_focus']} "
         "This foundation milestone does not imply full curriculum coverage or automatic exercise generation."
     )
+
+
+# ── Year groups ───────────────────────────────────────────────────────────────
+#
+# The learning profile's `grade` was free text, and production holds what free
+# text always holds: "Grade 6", "Sek1", a field of two spaces, and "14" - an age
+# written into a year-group box. The curriculum meanwhile spells its own year
+# group `grade_6_primary` on every row. The two vocabularies never met, so the
+# one place a grade is read - "The student is in {grade}" in the system prompt -
+# told the model "The student is in 14".
+#
+# One vocabulary now, and it is the curriculum's: `grade_<Klasse>_<stage>`, with
+# `grade_6_primary` kept exactly as the catalog spells it and the rest built the
+# same way. The number is the Swiss Klasse number, so it keeps counting across
+# the stage boundary: 6. Primarklasse, then 7. Klasse in der Sek.
+#
+# `grade_secondary_i` is the one member naming a stage rather than a year, for
+# the same reason "14" is not mapped at all: legacy "Sek1" says which stage a
+# student is in and not which year of it, and choosing a year for them would
+# invent precision the stored value never had.
+GRADE_LEVEL_CODES: tuple[str, ...] = (
+    "grade_1_primary",
+    "grade_2_primary",
+    "grade_3_primary",
+    "grade_4_primary",
+    "grade_5_primary",
+    "grade_6_primary",
+    "grade_7_secondary",
+    "grade_8_secondary",
+    "grade_9_secondary",
+    "grade_secondary_i",
+)
+
+# What the free text already in the table means. Read-only: a row written before
+# the codes existed is still understood, so a student who typed one of these
+# keeps a usable prompt without waiting for the backfill. The write path never
+# consults it, or free text would come straight back in.
+LEGACY_GRADE_SPELLINGS: dict[str, str] = {
+    "grade 6": "grade_6_primary",
+    "sek1": "grade_secondary_i",
+}
+
+
+def supported_grade_codes() -> tuple[str, ...]:
+    """Every year group a profile may store, in school order."""
+    return GRADE_LEVEL_CODES
+
+
+def normalize_grade(grade: str | None) -> str:
+    """The year group a profile write may store: one code, or none at all.
+
+    Nothing and whitespace are the same thing and both mean "not said", which
+    stays legal: a grade is asked for on the learning profile, not when an
+    account is opened (#50). Anything else must already be a code.
+    """
+    value = str(grade or "").strip()
+    if not value:
+        return ""
+    if value not in GRADE_LEVEL_CODES:
+        raise ValueError(f"Unsupported grade level: {grade}")
+    return value
+
+
+def resolve_grade_code(grade: str | None) -> str | None:
+    """What a stored year group means: a code, "" for none said, None for unreadable.
+
+    The three outcomes are kept apart on purpose. "Nobody said" is something the
+    assistant is already told how to handle (#50); "the row holds something
+    nobody can read" is a different thing to say, and saying the first in place
+    of the second claims the profile is empty when it holds "14".
+    """
+    value = str(grade or "").strip()
+    if not value:
+        return ""
+    if value in GRADE_LEVEL_CODES:
+        return value
+    return LEGACY_GRADE_SPELLINGS.get(" ".join(value.lower().split()))
+
+
+def grade_label(code: str, locale: str) -> str:
+    """One year group written out for somebody to read, in their language."""
+    try:
+        resolved = locale_service.normalize_locale(locale)
+    except ValueError:
+        resolved = locale_service.DEFAULT_LOCALE
+    return message_catalog.text(f"grade.{code}", resolved)
 
 
 def topic_seeds_from_ai_response(
