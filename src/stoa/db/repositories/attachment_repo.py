@@ -163,6 +163,38 @@ def _deserialize_attribute(value: object) -> object:
         raise AttachmentRepositoryConflict("dependency_failure") from None
 
 
+_IDENTIFIER = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}\b|\b[0-9a-fA-F]{16,}\b")
+
+
+def _safe_validation_message(exc: ClientError) -> str:
+    """The rule DynamoDB says was broken, with anything id-shaped taken out.
+
+    These messages name attributes and expression tokens, not the rows' values,
+    but a message is still the provider's words - so UUIDs and long hex runs
+    are replaced before it is written down, and the rest is bounded.
+    """
+    message = str(exc.response.get("Error", {}).get("Message") or "")
+    return _IDENTIFIER.sub("<id>", message)[:240]
+
+
+def _storage_quota_condition(limit_bytes: int, size: int) -> tuple[str, int]:
+    """Ask "does this file still fit" in a dialect the provider actually has.
+
+    DynamoDB allows arithmetic only in an UpdateExpression's SET, so
+    `used_bytes+:size<=:limit` is a syntax error in a condition. Every attempt
+    to attach a file to a message was answered 503 by it, which is why the
+    production table has never held a single attachment row. The question is
+    the same with the addition done here instead.
+
+    A file larger than the whole quota leaves no headroom at all, and then the
+    owner having no usage row yet must not be what lets it through.
+    """
+    headroom = limit_bytes - size
+    if headroom < 0:
+        return "used_bytes<=:headroom", headroom
+    return "attribute_not_exists(used_bytes) OR used_bytes<=:headroom", headroom
+
+
 def _failure_site() -> str:
     """Name the frame that raised, since `from None` removes the traceback."""
     try:
@@ -185,7 +217,12 @@ def _failure_cause() -> tuple[str, str]:
     if isinstance(response, Mapping):
         error = response.get("Error")
         if isinstance(error, Mapping):
-            return type(cause).__name__, str(error.get("Code") or "unknown")
+            code = str(error.get("Code") or "unknown")
+            # A validation failure means the request itself was wrong, and
+            # which rule it broke is only ever in the provider's own words.
+            if code == "ValidationException":
+                return type(cause).__name__, f"{code}: {_safe_validation_message(cause)}"
+            return type(cause).__name__, code
     return type(cause).__name__, "-"
 
 
@@ -4773,38 +4810,6 @@ def build_reuse_transaction(
             }
         },
     ]
-
-
-_IDENTIFIER = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}\b|\b[0-9a-fA-F]{16,}\b")
-
-
-def _safe_validation_message(exc: ClientError) -> str:
-    """The rule DynamoDB says was broken, with anything id-shaped taken out.
-
-    These messages name attributes and expression tokens, not the rows' values,
-    but a message is still the provider's words - so UUIDs and long hex runs
-    are replaced before it is written down, and the rest is bounded.
-    """
-    message = str(exc.response.get("Error", {}).get("Message") or "")
-    return _IDENTIFIER.sub("<id>", message)[:240]
-
-
-def _storage_quota_condition(limit_bytes: int, size: int) -> tuple[str, int]:
-    """Ask "does this file still fit" in a dialect the provider actually has.
-
-    DynamoDB allows arithmetic only in an UpdateExpression's SET, so
-    `used_bytes+:size<=:limit` is a syntax error in a condition. Every attempt
-    to attach a file to a message was answered 503 by it, which is why the
-    production table has never held a single attachment row. The question is
-    the same with the addition done here instead.
-
-    A file larger than the whole quota leaves no headroom at all, and then the
-    owner having no usage row yet must not be what lets it through.
-    """
-    headroom = limit_bytes - size
-    if headroom < 0:
-        return "used_bytes<=:headroom", headroom
-    return "attribute_not_exists(used_bytes) OR used_bytes<=:headroom", headroom
 
 
 def _transaction_shape(transact_items: list[AttachmentItem]) -> str:

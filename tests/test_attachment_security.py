@@ -4190,3 +4190,38 @@ def test_the_quota_condition_is_a_dialect_the_provider_speaks():
     with pytest.raises(ClientError) as oversized:
         charge("never-used", 200, 100)
     assert oversized.value.response["Error"]["Code"] == "ConditionalCheckFailedException"
+
+
+def test_a_validation_failure_says_which_rule(caplog):
+    """A malformed request is only explicable in the provider's own words.
+
+    Reading a conversation that holds an attachment answered 500 and the log
+    said `ValidationException` and no more, which names the class of fault and
+    not the fault. Scrubbing still applies: the rule, never the rows.
+    """
+    with caplog.at_level(logging.INFO, logger=attachment_repo.__name__):
+        try:
+            raise ClientError(
+                {
+                    "Error": {
+                        "Code": "ValidationException",
+                        "Message": (
+                            "Provided list of item keys contains duplicates for "
+                            "11111111-2222-3333-4444-555555555555"
+                        ),
+                    }
+                },
+                "BatchGetItem",
+            )
+        except ClientError:
+            with pytest.raises(attachment_repo.AttachmentRepositoryConflict):
+                raise attachment_repo.AttachmentRepositoryConflict("dependency_failure") from None
+
+    message = next(
+        r.getMessage()
+        for r in caplog.records
+        if "attachment_repository_conflict" in r.getMessage()
+    )
+    assert "detail=ValidationException: Provided list of item keys contains duplicates" in message
+    assert "11111111-2222-3333-4444-555555555555" not in message
+    assert "<id>" in message
