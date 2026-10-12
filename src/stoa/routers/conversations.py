@@ -56,7 +56,11 @@ from stoa.models.error import (
     SecurityErrorResponse,
 )
 from stoa.models.question import QuestionStatus
-from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
+from stoa.security.attachment_errors import (
+    AttachmentDecisionError,
+    AttachmentErrorCode,
+    log_attachment_failure,
+)
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.private_telemetry import emit_private_event
 from stoa.security.route_authorization import (
@@ -3498,6 +3502,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
 
 def _raise_attachment(error: AttachmentDecisionError, correlation_id: str) -> NoReturn:
     error.correlation_id = correlation_id
+    log_attachment_failure(error, route="conversations")
     headers = {"X-Correlation-ID": correlation_id}
     if error.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE:
         headers["Retry-After"] = "30"

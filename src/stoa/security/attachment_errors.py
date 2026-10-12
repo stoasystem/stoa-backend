@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import logging
+import traceback
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
+
+logger = logging.getLogger(__name__)
 
 
 class AttachmentErrorCode(StrEnum):
@@ -156,6 +160,36 @@ class AttachmentDecisionError(Exception):
 
     def public_body(self) -> dict[str, str]:
         return safe_attachment_error_body(self.code, correlation_id=self.correlation_id)
+
+
+def log_attachment_failure(error: AttachmentDecisionError, route: str) -> None:
+    """Record where a redacted failure came from, at the one boundary it leaves by.
+
+    The student is told only "temporarily unavailable", and the subsystem drops
+    its tracebacks with `from None` on the way here, but this exception's own
+    traceback still names the line that decided. Without it a 503 from a
+    provider outage, a contract violation and a scan running out of pages are
+    the same event to an operator - which is how card 127 came to be diagnosed
+    by probing the live API from outside instead of by reading a log.
+
+    Only frames are recorded: file, line and function, never a value.
+    """
+    frames = traceback.extract_tb(error.__traceback__)
+    where = " < ".join(
+        f"{frame.filename.rsplit('/', 1)[-1]}:{frame.lineno}:{frame.name}"
+        for frame in reversed(frames[-4:])
+    )
+    contract = ATTACHMENT_ERROR_REGISTRY[error.code]
+    log = logger.error if contract.http_status >= 500 else logger.info
+    log(
+        "attachment_failure code=%s status=%s route=%s correlation_id=%s detail=%s raised_at=%s",
+        error.code.value,
+        contract.http_status,
+        route,
+        error.correlation_id or "-",
+        error.internal_detail or "-",
+        where or "unknown",
+    )
 
 
 @dataclass(frozen=True, slots=True)

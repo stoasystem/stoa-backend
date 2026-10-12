@@ -10,6 +10,7 @@ from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
+from fastapi import HTTPException
 from botocore.exceptions import ClientError
 from pydantic import ValidationError
 from fakes.dynamodb import as_stored as _as_stored
@@ -58,6 +59,9 @@ from stoa.services.attachment_service import (
 from stoa.jobs import upload_cleanup
 from stoa.jobs.upload_cleanup import cleanup_expired_uploads
 from stoa.db.repositories import attachment_repo
+from stoa.routers import conversations as conversations_router
+from stoa.routers import files as files_router
+from stoa.security import attachment_errors
 from stoa.services.entitlement_service import resolve_student_entitlement
 from stoa.services import ai_service, attachment_service
 from stoa.services.ocr_service import OcrAttachmentFailure, extract_text_from_attachment
@@ -3953,3 +3957,82 @@ def test_a_conditional_conflict_does_not_cry_wolf(caplog):
     )
     assert record.levelno == logging.INFO
     assert "cause=none" in record.getMessage()
+
+
+def test_the_boundary_names_the_line_that_decided(caplog):
+    """Every redacted failure leaves by one door, so the door is where it is told.
+
+    `complete_upload` alone raises this directly from a dozen places, none of
+    which pass through the repository or the gateway wrapper - which is why
+    logging those two was not enough and card 127's second fault stayed
+    invisible. This exception's own traceback survives `from None`.
+    """
+    def _decides():
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+
+    deciding_line = sys._getframe().f_lineno - 2
+
+    def _deep():
+        _decides()
+    with caplog.at_level(logging.INFO, logger=attachment_errors.__name__):
+        try:
+            _deep()
+        except AttachmentDecisionError as error:
+            error.correlation_id = "corr-1"
+            attachment_errors.log_attachment_failure(error, route="files")
+
+    record = next(r for r in caplog.records if "attachment_failure" in r.getMessage())
+    message = record.getMessage()
+    assert record.levelno == logging.ERROR
+    assert "code=upload_service_unavailable status=503" in message
+    assert "route=files correlation_id=corr-1" in message
+    assert f"attachment_security.py:{deciding_line}:_decides" in message
+    # The caller chain, not only the innermost frame: in production the line
+    # that raised is often a shared helper, and which call reached it is the
+    # question. Pinning only the last frame would let that be truncated away.
+    assert "_decides < " in message
+    assert ":_deep" in message
+
+
+def test_a_failure_the_student_can_act_on_is_not_an_operator_alarm(caplog):
+    """The negative control: a 404 is the student's to fix, not an outage."""
+    with caplog.at_level(logging.INFO, logger=attachment_errors.__name__):
+        try:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+        except AttachmentDecisionError as error:
+            attachment_errors.log_attachment_failure(error, route="files")
+
+    record = next(r for r in caplog.records if "attachment_failure" in r.getMessage())
+    assert record.levelno == logging.INFO
+    assert "code=upload_not_found status=404" in record.getMessage()
+
+
+def test_both_doors_tell_before_they_answer():
+    """The guard for the call sites: a router that stops logging is a silent 503.
+
+    This is the shape card 127 ran into - the repository and the gateway both
+    logged, and the subsystem was still dark, because the route the student
+    actually hit raised past them both.
+    """
+    for module, raise_through, route in (
+        (files_router, files_router._raise_safe, "files"),
+        (conversations_router, conversations_router._raise_attachment, "conversations"),
+    ):
+        records = []
+        handler = logging.Handler()
+        handler.emit = records.append
+        log = logging.getLogger(attachment_errors.__name__)
+        log.addHandler(handler)
+        try:
+            error = AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+            with pytest.raises(HTTPException) as raised:
+                raise_through(error, "corr-door")
+        finally:
+            log.removeHandler(handler)
+        assert raised.value.status_code == 503
+        messages = [r.getMessage() for r in records]
+        assert any(
+            f"attachment_failure code=upload_service_unavailable status=503 route={route}" in m
+            and "correlation_id=corr-door" in m
+            for m in messages
+        ), f"{module.__name__} answered 503 without saying why: {messages}"

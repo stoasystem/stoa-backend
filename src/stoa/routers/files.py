@@ -21,6 +21,7 @@ from stoa.models.attachment import (
 from stoa.security.attachment_errors import (
     AttachmentDecisionError,
     AttachmentErrorCode,
+    log_attachment_failure,
 )
 from stoa.security.authorization import (
     AuthorizationAction,
@@ -71,6 +72,7 @@ _upload_actor_dependency.authorization_specs = (  # type: ignore[attr-defined]
 
 def _raise_safe(error: AttachmentDecisionError, correlation_id: str) -> Never:
     error.correlation_id = correlation_id
+    log_attachment_failure(error, route="files")
     headers = {"X-Correlation-ID": correlation_id}
     if error.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE:
         headers["Retry-After"] = "30"
