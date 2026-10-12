@@ -9,7 +9,9 @@ import threading
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
+import boto3
 import pytest
+from moto import mock_aws
 from fastapi import HTTPException
 from botocore.exceptions import ClientError
 from pydantic import ValidationError
@@ -4131,3 +4133,60 @@ def test_a_malformed_transaction_is_described_by_shape_not_by_value(caplog):
     # The shape, and nothing under it.
     assert owner not in message
     assert "one" not in message.split("shape=")[0]
+
+
+@mock_aws
+def test_the_quota_condition_is_a_dialect_the_provider_speaks():
+    """Against a parser, not a double: the condition must actually be valid.
+
+    `used_bytes+:size<=:limit` is a syntax error - DynamoDB allows arithmetic
+    only in an UpdateExpression's SET - so every attempt to attach a file to a
+    message was answered 503 and the production table has never held one
+    attachment row. The hand-written table doubles never parse a condition,
+    which is how this shipped and stayed green.
+    """
+    table = boto3.resource("dynamodb", region_name="eu-central-2").create_table(
+        TableName="quota-dialect",
+        KeySchema=[
+            {"AttributeName": "PK", "KeyType": "HASH"},
+            {"AttributeName": "SK", "KeyType": "RANGE"},
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": "PK", "AttributeType": "S"},
+            {"AttributeName": "SK", "AttributeType": "S"},
+        ],
+        BillingMode="PAY_PER_REQUEST",
+    )
+
+    def charge(owner: str, size: int, limit: int) -> None:
+        condition, headroom = attachment_repo._storage_quota_condition(limit, size)
+        table.update_item(
+            Key=attachment_repo.storage_key(owner),
+            UpdateExpression=(
+                "SET used_bytes=if_not_exists(used_bytes,:zero)+:size, limit_bytes=:limit"
+            ),
+            ConditionExpression=condition,
+            ExpressionAttributeValues={
+                ":zero": 0,
+                ":size": size,
+                ":limit": limit,
+                ":headroom": headroom,
+            },
+        )
+
+    charge("first-upload", 40, 100)
+    assert table.get_item(Key=attachment_repo.storage_key("first-upload"))["Item"][
+        "used_bytes"
+    ] == 40
+
+    # It still fits, and then it does not.
+    charge("first-upload", 50, 100)
+    with pytest.raises(ClientError) as refused:
+        charge("first-upload", 50, 100)
+    assert refused.value.response["Error"]["Code"] == "ConditionalCheckFailedException"
+
+    # A file bigger than the whole quota is refused even with no usage row yet:
+    # "nothing used so far" must not be what lets it through.
+    with pytest.raises(ClientError) as oversized:
+        charge("never-used", 200, 100)
+    assert oversized.value.response["Error"]["Code"] == "ConditionalCheckFailedException"

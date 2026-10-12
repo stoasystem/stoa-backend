@@ -2805,13 +2805,16 @@ def build_message_attachment_transaction(
                             "SET used_bytes=if_not_exists(used_bytes,:zero)+:size, "
                             "limit_bytes=:limit, updated_at=:updated"
                         ),
-                        "ConditionExpression": (
-                            "attribute_not_exists(used_bytes) OR used_bytes+:size<=:limit"
-                        ),
+                        "ConditionExpression": _storage_quota_condition(
+                            limit_bytes, fresh_bytes
+                        )[0],
                         "ExpressionAttributeValues": {
                             ":zero": 0,
                             ":size": fresh_bytes,
                             ":limit": limit_bytes,
+                            ":headroom": _storage_quota_condition(
+                                limit_bytes, fresh_bytes
+                            )[1],
                             ":updated": now_iso,
                         },
                     }
@@ -3958,15 +3961,22 @@ def build_question_attachment_transaction(
                                 "SET used_bytes=if_not_exists(used_bytes,:zero)+:size, "
                                 "limit_bytes=:limit, updated_at=:updated"
                             ),
-                            "ConditionExpression": (
-                                "attribute_not_exists(used_bytes) OR used_bytes+:size<=:limit"
-                            ),
+                            "ConditionExpression": _storage_quota_condition(
+                                limit_bytes,
+                                _require_positive_integer(attachment.get("content_length")),
+                            )[0],
                             "ExpressionAttributeValues": {
                                 ":zero": 0,
                                 ":size": _require_positive_integer(
                                     attachment.get("content_length")
                                 ),
                                 ":limit": limit_bytes,
+                                ":headroom": _storage_quota_condition(
+                                    limit_bytes,
+                                    _require_positive_integer(
+                                        attachment.get("content_length")
+                                    ),
+                                )[1],
                                 ":updated": now_iso,
                             },
                         }
@@ -4727,11 +4737,12 @@ def build_first_attachment_transaction(
             "Update": {
                 "Key": storage_key(upload_owner),
                 "UpdateExpression": "SET used_bytes=if_not_exists(used_bytes,:zero)+:size, limit_bytes=:limit, updated_at=:updated",
-                "ConditionExpression": "attribute_not_exists(used_bytes) OR used_bytes+:size<=:limit",
+                "ConditionExpression": _storage_quota_condition(limit_bytes, size)[0],
                 "ExpressionAttributeValues": {
                     ":zero": 0,
                     ":size": size,
                     ":limit": limit_bytes,
+                    ":headroom": _storage_quota_condition(limit_bytes, size)[1],
                     ":updated": now_iso,
                 },
             }
@@ -4776,6 +4787,24 @@ def _safe_validation_message(exc: ClientError) -> str:
     """
     message = str(exc.response.get("Error", {}).get("Message") or "")
     return _IDENTIFIER.sub("<id>", message)[:240]
+
+
+def _storage_quota_condition(limit_bytes: int, size: int) -> tuple[str, int]:
+    """Ask "does this file still fit" in a dialect the provider actually has.
+
+    DynamoDB allows arithmetic only in an UpdateExpression's SET, so
+    `used_bytes+:size<=:limit` is a syntax error in a condition. Every attempt
+    to attach a file to a message was answered 503 by it, which is why the
+    production table has never held a single attachment row. The question is
+    the same with the addition done here instead.
+
+    A file larger than the whole quota leaves no headroom at all, and then the
+    owner having no usage row yet must not be what lets it through.
+    """
+    headroom = limit_bytes - size
+    if headroom < 0:
+        return "used_bytes<=:headroom", headroom
+    return "attribute_not_exists(used_bytes) OR used_bytes<=:headroom", headroom
 
 
 def _transaction_shape(transact_items: list[AttachmentItem]) -> str:
