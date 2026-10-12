@@ -4036,3 +4036,44 @@ def test_both_doors_tell_before_they_answer():
             and "correlation_id=corr-door" in m
             for m in messages
         ), f"{module.__name__} answered 503 without saying why: {messages}"
+
+
+def test_a_blanket_handler_still_names_what_it_caught(caplog):
+    """`from None` keeps the cause from the student; it must not keep it from us.
+
+    Card 127's second fault - `complete_upload` answering 503 for every upload -
+    took two deploys to reach, because each blanket handler had to be taught to
+    say so by itself. The cause is still in flight while the decision is being
+    constructed, so it is taken there, once, for every site at once.
+    """
+    with caplog.at_level(logging.INFO, logger=attachment_errors.__name__):
+        try:
+            raise ClientError({"Error": {"Code": "NoSuchUpload"}}, "CompleteMultipartUpload")
+        except ClientError:
+            try:
+                raise AttachmentDecisionError(
+                    AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                ) from None
+            except AttachmentDecisionError as error:
+                assert error.internal_detail == "ClientError:NoSuchUpload"
+                attachment_errors.log_attachment_failure(error, route="files")
+
+    record = next(r for r in caplog.records if "attachment_failure" in r.getMessage())
+    assert "detail=ClientError:NoSuchUpload" in record.getMessage()
+
+
+def test_a_detail_the_caller_gave_is_not_overwritten():
+    """The negative control: an explicit detail wins over whatever is in flight.
+
+    Routes across this codebase already pass `internal_detail=type(exc).__name__`
+    by hand. Replacing those would lose the one the author chose.
+    """
+    try:
+        raise ClientError({"Error": {"Code": "NoSuchUpload"}}, "CompleteMultipartUpload")
+    except ClientError:
+        error = AttachmentDecisionError(
+            AttachmentErrorCode.UPLOAD_NOT_FOUND, internal_detail="chosen_by_hand"
+        )
+    assert error.internal_detail == "chosen_by_hand"
+    # And outside an `except` block there is nothing to name, so nothing is named.
+    assert AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND).internal_detail is None

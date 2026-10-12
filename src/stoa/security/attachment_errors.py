@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import sys
 import traceback
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -148,11 +150,37 @@ def safe_attachment_error_body(
     }
 
 
+def in_flight_cause() -> str | None:
+    """Name the exception being handled, without repeating what it says.
+
+    A provider error's message carries account coordinates, so only its own
+    `Error.Code` is taken; anything else is named by class alone. Returns None
+    outside an `except` block, where there is nothing to name.
+    """
+    cause = sys.exception()
+    if cause is None:
+        return None
+    response = getattr(cause, "response", None)
+    if isinstance(response, Mapping):
+        error = response.get("Error")
+        if isinstance(error, Mapping) and error.get("Code"):
+            return f"{type(cause).__name__}:{error['Code']}"
+    return type(cause).__name__
+
+
 @dataclass(slots=True)
 class AttachmentDecisionError(Exception):
     code: AttachmentErrorCode
     internal_detail: str | None = None
     correlation_id: str | None = None
+
+    def __post_init__(self) -> None:
+        # Most of the subsystem's blanket handlers raise this `from None`, which
+        # leaves an operator the decision but not the cause. The cause is still
+        # in flight here, and card 127's second fault needed two deploys to
+        # reach because each handler had to be taught to say so by itself.
+        if self.internal_detail is None:
+            self.internal_detail = in_flight_cause()
 
     @property
     def status_code(self) -> int:
