@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import base64
+import logging
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
@@ -16,6 +18,8 @@ from stoa.config import UPLOAD_INTENT_TTL_SECONDS
 from stoa.db.repositories import account_deletion_repo
 from stoa.db.dynamodb import get_table
 
+
+logger = logging.getLogger(__name__)
 
 type AttachmentItem = dict[str, object]
 
@@ -158,9 +162,59 @@ def _deserialize_attribute(value: object) -> object:
         raise AttachmentRepositoryConflict("dependency_failure") from None
 
 
+def _failure_site() -> str:
+    """Name the frame that raised, since `from None` removes the traceback."""
+    try:
+        frame = sys._getframe(3)
+    except ValueError:
+        return "unknown"
+    return f"{frame.f_code.co_name}:{frame.f_lineno}"
+
+
+def _failure_cause() -> tuple[str, str]:
+    """The in-flight exception's class and the provider's own code, never more.
+
+    A provider error carries account coordinates in its message, so only the
+    `Error.Code` is taken; anything else is reported by class name alone.
+    """
+    cause = sys.exception()
+    if cause is None:
+        return "none", "raised"
+    response = getattr(cause, "response", None)
+    if isinstance(response, Mapping):
+        error = response.get("Error")
+        if isinstance(error, Mapping):
+            return type(cause).__name__, str(error.get("Code") or "unknown")
+    return type(cause).__name__, "-"
+
+
 @dataclass(frozen=True, slots=True)
 class AttachmentRepositoryConflict(Exception):
+    """A conflict the caller is told about as `upload_service_unavailable`.
+
+    Forty-odd sites raise this with `from None`, and that is right for the
+    student - a provider's words are not an answer to give them - but it left
+    an operator nothing at all. Production ran for months with no application
+    log line from this module, so a 503 here could not be told apart from any
+    other 503. The cause is still in flight while this is constructed, so it
+    is recorded once here instead of at every site.
+    """
+
     category: str = "conditional_conflict"
+
+    def __post_init__(self) -> None:
+        cause, detail = _failure_cause()
+        # A conditional conflict is ordinary control flow - an idempotent
+        # replay losing a race - and saying so at WARNING would bury the
+        # dependency failures, which are the ones nobody can otherwise see.
+        log = logger.warning if self.category == "dependency_failure" else logger.info
+        log(
+            "attachment_repository_conflict category=%s site=%s cause=%s detail=%s",
+            self.category,
+            _failure_site(),
+            cause,
+            detail,
+        )
 
 
 class AttachmentTransactionOutcome(StrEnum):
@@ -228,6 +282,16 @@ class TransactionOperation:
 @dataclass(frozen=True, slots=True)
 class AttachmentTransactionError(Exception):
     outcome: AttachmentTransactionOutcome
+
+    def __post_init__(self) -> None:
+        cause, detail = _failure_cause()
+        logger.warning(
+            "attachment_transaction_failed outcome=%s site=%s cause=%s detail=%s",
+            self.outcome,
+            _failure_site(),
+            cause,
+            detail,
+        )
 
 
 @dataclass(frozen=True, slots=True)

@@ -3,6 +3,8 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+import logging
+import sys
 import threading
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -3901,3 +3903,53 @@ def test_cleanup_rejects_invalid_cursor_without_touching_local_fakes() -> None:
     )
     assert result.invalid_continuation == 1
     assert repository.uploads["invalid-cursor"]["status"] == "invalid"
+
+
+def test_dependency_failure_names_its_cause_and_site(caplog):
+    """A 503 the student cannot act on must still leave an operator something.
+
+    Production ran with no application log line from `attachment_repo` at all,
+    so every `upload_service_unavailable` looked alike and the cause had to be
+    inferred from black-box probes. The traceback is deliberately dropped by
+    `from None`, which is why the cause is read while it is still in flight.
+    """
+    with caplog.at_level(logging.INFO, logger=attachment_repo.__name__):
+        try:
+            raise ClientError(
+                {"Error": {"Code": "ProvisionedThroughputExceededException"}}, "Scan"
+            )
+        except ClientError:
+            with pytest.raises(attachment_repo.AttachmentRepositoryConflict):
+                raised_on = sys._getframe().f_lineno + 1
+                raise attachment_repo.AttachmentRepositoryConflict("dependency_failure")
+
+    record = next(
+        r for r in caplog.records if "attachment_repository_conflict" in r.getMessage()
+    )
+    message = record.getMessage()
+    assert record.levelno == logging.WARNING
+    assert "category=dependency_failure" in message
+    assert "cause=ClientError" in message
+    assert "detail=ProvisionedThroughputExceededException" in message
+    # The site must be the line that raised, not a frame inside the exception
+    # itself - the whole point is to replace the traceback `from None` removed.
+    assert f"site=test_dependency_failure_names_its_cause_and_site:{raised_on}" in message
+    assert "__post_init__" not in message
+
+
+def test_a_conditional_conflict_does_not_cry_wolf(caplog):
+    """The negative control: ordinary control flow must not log as a failure.
+
+    An idempotent replay losing its race raises the same class. If that were a
+    warning too, the dependency failures - the ones nobody can otherwise see -
+    would be buried under them.
+    """
+    with caplog.at_level(logging.INFO, logger=attachment_repo.__name__):
+        with pytest.raises(attachment_repo.AttachmentRepositoryConflict):
+            raise attachment_repo.AttachmentRepositoryConflict("conditional_conflict")
+
+    record = next(
+        r for r in caplog.records if "attachment_repository_conflict" in r.getMessage()
+    )
+    assert record.levelno == logging.INFO
+    assert "cause=none" in record.getMessage()

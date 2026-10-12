@@ -1305,9 +1305,15 @@ def complete_upload(
             )
     except AttachmentDecisionError:
         raise
-    except Exception:
+    except Exception as exc:
         # The assembling row retains the exact key, multipart ID, fence and lease.
         # A restart reconciles the exact completed version or aborts it during cleanup.
+        logger.error(
+            "upload_completion_failed upload_id=%s error_class=%s detail=%s",
+            upload_id,
+            type(exc).__name__,
+            _safe_gateway_detail(exc),
+        )
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
     completed = {
         **item,
