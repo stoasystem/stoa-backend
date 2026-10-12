@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import re
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -4763,6 +4764,20 @@ def build_reuse_transaction(
     ]
 
 
+_IDENTIFIER = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}\b|\b[0-9a-fA-F]{16,}\b")
+
+
+def _safe_validation_message(exc: ClientError) -> str:
+    """The rule DynamoDB says was broken, with anything id-shaped taken out.
+
+    These messages name attributes and expression tokens, not the rows' values,
+    but a message is still the provider's words - so UUIDs and long hex runs
+    are replaced before it is written down, and the rest is bounded.
+    """
+    message = str(exc.response.get("Error", {}).get("Message") or "")
+    return _IDENTIFIER.sub("<id>", message)[:240]
+
+
 def _transaction_shape(transact_items: list[AttachmentItem]) -> str:
     """Describe a rejected transaction by shape alone: no values, no identifiers.
 
@@ -4829,7 +4844,9 @@ def transact(
             # The request was malformed, not refused: no retry fixes it and no
             # condition explains it, so the shape is the only thing that can.
             logger.error(
-                "attachment_transaction_rejected %s", _transaction_shape(transact_items)
+                "attachment_transaction_rejected %s rule=%s",
+                _transaction_shape(transact_items),
+                _safe_validation_message(exc),
             )
         if described:
             raise AttachmentTransactionError(

@@ -4093,7 +4093,15 @@ def test_a_malformed_transaction_is_described_by_shape_not_by_value(caplog):
 
         def transact_attachment_write(self, items):
             raise ClientError(
-                {"Error": {"Code": "ValidationException", "Message": "duplicate"}},
+                {
+                    "Error": {
+                        "Code": "ValidationException",
+                        "Message": (
+                            "Supplied AttributeValue is empty for key :used of item "
+                            "11111111-2222-3333-4444-555555555555"
+                        ),
+                    }
+                },
                 "TransactWriteItems",
             )
 
@@ -4118,6 +4126,8 @@ def test_a_malformed_transaction_is_described_by_shape_not_by_value(caplog):
     assert "items=3" in message
     assert "duplicate_keys=1" in message
     assert "Put:ATTACHMENT/META Put:ATTACHMENT/META Delete:OWNER/STORAGE" in message
+    # The provider's own words name the rule, with anything id-shaped taken out.
+    assert "rule=Supplied AttributeValue is empty for key :used of item <id>" in message
     # The shape, and nothing under it.
     assert owner not in message
     assert "one" not in message.split("shape=")[0]
