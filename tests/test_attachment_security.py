@@ -4077,3 +4077,47 @@ def test_a_detail_the_caller_gave_is_not_overwritten():
     assert error.internal_detail == "chosen_by_hand"
     # And outside an `except` block there is nothing to name, so nothing is named.
     assert AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND).internal_detail is None
+
+
+def test_a_malformed_transaction_is_described_by_shape_not_by_value(caplog):
+    """A ValidationException means the request was wrong, so log what it was.
+
+    No retry fixes a malformed request and no condition explains it, and the
+    three rules DynamoDB enforces here - one operation per item, at most a
+    hundred items, well-formed keys - are all answerable from the shape. What
+    must not reach the log is whose rows they were.
+    """
+    class _Rejecting:
+        name = "stoa-main"
+        meta = None
+
+        def transact_attachment_write(self, items):
+            raise ClientError(
+                {"Error": {"Code": "ValidationException", "Message": "duplicate"}},
+                "TransactWriteItems",
+            )
+
+    owner = "11111111-2222-3333-4444-555555555555"
+    same_key = {"PK": f"ATTACHMENT#{owner}", "SK": "META#one"}
+    with caplog.at_level(logging.INFO, logger=attachment_repo.__name__):
+        with pytest.raises(attachment_repo.AttachmentRepositoryConflict):
+            attachment_repo.transact(
+                [
+                    {"Put": {"Item": {**same_key, "owner_id": owner}}},
+                    {"Put": {"Item": {**same_key, "owner_id": owner}}},
+                    {"Delete": {"Key": {"PK": f"OWNER#{owner}", "SK": "STORAGE#used"}}},
+                ],
+                table=_Rejecting(),
+            )
+
+    message = next(
+        r.getMessage()
+        for r in caplog.records
+        if "attachment_transaction_rejected" in r.getMessage()
+    )
+    assert "items=3" in message
+    assert "duplicate_keys=1" in message
+    assert "Put:ATTACHMENT/META Put:ATTACHMENT/META Delete:OWNER/STORAGE" in message
+    # The shape, and nothing under it.
+    assert owner not in message
+    assert "one" not in message.split("shape=")[0]

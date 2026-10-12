@@ -4763,6 +4763,35 @@ def build_reuse_transaction(
     ]
 
 
+def _transaction_shape(transact_items: list[AttachmentItem]) -> str:
+    """Describe a rejected transaction by shape alone: no values, no identifiers.
+
+    A DynamoDB `ValidationException` says the request itself was malformed, and
+    the three structural rules it enforces - one operation per item, at most a
+    hundred items, well-formed keys - are all answerable from the shape. Keys
+    are reduced to their prefix before the first `#`, so what is logged is
+    `Put:ATTACHMENT/META`, never whose attachment it is.
+    """
+    parts: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    duplicates = 0
+    for entry in transact_items:
+        if not isinstance(entry, Mapping):
+            parts.append("?")
+            continue
+        for kind, body in entry.items():
+            if not isinstance(body, Mapping):
+                continue
+            key = body.get("Key") or body.get("Item") or {}
+            pk = str(key.get("PK", "")) if isinstance(key, Mapping) else ""
+            sk = str(key.get("SK", "")) if isinstance(key, Mapping) else ""
+            if (pk, sk) in seen:
+                duplicates += 1
+            seen.add((pk, sk))
+            parts.append(f"{kind}:{pk.split('#')[0] or '?'}/{sk.split('#')[0] or '?'}")
+    return f"items={len(transact_items)} duplicate_keys={duplicates} shape=[{' '.join(parts)}]"
+
+
 def transact(
     operations: list[dict[str, object]] | list[TransactionOperation],
     *,
@@ -4796,6 +4825,12 @@ def transact(
                 TransactItems=_serialize_transactions(transact_items, target.name)
             )
     except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ValidationException":
+            # The request was malformed, not refused: no retry fixes it and no
+            # condition explains it, so the shape is the only thing that can.
+            logger.error(
+                "attachment_transaction_rejected %s", _transaction_shape(transact_items)
+            )
         if described:
             raise AttachmentTransactionError(
                 _attachment_transaction_outcome(
