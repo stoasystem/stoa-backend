@@ -22,7 +22,7 @@ from botocore.exceptions import ClientError
 from fastapi import HTTPException
 
 from stoa.config import Settings
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import get_table, omit_none_attributes, stored_int
 from stoa.db.repositories import (
     account_deletion_repo,
     billing_fact_repo,
@@ -30,6 +30,7 @@ from stoa.db.repositories import (
     notification_repo,
     user_repo,
 )
+from stoa.db.repositories.attachment_repo import wire_format_client
 from stoa.models.billing import (
     BillingFact,
     BillingFactKind,
@@ -5189,6 +5190,22 @@ def _within_dates(value: str | None, date_from: str | None, date_to: str | None)
 
 
 def _transact_write(operations: list[dict[str, Any]]) -> None:
+    # A None is serialized as the NULL type, and the table refuses a NULL in an
+    # attribute one of its indexes keys on: `create_parent_request` writes
+    # `student_id: None` and `GSI-StudentId` keys on it. The other two
+    # transaction serializers drop them; this one did not, and nothing noticed
+    # because the request ahead of it was being refused for a different reason.
+    #
+    # It happens before the branch on purpose. Production takes the low-level
+    # path and the test doubles take the high-level one, so a rule applied to
+    # only one of them is a rule no test can see. Items only: a condition's
+    # values are explicit, and a key cannot be absent.
+    operations = [
+        {**operation, "Put": {**put, "Item": omit_none_attributes(put["Item"])}}
+        if (put := operation.get("Put")) is not None
+        else operation
+        for operation in operations
+    ]
     table = get_table()
     if isinstance(table, _HighLevelTransactionTable):
         table.transact_write_items(TransactItems=operations)
@@ -5253,7 +5270,10 @@ def _transact_write(operations: list[dict[str, Any]]) -> None:
 
     if not isinstance(table, _DynamoTable):
         raise RuntimeError("DynamoDB transaction client is unavailable")
-    table.meta.client.transact_write_items(TransactItems=client_ops)
+    # The items above are already in wire format, and the resource table's own
+    # client would serialize them a second time (attachment_repo's note on the
+    # same trap). Stripe's writes go through here.
+    wire_format_client(table).transact_write_items(TransactItems=client_ops)
 
 
 def _versioned_profile_operations(

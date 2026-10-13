@@ -6,9 +6,12 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from zoneinfo import ZoneInfo
 
+import boto3
 import pytest
+from moto import mock_aws
 from pydantic import BaseModel, ValidationError
 
+from stoa.services import subscription_service
 from stoa.models.allowance import (
     MAX_EXACT_COUNT,
     AllowanceFinalization,
@@ -656,3 +659,57 @@ def test_support_projection_serializes_named_public_fields_by_alias() -> None:
         "safeActions",
         "beneficiaryIds",
     }.issubset(projection.model_dump(by_alias=True))
+
+
+@mock_aws
+def test_a_billing_transaction_is_not_serialized_twice(monkeypatch):
+    """Stripe's writes go down the path that broke attachments for five months.
+
+    `_transact_write` puts its operations into wire format itself and then
+    handed them to the resource table's own client, which carries request
+    transformations and serializes them again - every key becomes a map and
+    DynamoDB rejects the request for not matching the schema. The production
+    table does not satisfy the high-level protocol, so this is the branch it
+    takes, and the table holds no billing row at all.
+
+    Whether anyone has tried to subscribe is not something this can settle.
+    What it settles is that the write works.
+    """
+    resource = boto3.resource("dynamodb", region_name="eu-central-2")
+    resource.create_table(
+        TableName="stoa-main",
+        KeySchema=[
+            {"AttributeName": "PK", "KeyType": "HASH"},
+            {"AttributeName": "SK", "KeyType": "RANGE"},
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": "PK", "AttributeType": "S"},
+            {"AttributeName": "SK", "AttributeType": "S"},
+        ],
+        BillingMode="PAY_PER_REQUEST",
+    )
+    table = resource.Table("stoa-main")
+    assert not isinstance(table, subscription_service._HighLevelTransactionTable), (
+        "the branch under test is the one production takes"
+    )
+    monkeypatch.setattr(subscription_service, "get_table", lambda: table)
+
+    subscription_service._transact_write(
+        [
+            {
+                "Put": {
+                    "Item": {
+                        "PK": "BILLING#student-1",
+                        "SK": "FACT#one",
+                        "amount_cents": 1900,
+                        "currency": "CHF",
+                    },
+                    "ConditionExpression": "attribute_not_exists(PK)",
+                }
+            }
+        ]
+    )
+
+    stored = table.get_item(Key={"PK": "BILLING#student-1", "SK": "FACT#one"})["Item"]
+    assert stored["amount_cents"] == 1900
+    assert stored["currency"] == "CHF"

@@ -319,3 +319,54 @@ def test_the_stack_reader_sees_an_added_index_and_its_keys() -> None:
         "GSI-Poison": IndexSchema("poison_attr", "created_at"),
     }
     assert declared_indexes("table = dynamodb.Table(self, 'T')\n") == {}
+
+
+def test_a_parent_request_does_not_write_null_into_an_index_key(monkeypatch):
+    """The same rule, the other way a value can be absent: `None`, not `""`.
+
+    `create_parent_request` writes `student_id: None` - the request is about a
+    tier, not about one student - and `student_id` is the partition key of
+    `GSI-StudentId`. Of the three transaction serializers only
+    `subscription_service._transact_write` kept a None, and the double's own
+    note names it; no test had ever run that writer, because every route into
+    it is refused while billing is frozen.
+
+    It never showed because the request was being rejected one step earlier,
+    for serializing its items twice. Fixing that would have moved the failure
+    here instead of ending it.
+    """
+    from fakes.dynamodb import FakeTable
+
+    from stoa.db.repositories import user_repo
+    from stoa.services import subscription_service
+
+    table = FakeTable()
+    table.put_item(
+        Item={
+            "PK": "USER#parent-1",
+            "SK": "PROFILE",
+            "entity_type": "user_profile",
+            "user_id": "parent-1",
+            "role": "parent",
+            "subscription_tier": "free_trial",
+            "status": "active",
+        }
+    )
+    monkeypatch.setattr(subscription_service, "get_table", lambda: table)
+    monkeypatch.setattr(user_repo, "get_table", lambda: table)
+
+    created = subscription_service.create_parent_request(
+        parent_id="parent-1",
+        request_type="upgrade",
+        requested_tier="student",
+        parent_note="Bitte um ein Upgrade.",
+    )
+
+    stored = next(
+        row
+        for row in table.rows.values()
+        if row.get("entity_type") == subscription_service.REQUEST_ENTITY
+    )
+    assert created["status"] == "requested"
+    # Left out, not written as NULL: that is what a sparse index expects.
+    assert "student_id" not in stored
