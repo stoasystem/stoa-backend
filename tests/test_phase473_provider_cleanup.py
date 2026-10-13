@@ -726,7 +726,7 @@ def test_transactions_bypass_the_client_that_would_serialize_them_twice(monkeypa
 
     fresh = _WireFormatRejectingClient()
     monkeypatch.setattr(
-        attachment_repo, "_transaction_client", lambda _target: fresh
+        attachment_repo, "wire_format_client", lambda _target: fresh
     )
 
     attachment_repo.transact(

@@ -2382,7 +2382,7 @@ def get_attachments(
         raw_items: list[dict[str, object]] = []
         for _attempt in range(3):
             try:
-                response = _mapping(target.meta.client.batch_get_item(
+                response = _mapping(wire_format_client(target).batch_get_item(
                     RequestItems={
                         target.name: {"Keys": pending, "ConsistentRead": True}
                     }
@@ -4870,7 +4870,7 @@ def transact(
         else:
             if not isinstance(target, _DynamoTable):
                 raise AttachmentRepositoryConflict("dependency_failure")
-            _transaction_client(target).transact_write_items(
+            wire_format_client(target).transact_write_items(
                 TransactItems=_serialize_transactions(transact_items, target.name)
             )
     except ClientError as exc:
@@ -4952,12 +4952,15 @@ def _conditional(exc: ClientError) -> bool:
     }
 
 
-def _transaction_client(target: object) -> object:
+def wire_format_client(target: object) -> object:
     """Return a client that will not serialize these items a second time.
 
     The resource table's own client carries request-transformation handlers, so
     handing it items already in wire format turns every key into a map and the
-    write is rejected for not matching the schema.
+    request is rejected for not matching the schema. This was known and worked
+    around for writes while the read beside it kept the resource's client, so
+    reading a conversation that held an attachment answered 500 - unreachable
+    until the first attachment row in the table's history was written.
     """
     import boto3 as _boto3
 

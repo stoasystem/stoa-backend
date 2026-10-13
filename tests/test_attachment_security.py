@@ -2089,7 +2089,7 @@ def test_transaction_operation_index_classification_is_closed_and_redacted(
         # Transactions go through a client built for the purpose, so the double
         # is supplied the same way rather than through the table's own client.
         monkeypatch.setattr(
-            attachment_repo, "_transaction_client", lambda _target: table.client
+            attachment_repo, "wire_format_client", lambda _target: table.client
         )
     with pytest.raises(attachment_repo.AttachmentTransactionError) as error:
         attachment_repo.transact(operations, table=table)
@@ -4225,3 +4225,47 @@ def test_a_validation_failure_says_which_rule(caplog):
     assert "detail=ValidationException: Provided list of item keys contains duplicates" in message
     assert "11111111-2222-3333-4444-555555555555" not in message
     assert "<id>" in message
+
+
+@mock_aws
+def test_reading_attachments_survives_the_resource_clients_second_serialization():
+    """The read beside the write kept the client that serializes twice.
+
+    `wire_format_client` exists because the resource table's own client carries
+    request transformations, so items already in wire format have every key
+    turned into a map. That was known and worked around for `transact` while
+    `get_attachments` went on using `target.meta.client`, and the fault sat
+    unreachable until the first attachment row in the production table's
+    history was written - then reading that conversation answered 500.
+
+    A hand-written double cannot show this: the transformation belongs to
+    boto3's resource, so the table has to be a real one.
+    """
+    resource = boto3.resource("dynamodb", region_name="eu-central-2")
+    resource.create_table(
+        TableName="stoa-main",
+        KeySchema=[
+            {"AttributeName": "PK", "KeyType": "HASH"},
+            {"AttributeName": "SK", "KeyType": "RANGE"},
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": "PK", "AttributeType": "S"},
+            {"AttributeName": "SK", "AttributeType": "S"},
+        ],
+        BillingMode="PAY_PER_REQUEST",
+    )
+    table = resource.Table("stoa-main")
+    attachment_id = "be47a9e0-0db5-52ea-937a-2a8dcea1baf7"
+    table.put_item(
+        Item={
+            **attachment_repo.attachment_key(attachment_id),
+            "entity_type": "attachment",
+            "attachment_id": attachment_id,
+            "owner_id": "student-1",
+            "status": "active",
+        }
+    )
+
+    found = attachment_repo.get_attachments([attachment_id], table=table)
+    assert list(found) == [attachment_id]
+    assert found[attachment_id]["owner_id"] == "student-1"
