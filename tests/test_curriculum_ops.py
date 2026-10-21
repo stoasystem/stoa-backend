@@ -112,6 +112,9 @@ def _install_curriculum_ops_repo(monkeypatch, active_refs=None):
         "put_published_projection",
         lambda version, manifest: projections.append((dict(version), dict(manifest))),
     )
+    # The projection is stubbed, so nothing holds challenge ids for it to collide with;
+    # `test_curriculum_publish_projection` runs the real check against the table.
+    monkeypatch.setattr(repo, "assert_exercise_ids_available", lambda version: None)
     monkeypatch.setattr(repo, "append_audit_event", lambda public_id, event: audits.append((public_id, dict(event))))
     monkeypatch.setattr(
         repo,

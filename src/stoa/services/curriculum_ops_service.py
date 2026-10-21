@@ -266,6 +266,19 @@ def publish(
             "manifest": {"manifestId": pointer.get("manifest_id")},
             "version": _version_response(version),
         }
+    try:
+        curriculum_ops_repo.assert_exercise_ids_available(version)
+    except curriculum_ops_repo.ExerciseIdConflictError as exc:
+        _audit(
+            public_id,
+            user,
+            "publish_refused",
+            version["state"],
+            version["state"],
+            version_id,
+            "exercise_id_conflict",
+        )
+        raise HTTPException(status_code=409, detail="exercise_id_conflict") from exc
 
     now = _now()
     manifest = _manifest(public_id, version, pointer, user, now, reason)
@@ -309,6 +322,10 @@ def rollback(
     _require_capability(user, PUBLISHER_CAPABILITY)
     version = _existing_version(public_id, version_id)
     _require_state(version, ROLLBACK_STATES, "rollback_target_not_publishable")
+    try:
+        curriculum_ops_repo.assert_exercise_ids_available(version)
+    except curriculum_ops_repo.ExerciseIdConflictError as exc:
+        raise HTTPException(status_code=409, detail="exercise_id_conflict") from exc
     pointer = curriculum_ops_repo.get_pointer(public_id) or {}
     now = _now()
     manifest = _manifest(public_id, version, pointer, user, now, reason, operation="rollback")
@@ -591,6 +608,17 @@ def _validation_issues(
     issues.extend(_lesson_prerequisite_issues(lesson))
     if level in {"review", "publish"} and not exercises:
         issues.append(_validation_issue("exercises", "At least one exercise is required."))
+    seen_exercise_ids: set[object] = set()
+    for index, exercise in enumerate(exercises):
+        exercise_id = exercise.get("exercise_id")
+        if exercise_id and exercise_id in seen_exercise_ids:
+            issues.append(
+                _validation_issue(
+                    f"exercises[{index}].exercise_id",
+                    "Exercise id is used more than once in this lesson.",
+                )
+            )
+        seen_exercise_ids.add(exercise_id)
     if level == "publish":
         for index, exercise in enumerate(exercises, start=1):
             for key in ["exercise_id", "prompt", "difficulty", "answer_key", "explanation"]:
