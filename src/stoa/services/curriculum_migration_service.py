@@ -218,6 +218,10 @@ def _apply_row(row: dict[str, Any], user: dict[str, Any], now: str, migration_id
     pointer = None
     manifest = None
     if row["publishIntent"]:
+        try:
+            curriculum_ops_repo.assert_exercise_ids_available(version)
+        except curriculum_ops_repo.ExerciseIdConflictError as exc:
+            raise HTTPException(status_code=409, detail="exercise_id_conflict") from exc
         manifest = _publish_manifest(row, version, user, now, migration_id)
         curriculum_ops_repo.put_manifest(manifest)
         try:
