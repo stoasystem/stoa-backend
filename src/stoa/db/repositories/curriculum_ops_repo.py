@@ -143,15 +143,24 @@ def get_pointer(public_id: str) -> CurriculumItem | None:
 
 
 def put_pointer(item: CurriculumItem) -> None:
+    """Set the named fields on a lesson's pointer and keep every field it does not name.
+
+    A new draft names only `draft_version_id`. Replacing the row erased the published
+    version and manifest, so the next publish that named the live version as expected
+    was refused as stale."""
     table = get_table()
-    _put_item(
+    fields = {
+        "entity_type": POINTER_ENTITY,
+        **{key: value for key, value in item.items() if value is not None},
+    }
+    names = {f"#f{index}": key for index, key in enumerate(sorted(fields))}
+    values: CurriculumItem = {f":f{index}": fields[key] for index, key in enumerate(sorted(fields))}
+    _update_item(
         table,
-        Item={
-            "PK": f"CURRICULUM_POINTER#{item['public_id']}",
-            "SK": "META",
-            "entity_type": POINTER_ENTITY,
-            **item,
-        },
+        Key={"PK": f"CURRICULUM_POINTER#{item['public_id']}", "SK": "META"},
+        UpdateExpression="SET " + ", ".join(f"{name} = :{name[1:]}" for name in names),
+        ExpressionAttributeNames=names,
+        ExpressionAttributeValues=values,
     )
 
 
