@@ -64,7 +64,9 @@ def _backend_files(tmp_path: Path, *, package: str = "demo", version: str = "1.2
     return lock, requirements
 
 
-def _backend_audit(*, package: str = "demo", version: str = "1.2.3", advisory: str = "GHSA-abcd-1234-wxyz"):
+def _backend_audit(
+    *, package: str = "demo", version: str = "1.2.3", advisory: str = "GHSA-abcd-1234-wxyz"
+):
     return {
         "dependencies": [
             {
@@ -109,7 +111,9 @@ def _exception(lock: Path, **overrides: object):
     return value
 
 
-def _frontend_audit(*, severity: str = "high", advisory: int = 1099999, node: str = "node_modules/form-data"):
+def _frontend_audit(
+    *, severity: str = "high", advisory: int = 1099999, node: str = "node_modules/form-data"
+):
     return {
         "auditReportVersion": 2,
         "vulnerabilities": {
@@ -137,8 +141,22 @@ def _frontend_audit(*, severity: str = "high", advisory: int = 1099999, node: st
             }
         },
         "metadata": {
-            "vulnerabilities": {"info": 0, "low": 0, "moderate": 0, "high": 1, "critical": 0, "total": 1},
-            "dependencies": {"prod": 1, "dev": 0, "optional": 0, "peer": 0, "peerOptional": 0, "total": 1},
+            "vulnerabilities": {
+                "info": 0,
+                "low": 0,
+                "moderate": 0,
+                "high": 1,
+                "critical": 0,
+                "total": 1,
+            },
+            "dependencies": {
+                "prod": 1,
+                "dev": 0,
+                "optional": 0,
+                "peer": 0,
+                "peerOptional": 0,
+                "total": 1,
+            },
         },
     }
 
@@ -232,7 +250,9 @@ def test_one_exact_unexpired_exception_matches_only_bound_advisory_version_and_l
         ("unexpected", "field"),
     ],
 )
-def test_exception_schema_rejects_wildcards_broad_targets_and_unknown_fields(tmp_path, field, value):
+def test_exception_schema_rejects_wildcards_broad_targets_and_unknown_fields(
+    tmp_path, field, value
+):
     policy = _load_policy()
     lock, _ = _backend_files(tmp_path)
     exception = _exception(lock)
@@ -259,7 +279,10 @@ def test_duplicate_and_stale_unmatched_exceptions_fail_closed(tmp_path):
     stale = _exception(lock, advisory="GHSA-stale-1111-2222")
     with pytest.raises(policy.DependencyPolicyError, match="unmatched"):
         policy.evaluate_backend(
-            audit={"dependencies": [{"name": "demo", "version": "1.2.3", "vulns": []}], "fixes": []},
+            audit={
+                "dependencies": [{"name": "demo", "version": "1.2.3", "vulns": []}],
+                "fixes": [],
+            },
             lock_path=lock,
             requirements_path=requirements,
             exceptions=_ledger(stale),
@@ -320,7 +343,9 @@ def test_frontend_high_and_production_medium_block_but_dev_medium_does_not():
     assert dev_medium["status"] == "PASS"
 
 
-def test_frontend_policy_requires_the_authoritative_web_root_and_rejects_mobile_substitution(tmp_path):
+def test_frontend_policy_requires_the_authoritative_web_root_and_rejects_mobile_substitution(
+    tmp_path,
+):
     policy = _load_policy()
     mobile_root = tmp_path / "mobile"
     mobile_root.mkdir()
@@ -416,12 +441,12 @@ def test_committed_ecdsa_exception_is_exact_approved_expiring_and_source_support
             "advisory": "PYSEC-2026-1325",
             "advisory_aliases": ["CVE-2024-23342", "GHSA-wj6h-64fc-37mp"],
             "installed_version": "0.19.2",
-            "lock_sha256": "f8011b0c41641ee6f950e1803e92e94ce97cb3a7bd526d8f9b839443aff838d1",
+            "lock_sha256": "6178733a023d0ccd322561bedcb1b5559bdbc8ebaf095fb1ba0dd07a5ac56411",
             "dependency_scope": "runtime",
             "severity": "unavailable",
             "reachability": "proven-unreachable",
             "reachability_evidence": (
-                "Re-verified 2026-09-24 after the pypdf 6.19.0 lock change. "
+                "Re-verified 2026-10-21 after the tzdata lock change. "
                 "src/stoa/security/tokens.py rejects any alg other "
                 "than RS256 and passes algorithms RS256 only. src/stoa/security/jwks.py "
                 "accepts kty RSA alone and constructs RSAKey alone. A search of src for "
@@ -430,9 +455,10 @@ def test_committed_ecdsa_exception_is_exact_approved_expiring_and_source_support
             ),
             "owner": "project-owner",
             "approval_evidence": (
-                "Owner directed ticket E8 in Claude Code conversation on 2026-09-24: the "
-                "lock changed only by the pypdf 6.19.0 upgrade so this exception is rebound "
-                "to the new lock with its expiry unchanged. Upstream ecdsa still publishes "
+                "Owner directed in Claude Code conversation on 2026-10-21: the lock changed "
+                "only by adding tzdata for win32 alone so it never enters the Lambda runtime "
+                "and this exception is rebound to the new lock with its expiry unchanged. "
+                "Upstream ecdsa still publishes "
                 "0.19.2 as latest so neither exit named in the target is available yet."
             ),
             "expires_at": "2026-12-21T09:00:00Z",
@@ -445,8 +471,7 @@ def test_committed_ecdsa_exception_is_exact_approved_expiring_and_source_support
 
     tokens = (ROOT / "src" / "stoa" / "security" / "tokens.py").read_text(encoding="utf-8")
     runtime = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in sorted((ROOT / "src").rglob("*.py"))
+        path.read_text(encoding="utf-8") for path in sorted((ROOT / "src").rglob("*.py"))
     ).casefold()
     assert 'headers.get("alg") != "RS256"' in tokens
     assert 'algorithms=["RS256"]' in tokens
@@ -541,15 +566,15 @@ def test_committed_ecdsa_exception_accepts_only_the_exact_audit_identity():
             "advisory": "PYSEC-2026-1325",
             "advisory_aliases": ["CVE-2024-23342", "GHSA-wj6h-64fc-37mp"],
             "installed_version": "0.19.2",
-            "lock_sha256": "f8011b0c41641ee6f950e1803e92e94ce97cb3a7bd526d8f9b839443aff838d1",
+            "lock_sha256": "6178733a023d0ccd322561bedcb1b5559bdbc8ebaf095fb1ba0dd07a5ac56411",
             "reachability": "proven-unreachable",
             "expires_at": "2026-12-21T09:00:00Z",
         }
     ]
 
-    audit["dependencies"][next(
-        index for index, item in enumerate(audit["dependencies"]) if item["name"] == "ecdsa"
-    )]["vulns"][0]["aliases"] = ["CVE-2024-23342"]
+    audit["dependencies"][
+        next(index for index, item in enumerate(audit["dependencies"]) if item["name"] == "ecdsa")
+    ]["vulns"][0]["aliases"] = ["CVE-2024-23342"]
     with pytest.raises(policy.DependencyPolicyError, match="unmatched"):
         policy.evaluate_backend(
             audit=audit,
@@ -574,8 +599,7 @@ def test_supported_backend_advisory_fixes_are_present_in_frozen_runtime_lock():
     versions = {
         item["name"]: item["version"]
         for item in lock["package"]
-        if item["name"]
-        in {"cryptography", "pydantic-settings", "python-multipart", "starlette"}
+        if item["name"] in {"cryptography", "pydantic-settings", "python-multipart", "starlette"}
     }
 
     minimums = {
