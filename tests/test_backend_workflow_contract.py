@@ -93,6 +93,15 @@ WorkflowLoader.add_constructor(
 )
 
 
+def reads_secrets(workflow: object) -> bool:
+    """Whether a parsed workflow references the secrets context anywhere.
+
+    Searched in the parsed document rather than the file text: a comment saying
+    "no secrets." in the frontend workflow failed the deploy gate on main while
+    the workflow read none."""
+    return "secrets." in json.dumps(workflow, default=str)
+
+
 def _load_workflow() -> tuple[str, dict[str, Any]]:
     raw = WORKFLOW_PATH.read_text(encoding="utf-8")
     value = yaml.load(raw, Loader=WorkflowLoader)
@@ -383,6 +392,13 @@ def test_only_candidate_then_fixed_formal_are_invoked() -> None:
         ),
     }
     assert len(re.findall(r"python scripts/release_gate\.py (?:candidate|formal)", raw)) == 2
+
+
+def test_secrets_check_ignores_comments_but_not_expressions() -> None:
+    commented = "jobs:\n  a:\n    # Reads two files; no network, no secrets. Runs.\n    steps: []\n"
+    reading = "jobs:\n  a:\n    steps:\n      - run: echo ${{ secrets.TOKEN }}\n"
+    assert not reads_secrets(yaml.load(commented, Loader=WorkflowLoader))
+    assert reads_secrets(yaml.load(reading, Loader=WorkflowLoader))
 
 
 def test_workflow_has_no_delivery_or_alternate_gate_authority() -> None:

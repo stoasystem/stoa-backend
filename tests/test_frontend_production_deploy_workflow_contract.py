@@ -6,7 +6,7 @@ import re
 import subprocess
 from typing import Any
 
-from test_backend_workflow_contract import WorkflowLoader
+from test_backend_workflow_contract import WorkflowLoader, reads_secrets
 from test_frontend_workflow_contract import FRONTEND_ROOT
 import yaml
 
@@ -43,7 +43,7 @@ def test_deploys_only_on_pushes_to_main() -> None:
     assert list(workflow["jobs"]) == ["verify", "deploy"]
     assert workflow["jobs"]["deploy"]["needs"] == "verify"
     assert "environment" not in workflow["jobs"]["deploy"]
-    assert "secrets." not in raw
+    assert not reads_secrets(workflow)
 
 
 def test_gate_runs_lint_tests_and_the_publisher_suite() -> None:

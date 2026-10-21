@@ -12,7 +12,7 @@ import re
 import subprocess
 from typing import Any
 
-from test_backend_workflow_contract import WorkflowLoader
+from test_backend_workflow_contract import WorkflowLoader, reads_secrets
 import yaml
 
 
@@ -111,7 +111,7 @@ def test_only_the_deploy_job_can_obtain_aws_credentials() -> None:
     # OIDC subject to :environment:<name> and the role stops being assumable.
     assert "environment" not in jobs["deploy"]
     assert raw.count("id-token") == 1
-    assert "secrets." not in raw
+    assert not reads_secrets(workflow)
     assert "aws-access-key-id" not in raw
 
 
