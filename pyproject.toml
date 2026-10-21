@@ -17,6 +17,8 @@ dependencies = [
     "stripe>=15.2.0",
     "pillow>=11.0.0",
     "pypdf>=5.0.0",
+    # Windows ships no IANA database for zoneinfo; Lambda reads the system one.
+    "tzdata>=2024.1; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
