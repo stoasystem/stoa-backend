@@ -22,6 +22,7 @@ from fakes.dynamodb import FakeTable
 from scripts import seed_practice
 from stoa.db.repositories import curriculum_ops_repo, practice_repo
 from stoa.services import (
+    answer_judging,
     curriculum_analytics_service,
     curriculum_ops_service,
     curriculum_service,
@@ -152,6 +153,18 @@ def test_a_published_lesson_is_readable_and_answerable(table: FakeTable) -> None
 
     lesson = table.rows[("PRACTICE", f"LESSON#{LESSON_ID}")]
     assert lesson["challenge_count"] == 2
+
+
+def test_accepted_answers_reach_the_runtime_row_and_count(table: FakeTable) -> None:
+    _publish(_payload(_exercise(1, answer="59/12", acceptedAnswers=[" 4 11/12 ", "", "4 11/12"])))
+
+    challenge = practice_repo.get_challenge(f"{LESSON_ID}-q01")
+    assert challenge is not None
+    assert challenge["accepted_answers"] == ["4 11/12"]
+    assert answer_judging.judge_challenge("4 11 / 12", challenge)
+    assert not answer_judging.judge_challenge("118/24", challenge)
+    preview = practice_projection_service.build_challenge_preview(challenge)
+    assert "4 11/12" not in str(preview)
 
 
 def test_free_text_hints_never_reach_the_runtime_row(table: FakeTable) -> None:

@@ -11,7 +11,7 @@ from fastapi import HTTPException
 
 from stoa.db.repositories import curriculum_ops_repo, practice_repo
 from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
-from stoa.services import curriculum_analytics_service, curriculum_translations
+from stoa.services import answer_judging, curriculum_analytics_service, curriculum_translations
 
 
 AUTHOR_CAPABILITY = "curriculum_author"
@@ -72,6 +72,8 @@ EXERCISE_FIELD_ALIASES = {
     "answerKey": "answer_key",
     "correct_answer": "answer_key",
     "correctAnswer": "answer_key",
+    "accepted_answers": "accepted_answers",
+    "acceptedAnswers": "accepted_answers",
     "hint": "hint",
     "hints": "hints",
     "explanation": "explanation",
@@ -441,8 +443,28 @@ def _exercise_payloads(public_id: str, exercises: list[dict[str, Any]]) -> list[
         for rich_field in ["hint", "hints", "tags", "media_references"]:
             if rich_field in exercise:
                 item[rich_field] = exercise[rich_field]
+        accepted = _accepted_answers(
+            exercise.get("accepted_answers", exercise.get("acceptedAnswers"))
+        )
+        if accepted:
+            item["accepted_answers"] = accepted
+        else:
+            item.pop("accepted_answers", None)
         normalized.append(item)
     return normalized
+
+
+def _accepted_answers(value: Any) -> list[str]:
+    """Other writings of the key that also count; stripped, de-duplicated, bounded."""
+    if not isinstance(value, list | tuple):
+        return []
+    accepted: list[str] = []
+    for raw in value:
+        text = "" if raw is None else str(raw).strip()
+        text = text[: answer_judging.MAX_ACCEPTED_ANSWER_LENGTH]
+        if text and text not in accepted:
+            accepted.append(text)
+    return accepted[: answer_judging.MAX_ACCEPTED_ANSWERS]
 
 
 def _validate_publish_ready(

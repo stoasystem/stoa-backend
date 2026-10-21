@@ -4,7 +4,7 @@ import json
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from functools import lru_cache, partial
-from typing import Any, Literal, Optional, Protocol, runtime_checkable
+from typing import Annotated, Any, Literal, Optional, Protocol, runtime_checkable
 from uuid import uuid4
 
 import boto3
@@ -51,6 +51,7 @@ from stoa.models import user as user_model
 from stoa.models.user import SubscriptionTier
 from stoa.services import (
     account_provisioning_service,
+    answer_judging,
     teacher_support_allowance_service,
     locale_service,
     notify_service,
@@ -942,6 +943,13 @@ class CurriculumExerciseDraftRequest(BaseModel):
     difficulty: str = Field(default="practice", min_length=1, max_length=80)
     order: int | None = Field(default=None, ge=1, le=200)
     answer_key: str | None = Field(default=None, alias="answerKey", max_length=2000)
+    accepted_answers: list[
+        Annotated[str, Field(min_length=1, max_length=answer_judging.MAX_ACCEPTED_ANSWER_LENGTH)]
+    ] = Field(
+        default_factory=list,
+        alias="acceptedAnswers",
+        max_length=answer_judging.MAX_ACCEPTED_ANSWERS,
+    )
     explanation: str | None = Field(default=None, max_length=2000)
     skills: list[str] = Field(default_factory=list)
 

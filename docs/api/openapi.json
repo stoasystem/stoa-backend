@@ -2961,6 +2961,16 @@
       "CurriculumExerciseDraftRequest": {
         "additionalProperties": true,
         "properties": {
+          "acceptedAnswers": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Acceptedanswers",
+            "type": "array"
+          },
           "answerKey": {
             "anyOf": [
               {

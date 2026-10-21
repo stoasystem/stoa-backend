@@ -14,7 +14,7 @@ import secrets
 from collections.abc import Collection, Mapping, Sequence
 from typing import Any
 
-from stoa.services import curriculum_service, knowledge_mastery_service
+from stoa.services import answer_judging, curriculum_service, knowledge_mastery_service
 
 #: Wrong answers a quiz forgives; the next one loses it.
 QUIZ_MAX_MISTAKES = 1
@@ -93,14 +93,8 @@ def hearts_left(mistakes: int) -> int:
 
 
 def judge_answer(submitted: Any, correct_answer: Any) -> bool:
-    """Compare an answer the way the ordinary practice route does."""
-
-    def normalized(value: Any) -> str:
-        if isinstance(value, list):
-            return "|".join(str(item).strip().lower() for item in value)
-        return str(value).strip().lower()
-
-    return normalized(submitted) == normalized(correct_answer)
+    """Compare an answer with a bare key; `answer_judging` holds the rules."""
+    return answer_judging.judge(submitted, correct_answer)
 
 
 def new_token() -> str:
