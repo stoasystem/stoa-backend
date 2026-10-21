@@ -180,6 +180,11 @@ SKILL_UNITS: dict[str, dict[str, str]] = {
         "brueche-subtrahieren": "brueche-u2",
         "brueche-multiplizieren": "brueche-u2",
         "brueche-anteil-einer-menge": "brueche-u2",
+        # Knowledge cards KP-BRU-GANZES, KP-BRU-ANTEILSBRUCH and
+        # KP-BRU-RECHENREIHENFOLGE of the ZAP fractions batch (#106).
+        "brueche-ganzes-bestimmen": "brueche-u2",
+        "brueche-anteilsbruch-bestimmen": "brueche-u2",
+        "brueche-rechenreihenfolge": "brueche-u2",
         "gleichungen-einstufig": "gleichungen-u1",
         "gleichungen-probe": "gleichungen-u1",
         "gleichungen-zweistufig": "gleichungen-u1",
@@ -226,6 +231,9 @@ SKILL_TITLES: dict[str, str] = {
     "brueche-subtrahieren": "Brüche subtrahieren",
     "brueche-multiplizieren": "Brüche multiplizieren",
     "brueche-anteil-einer-menge": "Bruchteil einer Menge berechnen",
+    "brueche-ganzes-bestimmen": "Vom Bruchteil aufs Ganze schliessen",
+    "brueche-anteilsbruch-bestimmen": "Einen Anteil als Bruch angeben",
+    "brueche-rechenreihenfolge": "Rechenreihenfolge in Bruchtermen",
     "gleichungen-einstufig": "Einstufige Gleichungen lösen",
     "gleichungen-probe": "Lösung durch Einsetzen prüfen",
     "gleichungen-zweistufig": "Zweistufige Gleichungen lösen",
@@ -298,6 +306,21 @@ SKILL_TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "A fraction of a quantity",
         "fr": "Une fraction d'une quantité",
         "it": "Una frazione di una quantità",
+    },
+    "brueche-ganzes-bestimmen": {
+        "en": "Finding the whole from a fraction of it",
+        "fr": "Retrouver le tout à partir d'une fraction",
+        "it": "Risalire all'intero da una sua frazione",
+    },
+    "brueche-anteilsbruch-bestimmen": {
+        "en": "Writing a share as a fraction",
+        "fr": "Exprimer une part sous forme de fraction",
+        "it": "Esprimere una parte come frazione",
+    },
+    "brueche-rechenreihenfolge": {
+        "en": "Order of operations with fractions",
+        "fr": "Priorité des opérations avec des fractions",
+        "it": "Ordine delle operazioni con le frazioni",
     },
     "gleichungen-einstufig": {
         "en": "Solving one-step equations",

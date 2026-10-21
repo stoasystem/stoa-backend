@@ -68,14 +68,19 @@ def _seed_rows() -> list[dict[str, Any]]:
     return rows
 
 
-@pytest.fixture
-def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
+def install_seeded_table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
+    """One table double holding the seed, behind both repositories the workflow uses."""
     table = FakeTable()
     table.seed(*_seed_rows())
     monkeypatch.setattr(practice_repo, "get_table", lambda: table)
     monkeypatch.setattr(curriculum_ops_repo, "get_table", lambda: table)
     monkeypatch.setattr(curriculum_analytics_service, "record_publish_event", lambda *a, **k: None)
     return table
+
+
+@pytest.fixture
+def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
+    return install_seeded_table(monkeypatch)
 
 
 def _exercise(number: int, answer: str = "1", **extra: Any) -> dict[str, Any]:
