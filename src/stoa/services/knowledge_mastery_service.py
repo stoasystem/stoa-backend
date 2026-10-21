@@ -389,10 +389,15 @@ def skill_states(
     states: dict[str, SkillMastery] = {}
     for unit in units:
         unit_id = str(unit.get("id") or "")
+        exercises = skills_by_exercise.get(unit_id, {})
+        # A skill point appears once an active exercise trains it. A skill is
+        # registered before its exercises are published (#106), and until then
+        # nothing could light it: every student would see a speck that stays dark.
+        trained = {skill for skills in exercises.values() for skill in skills}
         for judged in judge_skills(
             unit_id=unit_id,
-            skill_ids=skills_by_unit.get(unit_id, []),
-            skills_by_exercise=skills_by_exercise.get(unit_id, {}),
+            skill_ids=[skill for skill in skills_by_unit.get(unit_id, []) if skill in trained],
+            skills_by_exercise=exercises,
             exercises_answered_right=answered_right,
         ):
             states[judged.skill_id] = judged
