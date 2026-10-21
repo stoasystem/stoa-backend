@@ -48,6 +48,7 @@ from stoa.security.route_authorization import (
     student_actor_dependency,
 )
 from stoa.services import (
+    answer_judging,
     knowledge_map_service,
     curriculum_analytics_service,
     curriculum_service,
@@ -1084,9 +1085,7 @@ async def answer_lesson_quiz(
             },
         ) from error
 
-    correct = lesson_quiz_service.judge_answer(
-        student_answer, challenge.get("correct_answer", "")
-    )
+    correct = answer_judging.judge_challenge(student_answer, challenge)
     mistakes = _as_int(session.get("mistakes"))
     asked, queue = queue[0], queue[1:]
     if not correct:
@@ -1258,8 +1257,7 @@ async def submit_answer(
                 "correlationId": correlation_id,
             },
         ) from error
-    correct_answer = challenge.get("correct_answer", "")
-    correct = lesson_quiz_service.judge_answer(student_answer, correct_answer)
+    correct = answer_judging.judge_challenge(student_answer, challenge)
 
     versioned_challenge = practice_repo.version_challenge(challenge)
     lesson_id = str(versioned_challenge.get("lesson_id") or "")
