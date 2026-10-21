@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from test_backend_workflow_contract import WorkflowLoader
+from test_backend_workflow_contract import WorkflowLoader, reads_secrets
 import yaml
 
 
@@ -73,7 +73,7 @@ def test_staging_only_credentials_follow_all_required_gates() -> None:
         assert job["permissions"] == {"contents": "read", "id-token": "write"}
     assert "id-token" not in raw.split("staging_substrate:", maxsplit=1)[0]
     assert "configure-aws-credentials" not in raw
-    assert "secrets." not in raw
+    assert not reads_secrets(workflow)
 
 
 def test_failure_tamper_or_missing_receipt_cuts_all_delivery_edges() -> None:

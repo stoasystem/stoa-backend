@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 import yaml
 
+from test_backend_workflow_contract import reads_secrets
 import test_frontend_workflow_contract as shared
 
 
@@ -365,7 +366,7 @@ def test_production_deploy_workflow_deploys_named_stacks_after_a_diff() -> None:
     for token in ("cdk destroy", "cdk import", "|| true", "StoaSandbox"):
         assert token not in commands
     assert "snapshot_lambda_environment.py" in commands
-    assert "secrets." not in raw
+    assert not reads_secrets(workflow)
 
     for step in job["steps"]:
         reference = step.get("uses")
