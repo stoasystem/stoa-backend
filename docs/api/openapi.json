@@ -3114,6 +3114,19 @@
             "title": "Objective",
             "type": "string"
           },
+          "order": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order"
+          },
           "publicLessonId": {
             "maxLength": 200,
             "minLength": 1,
