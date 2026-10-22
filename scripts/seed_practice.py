@@ -104,17 +104,26 @@ CHALLENGE_SKILLS = {
     "textaufgaben-l2-c1": ["textaufgaben-geschwindigkeit"],
     "textaufgaben-l2-c2": ["textaufgaben-fahrzeit"],
     "textaufgaben-l2-c3": ["textaufgaben-zeitspanne"],
-    "textaufgaben-l3-c1": ["textaufgaben-zap-flaeche"],
-    "textaufgaben-l3-c2": ["textaufgaben-zap-verhaeltnis"],
-    "textaufgaben-l3-c3": ["textaufgaben-zap-mehrschritt"],
-    "textaufgaben-l4-c1": ["textaufgaben-zap-flaeche"],
-    "textaufgaben-l4-c2": ["textaufgaben-zap-mehrschritt"],
-    "textaufgaben-l4-c3": ["textaufgaben-zap-kreis"],
+    # The six exercises of the retired "ZAP-Prüfungsaufgaben" star, each moved to
+    # the knowledge point it practises.
+    "textaufgaben-l1-c4": ["textaufgaben-preis-pro-einheit"],
+    "geometrie-l5-c1": ["geometrie-flaeche-rechteck"],
+    "geometrie-l5-c2": ["geometrie-flaeche-rechteck"],
+    "geometrie-l5-c3": ["geometrie-kreis-umfang"],
+    "prozentrechnung-l4-c4": ["prozentrechnung-verhaeltnis-teilen"],
+    "gleichungen-l4-c4": ["gleichungen-textaufgabe"],
 }
+
+
+RETIRED_CHALLENGES = frozenset(
+    f"textaufgaben-l{lesson}-c{order}" for lesson in (3, 4) for order in (1, 2, 3)
+)
 
 
 def challenge_skills(challenge_id: str) -> list[str]:
     """The skills one exercise carries. Missing is an error, not an empty list."""
+    if challenge_id in RETIRED_CHALLENGES:
+        return []
     skills = CHALLENGE_SKILLS.get(challenge_id)
     if not skills:
         raise ValueError(f"no skills declared for {challenge_id}")
@@ -319,7 +328,7 @@ def _gleichungen_data():
         {"lesson_id": f"{tid}-l4", "unit_id": f"{tid}-u2", "topic_id": tid,
          "subject_id": sid, "grade_level": gl, "topic_title": tt,
          "title": "ZAP-Aufgaben: Gleichungen", "difficulty": "review",
-         "estimated_minutes": 15, "order": 4, "challenge_count": 3},
+         "estimated_minutes": 15, "order": 4, "challenge_count": 4},
     ]
 
     challenges = [
@@ -403,6 +412,12 @@ def _gleichungen_data():
             "Sei b = Breite. Länge = b + 4. Umfang: 2·(b + b + 4) = 36 → 2·(2b+4)=36 → 2b+4=18 → b=7.",
             "Breite = b, Länge = b+4. 2(b + b+4) = 36 → 4b+8 = 36 → 4b = 28 → b = 7 cm.",
             "Korrekt! Die Breite ist 7 cm.", "Gleichung: 2·(Breite + Länge) = 36. Ersetze Länge = Breite + 4."),
+        _mc(f"{tid}-l4", tid, sid, gl, tt, f"{tid}-u2", 4,
+            "Ein Tank enthält 200 Liter. Jede Minute fliessen 8 Liter hinein und 3 Liter ab. Nach wie vielen Minuten sind 235 Liter im Tank?",
+            ["3 min", "5 min", "7 min", "4 min"], "7 min",
+            "Netto-Zufluss: 8 − 3 = 5 L/min. Benötigt: 235 − 200 = 35 L. 35 ÷ 5 = 7 Minuten.",
+            "Nettozufluss = 5 L/min. 35 L fehlen. 35/5 = 7 Minuten.",
+            "Richtig! 7 Minuten.", "Nettozufluss = 8 − 3 = 5 L/min. Dann: (235−200) ÷ 5."),
     ]
 
     topic = {
@@ -430,6 +445,14 @@ def _geometrie_data():
          "title": "Volumen und Oberfläche",
          "description": "Quader- und Würfelvolumen, Pythagoras.",
          "order": 2, "prerequisite_unit_ids": ["geometrie-u1"]},
+        {"unit_id": f"{tid}-u3", "topic_id": tid, "subject_id": sid, "grade_level": gl,
+         "title": "Koordinaten und Abbildungen",
+         "description": "Punkte im Koordinatensystem; Spiegeln, Drehen, Verschieben.",
+         "order": 3, "prerequisite_unit_ids": []},
+        {"unit_id": f"{tid}-u4", "topic_id": tid, "subject_id": sid, "grade_level": gl,
+         "title": "Räumliches Vorstellen",
+         "description": "Körper, Netze, Ansichten und zusammengesetzte Figuren.",
+         "order": 4, "prerequisite_unit_ids": []},
     ]
 
     lessons = [
@@ -449,6 +472,10 @@ def _geometrie_data():
          "subject_id": sid, "grade_level": gl, "topic_title": tt,
          "title": "Satz des Pythagoras", "difficulty": "review",
          "estimated_minutes": 15, "order": 4, "challenge_count": 3},
+        {"lesson_id": f"{tid}-l5", "unit_id": f"{tid}-u1", "topic_id": tid,
+         "subject_id": sid, "grade_level": gl, "topic_title": tt,
+         "title": "Flächen und Kreise im Alltag", "difficulty": "review",
+         "estimated_minutes": 15, "order": 5, "challenge_count": 3},
     ]
 
     challenges = [
@@ -528,6 +555,25 @@ def _geometrie_data():
             "h² = 5² − 3² = 25 − 9 = 16 → h = 4 m.",
             "Pythagoras: h² = Leiter² − Bodenabstand² = 25 − 9 = 16 → h = 4 m.",
             "Super! Die Leiter reicht 4 m hoch.", "Hypotenuse = 5 m, eine Kathete = 3 m → andere Kathete = ?"),
+        # l5 — Flächen und Kreise im Alltag
+        _input(f"{tid}-l5", tid, sid, gl, tt, f"{tid}-u1", 1,
+            "Ein rechteckiges Zimmer ist 4,5 m lang und 3,6 m breit. Wie viele Quadratmeter Teppich braucht man für den ganzen Boden?",
+            "16.2",
+            "Fläche = 4,5 × 3,6 = 16,2 m².",
+            "A = 4,5 × 3,6 = 16,2 m².",
+            "Richtig! 16,2 m².", "Fläche Rechteck = Länge × Breite."),
+        _input(f"{tid}-l5", tid, sid, gl, tt, f"{tid}-u1", 2,
+            "Ein Quadrat hat den Umfang 48 cm. Berechne die Fläche des Quadrats in cm².",
+            "144",
+            "Seite = 48 ÷ 4 = 12 cm. Fläche = 12² = 144 cm².",
+            "U = 4a → a = 48/4 = 12 cm. A = 12² = 144 cm².",
+            "Korrekt! 144 cm².", "Erst Seite aus Umfang: a = U/4 = 12. Dann Fläche = a²."),
+        _input(f"{tid}-l5", tid, sid, gl, tt, f"{tid}-u1", 3,
+            "Eine Bahn fährt auf einem kreisförmigen Gleis mit Radius 50 m. Wie weit fährt sie bei 3 vollen Runden? (π ≈ 3,14, Antwort in m, gerundet auf ganze Meter)",
+            "942",
+            "Umfang = 2·π·r = 2·3,14·50 = 314 m. 3 Runden = 3 × 314 = 942 m.",
+            "U = 2 × 3,14 × 50 = 314 m. 3 Runden: 3 × 314 = 942 m.",
+            "Super! 942 m.", "Umfang = 2·π·r. Dann × 3 Runden."),
     ]
 
     topic = {
@@ -573,7 +619,7 @@ def _prozent_data():
         {"lesson_id": f"{tid}-l4", "unit_id": f"{tid}-u2", "topic_id": tid,
          "subject_id": sid, "grade_level": gl, "topic_title": tt,
          "title": "ZAP-Aufgaben: Prozent & Verhältnis", "difficulty": "review",
-         "estimated_minutes": 15, "order": 4, "challenge_count": 3},
+         "estimated_minutes": 15, "order": 4, "challenge_count": 4},
     ]
 
     challenges = [
@@ -653,6 +699,12 @@ def _prozent_data():
             "1 + 4 = 5 Teile. Zement = 1/5 von 30 = 6 kg.",
             "Verhältnis 1:4 → 5 Teile gesamt. Zement = 30/5 × 1 = 6 kg.",
             "Richtig! 6 kg Zement.", "Gesamtteile = 1+4 = 5. Zement = 30 ÷ 5 × 1."),
+        _input(f"{tid}-l4", tid, sid, gl, tt, f"{tid}-u2", 4,
+            "In einer Schachtel sind rote und blaue Murmeln im Verhältnis 2:3. Es sind 30 Murmeln insgesamt. Wie viele rote Murmeln gibt es?",
+            "12",
+            "Gesamtteile: 2+3=5. Rote = 2/5 von 30 = 12.",
+            "30 ÷ 5 × 2 = 12 rote Murmeln.",
+            "Korrekt! 12 rote Murmeln.", "2 + 3 = 5 Teile. Ein Teil = 30/5 = 6. Rot = 2 × 6 = 12."),
     ]
 
     topic = {
@@ -663,9 +715,174 @@ def _prozent_data():
     return topic, units, lessons, challenges
 
 
-# ── Topic 5: Textaufgaben ─────────────────────────────────────────────────
+# ── Topic 0: Zahlen und Rechnen ───────────────────────────────────────────
+#
+# Stars without seeded lessons: their exercises come through the curriculum
+# workflow (the ZAP1 batch of #106). A star with no active lesson is not drawn.
 
-def _textaufgaben_data():
+def _zahlen_data():
+    tid = "zahlen"
+    sid = "mathematics"
+    gl  = "grade_6_primary"
+    tt  = "Zahlen und Rechnen"
+
+    units = [
+        {"unit_id": f"{tid}-u1", "topic_id": tid, "subject_id": sid, "grade_level": gl,
+         "title": "Rechnen mit natürlichen Zahlen und Dezimalzahlen",
+         "description": "Grundoperationen, Rechenreihenfolge, Dezimalzahlen multiplizieren und dividieren.",
+         "order": 1, "prerequisite_unit_ids": []},
+        {"unit_id": f"{tid}-u2", "topic_id": tid, "subject_id": sid, "grade_level": gl,
+         "title": "Stellenwerte und Zahlenstrahl",
+         "description": "Ziffern, Stellenwerte, Zahlenrätsel und Zahlen am Zahlenstrahl.",
+         "order": 2, "prerequisite_unit_ids": []},
+        {"unit_id": f"{tid}-u3", "topic_id": tid, "subject_id": sid, "grade_level": gl,
+         "title": "Teiler und Vielfache",
+         "description": "Teiler, Vielfache, gemeinsame Teiler und Vielfache.",
+         "order": 3, "prerequisite_unit_ids": []},
+        {"unit_id": f"{tid}-u4", "topic_id": tid, "subject_id": sid, "grade_level": gl,
+         "title": "Muster und Folgen",
+         "description": "Regelmässige Zahlen- und Figurenfolgen fortsetzen und berechnen.",
+         "order": 4, "prerequisite_unit_ids": []},
+    ]
+    topic = {
+        "topic_id": tid, "subject_id": sid, "grade_level": gl, "title": tt,
+        "description": "Natürliche Zahlen, Dezimalzahlen, Teilbarkeit und Folgen.",
+        "order": 0, "status": "available",
+    }
+    return topic, units, [], []
+
+
+# ── Topic 5: Grössen und Masse ────────────────────────────────────────────
+#
+# The money and time lessons of the retired Textaufgaben topic live here now,
+# under the same lesson and exercise ids, so attempts already made still count.
+
+def _groessen_data():
+    tid = "groessen"
+    sid = "mathematics"
+    gl  = "grade_6_primary"
+    tt  = "Grössen und Masse"
+
+    units = [
+        {"unit_id": f"{tid}-u1", "topic_id": tid, "subject_id": sid, "grade_level": gl,
+         "title": "Masseinheiten umrechnen",
+         "description": "Längen, Flächen, Volumen, Gewichte und Zeiteinheiten umrechnen.",
+         "order": 1, "prerequisite_unit_ids": []},
+        {"unit_id": f"{tid}-u2", "topic_id": tid, "subject_id": sid, "grade_level": gl,
+         "title": "Geld und Preise",
+         "description": "Mit Franken rechnen, Preis pro Einheit vergleichen.",
+         "order": 2, "prerequisite_unit_ids": []},
+        {"unit_id": f"{tid}-u3", "topic_id": tid, "subject_id": sid, "grade_level": gl,
+         "title": "Zeit, Geschwindigkeit und Weg",
+         "description": "Zeitspannen, Geschwindigkeit, Fahrzeit; Begegnen und Einholen.",
+         "order": 3, "prerequisite_unit_ids": []},
+    ]
+
+    lessons = [
+        {"lesson_id": "textaufgaben-l1", "unit_id": f"{tid}-u2", "topic_id": tid,
+         "subject_id": sid, "grade_level": gl, "topic_title": tt,
+         "title": "Geld und Einkauf", "difficulty": "intro",
+         "estimated_minutes": 12, "order": 1, "challenge_count": 4},
+        {"lesson_id": "textaufgaben-l2", "unit_id": f"{tid}-u3", "topic_id": tid,
+         "subject_id": sid, "grade_level": gl, "topic_title": tt,
+         "title": "Zeit, Geschwindigkeit, Weg", "difficulty": "practice",
+         "estimated_minutes": 15, "order": 2, "challenge_count": 3},
+    ]
+
+    challenges = [
+        # l1 — Geld
+        _input("textaufgaben-l1", tid, sid, gl, tt, "groessen-u2", 1,
+            "Nina kauft 3 Hefte à CHF 2.40 und 2 Stifte à CHF 1.80. Wie viel zahlt sie insgesamt?",
+            "10.8",
+            "Hefte: 3 × 2.40 = 7.20. Stifte: 2 × 1.80 = 3.60. Total: 7.20 + 3.60 = 10.80.",
+            "3×2.40 + 2×1.80 = 7.20 + 3.60 = CHF 10.80.",
+            "Korrekt! CHF 10.80.", "Berechne zuerst jeden Posten, dann addiere."),
+        _input("textaufgaben-l1", tid, sid, gl, tt, "groessen-u2", 2,
+            "Tobias hat CHF 50.–. Er gibt davon 3/5 aus. Wie viel Franken hat er noch?",
+            "20",
+            "3/5 von 50 = 30. Tobias hat 50 − 30 = 20 CHF übrig.",
+            "3/5 × 50 = 30 ausgegeben. 50 − 30 = 20 CHF.",
+            "Richtig! CHF 20.–.", "3/5 von 50 = 30. 50 − 30 = 20."),
+        _mc("textaufgaben-l1", tid, sid, gl, tt, "groessen-u2", 3,
+            "Für 6 Brötchen bezahlt man CHF 3.60. Was kosten 10 Brötchen?",
+            ["CHF 5.40", "CHF 6.00", "CHF 6.20", "CHF 5.80"], "CHF 6.00",
+            "Ein Brötchen: 3.60 ÷ 6 = 0.60 CHF. 10 Brötchen: 10 × 0.60 = 6.00 CHF.",
+            "Preis pro Brötchen = 3.60/6 = 0.60. 10 × 0.60 = CHF 6.00.",
+            "Richtig! CHF 6.00.", "Zuerst den Preis pro Brötchen, dann mal 10."),
+        # l2 — Zeit/Geschwindigkeit
+        _input("textaufgaben-l2", tid, sid, gl, tt, "groessen-u3", 1,
+            "Ein Zug fährt 180 km in 2 Stunden. Wie viele km/h fährt er?",
+            "90",
+            "Geschwindigkeit = Strecke ÷ Zeit = 180 ÷ 2 = 90 km/h.",
+            "v = s/t = 180/2 = 90 km/h.",
+            "Korrekt! 90 km/h.", "Geschwindigkeit = Strecke ÷ Zeit."),
+        _input("textaufgaben-l2", tid, sid, gl, tt, "groessen-u3", 2,
+            "Ein Auto fährt 75 km/h. Wie lange fährt es, bis es 225 km zurückgelegt hat? (Antwort in Stunden)",
+            "3",
+            "Zeit = Strecke ÷ Geschwindigkeit = 225 ÷ 75 = 3 Stunden.",
+            "t = s/v = 225/75 = 3 h.",
+            "Richtig! 3 Stunden.", "Zeit = Strecke ÷ Geschwindigkeit."),
+        _mc("textaufgaben-l2", tid, sid, gl, tt, "groessen-u3", 3,
+            "Julia fährt um 8:30 Uhr los und kommt um 11:15 Uhr an. Wie lange war sie unterwegs?",
+            ["2 h 30 min", "2 h 45 min", "3 h 15 min", "2 h 15 min"], "2 h 45 min",
+            "Von 8:30 bis 11:15 = 2 h 45 min. (8:30 → 11:30 = 3 h, minus 15 min = 2:45.)",
+            "11:15 − 8:30 = 2 h 45 min.",
+            "Korrekt! 2 Stunden 45 Minuten.", "Zähle von 8:30 auf 11:15: 8:30→9:30→10:30→11:15 = 2h45min."),
+        _mc("textaufgaben-l1", tid, sid, gl, tt, "groessen-u2", 4,
+            "5 Orangen kosten gleich viel wie 3 Äpfel. 1 Apfel kostet CHF 0.90. Was kosten 10 Orangen?",
+            ["CHF 5.40", "CHF 4.50", "CHF 6.00", "CHF 5.00"], "CHF 5.40",
+            "3 Äpfel = 3 × 0.90 = CHF 2.70 = 5 Orangen. 1 Orange = 2.70/5 = 0.54. 10 Orangen = 5.40.",
+            "5 Orangen = 3 × 0.90 = 2.70. 1 Orange = 0.54. 10 Orangen = 5.40 CHF.",
+            "Richtig! CHF 5.40.", "3 Äpfel à 0.90 = CHF 2.70 für 5 Orangen. 1 Orange = 0.54."),
+    ]
+
+    topic = {
+        "topic_id": tid, "subject_id": sid, "grade_level": gl, "title": tt,
+        "description": "Masseinheiten, Geld, Zeit und Geschwindigkeit.",
+        "order": 5, "status": "available",
+    }
+    return topic, units, lessons, challenges
+
+
+# ── Topic 6: Daten und Kombinatorik ───────────────────────────────────────
+
+def _daten_data():
+    tid = "daten"
+    sid = "mathematics"
+    gl  = "grade_6_primary"
+    tt  = "Daten und Kombinatorik"
+
+    units = [
+        {"unit_id": f"{tid}-u1", "topic_id": tid, "subject_id": sid, "grade_level": gl,
+         "title": "Durchschnitt und Diagramme",
+         "description": "Mit dem Durchschnitt rechnen, Tabellen und Diagramme lesen.",
+         "order": 1, "prerequisite_unit_ids": []},
+        {"unit_id": f"{tid}-u2", "topic_id": tid, "subject_id": sid, "grade_level": gl,
+         "title": "Kombinatorik",
+         "description": "Möglichkeiten systematisch abzählen.",
+         "order": 2, "prerequisite_unit_ids": []},
+    ]
+    topic = {
+        "topic_id": tid, "subject_id": sid, "grade_level": gl, "title": tt,
+        "description": "Durchschnitt, Diagramme und systematisches Abzählen.",
+        "order": 6, "status": "available",
+    }
+    return topic, units, [], []
+
+
+# ── Retired: Textaufgaben ─────────────────────────────────────────────────
+#
+# A topic named for a kind of task, with a star named for an exam, was not a
+# knowledge point. Its money and time lessons moved to Grössen und Masse; the
+# six exercises of its two ZAP lessons moved to the stars they practise
+# (geometrie-l5, prozentrechnung-l4, gleichungen-l4, textaufgaben-l1). The seed
+# never deletes a row, so the old rows are written archived: hidden from every
+# student read, and still there for the attempts that point at them.
+
+RETIRED = "archived"
+
+
+def _retired_textaufgaben_data():
     tid = "textaufgaben"
     sid = "mathematics"
     gl  = "grade_6_primary"
@@ -673,73 +890,23 @@ def _textaufgaben_data():
 
     units = [
         {"unit_id": f"{tid}-u1", "topic_id": tid, "subject_id": sid, "grade_level": gl,
-         "title": "Kombinierte Sachaufgaben",
-         "description": "Mathematische Probleme aus dem Alltag lösen.",
-         "order": 1, "prerequisite_unit_ids": ["gleichungen-u2", "prozentrechnung-u2"]},
+         "title": "Kombinierte Sachaufgaben", "order": 1, "prerequisite_unit_ids": [],
+         "rollout_state": RETIRED},
         {"unit_id": f"{tid}-u2", "topic_id": tid, "subject_id": sid, "grade_level": gl,
-         "title": "ZAP-Prüfungsaufgaben",
-         "description": "Originalnahe Aufgaben aus den ZAP-Prüfungsarchiven.",
-         "order": 2, "prerequisite_unit_ids": ["textaufgaben-u1", "geometrie-u2"]},
+         "title": "ZAP-Prüfungsaufgaben", "order": 2, "prerequisite_unit_ids": [],
+         "rollout_state": RETIRED},
     ]
-
     lessons = [
-        {"lesson_id": f"{tid}-l1", "unit_id": f"{tid}-u1", "topic_id": tid,
-         "subject_id": sid, "grade_level": gl, "topic_title": tt,
-         "title": "Geld und Einkauf", "difficulty": "intro",
-         "estimated_minutes": 12, "order": 1, "challenge_count": 3},
-        {"lesson_id": f"{tid}-l2", "unit_id": f"{tid}-u1", "topic_id": tid,
-         "subject_id": sid, "grade_level": gl, "topic_title": tt,
-         "title": "Zeit, Geschwindigkeit, Weg", "difficulty": "practice",
-         "estimated_minutes": 15, "order": 2, "challenge_count": 3},
         {"lesson_id": f"{tid}-l3", "unit_id": f"{tid}-u2", "topic_id": tid,
          "subject_id": sid, "grade_level": gl, "topic_title": tt,
          "title": "ZAP 2023–2025: Aufgaben Typ A", "difficulty": "review",
-         "estimated_minutes": 20, "order": 3, "challenge_count": 3},
+         "estimated_minutes": 20, "order": 3, "challenge_count": 3, "rollout_state": RETIRED},
         {"lesson_id": f"{tid}-l4", "unit_id": f"{tid}-u2", "topic_id": tid,
          "subject_id": sid, "grade_level": gl, "topic_title": tt,
          "title": "ZAP 2023–2025: Aufgaben Typ B", "difficulty": "review",
-         "estimated_minutes": 20, "order": 4, "challenge_count": 3},
+         "estimated_minutes": 20, "order": 4, "challenge_count": 3, "rollout_state": RETIRED},
     ]
-
     challenges = [
-        # l1 — Geld
-        _input(f"{tid}-l1", tid, sid, gl, tt, f"{tid}-u1", 1,
-            "Nina kauft 3 Hefte à CHF 2.40 und 2 Stifte à CHF 1.80. Wie viel zahlt sie insgesamt?",
-            "10.8",
-            "Hefte: 3 × 2.40 = 7.20. Stifte: 2 × 1.80 = 3.60. Total: 7.20 + 3.60 = 10.80.",
-            "3×2.40 + 2×1.80 = 7.20 + 3.60 = CHF 10.80.",
-            "Korrekt! CHF 10.80.", "Berechne zuerst jeden Posten, dann addiere."),
-        _input(f"{tid}-l1", tid, sid, gl, tt, f"{tid}-u1", 2,
-            "Tobias hat CHF 50.–. Er gibt davon 3/5 aus. Wie viel Franken hat er noch?",
-            "20",
-            "3/5 von 50 = 30. Tobias hat 50 − 30 = 20 CHF übrig.",
-            "3/5 × 50 = 30 ausgegeben. 50 − 30 = 20 CHF.",
-            "Richtig! CHF 20.–.", "3/5 von 50 = 30. 50 − 30 = 20."),
-        _mc(f"{tid}-l1", tid, sid, gl, tt, f"{tid}-u1", 3,
-            "Für 6 Brötchen bezahlt man CHF 3.60. Was kosten 10 Brötchen?",
-            ["CHF 5.40", "CHF 6.00", "CHF 6.20", "CHF 5.80"], "CHF 6.00",
-            "Ein Brötchen: 3.60 ÷ 6 = 0.60 CHF. 10 Brötchen: 10 × 0.60 = 6.00 CHF.",
-            "Preis pro Brötchen = 3.60/6 = 0.60. 10 × 0.60 = CHF 6.00.",
-            "Richtig! CHF 6.00.", "Zuerst den Preis pro Brötchen, dann mal 10."),
-        # l2 — Zeit/Geschwindigkeit
-        _input(f"{tid}-l2", tid, sid, gl, tt, f"{tid}-u1", 1,
-            "Ein Zug fährt 180 km in 2 Stunden. Wie viele km/h fährt er?",
-            "90",
-            "Geschwindigkeit = Strecke ÷ Zeit = 180 ÷ 2 = 90 km/h.",
-            "v = s/t = 180/2 = 90 km/h.",
-            "Korrekt! 90 km/h.", "Geschwindigkeit = Strecke ÷ Zeit."),
-        _input(f"{tid}-l2", tid, sid, gl, tt, f"{tid}-u1", 2,
-            "Ein Auto fährt 75 km/h. Wie lange fährt es, bis es 225 km zurückgelegt hat? (Antwort in Stunden)",
-            "3",
-            "Zeit = Strecke ÷ Geschwindigkeit = 225 ÷ 75 = 3 Stunden.",
-            "t = s/v = 225/75 = 3 h.",
-            "Richtig! 3 Stunden.", "Zeit = Strecke ÷ Geschwindigkeit."),
-        _mc(f"{tid}-l2", tid, sid, gl, tt, f"{tid}-u1", 3,
-            "Julia fährt um 8:30 Uhr los und kommt um 11:15 Uhr an. Wie lange war sie unterwegs?",
-            ["2 h 30 min", "2 h 45 min", "3 h 15 min", "2 h 15 min"], "2 h 45 min",
-            "Von 8:30 bis 11:15 = 2 h 45 min. (8:30 → 11:30 = 3 h, minus 15 min = 2:45.)",
-            "11:15 − 8:30 = 2 h 45 min.",
-            "Korrekt! 2 Stunden 45 Minuten.", "Zähle von 8:30 auf 11:15: 8:30→9:30→10:30→11:15 = 2h45min."),
         # l3 — ZAP Typ A
         _input(f"{tid}-l3", tid, sid, gl, tt, f"{tid}-u2", 1,
             "(ZAP 2024, Typ A) Ein rechteckiges Zimmer ist 4,5 m lang und 3,6 m breit. Wie viele Quadratmeter Teppich braucht man für den ganzen Boden?",
@@ -779,13 +946,21 @@ def _textaufgaben_data():
             "U = 2 × 3,14 × 50 = 314 m. 3 Runden: 3 × 314 = 942 m.",
             "Super! 942 m.", "Umfang = 2·π·r. Dann × 3 Runden."),
     ]
-
+    for challenge in challenges:
+        challenge["rollout_state"] = RETIRED
     topic = {
         "topic_id": tid, "subject_id": sid, "grade_level": gl, "title": tt,
-        "description": "Kombinierte Sachaufgaben aus dem ZAP-Prüfungsarchiv (Typen 2023–2025).",
-        "order": 5, "status": "available",
+        "order": 5, "status": "available", "rollout_state": RETIRED,
     }
     return topic, units, lessons, challenges
+
+
+#: The live topics, in map order, and the retired ones written archived.
+TOPIC_BUILDERS = (
+    _zahlen_data, _brueche_data, _gleichungen_data, _geometrie_data,
+    _prozent_data, _groessen_data, _daten_data,
+)
+RETIRED_BUILDERS = (_retired_textaufgaben_data,)
 
 
 # ── DynamoDB writer ───────────────────────────────────────────────────────
@@ -842,8 +1017,7 @@ def seed(
 ):
     all_topics, all_units, all_lessons, all_challenges = [], [], [], []
 
-    for fn in [_brueche_data, _gleichungen_data, _geometrie_data,
-               _prozent_data, _textaufgaben_data]:
+    for fn in (*TOPIC_BUILDERS, *RETIRED_BUILDERS):
         topic, units, lessons, challenges = fn()
         all_topics.append(topic)
         all_units.extend(units)

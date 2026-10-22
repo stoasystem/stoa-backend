@@ -46,11 +46,8 @@ OPERATOR = {
 def _seed_rows() -> list[dict[str, Any]]:
     topics, units, lessons, challenges = [], [], [], []
     for build in (
-        seed_practice._brueche_data,
-        seed_practice._gleichungen_data,
-        seed_practice._geometrie_data,
-        seed_practice._prozent_data,
-        seed_practice._textaufgaben_data,
+        *seed_practice.TOPIC_BUILDERS,
+        *seed_practice.RETIRED_BUILDERS,
     ):
         topic, topic_units, topic_lessons, topic_challenges = build()
         topics.append(topic)

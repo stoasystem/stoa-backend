@@ -39,7 +39,7 @@ def test_every_spelling_reads_the_same_catalog(monkeypatch: pytest.MonkeyPatch) 
 
     for spelling, catalog in catalogs.items():
         counts = (len(catalog["topics"]), len(catalog["units"]), len(catalog["lessons"]))
-        assert counts == (5, 10, 20), spelling
+        assert counts == (7, 19, 19), spelling
         assert [subject["id"] for subject in catalog["subjects"]] == ["math"]
     for part in ("topics", "units", "lessons"):
         assert len({tuple(_ids(catalog[part])) for catalog in catalogs.values()}) == 1, part

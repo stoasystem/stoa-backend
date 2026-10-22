@@ -31,11 +31,7 @@ def _seeded() -> tuple[list[dict], list[dict], list[dict]]:
     lessons: list[dict] = []
     challenges: list[dict] = []
     for build in [
-        seed_practice._brueche_data,
-        seed_practice._gleichungen_data,
-        seed_practice._geometrie_data,
-        seed_practice._prozent_data,
-        seed_practice._textaufgaben_data,
+        *seed_practice.TOPIC_BUILDERS,
     ]:
         _topic, topic_units, topic_lessons, topic_challenges = build()
         units.extend(topic_units)

@@ -31,11 +31,8 @@ def _seed_rows() -> list[dict[str, Any]]:
     """The rows `seed_practice.seed` would write, assembled the way it assembles them."""
     topics, units, lessons, challenges = [], [], [], []
     for build in (
-        seed_practice._brueche_data,
-        seed_practice._gleichungen_data,
-        seed_practice._geometrie_data,
-        seed_practice._prozent_data,
-        seed_practice._textaufgaben_data,
+        *seed_practice.TOPIC_BUILDERS,
+        *seed_practice.RETIRED_BUILDERS,
     ):
         topic, topic_units, topic_lessons, topic_challenges = build()
         topics.append(topic)
@@ -65,14 +62,40 @@ def test_every_seeded_topic_is_in_the_student_catalog(monkeypatch: pytest.Monkey
 
     catalog = curriculum_service.list_catalog(subject_id="mathematics")
 
+    live = [topic for topic in seeded_topics if topic.get("rollout_state") != "archived"]
     assert len(catalog["subjects"]) == 1
-    assert len(catalog["topics"]) == 5
-    assert len(catalog["units"]) == 10
-    assert len(catalog["lessons"]) == 20
+    assert len(catalog["topics"]) == 7
+    assert len(catalog["units"]) == 19
+    assert len(catalog["lessons"]) == 19
     assert {topic["rolloutState"] for topic in catalog["topics"]} == {"active"}
     assert sorted(topic["id"] for topic in catalog["topics"]) == sorted(
-        topic["topic_id"] for topic in seeded_topics
+        topic["topic_id"] for topic in live
     )
+
+
+def test_the_retired_word_problem_topic_is_hidden_and_its_lessons_moved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Textaufgaben named a kind of task and an exam, not a knowledge point. Its rows
+    stay in the table archived; its money and time lessons keep their ids under the
+    Grössen und Masse stars, and its ZAP exercises moved to the stars they practise."""
+    _seeded_table(monkeypatch)
+
+    catalog = curriculum_service.list_catalog(subject_id="mathematics")
+
+    assert "textaufgaben" not in {topic["id"] for topic in catalog["topics"]}
+    assert not {"textaufgaben-u1", "textaufgaben-u2"} & {unit["id"] for unit in catalog["units"]}
+    lessons = {lesson["id"]: lesson for lesson in catalog["lessons"]}
+    assert lessons["textaufgaben-l1"]["unitId"] == "groessen-u2"
+    assert lessons["textaufgaben-l2"]["unitId"] == "groessen-u3"
+    assert not {"textaufgaben-l3", "textaufgaben-l4"} & set(lessons)
+    moved = {
+        "geometrie-l5": "geometrie-u1",
+        "prozentrechnung-l4": "prozentrechnung-u2",
+        "gleichungen-l4": "gleichungen-u2",
+    }
+    for lesson_id, unit_id in moved.items():
+        assert lessons[lesson_id]["unitId"] == unit_id
 
 
 def test_a_lifecycle_status_alone_still_hides_a_row(monkeypatch: pytest.MonkeyPatch) -> None:

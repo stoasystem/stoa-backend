@@ -26,6 +26,65 @@ TITLE_TRANSLATIONS: dict[str, dict[str, str]] = {
         "it": "Percentuali e proporzioni",
     },
     "textaufgaben": {"en": "Word problems", "fr": "Problèmes concrets", "it": "Problemi con testo"},
+    "zahlen": {"en": "Numbers and arithmetic", "fr": "Nombres et calcul", "it": "Numeri e calcolo"},
+    "groessen": {
+        "en": "Quantities and measures",
+        "fr": "Grandeurs et mesures",
+        "it": "Grandezze e misure",
+    },
+    "daten": {"en": "Data and counting", "fr": "Données et dénombrement", "it": "Dati e conteggio"},
+    "zahlen-u1": {
+        "en": "Calculating with whole numbers and decimals",
+        "fr": "Calculer avec des nombres entiers et décimaux",
+        "it": "Calcolare con numeri interi e decimali",
+    },
+    "zahlen-u2": {
+        "en": "Place value and the number line",
+        "fr": "Valeur de position et droite numérique",
+        "it": "Valore posizionale e retta numerica",
+    },
+    "zahlen-u3": {
+        "en": "Divisors and multiples",
+        "fr": "Diviseurs et multiples",
+        "it": "Divisori e multipli",
+    },
+    "zahlen-u4": {
+        "en": "Patterns and sequences",
+        "fr": "Motifs et suites",
+        "it": "Schemi e successioni",
+    },
+    "groessen-u1": {
+        "en": "Converting units",
+        "fr": "Convertir des unités",
+        "it": "Convertire unità di misura",
+    },
+    "groessen-u2": {"en": "Money and prices", "fr": "Argent et prix", "it": "Denaro e prezzi"},
+    "groessen-u3": {
+        "en": "Time, speed and distance",
+        "fr": "Temps, vitesse et distance",
+        "it": "Tempo, velocità e distanza",
+    },
+    "geometrie-u3": {
+        "en": "Coordinates and transformations",
+        "fr": "Coordonnées et transformations",
+        "it": "Coordinate e trasformazioni",
+    },
+    "geometrie-u4": {
+        "en": "Spatial reasoning",
+        "fr": "Représentation spatiale",
+        "it": "Visione spaziale",
+    },
+    "daten-u1": {
+        "en": "Averages and charts",
+        "fr": "Moyennes et diagrammes",
+        "it": "Medie e diagrammi",
+    },
+    "daten-u2": {"en": "Combinatorics", "fr": "Combinatoire", "it": "Combinatoria"},
+    "geometrie-l5": {
+        "en": "Areas and circles in everyday life",
+        "fr": "Aires et cercles au quotidien",
+        "it": "Aree e cerchi nella vita quotidiana",
+    },
     # units
     "brueche-u1": {
         "en": "Understanding and reducing fractions",
@@ -211,15 +270,27 @@ SKILL_UNITS: dict[str, dict[str, str]] = {
         "prozentrechnung-direkte-proportionalitaet": "prozentrechnung-u2",
         "prozentrechnung-indirekte-proportionalitaet": "prozentrechnung-u2",
         "prozentrechnung-anwendung": "prozentrechnung-u2",
-        "textaufgaben-geld-rechnen": "textaufgaben-u1",
-        "textaufgaben-preis-pro-einheit": "textaufgaben-u1",
-        "textaufgaben-geschwindigkeit": "textaufgaben-u1",
-        "textaufgaben-fahrzeit": "textaufgaben-u1",
-        "textaufgaben-zeitspanne": "textaufgaben-u1",
-        "textaufgaben-zap-flaeche": "textaufgaben-u2",
-        "textaufgaben-zap-verhaeltnis": "textaufgaben-u2",
-        "textaufgaben-zap-mehrschritt": "textaufgaben-u2",
-        "textaufgaben-zap-kreis": "textaufgaben-u2",
+        # The ids keep their old prefix: exercises and attempts already carry them.
+        # What moved is the star they hang under (the Textaufgaben topic retired).
+        "textaufgaben-geld-rechnen": "groessen-u2",
+        "textaufgaben-preis-pro-einheit": "groessen-u2",
+        "textaufgaben-geschwindigkeit": "groessen-u3",
+        "textaufgaben-fahrzeit": "groessen-u3",
+        "textaufgaben-zeitspanne": "groessen-u3",
+        "groessen-einheiten": "groessen-u1",
+        "groessen-zeit-umrechnen": "groessen-u1",
+        "zahlen-terme": "zahlen-u1",
+        "zahlen-dezimal-terme": "zahlen-u1",
+        "zahlen-stellenwert": "zahlen-u2",
+        "zahlen-zahlenstrahl": "zahlen-u2",
+        "zahlen-teiler": "zahlen-u3",
+        "zahlen-muster-folgen": "zahlen-u4",
+        "brueche-bruch-dezimal": "brueche-u1",
+        "geometrie-abbildungen-koordinaten": "geometrie-u3",
+        "geometrie-raumvorstellung": "geometrie-u4",
+        "daten-durchschnitt": "daten-u1",
+        "daten-diagramme": "daten-u1",
+        "daten-kombinatorik": "daten-u2",
     },
 }
 
@@ -265,10 +336,20 @@ SKILL_TITLES: dict[str, str] = {
     "textaufgaben-geschwindigkeit": "Geschwindigkeit berechnen",
     "textaufgaben-fahrzeit": "Fahrzeit berechnen",
     "textaufgaben-zeitspanne": "Zeitspannen berechnen",
-    "textaufgaben-zap-flaeche": "ZAP: Flächen anwenden",
-    "textaufgaben-zap-verhaeltnis": "ZAP: Verhältnisse anwenden",
-    "textaufgaben-zap-mehrschritt": "ZAP: mehrschrittig rechnen",
-    "textaufgaben-zap-kreis": "ZAP: Kreis anwenden",
+    "groessen-einheiten": "Masseinheiten umrechnen",
+    "groessen-zeit-umrechnen": "Zeiteinheiten in Rechnungen umrechnen",
+    "zahlen-terme": "Terme mit natürlichen Zahlen berechnen",
+    "zahlen-dezimal-terme": "Mit Dezimalzahlen rechnen",
+    "zahlen-stellenwert": "Stellenwerte und Zahlenrätsel",
+    "zahlen-zahlenstrahl": "Zahlen am Zahlenstrahl",
+    "zahlen-teiler": "Teiler und Vielfache bestimmen",
+    "zahlen-muster-folgen": "Folgen fortsetzen und berechnen",
+    "brueche-bruch-dezimal": "Brüche und Dezimalzahlen umwandeln",
+    "geometrie-abbildungen-koordinaten": "Spiegeln und Drehen im Koordinatensystem",
+    "geometrie-raumvorstellung": "Körper und Figuren räumlich vorstellen",
+    "daten-durchschnitt": "Mit dem Durchschnitt rechnen",
+    "daten-diagramme": "Tabellen und Diagramme lesen",
+    "daten-kombinatorik": "Systematisch abzählen",
 }
 
 SKILL_TRANSLATIONS: dict[str, dict[str, str]] = {
@@ -477,25 +558,75 @@ SKILL_TRANSLATIONS: dict[str, dict[str, str]] = {
         "fr": "Calculer des durées",
         "it": "Calcolare intervalli di tempo",
     },
-    "textaufgaben-zap-flaeche": {
-        "en": "ZAP: applying areas",
-        "fr": "ZAP : appliquer les aires",
-        "it": "ZAP: applicare le aree",
+    "groessen-einheiten": {
+        "en": "Converting units",
+        "fr": "Convertir des unités",
+        "it": "Convertire unità",
     },
-    "textaufgaben-zap-verhaeltnis": {
-        "en": "ZAP: applying ratios",
-        "fr": "ZAP : appliquer les rapports",
-        "it": "ZAP: applicare i rapporti",
+    "groessen-zeit-umrechnen": {
+        "en": "Converting units of time in calculations",
+        "fr": "Convertir des unités de temps dans un calcul",
+        "it": "Convertire unità di tempo nei calcoli",
     },
-    "textaufgaben-zap-mehrschritt": {
-        "en": "ZAP: multi-step calculations",
-        "fr": "ZAP : calculs en plusieurs étapes",
-        "it": "ZAP: calcoli a più passaggi",
+    "zahlen-terme": {
+        "en": "Evaluating expressions with whole numbers",
+        "fr": "Calculer des expressions avec des nombres entiers",
+        "it": "Calcolare espressioni con numeri interi",
     },
-    "textaufgaben-zap-kreis": {
-        "en": "ZAP: applying the circle",
-        "fr": "ZAP : appliquer le cercle",
-        "it": "ZAP: applicare il cerchio",
+    "zahlen-dezimal-terme": {
+        "en": "Calculating with decimals",
+        "fr": "Calculer avec des nombres décimaux",
+        "it": "Calcolare con i numeri decimali",
+    },
+    "zahlen-stellenwert": {
+        "en": "Place value and number puzzles",
+        "fr": "Valeur de position et énigmes de nombres",
+        "it": "Valore posizionale e indovinelli numerici",
+    },
+    "zahlen-zahlenstrahl": {
+        "en": "Numbers on the number line",
+        "fr": "Nombres sur la droite numérique",
+        "it": "Numeri sulla retta numerica",
+    },
+    "zahlen-teiler": {
+        "en": "Finding divisors and multiples",
+        "fr": "Trouver diviseurs et multiples",
+        "it": "Trovare divisori e multipli",
+    },
+    "zahlen-muster-folgen": {
+        "en": "Continuing and calculating sequences",
+        "fr": "Prolonger et calculer des suites",
+        "it": "Continuare e calcolare successioni",
+    },
+    "brueche-bruch-dezimal": {
+        "en": "Converting fractions and decimals",
+        "fr": "Convertir fractions et nombres décimaux",
+        "it": "Convertire frazioni e decimali",
+    },
+    "geometrie-abbildungen-koordinaten": {
+        "en": "Reflecting and rotating in coordinates",
+        "fr": "Symétrie et rotation dans un repère",
+        "it": "Simmetria e rotazione nel piano cartesiano",
+    },
+    "geometrie-raumvorstellung": {
+        "en": "Visualising solids and figures",
+        "fr": "Se représenter solides et figures",
+        "it": "Immaginare solidi e figure",
+    },
+    "daten-durchschnitt": {
+        "en": "Working with the average",
+        "fr": "Calculer avec la moyenne",
+        "it": "Calcolare con la media",
+    },
+    "daten-diagramme": {
+        "en": "Reading tables and charts",
+        "fr": "Lire tableaux et diagrammes",
+        "it": "Leggere tabelle e diagrammi",
+    },
+    "daten-kombinatorik": {
+        "en": "Counting systematically",
+        "fr": "Dénombrer systématiquement",
+        "it": "Contare in modo sistematico",
     },
 }
 

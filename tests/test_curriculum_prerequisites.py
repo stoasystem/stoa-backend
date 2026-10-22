@@ -26,11 +26,8 @@ from stoa.services import curriculum_ops_service, curriculum_service
 def _seed_units() -> list[dict[str, Any]]:
     units: list[dict[str, Any]] = []
     for build in (
-        seed_practice._brueche_data,
-        seed_practice._gleichungen_data,
-        seed_practice._geometrie_data,
-        seed_practice._prozent_data,
-        seed_practice._textaufgaben_data,
+        *seed_practice.TOPIC_BUILDERS,
+        *seed_practice.RETIRED_BUILDERS,
     ):
         units.extend(build()[1])
     return units
