@@ -25,11 +25,8 @@ def _seed_rows() -> list[dict[str, Any]]:
     """The rows `seed_practice.seed` would write, assembled the way it assembles them."""
     topics, units, lessons = [], [], []
     for build in (
-        seed_practice._brueche_data,
-        seed_practice._gleichungen_data,
-        seed_practice._geometrie_data,
-        seed_practice._prozent_data,
-        seed_practice._textaufgaben_data,
+        *seed_practice.TOPIC_BUILDERS,
+        *seed_practice.RETIRED_BUILDERS,
     ):
         topic, topic_units, topic_lessons, _challenges = build()
         topics.append(topic)

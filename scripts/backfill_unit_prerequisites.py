@@ -24,11 +24,8 @@ def seeded_prerequisites() -> dict[str, list[str]]:
 
     relations: dict[str, list[str]] = {}
     for build in (
-        seed_practice._brueche_data,
-        seed_practice._gleichungen_data,
-        seed_practice._geometrie_data,
-        seed_practice._prozent_data,
-        seed_practice._textaufgaben_data,
+        *seed_practice.TOPIC_BUILDERS,
+        *seed_practice.RETIRED_BUILDERS,
     ):
         for unit in build()[1]:
             relations[str(unit["unit_id"])] = list(unit.get("prerequisite_unit_ids") or [])
