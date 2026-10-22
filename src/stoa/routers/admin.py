@@ -967,6 +967,7 @@ class CurriculumLessonDraftRequest(BaseModel):
     grade_level: str = Field(..., alias="gradeLevel", min_length=1, max_length=100)
     difficulty: str = Field(default="practice", min_length=1, max_length=80)
     estimated_minutes: int = Field(default=10, alias="estimatedMinutes", ge=1, le=240)
+    order: int | None = Field(default=None, ge=1, le=1000)
     language: str | None = Field(default=None, max_length=30)
     exercises: list[CurriculumExerciseDraftRequest] = Field(default_factory=list)
 

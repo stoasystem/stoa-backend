@@ -30,6 +30,7 @@ ROLLBACK_STATES = {"approved", "published", "superseded", "archived"}
 
 LESSON_FIELD_ALIASES = {
     "title": "title",
+    "order": "order",
     "objective": "objective",
     "description": "description",
     "subject_id": "subject_id",
@@ -404,7 +405,16 @@ def _lesson_payload(public_id: str, payload: dict[str, Any]) -> dict[str, Any]:
             or payload.get("prerequisiteLessonIds")
             or payload.get("prerequisites")
         ),
+        **_lesson_order(payload.get("order")),
     }
+
+
+def _lesson_order(value: Any) -> dict[str, int]:
+    """Where the lesson sits among its star's lessons. Without one it reads as 0
+    and sorts ahead of every seeded lesson, which number theirs from 1."""
+    if value is None or value == "":
+        return {}
+    return {"order": int(value)}
 
 
 def _normalized_ids(value: Any) -> list[str]:
@@ -557,6 +567,8 @@ def _patch_lesson(public_id: str, current: dict[str, Any], payload: dict[str, An
             lesson[target] = patch[source]
     if "estimated_minutes" in lesson:
         lesson["estimated_minutes"] = int(lesson["estimated_minutes"])
+    if "order" in lesson:
+        lesson["order"] = int(lesson["order"])
     return lesson
 
 

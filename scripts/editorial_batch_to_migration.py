@@ -46,6 +46,14 @@ MAX_TITLE = 300
 MAX_OBJECTIVE = 1000
 MAX_TEXT = 2000
 MAX_ID = 200
+#: A knowledge card with more exercises than this becomes several lessons of
+#: near-equal size, easiest first. A 26-exercise lesson reads as a test.
+MAX_EXERCISES_PER_LESSON = 8
+#: A ZAP1 paper is nine tasks of two to four parts in sixty minutes.
+MINUTES_PER_EXERCISE = 3
+#: Imported lessons follow the seeded lessons of their star, which number theirs from 1.
+FIRST_IMPORTED_ORDER = 101
+PART_SUFFIX = " · Teil {part}"
 
 #: Statuses an editorial record must have reached to become a draft (work guide:
 #: draft → extracted → mapped → reviewed → ready_for_adapter; blocked is a stop).
@@ -159,8 +167,38 @@ def _length_problem(fields: Mapping[str, str], limits: Mapping[str, int]) -> str
     return None
 
 
-def convert(batch: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _split(lesson: dict[str, Any], max_exercises: int) -> list[dict[str, Any]]:
+    """One card's lesson as parts of at most `max_exercises`, easiest first.
+
+    Easiest is read off the work shown: fewer solution steps, then a shorter prompt.
+    It is a proxy, not a judgement, and the review can reorder."""
+    exercises = sorted(
+        lesson["exercises"], key=lambda item: (item.pop("_steps"), len(item["prompt"]))
+    )
+    count = -(-len(exercises) // max_exercises)
+    size, extra = divmod(len(exercises), count)
+    parts, start = [], 0
+    for index in range(count):
+        end = start + size + (1 if index < extra else 0)
+        chunk = exercises[start:end]
+        start = end
+        part = {**lesson, "lesson": dict(lesson["lesson"]), "exercises": chunk}
+        if count > 1:
+            part["publicLessonId"] = f"{lesson['publicLessonId']}-{index + 1}"
+            part["lesson"]["title"] += PART_SUFFIX.format(part=index + 1)
+        part["lesson"]["estimatedMinutes"] = max(5, MINUTES_PER_EXERCISE * len(chunk))
+        for order, exercise in enumerate(chunk, start=1):
+            exercise["order"] = order
+        parts.append(part)
+    return parts
+
+
+def convert(
+    batch: Mapping[str, Any], *, max_exercises: int = MAX_EXERCISES_PER_LESSON
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """The dry-run manifest and the report for one editorial batch."""
+    if max_exercises < 1:
+        raise ValueError("a lesson holds at least one exercise")
     if batch.get("schema_version") != SCHEMA_VERSION:
         raise ValueError(f"expected schema {SCHEMA_VERSION}, got {batch.get('schema_version')!r}")
     batch_id = str(batch.get("batch_id") or "").strip()
@@ -271,7 +309,7 @@ def convert(batch: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             }
             problem = _length_problem(
                 {"title": lesson["lesson"]["title"], "objective": lesson["lesson"]["objective"]},
-                {"title": MAX_TITLE, "objective": MAX_OBJECTIVE},
+                {"title": MAX_TITLE - len(PART_SUFFIX.format(part=99)), "objective": MAX_OBJECTIVE},
             )
             if problem is not None:
                 row["status"] = "skipped"
@@ -288,18 +326,33 @@ def convert(batch: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             "difficulty": "practice",
             "order": len(lesson["exercises"]) + 1,
             "skills": [skill],
+            "_steps": len(fields["explanation"].splitlines()),
         }
         if accepted:
             exercise_payload["acceptedAnswers"] = accepted
         lesson["exercises"].append(exercise_payload)
         row.update(
             status="converted",
-            publicLessonId=lesson["publicLessonId"],
             exerciseId=fields["exerciseId"],
             knowledgeId=knowledge_id,
             skill=skill,
             notCarried=[name for name in NOT_CARRIED if exercise.get(name)],
         )
+
+    final: list[dict[str, Any]] = []
+    next_order: dict[str, int] = {}
+    for lesson in lessons.values():
+        for part in _split(lesson, max_exercises):
+            unit_id = str(part["lesson"]["unitId"])
+            part["lesson"]["order"] = next_order.setdefault(unit_id, FIRST_IMPORTED_ORDER)
+            next_order[unit_id] += 1
+            final.append(part)
+    lesson_of = {
+        e["exerciseId"]: part["publicLessonId"] for part in final for e in part["exercises"]
+    }
+    for row in report_rows:
+        if row.get("status") == "converted":
+            row["publicLessonId"] = lesson_of[row["exerciseId"]]
 
     rights = sorted(
         {
@@ -320,7 +373,7 @@ def convert(batch: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             f"Drafts from editorial batch {batch_id}; not for publication before teacher review "
             f"and permission for every source (rights statuses: {', '.join(rights) or 'none'})."
         ),
-        "lessons": list(lessons.values()),
+        "lessons": final,
     }
     report = {
         "batchId": batch_id,
@@ -329,7 +382,7 @@ def convert(batch: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             "exercises": len(report_rows),
             "converted": sum(1 for row in report_rows if row["status"] == "converted"),
             "skipped": sum(1 for row in report_rows if row["status"] == "skipped"),
-            "lessons": len(lessons),
+            "lessons": len(final),
         },
         "sourceRightsStatuses": rights,
         "exercises": report_rows,
@@ -348,10 +401,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("batch", type=Path)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--max-exercises", type=int, default=MAX_EXERCISES_PER_LESSON)
     args = parser.parse_args(argv)
     try:
         batch = json.loads(args.batch.read_text(encoding="utf-8"))
-        manifest, report = convert(batch)
+        manifest, report = convert(batch, max_exercises=args.max_exercises)
     except (OSError, ValueError, KeyError) as error:
         print(f"cannot convert {args.batch}: {error}", file=sys.stderr)
         return 1

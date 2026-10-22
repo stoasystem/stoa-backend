@@ -305,3 +305,84 @@ def test_a_converted_draft_goes_through_review_and_judges_its_listed_answers(
     assert challenge is not None
     assert answer_judging.judge_challenge("18 stück", challenge)
     assert not answer_judging.judge_challenge("24", challenge)
+
+
+def _steps(count: int) -> list[dict[str, Any]]:
+    return [{"step": index, "text": f"Schritt {index}."} for index in range(1, count + 1)]
+
+
+def test_a_large_card_becomes_parts_of_near_equal_size_easiest_first() -> None:
+    questions = [
+        _question(
+            f"EX-D0001-{index:02d}", solution=_steps(1 + index % 4), prompt=f"Aufgabe {index:02d}."
+        )
+        for index in range(20)
+    ]
+
+    manifest, report = converter.convert(_batch(*questions), max_exercises=8)
+
+    parts = manifest["lessons"]
+    assert [part["publicLessonId"] for part in parts] == [
+        "zap-anteil-1",
+        "zap-anteil-2",
+        "zap-anteil-3",
+    ]
+    assert [len(part["exercises"]) for part in parts] == [7, 7, 6]
+    assert [part["lesson"]["title"] for part in parts] == [
+        "Karte KP-ANTEIL · Teil 1",
+        "Karte KP-ANTEIL · Teil 2",
+        "Karte KP-ANTEIL · Teil 3",
+    ]
+    assert [part["lesson"]["estimatedMinutes"] for part in parts] == [21, 21, 18]
+    assert [part["lesson"]["order"] for part in parts] == [101, 102, 103]
+    steps = [len(e["explanation"].splitlines()) for part in parts for e in part["exercises"]]
+    assert steps == sorted(steps)
+    assert all(
+        [e["order"] for e in part["exercises"]] == list(range(1, len(part["exercises"]) + 1))
+        for part in parts
+    )
+    assert all("_steps" not in e for part in parts for e in part["exercises"])
+    lesson_of = {
+        e["exerciseId"]: part["publicLessonId"] for part in parts for e in part["exercises"]
+    }
+    assert all(row["publicLessonId"] == lesson_of[row["exerciseId"]] for row in report["exercises"])
+    assert report["counts"]["lessons"] == 3
+
+
+def test_a_small_card_stays_one_lesson_and_lessons_of_a_star_number_on() -> None:
+    manifest, _report = converter.convert(
+        _batch(_question("EX-D0001-1"), _question("EX-D0002-1", "KP-GANZES"))
+    )
+
+    assert [
+        (lesson["publicLessonId"], lesson["lesson"]["title"]) for lesson in manifest["lessons"]
+    ] == [
+        ("zap-anteil", "Karte KP-ANTEIL"),
+        ("zap-ganzes", "Karte KP-GANZES"),
+    ]
+    # Both cards hang under brueche-u2, so their lessons follow one another there.
+    assert [lesson["lesson"]["order"] for lesson in manifest["lessons"]] == [101, 102]
+    assert manifest["lessons"][0]["lesson"]["estimatedMinutes"] == 5
+
+
+def test_imported_lessons_follow_the_seeded_lessons_of_their_star(table: FakeTable) -> None:
+    from stoa.services import curriculum_service
+
+    manifest, _report = converter.convert(_batch(_question("EX-D0001-1A")))
+    preview = curriculum_migration_service.dry_run(manifest, OPERATOR)
+    applied = curriculum_migration_service.apply_migration(
+        preview["migrationId"], manifest, preview["confirmationToken"], OPERATOR
+    )
+    version_id = applied["rows"][0]["versionId"]
+    curriculum_ops_service.submit_review("zap-anteil", version_id, OPERATOR)
+    curriculum_ops_service.approve("zap-anteil", version_id, OPERATOR)
+    curriculum_ops_service.publish(
+        "zap-anteil", version_id, OPERATOR, expected_published_version_id=None
+    )
+
+    lessons = [
+        lesson["id"]
+        for lesson in curriculum_service.list_catalog(subject_id="math")["lessons"]
+        if lesson["unitId"] == "brueche-u2"
+    ]
+    assert lessons == ["brueche-l3", "brueche-l4", "zap-anteil"]
