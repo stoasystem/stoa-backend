@@ -253,6 +253,22 @@ def build_attempt_result(
     )
 
 
+#: What a student is told when an exercise brings no feedback of its own. The
+#: exercises are German (curriculum_translations: the ZAP is a German exam), and
+#: so are these, as the seed's own per-exercise defaults are. An English default
+#: put "Correct." under every exercise that came through the curriculum workflow.
+DEFAULT_CORRECT_FEEDBACK = "Richtig!"
+DEFAULT_INCORRECT_FEEDBACK = "Nicht ganz. Prüfe deinen Rechenweg und versuche es nochmal."
+
+
+def answer_feedback(challenge: Mapping[str, Any]) -> tuple[str, str]:
+    """The exercise's feedback for a right and for a wrong answer."""
+    return (
+        str(challenge.get("correct_feedback") or DEFAULT_CORRECT_FEEDBACK),
+        str(challenge.get("incorrect_feedback") or DEFAULT_INCORRECT_FEEDBACK),
+    )
+
+
 def build_privileged_answer(challenge: Mapping[str, Any]) -> PrivilegedPracticeAnswer:
     """Project only the explicit teacher/admin pre-attempt answer contract."""
     standard_answer = challenge.get("correct_answer", challenge.get("answer_key"))
@@ -263,11 +279,8 @@ def build_privileged_answer(challenge: Mapping[str, Any]) -> PrivilegedPracticeA
             challenge.get("explanation")
             or "Compare the solution method with the standard answer."
         ),
-        correctFeedback=str(challenge.get("correct_feedback") or "Correct."),
-        incorrectFeedback=str(
-            challenge.get("incorrect_feedback")
-            or "Review the explanation and try again."
-        ),
+        correctFeedback=answer_feedback(challenge)[0],
+        incorrectFeedback=answer_feedback(challenge)[1],
     )
 
 

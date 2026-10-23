@@ -60,6 +60,9 @@ LESSON_FIELD_ALIASES = {
     "localeMetadata": "locale_metadata",
 }
 
+#: Feedback an author writes for one exercise; without it the default applies.
+MAX_FEEDBACK_LENGTH = 500
+
 EXERCISE_FIELD_ALIASES = {
     "exercise_id": "exercise_id",
     "exerciseId": "exercise_id",
@@ -75,6 +78,10 @@ EXERCISE_FIELD_ALIASES = {
     "correctAnswer": "answer_key",
     "accepted_answers": "accepted_answers",
     "acceptedAnswers": "accepted_answers",
+    "correct_feedback": "correct_feedback",
+    "correctFeedback": "correct_feedback",
+    "incorrect_feedback": "incorrect_feedback",
+    "incorrectFeedback": "incorrect_feedback",
     "hint": "hint",
     "hints": "hints",
     "explanation": "explanation",
@@ -453,6 +460,12 @@ def _exercise_payloads(public_id: str, exercises: list[dict[str, Any]]) -> list[
         for rich_field in ["hint", "hints", "tags", "media_references"]:
             if rich_field in exercise:
                 item[rich_field] = exercise[rich_field]
+        for field in ("correct_feedback", "incorrect_feedback"):
+            text = str(item.get(field) or "").strip()[:MAX_FEEDBACK_LENGTH]
+            if text:
+                item[field] = text
+            else:
+                item.pop(field, None)
         accepted = _accepted_answers(
             exercise.get("accepted_answers", exercise.get("acceptedAnswers"))
         )
