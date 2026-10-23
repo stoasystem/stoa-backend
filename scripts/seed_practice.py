@@ -965,19 +965,24 @@ RETIRED_BUILDERS = (_retired_textaufgaben_data,)
 
 # ── Knowledge base stars, nebulae and subjects ────────────────────────────
 #
-# The imported knowledge base (scripts/knowledge_base_import.py) files its
-# lessons under stars that knowledge_base_catalog defines: new stars in the
-# mathematics nebulae, and the English and physics nebulae. They are written
+# The imported knowledge base (scripts/knowledge_base_import.py) has a star per
+# knowledge point, read from knowledge_base_catalog: beside the ZAP stars in the
+# mathematics nebulae, and in the English and physics nebulae. They are written
 # only on request. With --knowledge-base they are written in preview - hidden
-# from every student read - so that the imported drafts can name their unit
-# while they wait for review. With --knowledge-base-live, once the lessons are
+# from every student read - so that the imported practice sets can name their
+# unit while they wait for review. With --knowledge-base-live, once the sets are
 # published, they are written active together with the English and physics
 # subjects; the subject list shows a subject whether or not it has lessons.
+#
+# The stars' prerequisites, drawn from the upstream edges between knowledge
+# points, are written only with --knowledge-base-prerequisites: a prerequisite
+# still locks a star until stoa-backend#125 lands, and a chain of them would
+# keep a student out of most of the map.
 
 KNOWLEDGE_BASE_PREVIEW = "preview"
 
 
-def knowledge_base_rows(*, live: bool):
+def knowledge_base_rows(*, live: bool, prerequisites: bool = False):
     """The subjects, nebulae and stars of the knowledge base, as the seed writes them."""
     state = "active" if live else KNOWLEDGE_BASE_PREVIEW
     grade_levels = knowledge_base_catalog.SUBJECT_GRADE_LEVELS
@@ -1008,7 +1013,9 @@ def knowledge_base_rows(*, live: bool):
             "subject_id": unit["subject_id"],
             "grade_level": "grade_6_primary" if unit["subject_id"] == "mathematics" else "",
             "title": unit["titles"]["de"], "description": unit["description"],
-            "order": unit["order"], "prerequisite_unit_ids": [], "rollout_state": state,
+            "order": unit["order"],
+            "prerequisite_unit_ids": list(unit.get("prerequisites") or []) if prerequisites else [],
+            "rollout_state": state,
         }
         for unit in knowledge_base_catalog.units()
     ]
@@ -1067,6 +1074,7 @@ def seed(
     profile_name: str = "stoa",
     account_id: str = DEFAULT_AWS_ACCOUNT_ID,
     knowledge_base: str | None = None,
+    knowledge_base_prerequisites: bool = False,
 ):
     all_topics, all_units, all_lessons, all_challenges = [], [], [], []
     kb_subjects: list[dict] = []
@@ -1078,7 +1086,9 @@ def seed(
         all_lessons.extend(lessons)
         all_challenges.extend(challenges)
     if knowledge_base:
-        kb_subjects, kb_topics, kb_units = knowledge_base_rows(live=knowledge_base == "live")
+        kb_subjects, kb_topics, kb_units = knowledge_base_rows(
+            live=knowledge_base == "live", prerequisites=knowledge_base_prerequisites
+        )
         all_topics.extend(kb_topics)
         all_units.extend(kb_units)
 
@@ -1151,6 +1161,10 @@ if __name__ == "__main__":
         "--knowledge-base-live", dest="knowledge_base", action="store_const", const="live",
         help="write them active, with the English and physics subjects, once published",
     )
+    parser.add_argument(
+        "--knowledge-base-prerequisites", action="store_true",
+        help="with either of the two, also write the stars' prerequisites (after #125)",
+    )
     args = parser.parse_args()
     seed(
         args.table,
@@ -1159,4 +1173,5 @@ if __name__ == "__main__":
         profile_name=args.profile,
         account_id=args.account_id,
         knowledge_base=args.knowledge_base,
+        knowledge_base_prerequisites=args.knowledge_base_prerequisites,
     )

@@ -1,18 +1,27 @@
 """Where the imported knowledge base hangs in the star map.
 
 The knowledge base brings knowledge points for mathematics from the first year of
-primary school to upper secondary, for English and for physics. Each knowledge
-point becomes one skill, and one lesson practising it, under one star (a unit) of
-a nebula (a topic). Mathematics keeps its seven nebulae: what the ZAP stars did
-not cover gets stars of its own in the nebula of its field. English and physics
-are subjects of their own. A language subject is laid out by the situations of
-life it is used in and by its grammar, the same nebulae for every language.
+primary school to upper secondary, for English and for physics, and their
+exercises. In the star map a nebula (a topic) is a field of knowledge, a star (a
+unit) is one knowledge point, and the small stars around it (skills) are the
+question types its exercises practise. There are no lessons for the student: a
+small star's exercises are its practice, held in hidden practice sets that carry
+the small star's id.
 
-This module holds the rows the seed writes for those stars, nebulae and subjects,
-their titles in de/en/fr/it, and the skill vocabulary of the imported knowledge
-points, read from `knowledge_base_skills.json` next to it. The import script
-(scripts/knowledge_base_import.py) writes that file; it lists, per skill, the star
-it hangs under and its title in the four languages.
+Mathematics keeps its seven nebulae; the ZAP stars stay as they are and the
+knowledge base gets stars of its own beside them. English and physics are subjects
+of their own. A language subject is laid out by the situations of life it is used
+in and by its grammar, the same nebulae for every language.
+
+This module holds:
+
+- the nebulae and subjects, and the coarse stars the translation files each
+  upstream knowledge point under (`grouping_units`), which the structuring step
+  splits into the final stars;
+- the question types of each subject;
+- the final stars, read from `knowledge_base_stars.json`, and the skill and
+  practice-set titles, read from `knowledge_base_skills.json`. The import script
+  (scripts/knowledge_base_import.py) writes both files.
 """
 
 from __future__ import annotations
@@ -23,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 SKILLS_FILE = Path(__file__).with_name("knowledge_base_skills.json")
+STARS_FILE = Path(__file__).with_name("knowledge_base_stars.json")
 LOCALES = ("de", "en", "fr", "it")
 
 
@@ -537,6 +547,87 @@ def grade_level(grade: int) -> str:
     return GRADE_LEVELS.get(grade, UPPER_SECONDARY)
 
 
+#: The small stars: what kind of task an exercise is, per subject, in map order.
+#: Each is (slug, titles, scope); the scope tells the structuring step which
+#: exercises it holds. A knowledge point shows only the types it has exercises of.
+QUESTION_TYPES: dict[str, tuple[tuple[str, dict[str, str], str], ...]] = {
+    "mathematics": (
+        ("kopfrechnen", _titles("Kopfrechnen-Trick", "Mental maths tricks", "Astuces de calcul mental",
+                                "Trucchi di calcolo mentale"),
+         "Im Kopf rechnen, Rechentricks, Ergebnisse, die man auswendig weiss (Einmaleins)."),
+        ("rechnen", _titles("Rechnen und Umformen", "Calculating and transforming", "Calculer et transformer",
+                            "Calcolare e trasformare"),
+         "Mehrschrittige oder schriftliche Rechnungen, Terme umformen, Gleichungen lösen, Werte bestimmen."),
+        ("begriffe", _titles("Begriffe verstehen", "Understanding concepts", "Comprendre les notions",
+                             "Capire i concetti"),
+         "Definitionen, Eigenschaften, richtig oder falsch, Begriffe und Fälle unterscheiden."),
+        ("darstellen", _titles("Darstellen und Zerlegen", "Representing and decomposing",
+                               "Représenter et décomposer", "Rappresentare e scomporre"),
+         "Zahlen zerlegen und zusammensetzen, Stellenwerte, Brüche, Figuren und Körper darstellen, "
+         "Ansichten und Netze, Diagramme ablesen."),
+        ("vergleichen", _titles("Vergleichen und Ordnen", "Comparing and ordering", "Comparer et ordonner",
+                                "Confrontare e ordinare"),
+         "Grösser, kleiner, gleich; der Reihe nach ordnen; Reihenfolge und Position."),
+        ("sachaufgaben", _titles("Sachaufgaben", "Word problems", "Problèmes", "Problemi"),
+         "Aufgaben aus dem Alltag oder einer Sachsituation, die man in Mathematik übersetzt."),
+        ("schliessen", _titles("Formeln und Schlussfolgern", "Formulas and reasoning",
+                               "Formules et raisonnement", "Formule e ragionamento"),
+         "Formeln anwenden oder herleiten, Zusammenhänge erkennen, Muster fortsetzen, begründen, beweisen."),
+    ),
+    "english": (
+        ("wortschatz", _titles("Wortschatz", "Vocabulary", "Vocabulaire", "Lessico"),
+         "Bedeutung von Wörtern und Wendungen, das passende Wort wählen."),
+        ("grammatik", _titles("Grammatik anwenden", "Using grammar", "Appliquer la grammaire",
+                              "Applicare la grammatica"),
+         "Lücke mit der richtigen Form füllen, Zeitform, Wortform, Satzbau."),
+        ("saetze", _titles("Den richtigen Satz wählen", "Choosing the right sentence",
+                           "Choisir la bonne phrase", "Scegliere la frase giusta"),
+         "Welcher Satz ist richtig oder passt zu einer Aussage, ohne Gesprächssituation."),
+        ("situationen", _titles("Situationen meistern", "Handling situations", "Se débrouiller en situation",
+                                "Cavarsela nelle situazioni"),
+         "Was man in einer Situation oder auf eine Äusserung sagt, Dialoge, Höflichkeit."),
+        ("lesen", _titles("Leseverstehen", "Reading comprehension", "Compréhension écrite",
+                          "Comprensione del testo"),
+         "Fragen zu einem kurzen Text, Hauptaussage, Details, Textsorte."),
+        ("aussprache", _titles("Aussprache und Schreibung", "Pronunciation and spelling",
+                               "Prononciation et orthographe", "Pronuncia e ortografia"),
+         "Laute, Betonung, Buchstaben, Rechtschreibung."),
+    ),
+    "physics": (
+        ("begriffe", _titles("Begriffe verstehen", "Understanding concepts", "Comprendre les notions",
+                             "Capire i concetti"),
+         "Definitionen, Grössen und Einheiten, Gesetze erkennen, richtig oder falsch."),
+        ("rechnen", _titles("Berechnen", "Calculating", "Calculer", "Calcolare"),
+         "Mit Formeln rechnen, Werte und Einheiten bestimmen."),
+        ("erklaeren", _titles("Phänomene erklären", "Explaining phenomena", "Expliquer des phénomènes",
+                              "Spiegare fenomeni"),
+         "Alltagsbeobachtungen und Vorgänge physikalisch erklären, Vorhersagen."),
+        ("experiment", _titles("Experimente und Messen", "Experiments and measuring",
+                               "Expériences et mesures", "Esperimenti e misure"),
+         "Versuchsaufbau, Messgeräte, Messfehler, Ergebnisse auswerten."),
+        ("diagramme", _titles("Diagramme und Graphen", "Charts and graphs", "Diagrammes et graphiques",
+                              "Diagrammi e grafici"),
+         "Graphen, Schaltpläne, Tabellen lesen und deuten."),
+    ),
+}
+#: At most this many upstream knowledge points go into one star.
+MAX_POINTS_PER_STAR = 12
+
+
+def question_types(subject_id: str) -> dict[str, str]:
+    """type slug → German title and scope, for tagging an exercise of the subject."""
+    return {slug: f"{titles['de']}: {scope}" for slug, titles, scope in QUESTION_TYPES.get(subject_id, ())}
+
+
+def question_type_titles(subject_id: str, slug: str) -> dict[str, str]:
+    return next(titles for found, titles, _scope in QUESTION_TYPES[subject_id] if found == slug)
+
+
+def skill_id(unit_id: str, question_type: str) -> str:
+    """The small star of one question type around one knowledge point."""
+    return f"{unit_id}--{question_type}"
+
+
 def topics() -> list[dict[str, Any]]:
     """The nebulae of the new subjects."""
     return [
@@ -545,18 +636,33 @@ def topics() -> list[dict[str, Any]]:
     ]
 
 
+def grouping_units() -> list[dict[str, Any]]:
+    """The coarse stars the translation files knowledge points under, before the
+    structuring step splits them into knowledge-point stars."""
+    return [
+        {**unit, "subject_id": subject_of_topic(unit["topic_id"])}
+        for unit in (*MATH_UNITS, *_language_units(), *PHYSICS_UNITS)
+    ]
+
+
+def topic_of_group(group_id: str) -> str:
+    """The nebula a coarse star - one of the knowledge base's or a ZAP one - lies in."""
+    if group_id in ZAP_UNITS:
+        return group_id.rsplit("-u", 1)[0]
+    return next(unit["topic_id"] for unit in grouping_units() if unit["unit_id"] == group_id)
+
+
+@cache
+def _stars_data() -> dict[str, Any]:
+    if not STARS_FILE.exists():
+        return {}
+    return json.loads(STARS_FILE.read_text(encoding="utf-8"))
+
+
 def units() -> list[dict[str, Any]]:
-    """Every star this module adds, with its subject and its order within its nebula."""
-    rows: list[dict[str, Any]] = []
-    next_order: dict[str, int] = {}
-    for unit in (*MATH_UNITS, *_language_units(), *PHYSICS_UNITS):
-        topic_id = unit["topic_id"]
-        if topic_id not in next_order:
-            existing = sum(1 for zap in ZAP_UNITS if zap.startswith(f"{topic_id}-"))
-            next_order[topic_id] = existing + 1
-        rows.append({**unit, "subject_id": subject_of_topic(topic_id), "order": next_order[topic_id]})
-        next_order[topic_id] += 1
-    return rows
+    """The knowledge-point stars of the knowledge base, in map order within each nebula."""
+    stars = _stars_data().get("stars") or {}
+    return [{"unit_id": unit_id, **star} for unit_id, star in stars.items()]
 
 
 def subject_of_topic(topic_id: str) -> str:
@@ -569,7 +675,7 @@ def subject_of_topic(topic_id: str) -> str:
 
 
 def unit_choices(subject_id: str) -> dict[str, str]:
-    """unit id → German title and scope, for filing a knowledge point of the subject."""
+    """coarse star id → German title and scope, for filing a knowledge point of the subject."""
     if subject_id == "mathematics":
         added = {u["unit_id"]: f"{u['titles']['de']}: {u['description']}" for u in MATH_UNITS}
         return {**ZAP_UNITS, **added}
@@ -585,19 +691,29 @@ def unit_choices(subject_id: str) -> dict[str, str]:
 
 
 def title_translations() -> dict[str, dict[str, str]]:
-    """en/fr/it titles of every subject, nebula and star this module adds."""
+    """en/fr/it titles of every subject, nebula, star and practice set this module adds."""
     rows = [*SUBJECTS, *topics(), *units()]
     out: dict[str, dict[str, str]] = {}
     for row in rows:
         content_id = row.get("unit_id") or row.get("topic_id") or row["subject_id"]
         out[content_id] = {locale: row["titles"][locale] for locale in LOCALES if locale != "de"}
+    for lesson_id, titles in practice_sets().items():
+        out[lesson_id] = {locale: titles[locale] for locale in LOCALES if locale != "de"}
     return out
 
 
 @cache
-def skills() -> dict[str, dict[str, Any]]:
-    """The imported skill vocabulary: skill id → subject, unit and titles by locale."""
+def _skills_data() -> dict[str, Any]:
     if not SKILLS_FILE.exists():
         return {}
-    data = json.loads(SKILLS_FILE.read_text(encoding="utf-8"))
-    return dict(data.get("skills") or {})
+    return json.loads(SKILLS_FILE.read_text(encoding="utf-8"))
+
+
+def skills() -> dict[str, dict[str, Any]]:
+    """The small stars: skill id → subject, unit and titles by locale."""
+    return dict(_skills_data().get("skills") or {})
+
+
+def practice_sets() -> dict[str, dict[str, str]]:
+    """The titles of the hidden practice sets, by lesson id and locale."""
+    return dict(_skills_data().get("practiceSets") or {})

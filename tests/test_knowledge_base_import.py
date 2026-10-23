@@ -17,7 +17,6 @@ from typing import Any
 
 import pytest
 
-from fakes.dynamodb import FakeTable
 from scripts import knowledge_base_import as kb
 from scripts import seed_practice
 from stoa.db.repositories import practice_repo
@@ -268,33 +267,219 @@ def test_a_dropped_exercise_is_reported_with_the_translators_reason(tmp_path: Pa
     ]
 
 
+# ── structure ────────────────────────────────────────────────────────────────
+
+#: What the fake structurer tags each exercise as.
+TYPES = {
+    "kb-m-p101-q1": "kopfrechnen", "kb-m-p101-q2": "sachaufgaben", "kb-m-p101-q3": "schliessen",
+    "kb-m-p100-q1": "darstellen", "kb-p-h001-q1": "rechnen",
+}
+STAR_NAMES = {
+    "brueche-u2": ("brueche-addieren", ("Brüche addieren", "Adding fractions", "Additionner des fractions",
+                                        "Addizionare frazioni")),
+    "brueche-u1": ("bruchbegriff", ("Was ein Bruch ist", "What a fraction is", "Ce qu'est une fraction",
+                                    "Che cos'è una frazione")),
+    "physik-mechanik-u2": ("kraefte-addieren", ("Kräfte addieren", "Adding forces", "Additionner des forces",
+                                                "Sommare forze")),
+}
+
+
+def _structure_out(batch: dict[str, Any]) -> dict[str, Any]:
+    """Fill a structuring batch the way docs/knowledge-base-structure.md asks."""
+    stars = []
+    for group in batch["groups"]:
+        slug, (de, en, fr, it) = STAR_NAMES[group["group"]]
+        stars.append({
+            "group": group["group"], "slug": slug,
+            "titles": {"de": de, "en": en, "fr": fr, "it": it},
+            "description": f"{de} im Alltag.",
+            "points": [point["id"] for point in group["points"]],
+        })
+    exercises = {e["id"]: TYPES[e["id"]] for group in batch["groups"] for e in group["exercises"]}
+    return {"batch": batch["batch"], "stars": stars, "exercises": exercises}
+
+
+def _built(translated: dict[str, Any]) -> dict[str, Any]:
+    return kb.structure(translated, [_structure_out(b) for b in kb.structure_batches(translated)])
+
+
+def test_structure_makes_a_star_per_knowledge_point_beside_the_zap_stars(tmp_path: Path) -> None:
+    built = _built(_translated(tmp_path))
+
+    assert built["problems"] == []
+    assert set(built["stars"]) == {
+        "brueche-brueche-addieren", "brueche-bruchbegriff", "physik-mechanik-kraefte-addieren",
+    }
+    star = built["stars"]["brueche-bruchbegriff"]
+    assert star["topic_id"] == "brueche" and star["subject_id"] == "mathematics"
+    # After the two seeded ZAP stars of the fractions nebula, by the youngest grade.
+    assert star["order"] == 3
+    assert built["points"]["kb-m-p101"] == "brueche-brueche-addieren"
+    assert built["exercises"]["kb-m-p101-q2"] == "sachaufgaben"
+    # The upstream edge p101 -> p100 becomes an edge between their stars.
+    assert built["stars"]["brueche-brueche-addieren"]["prerequisites"] == ["brueche-bruchbegriff"]
+
+
+@pytest.mark.parametrize(
+    ("change", "problem"),
+    [
+        (lambda out: out["stars"][0]["points"].append("kb-m-p100"), "not in exactly one star"),
+        (lambda out: out["stars"][0].update(slug="Brüche addieren"), "slug"),
+        (lambda out: out["stars"][0]["titles"].update(fr="分数"), "Chinese"),
+        (lambda out: out["stars"][0].update(points=[f"p{i}" for i in range(13)]), "not in exactly one star"),
+        (lambda out: out["exercises"].update({"kb-m-p101-q1": "raten"}), "question type"),
+    ],
+)
+def test_structure_refuses_what_breaks_a_rule(tmp_path: Path, change: Any, problem: str) -> None:
+    translated = _translated(tmp_path)
+    filled = [_structure_out(b) for b in kb.structure_batches(translated)]
+    change(filled[0])
+
+    built = kb.structure(translated, filled)
+
+    assert any(problem in message for row in built["problems"] for message in row["problems"])
+
+
+def test_a_star_of_too_many_points_is_refused() -> None:
+    star = {"slug": "gross", "titles": {locale: "Gross" for locale in kb.LOCALES}, "description": "Viel.",
+            "points": [f"p{i}" for i in range(knowledge_base_catalog.MAX_POINTS_PER_STAR + 1)]}
+
+    assert any("more than" in problem for problem in kb._star_problems(star))  # noqa: SLF001
+
+
+def test_star_prerequisites_keep_the_heaviest_links_and_never_a_cycle() -> None:
+    point_star = {"a1": "A", "a2": "A", "b1": "B", "c1": "C"}
+    edges = [
+        {"point": "a1", "requires": "b1", "strength": "hard"},
+        {"point": "a2", "requires": "b1", "strength": "hard"},
+        {"point": "b1", "requires": "a1", "strength": "hard"},
+        {"point": "b1", "requires": "c1", "strength": "hard"},
+        {"point": "c1", "requires": "a1", "strength": "soft"},
+    ]
+
+    assert kb.star_prerequisites(point_star, edges) == {"A": ["B"], "B": ["C"]}
+
+
+def _merge(nebula: str, slug: str, sources: list[str]) -> dict[str, Any]:
+    return {"nebula": nebula, "stars": [{
+        "slug": slug, "titles": {locale: slug for locale in kb.LOCALES},
+        "description": "Zusammengeführt.", "from": sources,
+    }]}
+
+
+def test_the_merge_pass_joins_stars_of_a_nebula_whole(tmp_path: Path) -> None:
+    translated = _translated(tmp_path)
+    filled = [_structure_out(b) for b in kb.structure_batches(translated)]
+    merge = _merge("brueche", "brueche-verstehen-und-addieren",
+                   ["brueche-brueche-addieren", "brueche-bruchbegriff"])
+
+    built = kb.structure(translated, filled, [merge])
+
+    assert built["problems"] == []
+    assert "brueche-brueche-verstehen-und-addieren" in built["stars"]
+    assert "brueche-bruchbegriff" not in built["stars"]
+    # The nebula without a merge keeps its stars.
+    assert "physik-mechanik-kraefte-addieren" in built["stars"]
+    star = built["stars"]["brueche-brueche-verstehen-und-addieren"]
+    assert star["points"] == ["kb-m-p100", "kb-m-p101"]
+    assert built["points"]["kb-m-p100"] == "brueche-brueche-verstehen-und-addieren"
+
+
+@pytest.mark.parametrize(
+    ("sources", "problem"),
+    [
+        (["brueche-brueche-addieren"], "not in exactly one merged star"),
+        (["brueche-brueche-addieren", "brueche-bruchbegriff", "brueche-anderes"], "not in exactly one"),
+    ],
+)
+def test_the_merge_pass_refuses_a_star_left_out_or_unknown(
+    tmp_path: Path, sources: list[str], problem: str
+) -> None:
+    translated = _translated(tmp_path)
+    filled = [_structure_out(b) for b in kb.structure_batches(translated)]
+
+    built = kb.structure(translated, filled, [_merge("brueche", "alles", sources)])
+
+    assert any(problem in message for row in built["problems"] for message in row["problems"])
+
+
+def test_the_merge_pass_refuses_a_star_too_small_or_too_large() -> None:
+    points = {f"p{i}": {"grade": 1, "sourceId": f"cnm_{i}"} for i in range(14)}
+    stars = {
+        f"zahlen-s{i}": {"topic_id": "zahlen", "subject_id": "mathematics", "points": [f"p{i}"],
+                         "titles": {}, "description": "", "grades": [1, 1]}
+        for i in range(14)
+    }
+    split = {"nebula": "zahlen", "stars": [
+        {"slug": "klein", "titles": {locale: "Klein" for locale in kb.LOCALES}, "description": "Klein.",
+         "from": ["zahlen-s0"]},
+        {"slug": "gross", "titles": {locale: "Gross" for locale in kb.LOCALES}, "description": "Gross.",
+         "from": [f"zahlen-s{i}" for i in range(1, 14)]},
+    ]}
+
+    _merged, _point_star, problems = kb.apply_merges(stars, [split], points)
+
+    messages = [message for row in problems for message in row["problems"]]
+    assert any("fewer than" in message for message in messages)
+    assert any("more than" in message for message in messages)
+
+
 # ── manifest ─────────────────────────────────────────────────────────────────
 
 
-def test_every_lesson_is_a_draft_with_four_languages(tmp_path: Path) -> None:
-    made, report = kb.manifests(_translated(tmp_path), "abc123")
+def _manifests(tmp_path: Path):
+    translated = _translated(tmp_path)
+    return kb.manifests(translated, _built(translated), "abc123")
 
-    rows = [row for manifest in made for row in manifest["lessons"]]
-    assert all(row["publish"] is False for row in rows)
+
+def test_every_practice_set_is_a_draft_of_one_small_star_in_four_languages(tmp_path: Path) -> None:
+    made, report, stars_file, vocabulary = _manifests(tmp_path)
+
+    rows = {row["publicLessonId"]: row for manifest in made for row in manifest["lessons"]}
+    assert all(row["publish"] is False for row in rows.values())
     assert all("CC BY-NC" in manifest["operatorNote"] for manifest in made)
-    lesson = next(row for row in rows if row["publicLessonId"] == "kb-m-p101")
-    assert lesson["lesson"]["unitId"] == "brueche-u2" and lesson["lesson"]["topicId"] == "brueche"
-    assert lesson["lesson"]["gradeLevel"] == "grade_5_primary"
-    assert lesson["lesson"]["order"] == kb.FIRST_IMPORTED_ORDER
-    choice = next(e for e in lesson["exercises"] if e["exerciseId"] == "kb-m-p101-q2")
-    assert choice["type"] == "multiple_choice"
+    word_problems = rows["brueche-brueche-addieren--sachaufgaben"]
+    assert word_problems["lesson"]["unitId"] == "brueche-brueche-addieren"
+    assert word_problems["lesson"]["topicId"] == "brueche"
+    assert word_problems["lesson"]["title"] == "Sachaufgaben"
+    assert word_problems["lesson"]["gradeLevel"] == "grade_5_primary"
+    [choice] = word_problems["exercises"]
+    assert choice["type"] == "multiple_choice" and choice["skills"] == ["brueche-brueche-addieren--sachaufgaben"]
     assert choice["answerKey"] == "5/8" and choice["options"] == ["5/16", "5/8", "Mehr als 1"]
     assert choice["translations"]["fr"]["options"][2] == "Plus que 1"
     assert set(choice["translations"]) == {"en", "fr", "it"}
-    unordered = next(e for e in lesson["exercises"] if e["exerciseId"] == "kb-m-p101-q3")
-    assert unordered["type"] == "text_input" and unordered["skills"] == ["kb-m-p101"]
-    physics = next(row for row in rows if row["publicLessonId"] == "kb-p-h001")
+    assert set(rows) == {
+        "brueche-brueche-addieren--kopfrechnen", "brueche-brueche-addieren--sachaufgaben",
+        "brueche-brueche-addieren--schliessen", "brueche-bruchbegriff--darstellen",
+        "physik-mechanik-kraefte-addieren--rechnen",
+    }
+    physics = rows["physik-mechanik-kraefte-addieren--rechnen"]
     assert physics["lesson"]["gradeLevel"] == "grade_secondary_ii"
-    assert physics["lesson"]["topicId"] == "physik-mechanik"
-    assert report["prerequisitesForLater"] == [
-        {"point": "kb-m-p101", "requires": "kb-m-p100", "strength": "hard"}
-    ]
+    assert stars_file["stars"]["brueche-brueche-addieren"]["prerequisites"] == ["brueche-bruchbegriff"]
+    assert vocabulary["skills"]["brueche-brueche-addieren--kopfrechnen"] == {
+        "subject": "mathematics",
+        "unit": "brueche-brueche-addieren",
+        "titles": {"de": "Kopfrechnen-Trick", "en": "Mental maths tricks",
+                   "fr": "Astuces de calcul mental", "it": "Trucchi di calcolo mentale"},
+    }
+    assert report["summary"]["smallStars"] == 5
     assert "五" not in json.dumps(made, ensure_ascii=False)
+
+
+def test_a_large_small_star_is_cut_into_numbered_parts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(kb, "EXERCISES_PER_SET", 1)
+    translated = _translated(tmp_path)
+    built = _built(translated)
+    built["exercises"]["kb-m-p101-q3"] = "kopfrechnen"
+
+    made, _report, _stars, vocabulary = kb.manifests(translated, built, "abc123")
+
+    ids = [row["publicLessonId"] for m in made for row in m["lessons"]]
+    assert "brueche-brueche-addieren--kopfrechnen" in ids
+    assert "brueche-brueche-addieren--kopfrechnen-2" in ids
+    assert vocabulary["practiceSets"]["brueche-brueche-addieren--kopfrechnen-2"]["fr"] == (
+        "Astuces de calcul mental · Partie 2"
+    )
 
 
 def test_an_exercise_over_the_authoring_limit_is_skipped_not_shortened(tmp_path: Path) -> None:
@@ -302,44 +487,26 @@ def test_an_exercise_over_the_authoring_limit_is_skipped_not_shortened(tmp_path:
     long = next(e for e in translated["exercises"] if e["id"] == "kb-m-p101-q1")
     long["text"]["it"]["prompt"] = "x" * (kb.MAX_TEXT + 1)
 
-    made, report = kb.manifests(translated, "abc123")
+    made, report, _stars, _vocabulary = kb.manifests(translated, _built(translated), "abc123")
 
     ids = {e["exerciseId"] for m in made for row in m["lessons"] for e in row["exercises"]}
     assert "kb-m-p101-q1" not in ids
     assert any(row["sourceId"] == "cnm_p101_q1" and "longer" in row["reason"] for row in report["skipped"])
 
 
-def test_the_vocabulary_names_each_skill_in_four_languages(tmp_path: Path) -> None:
-    vocabulary = kb.skill_vocabulary(_translated(tmp_path))
-
-    assert vocabulary["skills"]["kb-m-p101"] == {
-        "subject": "mathematics",
-        "unit": "brueche-u2",
-        "titles": {"de": "Brüche addieren", "en": "Adding fractions",
-                   "fr": "Additionner des fractions", "it": "Addizionare frazioni"},
-    }
-
-
 # ── through the curriculum workflow ──────────────────────────────────────────
 
 
-@pytest.fixture
-def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
-    """The seed, with the knowledge base stars written the way --knowledge-base writes them."""
-    table = install_seeded_table(monkeypatch)
-    _subjects, topics, units = seed_practice.knowledge_base_rows(live=False)
-    table.seed(
-        *({"PK": "PRACTICE", "SK": f"TOPIC#{t['topic_id']}", **t} for t in topics),
-        *({"PK": "PRACTICE", "SK": f"UNIT#{u['unit_id']}", **u} for u in units),
-    )
-    return table
-
-
-def _register(monkeypatch: pytest.MonkeyPatch, vocabulary: dict[str, Any]) -> None:
-    """Load a vocabulary the way curriculum_translations loads the committed one."""
+def _register(
+    monkeypatch: pytest.MonkeyPatch, stars_file: dict[str, Any], vocabulary: dict[str, Any]
+) -> None:
+    """Load the generated files the way the catalog and curriculum_translations load the committed ones."""
+    monkeypatch.setattr(knowledge_base_catalog, "_stars_data", lambda: stars_file)
+    monkeypatch.setattr(knowledge_base_catalog, "_skills_data", lambda: vocabulary)
     units = copy.deepcopy(curriculum_translations.SKILL_UNITS)
     titles = dict(curriculum_translations.SKILL_TITLES)
     translations = dict(curriculum_translations.TITLE_TRANSLATIONS)
+    translations.update(knowledge_base_catalog.title_translations())
     for skill_id, skill in vocabulary["skills"].items():
         units.setdefault(skill["subject"], {})[skill_id] = skill["unit"]
         titles[skill_id] = skill["titles"]["de"]
@@ -349,10 +516,22 @@ def _register(monkeypatch: pytest.MonkeyPatch, vocabulary: dict[str, Any]) -> No
     monkeypatch.setattr(curriculum_translations, "TITLE_TRANSLATIONS", translations)
 
 
-def _publish_all(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    translated = _translated(tmp_path)
-    _register(monkeypatch, kb.skill_vocabulary(translated))
-    made, _report = kb.manifests(translated, "abc123")
+@pytest.fixture
+def imported(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[dict[str, Any]]:
+    """The seed with the knowledge base stars written the way --knowledge-base writes them;
+    returns the manifests."""
+    made, _report, stars_file, vocabulary = _manifests(tmp_path)
+    _register(monkeypatch, stars_file, vocabulary)
+    table = install_seeded_table(monkeypatch)
+    _subjects, topics, units = seed_practice.knowledge_base_rows(live=False)
+    table.seed(
+        *({"PK": "PRACTICE", "SK": f"TOPIC#{t['topic_id']}", **t} for t in topics),
+        *({"PK": "PRACTICE", "SK": f"UNIT#{u['unit_id']}", **u} for u in units),
+    )
+    return made
+
+
+def _publish_all(made: list[dict[str, Any]]) -> None:
     for manifest in made:
         preview = curriculum_migration_service.dry_run(manifest, OPERATOR)
         assert preview["summary"]["errors"] == 0, [r["validationIssues"] for r in preview["rows"]]
@@ -370,14 +549,8 @@ def _publish_all(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
             )
 
 
-def test_the_manifests_dry_run_clean_and_apply_as_drafts_only(
-    table: FakeTable, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    translated = _translated(tmp_path)
-    _register(monkeypatch, kb.skill_vocabulary(translated))
-    made, _report = kb.manifests(translated, "abc123")
-
-    for manifest in made:
+def test_the_manifests_dry_run_clean_and_apply_as_drafts_only(imported: list[dict[str, Any]]) -> None:
+    for manifest in imported:
         preview = curriculum_migration_service.dry_run(manifest, OPERATOR)
         assert preview["summary"]["errors"] == 0
         curriculum_migration_service.apply_migration(
@@ -388,9 +561,9 @@ def test_the_manifests_dry_run_clean_and_apply_as_drafts_only(
 
 
 def test_a_published_exercise_reads_and_judges_in_the_students_language(
-    table: FakeTable, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    imported: list[dict[str, Any]],
 ) -> None:
-    _publish_all(monkeypatch, tmp_path)
+    _publish_all(imported)
     row = practice_repo.get_challenge("kb-m-p101-q2")
     assert row is not None
 
@@ -405,9 +578,12 @@ def test_a_published_exercise_reads_and_judges_in_the_students_language(
     assert not answer_judging.judge_challenge("Plus que 1", shown)
     physics = exercise_localization.localized(practice_repo.get_challenge("kb-p-h001-q1"), "it")
     assert answer_judging.judge_challenge("5 N", physics)
-    assert curriculum_translations.translated_title("kb-m-p101", "Brüche addieren", "it") == (
-        "Addizionare frazioni"
-    )
+    assert curriculum_translations.translated_title(
+        "brueche-brueche-addieren--sachaufgaben", "Sachaufgaben", "it"
+    ) == "Problemi"
+    assert curriculum_translations.translated_title(
+        "brueche-brueche-addieren", "Brüche addieren", "fr"
+    ) == "Additionner des fractions"
 
 
 def test_a_translated_option_counts_in_its_language_and_in_german() -> None:
@@ -455,14 +631,21 @@ def test_authoring_refuses_options_and_translations_that_cannot_be_answered(
     assert field in [found for found, _message in issues]
 
 
-def test_the_knowledge_base_stars_stay_hidden_until_they_go_live() -> None:
-    subjects, topics, units = seed_practice.knowledge_base_rows(live=False)
+def test_the_knowledge_base_stars_stay_hidden_until_they_go_live(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _made, _report, stars_file, vocabulary = _manifests(tmp_path)
+    _register(monkeypatch, stars_file, vocabulary)
 
+    subjects, topics, units = seed_practice.knowledge_base_rows(live=False)
     assert subjects == []
     assert {row["rollout_state"] for row in (*topics, *units)} == {"preview"}
-    subjects, topics, units = seed_practice.knowledge_base_rows(live=True)
+    assert all(unit["prerequisite_unit_ids"] == [] for unit in units)
+    subjects, topics, units = seed_practice.knowledge_base_rows(live=True, prerequisites=True)
     assert [s["subject_id"] for s in subjects] == ["english", "physics"]
     assert {row["rollout_state"] for row in (*topics, *units)} == {"active"}
+    prerequisites = {unit["unit_id"]: unit["prerequisite_unit_ids"] for unit in units}
+    assert prerequisites["brueche-brueche-addieren"] == ["brueche-bruchbegriff"]
 
 
 def test_a_language_is_laid_out_by_situations_of_life_and_by_grammar(
@@ -487,16 +670,33 @@ def test_a_language_is_laid_out_by_situations_of_life_and_by_grammar(
     assert knowledge_base_catalog.subject_of_topic("deutsch-verben") == "german"
 
 
-def test_the_catalog_files_each_new_star_under_an_existing_or_new_nebula() -> None:
+def test_the_coarse_stars_lie_in_an_existing_or_new_nebula() -> None:
     topics = {row["topic_id"] for row in knowledge_base_catalog.topics()}
     zap_topics = {unit.rsplit("-u", 1)[0] for unit in knowledge_base_catalog.ZAP_UNITS}
-    units = knowledge_base_catalog.units()
+    units = knowledge_base_catalog.grouping_units()
 
     assert len({unit["unit_id"] for unit in units}) == len(units)
     assert not {unit["unit_id"] for unit in units} & set(knowledge_base_catalog.ZAP_UNITS)
     for unit in units:
         assert unit["topic_id"] in topics | zap_topics
         assert set(unit["titles"]) == set(knowledge_base_catalog.LOCALES)
-    translations = knowledge_base_catalog.title_translations()
-    assert translations["geometrie-u8"] == {"en": "Vectors", "fr": "Vecteurs", "it": "Vettori"}
-    assert translations["physics"]["fr"] == "Physique"
+    assert knowledge_base_catalog.topic_of_group("brueche-u2") == "brueche"
+    assert knowledge_base_catalog.title_translations()["physics"]["fr"] == "Physique"
+
+
+def test_every_subject_has_question_types_in_four_languages() -> None:
+    for subject in ("mathematics", "english", "physics"):
+        types = knowledge_base_catalog.QUESTION_TYPES[subject]
+        assert len({slug for slug, _titles, _scope in types}) == len(types)
+        for _slug, titles, scope in types:
+            assert set(titles) == set(knowledge_base_catalog.LOCALES) and scope
+
+
+def test_the_committed_stars_and_skills_agree() -> None:
+    """Every small star in the committed vocabulary hangs under a committed star."""
+    stars = {unit["unit_id"] for unit in knowledge_base_catalog.units()}
+    skills = knowledge_base_catalog.skills()
+
+    assert {skill["unit"] for skill in skills.values()} <= stars
+    for unit in knowledge_base_catalog.units():
+        assert set(unit["prerequisites"]) <= stars
