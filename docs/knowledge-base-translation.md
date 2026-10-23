@@ -82,3 +82,29 @@ breaks a rule below. The batches and their translations stay out of the reposito
 - Names of knowledge points: a short skill title (at most 80 characters) in the
   style "Brüche addieren", "Adding fractions", "Additionner des fractions",
   "Addizionare frazioni"; no grade, no numbering.
+
+## Localising what is left of China
+
+A second pass reads every translated batch of a subject and rewrites what still
+carries a Chinese or China-specific context, in all four locales at once:
+
+- **People**: Chinese names (Li Ming, Chen Jie, Zhang Peng, Wu Yifan ...) become names
+  common in Switzerland or Europe (Lena, Noah, Luca, Mia, Elena, Jonas ...); famous
+  Chinese people (Tu Youyou, Li Bai, Yuan Longping, Yang Liwei ...) become comparable
+  European or Swiss figures (Marie Curie, Goethe, Albert Einstein, Claude Nicollier ...).
+- **Places**: China, Chinese cities, provinces, rivers and sights become Swiss or
+  European ones (Zürich, Genf, Lugano, the Rhine, the Matterhorn, the Eiffel Tower ...).
+- **Festivals and customs**: Spring Festival, Mid-Autumn, Dragon Boat, Lantern Festival,
+  National Day, red envelopes ... become Christmas, New Year, Easter, the Swiss
+  National Day (1 August), Fasnacht, Sechseläuten, birthdays, Chalandamarz ...
+- **Food and things**: dumplings, mooncakes, zongzi, chopsticks, kung fu, pandas,
+  calligraphy, yuan ... become Swiss or European ones (Rösti, Fondue, Zopf, Grittibänz,
+  Birchermüesli, cutlery, football, skiing, francs ...).
+- **School and society**: the Gaokao, Chinese school terms, China's space missions or
+  facts about China become their Swiss or European counterparts (Matura, Gymnasium,
+  ESA, Swiss facts), or the exercise is dropped when the fact itself is the point.
+
+In this pass the English material of an English exercise may change too, as long
+as the grammar or vocabulary it tests stays exactly the same: the right option stays
+the right option, at the same position, and every locale tells the same story.
+Numbers and answers of mathematics and physics do not change.
