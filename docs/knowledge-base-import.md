@@ -24,8 +24,16 @@ figure (practice shows no figures yet) and self-assessments are skipped and list
 `src/stoa/services/knowledge_base_catalog.py` holds the stars: new stars in the
 seven mathematics nebulae for what the ZAP stars do not cover (functions, vectors,
 probability, ...), and the English and physics nebulae. The translator files each
-mathematics and physics knowledge point under one of the offered stars; English
-points go by strand and school stage.
+knowledge point under one of the offered stars.
+
+A language subject is laid out the same way for every language: ten nebulae for
+situations of life (me and others, daily life, school and work, food and shopping,
+free time, out and about, nature, health, society, communicating) and four for
+grammar (letters and sounds, parts of speech, verbs and tenses, building
+sentences). Vocabulary, everyday expressions and reading or writing go to the
+situation they are about; grammar goes to the structure it practises. Another
+language - German, French, Italian - gets the same nebulae by one entry in
+`LANGUAGE_SUBJECTS` once it has content.
 
 ## Steps
 

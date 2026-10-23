@@ -465,6 +465,28 @@ def test_the_knowledge_base_stars_stay_hidden_until_they_go_live() -> None:
     assert {row["rollout_state"] for row in (*topics, *units)} == {"active"}
 
 
+def test_a_language_is_laid_out_by_situations_of_life_and_by_grammar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    english = knowledge_base_catalog.unit_choices("english")
+
+    assert "englisch-schule-klassenzimmer" in english
+    assert "englisch-verben-vergangenheit" in english
+    assert all(unit.startswith("englisch-") for unit in english)
+    nebulae = [t["topic_id"] for t in knowledge_base_catalog.topics() if t["subject_id"] == "english"]
+    assert nebulae[0] == "englisch-ich" and nebulae[-1] == "englisch-saetze"
+
+    # Another language gets the same nebulae under its own prefix.
+    monkeypatch.setattr(
+        knowledge_base_catalog, "LANGUAGE_SUBJECTS", {"english": "englisch", "german": "deutsch"}
+    )
+    german = knowledge_base_catalog.unit_choices("german")
+    assert {unit.removeprefix("deutsch-") for unit in german} == {
+        unit.removeprefix("englisch-") for unit in english
+    }
+    assert knowledge_base_catalog.subject_of_topic("deutsch-verben") == "german"
+
+
 def test_the_catalog_files_each_new_star_under_an_existing_or_new_nebula() -> None:
     topics = {row["topic_id"] for row in knowledge_base_catalog.topics()}
     zap_topics = {unit.rsplit("-u", 1)[0] for unit in knowledge_base_catalog.ZAP_UNITS}

@@ -49,17 +49,6 @@ LICENCE = "CC BY-NC 4.0"
 LOCALES = catalog.LOCALES
 
 SUBJECTS = {None: ("mathematics", "m"), "english": ("english", "e"), "physics": ("physics", "p")}
-DOMAINS = {
-    # mathematics
-    "数与代数": "Zahlen und Algebra", "图形与几何": "Geometrie",
-    "统计与概率": "Statistik und Wahrscheinlichkeit", "综合与实践": "Anwendung und Projekte",
-    # English → the nebula of its strand
-    "语音": "englisch-aussprache", "词汇": "englisch-wortschatz", "语法": "englisch-grammatik",
-    "日常表达": "englisch-alltag", "读写": "englisch-lesen-schreiben",
-    # physics
-    "物质": "Materie", "运动和相互作用": "Bewegung und Wechselwirkung", "能量": "Energie",
-    "跨学科实践": "Fächerübergreifende Praxis",
-}
 #: Upstream fields that record the Chinese textbook or curriculum, never carried.
 TEXTBOOK_FIELDS = ("chapter", "semester", "standards", "root_reason", "external", "mathLinks")
 #: Upstream files that are textbook or upstream-process records, never read.
@@ -304,10 +293,9 @@ def merge(source: Mapping[str, Any], filled: Iterable[Mapping[str, Any]]) -> dic
         if found:
             problems.append({"id": point["id"], "problems": found})
             continue
-        unit = done["unit"] if units else catalog.english_unit_id(DOMAINS[point["domain"]], point["grade"])
         points.append({
             **{k: point[k] for k in ("id", "sourceId", "subject", "grade", "kind")},
-            "unit": unit,
+            "unit": done["unit"],
             "text": {locale: dict(done[locale]) for locale in LOCALES},
         })
     kept = {p["id"] for p in points}

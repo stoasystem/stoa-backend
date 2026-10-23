@@ -5,7 +5,8 @@ primary school to upper secondary, for English and for physics. Each knowledge
 point becomes one skill, and one lesson practising it, under one star (a unit) of
 a nebula (a topic). Mathematics keeps its seven nebulae: what the ZAP stars did
 not cover gets stars of its own in the nebula of its field. English and physics
-are subjects of their own with nebulae of their own.
+are subjects of their own. A language subject is laid out by the situations of
+life it is used in and by its grammar, the same nebulae for every language.
 
 This module holds the rows the seed writes for those stars, nebulae and subjects,
 their titles in de/en/fr/it, and the skill vocabulary of the imported knowledge
@@ -205,23 +206,215 @@ def _subject_topics(subject_id: str, topics: tuple[tuple[str, dict[str, str]], .
     ]
 
 
-#: English: one nebula per strand, one star per school stage. Which star a
-#: knowledge point goes to follows from its strand and grade alone.
-ENGLISH_STAGES: tuple[tuple[str, dict[str, str]], ...] = (
-    ("u1", _titles("Primarstufe", "Primary level", "Degré primaire", "Scuola elementare")),
-    ("u2", _titles("Sekundarstufe I", "Lower secondary", "Secondaire I", "Secondario I")),
-    ("u3", _titles("Sekundarstufe II", "Upper secondary", "Secondaire II", "Secondario II")),
+#: Language subjects are laid out the same way whatever the language: nebulae for
+#: the situations of life a learner talks about, and nebulae for the grammar that
+#: carries it. Each nebula is (slug, titles, stars) and each star
+#: (slug, titles, scope); the scope tells the import which knowledge points go
+#: there. Vocabulary, everyday expressions and reading or writing tasks go to the
+#: situation they are about; grammar, sounds and word formation go to grammar.
+_Star = tuple[str, dict[str, str], str]
+LANGUAGE_SCENARIOS: tuple[tuple[str, dict[str, str], tuple[_Star, ...]], ...] = (
+    ("ich", _titles("Ich und die anderen", "Me and other people", "Moi et les autres", "Io e gli altri"), (
+        ("vorstellen", _titles("Begrüssen und sich vorstellen", "Greeting and introducing yourself",
+                               "Saluer et se présenter", "Salutare e presentarsi"),
+         "Begrüssung, Abschied, Name, Alter, Herkunft, persönliche Angaben."),
+        ("familie", _titles("Familie und Freunde", "Family and friends", "Famille et amis",
+                            "Famiglia e amici"),
+         "Familienmitglieder, Freundschaft, Beziehungen."),
+        ("beschreiben", _titles("Aussehen, Charakter und Gefühle", "Looks, character and feelings",
+                                "Apparence, caractère et sentiments", "Aspetto, carattere e sentimenti"),
+         "Menschen beschreiben, Eigenschaften, Gefühle und Stimmungen."),
+    )),
+    ("alltag", _titles("Alltag und Zuhause", "Daily life and home", "Quotidien et maison",
+                       "Vita quotidiana e casa"), (
+        ("wohnen", _titles("Wohnen und Zuhause", "Home and living", "Le logement", "La casa"),
+         "Zimmer, Möbel, Haushalt, Gegenstände zu Hause."),
+        ("tagesablauf", _titles("Tagesablauf, Zahlen und Uhrzeit", "Daily routine, numbers and time",
+                                "Journée, nombres et heure", "Giornata, numeri e ora"),
+         "Zahlen, Uhrzeit, Datum, Wochentage, Monate, Tagesablauf, Gewohnheiten."),
+        ("kleidung", _titles("Kleidung und Farben", "Clothes and colours", "Vêtements et couleurs",
+                             "Vestiti e colori"),
+         "Kleidungsstücke, Farben, was man trägt."),
+    )),
+    ("schule", _titles("Schule und Arbeit", "School and work", "École et travail", "Scuola e lavoro"), (
+        ("klassenzimmer", _titles("Schulsachen und Klassenzimmer", "School things and the classroom",
+                                  "Affaires scolaires et salle de classe", "Materiale scolastico e aula"),
+         "Schulsachen, Klassenzimmer, Anweisungen im Unterricht."),
+        ("lernen", _titles("Fächer und Lernen", "Subjects and learning", "Matières et apprentissage",
+                           "Materie e apprendimento"),
+         "Schulfächer, Stundenplan, Schulleben, Lernen und Prüfungen."),
+        ("berufe", _titles("Berufe und Zukunft", "Jobs and the future", "Métiers et avenir",
+                           "Professioni e futuro"),
+         "Berufe, Arbeitswelt, Pläne und Träume für die Zukunft."),
+    )),
+    ("essen", _titles("Essen und Einkaufen", "Food and shopping", "Repas et achats", "Cibo e acquisti"), (
+        ("essen-trinken", _titles("Essen und Trinken", "Food and drink", "Manger et boire",
+                                  "Mangiare e bere"),
+         "Lebensmittel, Mahlzeiten, Vorlieben, im Restaurant bestellen, gesund essen."),
+        ("einkaufen", _titles("Einkaufen und Geld", "Shopping and money", "Achats et argent",
+                              "Acquisti e soldi"),
+         "Geschäfte, Preise, bezahlen, nach Waren fragen."),
+    )),
+    ("freizeit", _titles("Freizeit und Feste", "Free time and celebrations", "Loisirs et fêtes",
+                         "Tempo libero e feste"), (
+        ("hobbys", _titles("Hobbys und Sport", "Hobbies and sport", "Loisirs et sport", "Hobby e sport"),
+         "Hobbys, Sport, Spiele, Vereine, Fähigkeiten."),
+        ("feste", _titles("Feste und Einladungen", "Celebrations and invitations",
+                          "Fêtes et invitations", "Feste e inviti"),
+         "Geburtstag, Feiertage, Bräuche, einladen, Geschenke."),
+        ("medien", _titles("Musik, Filme und Medien", "Music, films and media",
+                           "Musique, films et médias", "Musica, film e media"),
+         "Musik, Filme, Bücher, Internet, soziale Medien."),
+    )),
+    ("unterwegs", _titles("Unterwegs", "Out and about", "En route", "In giro"), (
+        ("orte", _titles("Orte und Wege", "Places and directions", "Lieux et chemins",
+                         "Luoghi e indicazioni"),
+         "Orte in der Stadt, nach dem Weg fragen, Wegbeschreibung, Lage."),
+        ("reisen", _titles("Verkehr und Reisen", "Transport and travel", "Transports et voyages",
+                           "Trasporti e viaggi"),
+         "Verkehrsmittel, Ferien, Reisen, Unterkunft."),
+        ("laender", _titles("Länder und Kulturen", "Countries and cultures", "Pays et cultures",
+                            "Paesi e culture"),
+         "Länder, Sprachen, Nationalitäten, kulturelle Unterschiede."),
+    )),
+    ("natur", _titles("Natur und Umwelt", "Nature and the environment", "Nature et environnement",
+                      "Natura e ambiente"), (
+        ("wetter", _titles("Wetter und Jahreszeiten", "Weather and seasons", "Météo et saisons",
+                           "Tempo e stagioni"),
+         "Wetter, Jahreszeiten, Klima beschreiben."),
+        ("tiere", _titles("Tiere und Pflanzen", "Animals and plants", "Animaux et plantes",
+                          "Animali e piante"),
+         "Haustiere, Wildtiere, Pflanzen, Bauernhof, Zoo."),
+        ("umwelt", _titles("Umwelt und Klimaschutz", "Environment and climate", "Environnement et climat",
+                           "Ambiente e clima"),
+         "Umweltschutz, Klimawandel, Naturkatastrophen, nachhaltig leben."),
+    )),
+    ("gesundheit", _titles("Körper und Gesundheit", "Body and health", "Corps et santé",
+                           "Corpo e salute"), (
+        ("koerper", _titles("Körper und Krankheit", "The body and illness", "Le corps et la maladie",
+                            "Il corpo e la malattia"),
+         "Körperteile, Schmerzen und Krankheiten, beim Arzt."),
+        ("gesund-leben", _titles("Gesund und sicher leben", "Living healthily and safely",
+                                 "Vivre sain et en sécurité", "Vivere sani e sicuri"),
+         "Gesunde Gewohnheiten, Bewegung, Schlaf, Sicherheit, Hilfe im Notfall."),
+    )),
+    ("gesellschaft", _titles("Gesellschaft und Wissen", "Society and knowledge", "Société et savoir",
+                             "Società e sapere"), (
+        ("technik", _titles("Wissenschaft und Technik", "Science and technology", "Sciences et technique",
+                            "Scienza e tecnologia"),
+         "Erfindungen, Technik, Raumfahrt, Wissenschaft, künstliche Intelligenz."),
+        ("kultur", _titles("Geschichte, Kunst und Literatur", "History, art and literature",
+                           "Histoire, art et littérature", "Storia, arte e letteratura"),
+         "Geschichte, berühmte Personen, Kunst, Literatur, Theater."),
+        ("zusammenleben", _titles("Zusammenleben und Werte", "Living together and values",
+                                  "Vivre ensemble et valeurs", "Convivenza e valori"),
+         "Freiwilligenarbeit, Regeln, Rechte, Vorbilder, gesellschaftliche Fragen."),
+    )),
+    ("kommunizieren", _titles("Sich verständigen", "Communicating", "Communiquer", "Comunicare"), (
+        ("hoeflich", _titles("Bitten, danken, sich entschuldigen", "Asking, thanking, apologising",
+                             "Demander, remercier, s'excuser", "Chiedere, ringraziare, scusarsi"),
+         "Bitten und Angebote, Dank, Entschuldigung, Erlaubnis, Hilfe anbieten, am Telefon."),
+        ("meinung", _titles("Meinungen und Vorschläge", "Opinions and suggestions",
+                            "Opinions et propositions", "Opinioni e proposte"),
+         "Meinung äussern, zustimmen und widersprechen, Vorschläge, Ratschläge, diskutieren."),
+        ("texte-lesen", _titles("Texte verstehen", "Understanding texts", "Comprendre des textes",
+                                "Capire i testi"),
+         "Lesestrategien, Hauptaussage, Details, Textsorten erkennen, wenn kein Lebensbereich passt."),
+        ("texte-schreiben", _titles("Briefe, E-Mails und Aufsätze", "Letters, emails and essays",
+                                    "Lettres, e-mails et rédactions", "Lettere, e-mail e temi"),
+         "Nachrichten, Briefe, E-Mails, Berichte und Aufsätze schreiben und aufbauen."),
+    )),
 )
-ENGLISH_TOPICS: tuple[tuple[str, dict[str, str]], ...] = (
-    ("englisch-aussprache", _titles("Buchstaben und Aussprache", "Letters and pronunciation",
-                                    "Lettres et prononciation", "Lettere e pronuncia")),
-    ("englisch-wortschatz", _titles("Wortschatz", "Vocabulary", "Vocabulaire", "Lessico")),
-    ("englisch-grammatik", _titles("Grammatik", "Grammar", "Grammaire", "Grammatica")),
-    ("englisch-alltag", _titles("Alltagssprache", "Everyday expressions", "Expressions courantes",
-                                "Espressioni quotidiane")),
-    ("englisch-lesen-schreiben", _titles("Lesen und Schreiben", "Reading and writing",
-                                         "Lecture et écriture", "Lettura e scrittura")),
+LANGUAGE_GRAMMAR: tuple[tuple[str, dict[str, str], tuple[_Star, ...]], ...] = (
+    ("laute", _titles("Buchstaben und Aussprache", "Letters and pronunciation",
+                      "Lettres et prononciation", "Lettere e pronuncia"), (
+        ("alphabet", _titles("Alphabet und Schreibung", "Alphabet and spelling", "Alphabet et orthographe",
+                             "Alfabeto e ortografia"),
+         "Buchstaben, Alphabet, Gross- und Kleinschreibung, Rechtschreibung."),
+        ("aussprache", _titles("Laute, Betonung und Satzmelodie", "Sounds, stress and intonation",
+                               "Sons, accent et intonation", "Suoni, accento e intonazione"),
+         "Laute, Lautschrift, Wortbetonung, Satzbetonung, Intonation."),
+    )),
+    ("woerter", _titles("Wortarten", "Parts of speech", "Classes de mots", "Parti del discorso"), (
+        ("nomen", _titles("Nomen, Artikel und Mengen", "Nouns, articles and quantities",
+                          "Noms, articles et quantités", "Nomi, articoli e quantità"),
+         "Nomen, Plural, zählbar und unzählbar, Artikel, Mengenwörter, Genitiv."),
+        ("pronomen", _titles("Pronomen", "Pronouns", "Pronoms", "Pronomi"),
+         "Personal-, Possessiv-, Reflexiv-, Demonstrativ- und Indefinitpronomen."),
+        ("adjektive", _titles("Adjektive, Adverbien und Vergleiche", "Adjectives, adverbs and comparison",
+                              "Adjectifs, adverbes et comparaison", "Aggettivi, avverbi e comparazione"),
+         "Adjektive, Adverbien, Steigerung, Vergleiche."),
+        ("praepositionen", _titles("Präpositionen und Konjunktionen", "Prepositions and conjunctions",
+                                   "Prépositions et conjonctions", "Preposizioni e congiunzioni"),
+         "Präpositionen von Ort und Zeit, Konjunktionen, Verbindungswörter."),
+        ("wortbildung", _titles("Wortbildung und Wendungen", "Word formation and phrases",
+                                "Formation des mots et expressions",
+                                "Formazione delle parole ed espressioni"),
+         "Vorsilben, Nachsilben, zusammengesetzte Wörter, Wortfamilien, Phrasal Verbs, feste Wendungen."),
+    )),
+    ("verben", _titles("Verben und Zeitformen", "Verbs and tenses", "Verbes et temps", "Verbi e tempi"), (
+        ("hilfsverben", _titles("Hilfsverben und Modalverben", "Auxiliary and modal verbs",
+                                "Auxiliaires et verbes modaux", "Ausiliari e verbi modali"),
+         "sein, haben, tun, Modalverben (können, müssen, dürfen, sollen ...)."),
+        ("gegenwart", _titles("Gegenwart", "Present tenses", "Le présent", "Il presente"),
+         "Einfache und Verlaufsform der Gegenwart."),
+        ("vergangenheit", _titles("Vergangenheit", "Past tenses", "Le passé", "Il passato"),
+         "Einfache und Verlaufsform der Vergangenheit, unregelmässige Verben, used to."),
+        ("perfekt", _titles("Perfekt und Plusquamperfekt", "Perfect tenses", "Les temps composés",
+                            "I tempi composti"),
+         "Present Perfect, Past Perfect, Perfekt-Verlaufsformen."),
+        ("zukunft", _titles("Zukunft", "Future forms", "Le futur", "Il futuro"),
+         "will, going to, Gegenwart für Zukünftiges, Futur in der Vergangenheit."),
+        ("passiv", _titles("Passiv", "The passive", "Le passif", "Il passivo"),
+         "Passiv in allen Zeitformen."),
+        ("infinite", _titles("Infinitiv, Gerundium und Partizip", "Infinitive, gerund and participle",
+                             "Infinitif, gérondif et participe", "Infinito, gerundio e participio"),
+         "Infinitiv, Gerundium, Partizipien, Verben mit Infinitiv oder Gerundium."),
+    )),
+    ("saetze", _titles("Sätze bauen", "Building sentences", "Construire des phrases",
+                       "Costruire le frasi"), (
+        ("fragen", _titles("Fragen, Verneinung und Aufforderungen", "Questions, negation and commands",
+                           "Questions, négation et impératif", "Domande, negazione e imperativo"),
+         "Fragesätze, Fragewörter, Frageanhängsel, Verneinung, Imperativ, Ausrufe."),
+        ("satzmuster", _titles("Satzglieder und Satzmuster", "Sentence parts and patterns",
+                               "Éléments et types de phrases", "Elementi e schemi della frase"),
+         "Wortstellung, Satzglieder, there is / there are, einfache Satzmuster."),
+        ("nebensaetze", _titles("Nebensätze", "Subordinate clauses", "Subordonnées", "Subordinate"),
+         "Relativsätze, Adverbialsätze, Objekt- und Subjektsätze."),
+        ("bedingungen", _titles("Bedingungssätze und Konjunktiv", "Conditionals and the subjunctive",
+                                "Conditionnel et subjonctif", "Periodo ipotetico e congiuntivo"),
+         "if-Sätze, Wünsche, irreale Aussagen, Konjunktiv."),
+        ("indirekte-rede", _titles("Indirekte Rede", "Reported speech", "Discours indirect",
+                                   "Discorso indiretto"),
+         "Aussagen, Fragen und Bitten wiedergeben, Zeitverschiebung."),
+        ("stil", _titles("Betonung, Inversion und Ellipse", "Emphasis, inversion and ellipsis",
+                         "Mise en relief, inversion et ellipse", "Enfasi, inversione ed ellissi"),
+         "Hervorhebung, Inversion, Auslassung, Satzverknüpfung im Text."),
+    )),
 )
+#: The language subjects and the prefix of their nebula ids. German, French or
+#: Italian learning gets the same nebulae by an entry here once it has content.
+LANGUAGE_SUBJECTS: dict[str, str] = {"english": "englisch"}
+
+
+def _language_topics() -> list[dict[str, Any]]:
+    nebulae = (*LANGUAGE_SCENARIOS, *LANGUAGE_GRAMMAR)
+    return [
+        {"topic_id": f"{prefix}-{slug}", "subject_id": subject_id, "titles": titles, "order": order}
+        for subject_id, prefix in LANGUAGE_SUBJECTS.items()
+        for order, (slug, titles, _stars) in enumerate(nebulae, start=1)
+    ]
+
+
+def _language_units() -> tuple[dict[str, Any], ...]:
+    return tuple(
+        {"unit_id": f"{prefix}-{slug}-{star}", "topic_id": f"{prefix}-{slug}",
+         "titles": titles, "description": scope}
+        for prefix in LANGUAGE_SUBJECTS.values()
+        for slug, _nebula_titles, stars in (*LANGUAGE_SCENARIOS, *LANGUAGE_GRAMMAR)
+        for star, titles, scope in stars
+    )
+
 
 #: Physics: nebulae by field, stars by area; the import files each knowledge point
 #: under the star whose description fits it.
@@ -310,8 +503,8 @@ SUBJECTS: tuple[dict[str, Any], ...] = (
     {
         "subject_id": "english",
         "titles": _titles("Englisch", "English", "Anglais", "Inglese"),
-        "description": "Englisch von der Primarstufe bis zur Sekundarstufe II: Wortschatz, "
-                       "Grammatik, Alltagssprache, Lesen und Schreiben.",
+        "description": "Englisch von der Primarstufe bis zur Sekundarstufe II, geordnet nach "
+                       "Lebensbereichen und Grammatik.",
         "accent": "teal",
         "order": 2,
     },
@@ -344,23 +537,10 @@ def grade_level(grade: int) -> str:
     return GRADE_LEVELS.get(grade, UPPER_SECONDARY)
 
 
-def english_unit_id(topic_id: str, grade: int) -> str:
-    stage = "u1" if grade <= 6 else "u2" if grade <= 9 else "u3"
-    return f"{topic_id}-{stage}"
-
-
-def _english_units() -> tuple[dict[str, Any], ...]:
-    return tuple(
-        {"unit_id": f"{topic_id}-{stage}", "topic_id": topic_id, "titles": titles, "description": ""}
-        for topic_id, _ in ENGLISH_TOPICS
-        for stage, titles in ENGLISH_STAGES
-    )
-
-
 def topics() -> list[dict[str, Any]]:
     """The nebulae of the new subjects."""
     return [
-        *_subject_topics("english", ENGLISH_TOPICS),
+        *_language_topics(),
         *_subject_topics("physics", PHYSICS_TOPICS),
     ]
 
@@ -369,7 +549,7 @@ def units() -> list[dict[str, Any]]:
     """Every star this module adds, with its subject and its order within its nebula."""
     rows: list[dict[str, Any]] = []
     next_order: dict[str, int] = {}
-    for unit in (*MATH_UNITS, *_english_units(), *PHYSICS_UNITS):
+    for unit in (*MATH_UNITS, *_language_units(), *PHYSICS_UNITS):
         topic_id = unit["topic_id"]
         if topic_id not in next_order:
             existing = sum(1 for zap in ZAP_UNITS if zap.startswith(f"{topic_id}-"))
@@ -380,8 +560,9 @@ def units() -> list[dict[str, Any]]:
 
 
 def subject_of_topic(topic_id: str) -> str:
-    if topic_id.startswith("englisch-"):
-        return "english"
+    for subject_id, prefix in LANGUAGE_SUBJECTS.items():
+        if topic_id.startswith(f"{prefix}-"):
+            return subject_id
     if topic_id.startswith("physik-"):
         return "physics"
     return "mathematics"
@@ -394,6 +575,12 @@ def unit_choices(subject_id: str) -> dict[str, str]:
         return {**ZAP_UNITS, **added}
     if subject_id == "physics":
         return {u["unit_id"]: f"{u['titles']['de']}: {u['description']}" for u in PHYSICS_UNITS}
+    if subject_id in LANGUAGE_SUBJECTS:
+        prefix = f"{LANGUAGE_SUBJECTS[subject_id]}-"
+        return {
+            u["unit_id"]: f"{u['titles']['de']}: {u['description']}"
+            for u in _language_units() if u["unit_id"].startswith(prefix)
+        }
     return {}
 
 

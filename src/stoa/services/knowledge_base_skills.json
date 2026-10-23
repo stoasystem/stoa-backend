@@ -6,7 +6,7 @@
  "skills": {
   "kb-e-h001": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-satzmuster",
    "titles": {
     "de": "Satzglieder bestimmen",
     "en": "Identifying parts of a sentence",
@@ -16,7 +16,7 @@
   },
   "kb-e-h002": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-satzmuster",
    "titles": {
     "de": "Die fünf Grundsatzmuster",
     "en": "The five basic sentence patterns",
@@ -26,7 +26,7 @@
   },
   "kb-e-h003": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-satzmuster",
    "titles": {
     "de": "Objektsprädikativ erkennen",
     "en": "Recognising object complements",
@@ -36,7 +36,7 @@
   },
   "kb-e-h004": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Wörter rund um das Schulgelände verstehen",
     "en": "Understanding campus words",
@@ -46,7 +46,7 @@
   },
   "kb-e-h005": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-ich-vorstellen",
    "titles": {
     "de": "Grüssen und sich vorstellen",
     "en": "Greeting and introducing yourself",
@@ -56,7 +56,7 @@
   },
   "kb-e-h006": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-ich-vorstellen",
    "titles": {
     "de": "Ein Kurzporträt einer neuen Schülerin lesen",
     "en": "Reading a profile of a new student",
@@ -66,7 +66,7 @@
   },
   "kb-e-h007": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-ich-vorstellen",
    "titles": {
     "de": "Eine Selbstvorstellung schreiben",
     "en": "Writing a self-introduction",
@@ -76,7 +76,7 @@
   },
   "kb-e-h008": {
    "subject": "english",
-   "unit": "englisch-aussprache-u3",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Steigende und fallende Satzmelodie",
     "en": "Rising and falling intonation",
@@ -86,7 +86,7 @@
   },
   "kb-e-h009": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Wörter zu Kursen und Hausaufgaben verstehen",
     "en": "Understanding words for courses and homework",
@@ -96,7 +96,7 @@
   },
   "kb-e-h010": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Wörter zu Herausforderungen und Clubs verstehen",
     "en": "Understanding words for challenges and clubs",
@@ -106,7 +106,7 @@
   },
   "kb-e-h011": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-satzmuster",
    "titles": {
     "de": "Nominalgruppen erkennen",
     "en": "Recognising noun phrases",
@@ -116,7 +116,7 @@
   },
   "kb-e-h012": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-satzmuster",
    "titles": {
     "de": "Adjektiv- und Adverbgruppen erkennen",
     "en": "Recognising adjective and adverb phrases",
@@ -126,7 +126,7 @@
   },
   "kb-e-h013": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Über Fächer und Clubs sprechen",
     "en": "Talking about courses and clubs",
@@ -136,7 +136,7 @@
   },
   "kb-e-h014": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Einen kurzen Text über den Schulalltag lesen",
     "en": "Reading a short text about school life",
@@ -146,7 +146,7 @@
   },
   "kb-e-h015": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Sätze für eine Clubbewerbung schreiben",
     "en": "Writing sentences to apply for a club",
@@ -156,7 +156,7 @@
   },
   "kb-e-h016": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Wörter zur Reiseplanung",
     "en": "Words for travel arrangements",
@@ -166,7 +166,7 @@
   },
   "kb-e-h017": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Wörter für Sehenswürdigkeiten",
     "en": "Words for sights",
@@ -176,7 +176,7 @@
   },
   "kb-e-h018": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-zukunft",
    "titles": {
     "de": "Present progressive für feste Pläne",
     "en": "Present continuous for arranged plans",
@@ -186,7 +186,7 @@
   },
   "kb-e-h019": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-zukunft",
    "titles": {
     "de": "Simple present in Zeit- und Bedingungssätzen",
     "en": "Present simple in time and if clauses",
@@ -196,7 +196,7 @@
   },
   "kb-e-h020": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Über Reisepläne sprechen",
     "en": "Talking about travel plans",
@@ -206,7 +206,7 @@
   },
   "kb-e-h021": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Einen kurzen Reiseplan lesen",
     "en": "Reading a short itinerary",
@@ -216,7 +216,7 @@
   },
   "kb-e-h022": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Eine E-Mail über eine Reise schreiben",
     "en": "Writing a travel email",
@@ -226,7 +226,7 @@
   },
   "kb-e-h023": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Wörter zum Sport",
     "en": "Sports words",
@@ -236,7 +236,7 @@
   },
   "kb-e-h024": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesundheit-gesund-leben",
    "titles": {
     "de": "Wörter zu Fitness und Gesundheit",
     "en": "Words for fitness and health",
@@ -246,7 +246,7 @@
   },
   "kb-e-h025": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Question tags bilden",
     "en": "Forming question tags",
@@ -256,7 +256,7 @@
   },
   "kb-e-h026": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-woerter-adjektive",
    "titles": {
     "de": "Adverbialphrasen erkennen",
     "en": "Recognising adverb phrases",
@@ -266,7 +266,7 @@
   },
   "kb-e-h027": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-gesundheit-gesund-leben",
    "titles": {
     "de": "Ratschläge zu Sport geben",
     "en": "Giving advice on exercise",
@@ -276,7 +276,7 @@
   },
   "kb-e-h028": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Einen kurzen Sportbericht lesen",
     "en": "Reading a short sports report",
@@ -286,7 +286,7 @@
   },
   "kb-e-h029": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Eine kurze Sportmeldung schreiben",
     "en": "Writing a short sports news item",
@@ -296,7 +296,7 @@
   },
   "kb-e-h030": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Naturkatastrophen",
     "en": "Natural disasters",
@@ -306,7 +306,7 @@
   },
   "kb-e-h031": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Wörter zur Rettung",
     "en": "Rescue words",
@@ -316,7 +316,7 @@
   },
   "kb-e-h032": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Relativsätze mit Relativpronomen",
     "en": "Relative clauses with relative pronouns",
@@ -326,7 +326,7 @@
   },
   "kb-e-h033": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "whose und whom verwenden",
     "en": "Using whose and whom",
@@ -336,7 +336,7 @@
   },
   "kb-e-h034": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Eine Katastrophe schildern und um Hilfe bitten",
     "en": "Describing a disaster and asking for help",
@@ -346,7 +346,7 @@
   },
   "kb-e-h035": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Eine Katastrophenmeldung lesen",
     "en": "Reading disaster news",
@@ -356,7 +356,7 @@
   },
   "kb-e-h036": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Sätze für einen Katastrophenbericht schreiben",
     "en": "Writing sentences for a disaster report",
@@ -366,7 +366,7 @@
   },
   "kb-e-h037": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Sprache und Schrift",
     "en": "Language and writing",
@@ -376,7 +376,7 @@
   },
   "kb-e-h038": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-woerter-wortbildung",
    "titles": {
     "de": "Vorsilben und Nachsilben",
     "en": "Prefixes and suffixes",
@@ -386,7 +386,7 @@
   },
   "kb-e-h039": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Relativsätze mit Relativadverbien",
     "en": "Relative clauses with relative adverbs",
@@ -396,7 +396,7 @@
   },
   "kb-e-h040": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Präposition vor das Relativpronomen stellen",
     "en": "Putting a preposition before a relative pronoun",
@@ -406,7 +406,7 @@
   },
   "kb-e-h041": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Über Sprachen sprechen",
     "en": "Talking about languages",
@@ -416,7 +416,7 @@
   },
   "kb-e-h042": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Einen Text über das Sprachenlernen lesen",
     "en": "Reading a text about learning a language",
@@ -426,7 +426,7 @@
   },
   "kb-e-h043": {
    "subject": "english",
-   "unit": "englisch-aussprache-u3",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Betonung mehrsilbiger Wörter",
     "en": "Stress in words with several syllables",
@@ -436,7 +436,7 @@
   },
   "kb-e-h044": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Einen Lernplan für eine Sprache schreiben",
     "en": "Writing a language learning plan",
@@ -446,7 +446,7 @@
   },
   "kb-e-h045": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Wortschatz: Kulturerbe",
     "en": "Vocabulary: cultural heritage",
@@ -456,7 +456,7 @@
   },
   "kb-e-h046": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Wortschatz: Kulturgüter schützen",
     "en": "Vocabulary: protecting historic sites",
@@ -466,7 +466,7 @@
   },
   "kb-e-h047": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Nicht notwendige Relativsätze bilden",
     "en": "Using non-defining relative clauses",
@@ -476,7 +476,7 @@
   },
   "kb-e-h048": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "which auf einen ganzen Satz beziehen",
     "en": "Using which to refer to a whole clause",
@@ -486,7 +486,7 @@
   },
   "kb-e-h049": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Über den Schutz des Kulturerbes diskutieren",
     "en": "Discussing heritage protection",
@@ -496,7 +496,7 @@
   },
   "kb-e-h050": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Eine Informationstafel zum Kulturerbe lesen",
     "en": "Reading a notice about a heritage site",
@@ -506,7 +506,7 @@
   },
   "kb-e-h051": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Einen Vorschlag zum Schutz schreiben",
     "en": "Writing a proposal for protection",
@@ -516,7 +516,7 @@
   },
   "kb-e-h052": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Wortschatz: Wildtiere",
     "en": "Wildlife vocabulary",
@@ -526,7 +526,7 @@
   },
   "kb-e-h053": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Wortschatz: Lebensräume schützen",
     "en": "Vocabulary for protecting habitats",
@@ -536,7 +536,7 @@
   },
   "kb-e-h054": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-passiv",
    "titles": {
     "de": "Passiv im Present Progressive",
     "en": "Present continuous passive",
@@ -546,7 +546,7 @@
   },
   "kb-e-h055": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Partizip Perfekt und -ing-Form",
     "en": "Past participle and -ing form",
@@ -556,7 +556,7 @@
   },
   "kb-e-h056": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Über Tierschutz sprechen",
     "en": "Talking about protecting animals",
@@ -566,7 +566,7 @@
   },
   "kb-e-h057": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Einen Text über Tierschutz lesen",
     "en": "Reading a text about animal protection",
@@ -576,7 +576,7 @@
   },
   "kb-e-h058": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Sätze für ein Naturschutzplakat schreiben",
     "en": "Writing sentences for a conservation poster",
@@ -586,7 +586,7 @@
   },
   "kb-e-h059": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Wortschatz: Internet",
     "en": "Internet vocabulary",
@@ -596,7 +596,7 @@
   },
   "kb-e-h060": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Wortschatz: Verhalten im Netz",
     "en": "Vocabulary for online behaviour",
@@ -606,7 +606,7 @@
   },
   "kb-e-h061": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-passiv",
    "titles": {
     "de": "Passiv im Present Perfect",
     "en": "Present perfect passive",
@@ -616,7 +616,7 @@
   },
   "kb-e-h062": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-perfekt",
    "titles": {
     "de": "since mit dem Present Perfect",
     "en": "since with the present perfect",
@@ -626,7 +626,7 @@
   },
   "kb-e-h063": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Über Sicherheit im Internet sprechen",
     "en": "Talking about online safety",
@@ -636,7 +636,7 @@
   },
   "kb-e-h064": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Einen kurzen Text über das Internet lesen",
     "en": "Reading a short text about the internet",
@@ -646,7 +646,7 @@
   },
   "kb-e-h065": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Eine Erinnerung zur Internetsicherheit schreiben",
     "en": "Writing an online safety reminder",
@@ -656,7 +656,7 @@
   },
   "kb-e-h066": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Wortschatz: Geschichte und Tradition",
     "en": "Vocabulary: history and tradition",
@@ -666,7 +666,7 @@
   },
   "kb-e-h067": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-freizeit-feste",
    "titles": {
     "de": "Wortschatz: Feste und Bräuche",
     "en": "Vocabulary: festivals and customs",
@@ -676,7 +676,7 @@
   },
   "kb-e-h068": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Partizip Perfekt als Attribut und Prädikativ",
     "en": "Past participles as attributes and predicatives",
@@ -686,7 +686,7 @@
   },
   "kb-e-h069": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Partizip Perfekt als Objektergänzung",
     "en": "Past participles as object complements",
@@ -696,7 +696,7 @@
   },
   "kb-e-h070": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-freizeit-feste",
    "titles": {
     "de": "Über Traditionen sprechen",
     "en": "Talking about traditions",
@@ -706,7 +706,7 @@
   },
   "kb-e-h071": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-freizeit-feste",
    "titles": {
     "de": "Einen Text über eine Tradition lesen",
     "en": "Reading a text about a tradition",
@@ -716,7 +716,7 @@
   },
   "kb-e-h072": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-freizeit-feste",
    "titles": {
     "de": "Eine Tradition vorstellen",
     "en": "Writing about a tradition",
@@ -726,7 +726,7 @@
   },
   "kb-e-h073": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Wortschatz: Musik",
     "en": "Vocabulary: music",
@@ -736,7 +736,7 @@
   },
   "kb-e-h074": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Wortschatz: Musizieren",
     "en": "Vocabulary: playing music",
@@ -746,7 +746,7 @@
   },
   "kb-e-h075": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Die -ing-Form als Attribut und Prädikativ",
     "en": "The -ing form as attribute and predicative",
@@ -756,7 +756,7 @@
   },
   "kb-e-h076": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Die -ing-Form als Adverbiale und Objektprädikativ verwenden",
     "en": "Using the -ing form as adverbial and object complement",
@@ -766,7 +766,7 @@
   },
   "kb-e-h077": {
    "subject": "english",
-   "unit": "englisch-aussprache-u3",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Wörter innerhalb einer Sinngruppe verbinden",
     "en": "Linking words within a sense group",
@@ -776,7 +776,7 @@
   },
   "kb-e-h078": {
    "subject": "english",
-   "unit": "englisch-aussprache-u3",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Unvollständige Plosion erkennen",
     "en": "Recognising incomplete plosion",
@@ -786,7 +786,7 @@
   },
   "kb-e-h079": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Über eine Aufführung sprechen",
     "en": "Talking about a performance",
@@ -796,7 +796,7 @@
   },
   "kb-e-h080": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Einen kurzen Text über eine Aufführung lesen",
     "en": "Reading a short text about a performance",
@@ -806,7 +806,7 @@
   },
   "kb-e-h081": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Eine Ankündigung für eine Aufführung schreiben",
     "en": "Writing a notice for a performance",
@@ -816,7 +816,7 @@
   },
   "kb-e-h082": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-freizeit-feste",
    "titles": {
     "de": "Wortschatz: Feste",
     "en": "Vocabulary: festivals",
@@ -826,7 +826,7 @@
   },
   "kb-e-h083": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-freizeit-feste",
    "titles": {
     "de": "Wortschatz: Arten zu feiern",
     "en": "Vocabulary: ways of celebrating",
@@ -836,7 +836,7 @@
   },
   "kb-e-h084": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-woerter-praepositionen",
    "titles": {
     "de": "Präpositionalphrasen als Adverbiale erkennen",
     "en": "Prepositional phrases as adverbials",
@@ -846,7 +846,7 @@
   },
   "kb-e-h085": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-vergangenheit",
    "titles": {
     "de": "used to und be used to unterscheiden",
     "en": "Distinguishing used to and be used to",
@@ -856,7 +856,7 @@
   },
   "kb-e-h086": {
    "subject": "english",
-   "unit": "englisch-aussprache-u3",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Nach Sinngruppen pausieren",
     "en": "Pausing by sense groups",
@@ -866,7 +866,7 @@
   },
   "kb-e-h087": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-freizeit-feste",
    "titles": {
     "de": "Über Feste sprechen",
     "en": "Talking about festivals",
@@ -876,7 +876,7 @@
   },
   "kb-e-h088": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-freizeit-feste",
    "titles": {
     "de": "Einen Text über ein Fest lesen",
     "en": "Reading a short text about a festival",
@@ -886,7 +886,7 @@
   },
   "kb-e-h089": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-freizeit-feste",
    "titles": {
     "de": "Ein Fest vorstellen",
     "en": "Writing about a festival",
@@ -896,7 +896,7 @@
   },
   "kb-e-h090": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Wortschatz: Tugenden",
     "en": "Vocabulary: virtues",
@@ -906,7 +906,7 @@
   },
   "kb-e-h091": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Wortschatz: gute Taten",
     "en": "Vocabulary: good deeds",
@@ -916,7 +916,7 @@
   },
   "kb-e-h092": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Den Infinitiv als Attribut und Objekt verwenden",
     "en": "Using the infinitive as attribute and object",
@@ -926,7 +926,7 @@
   },
   "kb-e-h093": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Mit dem Infinitiv einen Zweck ausdrücken",
     "en": "Expressing purpose with the infinitive",
@@ -936,7 +936,7 @@
   },
   "kb-e-h094": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Ein Verhalten beurteilen",
     "en": "Judging how someone behaved",
@@ -946,7 +946,7 @@
   },
   "kb-e-h095": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Einen Text über eine gute Tat lesen",
     "en": "Reading a text about a good deed",
@@ -956,7 +956,7 @@
   },
   "kb-e-h096": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Sätze für einen Kommentar schreiben",
     "en": "Writing sentences for a comment",
@@ -966,7 +966,7 @@
   },
   "kb-e-h097": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Wortschatz: kulturelle Vielfalt",
     "en": "Vocabulary: cultural diversity",
@@ -976,7 +976,7 @@
   },
   "kb-e-h098": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Wortschatz: Bräuche und Kultur",
     "en": "Vocabulary: customs and culture",
@@ -986,7 +986,7 @@
   },
   "kb-e-h099": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-indirekte-rede",
    "titles": {
     "de": "Direkte Rede in indirekte Rede umwandeln",
     "en": "Turning direct speech into reported speech",
@@ -996,7 +996,7 @@
   },
   "kb-e-h100": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-indirekte-rede",
    "titles": {
     "de": "That in der indirekten Rede weglassen",
     "en": "Leaving out that in reported speech",
@@ -1006,7 +1006,7 @@
   },
   "kb-e-h101": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Kulturelle Unterschiede vergleichen",
     "en": "Comparing cultural differences",
@@ -1016,7 +1016,7 @@
   },
   "kb-e-h102": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Einen Text über eine Kultur lesen",
     "en": "Reading a short text about a culture",
@@ -1026,7 +1026,7 @@
   },
   "kb-e-h103": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Notizen über eine Kultur schreiben",
     "en": "Writing notes about a culture",
@@ -1036,7 +1036,7 @@
   },
   "kb-e-h104": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Weltraumforschung",
     "en": "Space exploration",
@@ -1046,7 +1046,7 @@
   },
   "kb-e-h105": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Raumfahrt",
     "en": "Spaceflight",
@@ -1056,7 +1056,7 @@
   },
   "kb-e-h106": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Den Infinitiv als Subjekt und Prädikativ verwenden",
     "en": "Using infinitives as subject and complement",
@@ -1066,7 +1066,7 @@
   },
   "kb-e-h107": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Den Infinitiv ohne to verwenden",
     "en": "Using the infinitive without to",
@@ -1076,7 +1076,7 @@
   },
   "kb-e-h108": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Über Raumfahrtpläne sprechen",
     "en": "Talking about space missions",
@@ -1086,7 +1086,7 @@
   },
   "kb-e-h109": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Einen Text über Raumfahrt lesen",
     "en": "Reading a text about spaceflight",
@@ -1096,7 +1096,7 @@
   },
   "kb-e-h110": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Notizen über Raumfahrt schreiben",
     "en": "Writing notes about spaceflight",
@@ -1106,7 +1106,7 @@
   },
   "kb-e-h111": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-essen-einkaufen",
    "titles": {
     "de": "Geld und Wert",
     "en": "Money and value",
@@ -1116,7 +1116,7 @@
   },
   "kb-e-h112": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-essen-einkaufen",
    "titles": {
     "de": "Wörter zu Konsumentscheidungen",
     "en": "Words for spending choices",
@@ -1126,7 +1126,7 @@
   },
   "kb-e-h113": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Modalverben mit have done",
     "en": "Modal verbs with have done",
@@ -1136,7 +1136,7 @@
   },
   "kb-e-h114": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-bedingungen",
    "titles": {
     "de": "would rather mit der Vergangenheitsform",
     "en": "would rather with the past simple",
@@ -1146,7 +1146,7 @@
   },
   "kb-e-h115": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-essen-einkaufen",
    "titles": {
     "de": "Über Wert und Geldausgaben sprechen",
     "en": "Talking about value and spending",
@@ -1156,7 +1156,7 @@
   },
   "kb-e-h116": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-essen-einkaufen",
    "titles": {
     "de": "Einen kurzen Text über einen Kauf lesen",
     "en": "Reading a short text about a purchase",
@@ -1166,7 +1166,7 @@
   },
   "kb-e-h117": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-essen-einkaufen",
    "titles": {
     "de": "Eine Reflexion über einen Kauf schreiben",
     "en": "Writing a reflection on spending",
@@ -1176,7 +1176,7 @@
   },
   "kb-e-h118": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Wörter zu Leistungen von Menschen",
     "en": "Words for people's achievements",
@@ -1186,7 +1186,7 @@
   },
   "kb-e-h119": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Wörter zu Forschenden und ihren Beiträgen",
     "en": "Words for scientists and their work",
@@ -1196,7 +1196,7 @@
   },
   "kb-e-h120": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Subjektsätze mit that",
     "en": "Subject clauses with that",
@@ -1206,7 +1206,7 @@
   },
   "kb-e-h121": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Subjektsätze mit whether",
     "en": "Subject clauses with whether",
@@ -1216,7 +1216,7 @@
   },
   "kb-e-h122": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Leistungen von Menschen beschreiben",
     "en": "Describing a person's achievements",
@@ -1226,7 +1226,7 @@
   },
   "kb-e-h123": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Einen kurzen Text über eine Person lesen",
     "en": "Reading a short text about a person",
@@ -1236,7 +1236,7 @@
   },
   "kb-e-h124": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Eine Kurzbiografie schreiben",
     "en": "Writing a short biography",
@@ -1246,7 +1246,7 @@
   },
   "kb-e-h125": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Wortschatz: Leben in der Zukunft",
     "en": "Vocabulary: life in the future",
@@ -1256,7 +1256,7 @@
   },
   "kb-e-h126": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Wortschatz: intelligente Geräte",
     "en": "Vocabulary: smart devices",
@@ -1266,7 +1266,7 @@
   },
   "kb-e-h127": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Prädikativsätze verwenden",
     "en": "Using predicative clauses",
@@ -1276,7 +1276,7 @@
   },
   "kb-e-h128": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Appositive Nebensätze verwenden",
     "en": "Using appositive clauses",
@@ -1286,7 +1286,7 @@
   },
   "kb-e-h129": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Ein Gerät der Zukunft beschreiben",
     "en": "Describing a device of the future",
@@ -1296,7 +1296,7 @@
   },
   "kb-e-h130": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Einen Text über das Leben in der Zukunft lesen",
     "en": "Reading a text about life in the future",
@@ -1306,7 +1306,7 @@
   },
   "kb-e-h131": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Eine Schritt-für-Schritt-Anleitung schreiben",
     "en": "Writing step-by-step instructions",
@@ -1316,7 +1316,7 @@
   },
   "kb-e-h132": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Wortschatz: Parks",
     "en": "Vocabulary: parks",
@@ -1326,7 +1326,7 @@
   },
   "kb-e-h133": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Wortschatz: Naturschutz",
     "en": "Vocabulary: nature conservation",
@@ -1336,7 +1336,7 @@
   },
   "kb-e-h134": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Die Perfektform having done verwenden",
     "en": "Using the perfect -ing form (having done)",
@@ -1346,7 +1346,7 @@
   },
   "kb-e-h135": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-satzmuster",
    "titles": {
     "de": "Die Konstruktion with + Objekt + Ergänzung verwenden",
     "en": "Using with + object + complement",
@@ -1356,7 +1356,7 @@
   },
   "kb-e-h136": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Parkregeln beschreiben",
     "en": "Describing park rules",
@@ -1366,7 +1366,7 @@
   },
   "kb-e-h137": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Einen Text über einen Park lesen",
     "en": "Reading a text about a park",
@@ -1376,7 +1376,7 @@
   },
   "kb-e-h138": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Besuchshinweise schreiben",
     "en": "Writing visitor instructions",
@@ -1386,7 +1386,7 @@
   },
   "kb-e-h139": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Wortschatz: Körpersprache",
     "en": "Vocabulary: body language",
@@ -1396,7 +1396,7 @@
   },
   "kb-e-h140": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Wortschatz: Mimik und Abstand",
     "en": "Vocabulary: facial expressions and distance",
@@ -1406,7 +1406,7 @@
   },
   "kb-e-h141": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Perfekt- und Passivformen infiniter Verben",
     "en": "Perfect and passive non-finite forms",
@@ -1416,7 +1416,7 @@
   },
   "kb-e-h142": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Ergänzungen nach Wahrnehmungsverben",
     "en": "Complements after verbs of perception",
@@ -1426,7 +1426,7 @@
   },
   "kb-e-h143": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Körpersprache beschreiben",
     "en": "Describing body language",
@@ -1436,7 +1436,7 @@
   },
   "kb-e-h144": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Einen Text über Körpersprache lesen",
     "en": "Reading a text about body language",
@@ -1446,7 +1446,7 @@
   },
   "kb-e-h145": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Beobachtungsnotizen schreiben",
     "en": "Writing observation notes",
@@ -1456,7 +1456,7 @@
   },
   "kb-e-h146": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Wortschatz: Landwirtschaft",
     "en": "Vocabulary: agriculture",
@@ -1466,7 +1466,7 @@
   },
   "kb-e-h147": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Wortschatz: Ackerbau",
     "en": "Vocabulary: farming",
@@ -1476,7 +1476,7 @@
   },
   "kb-e-h148": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-passiv",
    "titles": {
     "de": "Passiver Infinitiv",
     "en": "Passive infinitive",
@@ -1486,7 +1486,7 @@
   },
   "kb-e-h149": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Absolute Partizipialkonstruktion",
     "en": "Absolute phrases",
@@ -1496,7 +1496,7 @@
   },
   "kb-e-h150": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Feldarbeit beschreiben",
     "en": "Describing farm work",
@@ -1506,7 +1506,7 @@
   },
   "kb-e-h151": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Einen kurzen Text zur Landwirtschaft lesen",
     "en": "Reading a short text about farming",
@@ -1516,7 +1516,7 @@
   },
   "kb-e-h152": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Einen Arbeitsplan für die Feldarbeit schreiben",
     "en": "Writing a plan for farm work",
@@ -1526,7 +1526,7 @@
   },
   "kb-e-h153": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Wörter zur wissenschaftlichen Forschung",
     "en": "Words for scientific research",
@@ -1536,7 +1536,7 @@
   },
   "kb-e-h154": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Wörter für wissenschaftliche Schlussfolgerungen",
     "en": "Words for scientific conclusions",
@@ -1546,7 +1546,7 @@
   },
   "kb-e-h155": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-bedingungen",
    "titles": {
     "de": "Irrealer Bedingungssatz der Gegenwart",
     "en": "Unreal conditionals about the present",
@@ -1556,7 +1556,7 @@
   },
   "kb-e-h156": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-bedingungen",
    "titles": {
     "de": "But for im irrealen Bedingungssatz",
     "en": "But for in unreal conditionals",
@@ -1566,7 +1566,7 @@
   },
   "kb-e-h157": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Eine wissenschaftliche Hypothese erklären",
     "en": "Explaining a scientific hypothesis",
@@ -1576,7 +1576,7 @@
   },
   "kb-e-h158": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Einen kurzen wissenschaftlichen Text lesen",
     "en": "Reading a short scientific text",
@@ -1586,7 +1586,7 @@
   },
   "kb-e-h159": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Eine Beurteilung eines Experiments schreiben",
     "en": "Writing a review of an experiment",
@@ -1596,7 +1596,7 @@
   },
   "kb-e-h160": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Wortschatz zum interkulturellen Austausch",
     "en": "Vocabulary for cultural exchange",
@@ -1606,7 +1606,7 @@
   },
   "kb-e-h161": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Wortschatz zur Gastfamilie",
     "en": "Vocabulary for staying with a host family",
@@ -1616,7 +1616,7 @@
   },
   "kb-e-h162": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-bedingungen",
    "titles": {
     "de": "Irreale Bedingungen in der Vergangenheit ausdrücken",
     "en": "Expressing unreal conditions in the past",
@@ -1626,7 +1626,7 @@
   },
   "kb-e-h163": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-bedingungen",
    "titles": {
     "de": "Gemischte Bedingungssätze bilden",
     "en": "Forming mixed conditionals",
@@ -1636,7 +1636,7 @@
   },
   "kb-e-h164": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Kulturelle Unterschiede vergleichen",
     "en": "Comparing cultural differences",
@@ -1646,7 +1646,7 @@
   },
   "kb-e-h165": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Texte über einen Austausch lesen",
     "en": "Reading texts about an exchange",
@@ -1656,7 +1656,7 @@
   },
   "kb-e-h166": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Eine Reflexion über einen Austausch schreiben",
     "en": "Writing a reflection on an exchange",
@@ -1666,7 +1666,7 @@
   },
   "kb-e-h167": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Wortschatz zur Esskultur",
     "en": "Vocabulary for food culture",
@@ -1676,7 +1676,7 @@
   },
   "kb-e-h168": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Wortschatz zu Tischmanieren",
     "en": "Vocabulary for table manners",
@@ -1686,7 +1686,7 @@
   },
   "kb-e-h169": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-bedingungen",
    "titles": {
     "de": "Unwahrscheinliche Bedingungen in der Zukunft ausdrücken",
     "en": "Expressing unlikely conditions in the future",
@@ -1696,7 +1696,7 @@
   },
   "kb-e-h170": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-bedingungen",
    "titles": {
     "de": "Irreales mit as if ausdrücken",
     "en": "Using as if for unreal situations",
@@ -1706,7 +1706,7 @@
   },
   "kb-e-h171": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Gerichte vergleichen",
     "en": "Comparing dishes",
@@ -1716,7 +1716,7 @@
   },
   "kb-e-h172": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Einen Text über Essen lesen",
     "en": "Reading a text about food",
@@ -1726,7 +1726,7 @@
   },
   "kb-e-h173": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Über Essen schreiben",
     "en": "Writing about food",
@@ -1736,7 +1736,7 @@
   },
   "kb-e-h174": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Lange Bahnreisen",
     "en": "Long train journeys",
@@ -1746,7 +1746,7 @@
   },
   "kb-e-h175": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Reiseeindrücke",
     "en": "Impressions from a journey",
@@ -1756,7 +1756,7 @@
   },
   "kb-e-h176": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-bedingungen",
    "titles": {
     "de": "Konjunktiv nach wish",
     "en": "Subjunctive after wish",
@@ -1766,7 +1766,7 @@
   },
   "kb-e-h177": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-bedingungen",
    "titles": {
     "de": "Konjunktiv nach if only",
     "en": "Subjunctive after if only",
@@ -1776,7 +1776,7 @@
   },
   "kb-e-h178": {
    "subject": "english",
-   "unit": "englisch-aussprache-u3",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Haltung mit der Intonation ausdrücken",
     "en": "Showing attitude through intonation",
@@ -1786,7 +1786,7 @@
   },
   "kb-e-h179": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Eine Reise beschreiben",
     "en": "Describing a journey",
@@ -1796,7 +1796,7 @@
   },
   "kb-e-h180": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Einen Reisetext lesen",
     "en": "Reading a travel text",
@@ -1806,7 +1806,7 @@
   },
   "kb-e-h181": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Eine E-Mail über eine Reise schreiben",
     "en": "Writing an email about a journey",
@@ -1816,7 +1816,7 @@
   },
   "kb-e-h182": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesundheit-gesund-leben",
    "titles": {
     "de": "Erste Hilfe",
     "en": "First aid",
@@ -1826,7 +1826,7 @@
   },
   "kb-e-h183": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesundheit-gesund-leben",
    "titles": {
     "de": "Verletzungen versorgen",
     "en": "Treating injuries",
@@ -1836,7 +1836,7 @@
   },
   "kb-e-h184": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-bedingungen",
    "titles": {
     "de": "Konjunktiv nach suggest, insist und order",
     "en": "Subjunctive after suggest, insist and order",
@@ -1846,7 +1846,7 @@
   },
   "kb-e-h185": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-bedingungen",
    "titles": {
     "de": "Irreale Folge mit otherwise",
     "en": "Unreal results with otherwise",
@@ -1856,7 +1856,7 @@
   },
   "kb-e-h186": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-gesundheit-gesund-leben",
    "titles": {
     "de": "Erste-Hilfe-Schritte erklären",
     "en": "Explaining first-aid steps",
@@ -1866,7 +1866,7 @@
   },
   "kb-e-h187": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesundheit-gesund-leben",
    "titles": {
     "de": "Einen kurzen Text über Erste Hilfe lesen",
     "en": "Reading a short first-aid text",
@@ -1876,7 +1876,7 @@
   },
   "kb-e-h188": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesundheit-gesund-leben",
    "titles": {
     "de": "Erste-Hilfe-Schritte aufschreiben",
     "en": "Writing first-aid steps",
@@ -1886,7 +1886,7 @@
   },
   "kb-e-h189": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Kunst",
     "en": "Art",
@@ -1896,7 +1896,7 @@
   },
   "kb-e-h190": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Wörter zur Kunstkritik",
     "en": "Words for talking about art",
@@ -1906,7 +1906,7 @@
   },
   "kb-e-h191": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-stil",
    "titles": {
     "de": "Inversion nach verneinenden Adverbien",
     "en": "Inversion after negative adverbs",
@@ -1916,7 +1916,7 @@
   },
   "kb-e-h192": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-stil",
    "titles": {
     "de": "Inversion mit hardly",
     "en": "Inversion with hardly",
@@ -1926,7 +1926,7 @@
   },
   "kb-e-h193": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Ein Kunstwerk beschreiben",
     "en": "Describing a work of art",
@@ -1936,7 +1936,7 @@
   },
   "kb-e-h194": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Einen kurzen Text über Kunst lesen",
     "en": "Reading a short text about art",
@@ -1946,7 +1946,7 @@
   },
   "kb-e-h195": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Notizen zu einem Ausstellungsbesuch schreiben",
     "en": "Writing notes on an exhibition visit",
@@ -1956,7 +1956,7 @@
   },
   "kb-e-h196": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesundheit-gesund-leben",
    "titles": {
     "de": "Wortschatz: gesund leben",
     "en": "Vocabulary: healthy living",
@@ -1966,7 +1966,7 @@
   },
   "kb-e-h197": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesundheit-gesund-leben",
    "titles": {
     "de": "Wortschatz: Körper und Psyche",
     "en": "Vocabulary: body and mind",
@@ -1976,7 +1976,7 @@
   },
   "kb-e-h198": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-stil",
    "titles": {
     "de": "Inversion nach only, so und neither",
     "en": "Inversion after only, so and neither",
@@ -1986,7 +1986,7 @@
   },
   "kb-e-h199": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-stil",
    "titles": {
     "de": "Inversion nach there und Ortsangaben",
     "en": "Inversion after there and place phrases",
@@ -1996,7 +1996,7 @@
   },
   "kb-e-h200": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-gesundheit-gesund-leben",
    "titles": {
     "de": "Über gesunde Gewohnheiten sprechen",
     "en": "Talking about healthy habits",
@@ -2006,7 +2006,7 @@
   },
   "kb-e-h201": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesundheit-gesund-leben",
    "titles": {
     "de": "Einen Text über Gesundheit lesen",
     "en": "Reading a text about health",
@@ -2016,7 +2016,7 @@
   },
   "kb-e-h202": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesundheit-gesund-leben",
    "titles": {
     "de": "Gesundheitstipps schreiben",
     "en": "Writing health advice",
@@ -2026,7 +2026,7 @@
   },
   "kb-e-h203": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Wortschatz: Umweltschutz",
     "en": "Vocabulary: protecting the environment",
@@ -2036,7 +2036,7 @@
   },
   "kb-e-h204": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Wortschatz: Umweltverschmutzung",
     "en": "Vocabulary: pollution",
@@ -2046,7 +2046,7 @@
   },
   "kb-e-h205": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-stil",
    "titles": {
     "de": "Hervorhebungssätze bilden",
     "en": "Forming cleft sentences",
@@ -2056,7 +2056,7 @@
   },
   "kb-e-h206": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-stil",
    "titles": {
     "de": "Hervorhebungssätze und Relativsätze unterscheiden",
     "en": "Telling cleft sentences from relative clauses",
@@ -2066,7 +2066,7 @@
   },
   "kb-e-h207": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Über Umweltpolitik sprechen",
     "en": "Talking about environmental policy",
@@ -2076,7 +2076,7 @@
   },
   "kb-e-h208": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Einen Umwelttext lesen",
     "en": "Reading a text about the environment",
@@ -2086,7 +2086,7 @@
   },
   "kb-e-h209": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Einen Kommentar zur Umwelt schreiben",
     "en": "Writing a comment on an environmental issue",
@@ -2096,7 +2096,7 @@
   },
   "kb-e-h210": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Widrigkeiten",
     "en": "Facing hardship",
@@ -2106,7 +2106,7 @@
   },
   "kb-e-h211": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Durchhalten",
     "en": "Not giving up",
@@ -2116,7 +2116,7 @@
   },
   "kb-e-h212": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-stil",
    "titles": {
     "de": "Das Verb mit do betonen",
     "en": "Stressing the verb with do",
@@ -2126,7 +2126,7 @@
   },
   "kb-e-h213": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-bedingungen",
    "titles": {
     "de": "Inversion ohne if",
     "en": "Inversion without if",
@@ -2136,7 +2136,7 @@
   },
   "kb-e-h214": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Über Widrigkeiten sprechen",
     "en": "Talking about hard times",
@@ -2146,7 +2146,7 @@
   },
   "kb-e-h215": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Einen Text über Widrigkeiten lesen",
     "en": "Reading a text about hard times",
@@ -2156,7 +2156,7 @@
   },
   "kb-e-h216": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Gedanken zu einer Geschichte schreiben",
     "en": "Writing a response to a story",
@@ -2166,7 +2166,7 @@
   },
   "kb-e-h217": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Gedichte",
     "en": "Poetry",
@@ -2176,7 +2176,7 @@
   },
   "kb-e-h218": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Gedichte verstehen",
     "en": "Appreciating poems",
@@ -2186,7 +2186,7 @@
   },
   "kb-e-h219": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-stil",
    "titles": {
     "de": "Auslassung (Ellipse)",
     "en": "Ellipsis",
@@ -2196,7 +2196,7 @@
   },
   "kb-e-h220": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-stil",
    "titles": {
     "de": "Auslassungen in Vergleichssätzen",
     "en": "Ellipsis in comparisons",
@@ -2206,7 +2206,7 @@
   },
   "kb-e-h221": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Über Gedichte sprechen",
     "en": "Talking about poems",
@@ -2216,7 +2216,7 @@
   },
   "kb-e-h222": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Einen kurzen Text über Gedichte lesen",
     "en": "Reading a short text about poems",
@@ -2226,7 +2226,7 @@
   },
   "kb-e-h223": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Sätze für eine Gedichtbesprechung schreiben",
     "en": "Writing sentences for a poem review",
@@ -2236,7 +2236,7 @@
   },
   "kb-e-h224": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Wortschatz: Science-Fiction",
     "en": "Vocabulary: science fiction",
@@ -2246,7 +2246,7 @@
   },
   "kb-e-h225": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Wortschatz: Technik der Zukunft",
     "en": "Vocabulary: future technology",
@@ -2256,7 +2256,7 @@
   },
   "kb-e-h226": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Infinite Verbformen wählen",
     "en": "Choosing non-finite verb forms",
@@ -2266,7 +2266,7 @@
   },
   "kb-e-h227": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Perfekt- und Passivformen infiniter Verben",
     "en": "Perfect and passive non-finite forms",
@@ -2276,7 +2276,7 @@
   },
   "kb-e-h228": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Über eine Science-Fiction-Handlung sprechen",
     "en": "Discussing a science fiction plot",
@@ -2286,7 +2286,7 @@
   },
   "kb-e-h229": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Einen kurzen Science-Fiction-Text lesen",
     "en": "Reading a short science fiction text",
@@ -2296,7 +2296,7 @@
   },
   "kb-e-h230": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Eine Science-Fiction-Zusammenfassung schreiben",
     "en": "Writing a science fiction summary",
@@ -2306,7 +2306,7 @@
   },
   "kb-e-h231": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Wortschatz: Sehenswürdigkeiten",
     "en": "Vocabulary: landmarks",
@@ -2316,7 +2316,7 @@
   },
   "kb-e-h232": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Sehenswürdigkeiten",
     "en": "Sights and attractions",
@@ -2326,7 +2326,7 @@
   },
   "kb-e-h233": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "no matter und -ever",
     "en": "no matter and -ever",
@@ -2336,7 +2336,7 @@
   },
   "kb-e-h234": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Ortsangaben mit where",
     "en": "Adverbial clauses with where",
@@ -2346,7 +2346,7 @@
   },
   "kb-e-h235": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Sehenswürdigkeiten vorstellen",
     "en": "Presenting sights",
@@ -2356,7 +2356,7 @@
   },
   "kb-e-h236": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Texte über Sehenswürdigkeiten lesen",
     "en": "Reading texts about sights",
@@ -2366,7 +2366,7 @@
   },
   "kb-e-h237": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Einen Rundgang beschreiben",
     "en": "Writing a tour description",
@@ -2376,7 +2376,7 @@
   },
   "kb-e-h238": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Das Meer",
     "en": "The sea",
@@ -2386,7 +2386,7 @@
   },
   "kb-e-h239": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Seefahrt",
     "en": "Sailing",
@@ -2396,7 +2396,7 @@
   },
   "kb-e-h240": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Einräumung mit although und while",
     "en": "Concession with although and while",
@@ -2406,7 +2406,7 @@
   },
   "kb-e-h241": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "so that und in case",
     "en": "so that and in case",
@@ -2416,7 +2416,7 @@
   },
   "kb-e-h242": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Eine Seereise erklären",
     "en": "Explaining a sea voyage",
@@ -2426,7 +2426,7 @@
   },
   "kb-e-h243": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Texte über Seefahrt lesen",
     "en": "Reading texts about sailing",
@@ -2436,7 +2436,7 @@
   },
   "kb-e-h244": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Ein Segel-Memo schreiben",
     "en": "Writing a sailing memo",
@@ -2446,7 +2446,7 @@
   },
   "kb-e-h245": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Wortschatz: Spenden und Teilen",
     "en": "Vocabulary: giving and sharing",
@@ -2456,7 +2456,7 @@
   },
   "kb-e-h246": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Wortschatz: Einsatz für die Gemeinschaft",
     "en": "Vocabulary: community service",
@@ -2466,7 +2466,7 @@
   },
   "kb-e-h247": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Appositionssätze und Relativsätze unterscheiden",
     "en": "Telling appositive clauses from relative clauses",
@@ -2476,7 +2476,7 @@
   },
   "kb-e-h248": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Nominalsätze mit what",
     "en": "Noun clauses with what",
@@ -2486,7 +2486,7 @@
   },
   "kb-e-h249": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Eine Hilfsaktion organisieren",
     "en": "Organising a charity event",
@@ -2496,7 +2496,7 @@
   },
   "kb-e-h250": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Einen Text über eine Hilfsaktion lesen",
     "en": "Reading a text about a charity event",
@@ -2506,7 +2506,7 @@
   },
   "kb-e-h251": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Einen Aufruf für Freiwillige schreiben",
     "en": "Writing a call for volunteers",
@@ -2516,7 +2516,7 @@
   },
   "kb-e-h252": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-schule-berufe",
    "titles": {
     "de": "Wortschatz: Berufsplanung",
     "en": "Vocabulary: career planning",
@@ -2526,7 +2526,7 @@
   },
   "kb-e-h253": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u3",
+   "unit": "englisch-schule-berufe",
    "titles": {
     "de": "Wortschatz: Bewerbungsunterlagen",
     "en": "Vocabulary: job applications",
@@ -2536,7 +2536,7 @@
   },
   "kb-e-h254": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-verben-perfekt",
    "titles": {
     "de": "Zeitformen in einem Text wählen",
     "en": "Choosing tenses in a text",
@@ -2546,7 +2546,7 @@
   },
   "kb-e-h255": {
    "subject": "english",
-   "unit": "englisch-grammatik-u3",
+   "unit": "englisch-saetze-bedingungen",
    "titles": {
     "de": "Bedingungen mit provided that",
     "en": "Conditions with provided that",
@@ -2556,7 +2556,7 @@
   },
   "kb-e-h256": {
    "subject": "english",
-   "unit": "englisch-aussprache-u3",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Funktionswörter schwach aussprechen",
     "en": "Weak forms of function words",
@@ -2566,7 +2566,7 @@
   },
   "kb-e-h257": {
    "subject": "english",
-   "unit": "englisch-alltag-u3",
+   "unit": "englisch-schule-berufe",
    "titles": {
     "de": "Über die Stellensuche sprechen",
     "en": "Talking about job hunting",
@@ -2576,7 +2576,7 @@
   },
   "kb-e-h258": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-schule-berufe",
    "titles": {
     "de": "Einen kurzen Text zur Stellensuche lesen",
     "en": "Reading a short text about a job application",
@@ -2586,7 +2586,7 @@
   },
   "kb-e-h259": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u3",
+   "unit": "englisch-schule-berufe",
    "titles": {
     "de": "Eine Bewerbungs-E-Mail schreiben",
     "en": "Writing an application email",
@@ -2596,7 +2596,7 @@
   },
   "kb-e-j001": {
    "subject": "english",
-   "unit": "englisch-aussprache-u2",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Wortbetonung erkennen",
     "en": "Word stress",
@@ -2606,7 +2606,7 @@
   },
   "kb-e-j002": {
    "subject": "english",
-   "unit": "englisch-aussprache-u2",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Steigende und fallende Satzmelodie",
     "en": "Rising and falling intonation",
@@ -2616,7 +2616,7 @@
   },
   "kb-e-j003": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-ich-vorstellen",
    "titles": {
     "de": "Wörter für Namen und Personen",
     "en": "Words for names and people",
@@ -2626,7 +2626,7 @@
   },
   "kb-e-j004": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Die Formen am, is und are verwenden",
     "en": "Using am, is and are",
@@ -2636,7 +2636,7 @@
   },
   "kb-e-j005": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-ich-vorstellen",
    "titles": {
     "de": "Begrüssen und sich vorstellen",
     "en": "Greeting people and introducing yourself",
@@ -2646,7 +2646,7 @@
   },
   "kb-e-j006": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-ich-vorstellen",
    "titles": {
     "de": "Eine Selbstvorstellung lesen",
     "en": "Reading a self-introduction",
@@ -2656,7 +2656,7 @@
   },
   "kb-e-j007": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-ich-familie",
    "titles": {
     "de": "Familienmitglieder benennen",
     "en": "Naming family members",
@@ -2666,7 +2666,7 @@
   },
   "kb-e-j008": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-pronomen",
    "titles": {
     "de": "This is und These are",
     "en": "This is and These are",
@@ -2676,7 +2676,7 @@
   },
   "kb-e-j009": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-nomen",
    "titles": {
     "de": "Die Mehrzahl von Nomen bilden",
     "en": "Forming plural nouns",
@@ -2686,7 +2686,7 @@
   },
   "kb-e-j010": {
    "subject": "english",
-   "unit": "englisch-aussprache-u2",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Die Endung -s richtig aussprechen",
     "en": "Pronouncing the -s ending",
@@ -2696,7 +2696,7 @@
   },
   "kb-e-j011": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-ich-familie",
    "titles": {
     "de": "Die eigene Familie vorstellen",
     "en": "Introducing your family",
@@ -2706,7 +2706,7 @@
   },
   "kb-e-j012": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-ich-familie",
    "titles": {
     "de": "Eine Familienbeschreibung lesen",
     "en": "Reading about a family",
@@ -2716,7 +2716,7 @@
   },
   "kb-e-j013": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-schule-klassenzimmer",
    "titles": {
     "de": "Schulsachen",
     "en": "School things",
@@ -2726,7 +2726,7 @@
   },
   "kb-e-j014": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-pronomen",
    "titles": {
     "de": "Possessivbegleiter verwenden",
     "en": "Using possessive adjectives",
@@ -2736,7 +2736,7 @@
   },
   "kb-e-j015": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Ja/Nein-Fragen mit be bilden",
     "en": "Yes/no questions with be",
@@ -2746,7 +2746,7 @@
   },
   "kb-e-j016": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-schule-klassenzimmer",
    "titles": {
     "de": "Fundsachen zuordnen",
     "en": "Finding the owner of lost things",
@@ -2756,7 +2756,7 @@
   },
   "kb-e-j017": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-schule-klassenzimmer",
    "titles": {
     "de": "Eine Fundsachen-Anzeige lesen",
     "en": "Reading a lost-and-found notice",
@@ -2766,7 +2766,7 @@
   },
   "kb-e-j018": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Zimmer und Möbel",
     "en": "Rooms and furniture",
@@ -2776,7 +2776,7 @@
   },
   "kb-e-j019": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-praepositionen",
    "titles": {
     "de": "Präpositionen des Ortes",
     "en": "Prepositions of place",
@@ -2786,7 +2786,7 @@
   },
   "kb-e-j020": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Fragen, wo etwas ist",
     "en": "Asking where things are",
@@ -2796,7 +2796,7 @@
   },
   "kb-e-j021": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Eine Zimmerbeschreibung lesen",
     "en": "Reading a room description",
@@ -2806,7 +2806,7 @@
   },
   "kb-e-j022": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Ballsportarten",
     "en": "Ball games",
@@ -2816,7 +2816,7 @@
   },
   "kb-e-j023": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "have und has",
     "en": "have and has",
@@ -2826,7 +2826,7 @@
   },
   "kb-e-j024": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Fragen und Verneinungen mit do und does",
     "en": "Using do and does",
@@ -2836,7 +2836,7 @@
   },
   "kb-e-j025": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Über Sport sprechen",
     "en": "Talking about sports",
@@ -2846,7 +2846,7 @@
   },
   "kb-e-j026": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Einen kurzen Text über Sport lesen",
     "en": "Reading a short text about sports",
@@ -2856,7 +2856,7 @@
   },
   "kb-e-j027": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Wortschatz zum Essen",
     "en": "Food words",
@@ -2866,7 +2866,7 @@
   },
   "kb-e-j028": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-nomen",
    "titles": {
     "de": "Zählbare und nicht zählbare Nomen",
     "en": "Countable and uncountable nouns",
@@ -2876,7 +2876,7 @@
   },
   "kb-e-j029": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-gegenwart",
    "titles": {
     "de": "Mit like über Vorlieben sprechen",
     "en": "Talking about likes with like",
@@ -2886,7 +2886,7 @@
   },
   "kb-e-j030": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Über Essen sprechen",
     "en": "Talking about food",
@@ -2896,7 +2896,7 @@
   },
   "kb-e-j031": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Einen kurzen Text über Essen lesen",
     "en": "Reading a short text about food",
@@ -2906,7 +2906,7 @@
   },
   "kb-e-j032": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-alltag-kleidung",
    "titles": {
     "de": "Kleidungsstücke",
     "en": "Clothes",
@@ -2916,7 +2916,7 @@
   },
   "kb-e-j033": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Mit How much nach dem Preis fragen",
     "en": "Asking prices with How much",
@@ -2926,7 +2926,7 @@
   },
   "kb-e-j034": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-essen-einkaufen",
    "titles": {
     "de": "Beim Einkaufen sprechen",
     "en": "Shopping language",
@@ -2936,7 +2936,7 @@
   },
   "kb-e-j035": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-essen-einkaufen",
    "titles": {
     "de": "Ein Einkaufsgespräch lesen",
     "en": "Reading a shopping dialogue",
@@ -2946,7 +2946,7 @@
   },
   "kb-e-j036": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Monate und Ordnungszahlen",
     "en": "Months and ordinal numbers",
@@ -2956,7 +2956,7 @@
   },
   "kb-e-j037": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Mit When nach dem Datum fragen",
     "en": "Asking for dates with When",
@@ -2966,7 +2966,7 @@
   },
   "kb-e-j038": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Über den Geburtstag sprechen",
     "en": "Talking about birthdays",
@@ -2976,7 +2976,7 @@
   },
   "kb-e-j039": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Einen Veranstaltungsplan lesen",
     "en": "Reading an events schedule",
@@ -2986,7 +2986,7 @@
   },
   "kb-e-j040": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Schulfächer",
     "en": "School subjects",
@@ -2996,7 +2996,7 @@
   },
   "kb-e-j041": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-praepositionen",
    "titles": {
     "de": "Gründe mit because angeben",
     "en": "Giving reasons with because",
@@ -3006,7 +3006,7 @@
   },
   "kb-e-j042": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Über das Lieblingsfach sprechen",
     "en": "Talking about your favourite subject",
@@ -3016,7 +3016,7 @@
   },
   "kb-e-j043": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Einen Text über Schulfächer lesen",
     "en": "Reading about school subjects",
@@ -3026,7 +3026,7 @@
   },
   "kb-e-j044": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Talente und Klubs",
     "en": "Talents and clubs",
@@ -3036,7 +3036,7 @@
   },
   "kb-e-j045": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Das Modalverb can",
     "en": "The modal verb can",
@@ -3046,7 +3046,7 @@
   },
   "kb-e-j046": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Über Fähigkeiten und Klubs sprechen",
     "en": "Talking about abilities and clubs",
@@ -3056,7 +3056,7 @@
   },
   "kb-e-j047": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Eine Klubanzeige lesen",
     "en": "Reading a club advert",
@@ -3066,7 +3066,7 @@
   },
   "kb-e-j048": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Wörter zum Tagesablauf",
     "en": "Words for the daily routine",
@@ -3076,7 +3076,7 @@
   },
   "kb-e-j049": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Uhrzeiten angeben",
     "en": "Telling the time",
@@ -3086,7 +3086,7 @@
   },
   "kb-e-j050": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-adjektive",
    "titles": {
     "de": "Häufigkeitsadverbien verwenden",
     "en": "Using adverbs of frequency",
@@ -3096,7 +3096,7 @@
   },
   "kb-e-j051": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Über den Tagesablauf sprechen",
     "en": "Talking about daily routines",
@@ -3106,7 +3106,7 @@
   },
   "kb-e-j052": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Einen Text über einen Tagesablauf lesen",
     "en": "Reading about a daily schedule",
@@ -3116,7 +3116,7 @@
   },
   "kb-e-j053": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Verkehrsmittel",
     "en": "Means of transport",
@@ -3126,7 +3126,7 @@
   },
   "kb-e-j054": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Mit how nach dem Weg fragen",
     "en": "Asking about journeys with how",
@@ -3136,7 +3136,7 @@
   },
   "kb-e-j055": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Über den Schulweg sprechen",
     "en": "Talking about getting to school",
@@ -3146,7 +3146,7 @@
   },
   "kb-e-j056": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Einen Text über den Schulweg lesen",
     "en": "Reading about getting to school",
@@ -3156,7 +3156,7 @@
   },
   "kb-e-j057": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Wörter zu Schulregeln",
     "en": "School rules vocabulary",
@@ -3166,7 +3166,7 @@
   },
   "kb-e-j058": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Befehle mit dem Imperativ geben",
     "en": "Giving commands with the imperative",
@@ -3176,7 +3176,7 @@
   },
   "kb-e-j059": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Pflichten mit must und have to ausdrücken",
     "en": "Expressing obligation with must and have to",
@@ -3186,7 +3186,7 @@
   },
   "kb-e-j060": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Regeln erklären",
     "en": "Explaining rules",
@@ -3196,7 +3196,7 @@
   },
   "kb-e-j061": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Schulregeln lesen",
     "en": "Reading school rules",
@@ -3206,7 +3206,7 @@
   },
   "kb-e-j062": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Tiere",
     "en": "Animals",
@@ -3216,7 +3216,7 @@
   },
   "kb-e-j063": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Why und because verwenden",
     "en": "Using Why and because",
@@ -3226,7 +3226,7 @@
   },
   "kb-e-j064": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-adjektive",
    "titles": {
     "de": "Tiere mit Adjektiven beschreiben",
     "en": "Describing animals with adjectives",
@@ -3236,7 +3236,7 @@
   },
   "kb-e-j065": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Über Tiere sprechen",
     "en": "Talking about animals",
@@ -3246,7 +3246,7 @@
   },
   "kb-e-j066": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Einen Text über Tiere lesen",
     "en": "Reading about animals",
@@ -3256,7 +3256,7 @@
   },
   "kb-e-j067": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Wörter für Alltagstätigkeiten",
     "en": "Words for everyday activities",
@@ -3266,7 +3266,7 @@
   },
   "kb-e-j068": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-gegenwart",
    "titles": {
     "de": "Die Verlaufsform der Gegenwart bilden",
     "en": "Forming the present continuous",
@@ -3276,7 +3276,7 @@
   },
   "kb-e-j069": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Fragen, was jemand gerade macht",
     "en": "Asking what someone is doing",
@@ -3286,7 +3286,7 @@
   },
   "kb-e-j070": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Lesen, was gerade passiert",
     "en": "Reading about what is happening now",
@@ -3296,7 +3296,7 @@
   },
   "kb-e-j071": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-natur-wetter",
    "titles": {
     "de": "Wetterwörter",
     "en": "Weather words",
@@ -3306,7 +3306,7 @@
   },
   "kb-e-j072": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Ausrufesätze mit What und How",
     "en": "Exclamations with What and How",
@@ -3316,7 +3316,7 @@
   },
   "kb-e-j073": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-natur-wetter",
    "titles": {
     "de": "Über das Wetter sprechen",
     "en": "Talking about the weather",
@@ -3326,7 +3326,7 @@
   },
   "kb-e-j074": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-natur-wetter",
    "titles": {
     "de": "Wetterberichte lesen",
     "en": "Reading weather reports",
@@ -3336,7 +3336,7 @@
   },
   "kb-e-j075": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-unterwegs-orte",
    "titles": {
     "de": "Orte in der Stadt",
     "en": "Places in town",
@@ -3346,7 +3346,7 @@
   },
   "kb-e-j076": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-satzmuster",
    "titles": {
     "de": "There is und There are verwenden",
     "en": "Using there is and there are",
@@ -3356,7 +3356,7 @@
   },
   "kb-e-j077": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-unterwegs-orte",
    "titles": {
     "de": "Nach dem Weg fragen und ihn erklären",
     "en": "Asking for and giving directions",
@@ -3366,7 +3366,7 @@
   },
   "kb-e-j078": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-unterwegs-orte",
    "titles": {
     "de": "Wegbeschreibungen lesen",
     "en": "Reading directions",
@@ -3376,7 +3376,7 @@
   },
   "kb-e-j079": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Wörter zum Aussehen",
     "en": "Words for appearance",
@@ -3386,7 +3386,7 @@
   },
   "kb-e-j080": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Das Aussehen beschreiben",
     "en": "Describing appearance",
@@ -3396,7 +3396,7 @@
   },
   "kb-e-j081": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Fragen, wie jemand aussieht",
     "en": "Asking what someone looks like",
@@ -3406,7 +3406,7 @@
   },
   "kb-e-j082": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Personenbeschreibungen lesen",
     "en": "Reading descriptions of people",
@@ -3416,7 +3416,7 @@
   },
   "kb-e-j083": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Wörter zum Essenbestellen",
     "en": "Food words for ordering",
@@ -3426,7 +3426,7 @@
   },
   "kb-e-j084": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Mit would like bestellen",
     "en": "Ordering with would like",
@@ -3436,7 +3436,7 @@
   },
   "kb-e-j085": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Im Restaurant bestellen",
     "en": "Ordering in a restaurant",
@@ -3446,7 +3446,7 @@
   },
   "kb-e-j086": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Ein Bestellgespräch lesen",
     "en": "Reading an ordering dialogue",
@@ -3456,7 +3456,7 @@
   },
   "kb-e-j087": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Wörter rund um Ausflüge",
     "en": "Words for trips and outings",
@@ -3466,7 +3466,7 @@
   },
   "kb-e-j088": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-vergangenheit",
    "titles": {
     "de": "was und were verwenden",
     "en": "Using was and were",
@@ -3476,7 +3476,7 @@
   },
   "kb-e-j089": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-vergangenheit",
    "titles": {
     "de": "Vergangenheitsform regelmässiger Verben",
     "en": "Past tense of regular verbs",
@@ -3486,7 +3486,7 @@
   },
   "kb-e-j090": {
    "subject": "english",
-   "unit": "englisch-aussprache-u2",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Die Endung -ed aussprechen",
     "en": "Pronouncing the -ed ending",
@@ -3496,7 +3496,7 @@
   },
   "kb-e-j091": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Über einen Ausflug sprechen",
     "en": "Talking about a trip",
@@ -3506,7 +3506,7 @@
   },
   "kb-e-j092": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Ein Reisetagebuch lesen",
     "en": "Reading a travel diary",
@@ -3516,7 +3516,7 @@
   },
   "kb-e-j093": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Wörter rund ums Wochenende",
     "en": "Words for weekend activities",
@@ -3526,7 +3526,7 @@
   },
   "kb-e-j094": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-vergangenheit",
    "titles": {
     "de": "Fragen mit Did",
     "en": "Asking questions with Did",
@@ -3536,7 +3536,7 @@
   },
   "kb-e-j095": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-vergangenheit",
    "titles": {
     "de": "Vergangenheitsform unregelmässiger Verben",
     "en": "Past tense of irregular verbs",
@@ -3546,7 +3546,7 @@
   },
   "kb-e-j096": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Über das letzte Wochenende sprechen",
     "en": "Talking about last weekend",
@@ -3556,7 +3556,7 @@
   },
   "kb-e-j097": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Ein Wochenendtagebuch lesen",
     "en": "Reading a weekend diary",
@@ -3566,7 +3566,7 @@
   },
   "kb-e-j098": {
    "subject": "english",
-   "unit": "englisch-aussprache-u2",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Konsonant und Vokal verbinden",
     "en": "Linking a consonant to a vowel",
@@ -3576,7 +3576,7 @@
   },
   "kb-e-j099": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Ferienorte",
     "en": "Holiday places",
@@ -3586,7 +3586,7 @@
   },
   "kb-e-j100": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-vergangenheit",
    "titles": {
     "de": "Mit dem Simple Past von den Ferien erzählen",
     "en": "Talking about holidays in the simple past",
@@ -3596,7 +3596,7 @@
   },
   "kb-e-j101": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Sagen, wohin man in den Ferien ging",
     "en": "Talking about where you went on holiday",
@@ -3606,7 +3606,7 @@
   },
   "kb-e-j102": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Einen Ferientext lesen",
     "en": "Reading a holiday text",
@@ -3616,7 +3616,7 @@
   },
   "kb-e-j103": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-gesundheit-gesund-leben",
    "titles": {
     "de": "Wortschatz zu Sportgewohnheiten",
     "en": "Words about exercise habits",
@@ -3626,7 +3626,7 @@
   },
   "kb-e-j104": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Mit How often nach der Häufigkeit fragen",
     "en": "Asking how often with How often",
@@ -3636,7 +3636,7 @@
   },
   "kb-e-j105": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-gesundheit-gesund-leben",
    "titles": {
     "de": "Darüber sprechen, wie oft man Sport treibt",
     "en": "Talking about how often you exercise",
@@ -3646,7 +3646,7 @@
   },
   "kb-e-j106": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-gesundheit-gesund-leben",
    "titles": {
     "de": "Eine Umfrage zum Sport lesen",
     "en": "Reading an exercise survey",
@@ -3656,7 +3656,7 @@
   },
   "kb-e-j107": {
    "subject": "english",
-   "unit": "englisch-aussprache-u2",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Unvollständige Plosion",
     "en": "Incomplete plosion",
@@ -3666,7 +3666,7 @@
   },
   "kb-e-j108": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Adjektive für Charaktereigenschaften",
     "en": "Personality adjectives",
@@ -3676,7 +3676,7 @@
   },
   "kb-e-j109": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-adjektive",
    "titles": {
     "de": "Den Komparativ von Adjektiven bilden",
     "en": "Forming comparative adjectives",
@@ -3686,7 +3686,7 @@
   },
   "kb-e-j110": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-adjektive",
    "titles": {
     "de": "Mit than vergleichen",
     "en": "Comparing with than",
@@ -3696,7 +3696,7 @@
   },
   "kb-e-j111": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Zwei Personen vergleichen",
     "en": "Comparing two people",
@@ -3706,7 +3706,7 @@
   },
   "kb-e-j112": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Vergleiche von Personen lesen",
     "en": "Reading comparisons of people",
@@ -3716,7 +3716,7 @@
   },
   "kb-e-j113": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Wörter rund ums Kino",
     "en": "Words about cinemas and theatres",
@@ -3726,7 +3726,7 @@
   },
   "kb-e-j114": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-adjektive",
    "titles": {
     "de": "Den Superlativ von Adjektiven verwenden",
     "en": "Using superlative adjectives",
@@ -3736,7 +3736,7 @@
   },
   "kb-e-j115": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Über die besten Orte sprechen",
     "en": "Talking about the best places",
@@ -3746,7 +3746,7 @@
   },
   "kb-e-j116": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Einen Text über Kinos lesen",
     "en": "Reading about cinemas",
@@ -3756,7 +3756,7 @@
   },
   "kb-e-j117": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Wörter für Fernsehsendungen",
     "en": "Words for TV shows",
@@ -3766,7 +3766,7 @@
   },
   "kb-e-j118": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Der Infinitiv mit to als Objekt",
     "en": "The to-infinitive as an object",
@@ -3776,7 +3776,7 @@
   },
   "kb-e-j119": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Über Sendungen sprechen, die man sehen will",
     "en": "Talking about shows you want to watch",
@@ -3786,7 +3786,7 @@
   },
   "kb-e-j120": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Ein Gespräch über die Sendungswahl lesen",
     "en": "Reading about choosing shows",
@@ -3796,7 +3796,7 @@
   },
   "kb-e-j121": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-schule-berufe",
    "titles": {
     "de": "Wörter für Berufspläne",
     "en": "Words for career plans",
@@ -3806,7 +3806,7 @@
   },
   "kb-e-j122": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-zukunft",
    "titles": {
     "de": "Pläne mit be going to ausdrücken",
     "en": "Talking about plans with be going to",
@@ -3816,7 +3816,7 @@
   },
   "kb-e-j123": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-schule-berufe",
    "titles": {
     "de": "Über Zukunftspläne sprechen",
     "en": "Talking about future plans",
@@ -3826,7 +3826,7 @@
   },
   "kb-e-j124": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-schule-berufe",
    "titles": {
     "de": "Einen Text über Pläne lesen",
     "en": "Reading a text about plans",
@@ -3836,7 +3836,7 @@
   },
   "kb-e-j125": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Wörter zum Leben in der Zukunft",
     "en": "Words about life in the future",
@@ -3846,7 +3846,7 @@
   },
   "kb-e-j126": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-zukunft",
    "titles": {
     "de": "Die Zukunft mit will ausdrücken",
     "en": "The future with will",
@@ -3856,7 +3856,7 @@
   },
   "kb-e-j127": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Vorhersagen über die Zukunft machen",
     "en": "Making predictions about the future",
@@ -3866,7 +3866,7 @@
   },
   "kb-e-j128": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Vorhersagen über die Zukunft lesen",
     "en": "Reading predictions about the future",
@@ -3876,7 +3876,7 @@
   },
   "kb-e-j129": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Wörter aus der Küche",
     "en": "Cooking words",
@@ -3886,7 +3886,7 @@
   },
   "kb-e-j130": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-praepositionen",
    "titles": {
     "de": "Reihenfolgewörter first, next, then",
     "en": "Sequence words first, next, then",
@@ -3896,7 +3896,7 @@
   },
   "kb-e-j131": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Erklären, wie man etwas zubereitet",
     "en": "Explaining how to make something",
@@ -3906,7 +3906,7 @@
   },
   "kb-e-j132": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Ein Rezept lesen",
     "en": "Reading a recipe",
@@ -3916,7 +3916,7 @@
   },
   "kb-e-j133": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-freizeit-feste",
    "titles": {
     "de": "Wörter rund um Partys und Anlässe",
     "en": "Words for parties and events",
@@ -3926,7 +3926,7 @@
   },
   "kb-e-j134": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Mit can einladen",
     "en": "Making invitations with can",
@@ -3936,7 +3936,7 @@
   },
   "kb-e-j135": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-freizeit-feste",
    "titles": {
     "de": "Einladungen annehmen oder ablehnen",
     "en": "Accepting or declining invitations",
@@ -3946,7 +3946,7 @@
   },
   "kb-e-j136": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-freizeit-feste",
    "titles": {
     "de": "Eine Einladung lesen",
     "en": "Reading an invitation",
@@ -3956,7 +3956,7 @@
   },
   "kb-e-j137": {
    "subject": "english",
-   "unit": "englisch-aussprache-u2",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Pausen nach Sinneinheiten",
     "en": "Pausing between sense groups",
@@ -3966,7 +3966,7 @@
   },
   "kb-e-j138": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-kommunizieren-meinung",
    "titles": {
     "de": "Wörter rund um Ratschläge",
     "en": "Words for giving advice",
@@ -3976,7 +3976,7 @@
   },
   "kb-e-j139": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-bedingungen",
    "titles": {
     "de": "Bedingungssätze mit if",
     "en": "Conditional clauses with if",
@@ -3986,7 +3986,7 @@
   },
   "kb-e-j140": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-kommunizieren-meinung",
    "titles": {
     "de": "Mit Bedingungssätzen Ratschläge geben",
     "en": "Giving advice with conditional sentences",
@@ -3996,7 +3996,7 @@
   },
   "kb-e-j141": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-freizeit-feste",
    "titles": {
     "de": "Ratschläge für eine Party lesen",
     "en": "Reading advice about a party",
@@ -4006,7 +4006,7 @@
   },
   "kb-e-j142": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-gesundheit-koerper",
    "titles": {
     "de": "Beschwerden benennen",
     "en": "Naming common ailments",
@@ -4016,7 +4016,7 @@
   },
   "kb-e-j143": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Ratschläge mit «should» geben",
     "en": "Giving advice with should",
@@ -4026,7 +4026,7 @@
   },
   "kb-e-j144": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-gesundheit-koerper",
    "titles": {
     "de": "Nach dem Befinden fragen",
     "en": "Asking how someone feels",
@@ -4036,7 +4036,7 @@
   },
   "kb-e-j145": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-gesundheit-koerper",
    "titles": {
     "de": "Gesundheitsratschläge lesen",
     "en": "Reading health advice",
@@ -4046,7 +4046,7 @@
   },
   "kb-e-j146": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Freiwilligenarbeit",
     "en": "Volunteering",
@@ -4056,7 +4056,7 @@
   },
   "kb-e-j147": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Den Zweck mit dem Infinitiv ausdrücken",
     "en": "Using the infinitive to express purpose",
@@ -4066,7 +4066,7 @@
   },
   "kb-e-j148": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-kommunizieren-hoeflich",
    "titles": {
     "de": "Hilfe anbieten",
     "en": "Offering help",
@@ -4076,7 +4076,7 @@
   },
   "kb-e-j149": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Einen Aufruf für Freiwillige lesen",
     "en": "Reading a call for volunteers",
@@ -4086,7 +4086,7 @@
   },
   "kb-e-j150": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Hausarbeiten",
     "en": "Household chores",
@@ -4096,7 +4096,7 @@
   },
   "kb-e-j151": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Höflich bitten mit could",
     "en": "Polite requests with could",
@@ -4106,7 +4106,7 @@
   },
   "kb-e-j152": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-kommunizieren-hoeflich",
    "titles": {
     "de": "Höflich um etwas bitten",
     "en": "Making polite requests",
@@ -4116,7 +4116,7 @@
   },
   "kb-e-j153": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Ein Gespräch über Hausarbeiten lesen",
     "en": "Reading a dialogue about chores",
@@ -4126,7 +4126,7 @@
   },
   "kb-e-j154": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Wörter zu Gefühlen und Stress",
     "en": "Words for feelings and stress",
@@ -4136,7 +4136,7 @@
   },
   "kb-e-j155": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Gegensätze mit «although» ausdrücken",
     "en": "Expressing contrast with although",
@@ -4146,7 +4146,7 @@
   },
   "kb-e-j156": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-kommunizieren-meinung",
    "titles": {
     "de": "Vorschläge mit «Why don't you» machen",
     "en": "Making suggestions with Why don't you",
@@ -4156,7 +4156,7 @@
   },
   "kb-e-j157": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Einen Ratgeberbrief lesen",
     "en": "Reading an advice letter",
@@ -4166,7 +4166,7 @@
   },
   "kb-e-j158": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-natur-wetter",
    "titles": {
     "de": "Wörter zum Thema Unwetter",
     "en": "Words about storms",
@@ -4176,7 +4176,7 @@
   },
   "kb-e-j159": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-vergangenheit",
    "titles": {
     "de": "Die Verlaufsform der Vergangenheit",
     "en": "The past continuous",
@@ -4186,7 +4186,7 @@
   },
   "kb-e-j160": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-vergangenheit",
    "titles": {
     "de": "when und while unterscheiden",
     "en": "Using when and while",
@@ -4196,7 +4196,7 @@
   },
   "kb-e-j161": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-natur-wetter",
    "titles": {
     "de": "Erzählen, was gerade geschah",
     "en": "Describing what was happening",
@@ -4206,7 +4206,7 @@
   },
   "kb-e-j162": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-natur-wetter",
    "titles": {
     "de": "Eine Geschichte über ein Unwetter lesen",
     "en": "Reading a story about a rainstorm",
@@ -4216,7 +4216,7 @@
   },
   "kb-e-j163": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Wörter aus einer Geschichte",
     "en": "Words from a story",
@@ -4226,7 +4226,7 @@
   },
   "kb-e-j164": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-bedingungen",
    "titles": {
     "de": "unless im Sinn von «wenn nicht»",
     "en": "unless meaning “if not”",
@@ -4236,7 +4236,7 @@
   },
   "kb-e-j165": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Einen Zweck mit «so that» ausdrücken",
     "en": "Expressing purpose with so that",
@@ -4246,7 +4246,7 @@
   },
   "kb-e-j166": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Eine Geschichte nacherzählen",
     "en": "Retelling a story",
@@ -4256,7 +4256,7 @@
   },
   "kb-e-j167": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Einen Mythos lesen",
     "en": "Reading a myth",
@@ -4266,7 +4266,7 @@
   },
   "kb-e-j168": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Geografische Begriffe",
     "en": "Geography words",
@@ -4276,7 +4276,7 @@
   },
   "kb-e-j169": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-adjektive",
    "titles": {
     "de": "Komparativ oder Superlativ wählen",
     "en": "Choosing the comparative or the superlative",
@@ -4286,7 +4286,7 @@
   },
   "kb-e-j170": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Geografische Fakten angeben",
     "en": "Stating geographical facts",
@@ -4296,7 +4296,7 @@
   },
   "kb-e-j171": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Einen kurzen Geografietext lesen",
     "en": "Reading a short geography text",
@@ -4306,7 +4306,7 @@
   },
   "kb-e-j172": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-kommunizieren-texte-lesen",
    "titles": {
     "de": "Lücken in einem Text füllen",
     "en": "Completing a text with the right word",
@@ -4316,7 +4316,7 @@
   },
   "kb-e-j173": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Wörter rund um Bücher und Lesen",
     "en": "Words for books and reading",
@@ -4326,7 +4326,7 @@
   },
   "kb-e-j174": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-perfekt",
    "titles": {
     "de": "Das Present Perfect",
     "en": "The present perfect",
@@ -4336,7 +4336,7 @@
   },
   "kb-e-j175": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-perfekt",
    "titles": {
     "de": "already und yet",
     "en": "already and yet",
@@ -4346,7 +4346,7 @@
   },
   "kb-e-j176": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Über gelesene Bücher sprechen",
     "en": "Talking about books you have read",
@@ -4356,7 +4356,7 @@
   },
   "kb-e-j177": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Einen Lesebericht lesen",
     "en": "Reading a reading log",
@@ -4366,7 +4366,7 @@
   },
   "kb-e-j178": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Wörter rund um Ausstellungen und Erlebnisse",
     "en": "Words for visits and experiences",
@@ -4376,7 +4376,7 @@
   },
   "kb-e-j179": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-perfekt",
    "titles": {
     "de": "ever und never",
     "en": "ever and never",
@@ -4386,7 +4386,7 @@
   },
   "kb-e-j180": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-perfekt",
    "titles": {
     "de": "been und gone unterscheiden",
     "en": "Telling been from gone",
@@ -4396,7 +4396,7 @@
   },
   "kb-e-j181": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Fragen, wo jemand schon war",
     "en": "Asking where someone has been",
@@ -4406,7 +4406,7 @@
   },
   "kb-e-j182": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-gesellschaft-kultur",
    "titles": {
     "de": "Einen Text über Museumsbesuche lesen",
     "en": "Reading about museum visits",
@@ -4416,7 +4416,7 @@
   },
   "kb-e-j183": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Alte Dinge und Erinnerungen",
     "en": "Old things and memories",
@@ -4426,7 +4426,7 @@
   },
   "kb-e-j184": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-perfekt",
    "titles": {
     "de": "for und since verwenden",
     "en": "Using for and since",
@@ -4436,7 +4436,7 @@
   },
   "kb-e-j185": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Sagen, wie lange man etwas besitzt",
     "en": "Saying how long you have had something",
@@ -4446,7 +4446,7 @@
   },
   "kb-e-j186": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Eine Geschichte über alte Dinge lesen",
     "en": "Reading a story about old things",
@@ -4456,7 +4456,7 @@
   },
   "kb-e-j187": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Wortschatz: Lernmethoden",
     "en": "Vocabulary: ways of learning",
@@ -4466,7 +4466,7 @@
   },
   "kb-e-j188": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "by + -ing-Form verwenden",
     "en": "Using by + -ing",
@@ -4476,7 +4476,7 @@
   },
   "kb-e-j189": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Über Lernmethoden sprechen",
     "en": "Talking about ways of learning",
@@ -4486,7 +4486,7 @@
   },
   "kb-e-j190": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Lerntipps lesen",
     "en": "Reading study tips",
@@ -4496,7 +4496,7 @@
   },
   "kb-e-j191": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-freizeit-feste",
    "titles": {
     "de": "Wortschatz zu Festen",
     "en": "Vocabulary for festivals",
@@ -4506,7 +4506,7 @@
   },
   "kb-e-j192": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Objektsätze mit that",
     "en": "Object clauses with that",
@@ -4516,7 +4516,7 @@
   },
   "kb-e-j193": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Objektsätze mit if und whether",
     "en": "Object clauses with if and whether",
@@ -4526,7 +4526,7 @@
   },
   "kb-e-j194": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-freizeit-feste",
    "titles": {
     "de": "Über Feste sprechen",
     "en": "Talking about festivals",
@@ -4536,7 +4536,7 @@
   },
   "kb-e-j195": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-freizeit-feste",
    "titles": {
     "de": "Einen Text über ein Fest lesen",
     "en": "Reading a text about a festival",
@@ -4546,7 +4546,7 @@
   },
   "kb-e-j196": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-unterwegs-orte",
    "titles": {
     "de": "Wortschatz: öffentliche Orte",
     "en": "Vocabulary: public places",
@@ -4556,7 +4556,7 @@
   },
   "kb-e-j197": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Objektsätze mit Fragewörtern",
     "en": "Object clauses with question words",
@@ -4566,7 +4566,7 @@
   },
   "kb-e-j198": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-unterwegs-orte",
    "titles": {
     "de": "Höflich nach dem Weg fragen",
     "en": "Asking the way politely",
@@ -4576,7 +4576,7 @@
   },
   "kb-e-j199": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-unterwegs-orte",
    "titles": {
     "de": "Ein Gespräch über den Weg lesen",
     "en": "Reading a dialogue about directions",
@@ -4586,7 +4586,7 @@
   },
   "kb-e-j200": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Früher und heute",
     "en": "Then and now",
@@ -4596,7 +4596,7 @@
   },
   "kb-e-j201": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-vergangenheit",
    "titles": {
     "de": "Mit used to über frühere Gewohnheiten sprechen",
     "en": "Past habits with used to",
@@ -4606,7 +4606,7 @@
   },
   "kb-e-j202": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Früher und heute vergleichen",
     "en": "Comparing past and present",
@@ -4616,7 +4616,7 @@
   },
   "kb-e-j203": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Einen Text über Veränderungen lesen",
     "en": "Reading a text about change",
@@ -4626,7 +4626,7 @@
   },
   "kb-e-j204": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-essen-einkaufen",
    "titles": {
     "de": "Wortschatz: Materialien",
     "en": "Vocabulary: materials",
@@ -4636,7 +4636,7 @@
   },
   "kb-e-j205": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-passiv",
    "titles": {
     "de": "Passiv im Simple Present",
     "en": "Present simple passive",
@@ -4646,7 +4646,7 @@
   },
   "kb-e-j206": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-essen-einkaufen",
    "titles": {
     "de": "Fragen, woraus etwas gemacht ist",
     "en": "Asking what something is made of",
@@ -4656,7 +4656,7 @@
   },
   "kb-e-j207": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-essen-einkaufen",
    "titles": {
     "de": "Produktbeschreibungen lesen",
     "en": "Reading product descriptions",
@@ -4666,7 +4666,7 @@
   },
   "kb-e-j208": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Wortschatz: Erfindungen",
     "en": "Vocabulary: inventions",
@@ -4676,7 +4676,7 @@
   },
   "kb-e-j209": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-passiv",
    "titles": {
     "de": "Passiv im Simple Past",
     "en": "Past simple passive",
@@ -4686,7 +4686,7 @@
   },
   "kb-e-j210": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Fragen, wann etwas erfunden wurde",
     "en": "Asking when something was invented",
@@ -4696,7 +4696,7 @@
   },
   "kb-e-j211": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Texte über Erfindungen lesen",
     "en": "Reading about inventions",
@@ -4706,7 +4706,7 @@
   },
   "kb-e-j212": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Wortschatz: Regeln für Jugendliche",
     "en": "Vocabulary: rules for teenagers",
@@ -4716,7 +4716,7 @@
   },
   "kb-e-j213": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "be allowed to verwenden",
     "en": "Using be allowed to",
@@ -4726,7 +4726,7 @@
   },
   "kb-e-j214": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Darüber diskutieren, was erlaubt ist",
     "en": "Discussing what is allowed",
@@ -4736,7 +4736,7 @@
   },
   "kb-e-j215": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Meinungen zu Regeln lesen",
     "en": "Reading opinions on rules",
@@ -4746,7 +4746,7 @@
   },
   "kb-e-j216": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Wortschatz: Wem gehört das?",
     "en": "Vocabulary: who owns it?",
@@ -4756,7 +4756,7 @@
   },
   "kb-e-j217": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Vermutungen mit must und can't ausdrücken",
     "en": "Making deductions with must and can't",
@@ -4766,7 +4766,7 @@
   },
   "kb-e-j218": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Vermuten, wem etwas gehört",
     "en": "Guessing who owns something",
@@ -4776,7 +4776,7 @@
   },
   "kb-e-j219": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Einen Text mit Vermutungen lesen",
     "en": "Reading a text with deductions",
@@ -4786,7 +4786,7 @@
   },
   "kb-e-j220": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Wortschatz: Musikstile",
     "en": "Vocabulary: types of music",
@@ -4796,7 +4796,7 @@
   },
   "kb-e-j221": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-nebensaetze",
    "titles": {
     "de": "Relativsätze",
     "en": "Relative clauses",
@@ -4806,7 +4806,7 @@
   },
   "kb-e-j222": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Über Lieblingsmusik sprechen",
     "en": "Talking about favourite music",
@@ -4816,7 +4816,7 @@
   },
   "kb-e-j223": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Texte über Musikvorlieben lesen",
     "en": "Reading about music preferences",
@@ -4826,7 +4826,7 @@
   },
   "kb-e-j224": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Umgangsformen",
     "en": "Social customs",
@@ -4836,7 +4836,7 @@
   },
   "kb-e-j225": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "be supposed to verwenden",
     "en": "Using be supposed to",
@@ -4846,7 +4846,7 @@
   },
   "kb-e-j226": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Erklären, wie man sich begrüsst",
     "en": "Explaining how people greet",
@@ -4856,7 +4856,7 @@
   },
   "kb-e-j227": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Eine Beschreibung von Bräuchen lesen",
     "en": "Reading about customs",
@@ -4866,7 +4866,7 @@
   },
   "kb-e-j228": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Wortschatz zu Gefühlen und Reaktionen",
     "en": "Words about feelings and reactions",
@@ -4876,7 +4876,7 @@
   },
   "kb-e-j229": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "make mit Objekt und Grundform verwenden",
     "en": "Using make + object + base form",
@@ -4886,7 +4886,7 @@
   },
   "kb-e-j230": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Sagen, wie ein Film auf dich wirkt",
     "en": "Saying how a film makes you feel",
@@ -4896,7 +4896,7 @@
   },
   "kb-e-j231": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-freizeit-medien",
    "titles": {
     "de": "Eine Filmkritik lesen",
     "en": "Reading a film review",
@@ -4906,7 +4906,7 @@
   },
   "kb-e-j232": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Wortschatz zu unerwarteten Ereignissen",
     "en": "Words about unexpected events",
@@ -4916,7 +4916,7 @@
   },
   "kb-e-j233": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-perfekt",
    "titles": {
     "de": "Das Past Perfect verwenden",
     "en": "Using the past perfect",
@@ -4926,7 +4926,7 @@
   },
   "kb-e-j234": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Einen Zwischenfall erzählen",
     "en": "Telling the story of a mishap",
@@ -4936,7 +4936,7 @@
   },
   "kb-e-j235": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Eine Geschichte über einen Zwischenfall lesen",
     "en": "Reading a story about a mishap",
@@ -4946,7 +4946,7 @@
   },
   "kb-e-j236": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Wortschatz zum Umweltschutz",
     "en": "Words about protecting the environment",
@@ -4956,7 +4956,7 @@
   },
   "kb-e-j237": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-gegenwart",
    "titles": {
     "de": "Die richtige Zeitform wählen",
     "en": "Choosing the right tense",
@@ -4966,7 +4966,7 @@
   },
   "kb-e-j238": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Über Umweltschutz sprechen",
     "en": "Talking about protecting the environment",
@@ -4976,7 +4976,7 @@
   },
   "kb-e-j239": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Einen Umweltaufruf lesen",
     "en": "Reading an environmental appeal",
@@ -4986,7 +4986,7 @@
   },
   "kb-e-j240": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Lückentexte ergänzen",
     "en": "Filling gaps in a text",
@@ -4996,7 +4996,7 @@
   },
   "kb-e-j241": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Wörter rund um den Schulabschluss",
     "en": "Words about graduation",
@@ -5006,7 +5006,7 @@
   },
   "kb-e-j242": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "Gerundium oder Infinitiv",
     "en": "Gerund or infinitive",
@@ -5016,7 +5016,7 @@
   },
   "kb-e-j243": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Question Tags bilden",
     "en": "Forming question tags",
@@ -5026,7 +5026,7 @@
   },
   "kb-e-j244": {
    "subject": "english",
-   "unit": "englisch-alltag-u2",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Auf die Schulzeit zurückblicken",
     "en": "Looking back on school life",
@@ -5036,7 +5036,7 @@
   },
   "kb-e-j245": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u2",
+   "unit": "englisch-kommunizieren-texte-schreiben",
    "titles": {
     "de": "Stichpunkte beim Schreiben umsetzen",
     "en": "Covering key points in writing",
@@ -5046,7 +5046,7 @@
   },
   "kb-e-j246": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-nomen",
    "titles": {
     "de": "Den Besitz mit 's ausdrücken",
     "en": "The possessive 's",
@@ -5056,7 +5056,7 @@
   },
   "kb-e-j247": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-pronomen",
    "titles": {
     "de": "Possessivpronomen verwenden",
     "en": "Using possessive pronouns",
@@ -5066,7 +5066,7 @@
   },
   "kb-e-j248": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Alternativfragen",
     "en": "Alternative questions",
@@ -5076,7 +5076,7 @@
   },
   "kb-e-j249": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-pronomen",
    "titles": {
     "de": "Indefinitpronomen something und anything",
     "en": "Indefinite pronouns something and anything",
@@ -5086,7 +5086,7 @@
   },
   "kb-e-j250": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-adjektive",
    "titles": {
     "de": "Gleichheit ausdrücken mit as ... as",
     "en": "Comparing with as ... as",
@@ -5096,7 +5096,7 @@
   },
   "kb-e-j251": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-woerter-pronomen",
    "titles": {
     "de": "Reflexivpronomen verwenden",
     "en": "Using reflexive pronouns",
@@ -5106,7 +5106,7 @@
   },
   "kb-e-j252": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-perfekt",
    "titles": {
     "de": "Simple Past und Present Perfect unterscheiden",
     "en": "Simple past or present perfect",
@@ -5116,7 +5116,7 @@
   },
   "kb-e-j253": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-infinite",
    "titles": {
     "de": "It is ... (for sb) to do verwenden",
     "en": "Using It is ... (for sb) to do",
@@ -5126,7 +5126,7 @@
   },
   "kb-e-j254": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-verben-passiv",
    "titles": {
     "de": "Passiv im Futur mit will",
     "en": "Future passive with will",
@@ -5136,7 +5136,7 @@
   },
   "kb-e-j255": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Wortschatz: Weltraumforschung",
     "en": "Vocabulary: space exploration",
@@ -5146,7 +5146,7 @@
   },
   "kb-e-j256": {
    "subject": "english",
-   "unit": "englisch-grammatik-u2",
+   "unit": "englisch-saetze-satzmuster",
    "titles": {
     "de": "Subjekt und Verb übereinstimmen lassen",
     "en": "Making subject and verb agree",
@@ -5156,7 +5156,7 @@
   },
   "kb-e-j257": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u2",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Wortschatz zu Sportanlässen",
     "en": "Vocabulary for sports events",
@@ -5166,7 +5166,7 @@
   },
   "kb-e-p001": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-alphabet",
    "titles": {
     "de": "Das englische Alphabet",
     "en": "The English alphabet",
@@ -5176,7 +5176,7 @@
   },
   "kb-e-p002": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-alphabet",
    "titles": {
     "de": "Gross- und Kleinbuchstaben zuordnen",
     "en": "Matching capital and small letters",
@@ -5186,7 +5186,7 @@
   },
   "kb-e-p003": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-alphabet",
    "titles": {
     "de": "Vokalbuchstaben erkennen",
     "en": "Recognising vowel letters",
@@ -5196,7 +5196,7 @@
   },
   "kb-e-p004": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Den Anlaut b erkennen",
     "en": "The initial sound of b",
@@ -5206,7 +5206,7 @@
   },
   "kb-e-p005": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-ich-vorstellen",
    "titles": {
     "de": "Begrüssungswörter",
     "en": "Greeting words",
@@ -5216,7 +5216,7 @@
   },
   "kb-e-p006": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Das Verb be: am",
     "en": "The verb be: am",
@@ -5226,7 +5226,7 @@
   },
   "kb-e-p007": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-ich-vorstellen",
    "titles": {
     "de": "Begrüssen, verabschieden und danken",
     "en": "Greeting, saying goodbye and thanking",
@@ -5236,7 +5236,7 @@
   },
   "kb-e-p008": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-ich-vorstellen",
    "titles": {
     "de": "Eine Selbstvorstellung lesen",
     "en": "Reading a self-introduction",
@@ -5246,7 +5246,7 @@
   },
   "kb-e-p009": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-alltag-kleidung",
    "titles": {
     "de": "Farben",
     "en": "Colour words",
@@ -5256,7 +5256,7 @@
   },
   "kb-e-p010": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Farben mit «It is» angeben",
     "en": "Stating colours with It is",
@@ -5266,7 +5266,7 @@
   },
   "kb-e-p011": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-alltag-kleidung",
    "titles": {
     "de": "Nach der Farbe fragen",
     "en": "Asking about colours",
@@ -5276,7 +5276,7 @@
   },
   "kb-e-p012": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-alltag-kleidung",
    "titles": {
     "de": "Farben aus einem Text herauslesen",
     "en": "Reading colours in a text",
@@ -5286,7 +5286,7 @@
   },
   "kb-e-p013": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-gesundheit-koerper",
    "titles": {
     "de": "Teile des Gesichts",
     "en": "Parts of the face",
@@ -5296,7 +5296,7 @@
   },
   "kb-e-p014": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-woerter-pronomen",
    "titles": {
     "de": "This is und That is",
     "en": "This is and That is",
@@ -5306,7 +5306,7 @@
   },
   "kb-e-p015": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-gesundheit-koerper",
    "titles": {
     "de": "Das eigene Gesicht vorstellen",
     "en": "Introducing the parts of your face",
@@ -5316,7 +5316,7 @@
   },
   "kb-e-p016": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-gesundheit-koerper",
    "titles": {
     "de": "Sätze über das Gesicht lesen",
     "en": "Reading about the parts of the face",
@@ -5326,7 +5326,7 @@
   },
   "kb-e-p017": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Tiernamen",
     "en": "Animal words",
@@ -5336,7 +5336,7 @@
   },
   "kb-e-p018": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Tiere mit This is a vorstellen",
     "en": "Introducing animals with This is a",
@@ -5346,7 +5346,7 @@
   },
   "kb-e-p019": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Sätze über Tiere lesen",
     "en": "Reading sentences about animals",
@@ -5356,7 +5356,7 @@
   },
   "kb-e-p020": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Lebensmittel benennen",
     "en": "Naming food",
@@ -5366,7 +5366,7 @@
   },
   "kb-e-p021": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-gegenwart",
    "titles": {
     "de": "Mit I like sagen, was man mag",
     "en": "Saying what you like with I like",
@@ -5376,7 +5376,7 @@
   },
   "kb-e-p022": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Sagen, was man gern isst",
     "en": "Saying what you like to eat",
@@ -5386,7 +5386,7 @@
   },
   "kb-e-p023": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Texte über Vorlieben lesen",
     "en": "Reading about what people like",
@@ -5396,7 +5396,7 @@
   },
   "kb-e-p024": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Zahlwörter von 1 bis 10 lesen",
     "en": "Reading the numbers 1 to 10",
@@ -5406,7 +5406,7 @@
   },
   "kb-e-p025": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Spielsachen und Geschenke benennen",
     "en": "Naming toys and presents",
@@ -5416,7 +5416,7 @@
   },
   "kb-e-p026": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Mit «How many» nach der Anzahl fragen",
     "en": "Asking about quantity with How many",
@@ -5426,7 +5426,7 @@
   },
   "kb-e-p027": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-ich-vorstellen",
    "titles": {
     "de": "Nach dem Alter fragen",
     "en": "Asking someone's age",
@@ -5436,7 +5436,7 @@
   },
   "kb-e-p028": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Anzahlen aus einem Text herauslesen",
     "en": "Reading quantities in a text",
@@ -5446,7 +5446,7 @@
   },
   "kb-e-p029": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Das kurze a erkennen",
     "en": "Recognising the short vowel a",
@@ -5456,7 +5456,7 @@
   },
   "kb-e-p030": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-unterwegs-laender",
    "titles": {
     "de": "Länder benennen",
     "en": "Naming countries",
@@ -5466,7 +5466,7 @@
   },
   "kb-e-p031": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Mit «I am from» die Herkunft angeben",
     "en": "Saying where you are from with I am from",
@@ -5476,7 +5476,7 @@
   },
   "kb-e-p032": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-ich-vorstellen",
    "titles": {
     "de": "Fragen, woher jemand kommt",
     "en": "Asking where someone is from",
@@ -5486,7 +5486,7 @@
   },
   "kb-e-p033": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-ich-vorstellen",
    "titles": {
     "de": "Lesen, woher jemand kommt",
     "en": "Reading where someone is from",
@@ -5496,7 +5496,7 @@
   },
   "kb-e-p034": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Den kurzen Vokal e erkennen",
     "en": "Recognising the short vowel e",
@@ -5506,7 +5506,7 @@
   },
   "kb-e-p035": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-ich-familie",
    "titles": {
     "de": "Familienmitglieder",
     "en": "Family members",
@@ -5516,7 +5516,7 @@
   },
   "kb-e-p036": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Mit Who is nach einer Person fragen",
     "en": "Asking who someone is with Who is",
@@ -5526,7 +5526,7 @@
   },
   "kb-e-p037": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-ich-familie",
    "titles": {
     "de": "Familienmitglieder vorstellen",
     "en": "Introducing family members",
@@ -5536,7 +5536,7 @@
   },
   "kb-e-p038": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-ich-familie",
    "titles": {
     "de": "Eine Familienvorstellung lesen",
     "en": "Reading about someone's family",
@@ -5546,7 +5546,7 @@
   },
   "kb-e-p039": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Der kurze Vokal i",
     "en": "The short vowel i",
@@ -5556,7 +5556,7 @@
   },
   "kb-e-p040": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Wörter für Grösse und Wuchs",
     "en": "Words for size and height",
@@ -5566,7 +5566,7 @@
   },
   "kb-e-p041": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-woerter-adjektive",
    "titles": {
     "de": "Grösse mit Adjektiven beschreiben",
     "en": "Describing size with adjectives",
@@ -5576,7 +5576,7 @@
   },
   "kb-e-p042": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Sätze über Zootiere lesen",
     "en": "Reading sentences about zoo animals",
@@ -5586,7 +5586,7 @@
   },
   "kb-e-p043": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Der kurze Vokal o",
     "en": "The short vowel o",
@@ -5596,7 +5596,7 @@
   },
   "kb-e-p044": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Gegenstände im Zimmer benennen",
     "en": "Naming things in a room",
@@ -5606,7 +5606,7 @@
   },
   "kb-e-p045": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-woerter-praepositionen",
    "titles": {
     "de": "in, on und under verwenden",
     "en": "Using in, on and under",
@@ -5616,7 +5616,7 @@
   },
   "kb-e-p046": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Fragen, wo etwas ist",
     "en": "Asking where something is",
@@ -5626,7 +5626,7 @@
   },
   "kb-e-p047": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Ortsangaben lesen und verstehen",
     "en": "Reading where things are",
@@ -5636,7 +5636,7 @@
   },
   "kb-e-p048": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Den kurzen Vokal u erkennen",
     "en": "Recognising the short vowel u",
@@ -5646,7 +5646,7 @@
   },
   "kb-e-p049": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Die fünf kurzen Vokale wiederholen",
     "en": "Reviewing the five short vowels",
@@ -5656,7 +5656,7 @@
   },
   "kb-e-p050": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Früchte benennen",
     "en": "Fruit words",
@@ -5666,7 +5666,7 @@
   },
   "kb-e-p051": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Fragen mit Do you like",
     "en": "Questions with Do you like",
@@ -5676,7 +5676,7 @@
   },
   "kb-e-p052": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-woerter-nomen",
    "titles": {
     "de": "Plural zählbarer Nomen",
     "en": "Plural of countable nouns",
@@ -5686,7 +5686,7 @@
   },
   "kb-e-p053": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Über Lieblingsfrüchte lesen",
     "en": "Reading about favourite fruit",
@@ -5696,7 +5696,7 @@
   },
   "kb-e-p054": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Die Zahlen von 11 bis 20 lesen",
     "en": "Reading the numbers 11 to 20",
@@ -5706,7 +5706,7 @@
   },
   "kb-e-p055": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Mit How many Anzahlen von 11 bis 20 angeben",
     "en": "Saying how many with numbers 11 to 20",
@@ -5716,7 +5716,7 @@
   },
   "kb-e-p056": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Anzahlen von 11 bis 20 in Sätzen verstehen",
     "en": "Reading quantities from 11 to 20",
@@ -5726,7 +5726,7 @@
   },
   "kb-e-p057": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Den Laut a-e erkennen",
     "en": "Recognising the a-e sound",
@@ -5736,7 +5736,7 @@
   },
   "kb-e-p058": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-schule-klassenzimmer",
    "titles": {
     "de": "Dinge im Schulzimmer",
     "en": "Things in the classroom",
@@ -5746,7 +5746,7 @@
   },
   "kb-e-p059": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Vorschläge mit Let's",
     "en": "Making suggestions with Let's",
@@ -5756,7 +5756,7 @@
   },
   "kb-e-p060": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-schule-klassenzimmer",
    "titles": {
     "de": "Im Klassenzimmer Vorschläge machen",
     "en": "Making suggestions in the classroom",
@@ -5766,7 +5766,7 @@
   },
   "kb-e-p061": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-schule-klassenzimmer",
    "titles": {
     "de": "Kurze Texte aus dem Klassenzimmer lesen",
     "en": "Reading short classroom notices",
@@ -5776,7 +5776,7 @@
   },
   "kb-e-p062": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Der Laut von i-e",
     "en": "The sound of i-e",
@@ -5786,7 +5786,7 @@
   },
   "kb-e-p063": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-schule-klassenzimmer",
    "titles": {
     "de": "Schulsachen in der Schultasche",
     "en": "School things in your schoolbag",
@@ -5796,7 +5796,7 @@
   },
   "kb-e-p064": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-schule-klassenzimmer",
    "titles": {
     "de": "Sagen, was in der Schultasche ist",
     "en": "Talking about what is in your schoolbag",
@@ -5806,7 +5806,7 @@
   },
   "kb-e-p065": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-schule-klassenzimmer",
    "titles": {
     "de": "Texte über Schulsachen lesen",
     "en": "Reading about the things in a schoolbag",
@@ -5816,7 +5816,7 @@
   },
   "kb-e-p066": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Der Laut von o-e",
     "en": "The sound of o-e",
@@ -5826,7 +5826,7 @@
   },
   "kb-e-p067": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Wörter, um Freunde zu beschreiben",
     "en": "Words for describing friends",
@@ -5836,7 +5836,7 @@
   },
   "kb-e-p068": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "I have und He has verwenden",
     "en": "Using I have and He has",
@@ -5846,7 +5846,7 @@
   },
   "kb-e-p069": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Einen Freund vorstellen",
     "en": "Introducing a friend",
@@ -5856,7 +5856,7 @@
   },
   "kb-e-p070": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Texte über Freunde lesen",
     "en": "Reading about friends",
@@ -5866,7 +5866,7 @@
   },
   "kb-e-p071": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Die Aussprache von u-e erkennen",
     "en": "Recognising the u-e sound",
@@ -5876,7 +5876,7 @@
   },
   "kb-e-p072": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Wörter für die Zimmer im Haus",
     "en": "Words for rooms in the home",
@@ -5886,7 +5886,7 @@
   },
   "kb-e-p073": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Mit is und are sagen, wo jemand ist",
     "en": "Saying where people are with is and are",
@@ -5896,7 +5896,7 @@
   },
   "kb-e-p074": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Fragen, in welchem Zimmer jemand ist",
     "en": "Asking which room someone is in",
@@ -5906,7 +5906,7 @@
   },
   "kb-e-p075": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Lesen, wo jemand im Haus ist",
     "en": "Reading where people are at home",
@@ -5916,7 +5916,7 @@
   },
   "kb-e-p076": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Den langen Vokal e erkennen",
     "en": "Recognising the long vowel e",
@@ -5926,7 +5926,7 @@
   },
   "kb-e-p077": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Speisen zum Abendessen benennen",
     "en": "Naming dinner foods",
@@ -5936,7 +5936,7 @@
   },
   "kb-e-p078": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Mit Would you like Essen anbieten",
     "en": "Offering food with Would you like",
@@ -5946,7 +5946,7 @@
   },
   "kb-e-p079": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Gespräche beim Abendessen lesen",
     "en": "Reading dinner conversations",
@@ -5956,7 +5956,7 @@
   },
   "kb-e-p080": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-schule-berufe",
    "titles": {
     "de": "Berufe benennen",
     "en": "Naming jobs",
@@ -5966,7 +5966,7 @@
   },
   "kb-e-p081": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-woerter-pronomen",
    "titles": {
     "de": "Mit his und her nach dem Beruf fragen",
     "en": "Asking about jobs with his and her",
@@ -5976,7 +5976,7 @@
   },
   "kb-e-p082": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-schule-berufe",
    "titles": {
     "de": "Die Berufe der Familie vorstellen",
     "en": "Talking about family members' jobs",
@@ -5986,7 +5986,7 @@
   },
   "kb-e-p083": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-schule-berufe",
    "titles": {
     "de": "Texte über Berufe in der Familie lesen",
     "en": "Reading about family members' jobs",
@@ -5996,7 +5996,7 @@
   },
   "kb-e-p084": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Wörter für Orte in der Schule",
     "en": "Words for places at school",
@@ -6006,7 +6006,7 @@
   },
   "kb-e-p085": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Stockwerke mit first und second",
     "en": "Floors with first and second",
@@ -6016,7 +6016,7 @@
   },
   "kb-e-p086": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Nach Orten in der Schule fragen",
     "en": "Asking where places in the school are",
@@ -6026,7 +6026,7 @@
   },
   "kb-e-p087": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Eine Beschreibung der Schule lesen",
     "en": "Reading a description of a school",
@@ -6036,7 +6036,7 @@
   },
   "kb-e-p088": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Wörter für den Tagesablauf",
     "en": "Words for the daily routine",
@@ -6046,7 +6046,7 @@
   },
   "kb-e-p089": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Nach der Uhrzeit fragen",
     "en": "Asking the time",
@@ -6056,7 +6056,7 @@
   },
   "kb-e-p090": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Sagen, wofür es Zeit ist",
     "en": "Saying what it is time for",
@@ -6066,7 +6066,7 @@
   },
   "kb-e-p091": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Einen Tagesablauf lesen",
     "en": "Reading a daily timetable",
@@ -6076,7 +6076,7 @@
   },
   "kb-e-p092": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-natur-wetter",
    "titles": {
     "de": "Wetter",
     "en": "Weather words",
@@ -6086,7 +6086,7 @@
   },
   "kb-e-p093": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-saetze-satzmuster",
    "titles": {
     "de": "Das Wetter mit It is beschreiben",
     "en": "Describing the weather with It is",
@@ -6096,7 +6096,7 @@
   },
   "kb-e-p094": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-natur-wetter",
    "titles": {
     "de": "Über das Wetter sprechen und Vorschläge machen",
     "en": "Talking about the weather and making suggestions",
@@ -6106,7 +6106,7 @@
   },
   "kb-e-p095": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-natur-wetter",
    "titles": {
     "de": "Einen Wetterbericht lesen",
     "en": "Reading a weather report",
@@ -6116,7 +6116,7 @@
   },
   "kb-e-p096": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Tiere und Gemüse auf dem Bauernhof benennen",
     "en": "Naming farm animals and vegetables",
@@ -6126,7 +6126,7 @@
   },
   "kb-e-p097": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-woerter-pronomen",
    "titles": {
     "de": "These are und Those are verwenden",
     "en": "Using These are and Those are",
@@ -6136,7 +6136,7 @@
   },
   "kb-e-p098": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Auf dem Bauernhof nach Tieren und Gemüse fragen",
     "en": "Asking about animals and vegetables on the farm",
@@ -6146,7 +6146,7 @@
   },
   "kb-e-p099": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Einen kurzen Text über einen Bauernhof verstehen",
     "en": "Reading a short text about a farm",
@@ -6156,7 +6156,7 @@
   },
   "kb-e-p100": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-alltag-kleidung",
    "titles": {
     "de": "Kleidung",
     "en": "Clothes",
@@ -6166,7 +6166,7 @@
   },
   "kb-e-p101": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-woerter-nomen",
    "titles": {
     "de": "Whose und der Genitiv mit 's",
     "en": "Whose and the possessive 's",
@@ -6176,7 +6176,7 @@
   },
   "kb-e-p102": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-alltag-kleidung",
    "titles": {
     "de": "Über Kleidung sprechen",
     "en": "Talking about clothes",
@@ -6186,7 +6186,7 @@
   },
   "kb-e-p103": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-alltag-kleidung",
    "titles": {
     "de": "Lesen, wem Kleidung gehört",
     "en": "Reading who clothes belong to",
@@ -6196,7 +6196,7 @@
   },
   "kb-e-p104": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-essen-einkaufen",
    "titles": {
     "de": "Wörter für Dinge im Laden",
     "en": "Words for things in a shop",
@@ -6206,7 +6206,7 @@
   },
   "kb-e-p105": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Mit How much nach dem Preis fragen",
     "en": "Asking prices with How much",
@@ -6216,7 +6216,7 @@
   },
   "kb-e-p106": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-essen-einkaufen",
    "titles": {
     "de": "Im Laden einkaufen",
     "en": "Shopping in a shop",
@@ -6226,7 +6226,7 @@
   },
   "kb-e-p107": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-essen-einkaufen",
    "titles": {
     "de": "Preisangaben lesen",
     "en": "Reading prices",
@@ -6236,7 +6236,7 @@
   },
   "kb-e-p108": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Konsonantenverbindungen bl, cl, fl am Wortanfang",
     "en": "Initial consonant blends bl, cl, fl",
@@ -6246,7 +6246,7 @@
   },
   "kb-e-p109": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Alter und Charakter beschreiben",
     "en": "Describing age and character",
@@ -6256,7 +6256,7 @@
   },
   "kb-e-p110": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Mit What is he like? nach einer Person fragen",
     "en": "Asking What is he like?",
@@ -6266,7 +6266,7 @@
   },
   "kb-e-p111": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Lehrpersonen beschreiben",
     "en": "Describing teachers",
@@ -6276,7 +6276,7 @@
   },
   "kb-e-p112": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Einen Text über eine Lehrperson verstehen",
     "en": "Reading a text about a teacher",
@@ -6286,7 +6286,7 @@
   },
   "kb-e-p113": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Wochentage",
     "en": "Days of the week",
@@ -6296,7 +6296,7 @@
   },
   "kb-e-p114": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-woerter-praepositionen",
    "titles": {
     "de": "«I have» und «on Mondays» verwenden",
     "en": "Using “I have” with “on Mondays”",
@@ -6306,7 +6306,7 @@
   },
   "kb-e-p115": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Wochenendaktivitäten",
     "en": "Weekend activities",
@@ -6316,7 +6316,7 @@
   },
   "kb-e-p116": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Mit «often» über den Alltag sprechen",
     "en": "Talking about routines with “often”",
@@ -6326,7 +6326,7 @@
   },
   "kb-e-p117": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-schule-lernen",
    "titles": {
     "de": "Einen Stundenplan lesen",
     "en": "Reading a weekly timetable",
@@ -6336,7 +6336,7 @@
   },
   "kb-e-p118": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Essen und Trinken",
     "en": "Food and drink",
@@ -6346,7 +6346,7 @@
   },
   "kb-e-p119": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Essen bestellen mit «What would you like to eat?»",
     "en": "Ordering food with “What would you like to eat?”",
@@ -6356,7 +6356,7 @@
   },
   "kb-e-p120": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Texte über Essensbestellungen lesen",
     "en": "Reading food orders",
@@ -6366,7 +6366,7 @@
   },
   "kb-e-p121": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Verben für Fähigkeiten",
     "en": "Verbs for abilities",
@@ -6376,7 +6376,7 @@
   },
   "kb-e-p122": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Fähigkeiten mit can ausdrücken",
     "en": "Expressing ability with can",
@@ -6386,7 +6386,7 @@
   },
   "kb-e-p123": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Über Fähigkeiten sprechen",
     "en": "Talking about what you can do",
@@ -6396,7 +6396,7 @@
   },
   "kb-e-p124": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Kurze Texte über Fähigkeiten lesen",
     "en": "Reading short texts about abilities",
@@ -6406,7 +6406,7 @@
   },
   "kb-e-p125": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Dinge im Zimmer",
     "en": "Things in a room",
@@ -6416,7 +6416,7 @@
   },
   "kb-e-p126": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-saetze-satzmuster",
    "titles": {
     "de": "«There is» und «There are» verwenden",
     "en": "Using “there is” and “there are”",
@@ -6426,7 +6426,7 @@
   },
   "kb-e-p127": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Das eigene Zimmer beschreiben",
     "en": "Describing your room",
@@ -6436,7 +6436,7 @@
   },
   "kb-e-p128": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-alltag-wohnen",
    "titles": {
     "de": "Einen Text über ein Zimmer verstehen",
     "en": "Understanding a text about a room",
@@ -6446,7 +6446,7 @@
   },
   "kb-e-p129": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Wörter rund um den Naturpark",
     "en": "Words for a nature park",
@@ -6456,7 +6456,7 @@
   },
   "kb-e-p130": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Fragen mit Is there und Are there",
     "en": "Asking questions with Is there and Are there",
@@ -6466,7 +6466,7 @@
   },
   "kb-e-p131": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Darüber sprechen, was es im Park gibt",
     "en": "Talking about what is in a park",
@@ -6476,7 +6476,7 @@
   },
   "kb-e-p132": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-natur-tiere",
    "titles": {
     "de": "Einen Text über einen Naturpark verstehen",
     "en": "Understanding a text about a nature park",
@@ -6486,7 +6486,7 @@
   },
   "kb-e-p133": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Wörter für den Tagesablauf",
     "en": "Words for daily activities",
@@ -6496,7 +6496,7 @@
   },
   "kb-e-p134": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Mit When do you nach der Zeit fragen",
     "en": "Asking about times with When do you",
@@ -6506,7 +6506,7 @@
   },
   "kb-e-p135": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Über den Tagesablauf sprechen",
     "en": "Talking about your daily routine",
@@ -6516,7 +6516,7 @@
   },
   "kb-e-p136": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Einen Text über den Tagesablauf verstehen",
     "en": "Understanding a text about a daily routine",
@@ -6526,7 +6526,7 @@
   },
   "kb-e-p137": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-natur-wetter",
    "titles": {
     "de": "Die Jahreszeiten benennen",
     "en": "Naming the seasons",
@@ -6536,7 +6536,7 @@
   },
   "kb-e-p138": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-natur-wetter",
    "titles": {
     "de": "Über die Lieblingsjahreszeit sprechen",
     "en": "Talking about your favourite season",
@@ -6546,7 +6546,7 @@
   },
   "kb-e-p139": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-natur-wetter",
    "titles": {
     "de": "Einen Text über Jahreszeiten verstehen",
     "en": "Understanding a text about the seasons",
@@ -6556,7 +6556,7 @@
   },
   "kb-e-p140": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Monatsnamen",
     "en": "Names of the months",
@@ -6566,7 +6566,7 @@
   },
   "kb-e-p141": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-woerter-praepositionen",
    "titles": {
     "de": "in mit Monaten verwenden",
     "en": "Using in with months",
@@ -6576,7 +6576,7 @@
   },
   "kb-e-p142": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Sagen, in welchem Monat ein Fest ist",
     "en": "Saying which month a celebration is in",
@@ -6586,7 +6586,7 @@
   },
   "kb-e-p143": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Einen Schulkalender lesen",
     "en": "Reading a school calendar",
@@ -6596,7 +6596,7 @@
   },
   "kb-e-p144": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Ordnungszahlen",
     "en": "Ordinal numbers",
@@ -6606,7 +6606,7 @@
   },
   "kb-e-p145": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Ein Datum nennen",
     "en": "Saying a date",
@@ -6616,7 +6616,7 @@
   },
   "kb-e-p146": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Eine Mitteilung mit Datum lesen",
     "en": "Reading a notice with a date",
@@ -6626,7 +6626,7 @@
   },
   "kb-e-p147": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-woerter-pronomen",
    "titles": {
     "de": "Possessivpronomen mine, yours, his, hers",
     "en": "Possessive pronouns mine, yours, his, hers",
@@ -6636,7 +6636,7 @@
   },
   "kb-e-p148": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-gegenwart",
    "titles": {
     "de": "Present Progressive bilden",
     "en": "Forming the present continuous",
@@ -6646,7 +6646,7 @@
   },
   "kb-e-p149": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-woerter-pronomen",
    "titles": {
     "de": "Fragen, wem etwas gehört",
     "en": "Asking who something belongs to",
@@ -6656,7 +6656,7 @@
   },
   "kb-e-p150": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-kommunizieren-texte-lesen",
    "titles": {
     "de": "Einen Text über laufende Tätigkeiten lesen",
     "en": "Reading about what people are doing",
@@ -6666,7 +6666,7 @@
   },
   "kb-e-p151": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Wörter für Regeln",
     "en": "Words for rules",
@@ -6676,7 +6676,7 @@
   },
   "kb-e-p152": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Befehlssätze bilden",
     "en": "Giving instructions with imperatives",
@@ -6686,7 +6686,7 @@
   },
   "kb-e-p153": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Regeln nennen",
     "en": "Stating rules",
@@ -6696,7 +6696,7 @@
   },
   "kb-e-p154": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-gesellschaft-zusammenleben",
    "titles": {
     "de": "Regeln lesen und verstehen",
     "en": "Reading rules",
@@ -6706,7 +6706,7 @@
   },
   "kb-e-p155": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-unterwegs-orte",
    "titles": {
     "de": "Orte in der Stadt",
     "en": "Places in town",
@@ -6716,7 +6716,7 @@
   },
   "kb-e-p156": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Links abbiegen, rechts abbiegen, geradeaus gehen",
     "en": "Turning left, turning right and going straight",
@@ -6726,7 +6726,7 @@
   },
   "kb-e-p157": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-unterwegs-orte",
    "titles": {
     "de": "Nach dem Weg fragen und den Weg beschreiben",
     "en": "Asking for and giving directions",
@@ -6736,7 +6736,7 @@
   },
   "kb-e-p158": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-unterwegs-orte",
    "titles": {
     "de": "Wegbeschreibungen lesen",
     "en": "Reading directions",
@@ -6746,7 +6746,7 @@
   },
   "kb-e-p159": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Verkehrsmittel",
     "en": "Means of transport",
@@ -6756,7 +6756,7 @@
   },
   "kb-e-p160": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Verkehrsregeln mit must formulieren",
     "en": "Traffic rules with must",
@@ -6766,7 +6766,7 @@
   },
   "kb-e-p161": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Sagen, wie man zur Schule kommt",
     "en": "Saying how you get to school",
@@ -6776,7 +6776,7 @@
   },
   "kb-e-p162": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Verkehrsregeln in einem Text verstehen",
     "en": "Understanding traffic rules in a text",
@@ -6786,7 +6786,7 @@
   },
   "kb-e-p163": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Wörter rund um Wochenendpläne",
     "en": "Words for weekend plans",
@@ -6796,7 +6796,7 @@
   },
   "kb-e-p164": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-zukunft",
    "titles": {
     "de": "Die Zukunft mit be going to",
     "en": "The future with be going to",
@@ -6806,7 +6806,7 @@
   },
   "kb-e-p165": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Über Pläne sprechen",
     "en": "Talking about plans",
@@ -6816,7 +6816,7 @@
   },
   "kb-e-p166": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Texte über Wochenendpläne lesen",
     "en": "Reading about weekend plans",
@@ -6826,7 +6826,7 @@
   },
   "kb-e-p167": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Wörter rund um Hobbys",
     "en": "Words for hobbies",
@@ -6836,7 +6836,7 @@
   },
   "kb-e-p168": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-gegenwart",
    "titles": {
     "de": "does und die 3. Person Singular",
     "en": "does and the third person singular",
@@ -6846,7 +6846,7 @@
   },
   "kb-e-p169": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Über Brieffreunde und ihre Hobbys sprechen",
     "en": "Talking about pen pals and their hobbies",
@@ -6856,7 +6856,7 @@
   },
   "kb-e-p170": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Texte über Brieffreunde lesen",
     "en": "Reading about a pen pal",
@@ -6866,7 +6866,7 @@
   },
   "kb-e-p171": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-schule-berufe",
    "titles": {
     "de": "Weitere Berufe",
     "en": "More jobs",
@@ -6876,7 +6876,7 @@
   },
   "kb-e-p172": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Mit What does he do? nach dem Beruf fragen",
     "en": "Asking about jobs with What does he do?",
@@ -6886,7 +6886,7 @@
   },
   "kb-e-p173": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-schule-berufe",
    "titles": {
     "de": "Beruf und Arbeitsort vorstellen",
     "en": "Talking about jobs and workplaces",
@@ -6896,7 +6896,7 @@
   },
   "kb-e-p174": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-schule-berufe",
    "titles": {
     "de": "Kurze Texte über Berufe lesen",
     "en": "Reading short texts about jobs",
@@ -6906,7 +6906,7 @@
   },
   "kb-e-p175": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Gefühle benennen",
     "en": "Naming feelings",
@@ -6916,7 +6916,7 @@
   },
   "kb-e-p176": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Ratschläge mit should geben",
     "en": "Giving advice with should",
@@ -6926,7 +6926,7 @@
   },
   "kb-e-p177": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Nach Gefühlen fragen und Ratschläge geben",
     "en": "Asking about feelings and giving advice",
@@ -6936,7 +6936,7 @@
   },
   "kb-e-p178": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Gefühle und Ratschläge in einem Text verstehen",
     "en": "Understanding feelings and advice in a text",
@@ -6946,7 +6946,7 @@
   },
   "kb-e-p179": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Satzmelodie in Aussage- und Fragesätzen",
     "en": "Intonation in statements and questions",
@@ -6956,7 +6956,7 @@
   },
   "kb-e-p180": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Grösse und Gewicht",
     "en": "Height and weight",
@@ -6966,7 +6966,7 @@
   },
   "kb-e-p181": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-woerter-adjektive",
    "titles": {
     "de": "Adjektive steigern (Komparativ)",
     "en": "Comparative adjectives",
@@ -6976,7 +6976,7 @@
   },
   "kb-e-p182": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-woerter-adjektive",
    "titles": {
     "de": "Mit than vergleichen",
     "en": "Comparing with than",
@@ -6986,7 +6986,7 @@
   },
   "kb-e-p183": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Nach Grösse und Gewicht fragen",
     "en": "Asking about height and weight",
@@ -6996,7 +6996,7 @@
   },
   "kb-e-p184": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Einen Vergleichstext verstehen",
     "en": "Understanding a text that compares",
@@ -7006,7 +7006,7 @@
   },
   "kb-e-p185": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-vergangenheit",
    "titles": {
     "de": "Regelmässige Verben in der Vergangenheit",
     "en": "Past tense of regular verbs",
@@ -7016,7 +7016,7 @@
   },
   "kb-e-p186": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-saetze-fragen",
    "titles": {
     "de": "Fragen mit Did",
     "en": "Asking questions with Did",
@@ -7026,7 +7026,7 @@
   },
   "kb-e-p187": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Über das letzte Wochenende sprechen",
     "en": "Talking about last weekend",
@@ -7036,7 +7036,7 @@
   },
   "kb-e-p188": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-freizeit-hobbys",
    "titles": {
     "de": "Einen Tagebucheintrag zum Wochenende verstehen",
     "en": "Understanding a diary about last weekend",
@@ -7046,7 +7046,7 @@
   },
   "kb-e-p189": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-vergangenheit",
    "titles": {
     "de": "Unregelmässige Verben in der Vergangenheit",
     "en": "Past tense of irregular verbs",
@@ -7056,7 +7056,7 @@
   },
   "kb-e-p190": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Erzählen, wo man gewesen ist",
     "en": "Talking about where you went",
@@ -7066,7 +7066,7 @@
   },
   "kb-e-p191": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-unterwegs-reisen",
    "titles": {
     "de": "Ein Reisetagebuch lesen",
     "en": "Reading a travel diary",
@@ -7076,7 +7076,7 @@
   },
   "kb-e-p192": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Früher und heute",
     "en": "Then and now",
@@ -7086,7 +7086,7 @@
   },
   "kb-e-p193": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-vergangenheit",
    "titles": {
     "de": "was und were verwenden",
     "en": "Using was and were",
@@ -7096,7 +7096,7 @@
   },
   "kb-e-p194": {
    "subject": "english",
-   "unit": "englisch-alltag-u1",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Vergangenheit und Gegenwart vergleichen",
     "en": "Comparing the past and the present",
@@ -7106,7 +7106,7 @@
   },
   "kb-e-p195": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-ich-beschreiben",
    "titles": {
     "de": "Texte über früher und heute verstehen",
     "en": "Understanding texts about then and now",
@@ -7116,7 +7116,7 @@
   },
   "kb-e-p196": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-laute-alphabet",
    "titles": {
     "de": "Verwechselbare Wörter: there, its, too",
     "en": "Easily confused words: there, its, too",
@@ -7126,7 +7126,7 @@
   },
   "kb-e-p197": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-kommunizieren-texte-lesen",
    "titles": {
     "de": "Einen kurzen Brief verstehen",
     "en": "Understanding a short letter",
@@ -7136,7 +7136,7 @@
   },
   "kb-e-p198": {
    "subject": "english",
-   "unit": "englisch-aussprache-u1",
+   "unit": "englisch-laute-aussprache",
    "titles": {
     "de": "Die Aussprache von ai und ay",
     "en": "The sounds of ai and ay",
@@ -7146,7 +7146,7 @@
   },
   "kb-e-p199": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-hilfsverben",
    "titles": {
     "de": "Hausregeln mit have to und can't",
     "en": "House rules with have to and can't",
@@ -7156,7 +7156,7 @@
   },
   "kb-e-p200": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-essen-essen-trinken",
    "titles": {
     "de": "Lebensmittel vom Bauernhof bis auf den Tisch",
     "en": "Food from farm to table",
@@ -7166,7 +7166,7 @@
   },
   "kb-e-p201": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-essen-einkaufen",
    "titles": {
     "de": "Wortschatz zu Geld und Ausgaben",
     "en": "Words about money and spending",
@@ -7176,7 +7176,7 @@
   },
   "kb-e-p202": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-alltag-tagesablauf",
    "titles": {
     "de": "Preise mit hundred und thousand nennen",
     "en": "Saying prices with hundred and thousand",
@@ -7186,7 +7186,7 @@
   },
   "kb-e-p203": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-essen-einkaufen",
    "titles": {
     "de": "Einen Taschengeldplan verstehen",
     "en": "Understanding a pocket money plan",
@@ -7196,7 +7196,7 @@
   },
   "kb-e-p204": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Wortschatz zum Weltraum",
     "en": "Space words",
@@ -7206,7 +7206,7 @@
   },
   "kb-e-p205": {
    "subject": "english",
-   "unit": "englisch-grammatik-u1",
+   "unit": "englisch-verben-zukunft",
    "titles": {
     "de": "Mit will über das Leben im Weltraum in der Zukunft sprechen",
     "en": "Talking about future life in space with will",
@@ -7216,7 +7216,7 @@
   },
   "kb-e-p206": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-gesellschaft-technik",
    "titles": {
     "de": "Einen Text über die Raumfahrt verstehen",
     "en": "Understanding a text about space travel",
@@ -7226,7 +7226,7 @@
   },
   "kb-e-p207": {
    "subject": "english",
-   "unit": "englisch-wortschatz-u1",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Wortschatz zu Energie und Energiesparen",
     "en": "Words about energy and saving it",
@@ -7236,7 +7236,7 @@
   },
   "kb-e-p208": {
    "subject": "english",
-   "unit": "englisch-lesen-schreiben-u1",
+   "unit": "englisch-natur-umwelt",
    "titles": {
     "de": "Einen Aufruf zum Energiesparen verstehen",
     "en": "Understanding an energy-saving appeal",

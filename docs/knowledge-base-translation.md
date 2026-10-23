@@ -35,9 +35,13 @@ breaks a rule below. The batches and their translations stay out of the reposito
 
 - Every point and every exercise of the batch gets an entry, in all four locales
   `de`, `en`, `fr`, `it`, or - exercises only - a `drop` with its reason.
-- `unit` (mathematics and physics only): the id of the star from the batch's
-  `units` whose title and scope fit the knowledge point best. English batches
-  have no `units`; leave `unit` out.
+- `unit`: the id of the star from the batch's `units` whose title and scope fit
+  the knowledge point best. In a language subject the stars are situations of
+  life and grammar: vocabulary, everyday expressions and reading or writing tasks
+  go to the situation they are about (school vocabulary to the school star, a
+  letter of invitation to celebrations); grammar, sounds and word formation go to
+  the grammar star of the structure they practise, whatever the topic of the
+  example sentences.
 - `mastery`: as many criteria as the source has, in the same order.
 - Choice exercises: `choices` in the source's order, one text per option and no
   letter in front; the right option stays the one at `answerIndex`. Options must
