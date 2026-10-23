@@ -977,6 +977,7 @@ class CurriculumExerciseDraftRequest(BaseModel):
     )
     correct_feedback: str | None = Field(default=None, alias="correctFeedback", max_length=500)
     incorrect_feedback: str | None = Field(default=None, alias="incorrectFeedback", max_length=500)
+    knowledge_point: str | None = Field(default=None, alias="knowledgePoint", max_length=200)
     skills: list[str] = Field(default_factory=list)
 
 
@@ -995,6 +996,10 @@ class CurriculumLessonDraftRequest(BaseModel):
     estimated_minutes: int = Field(default=10, alias="estimatedMinutes", ge=1, le=240)
     order: int | None = Field(default=None, ge=1, le=1000)
     language: str | None = Field(default=None, max_length=30)
+    extension: bool = False
+    requires_points: list[Annotated[str, Field(min_length=1, max_length=200)]] = Field(
+        default_factory=list, alias="requiresPoints", max_length=100
+    )
     exercises: list[CurriculumExerciseDraftRequest] = Field(default_factory=list)
 
 

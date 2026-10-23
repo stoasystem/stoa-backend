@@ -366,7 +366,20 @@ def _build_lesson(raw: dict[str, Any], *, exercise_count: int, locale: str = "de
         "rolloutState": _content_state(raw),
         "exerciseCount": exercise_count,
         "source": raw.get("source", "practice_backfill"),
+        **_readiness(raw),
     }
+
+
+def _readiness(raw: dict[str, Any]) -> dict[str, Any]:
+    """A lesson that only deepens its unit, and the knowledge points that come
+    before it; absent on a lesson that states neither."""
+    out: dict[str, Any] = {}
+    if raw.get("extension"):
+        out["extension"] = True
+    points = [str(item) for item in raw.get("requires_points") or () if str(item).strip()]
+    if points:
+        out["requiresPoints"] = points
+    return out
 
 
 def _build_exercise(raw: dict[str, Any]) -> dict[str, Any]:

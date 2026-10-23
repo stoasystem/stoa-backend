@@ -612,6 +612,17 @@ QUESTION_TYPES: dict[str, tuple[tuple[str, dict[str, str], str], ...]] = {
 }
 #: At most this many upstream knowledge points go into one star.
 MAX_POINTS_PER_STAR = 12
+#: Question types that deepen a knowledge point rather than make it: a star
+#: lights from its core small stars, and these glow beside it when done.
+EXTENSION_TYPES: dict[str, frozenset[str]] = {
+    "mathematics": frozenset({"schliessen"}),
+    "physics": frozenset({"experiment", "diagramme"}),
+    "english": frozenset({"lesen", "aussprache"}),
+}
+
+
+def is_extension(subject_id: str, question_type: str) -> bool:
+    return question_type in EXTENSION_TYPES.get(subject_id, frozenset())
 
 
 def question_types(subject_id: str) -> dict[str, str]:

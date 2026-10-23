@@ -153,6 +153,7 @@ def build_map(
     # untouched.
     chapter_order = {nebula["topicId"]: nebula["order"] for nebula in nebulae}
 
+    unit_names = {str(unit.get("id") or ""): str(unit.get("title") or "") for unit in units}
     stars: list[dict[str, Any]] = []
     for unit in sorted(
         units,
@@ -188,7 +189,7 @@ def build_map(
                 "recommendation": None,
                 "x": round(x, 5),
                 "y": round(y, 5),
-                "skills": _skills_of(unit_id, skill_states or {}, locale),
+                "skills": _skills_of(unit_id, skill_states or {}, locale, unit_names),
                 "chapter": {
                     "lessonCount": judged.lesson_count,
                     "lessonsDone": judged.lessons_done,
@@ -450,17 +451,31 @@ def _skills_of(
     unit_id: str,
     states: Mapping[str, knowledge_mastery_service.SkillMastery],
     locale: str,
+    unit_names: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
-    """The skill points around one star, in a fixed order (#58)."""
+    """The skill points around one star, in a fixed order (#58).
+
+    A skill point that deepens its star says `extension`; one whose next
+    practice needs knowledge not mastered yet names where that knowledge is
+    (`missingPrerequisites`). Nothing is locked by it."""
+    names = unit_names or {}
     mine = [state for state in states.values() if state.unit_id == unit_id]
-    return [
-        {
+    out = []
+    for state in sorted(mine, key=lambda state: state.skill_id):
+        item: dict[str, Any] = {
             "skillId": state.skill_id,
             "name": curriculum_translations.skill_title(state.skill_id, locale),
             "lit": state.lit,
         }
-        for state in sorted(mine, key=lambda state: state.skill_id)
-    ]
+        if state.extension:
+            item["extension"] = True
+        if not state.ready:
+            item["missingPrerequisites"] = [
+                {"unitId": missing, "name": names.get(missing, missing)}
+                for missing in state.missing_unit_ids
+            ]
+        out.append(item)
+    return out
 
 
 def _prerequisite_edges(units: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:

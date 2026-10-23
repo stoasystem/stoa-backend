@@ -3038,6 +3038,18 @@
             ],
             "title": "Incorrectfeedback"
           },
+          "knowledgePoint": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledgepoint"
+          },
           "options": {
             "items": {
               "maxLength": 500,
@@ -3200,6 +3212,11 @@
             "title": "Exercises",
             "type": "array"
           },
+          "extension": {
+            "default": false,
+            "title": "Extension",
+            "type": "boolean"
+          },
           "gradeLevel": {
             "maxLength": 100,
             "minLength": 1,
@@ -3242,6 +3259,16 @@
             "minLength": 1,
             "title": "Publiclessonid",
             "type": "string"
+          },
+          "requiresPoints": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Requirespoints",
+            "type": "array"
           },
           "subjectId": {
             "maxLength": 100,

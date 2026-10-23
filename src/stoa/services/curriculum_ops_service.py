@@ -63,6 +63,9 @@ LESSON_FIELD_ALIASES = {
     "prerequisite_lesson_ids": "prerequisite_lesson_ids",
     "locale_metadata": "locale_metadata",
     "localeMetadata": "locale_metadata",
+    "extension": "extension",
+    "requires_points": "requires_points",
+    "requiresPoints": "requires_points",
 }
 
 #: The longest prompt, explanation or answer an exercise or its translation may hold,
@@ -94,6 +97,8 @@ EXERCISE_FIELD_ALIASES = {
     "correctFeedback": "correct_feedback",
     "incorrect_feedback": "incorrect_feedback",
     "incorrectFeedback": "incorrect_feedback",
+    "knowledge_point": "knowledge_point",
+    "knowledgePoint": "knowledge_point",
     "hint": "hint",
     "hints": "hints",
     "explanation": "explanation",
@@ -425,7 +430,21 @@ def _lesson_payload(public_id: str, payload: dict[str, Any]) -> dict[str, Any]:
             or payload.get("prerequisites")
         ),
         **_lesson_order(payload.get("order")),
+        **_lesson_readiness(payload),
     }
+
+
+def _lesson_readiness(payload: dict[str, Any]) -> dict[str, Any]:
+    """Whether the lesson only deepens its unit, and which knowledge points come
+    before it. Both are left out of a lesson that states neither, so the seeded
+    lessons and every lesson authored before them stay as they were."""
+    out: dict[str, Any] = {}
+    if payload.get("extension"):
+        out["extension"] = True
+    points = _normalized_ids(payload.get("requires_points") or payload.get("requiresPoints"))
+    if points:
+        out["requires_points"] = points
+    return out
 
 
 def _lesson_order(value: Any) -> dict[str, int]:
@@ -611,6 +630,14 @@ def _patch_lesson(public_id: str, current: dict[str, Any], payload: dict[str, An
         lesson["estimated_minutes"] = int(lesson["estimated_minutes"])
     if "order" in lesson:
         lesson["order"] = int(lesson["order"])
+    stated = {key: current[key] for key in ("extension", "requires_points") if key in current}
+    for source, target in (("extension", "extension"), ("requires_points", "requires_points"),
+                           ("requiresPoints", "requires_points")):
+        if source in patch:
+            stated[target] = patch[source]
+    lesson.pop("extension", None)
+    lesson.pop("requires_points", None)
+    lesson.update(_lesson_readiness(stated))
     return lesson
 
 

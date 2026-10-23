@@ -34,6 +34,25 @@ the result is `knowledge_base_stars.json` and `knowledge_base_skills.json`.
 Mathematics keeps its seven nebulae: the ZAP stars stay as they are, and the
 knowledge base gets stars of its own beside them.
 
+### What a student is ready for, and what lights a star
+
+- **Layers.** Inside a star its upstream knowledge points are layered by the
+  upstream edges between them: layer 1 needs nothing else in the star, layer 2
+  needs layer 1, and so on (at most four). A small star's practice is cut by
+  layer, so the star is worked through from its foundations up; a small star with
+  more than one layer shows "Stufe 1", "Stufe 2" ...
+- **Readiness, not age.** Every practice set states the knowledge points that come
+  before it (`requiresPoints`), in its own star or another. A knowledge point is
+  mastered when every core exercise of it has been answered right once. The star
+  map names, for each small star, the stars holding what its next practice needs
+  and the student has not mastered yet (`missingPrerequisites`). Nothing is
+  locked by it: the practice stays open, the hint says where to go first.
+- **Core and extension.** Question types that deepen a knowledge point are
+  extension: formulas and reasoning in mathematics, experiments and charts in
+  physics, reading and pronunciation in English. A star lights from its core
+  practice sets; extension sets are practice beside it and their small stars say
+  `extension`. The ZAP stars have no extension sets, so they light as before.
+
 A language subject is laid out the same way for every language: ten nebulae for
 situations of life (me and others, daily life, school and work, food and shopping,
 free time, out and about, nature, health, society, communicating) and four for

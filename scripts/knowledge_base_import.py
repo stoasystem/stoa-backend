@@ -727,6 +727,42 @@ def apply_merges(
 #: A small star's exercises are cut into practice sets of at most this many.
 EXERCISES_PER_SET = 10
 PART = {"de": "Teil", "en": "Part", "fr": "Partie", "it": "Parte"}
+STAGE = {"de": "Stufe", "en": "Level", "fr": "Niveau", "it": "Livello"}
+#: Inside a star its knowledge points are layered by the upstream edges between
+#: them; deeper chains share the last layer.
+MAX_LAYERS = 4
+
+
+def point_layers(
+    star_points: Sequence[str], edges: Iterable[Mapping[str, Any]]
+) -> dict[str, int]:
+    """Each knowledge point's layer inside its star: 1 when nothing in the star
+    comes before it, else one more than the deepest point it needs."""
+    mine = set(star_points)
+    graph: dict[str, set[str]] = defaultdict(set)
+    # In the upstream's own order: where two edges close a cycle, the later one goes.
+    for edge in edges:
+        point, requires = edge["point"], edge["requires"]
+        if edge["strength"] == "hard" and point in mine and requires in mine and point != requires:
+            if not _closes_cycle(graph, point, requires):
+                graph[point].add(requires)
+    layers: dict[str, int] = {}
+
+    def layer(point: str) -> int:
+        if point not in layers:
+            layers[point] = 1 + max((layer(r) for r in graph.get(point, ())), default=0)
+        return layers[point]
+
+    return {point: min(layer(point), MAX_LAYERS) for point in star_points}
+
+
+def _requires(edges: Iterable[Mapping[str, Any]]) -> dict[str, set[str]]:
+    """Every knowledge point's hard prerequisites, in any star of its subject."""
+    out: dict[str, set[str]] = defaultdict(set)
+    for edge in edges:
+        if edge["strength"] == "hard":
+            out[edge["point"]].add(edge["requires"])
+    return out
 
 
 def _exercise_order(points: Mapping[str, Mapping[str, Any]]):
@@ -740,9 +776,15 @@ def _exercise_order(points: Mapping[str, Mapping[str, Any]]):
 def manifests(
     translated: Mapping[str, Any], built: Mapping[str, Any], source_version: str
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Draft practice sets - one per small star, cut in parts - with the report, the
-    star file and the skill vocabulary the platform reads."""
+    """Draft practice sets - one per small star and layer, cut in parts - with the
+    report, the star file and the skill vocabulary the platform reads.
+
+    A set says which knowledge points come before it (`requiresPoints`): the
+    star map tells a student which ones are not mastered yet instead of locking
+    the set. A set of an extension question type does not count for lighting
+    its star (`extension`)."""
     points = {p["id"]: p for p in translated["points"]}
+    requires = _requires(translated["prerequisites"])
     skipped = list(translated["skipped"])
     by_set: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for exercise in translated["exercises"]:
@@ -759,49 +801,65 @@ def manifests(
     report_exercises: list[dict[str, Any]] = []
     for unit_id, star in built["stars"].items():
         subject = star["subject_id"]
+        layer_of = point_layers(star["points"], translated["prerequisites"])
         for type_index, (slug, _titles, _scope) in enumerate(catalog.QUESTION_TYPES[subject]):
             exercises = sorted(by_set.get((unit_id, slug), []), key=_exercise_order(points))
             if not exercises:
                 continue
             skill = catalog.skill_id(unit_id, slug)
             type_titles = catalog.question_type_titles(subject, slug)
-            skills[skill] = {"subject": subject, "unit": unit_id, "titles": dict(type_titles)}
-            parts = [exercises[i:i + EXERCISES_PER_SET] for i in range(0, len(exercises), EXERCISES_PER_SET)]
-            for part_index, part in enumerate(parts, start=1):
-                lesson_id = skill if part_index == 1 else f"{skill}-{part_index}"
-                titles = {
-                    locale: type_titles[locale] if len(parts) == 1
-                    else f"{type_titles[locale]} · {PART[locale]} {part_index}"
-                    for locale in LOCALES
-                }
-                practice_sets[lesson_id] = titles
-                grade = min(points[e["point"]]["grade"] for e in part)
-                rows.append({
-                    "publicLessonId": lesson_id,
-                    "publish": False,
-                    "lesson": {
-                        "title": titles["de"],
-                        "objective": star["description"],
-                        "description": star["description"],
-                        "subjectId": subject,
-                        "topicId": star["topic_id"],
-                        "unitId": unit_id,
-                        "gradeLevel": catalog.grade_level(grade),
-                        "difficulty": "practice",
-                        "estimatedMinutes": max(5, MINUTES_PER_EXERCISE * len(part)),
-                        "language": "de",
-                        "order": FIRST_IMPORTED_ORDER + type_index * 20 + part_index,
-                    },
-                    "exercises": [
-                        {**_manifest_exercise(e, order), "skills": [skill]}
-                        for order, e in enumerate(part, start=1)
-                    ],
-                })
-                report_exercises.extend(
-                    {"sourceId": e["sourceId"], "exercise": e["id"], "star": unit_id,
-                     "questionType": slug, "practiceSet": lesson_id}
-                    for e in part
-                )
+            extension = catalog.is_extension(subject, slug)
+            skills[skill] = {"subject": subject, "unit": unit_id, "titles": dict(type_titles),
+                             "extension": extension}
+            by_layer: dict[int, list[dict[str, Any]]] = defaultdict(list)
+            for exercise in exercises:
+                by_layer[layer_of[exercise["point"]]].append(exercise)
+            for layer, layered in sorted(by_layer.items()):
+                parts = [layered[i:i + EXERCISES_PER_SET] for i in range(0, len(layered), EXERCISES_PER_SET)]
+                for part_index, part in enumerate(parts, start=1):
+                    lesson_id = f"{skill}--{layer}" + (f"-{part_index}" if len(parts) > 1 else "")
+                    titles = {}
+                    for locale in LOCALES:
+                        title = type_titles[locale]
+                        if len(by_layer) > 1:
+                            title = f"{title} · {STAGE[locale]} {layer}"
+                        if len(parts) > 1:
+                            title = f"{title} · {PART[locale]} {part_index}"
+                        titles[locale] = title
+                    practice_sets[lesson_id] = titles
+                    grade = min(points[e["point"]]["grade"] for e in part)
+                    covered = {e["point"] for e in part}
+                    needed = sorted(set().union(*(requires.get(pid, set()) for pid in covered)) - covered)
+                    rows.append({
+                        "publicLessonId": lesson_id,
+                        "publish": False,
+                        "lesson": {
+                            "title": titles["de"],
+                            "objective": star["description"],
+                            "description": star["description"],
+                            "subjectId": subject,
+                            "topicId": star["topic_id"],
+                            "unitId": unit_id,
+                            "gradeLevel": catalog.grade_level(grade),
+                            "difficulty": "practice",
+                            "estimatedMinutes": max(5, MINUTES_PER_EXERCISE * len(part)),
+                            "language": "de",
+                            # Layer first, so a star is worked through from what needs
+                            # nothing before it; then the question types in map order.
+                            "order": layer * 100 + type_index * 10 + part_index,
+                            "extension": extension,
+                            "requiresPoints": needed,
+                        },
+                        "exercises": [
+                            {**_manifest_exercise(e, order), "skills": [skill], "knowledgePoint": e["point"]}
+                            for order, e in enumerate(part, start=1)
+                        ],
+                    })
+                    report_exercises.extend(
+                        {"sourceId": e["sourceId"], "exercise": e["id"], "star": unit_id,
+                         "questionType": slug, "layer": layer, "practiceSet": lesson_id}
+                        for e in part
+                    )
 
     trained = {skill["unit"] for skill in skills.values()}
     stars_file = {

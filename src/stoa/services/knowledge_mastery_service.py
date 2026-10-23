@@ -15,6 +15,11 @@ the *lighting fact* beside it (`LitFact`): once a unit has lit, `litAt` and
 `litAtSource` stay, so the first lighting can be celebrated exactly once even
 though the drawn state may move again.
 
+A lesson marked `extension` - a practice set of a question type that deepens a
+knowledge point, such as a proof - does not count for lighting: a unit lights
+from its core lessons, and its extension lessons are practice beside it. A unit
+whose every lesson is an extension lights from all of them.
+
 The states are ordered: lit > in_progress > ready > locked. `locked` needs a
 prerequisite that is not lit yet; until stoa-backend#56 stores prerequisites,
 nothing is locked, which is what #9 point 7 asks for ("no prerequisite edge,
@@ -31,7 +36,7 @@ never need a double cannot join them.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence, Set as AbstractSet
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any
 
@@ -133,6 +138,14 @@ class SkillMastery:
     skill_id: str
     unit_id: str
     lit: bool
+    #: A question type that deepens the knowledge point; it does not count for
+    #: lighting the unit.
+    extension: bool = False
+    #: Whether the student knows what the skill's next practice needs. Not a
+    #: lock: the star map names `missing_unit_ids`, the units holding the
+    #: knowledge points not mastered yet, and the practice stays open.
+    ready: bool = True
+    missing_unit_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,11 +191,15 @@ def judge_unit(
     hold a unit back or light it.
     """
     unit_id = str(unit.get("id") or "")
-    lesson_count = len(lessons)
-    done = [lesson for lesson in lessons if str(lesson.get("id") or "") in completed_lesson_ids]
+    extension = [lesson for lesson in lessons if lesson.get("extension")]
+    core = [lesson for lesson in lessons if not lesson.get("extension")] or list(lessons)
+    if len(core) == len(lessons):
+        extension = []
+    lesson_count = len(core)
+    done = [lesson for lesson in core if str(lesson.get("id") or "") in completed_lesson_ids]
     lessons_done = len(done)
 
-    exercise_ids = _lesson_exercise_ids(lessons, exercises_by_lesson)
+    exercise_ids = _lesson_exercise_ids(core, exercises_by_lesson)
     unmet = [item for item in exercise_ids if item not in exercises_answered_right]
 
     every_lesson_done = lesson_count > 0 and lessons_done == lesson_count
@@ -205,7 +222,11 @@ def judge_unit(
     else:
         state = LearningState.READY
 
-    remaining = [lesson for lesson in lessons if str(lesson.get("id") or "") not in completed_lesson_ids]
+    # The core first, then what deepens it.
+    remaining = [
+        lesson for lesson in (*core, *extension)
+        if str(lesson.get("id") or "") not in completed_lesson_ids
+    ]
     next_lesson = (
         NextLesson(str(remaining[0].get("id") or ""), str(remaining[0].get("title") or ""))
         if remaining
@@ -256,6 +277,66 @@ def judge_skills(
         )
         for skill_id in skill_ids
     ]
+
+
+def skill_readiness(
+    *,
+    lessons_by_skill: Mapping[str, Sequence[Mapping[str, Any]]],
+    exercises_by_lesson: Mapping[str, Sequence[Mapping[str, Any]]],
+    exercises_answered_right: frozenset[str],
+) -> dict[str, tuple[bool, bool, tuple[str, ...]]]:
+    """Per skill: whether it is an extension, whether the student is ready for its
+    next practice, and the units holding what is missing. Pure; no I/O.
+
+    The next practice is the skill's first lesson, in lesson order, with an
+    exercise not yet answered right. It is ready when every knowledge point it
+    states in `requiresPoints` is mastered: every core exercise of that point
+    answered right at least once. A point no core exercise practises cannot be
+    shown, so it never counts as missing.
+    """
+    point_exercises: dict[str, list[str]] = {}
+    point_unit: dict[str, str] = {}
+    lessons = {
+        str(lesson.get("id") or ""): lesson
+        for found in lessons_by_skill.values()
+        for lesson in found
+    }
+    for lesson_id, exercises in exercises_by_lesson.items():
+        lesson = lessons.get(lesson_id)
+        if lesson is None or lesson.get("extension"):
+            continue
+        for exercise in exercises:
+            point = str(exercise.get("knowledge_point") or "")
+            if point:
+                point_exercises.setdefault(point, []).append(str(exercise.get("id") or ""))
+                point_unit.setdefault(point, str(lesson.get("unitId") or ""))
+    mastered = {
+        point for point, ids in point_exercises.items()
+        if all(item in exercises_answered_right for item in ids)
+    }
+
+    out: dict[str, tuple[bool, bool, tuple[str, ...]]] = {}
+    for skill, skill_lessons in lessons_by_skill.items():
+        ordered = sorted(
+            skill_lessons,
+            key=lambda lesson: (int(lesson.get("order") or 0), str(lesson.get("id") or "")),
+        )
+        extension = bool(ordered) and all(lesson.get("extension") for lesson in ordered)
+        upcoming = next(
+            (
+                lesson for lesson in ordered
+                if any(
+                    str(e.get("id") or "") not in exercises_answered_right
+                    for e in exercises_by_lesson.get(str(lesson.get("id") or ""), ())
+                )
+            ),
+            None,
+        )
+        needed = [str(p) for p in (upcoming or {}).get("requiresPoints") or ()]
+        missing = [p for p in needed if p in point_exercises and p not in mastered]
+        units = tuple(dict.fromkeys(point_unit[p] for p in missing))
+        out[skill] = (extension, not missing, units)
+    return out
 
 
 def _completed_lesson_ids(student_id: str, subject_id: str | None) -> frozenset[str]:
@@ -378,13 +459,28 @@ def skill_states(
 
     skills_by_unit = curriculum_service.skill_ids_by_unit(subject_id=subject_id)
     skills_by_exercise: dict[str, dict[str, list[str]]] = {}
+    lessons_by_skill: dict[str, list[Mapping[str, Any]]] = {}
+    exercises_by_lesson: dict[str, list[Mapping[str, Any]]] = {}
     for lesson in lessons:
         unit_id = str(lesson.get("unitId") or "")
-        for challenge in _active_exercises(str(lesson.get("id") or "")):
+        lesson_id = str(lesson.get("id") or "")
+        for challenge in _active_exercises(lesson_id):
             skills = [str(skill) for skill in challenge.get("skills") or () if skill]
             skills_by_exercise.setdefault(unit_id, {})[_exercise_id(challenge)] = skills
+            exercises_by_lesson.setdefault(lesson_id, []).append(
+                {"id": _exercise_id(challenge), "knowledge_point": challenge.get("knowledge_point")}
+            )
+            for skill in skills:
+                mine = lessons_by_skill.setdefault(skill, [])
+                if lesson not in mine:
+                    mine.append(lesson)
 
     answered_right = _exercises_answered_right(student_id)
+    readiness = skill_readiness(
+        lessons_by_skill=lessons_by_skill,
+        exercises_by_lesson=exercises_by_lesson,
+        exercises_answered_right=answered_right,
+    )
 
     states: dict[str, SkillMastery] = {}
     for unit in units:
@@ -400,7 +496,10 @@ def skill_states(
             skills_by_exercise=exercises,
             exercises_answered_right=answered_right,
         ):
-            states[judged.skill_id] = judged
+            extension, ready, missing = readiness.get(judged.skill_id, (False, True, ()))
+            states[judged.skill_id] = replace(
+                judged, extension=extension, ready=ready, missing_unit_ids=missing
+            )
     return states
 
 

@@ -27,6 +27,8 @@ from stoa.services import (
     curriculum_translations,
     exercise_localization,
     knowledge_base_catalog,
+    knowledge_map_service,
+    knowledge_mastery_service,
     practice_projection_service,
 )
 from test_curriculum_publish_projection import install_seeded_table
@@ -438,22 +440,27 @@ def test_every_practice_set_is_a_draft_of_one_small_star_in_four_languages(tmp_p
     rows = {row["publicLessonId"]: row for manifest in made for row in manifest["lessons"]}
     assert all(row["publish"] is False for row in rows.values())
     assert all("CC BY-NC" in manifest["operatorNote"] for manifest in made)
-    word_problems = rows["brueche-brueche-addieren--sachaufgaben"]
+    word_problems = rows["brueche-brueche-addieren--sachaufgaben--1"]
     assert word_problems["lesson"]["unitId"] == "brueche-brueche-addieren"
     assert word_problems["lesson"]["topicId"] == "brueche"
     assert word_problems["lesson"]["title"] == "Sachaufgaben"
     assert word_problems["lesson"]["gradeLevel"] == "grade_5_primary"
+    assert word_problems["lesson"]["extension"] is False
+    # p101 needs p100, which sits in another star: the set says so, it is not locked.
+    assert word_problems["lesson"]["requiresPoints"] == ["kb-m-p100"]
     [choice] = word_problems["exercises"]
     assert choice["type"] == "multiple_choice" and choice["skills"] == ["brueche-brueche-addieren--sachaufgaben"]
+    assert choice["knowledgePoint"] == "kb-m-p101"
     assert choice["answerKey"] == "5/8" and choice["options"] == ["5/16", "5/8", "Mehr als 1"]
     assert choice["translations"]["fr"]["options"][2] == "Plus que 1"
     assert set(choice["translations"]) == {"en", "fr", "it"}
     assert set(rows) == {
-        "brueche-brueche-addieren--kopfrechnen", "brueche-brueche-addieren--sachaufgaben",
-        "brueche-brueche-addieren--schliessen", "brueche-bruchbegriff--darstellen",
-        "physik-mechanik-kraefte-addieren--rechnen",
+        "brueche-brueche-addieren--kopfrechnen--1", "brueche-brueche-addieren--sachaufgaben--1",
+        "brueche-brueche-addieren--schliessen--1", "brueche-bruchbegriff--darstellen--1",
+        "physik-mechanik-kraefte-addieren--rechnen--1",
     }
-    physics = rows["physik-mechanik-kraefte-addieren--rechnen"]
+    assert rows["brueche-brueche-addieren--schliessen--1"]["lesson"]["extension"] is True
+    physics = rows["physik-mechanik-kraefte-addieren--rechnen--1"]
     assert physics["lesson"]["gradeLevel"] == "grade_secondary_ii"
     assert stars_file["stars"]["brueche-brueche-addieren"]["prerequisites"] == ["brueche-bruchbegriff"]
     assert vocabulary["skills"]["brueche-brueche-addieren--kopfrechnen"] == {
@@ -461,7 +468,9 @@ def test_every_practice_set_is_a_draft_of_one_small_star_in_four_languages(tmp_p
         "unit": "brueche-brueche-addieren",
         "titles": {"de": "Kopfrechnen-Trick", "en": "Mental maths tricks",
                    "fr": "Astuces de calcul mental", "it": "Trucchi di calcolo mentale"},
+        "extension": False,
     }
+    assert vocabulary["skills"]["brueche-brueche-addieren--schliessen"]["extension"] is True
     assert report["summary"]["smallStars"] == 5
     assert "五" not in json.dumps(made, ensure_ascii=False)
 
@@ -475,10 +484,45 @@ def test_a_large_small_star_is_cut_into_numbered_parts(tmp_path: Path, monkeypat
     made, _report, _stars, vocabulary = kb.manifests(translated, built, "abc123")
 
     ids = [row["publicLessonId"] for m in made for row in m["lessons"]]
-    assert "brueche-brueche-addieren--kopfrechnen" in ids
-    assert "brueche-brueche-addieren--kopfrechnen-2" in ids
-    assert vocabulary["practiceSets"]["brueche-brueche-addieren--kopfrechnen-2"]["fr"] == (
+    assert "brueche-brueche-addieren--kopfrechnen--1-1" in ids
+    assert "brueche-brueche-addieren--kopfrechnen--1-2" in ids
+    assert vocabulary["practiceSets"]["brueche-brueche-addieren--kopfrechnen--1-2"]["fr"] == (
         "Astuces de calcul mental · Partie 2"
+    )
+
+
+def test_a_star_is_layered_by_what_its_knowledge_points_need() -> None:
+    edges = [
+        {"point": "b", "requires": "a", "strength": "hard"},
+        {"point": "c", "requires": "b", "strength": "hard"},
+        {"point": "d", "requires": "a", "strength": "soft"},
+        {"point": "a", "requires": "c", "strength": "hard"},  # would close a cycle
+        {"point": "b", "requires": "x", "strength": "hard"},  # in another star
+    ]
+
+    assert kb.point_layers(["a", "b", "c", "d"], edges) == {"a": 1, "b": 2, "c": 3, "d": 1}
+    chain = [{"point": f"p{i + 1}", "requires": f"p{i}", "strength": "hard"} for i in range(6)]
+    assert kb.point_layers([f"p{i}" for i in range(7)], chain)["p6"] == kb.MAX_LAYERS
+
+
+def test_layers_become_stages_of_one_small_star_in_order(tmp_path: Path) -> None:
+    translated = _translated(tmp_path)
+    built = _built(translated)
+    # Both points in one star: p101 needs p100, so it is the second layer.
+    star = built["stars"]["brueche-brueche-addieren"]
+    star["points"] = ["kb-m-p100", "kb-m-p101"]
+    del built["stars"]["brueche-bruchbegriff"]
+    built["points"]["kb-m-p100"] = "brueche-brueche-addieren"
+    built["exercises"]["kb-m-p100-q1"] = "kopfrechnen"
+
+    made, _report, _stars, vocabulary = kb.manifests(translated, built, "abc123")
+
+    rows = {row["publicLessonId"]: row["lesson"] for m in made for row in m["lessons"]}
+    first, second = rows["brueche-brueche-addieren--kopfrechnen--1"], rows["brueche-brueche-addieren--kopfrechnen--2"]
+    assert first["order"] < second["order"]
+    assert first["requiresPoints"] == [] and second["requiresPoints"] == ["kb-m-p100"]
+    assert vocabulary["practiceSets"]["brueche-brueche-addieren--kopfrechnen--2"]["en"] == (
+        "Mental maths tricks · Level 2"
     )
 
 
@@ -579,11 +623,71 @@ def test_a_published_exercise_reads_and_judges_in_the_students_language(
     physics = exercise_localization.localized(practice_repo.get_challenge("kb-p-h001-q1"), "it")
     assert answer_judging.judge_challenge("5 N", physics)
     assert curriculum_translations.translated_title(
-        "brueche-brueche-addieren--sachaufgaben", "Sachaufgaben", "it"
+        "brueche-brueche-addieren--sachaufgaben--1", "Sachaufgaben", "it"
     ) == "Problemi"
     assert curriculum_translations.translated_title(
         "brueche-brueche-addieren", "Brüche addieren", "fr"
     ) == "Additionner des fractions"
+
+
+def test_a_student_is_told_what_to_master_first_and_nothing_is_locked(
+    imported: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _publish_all(imported)
+    # Live, as --knowledge-base-live writes them once the sets are published.
+    _subjects, topics, units = seed_practice.knowledge_base_rows(live=True)
+    practice_repo.get_table().seed(
+        *({"PK": "PRACTICE", "SK": f"TOPIC#{t['topic_id']}", **t} for t in topics),
+        *({"PK": "PRACTICE", "SK": f"UNIT#{u['unit_id']}", **u} for u in units),
+    )
+    answered: set[str] = set()
+    monkeypatch.setattr(
+        knowledge_mastery_service.practice_repo, "all_challenges_answered_right", lambda _s: set(answered)
+    )
+
+    def skill(skill_id: str) -> knowledge_mastery_service.SkillMastery:
+        return knowledge_mastery_service.skill_states("student-1", subject_id="mathematics")[skill_id]
+
+    before = skill("brueche-brueche-addieren--sachaufgaben")
+    assert before.ready is False and before.missing_unit_ids == ("brueche-bruchbegriff",)
+    assert skill("brueche-brueche-addieren--schliessen").extension is True
+
+    answered.add("kb-m-p100-q1")
+    assert skill("brueche-brueche-addieren--sachaufgaben").ready is True
+
+
+def test_a_star_lights_from_its_core_and_extension_practice_is_beside_it() -> None:
+    lessons = [{"id": "core"}, {"id": "proof", "extension": True}]
+    exercises = {"core": ["c1"], "proof": ["p1"]}
+
+    judged = knowledge_mastery_service.judge_unit(
+        unit={"id": "u"}, lessons=lessons, exercises_by_lesson=exercises,
+        completed_lesson_ids=frozenset({"core"}), exercises_answered_right=frozenset({"c1"}),
+    )
+
+    assert judged.state is knowledge_mastery_service.LearningState.LIT
+    assert judged.lesson_count == 1
+    assert judged.next_lesson is not None and judged.next_lesson.lesson_id == "proof"
+    # A unit of nothing but extensions lights from all of them.
+    only = knowledge_mastery_service.judge_unit(
+        unit={"id": "u"}, lessons=[{"id": "proof", "extension": True}], exercises_by_lesson=exercises,
+        completed_lesson_ids=frozenset(), exercises_answered_right=frozenset(),
+    )
+    assert only.lesson_count == 1 and only.state is knowledge_mastery_service.LearningState.READY
+
+
+def test_the_star_map_names_missing_knowledge_and_extension_small_stars() -> None:
+    states = {
+        "u--a": knowledge_mastery_service.SkillMastery("u--a", "u", False, extension=True),
+        "u--b": knowledge_mastery_service.SkillMastery(
+            "u--b", "u", False, ready=False, missing_unit_ids=("v",)
+        ),
+    }
+
+    skills = knowledge_map_service._skills_of("u", states, "de", {"v": "Brüche verstehen"})  # noqa: SLF001
+
+    assert skills[0]["extension"] is True and "missingPrerequisites" not in skills[0]
+    assert skills[1]["missingPrerequisites"] == [{"unitId": "v", "name": "Brüche verstehen"}]
 
 
 def test_a_translated_option_counts_in_its_language_and_in_german() -> None:
