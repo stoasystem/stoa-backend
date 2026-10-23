@@ -53,6 +53,7 @@ from stoa.services import (
     curriculum_analytics_service,
     curriculum_service,
     entitlement_service,
+    exercise_localization,
     lesson_quiz_service,
     locale_service,
     usage_ledger_service,
@@ -497,7 +498,7 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
         raise HTTPException(status_code=404, detail="No lessons available")
 
     challenges: list[Mapping[str, Any]] = [
-        practice_projection_service.build_challenge_preview(c)
+        practice_projection_service.build_challenge_preview(c, locale)
         for c in practice_repo.get_challenges(recommended_raw["lesson_id"])
     ]
     recommended = practice_projection_service.build_lesson_preview(recommended_raw, challenges,
@@ -611,6 +612,7 @@ async def list_curriculum_exercises(
         difficulty=difficulty,
         rollout_state=rollout_state,
         include_preview=include_preview,
+        locale=_actor_locale(user),
     )
 
 
@@ -819,7 +821,7 @@ async def get_path(
         unit_lessons = []
         for lesson in unit_lessons_raw:
             challenges: list[Mapping[str, Any]] = [
-                practice_projection_service.build_challenge_preview(c)
+                practice_projection_service.build_challenge_preview(c, locale)
                 for c in practice_repo.get_challenges(lesson["lesson_id"])
             ]
             st = _lesson_status(lesson["lesson_id"], completed_ids, current_lesson_id)
@@ -858,11 +860,12 @@ async def get_lesson(
         None,
     )
     st = _lesson_status(lesson_id, completed_ids, current_id)
+    locale = _actor_locale(actor)
     challenges: list[Mapping[str, Any]] = [
-        practice_projection_service.build_challenge_preview(c)
+        practice_projection_service.build_challenge_preview(c, locale)
         for c in practice_repo.get_challenges(lesson_id)
     ]
-    return practice_projection_service.build_lesson_preview(lesson, challenges, st, locale=_actor_locale(actor))
+    return practice_projection_service.build_lesson_preview(lesson, challenges, st, locale=locale)
 
 
 def _quiz_conflict(code: str, message: str, **extra: Any) -> HTTPException:
@@ -907,11 +910,11 @@ def _spend_quiz_credential(student_id: str, lesson_id: str, credential: str) -> 
         )
 
 
-def _quiz_exercise_preview(challenge_id: str) -> dict[str, Any] | None:
+def _quiz_exercise_preview(challenge_id: str, locale: str) -> dict[str, Any] | None:
     challenge = practice_repo.get_challenge(challenge_id)
     if not challenge:
         return None
-    return practice_projection_service.build_challenge_preview(challenge)
+    return practice_projection_service.build_challenge_preview(challenge, locale)
 
 
 def _quiz_view(
@@ -920,9 +923,10 @@ def _quiz_view(
     queue: list[str],
     mistakes: int,
     quiz_status: str,
+    locale: str,
 ) -> dict[str, Any]:
     exercise = (
-        _quiz_exercise_preview(queue[0])
+        _quiz_exercise_preview(queue[0], locale)
         if queue and quiz_status == lesson_quiz_service.IN_PROGRESS
         else None
     )
@@ -997,7 +1001,11 @@ async def start_lesson_quiz(
         created_at=now.isoformat(),
     )
     return _quiz_view(
-        session, queue=queue, mistakes=0, quiz_status=lesson_quiz_service.IN_PROGRESS
+        session,
+        queue=queue,
+        mistakes=0,
+        quiz_status=lesson_quiz_service.IN_PROGRESS,
+        locale=_actor_locale(actor),
     )
 
 
@@ -1085,7 +1093,9 @@ async def answer_lesson_quiz(
             },
         ) from error
 
-    correct = answer_judging.judge_challenge(student_answer, challenge)
+    correct = answer_judging.judge_challenge(
+        student_answer, exercise_localization.localized(challenge, _actor_locale(actor))
+    )
     mistakes = _as_int(session.get("mistakes"))
     asked, queue = queue[0], queue[1:]
     if not correct:
@@ -1115,7 +1125,13 @@ async def answer_lesson_quiz(
         account_fence_generation=None,
     )
 
-    view = _quiz_view(session, queue=queue, mistakes=mistakes, quiz_status=quiz_status)
+    view = _quiz_view(
+        session,
+        queue=queue,
+        mistakes=mistakes,
+        quiz_status=quiz_status,
+        locale=_actor_locale(actor),
+    )
     view["correct"] = correct
     view["credential"] = None
     view["credentialExpiresAt"] = None
@@ -1257,7 +1273,10 @@ async def submit_answer(
                 "correlationId": correlation_id,
             },
         ) from error
-    correct = answer_judging.judge_challenge(student_answer, challenge)
+    # Shown and judged in the reader's language; the stored row stays as it is,
+    # since its version is what the attempt records.
+    shown = exercise_localization.localized(challenge, _actor_locale(actor))
+    correct = answer_judging.judge_challenge(student_answer, shown)
 
     versioned_challenge = practice_repo.version_challenge(challenge)
     lesson_id = str(versioned_challenge.get("lesson_id") or "")
@@ -1285,15 +1304,15 @@ async def submit_answer(
             challenge_version=versioned_challenge["challenge_version"],
             challenge_content_hash=versioned_challenge["challenge_content_hash"],
             standard_answer=str(
-                challenge.get("correct_answer", challenge.get("answer_key")) or ""
+                shown.get("correct_answer", shown.get("answer_key")) or ""
             ),
-            explanation=str(challenge.get("explanation") or ""),
+            explanation=str(shown.get("explanation") or ""),
             correct_feedback=correct_feedback,
             incorrect_feedback=incorrect_feedback,
             feedback=feedback,
             next_challenge_id=next_challenge_id,
-            prompt=str(challenge.get("prompt") or ""),
-            options=_list_field(challenge, "options"),
+            prompt=str(shown.get("prompt") or ""),
+            options=_list_field(shown, "options"),
             challenge_type=str(challenge.get("type") or ""),
             created_at=created_at,
         )
@@ -1382,7 +1401,9 @@ async def get_due_review(
     shows on it. Without it, the answer is unchanged.
     """
     return ReviewDueResponse.model_validate(
-        review_service.due_review(student_id=actor.user_id, unit_id=unit_id)
+        review_service.due_review(
+            student_id=actor.user_id, unit_id=unit_id, locale=_actor_locale(actor)
+        )
     )
 
 

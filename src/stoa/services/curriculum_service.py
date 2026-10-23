@@ -75,7 +75,7 @@ def get_lesson_detail(
         return None
 
     exercises = [
-        practice_projection_service.build_exercise_preview(exercise)
+        practice_projection_service.build_exercise_preview(exercise, locale)
         for exercise in _active_exercises_for_lesson(lesson_id, include_preview)
     ]
     return practice_projection_service.build_curriculum_lesson_preview(lesson, exercises, locale=locale)
@@ -89,10 +89,11 @@ def list_exercises(
     difficulty: str | None = None,
     rollout_state: str | None = None,
     include_preview: bool = False,
+    locale: str = "de",
 ) -> dict[str, Any]:
     raw_items = practice_repo.get_all_challenges(lesson_id=lesson_id, subject_id=subject_id, topic_id=topic_id)
     items = [
-        practice_projection_service.build_exercise_preview(item)
+        practice_projection_service.build_exercise_preview(item, locale)
         for item in sorted(raw_items, key=lambda challenge: (challenge.get("lesson_id", ""), _as_int(challenge.get("order", 0))))
         if _matches_state(item, rollout_state, include_preview)
         and (difficulty is None or str(item.get("difficulty", "")).lower() == difficulty.lower())

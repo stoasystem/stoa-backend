@@ -3014,6 +3014,16 @@
             ],
             "title": "Explanation"
           },
+          "options": {
+            "items": {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Options",
+            "type": "array"
+          },
           "order": {
             "anyOf": [
               {
@@ -3040,6 +3050,21 @@
             "title": "Skills",
             "type": "array"
           },
+          "translations": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CurriculumExerciseTranslation"
+            },
+            "propertyNames": {
+              "enum": [
+                "de",
+                "en",
+                "fr",
+                "it"
+              ]
+            },
+            "title": "Translations",
+            "type": "object"
+          },
           "type": {
             "default": "text_input",
             "maxLength": 50,
@@ -3052,6 +3077,67 @@
           "prompt"
         ],
         "title": "CurriculumExerciseDraftRequest",
+        "type": "object"
+      },
+      "CurriculumExerciseTranslation": {
+        "additionalProperties": false,
+        "description": "One exercise in another language: what a reader in that locale sees and answers.",
+        "properties": {
+          "acceptedAnswers": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Acceptedanswers",
+            "type": "array"
+          },
+          "correctAnswer": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correctanswer"
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation"
+          },
+          "options": {
+            "items": {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Options",
+            "type": "array"
+          },
+          "prompt": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "title": "CurriculumExerciseTranslation",
         "type": "object"
       },
       "CurriculumLessonDraftRequest": {
@@ -14016,7 +14102,7 @@
     }
   },
   "info": {
-    "description": "STOA learning platform backend â€” Zurich, Switzerland",
+    "description": "STOA learning platform backend — Zurich, Switzerland",
     "title": "STOA API",
     "version": "0.1.0"
   },
@@ -20758,7 +20844,7 @@
     },
     "/admin/stats": {
       "get": {
-        "description": "Return aggregate platform metrics (full-table scan â€” small scale only).",
+        "description": "Return aggregate platform metrics (full-table scan — small scale only).",
         "operationId": "get_stats_admin_stats_get",
         "responses": {
           "200": {
@@ -28956,7 +29042,7 @@
     },
     "/questions/{question_id}/feedback": {
       "post": {
-        "description": "Rate a resolved question (1â€“5 stars).",
+        "description": "Rate a resolved question (1–5 stars).",
         "operationId": "submit_feedback_questions__question_id__feedback_post",
         "parameters": [
           {

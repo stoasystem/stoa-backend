@@ -20,6 +20,7 @@ from stoa.models.practice import (
     PrivilegedPracticeAnswer,
 )
 from stoa.db.repositories import practice_repo
+from stoa.services import exercise_localization
 from stoa.services.curriculum_translations import translated_title
 
 
@@ -109,8 +110,10 @@ def _dump(model: Any) -> dict[str, Any]:
     return model.model_dump(by_alias=True, exclude_none=True)
 
 
-def build_challenge_preview(raw: Mapping[str, Any]) -> dict[str, Any]:
-    """Copy only fields approved for a pre-attempt challenge response."""
+def build_challenge_preview(raw: Mapping[str, Any], locale: str = "de") -> dict[str, Any]:
+    """Copy only fields approved for a pre-attempt challenge response, in `locale`
+    where the exercise has a translation."""
+    shown = exercise_localization.localized(raw, locale)
     return _dump(
         PracticeChallengePreview(
             challengeId=raw["challenge_id"],
@@ -122,8 +125,8 @@ def build_challenge_preview(raw: Mapping[str, Any]) -> dict[str, Any]:
             topic=raw.get("topic_title"),
             difficulty=raw.get("difficulty"),
             type=raw.get("type") or DEFAULT_CHALLENGE_TYPE,
-            prompt=raw["prompt"],
-            options=raw.get("options"),
+            prompt=shown["prompt"],
+            options=shown.get("options"),
             hintAvailable=approved_directional_hint(raw) is not None,
         )
     )
@@ -153,8 +156,10 @@ def build_lesson_preview(
     )
 
 
-def build_exercise_preview(raw: Mapping[str, Any]) -> dict[str, Any]:
-    """Copy only fields approved for student curriculum exercise responses."""
+def build_exercise_preview(raw: Mapping[str, Any], locale: str = "de") -> dict[str, Any]:
+    """Copy only fields approved for student curriculum exercise responses, in
+    `locale` where the exercise has a translation."""
+    shown = exercise_localization.localized(raw, locale)
     return _dump(
         PracticeExercisePreview(
             id=raw["challenge_id"],
@@ -162,8 +167,8 @@ def build_exercise_preview(raw: Mapping[str, Any]) -> dict[str, Any]:
             subjectId=_normal_subject_id(raw["subject_id"]),
             topicId=raw["topic_id"],
             type=raw.get("type") or DEFAULT_CHALLENGE_TYPE,
-            prompt=raw["prompt"],
-            choices=raw.get("options"),
+            prompt=shown["prompt"],
+            choices=shown.get("options"),
             difficulty=raw.get("difficulty", "practice"),
             estimatedMinutes=_as_int(raw.get("estimated_minutes", 5)),
             skills=raw.get("skills", []),

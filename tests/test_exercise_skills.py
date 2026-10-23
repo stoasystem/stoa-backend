@@ -37,6 +37,8 @@ def _seeded() -> tuple[list[dict], list[dict], list[dict]]:
         units.extend(topic_units)
         lessons.extend(topic_lessons)
         challenges.extend(topic_challenges)
+    # The knowledge base stars own the imported knowledge points' skills.
+    units.extend(seed_practice.knowledge_base_rows(live=True)[2])
     return units, lessons, challenges
 
 

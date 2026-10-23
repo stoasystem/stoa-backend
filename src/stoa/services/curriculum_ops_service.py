@@ -11,7 +11,12 @@ from fastapi import HTTPException
 
 from stoa.db.repositories import curriculum_ops_repo, practice_repo
 from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
-from stoa.services import answer_judging, curriculum_analytics_service, curriculum_translations
+from stoa.services import (
+    answer_judging,
+    curriculum_analytics_service,
+    curriculum_translations,
+    exercise_localization,
+)
 
 
 AUTHOR_CAPABILITY = "curriculum_author"
@@ -60,6 +65,10 @@ LESSON_FIELD_ALIASES = {
     "localeMetadata": "locale_metadata",
 }
 
+#: The longest prompt, explanation or answer an exercise or its translation may hold,
+#: as CurriculumExerciseDraftRequest allows.
+MAX_EXERCISE_TEXT = 2000
+
 EXERCISE_FIELD_ALIASES = {
     "exercise_id": "exercise_id",
     "exerciseId": "exercise_id",
@@ -75,6 +84,9 @@ EXERCISE_FIELD_ALIASES = {
     "correctAnswer": "answer_key",
     "accepted_answers": "accepted_answers",
     "acceptedAnswers": "accepted_answers",
+    "options": "options",
+    "choices": "options",
+    "translations": "translations",
     "hint": "hint",
     "hints": "hints",
     "explanation": "explanation",
@@ -460,8 +472,25 @@ def _exercise_payloads(public_id: str, exercises: list[dict[str, Any]]) -> list[
             item["accepted_answers"] = accepted
         else:
             item.pop("accepted_answers", None)
+        options = _options(exercise.get("options", exercise.get("choices")))
+        if options:
+            item["options"] = options
+        else:
+            item.pop("options", None)
+        translations = exercise_localization.normalize_translations(exercise.get("translations"))
+        if translations:
+            item["translations"] = translations
+        else:
+            item.pop("translations", None)
         normalized.append(item)
     return normalized
+
+
+def _options(value: Any) -> list[str]:
+    """The options of a choice exercise, in their order; empty for a typed answer."""
+    if not isinstance(value, list | tuple):
+        return []
+    return [str(item).strip() for item in value if item is not None and str(item).strip()]
 
 
 def _accepted_answers(value: Any) -> list[str]:
@@ -663,8 +692,34 @@ def _validation_issues(
                             "Required exercise field is missing.",
                         )
                     )
+    for index, exercise in enumerate(exercises):
+        issues.extend(
+            _validation_issue(f"exercises[{index}].{field}", message)
+            for field, message in _choice_issues(exercise)
+        )
+        issues.extend(
+            _validation_issue(f"exercises[{index}].{field}", message)
+            for field, message in exercise_localization.translation_issues(
+                exercise, max_text=MAX_EXERCISE_TEXT
+            )
+        )
     issues.extend(_skill_issues(lesson, exercises))
     return issues
+
+
+def _choice_issues(exercise: dict[str, Any]) -> list[tuple[str, str]]:
+    """A choice exercise offers at least two different options, one of them its key."""
+    options = exercise.get("options")
+    if exercise.get("type") != "multiple_choice":
+        return [("options", "Only a multiple-choice exercise has options.")] if options else []
+    if not isinstance(options, list) or len(options) < 2:
+        return [("options", "A multiple-choice exercise needs at least two options.")]
+    if len({answer_judging.normalize_answer(option) for option in options}) != len(options):
+        return [("options", "Two options read the same.")]
+    key = str(exercise.get("answer_key") or "")
+    if key and key not in options:
+        return [("answer_key", "The answer must be one of the options.")]
+    return []
 
 
 def _attribution_issues(lesson: dict[str, Any]) -> list[dict[str, Any]]:

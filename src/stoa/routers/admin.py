@@ -934,6 +934,28 @@ class StatsResponse(BaseModel):
     counts_complete: bool = True
 
 
+_ExerciseOption = Annotated[str, Field(min_length=1, max_length=500)]
+_AcceptedAnswer = Annotated[
+    str, Field(min_length=1, max_length=answer_judging.MAX_ACCEPTED_ANSWER_LENGTH)
+]
+
+
+class CurriculumExerciseTranslation(BaseModel):
+    """One exercise in another language: what a reader in that locale sees and answers."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    prompt: str = Field(..., min_length=1, max_length=2000)
+    options: list[_ExerciseOption] = Field(default_factory=list, max_length=10)
+    correct_answer: str | None = Field(default=None, alias="correctAnswer", max_length=2000)
+    accepted_answers: list[_AcceptedAnswer] = Field(
+        default_factory=list,
+        alias="acceptedAnswers",
+        max_length=answer_judging.MAX_ACCEPTED_ANSWERS,
+    )
+    explanation: str | None = Field(default=None, max_length=2000)
+
+
 class CurriculumExerciseDraftRequest(BaseModel):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
@@ -943,14 +965,16 @@ class CurriculumExerciseDraftRequest(BaseModel):
     difficulty: str = Field(default="practice", min_length=1, max_length=80)
     order: int | None = Field(default=None, ge=1, le=200)
     answer_key: str | None = Field(default=None, alias="answerKey", max_length=2000)
-    accepted_answers: list[
-        Annotated[str, Field(min_length=1, max_length=answer_judging.MAX_ACCEPTED_ANSWER_LENGTH)]
-    ] = Field(
+    accepted_answers: list[_AcceptedAnswer] = Field(
         default_factory=list,
         alias="acceptedAnswers",
         max_length=answer_judging.MAX_ACCEPTED_ANSWERS,
     )
     explanation: str | None = Field(default=None, max_length=2000)
+    options: list[_ExerciseOption] = Field(default_factory=list, max_length=10)
+    translations: dict[Literal["de", "en", "fr", "it"], CurriculumExerciseTranslation] = Field(
+        default_factory=dict
+    )
     skills: list[str] = Field(default_factory=list)
 
 

@@ -14,7 +14,7 @@ from typing import Any
 
 from stoa.db.repositories import practice_repo, review_repo
 from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
-from stoa.services import curriculum_service, review_scheduler
+from stoa.services import curriculum_service, exercise_localization, review_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +109,10 @@ def due_review(
     now: datetime | None = None,
     limit: int = DEFAULT_DUE_LIMIT,
     unit_id: str | None = None,
+    locale: str = "de",
 ) -> dict[str, Any]:
-    """The questions waiting for this student, with the content to attempt them."""
+    """The questions waiting for this student, with the content to attempt them,
+    in `locale` where a question has a translation."""
     moment = now or datetime.now(timezone.utc)
     selected: list[dict[str, Any]] | None = None
     if unit_id:
@@ -135,14 +137,15 @@ def due_review(
             # The question was withdrawn from the curriculum since it was
             # answered; there is nothing to review.
             continue
+        shown = exercise_localization.localized(challenge, locale)
         items.append(
             {
                 "challengeId": challenge_id,
                 "lessonId": _text(card.get("lesson_id")) or _text(challenge.get("lesson_id")),
                 "subjectId": _text(card.get("subject_id")) or _text(challenge.get("subject_id")),
                 "topicId": _text(card.get("topic_id")) or _text(challenge.get("topic_id")),
-                "prompt": _text(challenge.get("prompt")),
-                "options": [str(option) for option in (challenge.get("options") or [])],
+                "prompt": _text(shown.get("prompt")),
+                "options": [str(option) for option in (shown.get("options") or [])],
                 # The same default as the lesson stage, from the same
                 # definition: a question with no stored type must be the same
                 # kind of question on both pages (#124).
