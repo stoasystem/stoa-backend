@@ -951,6 +951,8 @@ class CurriculumExerciseDraftRequest(BaseModel):
         max_length=answer_judging.MAX_ACCEPTED_ANSWERS,
     )
     explanation: str | None = Field(default=None, max_length=2000)
+    correct_feedback: str | None = Field(default=None, alias="correctFeedback", max_length=500)
+    incorrect_feedback: str | None = Field(default=None, alias="incorrectFeedback", max_length=500)
     skills: list[str] = Field(default_factory=list)
 
 

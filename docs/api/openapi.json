@@ -2983,6 +2983,18 @@
             ],
             "title": "Answerkey"
           },
+          "correctFeedback": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correctfeedback"
+          },
           "difficulty": {
             "default": "practice",
             "maxLength": 80,
@@ -3013,6 +3025,18 @@
               }
             ],
             "title": "Explanation"
+          },
+          "incorrectFeedback": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Incorrectfeedback"
           },
           "order": {
             "anyOf": [
