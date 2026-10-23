@@ -1281,12 +1281,8 @@ async def submit_answer(
     versioned_challenge = practice_repo.version_challenge(challenge)
     lesson_id = str(versioned_challenge.get("lesson_id") or "")
     next_challenge_id = _next_challenge_id(challenge_id, lesson_id)
-    correct_feedback = str(
-        versioned_challenge.get("correct_feedback") or "Correct."
-    )
-    incorrect_feedback = str(
-        versioned_challenge.get("incorrect_feedback")
-        or "Review the explanation and try again."
+    correct_feedback, incorrect_feedback = practice_projection_service.answer_feedback(
+        versioned_challenge
     )
     feedback = correct_feedback if correct else incorrect_feedback
     created_at = datetime.now(timezone.utc).isoformat()

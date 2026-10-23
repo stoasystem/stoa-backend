@@ -975,6 +975,8 @@ class CurriculumExerciseDraftRequest(BaseModel):
     translations: dict[Literal["de", "en", "fr", "it"], CurriculumExerciseTranslation] = Field(
         default_factory=dict
     )
+    correct_feedback: str | None = Field(default=None, alias="correctFeedback", max_length=500)
+    incorrect_feedback: str | None = Field(default=None, alias="incorrectFeedback", max_length=500)
     skills: list[str] = Field(default_factory=list)
 
 
