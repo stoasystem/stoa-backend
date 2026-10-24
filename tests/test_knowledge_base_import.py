@@ -648,6 +648,29 @@ def test_a_figure_version_takes_the_place_of_the_same_exercise_without_it(tmp_pa
     assert exercise["text"]["de"]["figure"] == FIGURE.format(label="Rechteck")
 
 
+def test_options_that_are_pictures_are_shown_under_letters(tmp_path: Path) -> None:
+    translated = _translated(tmp_path)
+    staging = {"exercises": [{
+        "id": "kb-m-p101-q8", "sourceId": "cnm_p101_q8", "point": "kb-m-p101", "subject": "mathematics",
+        "difficulty": "basic", "type": "choice", "prompt": "哪个是长方形?", "choices": ["三角形", "长方形"],
+        "answerIndex": 1, "explanation": "看图", "hideChoiceText": True,
+        "choiceFigures": [FIGURE.format(label="A"), FIGURE.format(label="B")],
+    }]}
+    entry = {"type": "begriffe"}
+    for locale in kb.LOCALES:
+        entry[locale] = {"prompt": f"{locale}: Rechteck?", "choices": ["Dreieck", "Rechteck"], "explanation": "x"}
+    figured, _types, _dropped, problems = kb.figure_exercises(
+        staging, [{"exercises": {"kb-m-p101-q8": entry}}], translated
+    )
+
+    row = kb._manifest_exercise(figured[0], 1)  # noqa: SLF001
+
+    assert problems == []
+    assert row["options"] == ["A", "B"] and row["answerKey"] == "B"
+    assert row["translations"]["fr"]["options"] == ["A", "B"]
+    assert row["optionFigures"] == [FIGURE.format(label="A"), FIGURE.format(label="B")]
+
+
 def test_a_figure_without_words_is_shown_once_for_every_locale(tmp_path: Path) -> None:
     translated = _translated(tmp_path)
     staging, filled = _figure_task(label="A", translate=False)

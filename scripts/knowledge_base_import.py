@@ -381,6 +381,10 @@ def _too_long(text: Mapping[str, Any]) -> str | None:
 def _locale_exercise(exercise: Mapping[str, Any], text: Mapping[str, Any]) -> dict[str, Any]:
     if exercise["type"] == "choice":
         choices = [_text(c) for c in text["choices"]]
+        if exercise.get("pictureOptions"):
+            # The options are their pictures; their words would give the answer
+            # away, so each is shown under a letter.
+            choices = [chr(ord("A") + index) for index in range(len(choices))]
         return {"prompt": _text(text["prompt"]), "options": choices,
                 "correctAnswer": choices[exercise["answerIndex"]],
                 "explanation": _text(text["explanation"])}
@@ -828,6 +832,8 @@ def figure_exercises(
         exercise = {k: item[k] for k in ("id", "sourceId", "point", "difficulty", "type")}
         if item["type"] == "choice":
             exercise["answerIndex"] = item["answerIndex"]
+            if item.get("hideChoiceText"):
+                exercise["pictureOptions"] = True
         exercise["text"] = text
         kept.append(exercise)
         types[item["id"]] = entry["type"]
