@@ -146,6 +146,8 @@ def due_review(
                 "topicId": _text(card.get("topic_id")) or _text(challenge.get("topic_id")),
                 "prompt": _text(shown.get("prompt")),
                 "options": [str(option) for option in (shown.get("options") or [])],
+                **({"figure": shown["figure"]} if shown.get("figure") else {}),
+                **({"optionFigures": shown["option_figures"]} if shown.get("option_figures") else {}),
                 # The same default as the lesson stage, from the same
                 # definition: a question with no stored type must be the same
                 # kind of question on both pages (#124).

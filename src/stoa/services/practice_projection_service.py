@@ -127,6 +127,8 @@ def build_challenge_preview(raw: Mapping[str, Any], locale: str = "de") -> dict[
             type=raw.get("type") or DEFAULT_CHALLENGE_TYPE,
             prompt=shown["prompt"],
             options=shown.get("options"),
+            figure=shown.get("figure"),
+            optionFigures=shown.get("option_figures"),
             hintAvailable=approved_directional_hint(raw) is not None,
         )
     )
@@ -169,6 +171,8 @@ def build_exercise_preview(raw: Mapping[str, Any], locale: str = "de") -> dict[s
             type=raw.get("type") or DEFAULT_CHALLENGE_TYPE,
             prompt=shown["prompt"],
             choices=shown.get("options"),
+            figure=shown.get("figure"),
+            optionFigures=shown.get("option_figures"),
             difficulty=raw.get("difficulty", "practice"),
             estimatedMinutes=_as_int(raw.get("estimated_minutes", 5)),
             skills=raw.get("skills", []),

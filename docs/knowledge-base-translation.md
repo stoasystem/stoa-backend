@@ -125,3 +125,40 @@ and translated from German into English, French and Italian:
   from the task, not from the ZAP knowledge card it was filed under before.
 - Drop a task (`{"drop": "<reason>"}`) whose answer is wrong or ambiguous, or that
   needs a figure to be solved.
+
+## Exercises with a figure
+
+An exercise may show a figure: an SVG drawing, in the prompt or in an option. The
+platform shows it as written, so it is held to an allowlist of shapes, text and
+arrow markers (`stoa.services.figure_svg`). When translating one:
+
+- The drawing stays exactly as it is - every element and every attribute. Only the
+  words inside `<text>` and `<tspan>` change, into the locale's language.
+- A figure whose labels are numbers, letters or units only is not repeated per
+  locale: leave `figure` (or `choiceFigures`) out and the source figure is shown.
+- A figure with Chinese labels needs a translated `figure` in every locale, and an
+  option figure a translated entry in `choiceFigures` (one per option, `""` where
+  an option has none).
+- Everything else above still applies: no Chinese left, Swiss context, numbers and
+  answers unchanged, and a question type from the batch's `questionTypes`.
+
+A choice exercise whose options are pictures was translated once without them; its
+figure version replaces it in the manifests (`with_figures`).
+
+## ZAP tasks with a figure
+
+A ZAP task the student solves by looking at a figure - and answers with one typed
+value - is adapted like every other ZAP task (new numbers, new story, same
+structure, difficulty and kind of answer) and gets a figure drawn for the adapted
+numbers:
+
+- The figure is SVG within the allowlist of `stoa.services.figure_svg`: lines,
+  rectangles, circles, ellipses, polygons, polylines, paths, text and arrow
+  markers; `fill`/`stroke` with `currentColor` or plain colours. Dimensions in the
+  figure must agree with the prompt - the figure is part of the task.
+- Labels are German in `de`. When the figure carries words, every other locale gets
+  the same drawing with its words translated; labels of numbers, letters and units
+  only are drawn once.
+- `check` is a Python expression recomputing the answer from the adapted numbers
+  (`F` = Fraction, `gcd`, `lcm`, `math`); the check refuses a task whose expression
+  does not give the German answer.

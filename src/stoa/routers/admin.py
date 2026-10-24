@@ -954,6 +954,8 @@ class CurriculumExerciseTranslation(BaseModel):
         max_length=answer_judging.MAX_ACCEPTED_ANSWERS,
     )
     explanation: str | None = Field(default=None, max_length=2000)
+    figure: str | None = Field(default=None, max_length=32_000)
+    option_figures: list[str | None] = Field(default_factory=list, alias="optionFigures", max_length=10)
 
 
 class CurriculumExerciseDraftRequest(BaseModel):
@@ -978,6 +980,8 @@ class CurriculumExerciseDraftRequest(BaseModel):
     correct_feedback: str | None = Field(default=None, alias="correctFeedback", max_length=500)
     incorrect_feedback: str | None = Field(default=None, alias="incorrectFeedback", max_length=500)
     knowledge_point: str | None = Field(default=None, alias="knowledgePoint", max_length=200)
+    figure: str | None = Field(default=None, max_length=32_000)
+    option_figures: list[str | None] = Field(default_factory=list, alias="optionFigures", max_length=10)
     skills: list[str] = Field(default_factory=list)
 
 

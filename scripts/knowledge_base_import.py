@@ -410,6 +410,19 @@ def _manifest_exercise(exercise: Mapping[str, Any], order: int) -> dict[str, Any
         row["options"] = german["options"]
     if german.get("acceptedAnswers"):
         row["acceptedAnswers"] = german["acceptedAnswers"]
+    # A figure is drawn once, in German; a locale whose figure carries translated
+    # words has its own, the others show the German one.
+    base = exercise["text"]["de"]
+    if _text(base.get("figure")):
+        row["figure"] = base["figure"]
+    if any(_text(f) for f in base.get("choiceFigures") or []):
+        row["optionFigures"] = [_text(f) for f in base["choiceFigures"]]
+    for locale, translation in row["translations"].items():
+        text = exercise["text"][locale]
+        if _text(text.get("figure")) and text["figure"] != base.get("figure"):
+            translation["figure"] = text["figure"]
+        if any(_text(f) for f in text.get("choiceFigures") or []) and text["choiceFigures"] != base.get("choiceFigures"):
+            translation["optionFigures"] = [_text(f) for f in text["choiceFigures"]]
     return row
 
 
@@ -773,6 +786,69 @@ def _exercise_order(points: Mapping[str, Mapping[str, Any]]):
     return key
 
 
+def figure_exercises(
+    staging: Mapping[str, Any], filled: Iterable[Mapping[str, Any]], translated: Mapping[str, Any]
+) -> tuple[list[dict[str, Any]], dict[str, str], list[dict[str, Any]], list[dict[str, Any]]]:
+    """The knowledge base's exercises with a figure, translated: in the shape of
+    translated.json, with their question types, the dropped ones and the problems.
+
+    A figure whose labels needed no translation is not repeated per locale: the
+    source figure is the German one, and every locale shows it."""
+    done: dict[str, Any] = {}
+    for batch in filled:
+        done.update(batch.get("exercises") or {})
+    points = {p["id"] for p in translated["points"]}
+    kept, types, dropped, problems = [], {}, [], []
+    for item in staging["exercises"]:
+        entry = done.get(item["id"])
+        if not isinstance(entry, Mapping):
+            problems.append({"id": item["id"], "problems": ["not translated"]})
+            continue
+        if "drop" in entry:
+            dropped.append({"sourceId": item["sourceId"], "reason": f"translator: {entry['drop']}"})
+            continue
+        if item["point"] not in points:
+            dropped.append({"sourceId": item["sourceId"], "reason": "its knowledge point was not translated"})
+            continue
+        found = [] if entry.get("type") in catalog.question_types(item["subject"]) else ["no question type"]
+        text = {}
+        for locale in LOCALES:
+            given = entry.get(locale)
+            if not isinstance(given, Mapping):
+                found.append(f"{locale}: no text")
+                continue
+            text[locale] = dict(given)
+            if locale == "de":
+                text[locale].setdefault("figure", item.get("figure") or "")
+                if item.get("choiceFigures"):
+                    text[locale].setdefault("choiceFigures", list(item["choiceFigures"]))
+        if found:
+            problems.append({"id": item["id"], "problems": found})
+            continue
+        exercise = {k: item[k] for k in ("id", "sourceId", "point", "difficulty", "type")}
+        if item["type"] == "choice":
+            exercise["answerIndex"] = item["answerIndex"]
+        exercise["text"] = text
+        kept.append(exercise)
+        types[item["id"]] = entry["type"]
+    return kept, types, dropped, problems
+
+
+def with_figures(
+    translated: Mapping[str, Any], figured: Iterable[Mapping[str, Any]], dropped: Iterable[Mapping[str, Any]]
+) -> dict[str, Any]:
+    """translated.json with the figure exercises in it. A choice exercise whose
+    options are pictures was translated once without them; its figure version
+    takes its place, so no lesson holds the same exercise twice."""
+    figured = list(figured)
+    ids = {exercise["id"] for exercise in figured}
+    return {
+        **translated,
+        "exercises": [*(e for e in translated["exercises"] if e["id"] not in ids), *figured],
+        "skipped": [*(row for row in translated["skipped"] if "figure" not in row["reason"]), *dropped],
+    }
+
+
 def zap_exercises(
     staging: Mapping[str, Any], filled: Iterable[Mapping[str, Any]], built: Mapping[str, Any]
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -1061,7 +1137,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--out-dir", type=Path, required=True, help="manifest-NNN.json files and report.json")
     p.add_argument("--vocabulary", type=Path, default=catalog.SKILLS_FILE)
     p.add_argument("--stars", type=Path, default=catalog.STARS_FILE)
-    p.add_argument("--zap", type=Path, help="the ZAP staging file; its filled batches lie next to it")
+    p.add_argument("--zap", type=Path, nargs="*", default=[],
+                   help="ZAP staging files; their filled batches lie next to them")
+    p.add_argument("--figures", type=Path, help="the figure staging file; its filled batches lie next to it")
     p.add_argument("--source-version", required=True, help="the upstream commit translated")
     args = parser.parse_args(argv)
 
@@ -1105,9 +1183,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("records still have problems; fix them and merge or structure again")
             return 1
         zap: list[dict[str, Any]] = []
+        if args.figures:
+            filled = [_read(path) for path in sorted(args.figures.parent.glob("*.out.json"))]
+            figured, types, figure_dropped, figure_problems = figure_exercises(
+                _read(args.figures), filled, translated
+            )
+            if figure_problems:
+                print(f"{len(figure_problems)} figure exercises still have problems: {figure_problems[:3]}")
+                return 1
+            translated = with_figures(translated, figured, figure_dropped)
+            built = {**built, "exercises": {**built["exercises"], **types}}
         if args.zap:
-            staging = _read(args.zap)
-            filled = [_read(path) for path in sorted(args.zap.parent.glob("*.out.json"))]
+            staging = {"exercises": [item for path in args.zap for item in _read(path)["exercises"]]}
+            folders = {path.parent for path in args.zap}
+            filled = [_read(out) for folder in sorted(folders) for out in sorted(folder.glob("*.out.json"))]
             zap, zap_dropped, zap_problems = zap_exercises(staging, filled, built)
             if zap_problems:
                 print(f"{len(zap_problems)} ZAP exercises still have problems: {zap_problems[:3]}")

@@ -1,6 +1,6 @@
 """Exercises in the reader's language.
 
-An exercise row holds its text in one language - German for the ZAP curriculum
+An exercise row holds its text - and its figure, if it has one - in one language - German for the ZAP curriculum
 and for the imported knowledge base. It may also carry `translations`: for a
 locale, the prompt, options, answer, accepted answers and explanation in that
 language. A reader sees the exercise in their locale where it has one and in its
@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from stoa.services import answer_judging
+from stoa.services import answer_judging, figure_svg
 
 #: Locales an exercise can be translated into.
 LOCALES = frozenset({"de", "en", "fr", "it"})
@@ -33,6 +33,9 @@ TRANSLATION_FIELDS = {
     "accepted_answers": "accepted_answers",
     "acceptedAnswers": "accepted_answers",
     "explanation": "explanation",
+    "figure": "figure",
+    "option_figures": "option_figures",
+    "optionFigures": "option_figures",
 }
 
 
@@ -52,7 +55,10 @@ def normalize_translations(value: object) -> dict[str, dict[str, Any]]:
         for source, target in TRANSLATION_FIELDS.items():
             if source not in raw or target in text:
                 continue
-            if target in {"options", "accepted_answers"}:
+            if target == "option_figures":
+                items = raw[source] if isinstance(raw[source], list | tuple) else []
+                text[target] = [_text(item) for item in items]
+            elif target in {"options", "accepted_answers"}:
                 items = raw[source] if isinstance(raw[source], list | tuple) else []
                 text[target] = [_text(item) for item in items if _text(item)]
             else:
@@ -69,12 +75,15 @@ def localized(challenge: Mapping[str, Any], locale: str) -> dict[str, Any]:
     text = translations.get(locale) if isinstance(translations, Mapping) else None
     if not isinstance(text, Mapping):
         return shown
-    for field in ("prompt", "explanation"):
+    for field in ("prompt", "explanation", "figure"):
         if _text(text.get(field)):
             shown[field] = text[field]
     options, stored_options = text.get("options"), challenge.get("options")
     if isinstance(options, list) and isinstance(stored_options, list) and len(options) == len(stored_options):
         shown["options"] = list(options)
+    figures, stored_figures = text.get("option_figures"), challenge.get("option_figures")
+    if isinstance(figures, list) and isinstance(stored_figures, list) and len(figures) == len(stored_figures):
+        shown["option_figures"] = list(figures)
     key = _text(text.get("correct_answer"))
     if key:
         stored_key = challenge.get("correct_answer", challenge.get("answer_key"))
@@ -87,6 +96,24 @@ def localized(challenge: Mapping[str, Any], locale: str) -> dict[str, Any]:
 
 def _list(value: object) -> list[str]:
     return [_text(item) for item in value if _text(item)] if isinstance(value, list) else []
+
+
+def figure_issues(exercise: Mapping[str, Any], options: list | None) -> list[str]:
+    """What is wrong with the figure and the option figures of an exercise or of
+    one of its translations."""
+    issues: list[str] = []
+    figure = exercise.get("figure")
+    if figure not in (None, ""):
+        issues.extend(figure_svg.figure_issues(figure))
+    option_figures = exercise.get("option_figures")
+    if option_figures not in (None, []):
+        if not isinstance(option_figures, list) or options is None or len(option_figures) != len(options):
+            issues.append("Option figures go one per option, empty where an option has none.")
+        else:
+            for item in option_figures:
+                if _text(item):
+                    issues.extend(figure_svg.figure_issues(item))
+    return list(dict.fromkeys(issues))
 
 
 def translation_issues(exercise: Mapping[str, Any], *, max_text: int) -> list[tuple[str, str]]:
@@ -122,6 +149,7 @@ def translation_issues(exercise: Mapping[str, Any], *, max_text: int) -> list[tu
                 issues.append((field, "The translated answer must be the translated right option."))
         elif stored_key and not _text(text.get("correct_answer")):
             issues.append((field, "A translation needs its answer."))
+        issues.extend((field, message) for message in figure_issues(text, options))
         accepted = text.get("accepted_answers") or []
         if len(accepted) > answer_judging.MAX_ACCEPTED_ANSWERS or any(
             len(_text(item)) > answer_judging.MAX_ACCEPTED_ANSWER_LENGTH for item in accepted

@@ -99,6 +99,9 @@ EXERCISE_FIELD_ALIASES = {
     "incorrectFeedback": "incorrect_feedback",
     "knowledge_point": "knowledge_point",
     "knowledgePoint": "knowledge_point",
+    "figure": "figure",
+    "option_figures": "option_figures",
+    "optionFigures": "option_figures",
     "hint": "hint",
     "hints": "hints",
     "explanation": "explanation",
@@ -509,6 +512,16 @@ def _exercise_payloads(public_id: str, exercises: list[dict[str, Any]]) -> list[
             item["options"] = options
         else:
             item.pop("options", None)
+        figure = str(exercise.get("figure") or "").strip()
+        if figure:
+            item["figure"] = figure
+        else:
+            item.pop("figure", None)
+        option_figures = exercise.get("option_figures", exercise.get("optionFigures"))
+        if isinstance(option_figures, list | tuple) and any(str(f or "").strip() for f in option_figures):
+            item["option_figures"] = [str(f or "").strip() for f in option_figures]
+        else:
+            item.pop("option_figures", None)
         translations = exercise_localization.normalize_translations(exercise.get("translations"))
         if translations:
             item["translations"] = translations
@@ -736,6 +749,11 @@ def _validation_issues(
         issues.extend(
             _validation_issue(f"exercises[{index}].{field}", message)
             for field, message in _choice_issues(exercise)
+        )
+        options = exercise.get("options") if isinstance(exercise.get("options"), list) else None
+        issues.extend(
+            _validation_issue(f"exercises[{index}].figure", message)
+            for message in exercise_localization.figure_issues(exercise, options)
         )
         issues.extend(
             _validation_issue(f"exercises[{index}].{field}", message)

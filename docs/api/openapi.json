@@ -3026,6 +3026,18 @@
             ],
             "title": "Explanation"
           },
+          "figure": {
+            "anyOf": [
+              {
+                "maxLength": 32000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Figure"
+          },
           "incorrectFeedback": {
             "anyOf": [
               {
@@ -3049,6 +3061,21 @@
               }
             ],
             "title": "Knowledgepoint"
+          },
+          "optionFigures": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxItems": 10,
+            "title": "Optionfigures",
+            "type": "array"
           },
           "options": {
             "items": {
@@ -3152,6 +3179,33 @@
               }
             ],
             "title": "Explanation"
+          },
+          "figure": {
+            "anyOf": [
+              {
+                "maxLength": 32000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Figure"
+          },
+          "optionFigures": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxItems": 10,
+            "title": "Optionfigures",
+            "type": "array"
           },
           "options": {
             "items": {
@@ -11133,6 +11187,17 @@
             "title": "Dueat",
             "type": "string"
           },
+          "figure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Figure"
+          },
           "lapses": {
             "default": 0,
             "title": "Lapses",
@@ -11142,6 +11207,20 @@
             "default": "",
             "title": "Lessonid",
             "type": "string"
+          },
+          "optionFigures": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optionfigures"
           },
           "options": {
             "items": {

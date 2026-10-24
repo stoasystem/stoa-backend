@@ -597,6 +597,69 @@ def test_a_dropped_zap_exercise_is_reported(tmp_path: Path) -> None:
     assert dropped == [{"sourceId": "EX-STOA-ZAP1-2026-1a-v1", "reason": "ZAP: needs a figure"}]
 
 
+FIGURE = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20">'
+          '<rect x="1" y="1" width="30" height="10" fill="none" stroke="currentColor"/>'
+          '<text x="5" y="18">{label}</text></svg>')
+
+
+def _figure_task(label: str = "长方形", translate: bool = True) -> tuple[dict, list[dict]]:
+    staging = {"exercises": [{
+        "id": "kb-m-p101-q9", "sourceId": "cnm_p101_q9", "point": "kb-m-p101", "subject": "mathematics",
+        "difficulty": "basic", "type": "numeric", "prompt": "看图", "answer": "30", "accepted": [],
+        "explanation": "3*10", "figure": FIGURE.format(label=label),
+    }]}
+    words = {"de": "Rechteck", "en": "rectangle", "fr": "rectangle", "it": "rettangolo"}
+    entry = {"type": "rechnen"}
+    for locale in kb.LOCALES:
+        entry[locale] = {"prompt": f"{locale}: Fläche?", "answer": "30", "accepted": [], "explanation": "3 * 10 = 30"}
+        if translate:
+            entry[locale]["figure"] = FIGURE.format(label=words[locale])
+    return staging, [{"exercises": {"kb-m-p101-q9": entry}}]
+
+
+def test_a_figure_exercise_joins_its_knowledge_points_practice(tmp_path: Path) -> None:
+    translated = _translated(tmp_path)
+    staging, filled = _figure_task()
+    figured, types, dropped, problems = kb.figure_exercises(staging, filled, translated)
+    assert problems == [] and dropped == [] and types == {"kb-m-p101-q9": "rechnen"}
+    built = _built(translated)
+    built["exercises"].update(types)
+
+    made, _report, _stars, _vocabulary = kb.manifests(kb.with_figures(translated, figured, dropped), built, "abc123")
+
+    rows = {row["publicLessonId"]: row for m in made for row in m["lessons"]}
+    [exercise] = [e for e in rows["brueche-brueche-addieren--rechnen--1"]["exercises"]]
+    assert exercise["figure"] == FIGURE.format(label="Rechteck")
+    assert exercise["translations"]["it"]["figure"] == FIGURE.format(label="rettangolo")
+    assert exercise["knowledgePoint"] == "kb-m-p101"
+
+
+def test_a_figure_version_takes_the_place_of_the_same_exercise_without_it(tmp_path: Path) -> None:
+    translated = _translated(tmp_path)
+    staging, filled = _figure_task()
+    figured, _types, dropped, _problems = kb.figure_exercises(staging, filled, translated)
+    plain = {**figured[0], "text": {locale: {k: v for k, v in text.items() if k != "figure"}
+                                    for locale, text in figured[0]["text"].items()}}
+    translated = {**translated, "exercises": [*translated["exercises"], plain]}
+
+    merged = kb.with_figures(translated, figured, dropped)
+
+    [exercise] = [e for e in merged["exercises"] if e["id"] == "kb-m-p101-q9"]
+    assert exercise["text"]["de"]["figure"] == FIGURE.format(label="Rechteck")
+
+
+def test_a_figure_without_words_is_shown_once_for_every_locale(tmp_path: Path) -> None:
+    translated = _translated(tmp_path)
+    staging, filled = _figure_task(label="A", translate=False)
+
+    figured, _types, _dropped, problems = kb.figure_exercises(staging, filled, translated)
+    row = kb._manifest_exercise(figured[0], 1)  # noqa: SLF001
+
+    assert problems == []
+    assert row["figure"] == FIGURE.format(label="A")
+    assert all("figure" not in text for text in row["translations"].values())
+
+
 # ── through the curriculum workflow ──────────────────────────────────────────
 
 

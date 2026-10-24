@@ -4767,6 +4767,17 @@
    },
    "extension": false
   },
+  "geometrie-koerper-ansichten-und-netze--rechnen": {
+   "subject": "mathematics",
+   "unit": "geometrie-koerper-ansichten-und-netze",
+   "titles": {
+    "de": "Rechnen und Umformen",
+    "en": "Calculating and transforming",
+    "fr": "Calculer et transformer",
+    "it": "Calcolare e trasformare"
+   },
+   "extension": false
+  },
   "geometrie-koerper-ansichten-und-netze--sachaufgaben": {
    "subject": "mathematics",
    "unit": "geometrie-koerper-ansichten-und-netze",
@@ -5713,6 +5724,17 @@
    },
    "extension": false
   },
+  "geometrie-volumen-und-oberflaeche-von-koerpern--schliessen": {
+   "subject": "mathematics",
+   "unit": "geometrie-volumen-und-oberflaeche-von-koerpern",
+   "titles": {
+    "de": "Formeln und Schlussfolgern",
+    "en": "Formulas and reasoning",
+    "fr": "Formules et raisonnement",
+    "it": "Formule e ragionamento"
+   },
+   "extension": true
+  },
   "geometrie-winkel-an-parallelen-und-beweise--begriffe": {
    "subject": "mathematics",
    "unit": "geometrie-winkel-an-parallelen-und-beweise",
@@ -5800,6 +5822,17 @@
     "it": "Formule e ragionamento"
    },
    "extension": true
+  },
+  "geometrie-winkel-messen-und-berechnen--vergleichen": {
+   "subject": "mathematics",
+   "unit": "geometrie-winkel-messen-und-berechnen",
+   "titles": {
+    "de": "Vergleichen und Ordnen",
+    "en": "Comparing and ordering",
+    "fr": "Comparer et ordonner",
+    "it": "Confrontare e ordinare"
+   },
+   "extension": false
   },
   "gleichungen-ableitung-und-ableitungsregeln--begriffe": {
    "subject": "mathematics",
@@ -7330,6 +7363,17 @@
    },
    "extension": false
   },
+  "physik-elektrizitaet-ladung-strom-und-stromkreise--diagramme": {
+   "subject": "physics",
+   "unit": "physik-elektrizitaet-ladung-strom-und-stromkreise",
+   "titles": {
+    "de": "Diagramme und Graphen",
+    "en": "Charts and graphs",
+    "fr": "Diagrammes et graphiques",
+    "it": "Diagrammi e grafici"
+   },
+   "extension": true
+  },
   "physik-elektrizitaet-ladung-strom-und-stromkreise--erklaeren": {
    "subject": "physics",
    "unit": "physik-elektrizitaet-ladung-strom-und-stromkreise",
@@ -7660,6 +7704,17 @@
    },
    "extension": false
   },
+  "physik-mechanik-bewegung-geschwindigkeit-und-beschleunigung--diagramme": {
+   "subject": "physics",
+   "unit": "physik-mechanik-bewegung-geschwindigkeit-und-beschleunigung",
+   "titles": {
+    "de": "Diagramme und Graphen",
+    "en": "Charts and graphs",
+    "fr": "Diagrammes et graphiques",
+    "it": "Diagrammi e grafici"
+   },
+   "extension": true
+  },
   "physik-mechanik-bewegung-geschwindigkeit-und-beschleunigung--experiment": {
    "subject": "physics",
    "unit": "physik-mechanik-bewegung-geschwindigkeit-und-beschleunigung",
@@ -7737,6 +7792,17 @@
    },
    "extension": false
   },
+  "physik-mechanik-freier-fall-und-wurfbewegungen--erklaeren": {
+   "subject": "physics",
+   "unit": "physik-mechanik-freier-fall-und-wurfbewegungen",
+   "titles": {
+    "de": "Phänomene erklären",
+    "en": "Explaining phenomena",
+    "fr": "Expliquer des phénomènes",
+    "it": "Spiegare fenomeni"
+   },
+   "extension": false
+  },
   "physik-mechanik-freier-fall-und-wurfbewegungen--experiment": {
    "subject": "physics",
    "unit": "physik-mechanik-freier-fall-und-wurfbewegungen",
@@ -7747,6 +7813,17 @@
     "it": "Esperimenti e misure"
    },
    "extension": true
+  },
+  "physik-mechanik-freier-fall-und-wurfbewegungen--rechnen": {
+   "subject": "physics",
+   "unit": "physik-mechanik-freier-fall-und-wurfbewegungen",
+   "titles": {
+    "de": "Berechnen",
+    "en": "Calculating",
+    "fr": "Calculer",
+    "it": "Calcolare"
+   },
+   "extension": false
   },
   "physik-mechanik-impuls-und-stoesse--begriffe": {
    "subject": "physics",
@@ -7802,6 +7879,17 @@
     "it": "Capire i concetti"
    },
    "extension": false
+  },
+  "physik-mechanik-kraefte-elastische-kraft-und-reibung--diagramme": {
+   "subject": "physics",
+   "unit": "physik-mechanik-kraefte-elastische-kraft-und-reibung",
+   "titles": {
+    "de": "Diagramme und Graphen",
+    "en": "Charts and graphs",
+    "fr": "Diagrammes et graphiques",
+    "it": "Diagrammi e grafici"
+   },
+   "extension": true
   },
   "physik-mechanik-kraefte-elastische-kraft-und-reibung--erklaeren": {
    "subject": "physics",
@@ -8033,6 +8121,17 @@
     "it": "Diagrammi e grafici"
    },
    "extension": true
+  },
+  "physik-mechanik-mechanische-schwingungen--erklaeren": {
+   "subject": "physics",
+   "unit": "physik-mechanik-mechanische-schwingungen",
+   "titles": {
+    "de": "Phänomene erklären",
+    "en": "Explaining phenomena",
+    "fr": "Expliquer des phénomènes",
+    "it": "Spiegare fenomeni"
+   },
+   "extension": false
   },
   "physik-mechanik-mechanische-schwingungen--experiment": {
    "subject": "physics",
@@ -14461,6 +14560,12 @@
    "fr": "Comprendre les notions · Niveau 3",
    "it": "Capire i concetti · Livello 3"
   },
+  "geometrie-aehnlichkeit-und-zentrische-streckung--begriffe--4": {
+   "de": "Begriffe verstehen · Stufe 4",
+   "en": "Understanding concepts · Level 4",
+   "fr": "Comprendre les notions · Niveau 4",
+   "it": "Capire i concetti · Livello 4"
+  },
   "geometrie-aehnlichkeit-und-zentrische-streckung--rechnen--1": {
    "de": "Rechnen und Umformen · Stufe 1",
    "en": "Calculating and transforming · Level 1",
@@ -14863,11 +14968,17 @@
    "fr": "Comprendre les notions · Niveau 3",
    "it": "Capire i concetti · Livello 3"
   },
-  "geometrie-geraden-und-ebenen-im-raum--begriffe--4": {
-   "de": "Begriffe verstehen · Stufe 4",
-   "en": "Understanding concepts · Level 4",
-   "fr": "Comprendre les notions · Niveau 4",
-   "it": "Capire i concetti · Livello 4"
+  "geometrie-geraden-und-ebenen-im-raum--begriffe--4-1": {
+   "de": "Begriffe verstehen · Stufe 4 · Teil 1",
+   "en": "Understanding concepts · Level 4 · Part 1",
+   "fr": "Comprendre les notions · Niveau 4 · Partie 1",
+   "it": "Capire i concetti · Livello 4 · Parte 1"
+  },
+  "geometrie-geraden-und-ebenen-im-raum--begriffe--4-2": {
+   "de": "Begriffe verstehen · Stufe 4 · Teil 2",
+   "en": "Understanding concepts · Level 4 · Part 2",
+   "fr": "Comprendre les notions · Niveau 4 · Partie 2",
+   "it": "Capire i concetti · Livello 4 · Parte 2"
   },
   "geometrie-geraden-und-ebenen-im-raum--sachaufgaben--4": {
    "de": "Sachaufgaben",
@@ -14989,17 +15100,29 @@
    "fr": "Représenter et décomposer · Niveau 1",
    "it": "Rappresentare e scomporre · Livello 1"
   },
-  "geometrie-koerper-ansichten-und-netze--darstellen--2": {
-   "de": "Darstellen und Zerlegen · Stufe 2",
-   "en": "Representing and decomposing · Level 2",
-   "fr": "Représenter et décomposer · Niveau 2",
-   "it": "Rappresentare e scomporre · Livello 2"
+  "geometrie-koerper-ansichten-und-netze--darstellen--2-1": {
+   "de": "Darstellen und Zerlegen · Stufe 2 · Teil 1",
+   "en": "Representing and decomposing · Level 2 · Part 1",
+   "fr": "Représenter et décomposer · Niveau 2 · Partie 1",
+   "it": "Rappresentare e scomporre · Livello 2 · Parte 1"
+  },
+  "geometrie-koerper-ansichten-und-netze--darstellen--2-2": {
+   "de": "Darstellen und Zerlegen · Stufe 2 · Teil 2",
+   "en": "Representing and decomposing · Level 2 · Part 2",
+   "fr": "Représenter et décomposer · Niveau 2 · Partie 2",
+   "it": "Rappresentare e scomporre · Livello 2 · Parte 2"
   },
   "geometrie-koerper-ansichten-und-netze--darstellen--3": {
    "de": "Darstellen und Zerlegen · Stufe 3",
    "en": "Representing and decomposing · Level 3",
    "fr": "Représenter et décomposer · Niveau 3",
    "it": "Rappresentare e scomporre · Livello 3"
+  },
+  "geometrie-koerper-ansichten-und-netze--darstellen--zap": {
+   "de": "Darstellen und Zerlegen · ZAP",
+   "en": "Representing and decomposing · ZAP",
+   "fr": "Représenter et décomposer · ZAP",
+   "it": "Rappresentare e scomporre · ZAP"
   },
   "geometrie-koerper-ansichten-und-netze--kopfrechnen--1": {
    "de": "Kopfrechnen-Trick · Stufe 1",
@@ -15019,6 +15142,18 @@
    "fr": "Astuces de calcul mental · Niveau 3",
    "it": "Trucchi di calcolo mentale · Livello 3"
   },
+  "geometrie-koerper-ansichten-und-netze--rechnen--1": {
+   "de": "Rechnen und Umformen · Stufe 1",
+   "en": "Calculating and transforming · Level 1",
+   "fr": "Calculer et transformer · Niveau 1",
+   "it": "Calcolare e trasformare · Livello 1"
+  },
+  "geometrie-koerper-ansichten-und-netze--rechnen--2": {
+   "de": "Rechnen und Umformen · Stufe 2",
+   "en": "Calculating and transforming · Level 2",
+   "fr": "Calculer et transformer · Niveau 2",
+   "it": "Calcolare e trasformare · Livello 2"
+  },
   "geometrie-koerper-ansichten-und-netze--sachaufgaben--2": {
    "de": "Sachaufgaben · Stufe 2",
    "en": "Word problems · Level 2",
@@ -15037,11 +15172,17 @@
    "fr": "Problèmes · ZAP",
    "it": "Problemi · ZAP"
   },
+  "geometrie-koerper-ansichten-und-netze--schliessen--1": {
+   "de": "Formeln und Schlussfolgern · Stufe 1",
+   "en": "Formulas and reasoning · Level 1",
+   "fr": "Formules et raisonnement · Niveau 1",
+   "it": "Formule e ragionamento · Livello 1"
+  },
   "geometrie-koerper-ansichten-und-netze--schliessen--3": {
-   "de": "Formeln und Schlussfolgern",
-   "en": "Formulas and reasoning",
-   "fr": "Formules et raisonnement",
-   "it": "Formule e ragionamento"
+   "de": "Formeln und Schlussfolgern · Stufe 3",
+   "en": "Formulas and reasoning · Level 3",
+   "fr": "Formules et raisonnement · Niveau 3",
+   "it": "Formule e ragionamento · Livello 3"
   },
   "geometrie-koerper-darstellen-projektionen-schraegbilder--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
@@ -15055,6 +15196,12 @@
    "fr": "Comprendre les notions · Niveau 2",
    "it": "Capire i concetti · Livello 2"
   },
+  "geometrie-koerper-darstellen-projektionen-schraegbilder--darstellen--1": {
+   "de": "Darstellen und Zerlegen · Stufe 1",
+   "en": "Representing and decomposing · Level 1",
+   "fr": "Représenter et décomposer · Niveau 1",
+   "it": "Rappresentare e scomporre · Livello 1"
+  },
   "geometrie-koerper-darstellen-projektionen-schraegbilder--darstellen--2": {
    "de": "Darstellen und Zerlegen · Stufe 2",
    "en": "Representing and decomposing · Level 2",
@@ -15066,6 +15213,12 @@
    "en": "Representing and decomposing · Level 3",
    "fr": "Représenter et décomposer · Niveau 3",
    "it": "Rappresentare e scomporre · Livello 3"
+  },
+  "geometrie-koerper-darstellen-projektionen-schraegbilder--darstellen--zap": {
+   "de": "Darstellen und Zerlegen · ZAP",
+   "en": "Representing and decomposing · ZAP",
+   "fr": "Représenter et décomposer · ZAP",
+   "it": "Rappresentare e scomporre · ZAP"
   },
   "geometrie-koerper-darstellen-projektionen-schraegbilder--kopfrechnen--3": {
    "de": "Kopfrechnen-Trick",
@@ -15086,10 +15239,16 @@
    "it": "Problemi"
   },
   "geometrie-koerper-darstellen-projektionen-schraegbilder--schliessen--1": {
-   "de": "Formeln und Schlussfolgern",
-   "en": "Formulas and reasoning",
-   "fr": "Formules et raisonnement",
-   "it": "Formule e ragionamento"
+   "de": "Formeln und Schlussfolgern · Stufe 1",
+   "en": "Formulas and reasoning · Level 1",
+   "fr": "Formules et raisonnement · Niveau 1",
+   "it": "Formule e ragionamento · Livello 1"
+  },
+  "geometrie-koerper-darstellen-projektionen-schraegbilder--schliessen--3": {
+   "de": "Formeln und Schlussfolgern · Stufe 3",
+   "en": "Formulas and reasoning · Level 3",
+   "fr": "Formules et raisonnement · Niveau 3",
+   "it": "Formule e ragionamento · Livello 3"
   },
   "geometrie-kongruenz-und-gleichschenklige-dreiecke--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
@@ -15198,6 +15357,12 @@
    "en": "Mental maths tricks · Level 4",
    "fr": "Astuces de calcul mental · Niveau 4",
    "it": "Trucchi di calcolo mentale · Livello 4"
+  },
+  "geometrie-kreis-umfang-flaeche-und-sektor--rechnen--1": {
+   "de": "Rechnen und Umformen · Stufe 1",
+   "en": "Calculating and transforming · Level 1",
+   "fr": "Calculer et transformer · Niveau 1",
+   "it": "Calcolare e trasformare · Livello 1"
   },
   "geometrie-kreis-umfang-flaeche-und-sektor--rechnen--2": {
    "de": "Rechnen und Umformen · Stufe 2",
@@ -15534,6 +15699,12 @@
    "en": "Calculating and transforming · Level 3",
    "fr": "Calculer et transformer · Niveau 3",
    "it": "Calcolare e trasformare · Livello 3"
+  },
+  "geometrie-lage-winkel-und-abstaende-mit-vektoren--rechnen--4": {
+   "de": "Rechnen und Umformen · Stufe 4",
+   "en": "Calculating and transforming · Level 4",
+   "fr": "Calculer et transformer · Niveau 4",
+   "it": "Calcolare e trasformare · Livello 4"
   },
   "geometrie-lage-winkel-und-abstaende-mit-vektoren--schliessen--2": {
    "de": "Formeln und Schlussfolgern · Stufe 2",
@@ -15967,11 +16138,17 @@
    "fr": "Calculer et transformer · Niveau 4",
    "it": "Calcolare e trasformare · Livello 4"
   },
-  "geometrie-umfang-und-flaeche-ebener-figuren--rechnen--zap": {
-   "de": "Rechnen und Umformen · ZAP",
-   "en": "Calculating and transforming · ZAP",
-   "fr": "Calculer et transformer · ZAP",
-   "it": "Calcolare e trasformare · ZAP"
+  "geometrie-umfang-und-flaeche-ebener-figuren--rechnen--zap-1": {
+   "de": "Rechnen und Umformen · ZAP · Teil 1",
+   "en": "Calculating and transforming · ZAP · Part 1",
+   "fr": "Calculer et transformer · ZAP · Partie 1",
+   "it": "Calcolare e trasformare · ZAP · Parte 1"
+  },
+  "geometrie-umfang-und-flaeche-ebener-figuren--rechnen--zap-2": {
+   "de": "Rechnen und Umformen · ZAP · Teil 2",
+   "en": "Calculating and transforming · ZAP · Part 2",
+   "fr": "Calculer et transformer · ZAP · Partie 2",
+   "it": "Calcolare e trasformare · ZAP · Parte 2"
   },
   "geometrie-umfang-und-flaeche-ebener-figuren--sachaufgaben--1": {
    "de": "Sachaufgaben · Stufe 1",
@@ -15996,6 +16173,12 @@
    "en": "Word problems · ZAP",
    "fr": "Problèmes · ZAP",
    "it": "Problemi · ZAP"
+  },
+  "geometrie-umfang-und-flaeche-ebener-figuren--schliessen--4": {
+   "de": "Formeln und Schlussfolgern",
+   "en": "Formulas and reasoning",
+   "fr": "Formules et raisonnement",
+   "it": "Formule e ragionamento"
   },
   "geometrie-umfang-und-flaeche-ebener-figuren--schliessen--zap": {
    "de": "Formeln und Schlussfolgern · ZAP",
@@ -16267,11 +16450,17 @@
    "fr": "Calculer et transformer · Niveau 3",
    "it": "Calcolare e trasformare · Livello 3"
   },
-  "geometrie-volumen-und-oberflaeche-von-koerpern--rechnen--4": {
-   "de": "Rechnen und Umformen · Stufe 4",
-   "en": "Calculating and transforming · Level 4",
-   "fr": "Calculer et transformer · Niveau 4",
-   "it": "Calcolare e trasformare · Livello 4"
+  "geometrie-volumen-und-oberflaeche-von-koerpern--rechnen--4-1": {
+   "de": "Rechnen und Umformen · Stufe 4 · Teil 1",
+   "en": "Calculating and transforming · Level 4 · Part 1",
+   "fr": "Calculer et transformer · Niveau 4 · Partie 1",
+   "it": "Calcolare e trasformare · Livello 4 · Parte 1"
+  },
+  "geometrie-volumen-und-oberflaeche-von-koerpern--rechnen--4-2": {
+   "de": "Rechnen und Umformen · Stufe 4 · Teil 2",
+   "en": "Calculating and transforming · Level 4 · Part 2",
+   "fr": "Calculer et transformer · Niveau 4 · Partie 2",
+   "it": "Calcolare e trasformare · Livello 4 · Parte 2"
   },
   "geometrie-volumen-und-oberflaeche-von-koerpern--rechnen--zap": {
    "de": "Rechnen und Umformen · ZAP",
@@ -16284,6 +16473,30 @@
    "en": "Word problems · ZAP",
    "fr": "Problèmes · ZAP",
    "it": "Problemi · ZAP"
+  },
+  "geometrie-volumen-und-oberflaeche-von-koerpern--schliessen--2": {
+   "de": "Formeln und Schlussfolgern · Stufe 2",
+   "en": "Formulas and reasoning · Level 2",
+   "fr": "Formules et raisonnement · Niveau 2",
+   "it": "Formule e ragionamento · Livello 2"
+  },
+  "geometrie-volumen-und-oberflaeche-von-koerpern--schliessen--3": {
+   "de": "Formeln und Schlussfolgern · Stufe 3",
+   "en": "Formulas and reasoning · Level 3",
+   "fr": "Formules et raisonnement · Niveau 3",
+   "it": "Formule e ragionamento · Livello 3"
+  },
+  "geometrie-volumen-und-oberflaeche-von-koerpern--schliessen--4": {
+   "de": "Formeln und Schlussfolgern · Stufe 4",
+   "en": "Formulas and reasoning · Level 4",
+   "fr": "Formules et raisonnement · Niveau 4",
+   "it": "Formule e ragionamento · Livello 4"
+  },
+  "geometrie-volumen-und-oberflaeche-von-koerpern--schliessen--zap": {
+   "de": "Formeln und Schlussfolgern · ZAP",
+   "en": "Formulas and reasoning · ZAP",
+   "fr": "Formules et raisonnement · ZAP",
+   "it": "Formule e ragionamento · ZAP"
   },
   "geometrie-winkel-an-parallelen-und-beweise--begriffe--1-1": {
    "de": "Begriffe verstehen · Stufe 1 · Teil 1",
@@ -16338,6 +16551,12 @@
    "en": "Formulas and reasoning · Level 2",
    "fr": "Formules et raisonnement · Niveau 2",
    "it": "Formule e ragionamento · Livello 2"
+  },
+  "geometrie-winkel-an-parallelen-und-beweise--schliessen--3": {
+   "de": "Formeln und Schlussfolgern · Stufe 3",
+   "en": "Formulas and reasoning · Level 3",
+   "fr": "Formules et raisonnement · Niveau 3",
+   "it": "Formule e ragionamento · Livello 3"
   },
   "geometrie-winkel-messen-und-berechnen--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
@@ -16405,11 +16624,23 @@
    "fr": "Calculer et transformer · Niveau 4 · Partie 2",
    "it": "Calcolare e trasformare · Livello 4 · Parte 2"
   },
+  "geometrie-winkel-messen-und-berechnen--schliessen--2": {
+   "de": "Formeln und Schlussfolgern · Stufe 2",
+   "en": "Formulas and reasoning · Level 2",
+   "fr": "Formules et raisonnement · Niveau 2",
+   "it": "Formule e ragionamento · Livello 2"
+  },
   "geometrie-winkel-messen-und-berechnen--schliessen--4": {
-   "de": "Formeln und Schlussfolgern",
-   "en": "Formulas and reasoning",
-   "fr": "Formules et raisonnement",
-   "it": "Formule e ragionamento"
+   "de": "Formeln und Schlussfolgern · Stufe 4",
+   "en": "Formulas and reasoning · Level 4",
+   "fr": "Formules et raisonnement · Niveau 4",
+   "it": "Formule e ragionamento · Livello 4"
+  },
+  "geometrie-winkel-messen-und-berechnen--vergleichen--2": {
+   "de": "Vergleichen und Ordnen",
+   "en": "Comparing and ordering",
+   "fr": "Comparer et ordonner",
+   "it": "Confrontare e ordinare"
   },
   "gleichungen-ableitung-und-ableitungsregeln--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
@@ -18553,6 +18784,12 @@
    "fr": "Comprendre les notions · Niveau 2",
    "it": "Capire i concetti · Livello 2"
   },
+  "physik-elektrizitaet-ladung-strom-und-stromkreise--diagramme--3": {
+   "de": "Diagramme und Graphen",
+   "en": "Charts and graphs",
+   "fr": "Diagrammes et graphiques",
+   "it": "Diagrammi e grafici"
+  },
   "physik-elektrizitaet-ladung-strom-und-stromkreise--erklaeren--1": {
    "de": "Phänomene erklären · Stufe 1",
    "en": "Explaining phenomena · Level 1",
@@ -19003,6 +19240,12 @@
    "fr": "Comprendre les notions · Niveau 4",
    "it": "Capire i concetti · Livello 4"
   },
+  "physik-mechanik-bewegung-geschwindigkeit-und-beschleunigung--diagramme--4": {
+   "de": "Diagramme und Graphen",
+   "en": "Charts and graphs",
+   "fr": "Diagrammes et graphiques",
+   "it": "Diagrammi e grafici"
+  },
   "physik-mechanik-bewegung-geschwindigkeit-und-beschleunigung--experiment--2": {
    "de": "Experimente und Messen · Stufe 2",
    "en": "Experiments and measuring · Level 2",
@@ -19026,6 +19269,12 @@
    "en": "Calculating · Level 2",
    "fr": "Calculer · Niveau 2",
    "it": "Calcolare · Livello 2"
+  },
+  "physik-mechanik-bewegung-geschwindigkeit-und-beschleunigung--rechnen--3": {
+   "de": "Berechnen · Stufe 3",
+   "en": "Calculating · Level 3",
+   "fr": "Calculer · Niveau 3",
+   "it": "Calcolare · Livello 3"
   },
   "physik-mechanik-bewegung-geschwindigkeit-und-beschleunigung--rechnen--4-1": {
    "de": "Berechnen · Stufe 4 · Teil 1",
@@ -19141,11 +19390,47 @@
    "fr": "Comprendre les notions · Niveau 4",
    "it": "Capire i concetti · Livello 4"
   },
+  "physik-mechanik-freier-fall-und-wurfbewegungen--erklaeren--1": {
+   "de": "Phänomene erklären · Stufe 1",
+   "en": "Explaining phenomena · Level 1",
+   "fr": "Expliquer des phénomènes · Niveau 1",
+   "it": "Spiegare fenomeni · Livello 1"
+  },
+  "physik-mechanik-freier-fall-und-wurfbewegungen--erklaeren--4": {
+   "de": "Phänomene erklären · Stufe 4",
+   "en": "Explaining phenomena · Level 4",
+   "fr": "Expliquer des phénomènes · Niveau 4",
+   "it": "Spiegare fenomeni · Livello 4"
+  },
   "physik-mechanik-freier-fall-und-wurfbewegungen--experiment--2": {
    "de": "Experimente und Messen",
    "en": "Experiments and measuring",
    "fr": "Expériences et mesures",
    "it": "Esperimenti e misure"
+  },
+  "physik-mechanik-freier-fall-und-wurfbewegungen--rechnen--1": {
+   "de": "Berechnen · Stufe 1",
+   "en": "Calculating · Level 1",
+   "fr": "Calculer · Niveau 1",
+   "it": "Calcolare · Livello 1"
+  },
+  "physik-mechanik-freier-fall-und-wurfbewegungen--rechnen--2": {
+   "de": "Berechnen · Stufe 2",
+   "en": "Calculating · Level 2",
+   "fr": "Calculer · Niveau 2",
+   "it": "Calcolare · Livello 2"
+  },
+  "physik-mechanik-freier-fall-und-wurfbewegungen--rechnen--3": {
+   "de": "Berechnen · Stufe 3",
+   "en": "Calculating · Level 3",
+   "fr": "Calculer · Niveau 3",
+   "it": "Calcolare · Livello 3"
+  },
+  "physik-mechanik-freier-fall-und-wurfbewegungen--rechnen--4": {
+   "de": "Berechnen · Stufe 4",
+   "en": "Calculating · Level 4",
+   "fr": "Calculer · Niveau 4",
+   "it": "Calcolare · Livello 4"
   },
   "physik-mechanik-impuls-und-stoesse--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
@@ -19225,6 +19510,12 @@
    "fr": "Comprendre les notions · Niveau 2",
    "it": "Capire i concetti · Livello 2"
   },
+  "physik-mechanik-kraefte-elastische-kraft-und-reibung--diagramme--4": {
+   "de": "Diagramme und Graphen",
+   "en": "Charts and graphs",
+   "fr": "Diagrammes et graphiques",
+   "it": "Diagrammi e grafici"
+  },
   "physik-mechanik-kraefte-elastische-kraft-und-reibung--erklaeren--1": {
    "de": "Phänomene erklären · Stufe 1",
    "en": "Explaining phenomena · Level 1",
@@ -19273,6 +19564,12 @@
    "fr": "Calculer · Niveau 2",
    "it": "Calcolare · Livello 2"
   },
+  "physik-mechanik-kraefte-elastische-kraft-und-reibung--rechnen--3": {
+   "de": "Berechnen · Stufe 3",
+   "en": "Calculating · Level 3",
+   "fr": "Calculer · Niveau 3",
+   "it": "Calcolare · Livello 3"
+  },
   "physik-mechanik-kraefte-elastische-kraft-und-reibung--rechnen--4": {
    "de": "Berechnen · Stufe 4",
    "en": "Calculating · Level 4",
@@ -19292,10 +19589,16 @@
    "it": "Capire i concetti · Livello 4"
   },
   "physik-mechanik-kraefte-zusammensetzen-und-gleichgewicht--erklaeren--1": {
-   "de": "Phänomene erklären",
-   "en": "Explaining phenomena",
-   "fr": "Expliquer des phénomènes",
-   "it": "Spiegare fenomeni"
+   "de": "Phänomene erklären · Stufe 1",
+   "en": "Explaining phenomena · Level 1",
+   "fr": "Expliquer des phénomènes · Niveau 1",
+   "it": "Spiegare fenomeni · Livello 1"
+  },
+  "physik-mechanik-kraefte-zusammensetzen-und-gleichgewicht--erklaeren--4": {
+   "de": "Phänomene erklären · Stufe 4",
+   "en": "Explaining phenomena · Level 4",
+   "fr": "Expliquer des phénomènes · Niveau 4",
+   "it": "Spiegare fenomeni · Livello 4"
   },
   "physik-mechanik-kraefte-zusammensetzen-und-gleichgewicht--experiment--4": {
    "de": "Experimente und Messen",
@@ -19314,6 +19617,12 @@
    "en": "Calculating · Level 3",
    "fr": "Calculer · Niveau 3",
    "it": "Calcolare · Livello 3"
+  },
+  "physik-mechanik-kraefte-zusammensetzen-und-gleichgewicht--rechnen--4": {
+   "de": "Berechnen · Stufe 4",
+   "en": "Calculating · Level 4",
+   "fr": "Calculer · Niveau 4",
+   "it": "Calcolare · Livello 4"
   },
   "physik-mechanik-kreisbewegung-und-gravitation--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
@@ -19339,11 +19648,23 @@
    "fr": "Comprendre les notions · Niveau 4",
    "it": "Capire i concetti · Livello 4"
   },
+  "physik-mechanik-kreisbewegung-und-gravitation--erklaeren--1": {
+   "de": "Phänomene erklären · Stufe 1",
+   "en": "Explaining phenomena · Level 1",
+   "fr": "Expliquer des phénomènes · Niveau 1",
+   "it": "Spiegare fenomeni · Livello 1"
+  },
   "physik-mechanik-kreisbewegung-und-gravitation--erklaeren--3": {
-   "de": "Phänomene erklären",
-   "en": "Explaining phenomena",
-   "fr": "Expliquer des phénomènes",
-   "it": "Spiegare fenomeni"
+   "de": "Phänomene erklären · Stufe 3",
+   "en": "Explaining phenomena · Level 3",
+   "fr": "Expliquer des phénomènes · Niveau 3",
+   "it": "Spiegare fenomeni · Livello 3"
+  },
+  "physik-mechanik-kreisbewegung-und-gravitation--erklaeren--4": {
+   "de": "Phänomene erklären · Stufe 4",
+   "en": "Explaining phenomena · Level 4",
+   "fr": "Expliquer des phénomènes · Niveau 4",
+   "it": "Spiegare fenomeni · Livello 4"
   },
   "physik-mechanik-kreisbewegung-und-gravitation--experiment--3": {
    "de": "Experimente und Messen",
@@ -19507,6 +19828,12 @@
    "fr": "Calculer · Niveau 3",
    "it": "Calcolare · Livello 3"
   },
+  "physik-mechanik-mechanische-schwingungen--begriffe--1": {
+   "de": "Begriffe verstehen · Stufe 1",
+   "en": "Understanding concepts · Level 1",
+   "fr": "Comprendre les notions · Niveau 1",
+   "it": "Capire i concetti · Livello 1"
+  },
   "physik-mechanik-mechanische-schwingungen--begriffe--2": {
    "de": "Begriffe verstehen · Stufe 2",
    "en": "Understanding concepts · Level 2",
@@ -19531,11 +19858,23 @@
    "fr": "Diagrammes et graphiques",
    "it": "Diagrammi e grafici"
   },
+  "physik-mechanik-mechanische-schwingungen--erklaeren--1": {
+   "de": "Phänomene erklären",
+   "en": "Explaining phenomena",
+   "fr": "Expliquer des phénomènes",
+   "it": "Spiegare fenomeni"
+  },
   "physik-mechanik-mechanische-schwingungen--experiment--4": {
    "de": "Experimente und Messen",
    "en": "Experiments and measuring",
    "fr": "Expériences et mesures",
    "it": "Esperimenti e misure"
+  },
+  "physik-mechanik-mechanische-schwingungen--rechnen--1": {
+   "de": "Berechnen · Stufe 1",
+   "en": "Calculating · Level 1",
+   "fr": "Calculer · Niveau 1",
+   "it": "Calcolare · Livello 1"
   },
   "physik-mechanik-mechanische-schwingungen--rechnen--2": {
    "de": "Berechnen · Stufe 2",
@@ -19560,6 +19899,12 @@
    "en": "Understanding concepts · Level 1",
    "fr": "Comprendre les notions · Niveau 1",
    "it": "Capire i concetti · Livello 1"
+  },
+  "physik-mechanik-mechanische-wellen--begriffe--2": {
+   "de": "Begriffe verstehen · Stufe 2",
+   "en": "Understanding concepts · Level 2",
+   "fr": "Comprendre les notions · Niveau 2",
+   "it": "Capire i concetti · Livello 2"
   },
   "physik-mechanik-mechanische-wellen--begriffe--3": {
    "de": "Begriffe verstehen · Stufe 3",
@@ -19663,11 +20008,17 @@
    "fr": "Calculer · Niveau 2",
    "it": "Calcolare · Livello 2"
   },
-  "physik-mechanik-newtonsche-gesetze--rechnen--4": {
-   "de": "Berechnen · Stufe 4",
-   "en": "Calculating · Level 4",
-   "fr": "Calculer · Niveau 4",
-   "it": "Calcolare · Livello 4"
+  "physik-mechanik-newtonsche-gesetze--rechnen--4-1": {
+   "de": "Berechnen · Stufe 4 · Teil 1",
+   "en": "Calculating · Level 4 · Part 1",
+   "fr": "Calculer · Niveau 4 · Partie 1",
+   "it": "Calcolare · Livello 4 · Parte 1"
+  },
+  "physik-mechanik-newtonsche-gesetze--rechnen--4-2": {
+   "de": "Berechnen · Stufe 4 · Teil 2",
+   "en": "Calculating · Level 4 · Part 2",
+   "fr": "Calculer · Niveau 4 · Partie 2",
+   "it": "Calcolare · Livello 4 · Parte 2"
   },
   "physik-modern-kernphysik-und-energieversorgung--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
@@ -19896,6 +20247,12 @@
    "en": "Experiments and measuring · Level 4",
    "fr": "Expériences et mesures · Niveau 4",
    "it": "Esperimenti e misure · Livello 4"
+  },
+  "physik-optik-akustik-ausbreitung-reflexion-und-brechung-des-lichts--rechnen--2": {
+   "de": "Berechnen · Stufe 2",
+   "en": "Calculating · Level 2",
+   "fr": "Calculer · Niveau 2",
+   "it": "Calcolare · Livello 2"
   },
   "physik-optik-akustik-ausbreitung-reflexion-und-brechung-des-lichts--rechnen--3": {
    "de": "Berechnen · Stufe 3",
