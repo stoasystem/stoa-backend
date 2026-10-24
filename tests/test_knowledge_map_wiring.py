@@ -133,6 +133,8 @@ def _states(monkeypatch, *, done: set[str], right: set[str]) -> dict[str, Any]:
     catalog = _catalog(_unit("u1", order=1), _unit("u2", order=2, before=["u1"]))
     catalog["lessons"] = [_lesson("l1", "u1"), _lesson("l2", "u2")]
     monkeypatch.setattr(knowledge_mastery_service, "_active_exercise_ids", lambda lesson_id: [f"{lesson_id}-c1"])
+    # Lesson rows written before the exercise index: read through their challenges.
+    monkeypatch.setattr(knowledge_mastery_service, "_indexed_lessons", lambda: {})
     monkeypatch.setattr(knowledge_mastery_service, "_completed_lesson_ids", lambda *a, **k: frozenset(done))
     monkeypatch.setattr(knowledge_mastery_service, "_exercises_answered_right", lambda *a, **k: frozenset(right))
     return knowledge_mastery_service.unit_states("student-1", catalog=catalog)

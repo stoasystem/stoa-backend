@@ -372,12 +372,47 @@ def _active_exercise_ids(lesson_id: str) -> list[str]:
     return [_exercise_id(challenge) for challenge in _active_exercises(lesson_id)]
 
 
+def indexed_lessons() -> dict[str, list[dict[str, Any]]]:
+    """The exercise index of every lesson row, read once for a caller that judges
+    units and skills both."""
+    return _indexed_lessons()
+
+
+def _indexed_lessons() -> dict[str, list[dict[str, Any]]]:
+    """The exercise index of every lesson row that carries one, in one read.
+
+    The lesson rows carry it (`practice_repo.exercise_index`); a row written
+    before that is read through its challenges instead, one query each."""
+    out: dict[str, list[dict[str, Any]]] = {}
+    for row in practice_repo.get_lessons():
+        index = practice_repo.indexed_exercises(row)
+        if index is not None:
+            out[str(row.get("lesson_id") or "")] = index
+    return out
+
+
+def _exercise_entries(
+    lessons: Sequence[Mapping[str, Any]],
+    indexed: Mapping[str, list[dict[str, Any]]] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Each lesson's live exercises - id, skills, knowledge point."""
+    indexed = _indexed_lessons() if indexed is None else indexed
+    entries: dict[str, list[dict[str, Any]]] = {}
+    for lesson in lessons:
+        lesson_id = str(lesson.get("id") or "")
+        entries[lesson_id] = indexed[lesson_id] if lesson_id in indexed else (
+            practice_repo.exercise_index(_active_exercises(lesson_id))
+        )
+    return entries
+
+
 def unit_states(
     student_id: str,
     *,
     subject_id: str | None = None,
     locale: str = "de",
     catalog: Mapping[str, Any] | None = None,
+    indexed: Mapping[str, list[dict[str, Any]]] | None = None,
 ) -> dict[str, UnitMastery]:
     """Every unit's state for one student, keyed by unit id.
 
@@ -394,8 +429,13 @@ def unit_states(
     for lesson in lessons:
         lessons_by_unit.setdefault(str(lesson.get("unitId") or ""), []).append(lesson)
 
+    indexed = _indexed_lessons() if indexed is None else indexed
     exercises_by_lesson = {
-        str(lesson.get("id") or ""): _active_exercise_ids(str(lesson.get("id") or ""))
+        str(lesson.get("id") or ""): (
+            [str(entry["id"]) for entry in indexed[str(lesson.get("id") or "")]]
+            if str(lesson.get("id") or "") in indexed
+            else _active_exercise_ids(str(lesson.get("id") or ""))
+        )
         for lesson in lessons
     }
 
@@ -446,6 +486,7 @@ def skill_states(
     subject_id: str | None = None,
     locale: str = "de",
     catalog: Mapping[str, Any] | None = None,
+    indexed: Mapping[str, list[dict[str, Any]]] | None = None,
 ) -> dict[str, SkillMastery]:
     """Every skill point's state for one student, keyed by skill id.
 
@@ -461,14 +502,15 @@ def skill_states(
     skills_by_exercise: dict[str, dict[str, list[str]]] = {}
     lessons_by_skill: dict[str, list[Mapping[str, Any]]] = {}
     exercises_by_lesson: dict[str, list[Mapping[str, Any]]] = {}
+    entries_by_lesson = _exercise_entries(lessons, indexed)
     for lesson in lessons:
         unit_id = str(lesson.get("unitId") or "")
         lesson_id = str(lesson.get("id") or "")
-        for challenge in _active_exercises(lesson_id):
-            skills = [str(skill) for skill in challenge.get("skills") or () if skill]
-            skills_by_exercise.setdefault(unit_id, {})[_exercise_id(challenge)] = skills
+        for entry in entries_by_lesson.get(lesson_id, []):
+            skills = [str(skill) for skill in entry.get("skills") or () if skill]
+            skills_by_exercise.setdefault(unit_id, {})[str(entry["id"])] = skills
             exercises_by_lesson.setdefault(lesson_id, []).append(
-                {"id": _exercise_id(challenge), "knowledge_point": challenge.get("knowledge_point")}
+                {"id": str(entry["id"]), "knowledge_point": entry.get("knowledge_point")}
             )
             for skill in skills:
                 mine = lessons_by_skill.setdefault(skill, [])

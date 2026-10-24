@@ -656,6 +656,109 @@ def test_a_student_is_told_what_to_master_first_and_nothing_is_locked(
     assert skill("brueche-brueche-addieren--sachaufgaben").ready is True
 
 
+def _go_live(imported: list[dict[str, Any]]) -> None:
+    """Publish everything and write the stars live, as --knowledge-base-live does."""
+    _publish_all(imported)
+    _subjects, topics, units = seed_practice.knowledge_base_rows(live=True)
+    practice_repo.get_table().seed(
+        *({"PK": "PRACTICE", "SK": f"TOPIC#{t['topic_id']}", **t} for t in topics),
+        *({"PK": "PRACTICE", "SK": f"UNIT#{u['unit_id']}", **u} for u in units),
+    )
+
+
+def test_a_published_practice_set_carries_its_exercise_index(imported: list[dict[str, Any]]) -> None:
+    _publish_all(imported)
+
+    row = practice_repo.get_lesson("brueche-brueche-addieren--sachaufgaben--1")
+
+    assert row is not None
+    assert row["exercise_index"] == [{
+        "id": "kb-m-p101-q2",
+        "skills": ["brueche-brueche-addieren--sachaufgaben"],
+        "knowledge_point": "kb-m-p101",
+    }]
+
+
+def test_the_star_map_reads_no_exercise_of_an_indexed_practice_set(
+    imported: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _go_live(imported)
+    read: list[str] = []
+    original = practice_repo.get_challenges
+    monkeypatch.setattr(
+        practice_repo, "get_challenges", lambda lesson_id: read.append(lesson_id) or original(lesson_id)
+    )
+    monkeypatch.setattr(practice_repo, "all_challenges_answered_right", lambda _s: set())
+
+    states = knowledge_mastery_service.unit_states("student-1", subject_id="mathematics")
+    knowledge_mastery_service.skill_states("student-1", subject_id="mathematics")
+
+    assert states["brueche-brueche-addieren"].lesson_count == 2  # the extension set does not count
+    assert not [lesson for lesson in read if "--" in lesson]
+
+
+def test_lists_of_the_practice_partition_follow_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    pages = [
+        {"Items": [{"PK": "PRACTICE", "SK": "LESSON#a", "lesson_id": "a"}], "LastEvaluatedKey": {"SK": "1"}},
+        {"Items": [{"PK": "PRACTICE", "SK": "LESSON#b", "lesson_id": "b"}]},
+    ]
+
+    class Paged:
+        def query(self, **kwargs: Any) -> dict[str, Any]:
+            return pages[1] if kwargs.get("ExclusiveStartKey") else pages[0]
+
+    monkeypatch.setattr(practice_repo, "get_table", lambda: Paged())
+
+    assert [row["lesson_id"] for row in practice_repo.get_lessons()] == ["a", "b"]
+
+
+def test_the_skeleton_sends_every_star_without_its_small_stars(
+    imported: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _go_live(imported)
+    monkeypatch.setattr(practice_repo, "all_challenges_answered_right", lambda _s: set())
+
+    full = knowledge_map_service.knowledge_map("student-1", subject_id="mathematics")
+    skeleton = knowledge_map_service.knowledge_map("student-1", subject_id="mathematics", view="skeleton")
+
+    assert skeleton["view"] == "skeleton"
+    assert [s["unitId"] for s in skeleton["stars"]] == [s["unitId"] for s in full["stars"]]
+    assert all(star["skills"] == [] for star in skeleton["stars"])
+    assert any(star["skills"] for star in full["stars"])
+
+
+def test_the_neighbourhood_sends_the_star_its_prerequisites_and_its_practice(
+    imported: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _go_live(imported)
+    monkeypatch.setattr(practice_repo, "all_challenges_answered_right", lambda _s: set())
+
+    around = knowledge_map_service.neighbourhood(
+        "student-1", subject_id="mathematics", around="brueche-brueche-addieren", locale="fr"
+    )
+
+    assert around["focus"] == "brueche-brueche-addieren"
+    stars = {star["unitId"]: star for star in around["stars"]}
+    assert stars["brueche-brueche-addieren"]["relation"] == "focus"
+    assert stars["brueche-bruchbegriff"]["relation"] == "prerequisite"
+    focus = stars["brueche-brueche-addieren"]
+    assert focus["name"] == "Additionner des fractions"
+    assert focus["prerequisiteUnitIds"] == ["brueche-bruchbegriff"]
+    sets = focus["practiceSets"]
+    assert [item["skillId"] for item in sets] == [
+        "brueche-brueche-addieren--kopfrechnen",
+        "brueche-brueche-addieren--sachaufgaben",
+        "brueche-brueche-addieren--schliessen",
+    ]
+    assert sets[2]["extension"] is True and sets[0]["status"] == "available"
+    word_problems = next(s for s in focus["skills"] if s["skillId"].endswith("--sachaufgaben"))
+    assert word_problems["missingPrerequisites"] == [
+        {"unitId": "brueche-bruchbegriff", "name": "Ce qu'est une fraction"}
+    ]
+    # Without a star to centre on, the map's recommendation is the focus.
+    assert knowledge_map_service.neighbourhood("student-1", subject_id="mathematics")["focus"]
+
+
 def test_a_star_lights_from_its_core_and_extension_practice_is_beside_it() -> None:
     lessons = [{"id": "core"}, {"id": "proof", "extension": True}]
     exercises = {"core": ["c1"], "proof": ["p1"]}

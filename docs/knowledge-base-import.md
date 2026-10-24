@@ -53,6 +53,21 @@ knowledge base gets stars of its own beside them.
   practice sets; extension sets are practice beside it and their small stars say
   `extension`. The ZAP stars have no extension sets, so they light as before.
 
+### Reading the star map at this size
+
+- Every list read of the practice partition follows all its pages; a lesson list of
+  two thousand rows is over the 1 MB a query returns.
+- A published or seeded practice set carries its exercise index on its lesson row
+  (each exercise's id, small stars and knowledge point), so the catalog and the
+  star map judge from lesson rows instead of reading every set's exercises. A row
+  written before that still works, read through its challenges; running
+  `seed_practice.py` once after the deploy writes the index onto the ZAP lessons.
+- `GET /practice/knowledge-map?view=skeleton` sends every star without its small
+  stars, and `GET /practice/knowledge-map/stars?around=<unit>` the few around one in
+  full - the star, the stars it needs, the stars that need it and its neighbours,
+  with small stars, practice sets and missing prerequisites. The client opens on
+  the skeleton and loads the neighbourhood it shows (stoa-frontend#503).
+
 A language subject is laid out the same way for every language: ten nebulae for
 situations of life (me and others, daily life, school and work, food and shopping,
 free time, out and about, nature, health, society, communicating) and four for

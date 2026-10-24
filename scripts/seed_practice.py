@@ -1109,10 +1109,15 @@ def seed(
     for u in all_units:
         items_to_write.append({"PK": "PRACTICE", "SK": f"UNIT#{u['unit_id']}", **u})
 
-    # Lessons
+    # Lessons, each with the index of its exercises the star map reads.
     for lesson in all_lessons:
+        index = practice_repo.exercise_index(
+            challenge for challenge in all_challenges
+            if challenge["lesson_id"] == lesson["lesson_id"]
+        )
         items_to_write.append(
-            {"PK": "PRACTICE", "SK": f"LESSON#{lesson['lesson_id']}", **lesson}
+            {"PK": "PRACTICE", "SK": f"LESSON#{lesson['lesson_id']}", **lesson,
+             "exercise_index": index}
         )
 
     # Validate all IDs before any write, then add canonical rows and direct pointers.

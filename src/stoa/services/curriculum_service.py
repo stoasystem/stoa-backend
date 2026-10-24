@@ -48,7 +48,7 @@ def list_catalog(
         if _matches_state(unit, rollout_state, include_preview)
     ]
     lessons = [
-        _build_lesson(lesson, exercise_count=len(_active_exercises_for_lesson(lesson["lesson_id"], include_preview)), locale=locale)
+        _build_lesson(lesson, exercise_count=_exercise_count(lesson, include_preview), locale=locale)
         for lesson in sorted(practice_repo.get_lessons(), key=lambda item: (item.get("topic_id", ""), item.get("unit_id", ""), _as_int(item.get("order", 0))))
         if _lesson_matches(lesson, subject_id, grade_level) and _matches_state(lesson, rollout_state, include_preview)
     ]
@@ -262,6 +262,15 @@ def _all_units(topics: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for topic in topics:
         units.extend(practice_repo.get_units(topic["id"]))
     return units
+
+
+def _exercise_count(lesson: dict[str, Any], include_preview: bool) -> int:
+    """From the lesson's own exercise index where it has one; a preview reader also
+    sees exercises not yet live, which only the challenge rows know of."""
+    index = practice_repo.indexed_exercises(lesson)
+    if index is not None and not include_preview:
+        return len(index)
+    return len(_active_exercises_for_lesson(lesson["lesson_id"], include_preview))
 
 
 def _active_exercises_for_lesson(lesson_id: str, include_preview: bool) -> list[dict[str, Any]]:

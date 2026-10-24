@@ -643,6 +643,7 @@ async def get_curriculum_progress(
 @router.get("/knowledge-map")
 async def get_knowledge_map(
     subject_id: str | None = Query(default=None, alias="subjectId"),
+    view: Literal["full", "skeleton"] = Query(default="full"),
     authorized_student: AuthorizedResource = Depends(_practice_progress),
     actor: Actor = Depends(get_actor),
 ):
@@ -661,11 +662,44 @@ async def get_knowledge_map(
     A `subjectId` naming no subject the curriculum has is a 422 rather than a
     sky labelled with it (#124). One the student has not started is not: the
     map is there to be browsed ahead of enrolment.
+
+    `view=skeleton` sends every star with its state and position but none of
+    its small stars; `/knowledge-map/stars` then sends the few around one in full.
     """
     try:
         return knowledge_map_service.knowledge_map(
             authorized_student.ref.student_id,
             subject_id=subject_id,
+            locale=_actor_locale(actor),
+            view=view,
+        )
+    except knowledge_map_service.UnknownSubject:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="subjectId does not name a subject in the curriculum",
+        ) from None
+
+
+@router.get("/knowledge-map/stars")
+async def get_knowledge_map_neighbourhood(
+    subject_id: str | None = Query(default=None, alias="subjectId"),
+    around: str | None = Query(default=None, max_length=200),
+    authorized_student: AuthorizedResource = Depends(_practice_progress),
+    actor: Actor = Depends(get_actor),
+):
+    """A few stars in full - small stars, practice sets, missing prerequisites -
+    around `around`, or around where the student last practised.
+
+    With the star come the ones it needs, the ones that need it and its
+    neighbours in its nebula, so the client loads the part of the sky the
+    student is about to look at. The student is decided by the authorization
+    dependency, exactly as for `/knowledge-map`.
+    """
+    try:
+        return knowledge_map_service.neighbourhood(
+            authorized_student.ref.student_id,
+            subject_id=subject_id,
+            around=around,
             locale=_actor_locale(actor),
         )
     except knowledge_map_service.UnknownSubject:

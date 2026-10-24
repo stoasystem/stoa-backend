@@ -402,6 +402,7 @@ def put_published_projection(version: CurriculumItem, manifest: CurriculumItem) 
     lesson["version_id"] = version["version_id"]
     lesson["manifest_id"] = manifest["manifest_id"]
     lesson["challenge_count"] = len(rows)
+    lesson["exercise_index"] = practice_repo.exercise_index(rows)
     _put_item(
         table,
         Item={"PK": PRACTICE_PK, "SK": f"LESSON#{public_id}", **lesson},
@@ -436,12 +437,22 @@ def get_practice_unit(unit_id: str) -> CurriculumItem | None:
 
 
 def list_practice_units() -> list[CurriculumItem]:
+    """Every unit row, across every page: the knowledge base brings two hundred."""
     table = get_table()
-    resp = _query(
-        table,
-        KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("UNIT#")),
-    )
-    return _items(resp.get("Items", []))
+    items: list[CurriculumItem] = []
+    request: CurriculumItem = {
+        "KeyConditionExpression": Key("PK").eq(PRACTICE_PK) & Key("SK").begins_with("UNIT#"),
+    }
+    for _page in range(PRACTICE_PAGE_BUDGET):
+        resp = _query(table, **request)
+        items.extend(_items(resp.get("Items", [])))
+        cursor = resp.get("LastEvaluatedKey")
+        if not cursor:
+            return items
+        if not isinstance(cursor, Mapping) or cursor == request.get("ExclusiveStartKey"):
+            raise RuntimeError("practice pagination did not move forward")
+        request["ExclusiveStartKey"] = dict(cursor)
+    raise RuntimeError("practice pagination exceeded the bounded page limit")
 
 
 def set_unit_prerequisites(
