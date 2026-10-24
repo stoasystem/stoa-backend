@@ -785,6 +785,17 @@
    },
    "extension": false
   },
+  "daten-zaehlprinzipien-und-variationen--darstellen": {
+   "subject": "mathematics",
+   "unit": "daten-zaehlprinzipien-und-variationen",
+   "titles": {
+    "de": "Darstellen und Zerlegen",
+    "en": "Representing and decomposing",
+    "fr": "Représenter et décomposer",
+    "it": "Rappresentare e scomporre"
+   },
+   "extension": false
+  },
   "daten-zaehlprinzipien-und-variationen--kopfrechnen": {
    "subject": "mathematics",
    "unit": "daten-zaehlprinzipien-und-variationen",
@@ -5471,6 +5482,17 @@
    },
    "extension": false
   },
+  "geometrie-umfang-und-flaeche-ebener-figuren--schliessen": {
+   "subject": "mathematics",
+   "unit": "geometrie-umfang-und-flaeche-ebener-figuren",
+   "titles": {
+    "de": "Formeln und Schlussfolgern",
+    "en": "Formulas and reasoning",
+    "fr": "Formules et raisonnement",
+    "it": "Formule e ragionamento"
+   },
+   "extension": true
+  },
   "geometrie-vektoren-in-der-ebene--begriffe": {
    "subject": "mathematics",
    "unit": "geometrie-vektoren-in-der-ebene",
@@ -5677,6 +5699,17 @@
     "en": "Calculating and transforming",
     "fr": "Calculer et transformer",
     "it": "Calcolare e trasformare"
+   },
+   "extension": false
+  },
+  "geometrie-volumen-und-oberflaeche-von-koerpern--sachaufgaben": {
+   "subject": "mathematics",
+   "unit": "geometrie-volumen-und-oberflaeche-von-koerpern",
+   "titles": {
+    "de": "Sachaufgaben",
+    "en": "Word problems",
+    "fr": "Problèmes",
+    "it": "Problemi"
    },
    "extension": false
   },
@@ -6956,6 +6989,17 @@
    },
    "extension": false
   },
+  "groessen-gewicht-hohlmasse-und-geld--rechnen": {
+   "subject": "mathematics",
+   "unit": "groessen-gewicht-hohlmasse-und-geld",
+   "titles": {
+    "de": "Rechnen und Umformen",
+    "en": "Calculating and transforming",
+    "fr": "Calculer et transformer",
+    "it": "Calcolare e trasformare"
+   },
+   "extension": false
+  },
   "groessen-gewicht-hohlmasse-und-geld--sachaufgaben": {
    "subject": "mathematics",
    "unit": "groessen-gewicht-hohlmasse-und-geld",
@@ -6986,6 +7030,17 @@
     "en": "Mental maths tricks",
     "fr": "Astuces de calcul mental",
     "it": "Trucchi di calcolo mentale"
+   },
+   "extension": false
+  },
+  "groessen-laengen-und-flaechen--rechnen": {
+   "subject": "mathematics",
+   "unit": "groessen-laengen-und-flaechen",
+   "titles": {
+    "de": "Rechnen und Umformen",
+    "en": "Calculating and transforming",
+    "fr": "Calculer et transformer",
+    "it": "Calcolare e trasformare"
    },
    "extension": false
   },
@@ -7030,6 +7085,17 @@
     "en": "Mental maths tricks",
     "fr": "Astuces de calcul mental",
     "it": "Trucchi di calcolo mentale"
+   },
+   "extension": false
+  },
+  "groessen-zeit-uhrzeit-und-zeitdauer--rechnen": {
+   "subject": "mathematics",
+   "unit": "groessen-zeit-uhrzeit-und-zeitdauer",
+   "titles": {
+    "de": "Rechnen und Umformen",
+    "en": "Calculating and transforming",
+    "fr": "Calculer et transformer",
+    "it": "Calcolare e trasformare"
    },
    "extension": false
   },
@@ -8760,6 +8826,17 @@
    },
    "extension": false
   },
+  "zahlen-dezimalstellen-runden-und-ueberschlagen--darstellen": {
+   "subject": "mathematics",
+   "unit": "zahlen-dezimalstellen-runden-und-ueberschlagen",
+   "titles": {
+    "de": "Darstellen und Zerlegen",
+    "en": "Representing and decomposing",
+    "fr": "Représenter et décomposer",
+    "it": "Rappresentare e scomporre"
+   },
+   "extension": false
+  },
   "zahlen-dezimalstellen-runden-und-ueberschlagen--kopfrechnen": {
    "subject": "mathematics",
    "unit": "zahlen-dezimalstellen-runden-und-ueberschlagen",
@@ -9142,6 +9219,17 @@
     "en": "Understanding concepts",
     "fr": "Comprendre les notions",
     "it": "Capire i concetti"
+   },
+   "extension": false
+  },
+  "zahlen-muster-und-knobelaufgaben--darstellen": {
+   "subject": "mathematics",
+   "unit": "zahlen-muster-und-knobelaufgaben",
+   "titles": {
+    "de": "Darstellen und Zerlegen",
+    "en": "Representing and decomposing",
+    "fr": "Représenter et décomposer",
+    "it": "Rappresentare e scomporre"
    },
    "extension": false
   },
@@ -9739,6 +9827,28 @@
    },
    "extension": false
   },
+  "zahlen-teilbarkeit-primzahlen-ggt-kgv--sachaufgaben": {
+   "subject": "mathematics",
+   "unit": "zahlen-teilbarkeit-primzahlen-ggt-kgv",
+   "titles": {
+    "de": "Sachaufgaben",
+    "en": "Word problems",
+    "fr": "Problèmes",
+    "it": "Problemi"
+   },
+   "extension": false
+  },
+  "zahlen-teilbarkeit-primzahlen-ggt-kgv--schliessen": {
+   "subject": "mathematics",
+   "unit": "zahlen-teilbarkeit-primzahlen-ggt-kgv",
+   "titles": {
+    "de": "Formeln und Schlussfolgern",
+    "en": "Formulas and reasoning",
+    "fr": "Formules et raisonnement",
+    "it": "Formule e ragionamento"
+   },
+   "extension": true
+  },
   "zahlen-wurzeln-und-reelle-zahlen--begriffe": {
    "subject": "mathematics",
    "unit": "zahlen-wurzeln-und-reelle-zahlen",
@@ -9887,6 +9997,12 @@
    "fr": "Calculer et transformer · Niveau 4",
    "it": "Calcolare e trasformare · Livello 4"
   },
+  "brueche-brueche-kuerzen-addieren-und-subtrahieren--rechnen--zap": {
+   "de": "Rechnen und Umformen · ZAP",
+   "en": "Calculating and transforming · ZAP",
+   "fr": "Calculer et transformer · ZAP",
+   "it": "Calcolare e trasformare · ZAP"
+  },
   "brueche-brueche-kuerzen-addieren-und-subtrahieren--sachaufgaben--1": {
    "de": "Sachaufgaben · Stufe 1",
    "en": "Word problems · Level 1",
@@ -9904,6 +10020,12 @@
    "en": "Word problems · Level 4",
    "fr": "Problèmes · Niveau 4",
    "it": "Problemi · Livello 4"
+  },
+  "brueche-brueche-kuerzen-addieren-und-subtrahieren--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
   },
   "brueche-brueche-multiplizieren-und-dividieren--kopfrechnen--1": {
    "de": "Kopfrechnen-Trick · Stufe 1",
@@ -9941,6 +10063,12 @@
    "fr": "Calculer et transformer · Niveau 4",
    "it": "Calcolare e trasformare · Livello 4"
   },
+  "brueche-brueche-multiplizieren-und-dividieren--rechnen--zap": {
+   "de": "Rechnen und Umformen · ZAP",
+   "en": "Calculating and transforming · ZAP",
+   "fr": "Calculer et transformer · ZAP",
+   "it": "Calcolare e trasformare · ZAP"
+  },
   "brueche-brueche-multiplizieren-und-dividieren--sachaufgaben--1": {
    "de": "Sachaufgaben · Stufe 1",
    "en": "Word problems · Level 1",
@@ -9964,6 +10092,24 @@
    "en": "Word problems · Level 4",
    "fr": "Problèmes · Niveau 4",
    "it": "Problemi · Livello 4"
+  },
+  "brueche-brueche-multiplizieren-und-dividieren--sachaufgaben--zap-1": {
+   "de": "Sachaufgaben · ZAP · Teil 1",
+   "en": "Word problems · ZAP · Part 1",
+   "fr": "Problèmes · ZAP · Partie 1",
+   "it": "Problemi · ZAP · Parte 1"
+  },
+  "brueche-brueche-multiplizieren-und-dividieren--sachaufgaben--zap-2": {
+   "de": "Sachaufgaben · ZAP · Teil 2",
+   "en": "Word problems · ZAP · Part 2",
+   "fr": "Problèmes · ZAP · Partie 2",
+   "it": "Problemi · ZAP · Parte 2"
+  },
+  "brueche-brueche-multiplizieren-und-dividieren--sachaufgaben--zap-3": {
+   "de": "Sachaufgaben · ZAP · Teil 3",
+   "en": "Word problems · ZAP · Part 3",
+   "fr": "Problèmes · ZAP · Partie 3",
+   "it": "Problemi · ZAP · Parte 3"
   },
   "brueche-brueche-und-dezimalzahlen-verstehen--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
@@ -10043,6 +10189,12 @@
    "fr": "Problèmes · Niveau 3",
    "it": "Problemi · Livello 3"
   },
+  "brueche-brueche-und-dezimalzahlen-verstehen--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
+  },
   "brueche-brueche-und-dezimalzahlen-verstehen--vergleichen--1": {
    "de": "Vergleichen und Ordnen · Stufe 1",
    "en": "Comparing and ordering · Level 1",
@@ -10054,6 +10206,12 @@
    "en": "Comparing and ordering · Level 3",
    "fr": "Comparer et ordonner · Niveau 3",
    "it": "Confrontare e ordinare · Livello 3"
+  },
+  "brueche-brueche-und-dezimalzahlen-verstehen--vergleichen--zap": {
+   "de": "Vergleichen und Ordnen · ZAP",
+   "en": "Comparing and ordering · ZAP",
+   "fr": "Comparer et ordonner · ZAP",
+   "it": "Confrontare e ordinare · ZAP"
   },
   "daten-bedingte-wahrscheinlichkeit-und-bayes--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
@@ -10228,6 +10386,12 @@
    "en": "Word problems · Level 2",
    "fr": "Problèmes · Niveau 2",
    "it": "Problemi · Livello 2"
+  },
+  "daten-daten-ordnen-und-darstellen--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
   },
   "daten-daten-ordnen-und-darstellen--schliessen--1": {
    "de": "Formeln und Schlussfolgern · Stufe 1",
@@ -10583,6 +10747,12 @@
    "fr": "Calculer et transformer · Niveau 4",
    "it": "Calcolare e trasformare · Livello 4"
   },
+  "daten-mittelwert-median-und-modalwert--rechnen--zap": {
+   "de": "Rechnen und Umformen · ZAP",
+   "en": "Calculating and transforming · ZAP",
+   "fr": "Calculer et transformer · ZAP",
+   "it": "Calcolare e trasformare · ZAP"
+  },
   "daten-mittelwert-median-und-modalwert--sachaufgaben--1": {
    "de": "Sachaufgaben · Stufe 1",
    "en": "Word problems · Level 1",
@@ -10595,6 +10765,12 @@
    "fr": "Problèmes · Niveau 3",
    "it": "Problemi · Livello 3"
   },
+  "daten-mittelwert-median-und-modalwert--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
+  },
   "daten-mittelwert-median-und-modalwert--schliessen--2": {
    "de": "Formeln und Schlussfolgern · Stufe 2",
    "en": "Formulas and reasoning · Level 2",
@@ -10606,6 +10782,12 @@
    "en": "Formulas and reasoning · Level 4",
    "fr": "Formules et raisonnement · Niveau 4",
    "it": "Formule e ragionamento · Livello 4"
+  },
+  "daten-mittelwert-median-und-modalwert--schliessen--zap": {
+   "de": "Formeln und Schlussfolgern · ZAP",
+   "en": "Formulas and reasoning · ZAP",
+   "fr": "Formules et raisonnement · ZAP",
+   "it": "Formule e ragionamento · ZAP"
   },
   "daten-mittelwert-median-und-modalwert--vergleichen--3": {
    "de": "Vergleichen und Ordnen",
@@ -10901,6 +11083,12 @@
    "fr": "Comprendre les notions · Niveau 4",
    "it": "Capire i concetti · Livello 4"
   },
+  "daten-zaehlprinzipien-und-variationen--darstellen--zap": {
+   "de": "Darstellen und Zerlegen · ZAP",
+   "en": "Representing and decomposing · ZAP",
+   "fr": "Représenter et décomposer · ZAP",
+   "it": "Rappresentare e scomporre · ZAP"
+  },
   "daten-zaehlprinzipien-und-variationen--kopfrechnen--1": {
    "de": "Kopfrechnen-Trick",
    "en": "Mental maths tricks",
@@ -10937,11 +11125,23 @@
    "fr": "Problèmes · Niveau 4",
    "it": "Problemi · Livello 4"
   },
+  "daten-zaehlprinzipien-und-variationen--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
+  },
   "daten-zaehlprinzipien-und-variationen--schliessen--4": {
    "de": "Formeln und Schlussfolgern",
    "en": "Formulas and reasoning",
    "fr": "Formules et raisonnement",
    "it": "Formule e ragionamento"
+  },
+  "daten-zaehlprinzipien-und-variationen--schliessen--zap": {
+   "de": "Formeln und Schlussfolgern · ZAP",
+   "en": "Formulas and reasoning · ZAP",
+   "fr": "Formules et raisonnement · ZAP",
+   "it": "Formule e ragionamento · ZAP"
   },
   "daten-zufall-und-wahrscheinlichkeit-einschaetzen--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
@@ -14219,6 +14419,12 @@
    "fr": "Calculer et transformer · Niveau 4",
    "it": "Calcolare e trasformare · Livello 4"
   },
+  "geometrie-achsen-und-punktsymmetrie--rechnen--zap": {
+   "de": "Rechnen und Umformen · ZAP",
+   "en": "Calculating and transforming · ZAP",
+   "fr": "Calculer et transformer · ZAP",
+   "it": "Calcolare e trasformare · ZAP"
+  },
   "geometrie-achsen-und-punktsymmetrie--schliessen--1": {
    "de": "Formeln und Schlussfolgern · Stufe 1",
    "en": "Formulas and reasoning · Level 1",
@@ -14825,6 +15031,12 @@
    "fr": "Problèmes · Niveau 3",
    "it": "Problemi · Livello 3"
   },
+  "geometrie-koerper-ansichten-und-netze--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
+  },
   "geometrie-koerper-ansichten-und-netze--schliessen--3": {
    "de": "Formeln und Schlussfolgern",
    "en": "Formulas and reasoning",
@@ -15191,6 +15403,12 @@
    "fr": "Représenter et décomposer · Niveau 4 · Partie 2",
    "it": "Rappresentare e scomporre · Livello 4 · Parte 2"
   },
+  "geometrie-lage-richtung-und-koordinaten--darstellen--zap": {
+   "de": "Darstellen und Zerlegen · ZAP",
+   "en": "Representing and decomposing · ZAP",
+   "fr": "Représenter et décomposer · ZAP",
+   "it": "Rappresentare e scomporre · ZAP"
+  },
   "geometrie-lage-richtung-und-koordinaten--kopfrechnen--1": {
    "de": "Kopfrechnen-Trick · Stufe 1",
    "en": "Mental maths tricks · Level 1",
@@ -15208,6 +15426,12 @@
    "en": "Calculating and transforming",
    "fr": "Calculer et transformer",
    "it": "Calcolare e trasformare"
+  },
+  "geometrie-lage-richtung-und-koordinaten--rechnen--zap": {
+   "de": "Rechnen und Umformen · ZAP",
+   "en": "Calculating and transforming · ZAP",
+   "fr": "Calculer et transformer · ZAP",
+   "it": "Calcolare e trasformare · ZAP"
   },
   "geometrie-lage-richtung-und-koordinaten--sachaufgaben--1": {
    "de": "Sachaufgaben · Stufe 1",
@@ -15232,6 +15456,12 @@
    "en": "Word problems · Level 4",
    "fr": "Problèmes · Niveau 4",
    "it": "Problemi · Livello 4"
+  },
+  "geometrie-lage-richtung-und-koordinaten--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
   },
   "geometrie-lage-richtung-und-koordinaten--schliessen--4": {
    "de": "Formeln und Schlussfolgern",
@@ -15737,6 +15967,12 @@
    "fr": "Calculer et transformer · Niveau 4",
    "it": "Calcolare e trasformare · Livello 4"
   },
+  "geometrie-umfang-und-flaeche-ebener-figuren--rechnen--zap": {
+   "de": "Rechnen und Umformen · ZAP",
+   "en": "Calculating and transforming · ZAP",
+   "fr": "Calculer et transformer · ZAP",
+   "it": "Calcolare e trasformare · ZAP"
+  },
   "geometrie-umfang-und-flaeche-ebener-figuren--sachaufgaben--1": {
    "de": "Sachaufgaben · Stufe 1",
    "en": "Word problems · Level 1",
@@ -15754,6 +15990,18 @@
    "en": "Word problems · Level 4",
    "fr": "Problèmes · Niveau 4",
    "it": "Problemi · Livello 4"
+  },
+  "geometrie-umfang-und-flaeche-ebener-figuren--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
+  },
+  "geometrie-umfang-und-flaeche-ebener-figuren--schliessen--zap": {
+   "de": "Formeln und Schlussfolgern · ZAP",
+   "en": "Formulas and reasoning · ZAP",
+   "fr": "Formules et raisonnement · ZAP",
+   "it": "Formule e ragionamento · ZAP"
   },
   "geometrie-vektoren-in-der-ebene--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
@@ -15947,6 +16195,12 @@
    "fr": "Calculer et transformer · Niveau 4",
    "it": "Calcolare e trasformare · Livello 4"
   },
+  "geometrie-verschiebung-und-drehung--rechnen--zap": {
+   "de": "Rechnen und Umformen · ZAP",
+   "en": "Calculating and transforming · ZAP",
+   "fr": "Calculer et transformer · ZAP",
+   "it": "Calcolare e trasformare · ZAP"
+  },
   "geometrie-verschiebung-und-drehung--sachaufgaben--2": {
    "de": "Sachaufgaben",
    "en": "Word problems",
@@ -15983,6 +16237,12 @@
    "fr": "Représenter et décomposer",
    "it": "Rappresentare e scomporre"
   },
+  "geometrie-volumen-und-oberflaeche-von-koerpern--darstellen--zap": {
+   "de": "Darstellen und Zerlegen · ZAP",
+   "en": "Representing and decomposing · ZAP",
+   "fr": "Représenter et décomposer · ZAP",
+   "it": "Rappresentare e scomporre · ZAP"
+  },
   "geometrie-volumen-und-oberflaeche-von-koerpern--kopfrechnen--1": {
    "de": "Kopfrechnen-Trick · Stufe 1",
    "en": "Mental maths tricks · Level 1",
@@ -16012,6 +16272,18 @@
    "en": "Calculating and transforming · Level 4",
    "fr": "Calculer et transformer · Niveau 4",
    "it": "Calcolare e trasformare · Livello 4"
+  },
+  "geometrie-volumen-und-oberflaeche-von-koerpern--rechnen--zap": {
+   "de": "Rechnen und Umformen · ZAP",
+   "en": "Calculating and transforming · ZAP",
+   "fr": "Calculer et transformer · ZAP",
+   "it": "Calcolare e trasformare · ZAP"
+  },
+  "geometrie-volumen-und-oberflaeche-von-koerpern--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
   },
   "geometrie-winkel-an-parallelen-und-beweise--begriffe--1-1": {
    "de": "Begriffe verstehen · Stufe 1 · Teil 1",
@@ -16493,6 +16765,24 @@
    "fr": "Problèmes · Niveau 2",
    "it": "Problemi · Livello 2"
   },
+  "gleichungen-ersetzen-und-groessenbeziehungen--sachaufgaben--zap-1": {
+   "de": "Sachaufgaben · ZAP · Teil 1",
+   "en": "Word problems · ZAP · Part 1",
+   "fr": "Problèmes · ZAP · Partie 1",
+   "it": "Problemi · ZAP · Parte 1"
+  },
+  "gleichungen-ersetzen-und-groessenbeziehungen--sachaufgaben--zap-2": {
+   "de": "Sachaufgaben · ZAP · Teil 2",
+   "en": "Word problems · ZAP · Part 2",
+   "fr": "Problèmes · ZAP · Partie 2",
+   "it": "Problemi · ZAP · Parte 2"
+  },
+  "gleichungen-ersetzen-und-groessenbeziehungen--sachaufgaben--zap-3": {
+   "de": "Sachaufgaben · ZAP · Teil 3",
+   "en": "Word problems · ZAP · Part 3",
+   "fr": "Problèmes · ZAP · Partie 3",
+   "it": "Problemi · ZAP · Parte 3"
+  },
   "gleichungen-ersetzen-und-groessenbeziehungen--schliessen--1": {
    "de": "Formeln und Schlussfolgern",
    "en": "Formulas and reasoning",
@@ -16858,6 +17148,12 @@
    "en": "Calculating and transforming · Level 4",
    "fr": "Calculer et transformer · Niveau 4",
    "it": "Calcolare e trasformare · Livello 4"
+  },
+  "gleichungen-lineare-gleichungen-loesen--rechnen--zap": {
+   "de": "Rechnen und Umformen · ZAP",
+   "en": "Calculating and transforming · ZAP",
+   "fr": "Calculer et transformer · ZAP",
+   "it": "Calcolare e trasformare · ZAP"
   },
   "gleichungen-lineare-gleichungssysteme--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
@@ -17285,6 +17581,12 @@
    "fr": "Problèmes · Niveau 2 · Partie 2",
    "it": "Problemi · Livello 2 · Parte 2"
   },
+  "gleichungen-sachaufgaben-mit-gleichungen--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
+  },
   "gleichungen-terme-aufstellen-und-berechnen--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
    "en": "Understanding concepts · Level 1",
@@ -17693,6 +17995,18 @@
    "fr": "Astuces de calcul mental · Niveau 2",
    "it": "Trucchi di calcolo mentale · Livello 2"
   },
+  "groessen-gewicht-hohlmasse-und-geld--rechnen--zap-1": {
+   "de": "Rechnen und Umformen · ZAP · Teil 1",
+   "en": "Calculating and transforming · ZAP · Part 1",
+   "fr": "Calculer et transformer · ZAP · Partie 1",
+   "it": "Calcolare e trasformare · ZAP · Parte 1"
+  },
+  "groessen-gewicht-hohlmasse-und-geld--rechnen--zap-2": {
+   "de": "Rechnen und Umformen · ZAP · Teil 2",
+   "en": "Calculating and transforming · ZAP · Part 2",
+   "fr": "Calculer et transformer · ZAP · Partie 2",
+   "it": "Calcolare e trasformare · ZAP · Parte 2"
+  },
   "groessen-gewicht-hohlmasse-und-geld--sachaufgaben--1": {
    "de": "Sachaufgaben · Stufe 1",
    "en": "Word problems · Level 1",
@@ -17704,6 +18018,12 @@
    "en": "Word problems · Level 2",
    "fr": "Problèmes · Niveau 2",
    "it": "Problemi · Livello 2"
+  },
+  "groessen-gewicht-hohlmasse-und-geld--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
   },
   "groessen-laengen-und-flaechen--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
@@ -17753,6 +18073,12 @@
    "fr": "Astuces de calcul mental · Niveau 4",
    "it": "Trucchi di calcolo mentale · Livello 4"
   },
+  "groessen-laengen-und-flaechen--rechnen--zap": {
+   "de": "Rechnen und Umformen · ZAP",
+   "en": "Calculating and transforming · ZAP",
+   "fr": "Calculer et transformer · ZAP",
+   "it": "Calcolare e trasformare · ZAP"
+  },
   "groessen-laengen-und-flaechen--sachaufgaben--1": {
    "de": "Sachaufgaben · Stufe 1",
    "en": "Word problems · Level 1",
@@ -17776,6 +18102,12 @@
    "en": "Word problems · Level 4",
    "fr": "Problèmes · Niveau 4",
    "it": "Problemi · Livello 4"
+  },
+  "groessen-laengen-und-flaechen--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
   },
   "groessen-laengen-und-flaechen--vergleichen--2": {
    "de": "Vergleichen und Ordnen",
@@ -17831,6 +18163,12 @@
    "fr": "Astuces de calcul mental · Niveau 4",
    "it": "Trucchi di calcolo mentale · Livello 4"
   },
+  "groessen-zeit-uhrzeit-und-zeitdauer--rechnen--zap": {
+   "de": "Rechnen und Umformen · ZAP",
+   "en": "Calculating and transforming · ZAP",
+   "fr": "Calculer et transformer · ZAP",
+   "it": "Calcolare e trasformare · ZAP"
+  },
   "groessen-zeit-uhrzeit-und-zeitdauer--sachaufgaben--1": {
    "de": "Sachaufgaben · Stufe 1",
    "en": "Word problems · Level 1",
@@ -17854,6 +18192,12 @@
    "en": "Word problems · Level 4",
    "fr": "Problèmes · Niveau 4",
    "it": "Problemi · Livello 4"
+  },
+  "groessen-zeit-uhrzeit-und-zeitdauer--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
   },
   "physik-elektrizitaet-coulombsches-gesetz-und-elektrisches-feld--begriffe--2": {
    "de": "Begriffe verstehen · Stufe 2",
@@ -20093,6 +20437,12 @@
    "fr": "Calculer et transformer · Niveau 3",
    "it": "Calcolare e trasformare · Livello 3"
   },
+  "prozentrechnung-verhaeltnisse-und-proportionalitaet--rechnen--zap": {
+   "de": "Rechnen und Umformen · ZAP",
+   "en": "Calculating and transforming · ZAP",
+   "fr": "Calculer et transformer · ZAP",
+   "it": "Calcolare e trasformare · ZAP"
+  },
   "prozentrechnung-verhaeltnisse-und-proportionalitaet--sachaufgaben--1": {
    "de": "Sachaufgaben · Stufe 1",
    "en": "Word problems · Level 1",
@@ -20110,6 +20460,30 @@
    "en": "Word problems · Level 4",
    "fr": "Problèmes · Niveau 4",
    "it": "Problemi · Livello 4"
+  },
+  "prozentrechnung-verhaeltnisse-und-proportionalitaet--sachaufgaben--zap-1": {
+   "de": "Sachaufgaben · ZAP · Teil 1",
+   "en": "Word problems · ZAP · Part 1",
+   "fr": "Problèmes · ZAP · Partie 1",
+   "it": "Problemi · ZAP · Parte 1"
+  },
+  "prozentrechnung-verhaeltnisse-und-proportionalitaet--sachaufgaben--zap-2": {
+   "de": "Sachaufgaben · ZAP · Teil 2",
+   "en": "Word problems · ZAP · Part 2",
+   "fr": "Problèmes · ZAP · Partie 2",
+   "it": "Problemi · ZAP · Parte 2"
+  },
+  "prozentrechnung-verhaeltnisse-und-proportionalitaet--sachaufgaben--zap-3": {
+   "de": "Sachaufgaben · ZAP · Teil 3",
+   "en": "Word problems · ZAP · Part 3",
+   "fr": "Problèmes · ZAP · Partie 3",
+   "it": "Problemi · ZAP · Parte 3"
+  },
+  "prozentrechnung-verhaeltnisse-und-proportionalitaet--sachaufgaben--zap-4": {
+   "de": "Sachaufgaben · ZAP · Teil 4",
+   "en": "Word problems · ZAP · Part 4",
+   "fr": "Problèmes · ZAP · Partie 4",
+   "it": "Problemi · ZAP · Parte 4"
   },
   "zahlen-addition-und-subtraktion-bis-20--darstellen--1": {
    "de": "Darstellen und Zerlegen · Stufe 1",
@@ -20224,6 +20598,12 @@
    "en": "Understanding concepts",
    "fr": "Comprendre les notions",
    "it": "Capire i concetti"
+  },
+  "zahlen-dezimalstellen-runden-und-ueberschlagen--darstellen--zap": {
+   "de": "Darstellen und Zerlegen · ZAP",
+   "en": "Representing and decomposing · ZAP",
+   "fr": "Représenter et décomposer · ZAP",
+   "it": "Rappresentare e scomporre · ZAP"
   },
   "zahlen-dezimalstellen-runden-und-ueberschlagen--kopfrechnen--1-1": {
    "de": "Kopfrechnen-Trick · Stufe 1 · Teil 1",
@@ -20549,6 +20929,12 @@
    "fr": "Problèmes · Niveau 3",
    "it": "Problemi · Livello 3"
   },
+  "zahlen-mehrstellig-multiplizieren-und-dividieren--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
+  },
   "zahlen-mengen-und-teilmengen--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
    "en": "Understanding concepts · Level 1",
@@ -20693,6 +21079,12 @@
    "fr": "Comprendre les notions",
    "it": "Capire i concetti"
   },
+  "zahlen-muster-und-knobelaufgaben--darstellen--zap": {
+   "de": "Darstellen und Zerlegen · ZAP",
+   "en": "Representing and decomposing · ZAP",
+   "fr": "Représenter et décomposer · ZAP",
+   "it": "Rappresentare e scomporre · ZAP"
+  },
   "zahlen-muster-und-knobelaufgaben--kopfrechnen--1": {
    "de": "Kopfrechnen-Trick · Stufe 1",
    "en": "Mental maths tricks · Level 1",
@@ -20717,6 +21109,12 @@
    "fr": "Problèmes",
    "it": "Problemi"
   },
+  "zahlen-muster-und-knobelaufgaben--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
+  },
   "zahlen-muster-und-knobelaufgaben--schliessen--1": {
    "de": "Formeln und Schlussfolgern · Stufe 1",
    "en": "Formulas and reasoning · Level 1",
@@ -20729,11 +21127,29 @@
    "fr": "Formules et raisonnement · Niveau 2",
    "it": "Formule e ragionamento · Livello 2"
   },
+  "zahlen-muster-und-knobelaufgaben--schliessen--zap-1": {
+   "de": "Formeln und Schlussfolgern · ZAP · Teil 1",
+   "en": "Formulas and reasoning · ZAP · Part 1",
+   "fr": "Formules et raisonnement · ZAP · Partie 1",
+   "it": "Formule e ragionamento · ZAP · Parte 1"
+  },
+  "zahlen-muster-und-knobelaufgaben--schliessen--zap-2": {
+   "de": "Formeln und Schlussfolgern · ZAP · Teil 2",
+   "en": "Formulas and reasoning · ZAP · Part 2",
+   "fr": "Formules et raisonnement · ZAP · Partie 2",
+   "it": "Formule e ragionamento · ZAP · Parte 2"
+  },
   "zahlen-muster-und-knobelaufgaben--vergleichen--1": {
    "de": "Vergleichen und Ordnen",
    "en": "Comparing and ordering",
    "fr": "Comparer et ordonner",
    "it": "Confrontare e ordinare"
+  },
+  "zahlen-muster-und-knobelaufgaben--vergleichen--zap": {
+   "de": "Vergleichen und Ordnen · ZAP",
+   "en": "Comparing and ordering · ZAP",
+   "fr": "Comparer et ordonner · ZAP",
+   "it": "Confrontare e ordinare · ZAP"
   },
   "zahlen-negative-und-rationale-zahlen--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
@@ -20981,6 +21397,12 @@
    "fr": "Calculer et transformer · Niveau 4",
    "it": "Calcolare e trasformare · Livello 4"
   },
+  "zahlen-plus-und-minus-bis-1000--rechnen--zap": {
+   "de": "Rechnen und Umformen · ZAP",
+   "en": "Calculating and transforming · ZAP",
+   "fr": "Calculer et transformer · ZAP",
+   "it": "Calcolare e trasformare · ZAP"
+  },
   "zahlen-plus-und-minus-bis-1000--sachaufgaben--1": {
    "de": "Sachaufgaben · Stufe 1",
    "en": "Word problems · Level 1",
@@ -20998,6 +21420,12 @@
    "en": "Word problems · Level 3",
    "fr": "Problèmes · Niveau 3",
    "it": "Problemi · Livello 3"
+  },
+  "zahlen-plus-und-minus-bis-1000--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
   },
   "zahlen-plus-und-minus-bis-1000--schliessen--4": {
    "de": "Formeln und Schlussfolgern",
@@ -21113,6 +21541,12 @@
    "fr": "Comprendre les notions · Niveau 3",
    "it": "Capire i concetti · Livello 3"
   },
+  "zahlen-rechengesetze-und-rechenreihenfolge--begriffe--zap": {
+   "de": "Begriffe verstehen · ZAP",
+   "en": "Understanding concepts · ZAP",
+   "fr": "Comprendre les notions · ZAP",
+   "it": "Capire i concetti · ZAP"
+  },
   "zahlen-rechengesetze-und-rechenreihenfolge--kopfrechnen--1": {
    "de": "Kopfrechnen-Trick · Stufe 1",
    "en": "Mental maths tricks · Level 1",
@@ -21130,6 +21564,12 @@
    "en": "Mental maths tricks · Level 4",
    "fr": "Astuces de calcul mental · Niveau 4",
    "it": "Trucchi di calcolo mentale · Livello 4"
+  },
+  "zahlen-rechengesetze-und-rechenreihenfolge--kopfrechnen--zap": {
+   "de": "Kopfrechnen-Trick · ZAP",
+   "en": "Mental maths tricks · ZAP",
+   "fr": "Astuces de calcul mental · ZAP",
+   "it": "Trucchi di calcolo mentale · ZAP"
   },
   "zahlen-rechengesetze-und-rechenreihenfolge--rechnen--1": {
    "de": "Rechnen und Umformen · Stufe 1",
@@ -21155,6 +21595,12 @@
    "fr": "Calculer et transformer · Niveau 4",
    "it": "Calcolare e trasformare · Livello 4"
   },
+  "zahlen-rechengesetze-und-rechenreihenfolge--rechnen--zap": {
+   "de": "Rechnen und Umformen · ZAP",
+   "en": "Calculating and transforming · ZAP",
+   "fr": "Calculer et transformer · ZAP",
+   "it": "Calcolare e trasformare · ZAP"
+  },
   "zahlen-rechengesetze-und-rechenreihenfolge--sachaufgaben--1": {
    "de": "Sachaufgaben · Stufe 1",
    "en": "Word problems · Level 1",
@@ -21178,6 +21624,12 @@
    "en": "Word problems · Level 4",
    "fr": "Problèmes · Niveau 4",
    "it": "Problemi · Livello 4"
+  },
+  "zahlen-rechengesetze-und-rechenreihenfolge--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
   },
   "zahlen-rechnen-mit-dezimalzahlen--kopfrechnen--1": {
    "de": "Kopfrechnen-Trick · Stufe 1",
@@ -21221,6 +21673,18 @@
    "fr": "Calculer et transformer · Niveau 4",
    "it": "Calcolare e trasformare · Livello 4"
   },
+  "zahlen-rechnen-mit-dezimalzahlen--rechnen--zap-1": {
+   "de": "Rechnen und Umformen · ZAP · Teil 1",
+   "en": "Calculating and transforming · ZAP · Part 1",
+   "fr": "Calculer et transformer · ZAP · Partie 1",
+   "it": "Calcolare e trasformare · ZAP · Parte 1"
+  },
+  "zahlen-rechnen-mit-dezimalzahlen--rechnen--zap-2": {
+   "de": "Rechnen und Umformen · ZAP · Teil 2",
+   "en": "Calculating and transforming · ZAP · Part 2",
+   "fr": "Calculer et transformer · ZAP · Partie 2",
+   "it": "Calcolare e trasformare · ZAP · Parte 2"
+  },
   "zahlen-rechnen-mit-dezimalzahlen--sachaufgaben--1": {
    "de": "Sachaufgaben · Stufe 1",
    "en": "Word problems · Level 1",
@@ -21244,6 +21708,12 @@
    "en": "Word problems · Level 4",
    "fr": "Problèmes · Niveau 4",
    "it": "Problemi · Livello 4"
+  },
+  "zahlen-rechnen-mit-dezimalzahlen--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
   },
   "zahlen-rechnen-mit-quadratwurzeln--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",
@@ -21538,6 +22008,18 @@
    "en": "Mental maths tricks · Level 4",
    "fr": "Astuces de calcul mental · Niveau 4",
    "it": "Trucchi di calcolo mentale · Livello 4"
+  },
+  "zahlen-teilbarkeit-primzahlen-ggt-kgv--sachaufgaben--zap": {
+   "de": "Sachaufgaben · ZAP",
+   "en": "Word problems · ZAP",
+   "fr": "Problèmes · ZAP",
+   "it": "Problemi · ZAP"
+  },
+  "zahlen-teilbarkeit-primzahlen-ggt-kgv--schliessen--zap": {
+   "de": "Formeln und Schlussfolgern · ZAP",
+   "en": "Formulas and reasoning · ZAP",
+   "fr": "Formules et raisonnement · ZAP",
+   "it": "Formule e ragionamento · ZAP"
   },
   "zahlen-wurzeln-und-reelle-zahlen--begriffe--1": {
    "de": "Begriffe verstehen · Stufe 1",

@@ -400,7 +400,7 @@ def _manifest_exercise(exercise: Mapping[str, Any], order: int) -> dict[str, Any
         "prompt": german["prompt"],
         "answerKey": german["correctAnswer"],
         "explanation": german["explanation"],
-        "skills": [exercise["point"]],
+        "skills": [exercise["point"]] if exercise.get("point") else [],
         "translations": {
             locale: _locale_exercise(exercise, exercise["text"][locale])
             for locale in LOCALES if locale != "de"
@@ -773,8 +773,57 @@ def _exercise_order(points: Mapping[str, Mapping[str, Any]]):
     return key
 
 
+def zap_exercises(
+    staging: Mapping[str, Any], filled: Iterable[Mapping[str, Any]], built: Mapping[str, Any]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """The adapted ZAP exercises (#106) as filed and translated: each under a
+    mathematics star with its question type; with the dropped ones and the problems."""
+    done: dict[str, Any] = {}
+    for batch in filled:
+        done.update(batch.get("exercises") or {})
+    stars = {u for u, star in built["stars"].items() if star["subject_id"] == "mathematics"}
+    types = catalog.question_types("mathematics")
+    kept, dropped, problems = [], [], []
+    for item in staging["exercises"]:
+        entry = done.get(item["id"])
+        if not isinstance(entry, Mapping):
+            problems.append({"id": item["id"], "problems": ["not filed"]})
+            continue
+        if "drop" in entry:
+            dropped.append({"sourceId": item["editorialId"], "reason": f"ZAP: {entry['drop']}"})
+            continue
+        found = []
+        if entry.get("star") not in stars:
+            found.append(f"star {entry.get('star')!r} is not a mathematics star")
+        if entry.get("type") not in types:
+            found.append(f"type {entry.get('type')!r} is not a mathematics question type")
+        for locale in LOCALES:
+            text = entry.get(locale)
+            if not isinstance(text, Mapping) or not all(_text(text.get(k)) for k in ("prompt", "answer", "explanation")):
+                found.append(f"{locale}: prompt, answer and explanation are all needed")
+            elif CJK.search(json.dumps(text, ensure_ascii=False)):
+                found.append(f"{locale}: Chinese left in the text")
+        if found:
+            problems.append({"id": item["id"], "problems": found})
+            continue
+        kept.append({
+            "id": item["id"],
+            "sourceId": item["editorialId"],
+            "original": item["original"],
+            "star": entry["star"],
+            "questionType": entry["type"],
+            "type": "numeric",
+            "difficulty": "zap",
+            "text": {locale: dict(entry[locale]) for locale in LOCALES},
+        })
+    return kept, dropped, problems
+
+
 def manifests(
-    translated: Mapping[str, Any], built: Mapping[str, Any], source_version: str
+    translated: Mapping[str, Any],
+    built: Mapping[str, Any],
+    source_version: str,
+    zap: Sequence[Mapping[str, Any]] = (),
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any], dict[str, Any]]:
     """Draft practice sets - one per small star and layer, cut in parts - with the
     report, the star file and the skill vocabulary the platform reads.
@@ -860,6 +909,62 @@ def manifests(
                          "questionType": slug, "layer": layer, "practiceSet": lesson_id}
                         for e in part
                     )
+
+    # The adapted ZAP tasks: practice of the same small star, after the star's own,
+    # tagged so exam preparation can pick them out. They deepen the knowledge
+    # point rather than make it, so they do not count for lighting it.
+    by_zap_set: dict[tuple[str, str], list[Mapping[str, Any]]] = defaultdict(list)
+    for exercise in zap:
+        reason = next(filter(None, (_too_long(exercise["text"][locale]) for locale in LOCALES)), None)
+        if reason:
+            skipped.append({"sourceId": exercise["sourceId"], "reason": reason})
+        else:
+            by_zap_set[(exercise["star"], exercise["questionType"])].append(exercise)
+    for (unit_id, slug), exercises in sorted(by_zap_set.items()):
+        star = built["stars"][unit_id]
+        type_index = [t for t, _titles, _scope in catalog.QUESTION_TYPES["mathematics"]].index(slug)
+        skill = catalog.skill_id(unit_id, slug)
+        type_titles = catalog.question_type_titles("mathematics", slug)
+        skills.setdefault(skill, {"subject": "mathematics", "unit": unit_id, "titles": dict(type_titles),
+                                  "extension": catalog.is_extension("mathematics", slug)})
+        exercises = sorted(exercises, key=lambda e: e["id"])
+        parts = [exercises[i:i + EXERCISES_PER_SET] for i in range(0, len(exercises), EXERCISES_PER_SET)]
+        for part_index, part in enumerate(parts, start=1):
+            lesson_id = f"{skill}--zap" + (f"-{part_index}" if len(parts) > 1 else "")
+            titles = {
+                locale: f"{type_titles[locale]} · ZAP" + (f" · {PART[locale]} {part_index}" if len(parts) > 1 else "")
+                for locale in LOCALES
+            }
+            practice_sets[lesson_id] = titles
+            rows.append({
+                "publicLessonId": lesson_id,
+                "publish": False,
+                "lesson": {
+                    "title": titles["de"],
+                    "objective": star["description"],
+                    "description": star["description"],
+                    "subjectId": "mathematics",
+                    "topicId": star["topic_id"],
+                    "unitId": unit_id,
+                    "gradeLevel": catalog.GRADE_LEVELS[6],
+                    "difficulty": "practice",
+                    "estimatedMinutes": max(5, MINUTES_PER_EXERCISE * len(part)),
+                    "language": "de",
+                    "order": 500 + type_index * 10 + part_index,
+                    "extension": True,
+                    "requiresPoints": [],
+                    "tags": ["zap"],
+                },
+                "exercises": [
+                    {**_manifest_exercise(e, order), "skills": [skill], "tags": ["zap", e["original"]]}
+                    for order, e in enumerate(part, start=1)
+                ],
+            })
+            report_exercises.extend(
+                {"sourceId": e["sourceId"], "exercise": e["id"], "star": unit_id, "questionType": slug,
+                 "practiceSet": lesson_id, "zap": e["original"]}
+                for e in part
+            )
 
     trained = {skill["unit"] for skill in skills.values()}
     stars_file = {
@@ -956,6 +1061,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--out-dir", type=Path, required=True, help="manifest-NNN.json files and report.json")
     p.add_argument("--vocabulary", type=Path, default=catalog.SKILLS_FILE)
     p.add_argument("--stars", type=Path, default=catalog.STARS_FILE)
+    p.add_argument("--zap", type=Path, help="the ZAP staging file; its filled batches lie next to it")
     p.add_argument("--source-version", required=True, help="the upstream commit translated")
     args = parser.parse_args(argv)
 
@@ -998,7 +1104,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         if translated["problems"] or built["problems"]:
             print("records still have problems; fix them and merge or structure again")
             return 1
-        made, report, stars_file, vocabulary = manifests(translated, built, args.source_version)
+        zap: list[dict[str, Any]] = []
+        if args.zap:
+            staging = _read(args.zap)
+            filled = [_read(path) for path in sorted(args.zap.parent.glob("*.out.json"))]
+            zap, zap_dropped, zap_problems = zap_exercises(staging, filled, built)
+            if zap_problems:
+                print(f"{len(zap_problems)} ZAP exercises still have problems: {zap_problems[:3]}")
+                return 1
+            translated = {**translated, "skipped": [*translated["skipped"], *zap_dropped]}
+        made, report, stars_file, vocabulary = manifests(translated, built, args.source_version, zap)
         for old in args.out_dir.glob("manifest-*.json"):
             old.unlink()
         for index, manifest in enumerate(made, start=1):

@@ -538,6 +538,65 @@ def test_an_exercise_over_the_authoring_limit_is_skipped_not_shortened(tmp_path:
     assert any(row["sourceId"] == "cnm_p101_q1" and "longer" in row["reason"] for row in report["skipped"])
 
 
+def _zap(star: str = "brueche-brueche-addieren", qtype: str = "sachaufgaben") -> tuple[dict, list[dict]]:
+    staging = {"exercises": [{
+        "id": "zap-stoa-zap1-2026-1a-v1", "editorialId": "EX-STOA-ZAP1-2026-1a-v1", "original": "ZAP1 2026 · 1a",
+        "de": {"prompt": "Lea kauft $\frac{3}{4}$ kg Käse.", "answer": "12", "accepted": [], "explanation": "x"},
+    }]}
+    texts = {locale: {"prompt": f"{locale}: $\frac{{3}}{{4}}$ kg", "answer": "12", "accepted": ["12 Fr."],
+                      "explanation": "3/4 * 16 = 12"} for locale in kb.LOCALES}
+    filled = [{"exercises": {"zap-stoa-zap1-2026-1a-v1": {"star": star, "type": qtype, **texts}}}]
+    return staging, filled
+
+
+def test_zap_exercises_join_their_small_star_as_tagged_extension_practice(tmp_path: Path) -> None:
+    translated = _translated(tmp_path)
+    built = _built(translated)
+    staging, filled = _zap()
+    zap, dropped, problems = kb.zap_exercises(staging, filled, built)
+    assert problems == [] and dropped == []
+
+    made, report, _stars, vocabulary = kb.manifests(translated, built, "abc123", zap)
+
+    rows = {row["publicLessonId"]: row for m in made for row in m["lessons"]}
+    zap_set = rows["brueche-brueche-addieren--sachaufgaben--zap"]
+    assert zap_set["lesson"]["extension"] is True and zap_set["lesson"]["tags"] == ["zap"]
+    assert zap_set["lesson"]["order"] > rows["brueche-brueche-addieren--sachaufgaben--1"]["lesson"]["order"]
+    [exercise] = zap_set["exercises"]
+    assert exercise["skills"] == ["brueche-brueche-addieren--sachaufgaben"]
+    assert exercise["tags"] == ["zap", "ZAP1 2026 · 1a"]
+    assert exercise["acceptedAnswers"] == ["12 Fr."] and set(exercise["translations"]) == {"en", "fr", "it"}
+    assert vocabulary["practiceSets"]["brueche-brueche-addieren--sachaufgaben--zap"]["it"] == "Problemi · ZAP"
+    assert any(row.get("zap") == "ZAP1 2026 · 1a" for row in report["exercises"])
+
+
+@pytest.mark.parametrize(
+    ("star", "qtype", "problem"),
+    [
+        ("physik-mechanik-kraefte-addieren", "sachaufgaben", "not a mathematics star"),
+        ("brueche-brueche-addieren", "raten", "not a mathematics question type"),
+    ],
+)
+def test_a_zap_exercise_filed_wrongly_is_refused(tmp_path: Path, star: str, qtype: str, problem: str) -> None:
+    translated = _translated(tmp_path)
+    staging, filled = _zap(star, qtype)
+
+    _kept, _dropped, problems = kb.zap_exercises(staging, filled, _built(translated))
+
+    assert any(problem in message for row in problems for message in row["problems"])
+
+
+def test_a_dropped_zap_exercise_is_reported(tmp_path: Path) -> None:
+    translated = _translated(tmp_path)
+    staging, _filled = _zap()
+    filled = [{"exercises": {"zap-stoa-zap1-2026-1a-v1": {"drop": "needs a figure"}}}]
+
+    kept, dropped, problems = kb.zap_exercises(staging, filled, _built(translated))
+
+    assert kept == [] and problems == []
+    assert dropped == [{"sourceId": "EX-STOA-ZAP1-2026-1a-v1", "reason": "ZAP: needs a figure"}]
+
+
 # ── through the curriculum workflow ──────────────────────────────────────────
 
 

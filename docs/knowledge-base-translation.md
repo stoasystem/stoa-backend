@@ -108,3 +108,20 @@ In this pass the English material of an English exercise may change too, as long
 as the grammar or vocabulary it tests stays exactly the same: the right option stays
 the right option, at the same position, and every locale tells the same story.
 Numbers and answers of mathematics and physics do not change.
+
+## ZAP exercises
+
+The exercises adapted from ZAP papers (#106) - new numbers and a new story for
+every original task - join the knowledge base. Each one is filed under the
+mathematics knowledge-point star it practises and tagged with its question type,
+and translated from German into English, French and Italian:
+
+- The German text stays as written; fix only `ß` (→ `ss`) or an obvious slip.
+- Formulas are LaTeX between `$...$`: keep every formula exactly, in every locale.
+- Numbers, answers and accepted answers keep their values. A unit or word in an
+  answer is translated (`Fr.` stays `Fr.`; `Minuten` → `minutes`).
+- The context is already Swiss; keep it (names, places, francs) in every locale.
+- `star`: the knowledge-point star whose title and scope fit the task best - judge
+  from the task, not from the ZAP knowledge card it was filed under before.
+- Drop a task (`{"drop": "<reason>"}`) whose answer is wrong or ambiguous, or that
+  needs a figure to be solved.
