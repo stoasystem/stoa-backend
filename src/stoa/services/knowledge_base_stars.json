@@ -1,0 +1,3407 @@
+{
+ "source": {
+  "repository": "https://github.com/xiaoyang111222/cn-math-taxonomy",
+  "licence": "CC BY-NC 4.0"
+ },
+ "stars": {
+  "brueche-brueche-kuerzen-addieren-und-subtrahieren": {
+   "topic_id": "brueche",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Brüche kürzen, addieren und subtrahieren",
+    "en": "Simplifying, adding and subtracting fractions",
+    "fr": "Simplifier, additionner et soustraire des fractions",
+    "it": "Semplificare, addizionare e sottrarre frazioni"
+   },
+   "description": "Brüche erweitern und kürzen, gleichnamig machen und gleichnamige wie ungleichnamige Brüche addieren und subtrahieren.",
+   "order": 3,
+   "prerequisites": [
+    "brueche-brueche-und-dezimalzahlen-verstehen",
+    "zahlen-rechengesetze-und-rechenreihenfolge",
+    "zahlen-teilbarkeit-primzahlen-ggt-kgv"
+   ]
+  },
+  "brueche-brueche-und-dezimalzahlen-verstehen": {
+   "topic_id": "brueche",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Brüche und Dezimalzahlen verstehen",
+    "en": "Understanding fractions and decimals",
+    "fr": "Comprendre les fractions et les nombres décimaux",
+    "it": "Capire le frazioni e i numeri decimali"
+   },
+   "description": "Bruchteile mit Zähler und Nenner angeben, echte und unechte Brüche unterscheiden, Brüche der Grösse nach vergleichen und Brüche mit Nenner 10 oder 100 in Dezimalzahlen umwandeln.",
+   "order": 4,
+   "prerequisites": [
+    "groessen-gewicht-hohlmasse-und-geld",
+    "zahlen-einmaleins-und-teilen",
+    "zahlen-teilbarkeit-primzahlen-ggt-kgv"
+   ]
+  },
+  "brueche-brueche-multiplizieren-und-dividieren": {
+   "topic_id": "brueche",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Brüche multiplizieren und dividieren",
+    "en": "Multiplying and dividing fractions",
+    "fr": "Multiplier et diviser des fractions",
+    "it": "Moltiplicare e dividere frazioni"
+   },
+   "description": "Brüche mit ganzen Zahlen und mit Brüchen multiplizieren und dividieren, Bruchteile von Zahlen berechnen und Sachaufgaben dazu lösen.",
+   "order": 5,
+   "prerequisites": [
+    "brueche-brueche-kuerzen-addieren-und-subtrahieren",
+    "gleichungen-ersetzen-und-groessenbeziehungen",
+    "zahlen-rechnen-mit-dezimalzahlen"
+   ]
+  },
+  "daten-daten-ordnen-und-darstellen": {
+   "topic_id": "daten",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Daten ordnen und in Diagrammen darstellen",
+    "en": "Organising data and showing it in charts",
+    "fr": "Organiser des données et les représenter en diagrammes",
+    "it": "Ordinare dati e rappresentarli in grafici"
+   },
+   "description": "Daten sortieren, mit Strichlisten und Häufigkeitstabellen erfassen und in passenden, ehrlichen Diagrammen darstellen.",
+   "order": 3,
+   "prerequisites": [
+    "daten-statistische-untersuchungen-durchfuehren",
+    "geometrie-winkel-messen-und-berechnen",
+    "prozentrechnung-prozente-und-prozentrechnung",
+    "zahlen-plus-und-minus-bis-100",
+    "zahlen-stellenwerte-und-zahlensysteme",
+    "zahlen-zahlenraum-bis-20"
+   ]
+  },
+  "daten-zaehlprinzipien-und-variationen": {
+   "topic_id": "daten",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Zählprinzipien und Variationen",
+    "en": "Counting principles and permutations",
+    "fr": "Principes de dénombrement et arrangements",
+    "it": "Principi di conteggio e disposizioni"
+   },
+   "description": "Möglichkeiten geordnet abzählen, das Schubfachprinzip nutzen und mit Additions- und Multiplikationsprinzip sowie Variationen zählen.",
+   "order": 4,
+   "prerequisites": [
+    "zahlen-einmaleins-und-teilen"
+   ]
+  },
+  "daten-mittelwert-median-und-modalwert": {
+   "topic_id": "daten",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Mittelwert, Median und Modalwert",
+    "en": "Mean, median and mode",
+    "fr": "Moyenne, médiane et mode",
+    "it": "Media, mediana e moda"
+   },
+   "description": "Durchschnitt, gewichtetes Mittel, Median und Modalwert bestimmen und den passenden Lagewert wählen.",
+   "order": 5,
+   "prerequisites": [
+    "zahlen-mehrstellig-multiplizieren-und-dividieren",
+    "zahlen-negative-und-rationale-zahlen",
+    "zahlen-rechnen-mit-rationalen-zahlen"
+   ]
+  },
+  "daten-diagramme-und-histogramme-lesen": {
+   "topic_id": "daten",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Diagramme und Histogramme lesen",
+    "en": "Reading charts and histograms",
+    "fr": "Lire des diagrammes et des histogrammes",
+    "it": "Leggere grafici e istogrammi"
+   },
+   "description": "Säulen-, Linien- und Kreisdiagramme sowie Histogramme lesen, auswerten und Entwicklungen daraus ablesen.",
+   "order": 6,
+   "prerequisites": [
+    "daten-daten-ordnen-und-darstellen",
+    "daten-mittelwert-median-und-modalwert",
+    "daten-stichproben-und-stichprobenverfahren",
+    "geometrie-kreis-umfang-flaeche-und-sektor",
+    "prozentrechnung-prozente-und-prozentrechnung"
+   ]
+  },
+  "daten-zufall-und-wahrscheinlichkeit-einschaetzen": {
+   "topic_id": "daten",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Zufall und Wahrscheinlichkeit einschätzen",
+    "en": "Judging chance and probability",
+    "fr": "Évaluer le hasard et la probabilité",
+    "it": "Valutare il caso e la probabilità"
+   },
+   "description": "Ereignisse als sicher, möglich oder unmöglich einordnen, nach ihrer Wahrscheinlichkeit vergleichen und Wahrscheinlichkeiten mit relativen Häufigkeiten schätzen.",
+   "order": 7,
+   "prerequisites": [
+    "daten-daten-ordnen-und-darstellen"
+   ]
+  },
+  "daten-statistische-untersuchungen-durchfuehren": {
+   "topic_id": "daten",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Statistische Untersuchungen durchführen",
+    "en": "Carrying out statistical investigations",
+    "fr": "Mener une enquête statistique",
+    "it": "Svolgere un'indagine statistica"
+   },
+   "description": "Eine statistische Untersuchung planen, Daten erheben und von der Stichprobe auf die Grundgesamtheit schliessen.",
+   "order": 8,
+   "prerequisites": [
+    "daten-mittelwert-median-und-modalwert",
+    "daten-stichproben-und-stichprobenverfahren",
+    "daten-streuung-quartile-und-boxplots"
+   ]
+  },
+  "daten-stichproben-und-stichprobenverfahren": {
+   "topic_id": "daten",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Stichproben und Stichprobenverfahren",
+    "en": "Samples and sampling methods",
+    "fr": "Échantillons et méthodes d'échantillonnage",
+    "it": "Campioni e metodi di campionamento"
+   },
+   "description": "Vollerhebung und Stichprobe unterscheiden und repräsentative, einfache oder geschichtete Zufallsstichproben ziehen.",
+   "order": 9,
+   "prerequisites": []
+  },
+  "daten-streuung-quartile-und-boxplots": {
+   "topic_id": "daten",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Streuung, Quartile und Boxplots",
+    "en": "Spread, quartiles and box plots",
+    "fr": "Dispersion, quartiles et boîtes à moustaches",
+    "it": "Dispersione, quartili e box plot"
+   },
+   "description": "Quartile und Perzentile bestimmen, Boxplots vergleichen und die Streuung mit Spannweite, Varianz und Standardabweichung messen.",
+   "order": 10,
+   "prerequisites": [
+    "daten-mittelwert-median-und-modalwert",
+    "daten-stichproben-und-stichprobenverfahren"
+   ]
+  },
+  "daten-ereignisse-und-mehrstufige-zufallsexperimente": {
+   "topic_id": "daten",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Ereignisse und mehrstufige Zufallsexperimente",
+    "en": "Events and multi-stage random experiments",
+    "fr": "Événements et expériences aléatoires à plusieurs étapes",
+    "it": "Eventi ed esperimenti casuali a più stadi"
+   },
+   "description": "Ergebnismengen und Ereignisse beschreiben, unabhängige Ereignisse erkennen und mehrstufige Experimente mit Baumdiagrammen berechnen.",
+   "order": 11,
+   "prerequisites": [
+    "daten-wahrscheinlichkeiten-berechnen",
+    "daten-zufall-und-wahrscheinlichkeit-einschaetzen",
+    "zahlen-mengen-und-teilmengen",
+    "zahlen-mengenoperationen-und-logik"
+   ]
+  },
+  "daten-wahrscheinlichkeiten-berechnen": {
+   "topic_id": "daten",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Wahrscheinlichkeiten berechnen",
+    "en": "Calculating probabilities",
+    "fr": "Calculer des probabilités",
+    "it": "Calcolare probabilità"
+   },
+   "description": "Laplace-Wahrscheinlichkeiten durch Abzählen berechnen, Wahrscheinlichkeiten addieren und damit beurteilen, ob ein Spiel fair ist.",
+   "order": 12,
+   "prerequisites": [
+    "brueche-brueche-und-dezimalzahlen-verstehen",
+    "daten-daten-ordnen-und-darstellen",
+    "daten-zufall-und-wahrscheinlichkeit-einschaetzen"
+   ]
+  },
+  "daten-bedingte-wahrscheinlichkeit-und-bayes": {
+   "topic_id": "daten",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Bedingte Wahrscheinlichkeit und Satz von Bayes",
+    "en": "Conditional probability and Bayes' theorem",
+    "fr": "Probabilité conditionnelle et théorème de Bayes",
+    "it": "Probabilità condizionata e teorema di Bayes"
+   },
+   "description": "Bedingte Wahrscheinlichkeiten berechnen, totale Wahrscheinlichkeit und Satz von Bayes anwenden und Unabhängigkeit in Kontingenztafeln prüfen.",
+   "order": 13,
+   "prerequisites": [
+    "daten-ereignisse-und-mehrstufige-zufallsexperimente",
+    "daten-wahrscheinlichkeiten-berechnen",
+    "daten-zufall-und-wahrscheinlichkeit-einschaetzen"
+   ]
+  },
+  "daten-kombinationen-und-binomischer-lehrsatz": {
+   "topic_id": "daten",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Kombinationen und binomischer Lehrsatz",
+    "en": "Combinations and the binomial theorem",
+    "fr": "Combinaisons et formule du binôme",
+    "it": "Combinazioni e teorema binomiale"
+   },
+   "description": "Kombinationen und Binomialkoeffizienten berechnen und mit dem binomischen Lehrsatz und dem Pascalschen Dreieck arbeiten.",
+   "order": 14,
+   "prerequisites": [
+    "daten-zaehlprinzipien-und-variationen"
+   ]
+  },
+  "daten-korrelation-und-lineare-regression": {
+   "topic_id": "daten",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Korrelation und lineare Regression",
+    "en": "Correlation and linear regression",
+    "fr": "Corrélation et régression linéaire",
+    "it": "Correlazione e regressione lineare"
+   },
+   "description": "Korrelationen bei Datenpaaren beurteilen und mit der Regressionsgeraden nach der Methode der kleinsten Quadrate Vorhersagen machen.",
+   "order": 15,
+   "prerequisites": [
+    "daten-statistische-untersuchungen-durchfuehren",
+    "gleichungen-lineare-funktionen"
+   ]
+  },
+  "daten-zufallsvariablen-und-verteilungen": {
+   "topic_id": "daten",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Zufallsvariablen und Verteilungen",
+    "en": "Random variables and distributions",
+    "fr": "Variables aléatoires et lois de probabilité",
+    "it": "Variabili casuali e distribuzioni"
+   },
+   "description": "Diskrete Zufallsvariablen mit Erwartungswert und Varianz beschreiben und Binomial-, hypergeometrische und Normalverteilung anwenden.",
+   "order": 16,
+   "prerequisites": [
+    "daten-diagramme-und-histogramme-lesen",
+    "daten-ereignisse-und-mehrstufige-zufallsexperimente",
+    "daten-kombinationen-und-binomischer-lehrsatz",
+    "daten-mittelwert-median-und-modalwert",
+    "daten-streuung-quartile-und-boxplots"
+   ]
+  },
+  "englisch-alltag-zahlen-und-ordnungszahlen": {
+   "topic_id": "englisch-alltag",
+   "subject_id": "english",
+   "titles": {
+    "de": "Zahlen und Ordnungszahlen",
+    "en": "Numbers and ordinal numbers",
+    "fr": "Nombres et nombres ordinaux",
+    "it": "Numeri e numeri ordinali"
+   },
+   "description": "Zahlwörter bis 20 sowie Preise mit hundred und thousand lesen und Ordnungszahlen für Stockwerke und Reihenfolgen brauchen.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "englisch-alltag-haus-zimmer-und-ortsangaben": {
+   "topic_id": "englisch-alltag",
+   "subject_id": "english",
+   "titles": {
+    "de": "Haus, Zimmer und Ortsangaben",
+    "en": "House, rooms and places",
+    "fr": "Maison, pièces et indications de lieu",
+    "it": "Casa, stanze e indicazioni di luogo"
+   },
+   "description": "Zimmer und Möbel benennen, mit Where is fragen, wo etwas ist, und mit There is und There are ein Zimmer beschreiben.",
+   "order": 2,
+   "prerequisites": []
+  },
+  "englisch-alltag-farben-kleidung-und-besitz": {
+   "topic_id": "englisch-alltag",
+   "subject_id": "english",
+   "titles": {
+    "de": "Farben, Kleidung und Besitz",
+    "en": "Colours, clothes and belongings",
+    "fr": "Couleurs, vêtements et possession",
+    "it": "Colori, vestiti e appartenenza"
+   },
+   "description": "Farben und Kleidungsstücke benennen, darüber sprechen und mit whose fragen und vermuten, wem etwas gehört.",
+   "order": 3,
+   "prerequisites": []
+  },
+  "englisch-alltag-uhrzeit-und-tagesablauf": {
+   "topic_id": "englisch-alltag",
+   "subject_id": "english",
+   "titles": {
+    "de": "Uhrzeit und Tagesablauf",
+    "en": "Time and daily routine",
+    "fr": "L'heure et la journée",
+    "it": "L'ora e la giornata"
+   },
+   "description": "Nach der Uhrzeit fragen, Uhrzeiten angeben und mit ihnen den Tagesablauf beschreiben und verstehen.",
+   "order": 4,
+   "prerequisites": []
+  },
+  "englisch-alltag-monate-und-datum": {
+   "topic_id": "englisch-alltag",
+   "subject_id": "english",
+   "titles": {
+    "de": "Monate und Datum",
+    "en": "Months and dates",
+    "fr": "Mois et dates",
+    "it": "Mesi e date"
+   },
+   "description": "Die Monatsnamen kennen, ein Datum nennen, über den Geburtstag sprechen und Daten in Kalendern und Plänen lesen.",
+   "order": 5,
+   "prerequisites": [
+    "englisch-alltag-zahlen-und-ordnungszahlen"
+   ]
+  },
+  "englisch-alltag-wochentage-und-alltagstaetigkeiten": {
+   "topic_id": "englisch-alltag",
+   "subject_id": "english",
+   "titles": {
+    "de": "Wochentage und Alltagstätigkeiten",
+    "en": "Days of the week and everyday activities",
+    "fr": "Jours de la semaine et activités quotidiennes",
+    "it": "Giorni della settimana e attività quotidiane"
+   },
+   "description": "Wochentage, Wochenendaktivitäten und Hausarbeiten benennen und sagen, was man oft oder gerade macht.",
+   "order": 6,
+   "prerequisites": [
+    "englisch-verben-present-progressive-und-zukunft"
+   ]
+  },
+  "englisch-alltag-von-frueher-erzaehlen": {
+   "topic_id": "englisch-alltag",
+   "subject_id": "english",
+   "titles": {
+    "de": "Von früher erzählen",
+    "en": "Talking about the past",
+    "fr": "Raconter le passé",
+    "it": "Raccontare il passato"
+   },
+   "description": "Mit Present Perfect und Past Perfect erzählen, wie lange man etwas besitzt und was bei einem Zwischenfall früher geschah.",
+   "order": 7,
+   "prerequisites": [
+    "englisch-verben-perfekt-und-zeitformen-unterscheiden"
+   ]
+  },
+  "englisch-essen-essen-anbieten-und-bestellen": {
+   "topic_id": "englisch-essen",
+   "subject_id": "english",
+   "titles": {
+    "de": "Essen anbieten und bestellen",
+    "en": "Offering and ordering food",
+    "fr": "Proposer et commander à manger",
+    "it": "Offrire e ordinare da mangiare"
+   },
+   "description": "Speisen benennen, mit Would you like etwas anbieten, mit I'd like im Restaurant bestellen und Gespräche beim Essen verstehen.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "englisch-essen-lebensmittel-und-lieblingsessen": {
+   "topic_id": "englisch-essen",
+   "subject_id": "english",
+   "titles": {
+    "de": "Lebensmittel und Lieblingsessen",
+    "en": "Food and favourite meals",
+    "fr": "Aliments et plats préférés",
+    "it": "Alimenti e cibi preferiti"
+   },
+   "description": "Früchte und Grundnahrungsmittel benennen, ihre Herkunft kennen, sagen, welches Essen man mag, und Texte über Vorlieben verstehen.",
+   "order": 2,
+   "prerequisites": []
+  },
+  "englisch-essen-einkaufen-und-taschengeld": {
+   "topic_id": "englisch-essen",
+   "subject_id": "english",
+   "titles": {
+    "de": "Einkaufen und Taschengeld",
+    "en": "Shopping and pocket money",
+    "fr": "Faire des achats et argent de poche",
+    "it": "Fare acquisti e paghetta"
+   },
+   "description": "Dinge im Laden benennen, nach Preisen fragen, Preisangaben und Einkaufsgespräche verstehen und einen Taschengeldplan lesen.",
+   "order": 3,
+   "prerequisites": []
+  },
+  "englisch-essen-kochen-und-esskultur": {
+   "topic_id": "englisch-essen",
+   "subject_id": "english",
+   "titles": {
+    "de": "Kochen und Esskultur",
+    "en": "Cooking and food culture",
+    "fr": "Cuisine et culture culinaire",
+    "it": "Cucina e cultura del cibo"
+   },
+   "description": "Küchenwörter und Rezepte verstehen, die Zubereitung erklären, Tischmanieren kennen und Gerichte und Esskultur vergleichen und beschreiben.",
+   "order": 4,
+   "prerequisites": []
+  },
+  "englisch-essen-produkte-wert-und-konsum": {
+   "topic_id": "englisch-essen",
+   "subject_id": "english",
+   "titles": {
+    "de": "Produkte, Wert und Konsum",
+    "en": "Products, value and consumption",
+    "fr": "Produits, valeur et consommation",
+    "it": "Prodotti, valore e consumo"
+   },
+   "description": "Über Materialien und Herkunft von Produkten, über Wert, Budget und Konsumentscheidungen sprechen, lesen und schreiben.",
+   "order": 5,
+   "prerequisites": [
+    "englisch-verben-das-passiv"
+   ]
+  },
+  "englisch-freizeit-spielsachen-hobbys-und-faehigkeiten": {
+   "topic_id": "englisch-freizeit",
+   "subject_id": "english",
+   "titles": {
+    "de": "Spielsachen, Hobbys und Fähigkeiten",
+    "en": "Toys, hobbies and abilities",
+    "fr": "Jouets, loisirs et capacités",
+    "it": "Giocattoli, hobby e capacità"
+   },
+   "description": "Spielsachen und Hobbys benennen, einen Brieffreund vorstellen und mit can über Fähigkeiten und Klubs sprechen.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "englisch-freizeit-das-wochenende": {
+   "topic_id": "englisch-freizeit",
+   "subject_id": "english",
+   "titles": {
+    "de": "Das Wochenende",
+    "en": "The weekend",
+    "fr": "Le week-end",
+    "it": "Il fine settimana"
+   },
+   "description": "Mit be going to über Wochenendpläne und in der einfachen Vergangenheit über das letzte Wochenende sprechen und lesen.",
+   "order": 2,
+   "prerequisites": [
+    "englisch-saetze-ja-nein-fragen-und-question-tags",
+    "englisch-verben-simple-past-und-past-progressive"
+   ]
+  },
+  "englisch-freizeit-sport-und-wettkaempfe": {
+   "topic_id": "englisch-freizeit",
+   "subject_id": "english",
+   "titles": {
+    "de": "Sport und Wettkämpfe",
+    "en": "Sport and competitions",
+    "fr": "Sport et compétitions",
+    "it": "Sport e gare"
+   },
+   "description": "Sportarten und Wörter zu Wettkämpfen kennen, über Sport sprechen, Sportberichte lesen und kurze Sportmeldungen schreiben.",
+   "order": 3,
+   "prerequisites": []
+  },
+  "englisch-freizeit-fernsehen-und-internet": {
+   "topic_id": "englisch-freizeit",
+   "subject_id": "english",
+   "titles": {
+    "de": "Fernsehen und Internet",
+    "en": "Television and the internet",
+    "fr": "Télévision et internet",
+    "it": "Televisione e internet"
+   },
+   "description": "Über Fernsehsendungen und das Internet sprechen, Gespräche und Texte dazu lesen und Ratschläge zur Sicherheit im Netz geben.",
+   "order": 4,
+   "prerequisites": []
+  },
+  "englisch-freizeit-partys-und-feste": {
+   "topic_id": "englisch-freizeit",
+   "subject_id": "english",
+   "titles": {
+    "de": "Partys und Feste",
+    "en": "Parties and celebrations",
+    "fr": "Fêtes et célébrations",
+    "it": "Feste e celebrazioni"
+   },
+   "description": "Wörter rund um Partys, Feste und das Feiern kennen, Einladungen annehmen oder ablehnen und Einladungen lesen.",
+   "order": 5,
+   "prerequisites": [
+    "englisch-saetze-bedingung-gegensatz-und-zweck"
+   ]
+  },
+  "englisch-freizeit-buecher-filme-und-science-fiction": {
+   "topic_id": "englisch-freizeit",
+   "subject_id": "english",
+   "titles": {
+    "de": "Bücher, Filme und Science-Fiction",
+    "en": "Books, films and science fiction",
+    "fr": "Livres, films et science-fiction",
+    "it": "Libri, film e fantascienza"
+   },
+   "description": "Über Bücher, Kino und Filme sprechen, Leseberichte und Filmkritiken lesen und eine Science-Fiction-Handlung zusammenfassen.",
+   "order": 6,
+   "prerequisites": [
+    "englisch-verben-perfekt-und-zeitformen-unterscheiden"
+   ]
+  },
+  "englisch-freizeit-musik-und-auffuehrungen": {
+   "topic_id": "englisch-freizeit",
+   "subject_id": "english",
+   "titles": {
+    "de": "Musik und Aufführungen",
+    "en": "Music and performances",
+    "fr": "Musique et spectacles",
+    "it": "Musica e spettacoli"
+   },
+   "description": "Musikstile und Wörter zum Musizieren kennen, über Lieblingsmusik und Aufführungen sprechen, Texte lesen und Ankündigungen schreiben.",
+   "order": 7,
+   "prerequisites": [
+    "englisch-saetze-relativsaetze-und-appositionssaetze"
+   ]
+  },
+  "englisch-freizeit-feste-und-traditionen": {
+   "topic_id": "englisch-freizeit",
+   "subject_id": "english",
+   "titles": {
+    "de": "Feste und Traditionen",
+    "en": "Festivals and traditions",
+    "fr": "Festivals et traditions",
+    "it": "Festività e tradizioni"
+   },
+   "description": "Über Feste und Traditionen sprechen, Texte darüber lesen und ein Fest oder eine Tradition vorstellen.",
+   "order": 8,
+   "prerequisites": [
+    "englisch-saetze-nominalsaetze-und-indirekte-rede"
+   ]
+  },
+  "englisch-gesellschaft-regeln-in-schule-und-alltag": {
+   "topic_id": "englisch-gesellschaft",
+   "subject_id": "english",
+   "titles": {
+    "de": "Regeln in Schule und Alltag",
+    "en": "Rules at school and in everyday life",
+    "fr": "Règles à l'école et au quotidien",
+    "it": "Regole a scuola e nella vita quotidiana"
+   },
+   "description": "Regeln in Schulzimmer und Bibliothek verstehen und nennen, über Regeln für Jugendliche diskutieren und Meinungen dazu lesen.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "englisch-gesellschaft-weltraum-und-raumfahrt": {
+   "topic_id": "englisch-gesellschaft",
+   "subject_id": "english",
+   "titles": {
+    "de": "Weltraum und Raumfahrt",
+    "en": "Space and space travel",
+    "fr": "L'espace et les voyages spatiaux",
+    "it": "Lo spazio e i viaggi spaziali"
+   },
+   "description": "Wortschatz zu Weltraum, Raketen und Satelliten nutzen, über Raumfahrtmissionen sprechen, Texte dazu lesen und Notizen schreiben.",
+   "order": 2,
+   "prerequisites": [
+    "englisch-natur-tiere"
+   ]
+  },
+  "englisch-gesellschaft-geschichten-mythen-und-gedichte": {
+   "topic_id": "englisch-gesellschaft",
+   "subject_id": "english",
+   "titles": {
+    "de": "Geschichten, Mythen und Gedichte",
+    "en": "Stories, myths and poems",
+    "fr": "Histoires, mythes et poèmes",
+    "it": "Storie, miti e poesie"
+   },
+   "description": "Geschichten und Mythen lesen und nacherzählen, Gedichte verstehen, über Bilder und Rhythmus sprechen und eine Gedichtbesprechung schreiben.",
+   "order": 3,
+   "prerequisites": []
+  },
+  "englisch-gesellschaft-leben-und-technik-der-zukunft": {
+   "topic_id": "englisch-gesellschaft",
+   "subject_id": "english",
+   "titles": {
+    "de": "Leben und Technik der Zukunft",
+    "en": "Life and technology in the future",
+    "fr": "La vie et la technologie du futur",
+    "it": "Vita e tecnologia del futuro"
+   },
+   "description": "Mit will Vorhersagen über die Zukunft machen, intelligente Geräte beschreiben, Texte darüber lesen und eine Anleitung schreiben.",
+   "order": 4,
+   "prerequisites": []
+  },
+  "englisch-gesellschaft-kunst-und-ausstellungen": {
+   "topic_id": "englisch-gesellschaft",
+   "subject_id": "english",
+   "titles": {
+    "de": "Kunst und Ausstellungen",
+    "en": "Art and exhibitions",
+    "fr": "L'art et les expositions",
+    "it": "Arte e mostre"
+   },
+   "description": "Wortschatz zu Kunst und Ausstellungen nutzen, Kunstwerke beschreiben, Texte über Kunst und Museumsbesuche lesen und Ausstellungsnotizen schreiben.",
+   "order": 5,
+   "prerequisites": []
+  },
+  "englisch-gesellschaft-helfen-und-sich-engagieren": {
+   "topic_id": "englisch-gesellschaft",
+   "subject_id": "english",
+   "titles": {
+    "de": "Helfen und sich engagieren",
+    "en": "Helping and getting involved",
+    "fr": "Aider et s'engager",
+    "it": "Aiutare e impegnarsi"
+   },
+   "description": "Über Freiwilligenarbeit, Spenden, Hilfsaktionen und gute Taten sprechen und lesen, ein Verhalten beurteilen und Aufrufe und Kommentare schreiben.",
+   "order": 6,
+   "prerequisites": []
+  },
+  "englisch-gesellschaft-erfindungen-und-leistungen": {
+   "topic_id": "englisch-gesellschaft",
+   "subject_id": "english",
+   "titles": {
+    "de": "Erfindungen und Leistungen",
+    "en": "Inventions and achievements",
+    "fr": "Inventions et réalisations",
+    "it": "Invenzioni e conquiste"
+   },
+   "description": "Mit dem Passiv über Erfindungen fragen, Menschen und ihre Leistungen beschreiben, Texte darüber lesen und eine Kurzbiografie schreiben.",
+   "order": 7,
+   "prerequisites": [
+    "englisch-verben-das-passiv"
+   ]
+  },
+  "englisch-gesellschaft-kulturerbe-schuetzen": {
+   "topic_id": "englisch-gesellschaft",
+   "subject_id": "english",
+   "titles": {
+    "de": "Kulturerbe schützen",
+    "en": "Protecting cultural heritage",
+    "fr": "Protéger le patrimoine culturel",
+    "it": "Proteggere il patrimonio culturale"
+   },
+   "description": "Wortschatz zu Kulturerbe und Tradition nutzen, über den Schutz diskutieren, Informationstafeln lesen und Vorschläge formulieren.",
+   "order": 8,
+   "prerequisites": []
+  },
+  "englisch-gesellschaft-wissenschaftliche-forschung": {
+   "topic_id": "englisch-gesellschaft",
+   "subject_id": "english",
+   "titles": {
+    "de": "Wissenschaftliche Forschung",
+    "en": "Scientific research",
+    "fr": "La recherche scientifique",
+    "it": "La ricerca scientifica"
+   },
+   "description": "Fachwörter zu Forschung, Hypothese und Belegen nutzen, Hypothesen erklären, wissenschaftliche Texte lesen und ein Experiment beurteilen.",
+   "order": 9,
+   "prerequisites": []
+  },
+  "englisch-gesundheit-gesicht-beschwerden-und-erste-hilfe": {
+   "topic_id": "englisch-gesundheit",
+   "subject_id": "english",
+   "titles": {
+    "de": "Gesicht, Beschwerden und Erste Hilfe",
+    "en": "Face, ailments and first aid",
+    "fr": "Visage, maux et premiers secours",
+    "it": "Viso, disturbi e primo soccorso"
+   },
+   "description": "Die Teile des Gesichts benennen, Beschwerden beschreiben, nach dem Befinden fragen und Erste-Hilfe-Schritte verstehen, erklären und aufschreiben.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "englisch-gesundheit-sport-und-gesunde-gewohnheiten": {
+   "topic_id": "englisch-gesundheit",
+   "subject_id": "english",
+   "titles": {
+    "de": "Sport und gesunde Gewohnheiten",
+    "en": "Sport and healthy habits",
+    "fr": "Sport et habitudes saines",
+    "it": "Sport e abitudini sane"
+   },
+   "description": "Über Sport, Fitness und einen gesunden Lebensstil sprechen, Texte dazu lesen sowie Ratschläge und Tipps geben und schreiben.",
+   "order": 2,
+   "prerequisites": []
+  },
+  "englisch-ich-familie": {
+   "topic_id": "englisch-ich",
+   "subject_id": "english",
+   "titles": {
+    "de": "Die Familie",
+    "en": "The family",
+    "fr": "La famille",
+    "it": "La famiglia"
+   },
+   "description": "Die Wörter für Familienmitglieder kennen, die eigene Familie mit This is my und These are my vorstellen und Familienbeschreibungen lesen.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "englisch-ich-begruessen-und-sich-vorstellen": {
+   "topic_id": "englisch-ich",
+   "subject_id": "english",
+   "titles": {
+    "de": "Begrüssen und sich vorstellen",
+    "en": "Greetings and introducing yourself",
+    "fr": "Saluer et se présenter",
+    "it": "Salutare e presentarsi"
+   },
+   "description": "Begrüssen, verabschieden und danken, Name, Alter, Herkunft und Klasse nennen und erfragen sowie Selbstvorstellungen lesen und schreiben.",
+   "order": 2,
+   "prerequisites": []
+  },
+  "englisch-ich-aussehen-und-koerpersprache": {
+   "topic_id": "englisch-ich",
+   "subject_id": "english",
+   "titles": {
+    "de": "Aussehen und Körpersprache",
+    "en": "Appearance and body language",
+    "fr": "Apparence et langage corporel",
+    "it": "Aspetto e linguaggio del corpo"
+   },
+   "description": "Aussehen, Körpergrösse und Gewicht einer Person beschreiben und erfragen sowie Gesten, Mimik und Abstand benennen und deuten.",
+   "order": 3,
+   "prerequisites": []
+  },
+  "englisch-ich-personen-und-charakter-beschreiben": {
+   "topic_id": "englisch-ich",
+   "subject_id": "english",
+   "titles": {
+    "de": "Personen und Charakter beschreiben",
+    "en": "Describing people and character",
+    "fr": "Décrire des personnes et leur caractère",
+    "it": "Descrivere persone e carattere"
+   },
+   "description": "Eigenschaften von Freunden und Lehrpersonen benennen, beschreiben und Personen im Charakter vergleichen.",
+   "order": 4,
+   "prerequisites": [
+    "englisch-woerter-adjektive-steigerung-und-wortbildung"
+   ]
+  },
+  "englisch-ich-gefuehle-ratschlaege-und-durchhalten": {
+   "topic_id": "englisch-ich",
+   "subject_id": "english",
+   "titles": {
+    "de": "Gefühle, Ratschläge und Durchhalten",
+    "en": "Feelings, advice and perseverance",
+    "fr": "Sentiments, conseils et persévérance",
+    "it": "Sentimenti, consigli e perseveranza"
+   },
+   "description": "Gefühle benennen und erfragen, mit should Rat geben und über Widrigkeiten, Mut und Ausdauer sprechen, lesen und schreiben.",
+   "order": 5,
+   "prerequisites": []
+  },
+  "englisch-ich-frueher-und-heute": {
+   "topic_id": "englisch-ich",
+   "subject_id": "english",
+   "titles": {
+    "de": "Früher und heute",
+    "en": "Then and now",
+    "fr": "Autrefois et aujourd'hui",
+    "it": "Prima e oggi"
+   },
+   "description": "Beschreiben und verstehen, wie man selbst oder etwas früher war und heute ist, auch mit used to.",
+   "order": 6,
+   "prerequisites": [
+    "englisch-verben-simple-past-und-past-progressive"
+   ]
+  },
+  "englisch-kommunizieren-texte-verstehen-und-im-alltag-kommunizieren": {
+   "topic_id": "englisch-kommunizieren",
+   "subject_id": "english",
+   "titles": {
+    "de": "Texte verstehen und im Alltag kommunizieren",
+    "en": "Understanding texts and everyday communication",
+    "fr": "Comprendre des textes et communiquer au quotidien",
+    "it": "Capire testi e comunicare nella vita quotidiana"
+   },
+   "description": "Kurze Texte und Briefe verstehen, Lücken und Stichpunkte sinnvoll umsetzen sowie Hilfe anbieten, höflich bitten, Ratschläge geben und Vorschläge machen.",
+   "order": 1,
+   "prerequisites": [
+    "englisch-saetze-ja-nein-fragen-und-question-tags",
+    "englisch-verben-perfekt-und-zeitformen-unterscheiden",
+    "englisch-verben-present-progressive-und-zukunft",
+    "englisch-woerter-adjektive-steigerung-und-wortbildung"
+   ]
+  },
+  "englisch-laute-alphabet-und-anlaute": {
+   "topic_id": "englisch-laute",
+   "subject_id": "english",
+   "titles": {
+    "de": "Alphabet und Anlaute",
+    "en": "Alphabet and initial sounds",
+    "fr": "Alphabet et sons initiaux",
+    "it": "Alfabeto e suoni iniziali"
+   },
+   "description": "Das englische Alphabet mit Gross- und Kleinbuchstaben kennen und Anlaute sowie Konsonantenverbindungen wie bl, cl und fl am Wortanfang erkennen.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "englisch-laute-kurze-und-lange-vokale": {
+   "topic_id": "englisch-laute",
+   "subject_id": "english",
+   "titles": {
+    "de": "Kurze und lange Vokale",
+    "en": "Short and long vowels",
+    "fr": "Voyelles courtes et longues",
+    "it": "Vocali brevi e lunghe"
+   },
+   "description": "Die kurzen Vokale a, e, i, o und u sowie lange Vokale in Schreibungen wie a-e, i-e, o-e, u-e, ai und ay erkennen und unterscheiden.",
+   "order": 2,
+   "prerequisites": [
+    "englisch-laute-alphabet-und-anlaute"
+   ]
+  },
+  "englisch-laute-aussprache-im-wort-und-im-redefluss": {
+   "topic_id": "englisch-laute",
+   "subject_id": "english",
+   "titles": {
+    "de": "Aussprache im Wort und im Redefluss",
+    "en": "Pronunciation in words and connected speech",
+    "fr": "Prononciation des mots et de la parole enchaînée",
+    "it": "Pronuncia delle parole e del parlato continuo"
+   },
+   "description": "Die Endungen -s und -ed richtig aussprechen, gleich klingende Wörter unterscheiden und erkennen, wie Wörter im Redefluss verbunden und Verschlusslaute unvollständig gelöst werden.",
+   "order": 3,
+   "prerequisites": [
+    "englisch-laute-alphabet-und-anlaute",
+    "englisch-laute-betonung-satzmelodie-und-pausen",
+    "englisch-verben-simple-past-und-past-progressive",
+    "englisch-woerter-this-these-und-plural-von-nomen"
+   ]
+  },
+  "englisch-laute-betonung-satzmelodie-und-pausen": {
+   "topic_id": "englisch-laute",
+   "subject_id": "english",
+   "titles": {
+    "de": "Betonung, Satzmelodie und Pausen",
+    "en": "Stress, intonation and pauses",
+    "fr": "Accent, intonation et pauses",
+    "it": "Accento, intonazione e pause"
+   },
+   "description": "Wort- und Satzbetonung erkennen, steigende und fallende Satzmelodie unterscheiden und beim Vorlesen nach Sinngruppen pausieren.",
+   "order": 4,
+   "prerequisites": [
+    "englisch-laute-alphabet-und-anlaute"
+   ]
+  },
+  "englisch-natur-tiere": {
+   "topic_id": "englisch-natur",
+   "subject_id": "english",
+   "titles": {
+    "de": "Tiere",
+    "en": "Animals",
+    "fr": "Les animaux",
+    "it": "Gli animali"
+   },
+   "description": "Tiernamen kennen, Tiere vorstellen und sagen, woher sie kommen, und über Wildtiere und Tierschutz sprechen, lesen und schreiben.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "englisch-natur-wetter-und-jahreszeiten": {
+   "topic_id": "englisch-natur",
+   "subject_id": "english",
+   "titles": {
+    "de": "Wetter und Jahreszeiten",
+    "en": "Weather and seasons",
+    "fr": "La météo et les saisons",
+    "it": "Il tempo e le stagioni"
+   },
+   "description": "Wetterwörter und Jahreszeiten kennen, über das Wetter und die Lieblingsjahreszeit sprechen und Wetterberichte und kurze Texte lesen.",
+   "order": 2,
+   "prerequisites": []
+  },
+  "englisch-natur-bauernhof-und-landwirtschaft": {
+   "topic_id": "englisch-natur",
+   "subject_id": "english",
+   "titles": {
+    "de": "Bauernhof und Landwirtschaft",
+    "en": "Farm and agriculture",
+    "fr": "La ferme et l'agriculture",
+    "it": "La fattoria e l'agricoltura"
+   },
+   "description": "Tiere, Gemüse und Wörter zu Landwirtschaft und Ackerbau kennen, danach fragen, Feldarbeit beschreiben und planen und Texte über den Bauernhof lesen.",
+   "order": 3,
+   "prerequisites": []
+  },
+  "englisch-natur-naturparks-und-naturschutz": {
+   "topic_id": "englisch-natur",
+   "subject_id": "english",
+   "titles": {
+    "de": "Naturparks und Naturschutz",
+    "en": "Nature parks and conservation",
+    "fr": "Parcs naturels et protection de la nature",
+    "it": "Parchi naturali e tutela della natura"
+   },
+   "description": "Wörter zu Landschaft, Parks und Naturschutz kennen, sagen, was es in einem Park gibt, Parkregeln beschreiben, Texte über Parks lesen und Besuchshinweise schreiben.",
+   "order": 4,
+   "prerequisites": []
+  },
+  "englisch-natur-umweltschutz-und-klima": {
+   "topic_id": "englisch-natur",
+   "subject_id": "english",
+   "titles": {
+    "de": "Umweltschutz und Klima",
+    "en": "Environmental protection and climate",
+    "fr": "Protection de l'environnement et climat",
+    "it": "Tutela dell'ambiente e clima"
+   },
+   "description": "Wörter zu Energie, Abfall, Klima und Emissionen nutzen, sagen, was man für die Umwelt tun kann, Umweltaufrufe und -texte lesen und einen Kommentar schreiben.",
+   "order": 5,
+   "prerequisites": [
+    "englisch-verben-perfekt-und-zeitformen-unterscheiden"
+   ]
+  },
+  "englisch-natur-unwetter-und-naturkatastrophen": {
+   "topic_id": "englisch-natur",
+   "subject_id": "english",
+   "titles": {
+    "de": "Unwetter und Naturkatastrophen",
+    "en": "Storms and natural disasters",
+    "fr": "Intempéries et catastrophes naturelles",
+    "it": "Maltempo e catastrofi naturali"
+   },
+   "description": "Wörter zu Unwettern, Katastrophen und Rettung nutzen, in der Vergangenheit erzählen, was geschah, um Hilfe bitten und Katastrophenmeldungen lesen und schreiben.",
+   "order": 6,
+   "prerequisites": [
+    "englisch-verben-simple-past-und-past-progressive"
+   ]
+  },
+  "englisch-saetze-fragen-mit-fragewoertern": {
+   "topic_id": "englisch-saetze",
+   "subject_id": "english",
+   "titles": {
+    "de": "Fragen mit Fragewörtern",
+    "en": "Questions with question words",
+    "fr": "Questions avec des mots interrogatifs",
+    "it": "Domande con parole interrogative"
+   },
+   "description": "Mit How many, How much, Who, What, Why, When und How often nach Anzahl, Preis, Personen, Grund, Zeit und Häufigkeit fragen und antworten.",
+   "order": 1,
+   "prerequisites": [
+    "englisch-alltag-zahlen-und-ordnungszahlen",
+    "englisch-verben-be-have-und-simple-present",
+    "englisch-woerter-praepositionen-adverbien-und-verbindungswoerter",
+    "englisch-woerter-this-these-und-plural-von-nomen"
+   ]
+  },
+  "englisch-saetze-aussagen-aufforderungen-und-ausrufe": {
+   "topic_id": "englisch-saetze",
+   "subject_id": "english",
+   "titles": {
+    "de": "Aussagen, Aufforderungen und Ausrufe",
+    "en": "Statements, commands and exclamations",
+    "fr": "Affirmations, ordres et exclamations",
+    "it": "Affermazioni, ordini ed esclamazioni"
+   },
+   "description": "Mit It is und There is Aussagen machen, mit Let's und dem Imperativ auffordern, den Weg beschreiben und mit What und How Ausrufe bilden.",
+   "order": 2,
+   "prerequisites": [
+    "englisch-natur-wetter-und-jahreszeiten",
+    "englisch-saetze-fragen-mit-fragewoertern",
+    "englisch-saetze-ja-nein-fragen-und-question-tags",
+    "englisch-verben-be-have-und-simple-present"
+   ]
+  },
+  "englisch-saetze-ja-nein-fragen-und-question-tags": {
+   "topic_id": "englisch-saetze",
+   "subject_id": "english",
+   "titles": {
+    "de": "Ja/Nein-Fragen und Question Tags",
+    "en": "Yes/no questions and question tags",
+    "fr": "Questions fermées et question tags",
+    "it": "Domande sì/no e question tag"
+   },
+   "description": "Ja/Nein- und Alternativfragen mit be, do, does, did und there is bilden und einer Aussage eine Rückfrage als Question Tag anhängen.",
+   "order": 3,
+   "prerequisites": [
+    "englisch-verben-be-have-und-simple-present",
+    "englisch-verben-simple-past-und-past-progressive"
+   ]
+  },
+  "englisch-saetze-bedingung-gegensatz-und-zweck": {
+   "topic_id": "englisch-saetze",
+   "subject_id": "english",
+   "titles": {
+    "de": "Bedingung, Gegensatz und Zweck",
+    "en": "Condition, contrast and purpose",
+    "fr": "Condition, opposition et but",
+    "it": "Condizione, contrasto e scopo"
+   },
+   "description": "Mit if, unless, provided that, although, while, so that, in case, no matter und where reale Bedingungen, Gegensätze, Zwecke und Orte ausdrücken.",
+   "order": 4,
+   "prerequisites": [
+    "englisch-verben-infinitiv-und-gerundium",
+    "englisch-verben-present-progressive-und-zukunft",
+    "englisch-woerter-praepositionen-adverbien-und-verbindungswoerter"
+   ]
+  },
+  "englisch-saetze-satzglieder-und-satzbau": {
+   "topic_id": "englisch-saetze",
+   "subject_id": "english",
+   "titles": {
+    "de": "Satzglieder und Satzbau",
+    "en": "Sentence elements and structure",
+    "fr": "Éléments et structure de la phrase",
+    "it": "Elementi e struttura della frase"
+   },
+   "description": "Satzglieder, Wortgruppen und Grundsatzmuster bestimmen, Subjekt und Verb in Übereinstimmung bringen und die with-Konstruktion verwenden.",
+   "order": 5,
+   "prerequisites": [
+    "englisch-saetze-ja-nein-fragen-und-question-tags",
+    "englisch-verben-be-have-und-simple-present"
+   ]
+  },
+  "englisch-saetze-nominalsaetze-und-indirekte-rede": {
+   "topic_id": "englisch-saetze",
+   "subject_id": "english",
+   "titles": {
+    "de": "Nominalsätze und indirekte Rede",
+    "en": "Noun clauses and reported speech",
+    "fr": "Complétives et discours indirect",
+    "it": "Proposizioni nominali e discorso indiretto"
+   },
+   "description": "Objekt-, Subjekt- und Prädikativsätze mit that, if, whether, what oder einem Fragewort bilden und direkte in indirekte Rede umwandeln.",
+   "order": 6,
+   "prerequisites": [
+    "englisch-verben-be-have-und-simple-present"
+   ]
+  },
+  "englisch-saetze-relativsaetze-und-appositionssaetze": {
+   "topic_id": "englisch-saetze",
+   "subject_id": "english",
+   "titles": {
+    "de": "Relativsätze und Appositionssätze",
+    "en": "Relative and appositive clauses",
+    "fr": "Relatives et propositions appositives",
+    "it": "Relative e proposizioni appositive"
+   },
+   "description": "Notwendige und nicht notwendige Relativsätze mit Relativpronomen und -adverbien bilden und von Appositionssätzen mit that unterscheiden.",
+   "order": 7,
+   "prerequisites": [
+    "englisch-saetze-nominalsaetze-und-indirekte-rede"
+   ]
+  },
+  "englisch-saetze-irreale-bedingungen-und-konjunktiv": {
+   "topic_id": "englisch-saetze",
+   "subject_id": "english",
+   "titles": {
+    "de": "Irreale Bedingungen und Konjunktiv",
+    "en": "Unreal conditionals and the subjunctive",
+    "fr": "Conditions irréelles et subjonctif",
+    "it": "Condizionali irreali e congiuntivo"
+   },
+   "description": "Irreale und gemischte Bedingungssätze bilden und nach wish, if only, as if, would rather, suggest und insist den Konjunktiv verwenden.",
+   "order": 8,
+   "prerequisites": [
+    "englisch-saetze-bedingung-gegensatz-und-zweck",
+    "englisch-verben-perfekt-und-zeitformen-unterscheiden"
+   ]
+  },
+  "englisch-saetze-hervorhebung-inversion-und-ellipse": {
+   "topic_id": "englisch-saetze",
+   "subject_id": "english",
+   "titles": {
+    "de": "Hervorhebung, Inversion und Ellipse",
+    "en": "Emphasis, inversion and ellipsis",
+    "fr": "Mise en relief, inversion et ellipse",
+    "it": "Enfasi, inversione ed ellissi"
+   },
+   "description": "Mit It is ... that und do hervorheben, nach verneinenden Ausdrücken und Ortsangaben invertieren und Wiederholtes weglassen.",
+   "order": 9,
+   "prerequisites": [
+    "englisch-saetze-irreale-bedingungen-und-konjunktiv",
+    "englisch-saetze-relativsaetze-und-appositionssaetze",
+    "englisch-verben-infinitiv-und-gerundium"
+   ]
+  },
+  "englisch-schule-schulzimmer-und-schulsachen": {
+   "topic_id": "englisch-schule",
+   "subject_id": "english",
+   "titles": {
+    "de": "Schulzimmer und Schulsachen",
+    "en": "Classroom and school things",
+    "fr": "La salle de classe et le matériel scolaire",
+    "it": "L'aula e il materiale scolastico"
+   },
+   "description": "Wörter für Schulzimmer und Schulsachen verstehen, sagen, was in der Schultasche ist, und fragen, wem eine Fundsache gehört.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "englisch-schule-berufe-und-arbeitsorte": {
+   "topic_id": "englisch-schule",
+   "subject_id": "english",
+   "titles": {
+    "de": "Berufe und Arbeitsorte",
+    "en": "Jobs and workplaces",
+    "fr": "Métiers et lieux de travail",
+    "it": "Professioni e luoghi di lavoro"
+   },
+   "description": "Berufe benennen und sagen, wer welchen Beruf hat und wo er arbeitet.",
+   "order": 2,
+   "prerequisites": []
+  },
+  "englisch-schule-orte-faecher-und-regeln-in-der-schule": {
+   "topic_id": "englisch-schule",
+   "subject_id": "english",
+   "titles": {
+    "de": "Orte, Fächer und Regeln in der Schule",
+    "en": "Places, subjects and rules at school",
+    "fr": "Lieux, matières et règles à l'école",
+    "it": "Luoghi, materie e regole a scuola"
+   },
+   "description": "Orte in der Schule und Schulfächer benennen, einen Stundenplan lesen und Schulregeln erklären.",
+   "order": 3,
+   "prerequisites": []
+  },
+  "englisch-schule-berufsplaene-und-bewerbung": {
+   "topic_id": "englisch-schule",
+   "subject_id": "english",
+   "titles": {
+    "de": "Berufspläne und Bewerbung",
+    "en": "Career plans and job applications",
+    "fr": "Projets professionnels et candidatures",
+    "it": "Progetti professionali e candidature"
+   },
+   "description": "Mit going to über Berufspläne sprechen, über die Stellensuche reden und eine Bewerbungs-E-Mail verfassen.",
+   "order": 4,
+   "prerequisites": []
+  },
+  "englisch-schule-lernmethoden-und-schulabschluss": {
+   "topic_id": "englisch-schule",
+   "subject_id": "english",
+   "titles": {
+    "de": "Lernmethoden und Schulabschluss",
+    "en": "Learning methods and leaving school",
+    "fr": "Méthodes d'apprentissage et fin de la scolarité",
+    "it": "Metodi di studio e fine della scuola"
+   },
+   "description": "Über Lernmethoden sprechen, einen Lernplan für eine Sprache schreiben und auf die Schulzeit zurückblicken.",
+   "order": 5,
+   "prerequisites": []
+  },
+  "englisch-schule-schulalltag-kurse-und-clubs": {
+   "topic_id": "englisch-schule",
+   "subject_id": "english",
+   "titles": {
+    "de": "Schulalltag, Kurse und Clubs",
+    "en": "School life, courses and clubs",
+    "fr": "Vie scolaire, cours et clubs",
+    "it": "Vita scolastica, corsi e club"
+   },
+   "description": "Über Schulgelände, Kurse, Hausaufgaben und Clubs sprechen, lesen und eine Clubbewerbung verfassen.",
+   "order": 6,
+   "prerequisites": []
+  },
+  "englisch-unterwegs-laender-sprachen-und-umgangsformen": {
+   "topic_id": "englisch-unterwegs",
+   "subject_id": "english",
+   "titles": {
+    "de": "Länder, Sprachen und Umgangsformen",
+    "en": "Countries, languages and manners",
+    "fr": "Pays, langues et bonnes manières",
+    "it": "Paesi, lingue e buone maniere"
+   },
+   "description": "Länder und geografische Begriffe kennen, über Sprachen und Dialekte sprechen und erklären, wie man sich in anderen Ländern begrüsst.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "englisch-unterwegs-verkehrsmittel-und-schulweg": {
+   "topic_id": "englisch-unterwegs",
+   "subject_id": "english",
+   "titles": {
+    "de": "Verkehrsmittel und Schulweg",
+    "en": "Means of transport and the way to school",
+    "fr": "Moyens de transport et chemin de l'école",
+    "it": "Mezzi di trasporto e tragitto per la scuola"
+   },
+   "description": "Verkehrsmittel benennen, sagen, wie man zur Schule kommt und wie lange es dauert, und kurze Texte über den Verkehr verstehen.",
+   "order": 2,
+   "prerequisites": []
+  },
+  "englisch-unterwegs-von-ausfluegen-und-ferien-erzaehlen": {
+   "topic_id": "englisch-unterwegs",
+   "subject_id": "english",
+   "titles": {
+    "de": "Von Ausflügen und Ferien erzählen",
+    "en": "Talking about trips and holidays",
+    "fr": "Raconter des excursions et des vacances",
+    "it": "Raccontare gite e vacanze"
+   },
+   "description": "Wörter zu Ausflügen und Ferienorten kennen, fragen und erzählen, wohin man gegangen ist und was man erlebt hat, und Reisetagebücher lesen.",
+   "order": 3,
+   "prerequisites": [
+    "englisch-verben-simple-past-und-past-progressive"
+   ]
+  },
+  "englisch-unterwegs-orte-in-der-stadt-und-wege": {
+   "topic_id": "englisch-unterwegs",
+   "subject_id": "english",
+   "titles": {
+    "de": "Orte in der Stadt und Wegbeschreibungen",
+    "en": "Places in town and directions",
+    "fr": "Lieux en ville et itinéraires",
+    "it": "Luoghi in città e indicazioni stradali"
+   },
+   "description": "Orte in der Stadt benennen, höflich nach dem Weg fragen, den Weg beschreiben und Wegbeschreibungen verstehen.",
+   "order": 4,
+   "prerequisites": []
+  },
+  "englisch-unterwegs-reisen-planen-und-sehenswuerdigkeiten": {
+   "topic_id": "englisch-unterwegs",
+   "subject_id": "english",
+   "titles": {
+    "de": "Reisen planen und Sehenswürdigkeiten",
+    "en": "Planning trips and sights",
+    "fr": "Planifier un voyage et curiosités",
+    "it": "Pianificare viaggi e attrazioni"
+   },
+   "description": "Wörter zur Reiseplanung und zu Sehenswürdigkeiten kennen, über Reisepläne sprechen und Sehenswürdigkeiten und Rundgänge vorstellen.",
+   "order": 5,
+   "prerequisites": []
+  },
+  "englisch-unterwegs-kulturelle-vielfalt-und-austausch": {
+   "topic_id": "englisch-unterwegs",
+   "subject_id": "english",
+   "titles": {
+    "de": "Kulturelle Vielfalt und Austausch",
+    "en": "Cultural diversity and exchange",
+    "fr": "Diversité culturelle et échange",
+    "it": "Diversità culturale e scambio"
+   },
+   "description": "Wörter zu Kultur, Bräuchen und Austausch kennen, Kulturen vergleichen und über einen Austausch im Ausland lesen und schreiben.",
+   "order": 6,
+   "prerequisites": []
+  },
+  "englisch-unterwegs-bahnreisen-und-seereisen": {
+   "topic_id": "englisch-unterwegs",
+   "subject_id": "english",
+   "titles": {
+    "de": "Bahnreisen und Seereisen",
+    "en": "Train journeys and sea voyages",
+    "fr": "Voyages en train et en mer",
+    "it": "Viaggi in treno e per mare"
+   },
+   "description": "Wörter zu Bahnreisen und zur Seefahrt kennen und eine lange Reise beschreiben, darüber lesen und in einer E-Mail oder einem Memo schildern.",
+   "order": 7,
+   "prerequisites": []
+  },
+  "englisch-verben-be-have-und-simple-present": {
+   "topic_id": "englisch-verben",
+   "subject_id": "english",
+   "titles": {
+    "de": "be, have und das Simple Present",
+    "en": "be, have and the simple present",
+    "fr": "be, have et le simple present",
+    "it": "be, have e il simple present"
+   },
+   "description": "Je nach Subjekt am, is, are und have, has verwenden und im Simple Present mit do und does Sätze und Fragen bilden.",
+   "order": 1,
+   "prerequisites": [
+    "englisch-alltag-farben-kleidung-und-besitz",
+    "englisch-essen-lebensmittel-und-lieblingsessen"
+   ]
+  },
+  "englisch-verben-pflicht-erlaubnis-und-vermutung": {
+   "topic_id": "englisch-verben",
+   "subject_id": "english",
+   "titles": {
+    "de": "Pflicht, Erlaubnis und Vermutung mit Modalverben",
+    "en": "Obligation, permission and deduction with modal verbs",
+    "fr": "Obligation, permission et supposition avec les verbes modaux",
+    "it": "Obbligo, permesso e supposizione con i verbi modali"
+   },
+   "description": "Mit must, have to, can't, be allowed to und be supposed to Pflichten und Erlaubnis ausdrücken und mit Modalverben Vermutungen anstellen.",
+   "order": 2,
+   "prerequisites": [
+    "englisch-saetze-aussagen-aufforderungen-und-ausrufe",
+    "englisch-verben-das-passiv",
+    "englisch-verben-infinitiv-und-gerundium"
+   ]
+  },
+  "englisch-verben-faehigkeiten-bitten-und-ratschlaege": {
+   "topic_id": "englisch-verben",
+   "subject_id": "english",
+   "titles": {
+    "de": "Fähigkeiten, Bitten und Ratschläge mit Modalverben",
+    "en": "Ability, requests and advice with modal verbs",
+    "fr": "Capacité, demandes et conseils avec les verbes modaux",
+    "it": "Capacità, richieste e consigli con i verbi modali"
+   },
+   "description": "Mit can, could, would like und should sagen, was man kann, höflich bitten, einladen und Ratschläge geben.",
+   "order": 3,
+   "prerequisites": [
+    "englisch-essen-essen-anbieten-und-bestellen"
+   ]
+  },
+  "englisch-verben-present-progressive-und-zukunft": {
+   "topic_id": "englisch-verben",
+   "subject_id": "english",
+   "titles": {
+    "de": "Present Progressive und die Zukunft",
+    "en": "Present progressive and the future",
+    "fr": "Present progressive et le futur",
+    "it": "Present progressive e il futuro"
+   },
+   "description": "Mit der -ing-Form sagen, was gerade geschieht, und mit going to, will und Gegenwartsformen über die Zukunft sprechen.",
+   "order": 4,
+   "prerequisites": [
+    "englisch-saetze-fragen-mit-fragewoertern"
+   ]
+  },
+  "englisch-verben-simple-past-und-past-progressive": {
+   "topic_id": "englisch-verben",
+   "subject_id": "english",
+   "titles": {
+    "de": "Simple Past, Past Progressive und used to",
+    "en": "Simple past, past progressive and used to",
+    "fr": "Simple past, past progressive et used to",
+    "it": "Simple past, past progressive e used to"
+   },
+   "description": "Mit dem Simple Past, was und were, der Verlaufsform der Vergangenheit und used to über Vergangenes erzählen.",
+   "order": 5,
+   "prerequisites": [
+    "englisch-verben-present-progressive-und-zukunft"
+   ]
+  },
+  "englisch-verben-infinitiv-und-gerundium": {
+   "topic_id": "englisch-verben",
+   "subject_id": "english",
+   "titles": {
+    "de": "Infinitiv und Gerundium",
+    "en": "Infinitive and gerund",
+    "fr": "Infinitif et gérondif",
+    "it": "Infinito e gerundio"
+   },
+   "description": "Den Infinitiv mit und ohne to verwenden und entscheiden, ob nach einem Verb to do oder doing folgt.",
+   "order": 6,
+   "prerequisites": [
+    "englisch-verben-be-have-und-simple-present",
+    "englisch-verben-partizipien-und-partizipialkonstruktionen"
+   ]
+  },
+  "englisch-verben-perfekt-und-zeitformen-unterscheiden": {
+   "topic_id": "englisch-verben",
+   "subject_id": "english",
+   "titles": {
+    "de": "Present Perfect, Past Perfect und die Wahl der Zeitform",
+    "en": "Present perfect, past perfect and choosing the tense",
+    "fr": "Present perfect, past perfect et le choix du temps",
+    "it": "Present perfect, past perfect e la scelta del tempo"
+   },
+   "description": "Present Perfect mit for und since und Past Perfect bilden und passend zur Zeitangabe die richtige Zeitform wählen.",
+   "order": 7,
+   "prerequisites": [
+    "englisch-verben-present-progressive-und-zukunft",
+    "englisch-verben-simple-past-und-past-progressive"
+   ]
+  },
+  "englisch-verben-das-passiv": {
+   "topic_id": "englisch-verben",
+   "subject_id": "english",
+   "titles": {
+    "de": "Das Passiv",
+    "en": "The passive",
+    "fr": "Le passif",
+    "it": "Il passivo"
+   },
+   "description": "Das Passiv in einfachen Zeitformen, in Verlaufsform und Perfekt sowie als passiven Infinitiv bilden.",
+   "order": 8,
+   "prerequisites": [
+    "englisch-verben-be-have-und-simple-present",
+    "englisch-verben-infinitiv-und-gerundium",
+    "englisch-verben-perfekt-und-zeitformen-unterscheiden",
+    "englisch-verben-present-progressive-und-zukunft",
+    "englisch-verben-simple-past-und-past-progressive"
+   ]
+  },
+  "englisch-verben-partizipien-und-partizipialkonstruktionen": {
+   "topic_id": "englisch-verben",
+   "subject_id": "english",
+   "titles": {
+    "de": "Partizipien und Partizipialkonstruktionen",
+    "en": "Participles and participle clauses",
+    "fr": "Participes et propositions participiales",
+    "it": "Participi e costruzioni participiali"
+   },
+   "description": "Die -ing-Form und das Partizip Perfekt als Attribut und Ergänzung sowie in Partizipialkonstruktionen mit having done verwenden.",
+   "order": 9,
+   "prerequisites": []
+  },
+  "englisch-woerter-this-these-und-plural-von-nomen": {
+   "topic_id": "englisch-woerter",
+   "subject_id": "english",
+   "titles": {
+    "de": "this, these und Plural von Nomen",
+    "en": "this, these and plural nouns",
+    "fr": "this, these et pluriel des noms",
+    "it": "this, these e plurale dei nomi"
+   },
+   "description": "Mit this, that, these und those auf Dinge zeigen, Nomen in die Mehrzahl setzen und zählbare von nicht zählbaren Nomen unterscheiden.",
+   "order": 1,
+   "prerequisites": [
+    "englisch-natur-tiere",
+    "englisch-verben-be-have-und-simple-present"
+   ]
+  },
+  "englisch-woerter-adjektive-steigerung-und-wortbildung": {
+   "topic_id": "englisch-woerter",
+   "subject_id": "english",
+   "titles": {
+    "de": "Adjektive, Steigerung und Wortbildung",
+    "en": "Adjectives, comparison and word formation",
+    "fr": "Adjectifs, comparaison et formation des mots",
+    "it": "Aggettivi, comparazione e formazione delle parole"
+   },
+   "description": "Mit Adjektiven beschreiben, Komparativ und Superlativ bilden und vergleichen sowie Wörter mit Vor- und Nachsilben erschliessen.",
+   "order": 2,
+   "prerequisites": [
+    "englisch-ich-aussehen-und-koerpersprache"
+   ]
+  },
+  "englisch-woerter-praepositionen-adverbien-und-verbindungswoerter": {
+   "topic_id": "englisch-woerter",
+   "subject_id": "english",
+   "titles": {
+    "de": "Präpositionen, Adverbien und Verbindungswörter",
+    "en": "Prepositions, adverbs and linking words",
+    "fr": "Prépositions, adverbes et mots de liaison",
+    "it": "Preposizioni, avverbi e connettivi"
+   },
+   "description": "Mit Präpositionen Ort und Zeit angeben, Adverbien und Adverbiale verwenden und erkennen sowie Sätze mit because, first und then verbinden.",
+   "order": 3,
+   "prerequisites": [
+    "englisch-alltag-haus-zimmer-und-ortsangaben",
+    "englisch-verben-be-have-und-simple-present"
+   ]
+  },
+  "englisch-woerter-besitz-und-pronomen": {
+   "topic_id": "englisch-woerter",
+   "subject_id": "english",
+   "titles": {
+    "de": "Besitz und Pronomen",
+    "en": "Possession and pronouns",
+    "fr": "Possession et pronoms",
+    "it": "Possesso e pronomi"
+   },
+   "description": "Mit whose, 's, Possessivbegleitern und Possessivpronomen sagen, wem etwas gehört, und Reflexiv- sowie Indefinitpronomen richtig verwenden.",
+   "order": 4,
+   "prerequisites": []
+  },
+  "geometrie-lage-richtung-und-koordinaten": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Lage, Richtung und Koordinaten",
+    "en": "Position, direction and coordinates",
+    "fr": "Position, direction et coordonnées",
+    "it": "Posizione, direzione e coordinate"
+   },
+   "description": "Lagen mit Richtungsangaben, Himmelsrichtungen, Entfernungen und Koordinaten beschreiben.",
+   "order": 5,
+   "prerequisites": [
+    "geometrie-strecken-geraden-senkrechte-und-parallelen",
+    "zahlen-negative-und-rationale-zahlen",
+    "zahlen-zahlenraum-bis-20"
+   ]
+  },
+  "geometrie-ebene-figuren-und-vielecke": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Ebene Figuren und Vielecke",
+    "en": "Plane shapes and polygons",
+    "fr": "Figures planes et polygones",
+    "it": "Figure piane e poligoni"
+   },
+   "description": "Ebene Figuren und Vielecke erkennen, unterscheiden, zusammensetzen und zu Parkettierungen legen.",
+   "order": 6,
+   "prerequisites": [
+    "geometrie-strecken-geraden-senkrechte-und-parallelen"
+   ]
+  },
+  "geometrie-koerper-ansichten-und-netze": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Körper, Ansichten und Netze",
+    "en": "Solids, views and nets",
+    "fr": "Solides, vues et patrons",
+    "it": "Solidi, viste e sviluppi"
+   },
+   "description": "Geometrische Körper erkennen, aus verschiedenen Ansichten betrachten und ihre Netze deuten.",
+   "order": 7,
+   "prerequisites": [
+    "geometrie-ebene-figuren-und-vielecke",
+    "geometrie-kreis-umfang-flaeche-und-sektor",
+    "zahlen-zahlenraum-bis-20"
+   ]
+  },
+  "geometrie-umfang-und-flaeche-ebener-figuren": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Umfang und Fläche ebener Figuren",
+    "en": "Perimeter and area of plane shapes",
+    "fr": "Périmètre et aire des figures planes",
+    "it": "Perimetro e area delle figure piane"
+   },
+   "description": "Umfang und Flächeninhalt von Rechteck, Quadrat, Parallelogramm, Dreieck, Trapez und zusammengesetzten Figuren berechnen.",
+   "order": 8,
+   "prerequisites": [
+    "geometrie-dreiecke-und-winkelsummen",
+    "geometrie-ebene-figuren-und-vielecke",
+    "geometrie-strecken-geraden-senkrechte-und-parallelen",
+    "zahlen-mehrstellig-multiplizieren-und-dividieren",
+    "zahlen-plus-und-minus-bis-100"
+   ]
+  },
+  "geometrie-strecken-geraden-senkrechte-und-parallelen": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Strecken, Geraden, Senkrechte und Parallelen",
+    "en": "Segments, lines, perpendiculars and parallels",
+    "fr": "Segments, droites, perpendiculaires et parallèles",
+    "it": "Segmenti, rette, perpendicolari e parallele"
+   },
+   "description": "Strecke, Gerade und Strahl unterscheiden, Senkrechte und Parallelen erkennen und zeichnen und Abstände bestimmen.",
+   "order": 9,
+   "prerequisites": [
+    "groessen-laengen-und-flaechen"
+   ]
+  },
+  "geometrie-winkel-messen-und-berechnen": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Winkel messen und berechnen",
+    "en": "Measuring and calculating angles",
+    "fr": "Mesurer et calculer des angles",
+    "it": "Misurare e calcolare angoli"
+   },
+   "description": "Winkel erkennen, einteilen, messen, umrechnen und mit Neben-, Scheitel-, Komplement- und Supplementwinkeln rechnen.",
+   "order": 10,
+   "prerequisites": [
+    "geometrie-strecken-geraden-senkrechte-und-parallelen",
+    "gleichungen-lineare-gleichungen-loesen"
+   ]
+  },
+  "geometrie-verschiebung-und-drehung": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Verschiebung und Drehung",
+    "en": "Translation and rotation",
+    "fr": "Translation et rotation",
+    "it": "Traslazione e rotazione"
+   },
+   "description": "Bewegungen unterscheiden sowie Figuren verschieben und drehen, ihre Eigenschaften nutzen und konstruieren.",
+   "order": 11,
+   "prerequisites": [
+    "geometrie-achsen-und-punktsymmetrie",
+    "geometrie-ebene-figuren-und-vielecke",
+    "geometrie-lage-richtung-und-koordinaten",
+    "geometrie-winkel-an-parallelen-und-beweise",
+    "geometrie-winkel-messen-und-berechnen"
+   ]
+  },
+  "geometrie-dreiecke-und-winkelsummen": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Dreiecke und Winkelsummen",
+    "en": "Triangles and angle sums",
+    "fr": "Triangles et sommes des angles",
+    "it": "Triangoli e somme degli angoli"
+   },
+   "description": "Dreiecke einteilen, die Dreiecksungleichung anwenden und Winkelsummen in Dreiecken und Vielecken nutzen.",
+   "order": 12,
+   "prerequisites": [
+    "geometrie-ebene-figuren-und-vielecke",
+    "geometrie-strecken-geraden-senkrechte-und-parallelen",
+    "geometrie-winkel-an-parallelen-und-beweise"
+   ]
+  },
+  "geometrie-achsen-und-punktsymmetrie": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Achsen- und Punktsymmetrie",
+    "en": "Line and point symmetry",
+    "fr": "Symétrie axiale et centrale",
+    "it": "Simmetria assiale e centrale"
+   },
+   "description": "Achsen- und punktsymmetrische Figuren erkennen, Figuren spiegeln und Spiegelungen anwenden.",
+   "order": 13,
+   "prerequisites": [
+    "geometrie-lage-richtung-und-koordinaten",
+    "geometrie-strecken-geraden-senkrechte-und-parallelen"
+   ]
+  },
+  "geometrie-volumen-und-oberflaeche-von-koerpern": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Volumen und Oberfläche von Körpern",
+    "en": "Volume and surface area of solids",
+    "fr": "Volume et aire des solides",
+    "it": "Volume e superficie dei solidi"
+   },
+   "description": "Volumen und Oberfläche von Quader, Würfel, Zylinder, Kegel und Kugel berechnen.",
+   "order": 14,
+   "prerequisites": [
+    "geometrie-koerper-ansichten-und-netze",
+    "geometrie-koerper-darstellen-projektionen-schraegbilder",
+    "geometrie-kreis-umfang-flaeche-und-sektor",
+    "geometrie-umfang-und-flaeche-ebener-figuren",
+    "groessen-laengen-und-flaechen"
+   ]
+  },
+  "geometrie-kreis-umfang-flaeche-und-sektor": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Kreis: Umfang, Fläche und Sektor",
+    "en": "Circle: circumference, area and sector",
+    "fr": "Cercle : circonférence, aire et secteur",
+    "it": "Cerchio: circonferenza, area e settore"
+   },
+   "description": "Grundbegriffe am Kreis kennen und Kreisumfang, Kreisfläche, Bogenlänge und Kreissektor berechnen.",
+   "order": 15,
+   "prerequisites": [
+    "geometrie-strecken-geraden-senkrechte-und-parallelen",
+    "geometrie-umfang-und-flaeche-ebener-figuren",
+    "geometrie-winkel-messen-und-berechnen",
+    "gleichungen-ersetzen-und-groessenbeziehungen",
+    "zahlen-rechnen-mit-dezimalzahlen"
+   ]
+  },
+  "geometrie-winkel-an-parallelen-und-beweise": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Winkel an Parallelen und geometrische Beweise",
+    "en": "Angles at parallel lines and geometric proofs",
+    "fr": "Angles et parallèles, démonstrations géométriques",
+    "it": "Angoli e parallele, dimostrazioni geometriche"
+   },
+   "description": "Stufen-, Wechsel- und Nachbarwinkel an Parallelen nutzen und geometrische Aussagen sauber beweisen.",
+   "order": 16,
+   "prerequisites": [
+    "geometrie-strecken-geraden-senkrechte-und-parallelen",
+    "geometrie-winkel-messen-und-berechnen"
+   ]
+  },
+  "geometrie-kongruenz-und-gleichschenklige-dreiecke": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Kongruenz und gleichschenklige Dreiecke",
+    "en": "Congruence and isosceles triangles",
+    "fr": "Isométrie et triangles isocèles",
+    "it": "Congruenza e triangoli isosceli"
+   },
+   "description": "Kongruente Dreiecke mit den Kongruenzsätzen nachweisen und Eigenschaften gleichschenkliger und gleichseitiger Dreiecke beweisen.",
+   "order": 17,
+   "prerequisites": [
+    "geometrie-dreiecke-und-winkelsummen",
+    "geometrie-verschiebung-und-drehung",
+    "geometrie-winkel-an-parallelen-und-beweise"
+   ]
+  },
+  "geometrie-parallelogramme-und-besondere-vierecke": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Parallelogramme und besondere Vierecke",
+    "en": "Parallelograms and special quadrilaterals",
+    "fr": "Parallélogrammes et quadrilatères particuliers",
+    "it": "Parallelogrammi e quadrilateri particolari"
+   },
+   "description": "Eigenschaften von Parallelogramm, Rechteck, Rhombus und Quadrat sowie der Mittelparallele nutzen und nachweisen.",
+   "order": 18,
+   "prerequisites": [
+    "geometrie-ebene-figuren-und-vielecke",
+    "geometrie-kongruenz-und-gleichschenklige-dreiecke",
+    "geometrie-rechtwinklige-dreiecke-und-pythagoras",
+    "geometrie-strecken-geraden-senkrechte-und-parallelen",
+    "geometrie-winkel-an-parallelen-und-beweise"
+   ]
+  },
+  "geometrie-rechtwinklige-dreiecke-und-pythagoras": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Rechtwinklige Dreiecke und Satz des Pythagoras",
+    "en": "Right triangles and the Pythagorean theorem",
+    "fr": "Triangles rectangles et théorème de Pythagore",
+    "it": "Triangoli rettangoli e teorema di Pitagora"
+   },
+   "description": "Sätze am rechtwinkligen Dreieck, den Satz des Pythagoras und seine Umkehrung beweisen und anwenden.",
+   "order": 19,
+   "prerequisites": [
+    "geometrie-dreiecke-und-winkelsummen",
+    "geometrie-kongruenz-und-gleichschenklige-dreiecke",
+    "gleichungen-binomische-formeln-und-faktorisieren",
+    "zahlen-rechnen-mit-quadratwurzeln",
+    "zahlen-wurzeln-und-reelle-zahlen"
+   ]
+  },
+  "geometrie-besondere-linien-inkreis-und-umkreis": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Besondere Linien im Dreieck, Inkreis und Umkreis",
+    "en": "Special lines in a triangle, incircle and circumcircle",
+    "fr": "Droites remarquables du triangle, cercles inscrit et circonscrit",
+    "it": "Linee notevoli del triangolo, cerchio inscritto e circoscritto"
+   },
+   "description": "Höhen, Seitenhalbierende, Winkelhalbierende und Mittelsenkrechte konstruieren und für Inkreis und Umkreis nutzen.",
+   "order": 20,
+   "prerequisites": [
+    "geometrie-achsen-und-punktsymmetrie",
+    "geometrie-dreiecke-und-winkelsummen",
+    "geometrie-kongruenz-und-gleichschenklige-dreiecke",
+    "geometrie-kreissaetze-sehnen-tangenten-umfangswinkel",
+    "geometrie-strecken-geraden-senkrechte-und-parallelen",
+    "geometrie-winkel-messen-und-berechnen"
+   ]
+  },
+  "geometrie-aehnlichkeit-und-zentrische-streckung": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Ähnlichkeit und zentrische Streckung",
+    "en": "Similarity and dilation",
+    "fr": "Similitude et homothétie",
+    "it": "Similitudine e omotetia"
+   },
+   "description": "Proportionale Strecken, zentrische Streckung und ähnliche Dreiecke erkennen, nachweisen und anwenden.",
+   "order": 21,
+   "prerequisites": [
+    "geometrie-ebene-figuren-und-vielecke",
+    "geometrie-lage-richtung-und-koordinaten",
+    "geometrie-winkel-an-parallelen-und-beweise",
+    "gleichungen-bruchterme-und-bruchgleichungen",
+    "prozentrechnung-verhaeltnisse-und-proportionalitaet"
+   ]
+  },
+  "geometrie-kreissaetze-sehnen-tangenten-umfangswinkel": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Kreissätze: Sehnen, Tangenten und Umfangswinkel",
+    "en": "Circle theorems: chords, tangents and inscribed angles",
+    "fr": "Théorèmes du cercle : cordes, tangentes et angles inscrits",
+    "it": "Teoremi del cerchio: corde, tangenti e angoli alla circonferenza"
+   },
+   "description": "Lagen zum Kreis bestimmen und Sätze über Sehnen, Bögen, Tangenten, Umfangswinkel und Sehnenvierecke anwenden.",
+   "order": 22,
+   "prerequisites": [
+    "geometrie-achsen-und-punktsymmetrie",
+    "geometrie-dreiecke-und-winkelsummen",
+    "geometrie-kongruenz-und-gleichschenklige-dreiecke",
+    "geometrie-kreis-umfang-flaeche-und-sektor",
+    "geometrie-rechtwinklige-dreiecke-und-pythagoras",
+    "geometrie-strecken-geraden-senkrechte-und-parallelen",
+    "geometrie-verschiebung-und-drehung"
+   ]
+  },
+  "geometrie-koerper-darstellen-projektionen-schraegbilder": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Körper darstellen: Projektionen und Schrägbilder",
+    "en": "Representing solids: projections and oblique drawings",
+    "fr": "Représenter des solides : projections et perspectives",
+    "it": "Rappresentare solidi: proiezioni e assonometrie"
+   },
+   "description": "Körper beschreiben und zerlegen sowie mit Projektionen und Schrägbildern darstellen.",
+   "order": 23,
+   "prerequisites": [
+    "geometrie-koerper-ansichten-und-netze"
+   ]
+  },
+  "geometrie-trigonometrie": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Trigonometrie",
+    "en": "Trigonometry",
+    "fr": "Trigonométrie",
+    "it": "Trigonometria"
+   },
+   "description": "Dreiecke mit Sinus, Kosinus, Tangens, Sinussatz und Kosinussatz berechnen und in Sachsituationen anwenden.",
+   "order": 24,
+   "prerequisites": [
+    "geometrie-aehnlichkeit-und-zentrische-streckung",
+    "geometrie-rechtwinklige-dreiecke-und-pythagoras",
+    "gleichungen-bogenmass-und-einheitskreis"
+   ]
+  },
+  "geometrie-geraden-und-ebenen-im-raum": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Geraden und Ebenen im Raum",
+    "en": "Lines and planes in space",
+    "fr": "Droites et plans dans l'espace",
+    "it": "Rette e piani nello spazio"
+   },
+   "description": "Lagebeziehungen, Parallelität und Orthogonalität von Geraden und Ebenen im Raum nachweisen.",
+   "order": 25,
+   "prerequisites": [
+    "geometrie-koerper-ansichten-und-netze",
+    "geometrie-koerper-darstellen-projektionen-schraegbilder",
+    "geometrie-strecken-geraden-senkrechte-und-parallelen"
+   ]
+  },
+  "geometrie-vektoren-in-der-ebene": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Vektoren in der Ebene",
+    "en": "Vectors in the plane",
+    "fr": "Vecteurs dans le plan",
+    "it": "Vettori nel piano"
+   },
+   "description": "Vektoren in der Ebene verstehen, addieren, vervielfachen, mit Koordinaten rechnen und in einer Basis zerlegen.",
+   "order": 26,
+   "prerequisites": [
+    "geometrie-lage-richtung-und-koordinaten"
+   ]
+  },
+  "geometrie-skalarprodukt-und-geometrie-mit-vektoren": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Skalarprodukt und Geometrie mit Vektoren",
+    "en": "Dot product and geometry with vectors",
+    "fr": "Produit scalaire et géométrie vectorielle",
+    "it": "Prodotto scalare e geometria con i vettori"
+   },
+   "description": "Mit dem Skalarprodukt Beträge und Winkel bestimmen und geometrische Fragen mit Vektoren untersuchen.",
+   "order": 27,
+   "prerequisites": [
+    "geometrie-rechtwinklige-dreiecke-und-pythagoras",
+    "geometrie-trigonometrie",
+    "geometrie-vektoren-in-der-ebene",
+    "geometrie-vektoren-und-koordinaten-im-raum"
+   ]
+  },
+  "geometrie-ellipse": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Ellipse",
+    "en": "Ellipse",
+    "fr": "Ellipse",
+    "it": "Ellisse"
+   },
+   "description": "Die Ellipse definieren, ihre Gleichung und Eigenschaften nutzen und Schnittpunkte mit Geraden bestimmen.",
+   "order": 28,
+   "prerequisites": [
+    "geometrie-geraden-in-der-koordinatenebene"
+   ]
+  },
+  "geometrie-geraden-in-der-koordinatenebene": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Geraden in der Koordinatenebene",
+    "en": "Lines in the coordinate plane",
+    "fr": "Droites dans le plan repéré",
+    "it": "Rette nel piano cartesiano"
+   },
+   "description": "Steigung, Geradengleichungen, Schnittpunkte und Abstände in der Koordinatenebene bestimmen.",
+   "order": 29,
+   "prerequisites": [
+    "geometrie-lage-richtung-und-koordinaten",
+    "geometrie-rechtwinklige-dreiecke-und-pythagoras",
+    "geometrie-strecken-geraden-senkrechte-und-parallelen"
+   ]
+  },
+  "geometrie-hyperbel-und-parabel": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Hyperbel und Parabel",
+    "en": "Hyperbola and parabola",
+    "fr": "Hyperbole et parabole",
+    "it": "Iperbole e parabola"
+   },
+   "description": "Hyperbel und Parabel definieren und ihre Gleichungen, Eigenschaften und Anwendungen nutzen.",
+   "order": 30,
+   "prerequisites": [
+    "geometrie-ellipse"
+   ]
+  },
+  "geometrie-kreisgleichungen-und-lage-zum-kreis": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Kreisgleichungen und Lage zum Kreis",
+    "en": "Circle equations and positions relative to a circle",
+    "fr": "Équations de cercle et positions relatives",
+    "it": "Equazioni della circonferenza e posizioni relative"
+   },
+   "description": "Kreisgleichungen aufstellen und die Lage von Geraden und Kreisen zueinander bestimmen.",
+   "order": 31,
+   "prerequisites": [
+    "geometrie-geraden-in-der-koordinatenebene",
+    "geometrie-kreis-umfang-flaeche-und-sektor"
+   ]
+  },
+  "geometrie-lage-winkel-und-abstaende-mit-vektoren": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Lage, Winkel und Abstände mit Vektoren",
+    "en": "Position, angles and distances with vectors",
+    "fr": "Positions, angles et distances avec des vecteurs",
+    "it": "Posizioni, angoli e distanze con i vettori"
+   },
+   "description": "Mit Richtungs- und Normalenvektoren Parallelität, Orthogonalität, Winkel und Abstände im Raum bestimmen.",
+   "order": 32,
+   "prerequisites": [
+    "geometrie-geraden-und-ebenen-im-raum",
+    "geometrie-skalarprodukt-und-geometrie-mit-vektoren",
+    "geometrie-vektoren-und-koordinaten-im-raum"
+   ]
+  },
+  "geometrie-vektoren-und-koordinaten-im-raum": {
+   "topic_id": "geometrie",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Vektoren und Koordinaten im Raum",
+    "en": "Vectors and coordinates in space",
+    "fr": "Vecteurs et coordonnées dans l'espace",
+    "it": "Vettori e coordinate nello spazio"
+   },
+   "description": "Im räumlichen Koordinatensystem mit Vektoren rechnen, sie in einer Basis zerlegen und Abstände bestimmen.",
+   "order": 33,
+   "prerequisites": [
+    "geometrie-geraden-und-ebenen-im-raum",
+    "geometrie-lage-richtung-und-koordinaten",
+    "geometrie-rechtwinklige-dreiecke-und-pythagoras",
+    "geometrie-vektoren-in-der-ebene"
+   ]
+  },
+  "gleichungen-ersetzen-und-groessenbeziehungen": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Sachaufgaben mit Ersetzen und Grössenbeziehungen",
+    "en": "Word problems with substitution and quantity relations",
+    "fr": "Problèmes par substitution et relations entre grandeurs",
+    "it": "Problemi con sostituzione e relazioni tra grandezze"
+   },
+   "description": "Unbekannte durch Ersetzen, eine Annahme und Grössenbeziehungen wie Gesamtpreis = Stückpreis × Anzahl berechnen.",
+   "order": 3,
+   "prerequisites": [
+    "zahlen-einmaleins-und-teilen",
+    "zahlen-mehrstellig-multiplizieren-und-dividieren",
+    "zahlen-plus-und-minus-bis-1000"
+   ]
+  },
+  "gleichungen-lineare-gleichungen-loesen": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Lineare Gleichungen lösen",
+    "en": "Solving linear equations",
+    "fr": "Résoudre des équations linéaires",
+    "it": "Risolvere equazioni lineari"
+   },
+   "description": "Gleichungen und ihre Lösungen erkennen und lineare Gleichungen mit Äquivalenzumformungen lösen, auch mit Klammern und Brüchen.",
+   "order": 4,
+   "prerequisites": [
+    "gleichungen-rechnen-mit-polynomen",
+    "gleichungen-terme-aufstellen-und-berechnen",
+    "zahlen-rechnen-mit-dezimalzahlen"
+   ]
+  },
+  "gleichungen-terme-aufstellen-und-berechnen": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Terme aufstellen und berechnen",
+    "en": "Writing and evaluating expressions",
+    "fr": "Écrire et calculer des expressions",
+    "it": "Scrivere e calcolare espressioni"
+   },
+   "description": "Zahlen und Beziehungen mit Buchstaben darstellen, Terme aus Texten aufstellen, deuten und ihre Werte berechnen.",
+   "order": 5,
+   "prerequisites": [
+    "gleichungen-ersetzen-und-groessenbeziehungen",
+    "zahlen-rechengesetze-und-rechenreihenfolge",
+    "zahlen-rechnen-mit-rationalen-zahlen"
+   ]
+  },
+  "gleichungen-sachaufgaben-mit-gleichungen": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Sachaufgaben mit Gleichungen",
+    "en": "Word problems with equations",
+    "fr": "Problèmes résolus par des équations",
+    "it": "Problemi risolti con equazioni"
+   },
+   "description": "Sachaufgaben zu Arbeit, Bewegung, Verkauf und Tarifen als Gleichung aufschreiben, lösen und die Lösung prüfen.",
+   "order": 6,
+   "prerequisites": [
+    "gleichungen-bruchterme-und-bruchgleichungen",
+    "gleichungen-ersetzen-und-groessenbeziehungen",
+    "gleichungen-lineare-gleichungen-loesen",
+    "gleichungen-terme-aufstellen-und-berechnen",
+    "groessen-gewicht-hohlmasse-und-geld"
+   ]
+  },
+  "gleichungen-lineare-gleichungssysteme": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Lineare Gleichungssysteme",
+    "en": "Systems of linear equations",
+    "fr": "Systèmes d’équations linéaires",
+    "it": "Sistemi di equazioni lineari"
+   },
+   "description": "Lineare Gleichungssysteme mit dem Einsetzungs- und dem Additionsverfahren lösen und Sachaufgaben damit bearbeiten.",
+   "order": 7,
+   "prerequisites": [
+    "gleichungen-lineare-gleichungen-loesen",
+    "gleichungen-sachaufgaben-mit-gleichungen"
+   ]
+  },
+  "gleichungen-rechnen-mit-polynomen": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Rechnen mit Polynomen",
+    "en": "Calculating with polynomials",
+    "fr": "Calculer avec des polynômes",
+    "it": "Calcolare con i polinomi"
+   },
+   "description": "Gleichartige Glieder zusammenfassen, Klammern auflösen und Polynome addieren, subtrahieren und multiplizieren.",
+   "order": 8,
+   "prerequisites": [
+    "gleichungen-terme-aufstellen-und-berechnen",
+    "zahlen-potenzen-und-potenzgesetze",
+    "zahlen-rechnen-mit-rationalen-zahlen"
+   ]
+  },
+  "gleichungen-lineare-ungleichungen-loesen-und-anwenden": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Lineare Ungleichungen lösen und anwenden",
+    "en": "Solving and applying linear inequalities",
+    "fr": "Résoudre et appliquer des inéquations linéaires",
+    "it": "Risolvere e applicare disequazioni lineari"
+   },
+   "description": "Lineare Ungleichungen und Ungleichungssysteme lösen und Alltagssituationen mit «höchstens» oder «mindestens» damit beschreiben.",
+   "order": 9,
+   "prerequisites": [
+    "gleichungen-lineare-gleichungen-loesen",
+    "gleichungen-sachaufgaben-mit-gleichungen",
+    "gleichungen-ungleichungen-und-ihre-eigenschaften"
+   ]
+  },
+  "gleichungen-ungleichungen-und-ihre-eigenschaften": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Ungleichungen und ihre Eigenschaften",
+    "en": "Inequalities and their properties",
+    "fr": "Inéquations et leurs propriétés",
+    "it": "Disequazioni e loro proprietà"
+   },
+   "description": "Lösungsmengen von Ungleichungen bestimmen und darstellen, ihre Eigenschaften anwenden und mit der Mittelwertungleichung Extremwerte finden.",
+   "order": 10,
+   "prerequisites": [
+    "gleichungen-lineare-gleichungen-loesen",
+    "zahlen-mengen-und-teilmengen",
+    "zahlen-negative-und-rationale-zahlen",
+    "zahlen-rechnen-mit-rationalen-zahlen"
+   ]
+  },
+  "gleichungen-binomische-formeln-und-faktorisieren": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Binomische Formeln und Faktorisieren",
+    "en": "Binomial formulas and factorising",
+    "fr": "Identités remarquables et factorisation",
+    "it": "Prodotti notevoli e scomposizione"
+   },
+   "description": "Die binomischen Formeln anwenden und Polynome durch Ausklammern und mit binomischen Formeln faktorisieren.",
+   "order": 11,
+   "prerequisites": [
+    "gleichungen-rechnen-mit-polynomen"
+   ]
+  },
+  "gleichungen-bruchterme-und-bruchgleichungen": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Bruchterme und Bruchgleichungen",
+    "en": "Algebraic fractions and fractional equations",
+    "fr": "Fractions rationnelles et équations rationnelles",
+    "it": "Frazioni algebriche ed equazioni fratte"
+   },
+   "description": "Mit Bruchtermen rechnen und Gleichungen mit der Unbekannten im Nenner lösen, ohne Scheinlösungen zu übersehen.",
+   "order": 12,
+   "prerequisites": [
+    "gleichungen-binomische-formeln-und-faktorisieren",
+    "gleichungen-lineare-gleichungen-loesen",
+    "gleichungen-rechnen-mit-polynomen"
+   ]
+  },
+  "gleichungen-funktionsbegriff-und-darstellungen": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Funktionsbegriff und Darstellungen",
+    "en": "The function concept and representations",
+    "fr": "Notion de fonction et représentations",
+    "it": "Concetto di funzione e rappresentazioni"
+   },
+   "description": "Variablen und Funktionen verstehen, Funktionswerte berechnen und Funktionen als Gleichung, Wertetabelle und Graph darstellen.",
+   "order": 13,
+   "prerequisites": [
+    "geometrie-lage-richtung-und-koordinaten",
+    "gleichungen-bruchterme-und-bruchgleichungen",
+    "gleichungen-terme-aufstellen-und-berechnen",
+    "zahlen-rechnen-mit-quadratwurzeln"
+   ]
+  },
+  "gleichungen-lineare-funktionen": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Lineare Funktionen",
+    "en": "Linear functions",
+    "fr": "Fonctions linéaires",
+    "it": "Funzioni lineari"
+   },
+   "description": "Lineare Funktionen zeichnen und untersuchen, mit Gleichungen und Ungleichungen verbinden und Sachprobleme damit lösen.",
+   "order": 14,
+   "prerequisites": [
+    "geometrie-verschiebung-und-drehung",
+    "gleichungen-funktionsbegriff-und-darstellungen",
+    "gleichungen-lineare-gleichungen-loesen",
+    "gleichungen-lineare-gleichungssysteme",
+    "gleichungen-lineare-ungleichungen-loesen-und-anwenden",
+    "prozentrechnung-verhaeltnisse-und-proportionalitaet"
+   ]
+  },
+  "gleichungen-umgekehrt-proportionale-funktionen": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Umgekehrt proportionale Funktionen",
+    "en": "Inverse proportional functions",
+    "fr": "Fonctions inversement proportionnelles",
+    "it": "Funzioni di proporzionalità inversa"
+   },
+   "description": "Umgekehrt proportionale Funktionen erkennen, ihre Hyperbeln untersuchen, ihre Gleichung bestimmen und Sachprobleme damit lösen.",
+   "order": 15,
+   "prerequisites": [
+    "geometrie-lage-richtung-und-koordinaten",
+    "gleichungen-funktionsbegriff-und-darstellungen",
+    "gleichungen-lineare-funktionen",
+    "gleichungen-lineare-gleichungen-loesen",
+    "prozentrechnung-verhaeltnisse-und-proportionalitaet"
+   ]
+  },
+  "gleichungen-quadratische-funktionen": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Quadratische Funktionen",
+    "en": "Quadratic functions",
+    "fr": "Fonctions quadratiques",
+    "it": "Funzioni quadratiche"
+   },
+   "description": "Parabeln untersuchen, grösste und kleinste Werte bestimmen und quadratische Ungleichungen mit dem Graphen lösen.",
+   "order": 16,
+   "prerequisites": [
+    "gleichungen-lineare-funktionen",
+    "gleichungen-lineare-gleichungssysteme",
+    "gleichungen-quadratische-gleichungen"
+   ]
+  },
+  "gleichungen-quadratische-gleichungen": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Quadratische Gleichungen",
+    "en": "Quadratic equations",
+    "fr": "Équations du second degré",
+    "it": "Equazioni di secondo grado"
+   },
+   "description": "Quadratische Gleichungen mit passenden Verfahren lösen, ihre Lösungen mit Diskriminante und Vieta untersuchen und Sachaufgaben lösen.",
+   "order": 17,
+   "prerequisites": [
+    "gleichungen-binomische-formeln-und-faktorisieren",
+    "gleichungen-lineare-gleichungen-loesen",
+    "gleichungen-sachaufgaben-mit-gleichungen",
+    "gleichungen-ungleichungen-und-ihre-eigenschaften",
+    "zahlen-rechnen-mit-quadratwurzeln",
+    "zahlen-wurzeln-und-reelle-zahlen"
+   ]
+  },
+  "gleichungen-bogenmass-und-einheitskreis": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Bogenmass und Einheitskreis",
+    "en": "Radians and the unit circle",
+    "fr": "Radian et cercle trigonométrique",
+    "it": "Radianti e circonferenza goniometrica"
+   },
+   "description": "Beliebige Winkel im Grad- und Bogenmass angeben und Sinus und Kosinus am Einheitskreis bestimmen.",
+   "order": 18,
+   "prerequisites": [
+    "geometrie-winkel-messen-und-berechnen",
+    "gleichungen-funktionen-und-funktionsmodelle"
+   ]
+  },
+  "gleichungen-eigenschaften-von-funktionen": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Eigenschaften von Funktionen",
+    "en": "Properties of functions",
+    "fr": "Propriétés des fonctions",
+    "it": "Proprietà delle funzioni"
+   },
+   "description": "Monotonie, Extremwerte, Symmetrie und Nullstellen von Funktionen untersuchen.",
+   "order": 19,
+   "prerequisites": [
+    "gleichungen-funktionen-und-funktionsmodelle",
+    "gleichungen-quadratische-funktionen",
+    "gleichungen-ungleichungen-und-ihre-eigenschaften"
+   ]
+  },
+  "gleichungen-exponential-und-logarithmusfunktionen": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Exponential- und Logarithmusfunktionen",
+    "en": "Exponential and logarithmic functions",
+    "fr": "Fonctions exponentielles et logarithmes",
+    "it": "Funzioni esponenziali e logaritmiche"
+   },
+   "description": "Potenzen mit rationalen Exponenten, Logarithmen und ihre Rechenregeln sowie Exponential- und Logarithmusfunktionen kennen.",
+   "order": 20,
+   "prerequisites": [
+    "gleichungen-eigenschaften-von-funktionen",
+    "zahlen-potenzen-und-potenzgesetze",
+    "zahlen-rechnen-mit-quadratwurzeln"
+   ]
+  },
+  "gleichungen-funktionen-und-funktionsmodelle": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Funktionen und Funktionsmodelle",
+    "en": "Functions and function models",
+    "fr": "Fonctions et modèles fonctionnels",
+    "it": "Funzioni e modelli funzionali"
+   },
+   "description": "Funktionen als Zuordnungen mit Definitions- und Wertemenge verstehen und Sachprobleme mit passenden Funktionsmodellen lösen.",
+   "order": 21,
+   "prerequisites": [
+    "gleichungen-funktionsbegriff-und-darstellungen",
+    "gleichungen-quadratische-funktionen",
+    "zahlen-mengen-und-teilmengen"
+   ]
+  },
+  "gleichungen-trigonometrische-formeln": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Trigonometrische Formeln",
+    "en": "Trigonometric identities",
+    "fr": "Formules trigonométriques",
+    "it": "Formule trigonometriche"
+   },
+   "description": "Mit Reduktionsformeln, Additionstheoremen und Doppelwinkelformeln trigonometrische Werte berechnen und Terme umformen.",
+   "order": 22,
+   "prerequisites": [
+    "gleichungen-bogenmass-und-einheitskreis"
+   ]
+  },
+  "gleichungen-trigonometrische-funktionen": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Trigonometrische Funktionen",
+    "en": "Trigonometric functions",
+    "fr": "Fonctions trigonométriques",
+    "it": "Funzioni trigonometriche"
+   },
+   "description": "Graphen von Sinus, Kosinus und Tangens kennen und periodische Vorgänge mit y=Asin(ωx+φ) beschreiben.",
+   "order": 23,
+   "prerequisites": [
+    "gleichungen-trigonometrische-formeln"
+   ]
+  },
+  "gleichungen-ableitung-und-ableitungsregeln": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Ableitung und Ableitungsregeln",
+    "en": "The derivative and differentiation rules",
+    "fr": "Dérivée et règles de dérivation",
+    "it": "Derivata e regole di derivazione"
+   },
+   "description": "Die Ableitung als momentane Änderungsrate und Tangentensteigung verstehen und mit den Ableitungsregeln berechnen.",
+   "order": 24,
+   "prerequisites": [
+    "geometrie-geraden-in-der-koordinatenebene",
+    "gleichungen-eigenschaften-von-funktionen"
+   ]
+  },
+  "gleichungen-monotonie-und-extremwerte": {
+   "topic_id": "gleichungen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Monotonie und Extremwerte",
+    "en": "Monotonicity and extrema",
+    "fr": "Monotonie et extremums",
+    "it": "Monotonia ed estremi"
+   },
+   "description": "Mit der Ableitung Monotonie, Extremstellen und grösste oder kleinste Werte von Polynomfunktionen bestimmen.",
+   "order": 25,
+   "prerequisites": [
+    "gleichungen-ableitung-und-ableitungsregeln"
+   ]
+  },
+  "groessen-gewicht-hohlmasse-und-geld": {
+   "topic_id": "groessen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Gewicht, Hohlmasse und Geld",
+    "en": "Weight, capacity and money",
+    "fr": "Masse, contenance et argent",
+    "it": "Peso, capacità e denaro"
+   },
+   "description": "Gramm, Kilogramm und Tonne, Liter und Milliliter sowie Franken und Rappen kennen und umrechnen und Rabatt und Zins eines Geldbetrags berechnen.",
+   "order": 4,
+   "prerequisites": [
+    "groessen-laengen-und-flaechen",
+    "zahlen-plus-und-minus-bis-100",
+    "zahlen-stellenwerte-und-zahlensysteme"
+   ]
+  },
+  "groessen-zeit-uhrzeit-und-zeitdauer": {
+   "topic_id": "groessen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Zeit: Uhrzeit, Zeiteinheiten und Zeitdauer",
+    "en": "Time: clock, units of time and duration",
+    "fr": "Le temps : heure, unités de temps et durée",
+    "it": "Il tempo: ora, unità di tempo e durata"
+   },
+   "description": "Uhrzeiten im 24-Stunden-Format angeben, Sekunden, Minuten, Stunden, Tage, Monate und Jahre umrechnen, Zeitdauern berechnen und Abläufe zeitsparend planen.",
+   "order": 5,
+   "prerequisites": [
+    "zahlen-plus-und-minus-bis-100",
+    "zahlen-stellenwerte-und-zahlensysteme"
+   ]
+  },
+  "groessen-laengen-und-flaechen": {
+   "topic_id": "groessen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Längen und Flächen",
+    "en": "Length and area",
+    "fr": "Longueurs et aires",
+    "it": "Lunghezze e superfici"
+   },
+   "description": "Längeneinheiten vom Millimeter bis zum Kilometer und Flächeneinheiten bis zur Hektare und zum Quadratkilometer kennen, Längen schätzen und messen und benachbarte Einheiten umrechnen.",
+   "order": 6,
+   "prerequisites": [
+    "zahlen-zahlenraum-bis-20"
+   ]
+  },
+  "physik-elektrizitaet-elektrische-energie-leistung-und-haushalt": {
+   "topic_id": "physik-elektrizitaet",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Elektrische Energie, Leistung und Haushalt",
+    "en": "Electrical energy, power and the household",
+    "fr": "Énergie électrique, puissance et ménage",
+    "it": "Energia elettrica, potenza e casa"
+   },
+   "description": "Elektrische Arbeit, Leistung und Joulesches Gesetz berechnen sowie Hausinstallation, Sicherheit und Stromsparen.",
+   "order": 1,
+   "prerequisites": [
+    "physik-elektrizitaet-ladung-strom-und-stromkreise",
+    "physik-elektrizitaet-potential-spannung-und-kondensator",
+    "physik-elektrizitaet-widerstand-und-ohmsches-gesetz"
+   ]
+  },
+  "physik-elektrizitaet-ladung-strom-und-stromkreise": {
+   "topic_id": "physik-elektrizitaet",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Ladung, Strom und Stromkreise",
+    "en": "Charge, current and circuits",
+    "fr": "Charge, courant et circuits",
+    "it": "Carica, corrente e circuiti"
+   },
+   "description": "Elektrische Ladung und Strom, Serien- und Parallelschaltungen sowie das Messen von Stromstärke und Spannung.",
+   "order": 2,
+   "prerequisites": []
+  },
+  "physik-elektrizitaet-magnetfeld-und-elektromagnet": {
+   "topic_id": "physik-elektrizitaet",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Magnetfeld und Elektromagnet",
+    "en": "Magnetic field and electromagnet",
+    "fr": "Champ magnétique et électroaimant",
+    "it": "Campo magnetico ed elettromagnete"
+   },
+   "description": "Magnete und Feldlinien, das Magnetfeld des Stroms mit Elektromagnet und Relais sowie magnetische Flussdichte und Fluss.",
+   "order": 3,
+   "prerequisites": [
+    "physik-elektrizitaet-ladung-strom-und-stromkreise"
+   ]
+  },
+  "physik-elektrizitaet-schaltungen-und-innenwiderstand-berechnen": {
+   "topic_id": "physik-elektrizitaet",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Schaltungen und Innenwiderstand berechnen",
+    "en": "Calculating circuits and internal resistance",
+    "fr": "Calculer des circuits et la résistance interne",
+    "it": "Calcolare circuiti e resistenza interna"
+   },
+   "description": "Ströme, Spannungen und Gesamtwiderstand in Schaltungen sowie Quellenspannung und Innenwiderstand im geschlossenen Stromkreis berechnen.",
+   "order": 4,
+   "prerequisites": [
+    "physik-elektrizitaet-elektrische-energie-leistung-und-haushalt",
+    "physik-elektrizitaet-ladung-strom-und-stromkreise",
+    "physik-elektrizitaet-potential-spannung-und-kondensator",
+    "physik-elektrizitaet-widerstand-und-ohmsches-gesetz"
+   ]
+  },
+  "physik-elektrizitaet-widerstand-und-ohmsches-gesetz": {
+   "topic_id": "physik-elektrizitaet",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Widerstand und ohmsches Gesetz",
+    "en": "Resistance and Ohm's law",
+    "fr": "Résistance et loi d'Ohm",
+    "it": "Resistenza e legge di Ohm"
+   },
+   "description": "Wovon der Widerstand abhängt, Schiebewiderstand und das ohmsche Gesetz I = U/R beschreiben, berechnen und messen.",
+   "order": 5,
+   "prerequisites": [
+    "physik-elektrizitaet-ladung-strom-und-stromkreise",
+    "physik-praxis-messen-energiesparen-steuern"
+   ]
+  },
+  "physik-elektrizitaet-elektromagnetische-induktion": {
+   "topic_id": "physik-elektrizitaet",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Elektromagnetische Induktion",
+    "en": "Electromagnetic induction",
+    "fr": "Induction électromagnétique",
+    "it": "Induzione elettromagnetica"
+   },
+   "description": "Bedingungen und Richtung des Induktionsstroms, Lenzsche Regel und Induktionsgesetz mit induzierten Spannungen berechnen.",
+   "order": 6,
+   "prerequisites": [
+    "physik-elektrizitaet-kraefte-im-magnetfeld-und-elektromotor",
+    "physik-elektrizitaet-magnetfeld-und-elektromagnet",
+    "physik-elektrizitaet-schaltungen-und-innenwiderstand-berechnen"
+   ]
+  },
+  "physik-elektrizitaet-elektromagnetische-wellen-und-nachrichtentechnik": {
+   "topic_id": "physik-elektrizitaet",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Elektromagnetische Wellen und Nachrichtentechnik",
+    "en": "Electromagnetic waves and communication technology",
+    "fr": "Ondes électromagnétiques et télécommunications",
+    "it": "Onde elettromagnetiche e telecomunicazioni"
+   },
+   "description": "Schwingkreis und elektromagnetische Wellen, Informationsübertragung mit Radio, Mobilfunk und Glasfaser sowie Sensoren.",
+   "order": 7,
+   "prerequisites": [
+    "physik-elektrizitaet-elektromagnetische-induktion",
+    "physik-elektrizitaet-kraefte-im-magnetfeld-und-elektromotor",
+    "physik-elektrizitaet-potential-spannung-und-kondensator",
+    "physik-elektrizitaet-wechselstrom-transformator-und-selbstinduktion",
+    "physik-elektrizitaet-widerstand-und-ohmsches-gesetz",
+    "physik-optik-akustik-ausbreitung-reflexion-und-brechung-des-lichts"
+   ]
+  },
+  "physik-elektrizitaet-kraefte-im-magnetfeld-und-elektromotor": {
+   "topic_id": "physik-elektrizitaet",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Kräfte im Magnetfeld und Elektromotor",
+    "en": "Forces in a magnetic field and the electric motor",
+    "fr": "Forces dans un champ magnétique et moteur électrique",
+    "it": "Forze nel campo magnetico e motore elettrico"
+   },
+   "description": "Die Kraft auf stromdurchflossene Leiter und die Lorentzkraft auf bewegte Ladungen berechnen und den Elektromotor erklären.",
+   "order": 8,
+   "prerequisites": [
+    "physik-elektrizitaet-coulombsches-gesetz-und-elektrisches-feld",
+    "physik-elektrizitaet-magnetfeld-und-elektromagnet",
+    "physik-mechanik-kreisbewegung-und-gravitation"
+   ]
+  },
+  "physik-elektrizitaet-coulombsches-gesetz-und-elektrisches-feld": {
+   "topic_id": "physik-elektrizitaet",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Coulombsches Gesetz und elektrisches Feld",
+    "en": "Coulomb's law and the electric field",
+    "fr": "Loi de Coulomb et champ électrique",
+    "it": "Legge di Coulomb e campo elettrico"
+   },
+   "description": "Ladung und Coulombsches Gesetz, elektrische Feldstärke und Feldlinien sowie geladene Teilchen im elektrischen Feld.",
+   "order": 9,
+   "prerequisites": [
+    "physik-elektrizitaet-ladung-strom-und-stromkreise",
+    "physik-mechanik-freier-fall-und-wurfbewegungen",
+    "physik-mechanik-kraefte-zusammensetzen-und-gleichgewicht",
+    "physik-mechanik-mechanische-energie-und-energieerhaltung"
+   ]
+  },
+  "physik-elektrizitaet-potential-spannung-und-kondensator": {
+   "topic_id": "physik-elektrizitaet",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Potential, Spannung und Kondensator",
+    "en": "Potential, voltage and capacitor",
+    "fr": "Potentiel, tension et condensateur",
+    "it": "Potenziale, tensione e condensatore"
+   },
+   "description": "Potentielle Energie, Potential und Spannung im elektrischen Feld sowie Kapazität, Laden und Entladen des Kondensators.",
+   "order": 10,
+   "prerequisites": [
+    "physik-elektrizitaet-coulombsches-gesetz-und-elektrisches-feld",
+    "physik-mechanik-arbeit-leistung-und-einfache-maschinen"
+   ]
+  },
+  "physik-elektrizitaet-wechselstrom-transformator-und-selbstinduktion": {
+   "topic_id": "physik-elektrizitaet",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Wechselstrom, Transformator und Selbstinduktion",
+    "en": "Alternating current, transformer and self-induction",
+    "fr": "Courant alternatif, transformateur et auto-induction",
+    "it": "Corrente alternata, trasformatore e autoinduzione"
+   },
+   "description": "Wechselstrom beschreiben, mit dem Transformator rechnen sowie Wirbelströme, Selbstinduktion und gegenseitige Induktion erklären.",
+   "order": 11,
+   "prerequisites": [
+    "physik-elektrizitaet-elektrische-energie-leistung-und-haushalt",
+    "physik-elektrizitaet-elektromagnetische-induktion",
+    "physik-elektrizitaet-magnetfeld-und-elektromagnet"
+   ]
+  },
+  "physik-mechanik-druck-und-auftrieb": {
+   "topic_id": "physik-mechanik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Druck und Auftrieb",
+    "en": "Pressure and buoyancy",
+    "fr": "Pression et poussée d'Archimède",
+    "it": "Pressione e spinta di Archimede"
+   },
+   "description": "Den Druck in Festkörpern, Flüssigkeiten und Gasen berechnen und mit Auftrieb und dem Prinzip des Archimedes Schwimmen, Schweben und Sinken erklären.",
+   "order": 1,
+   "prerequisites": [
+    "physik-mechanik-kraefte-zusammensetzen-und-gleichgewicht",
+    "physik-mechanik-masse-dichte-und-gewichtskraft"
+   ]
+  },
+  "physik-mechanik-bewegung-geschwindigkeit-und-beschleunigung": {
+   "topic_id": "physik-mechanik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Bewegung, Geschwindigkeit und Beschleunigung",
+    "en": "Motion, velocity and acceleration",
+    "fr": "Mouvement, vitesse et accélération",
+    "it": "Moto, velocità e accelerazione"
+   },
+   "description": "Bewegungen in einem Bezugssystem beschreiben, Geschwindigkeiten messen und berechnen und die gleichmässig beschleunigte Bewegung analysieren.",
+   "order": 2,
+   "prerequisites": [
+    "physik-praxis-messen-energiesparen-steuern"
+   ]
+  },
+  "physik-mechanik-kraefte-elastische-kraft-und-reibung": {
+   "topic_id": "physik-mechanik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Kräfte, elastische Kraft und Reibung",
+    "en": "Forces, elastic force and friction",
+    "fr": "Forces, force élastique et frottement",
+    "it": "Forze, forza elastica e attrito"
+   },
+   "description": "Kräfte und ihre Wechselwirkung beschreiben, elastische Kräfte mit dem Hookeschen Gesetz berechnen und Haft- und Gleitreibung verstehen.",
+   "order": 3,
+   "prerequisites": [
+    "physik-mechanik-kraefte-zusammensetzen-und-gleichgewicht"
+   ]
+  },
+  "physik-mechanik-kraefte-zusammensetzen-und-gleichgewicht": {
+   "topic_id": "physik-mechanik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Kräfte zusammensetzen und Kräftegleichgewicht",
+    "en": "Combining forces and equilibrium",
+    "fr": "Composition des forces et équilibre",
+    "it": "Composizione delle forze ed equilibrio"
+   },
+   "description": "Kräfte zusammensetzen und zerlegen und das Gleichgewicht von Kräften an einem Punkt erkennen.",
+   "order": 4,
+   "prerequisites": [
+    "physik-mechanik-masse-dichte-und-gewichtskraft"
+   ]
+  },
+  "physik-mechanik-masse-dichte-und-gewichtskraft": {
+   "topic_id": "physik-mechanik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Masse, Dichte und Gewichtskraft",
+    "en": "Mass, density and weight",
+    "fr": "Masse, masse volumique et poids",
+    "it": "Massa, densità e forza peso"
+   },
+   "description": "Masse und Dichte messen und berechnen und die Gewichtskraft sowie den Schwerpunkt eines Körpers bestimmen.",
+   "order": 5,
+   "prerequisites": []
+  },
+  "physik-mechanik-newtonsche-gesetze": {
+   "topic_id": "physik-mechanik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Newtonsche Gesetze",
+    "en": "Newton's laws",
+    "fr": "Lois de Newton",
+    "it": "Leggi di Newton"
+   },
+   "description": "Trägheit und das erste und zweite Newtonsche Gesetz verstehen und auf verbundene Körper, scheinbares Gewicht und Schwerelosigkeit anwenden.",
+   "order": 6,
+   "prerequisites": [
+    "physik-mechanik-bewegung-geschwindigkeit-und-beschleunigung",
+    "physik-mechanik-kraefte-elastische-kraft-und-reibung",
+    "physik-mechanik-kraefte-zusammensetzen-und-gleichgewicht"
+   ]
+  },
+  "physik-mechanik-arbeit-leistung-und-einfache-maschinen": {
+   "topic_id": "physik-mechanik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Arbeit, Leistung und einfache Maschinen",
+    "en": "Work, power and simple machines",
+    "fr": "Travail, puissance et machines simples",
+    "it": "Lavoro, potenza e macchine semplici"
+   },
+   "description": "Mechanische Arbeit und Leistung berechnen und Hebel, Rollen und Flaschenzüge als einfache Maschinen verstehen.",
+   "order": 7,
+   "prerequisites": [
+    "physik-mechanik-bewegung-geschwindigkeit-und-beschleunigung",
+    "physik-mechanik-kraefte-elastische-kraft-und-reibung",
+    "physik-mechanik-kraefte-zusammensetzen-und-gleichgewicht",
+    "physik-mechanik-masse-dichte-und-gewichtskraft"
+   ]
+  },
+  "physik-mechanik-mechanische-energie-und-energieerhaltung": {
+   "topic_id": "physik-mechanik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Mechanische Energie und Energieerhaltung",
+    "en": "Mechanical energy and conservation of energy",
+    "fr": "Énergie mécanique et conservation de l'énergie",
+    "it": "Energia meccanica e conservazione dell'energia"
+   },
+   "description": "Kinetische und potentielle Energie berechnen, den Energieerhaltungssatz und den Satz von der kinetischen Energie anwenden und den Wirkungsgrad bestimmen.",
+   "order": 8,
+   "prerequisites": [
+    "physik-mechanik-arbeit-leistung-und-einfache-maschinen",
+    "physik-mechanik-bewegung-geschwindigkeit-und-beschleunigung",
+    "physik-mechanik-kraefte-elastische-kraft-und-reibung",
+    "physik-mechanik-masse-dichte-und-gewichtskraft",
+    "physik-waerme-teilchenmodell-temperatur-und-waerme"
+   ]
+  },
+  "physik-mechanik-freier-fall-und-wurfbewegungen": {
+   "topic_id": "physik-mechanik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Freier Fall und Wurfbewegungen",
+    "en": "Free fall and projectile motion",
+    "fr": "Chute libre et mouvements de projectiles",
+    "it": "Caduta libera e moto dei proiettili"
+   },
+   "description": "Den freien Fall, krummlinige Bewegungen sowie den horizontalen und schiefen Wurf durch Zusammensetzen von Bewegungen beschreiben und berechnen.",
+   "order": 9,
+   "prerequisites": [
+    "physik-mechanik-bewegung-geschwindigkeit-und-beschleunigung",
+    "physik-mechanik-newtonsche-gesetze"
+   ]
+  },
+  "physik-mechanik-kreisbewegung-und-gravitation": {
+   "topic_id": "physik-mechanik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Kreisbewegung und Gravitation",
+    "en": "Circular motion and gravitation",
+    "fr": "Mouvement circulaire et gravitation",
+    "it": "Moto circolare e gravitazione"
+   },
+   "description": "Die gleichförmige Kreisbewegung und die Zentripetalkraft verstehen und mit den keplerschen Gesetzen und dem Gravitationsgesetz Planeten- und Satellitenbahnen berechnen.",
+   "order": 10,
+   "prerequisites": [
+    "physik-mechanik-bewegung-geschwindigkeit-und-beschleunigung",
+    "physik-mechanik-freier-fall-und-wurfbewegungen",
+    "physik-mechanik-newtonsche-gesetze"
+   ]
+  },
+  "physik-mechanik-impuls-und-stoesse": {
+   "topic_id": "physik-mechanik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Impuls und Stösse",
+    "en": "Momentum and collisions",
+    "fr": "Quantité de mouvement et chocs",
+    "it": "Quantità di moto e urti"
+   },
+   "description": "Impuls und Kraftstoss berechnen, den Impulserhaltungssatz anwenden und elastische und unelastische Stösse sowie den Rückstoss analysieren.",
+   "order": 11,
+   "prerequisites": [
+    "physik-mechanik-bewegung-geschwindigkeit-und-beschleunigung",
+    "physik-mechanik-kraefte-elastische-kraft-und-reibung",
+    "physik-mechanik-mechanische-energie-und-energieerhaltung",
+    "physik-mechanik-newtonsche-gesetze"
+   ]
+  },
+  "physik-mechanik-mechanische-schwingungen": {
+   "topic_id": "physik-mechanik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Mechanische Schwingungen",
+    "en": "Mechanical oscillations",
+    "fr": "Oscillations mécaniques",
+    "it": "Oscillazioni meccaniche"
+   },
+   "description": "Harmonische Schwingungen mit Amplitude, Periode und Phase beschreiben, das Fadenpendel untersuchen und erzwungene Schwingungen und Resonanz verstehen.",
+   "order": 12,
+   "prerequisites": [
+    "physik-mechanik-kraefte-elastische-kraft-und-reibung",
+    "physik-mechanik-kraefte-zusammensetzen-und-gleichgewicht",
+    "physik-mechanik-newtonsche-gesetze"
+   ]
+  },
+  "physik-mechanik-mechanische-wellen": {
+   "topic_id": "physik-mechanik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Mechanische Wellen",
+    "en": "Mechanical waves",
+    "fr": "Ondes mécaniques",
+    "it": "Onde meccaniche"
+   },
+   "description": "Die Entstehung und Grössen mechanischer Wellen beschreiben und Reflexion, Brechung, Beugung, Interferenz und den Dopplereffekt erklären.",
+   "order": 13,
+   "prerequisites": [
+    "physik-mechanik-mechanische-schwingungen"
+   ]
+  },
+  "physik-modern-kernphysik-und-energieversorgung": {
+   "topic_id": "physik-modern",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Kernphysik und Energieversorgung",
+    "en": "Nuclear physics and energy supply",
+    "fr": "Physique nucléaire et approvisionnement en énergie",
+    "it": "Fisica nucleare e approvvigionamento energetico"
+   },
+   "description": "Atomkern, radioaktiven Zerfall, Halbwertszeit und Strahlenschutz, Kernspaltung und Kernfusion sowie Elementarteilchen beschreiben und Energiequellen nachhaltig beurteilen.",
+   "order": 1,
+   "prerequisites": [
+    "physik-mechanik-mechanische-energie-und-energieerhaltung",
+    "physik-modern-relativitaet-und-quantenphysik"
+   ]
+  },
+  "physik-modern-relativitaet-und-quantenphysik": {
+   "topic_id": "physik-modern",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Relativität und Quantenphysik",
+    "en": "Relativity and quantum physics",
+    "fr": "Relativité et physique quantique",
+    "it": "Relatività e fisica quantistica"
+   },
+   "description": "Die Grenzen der Newtonschen Mechanik und die Relativität, Energiequanten und Schwarzkörperstrahlung, den Photoeffekt mit Welle-Teilchen-Dualismus sowie die Atommodelle von Rutherford und Bohr mit dem Wasserstoffspektrum verstehen.",
+   "order": 2,
+   "prerequisites": [
+    "physik-elektrizitaet-coulombsches-gesetz-und-elektrisches-feld",
+    "physik-elektrizitaet-elektromagnetische-wellen-und-nachrichtentechnik",
+    "physik-mechanik-impuls-und-stoesse",
+    "physik-mechanik-mechanische-energie-und-energieerhaltung"
+   ]
+  },
+  "physik-optik-akustik-linsen-und-optische-geraete": {
+   "topic_id": "physik-optik-akustik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Linsen und optische Geräte",
+    "en": "Lenses and optical instruments",
+    "fr": "Lentilles et instruments d'optique",
+    "it": "Lenti e strumenti ottici"
+   },
+   "description": "Sammel- und Zerstreuungslinsen unterscheiden, die Bildentstehung an Linsen beschreiben und Auge, Brille und Fernrohr verstehen.",
+   "order": 1,
+   "prerequisites": [
+    "physik-optik-akustik-ausbreitung-reflexion-und-brechung-des-lichts"
+   ]
+  },
+  "physik-optik-akustik-schall-und-laerm": {
+   "topic_id": "physik-optik-akustik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Schall und Lärm",
+    "en": "Sound and noise",
+    "fr": "Son et bruit",
+    "it": "Suono e rumore"
+   },
+   "description": "Entstehung und Ausbreitung von Schall, Tonhöhe, Lautstärke und Klangfarbe sowie den Schutz vor Lärm verstehen.",
+   "order": 2,
+   "prerequisites": []
+  },
+  "physik-optik-akustik-ausbreitung-reflexion-und-brechung-des-lichts": {
+   "topic_id": "physik-optik-akustik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Ausbreitung, Reflexion und Brechung des Lichts",
+    "en": "Propagation, reflection and refraction of light",
+    "fr": "Propagation, réflexion et réfraction de la lumière",
+    "it": "Propagazione, riflessione e rifrazione della luce"
+   },
+   "description": "Die geradlinige Ausbreitung des Lichts, die Reflexion am Spiegel, die Brechung bis zur Totalreflexion und die Zerlegung des weissen Lichts in Farben verstehen.",
+   "order": 3,
+   "prerequisites": []
+  },
+  "physik-optik-akustik-wellenoptik": {
+   "topic_id": "physik-optik-akustik",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Wellenoptik",
+    "en": "Wave optics",
+    "fr": "Optique ondulatoire",
+    "it": "Ottica ondulatoria"
+   },
+   "description": "Interferenz, Beugung und Polarisation als Welleneigenschaften des Lichts beschreiben und die Eigenschaften von Laserlicht kennen.",
+   "order": 4,
+   "prerequisites": [
+    "physik-mechanik-mechanische-wellen"
+   ]
+  },
+  "physik-praxis-messen-energiesparen-steuern": {
+   "topic_id": "physik-praxis",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Messen, Energie sparen und Steuern in der Praxis",
+    "en": "Measuring, saving energy and control in practice",
+    "fr": "Mesurer, économiser l'énergie et commander en pratique",
+    "it": "Misurare, risparmiare energia e controllare nella pratica"
+   },
+   "description": "Längen und Zeiten mit geeigneten Messgeräten messen, einen Energiesparplan entwerfen und eine einfache automatische Steuerung mit Sensoren bauen.",
+   "order": 1,
+   "prerequisites": []
+  },
+  "physik-waerme-aggregatzustaende-und-zustandsaenderungen": {
+   "topic_id": "physik-waerme",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Aggregatzustände und Zustandsänderungen",
+    "en": "States of matter and changes of state",
+    "fr": "États de la matière et changements d'état",
+    "it": "Stati di aggregazione e passaggi di stato"
+   },
+   "description": "Eigenschaften von Festkörpern und Flüssigkeiten kennen und Schmelzen, Verdampfen, Sublimieren und ihre Umkehrungen im Alltag erklären.",
+   "order": 1,
+   "prerequisites": [
+    "physik-waerme-teilchenmodell-temperatur-und-waerme"
+   ]
+  },
+  "physik-waerme-teilchenmodell-temperatur-und-waerme": {
+   "topic_id": "physik-waerme",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Teilchenmodell, Temperatur und Wärme",
+    "en": "Particle model, temperature and heat",
+    "fr": "Modèle particulaire, température et chaleur",
+    "it": "Modello particellare, temperatura e calore"
+   },
+   "description": "Die Materie im Teilchenmodell beschreiben, Temperaturen messen und umrechnen, die innere Energie verstehen und Wärme mit Q = cmΔt berechnen.",
+   "order": 2,
+   "prerequisites": [
+    "physik-mechanik-masse-dichte-und-gewichtskraft"
+   ]
+  },
+  "physik-waerme-thermodynamik-und-waermekraftmaschinen": {
+   "topic_id": "physik-waerme",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Hauptsätze der Thermodynamik und Wärmekraftmaschinen",
+    "en": "Laws of thermodynamics and heat engines",
+    "fr": "Principes de la thermodynamique et moteurs thermiques",
+    "it": "Principi della termodinamica e macchine termiche"
+   },
+   "description": "Die Änderung der inneren Energie mit dem ersten Hauptsatz beschreiben, die Richtung von Wärmevorgängen mit dem zweiten Hauptsatz verstehen und Viertaktmotor und Wirkungsgrad von Wärmekraftmaschinen erklären.",
+   "order": 3,
+   "prerequisites": [
+    "physik-mechanik-mechanische-energie-und-energieerhaltung",
+    "physik-waerme-ideales-gas-und-kinetische-gastheorie",
+    "physik-waerme-teilchenmodell-temperatur-und-waerme"
+   ]
+  },
+  "physik-waerme-ideales-gas-und-kinetische-gastheorie": {
+   "topic_id": "physik-waerme",
+   "subject_id": "physics",
+   "titles": {
+    "de": "Ideales Gas und kinetische Gastheorie",
+    "en": "Ideal gas and kinetic theory of gases",
+    "fr": "Gaz parfait et théorie cinétique des gaz",
+    "it": "Gas ideale e teoria cinetica dei gas"
+   },
+   "description": "Die Gasgesetze und die Zustandsgleichung des idealen Gases anwenden und Gasdruck und Temperatur aus der Bewegung der Moleküle erklären.",
+   "order": 4,
+   "prerequisites": [
+    "physik-mechanik-druck-und-auftrieb",
+    "physik-mechanik-mechanische-energie-und-energieerhaltung",
+    "physik-waerme-teilchenmodell-temperatur-und-waerme"
+   ]
+  },
+  "prozentrechnung-prozente-und-prozentrechnung": {
+   "topic_id": "prozentrechnung",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Prozente und Prozentrechnung",
+    "en": "Percentages and percentage calculation",
+    "fr": "Pourcentages et calcul de pourcentages",
+    "it": "Percentuali e calcolo percentuale"
+   },
+   "description": "Prozente als Hundertstel verstehen und umwandeln, Prozentwert, Prozentsatz und Grundwert berechnen und Prozente auf Zunahmen und Alltagssituationen anwenden.",
+   "order": 3,
+   "prerequisites": [
+    "brueche-brueche-multiplizieren-und-dividieren",
+    "brueche-brueche-und-dezimalzahlen-verstehen",
+    "groessen-gewicht-hohlmasse-und-geld"
+   ]
+  },
+  "prozentrechnung-verhaeltnisse-und-proportionalitaet": {
+   "topic_id": "prozentrechnung",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Verhältnisse und Proportionalität",
+    "en": "Ratios and proportionality",
+    "fr": "Rapports et proportionnalité",
+    "it": "Rapporti e proporzionalità"
+   },
+   "description": "Verhältnisse kürzen und aufteilen, Verhältnisgleichungen lösen, mit dem Massstab rechnen sowie proportionale und umgekehrt proportionale Grössen erkennen und in Sachaufgaben anwenden.",
+   "order": 4,
+   "prerequisites": [
+    "brueche-brueche-multiplizieren-und-dividieren",
+    "geometrie-lage-richtung-und-koordinaten",
+    "gleichungen-ersetzen-und-groessenbeziehungen",
+    "gleichungen-lineare-gleichungen-loesen"
+   ]
+  },
+  "zahlen-addition-und-subtraktion-bis-20": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Addition und Subtraktion bis 20",
+    "en": "Addition and subtraction up to 20",
+    "fr": "Addition et soustraction jusqu'à 20",
+    "it": "Addizione e sottrazione fino a 20"
+   },
+   "description": "Bis 20 ohne und mit Zehnerübergang addieren und subtrahieren.",
+   "order": 5,
+   "prerequisites": [
+    "zahlen-plus-und-minus-bis-10",
+    "zahlen-stellenwerte-und-zahlensysteme"
+   ]
+  },
+  "zahlen-plus-und-minus-bis-10": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Plus und Minus bis 10",
+    "en": "Addition and subtraction up to 10",
+    "fr": "Addition et soustraction jusqu'à 10",
+    "it": "Addizione e sottrazione fino a 10"
+   },
+   "description": "Im Zahlenraum bis 10 addieren und subtrahieren, auch mit drei Zahlen und gemischt.",
+   "order": 6,
+   "prerequisites": [
+    "zahlen-zahlenraum-bis-20"
+   ]
+  },
+  "zahlen-plus-und-minus-bis-100": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Plus und Minus bis 100",
+    "en": "Addition and subtraction up to 100",
+    "fr": "Addition et soustraction jusqu'à 100",
+    "it": "Addizione e sottrazione fino a 100"
+   },
+   "description": "Bis 100 im Kopf und schriftlich addieren und subtrahieren und Unterschiede berechnen.",
+   "order": 7,
+   "prerequisites": [
+    "zahlen-addition-und-subtraktion-bis-20",
+    "zahlen-plus-und-minus-bis-10",
+    "zahlen-stellenwerte-und-zahlensysteme"
+   ]
+  },
+  "zahlen-zahlenraum-bis-20": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Zahlen bis 20",
+    "en": "Numbers up to 20",
+    "fr": "Les nombres jusqu'à 20",
+    "it": "I numeri fino a 20"
+   },
+   "description": "Die Zahlen bis 20 kennen, zerlegen, vergleichen und Anzahl von Platz in einer Reihe unterscheiden.",
+   "order": 8,
+   "prerequisites": []
+  },
+  "zahlen-stellenwerte-und-zahlensysteme": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Stellenwerte und Zahlensysteme",
+    "en": "Place value and number systems",
+    "fr": "Valeur positionnelle et systèmes de numération",
+    "it": "Valore posizionale e sistemi di numerazione"
+   },
+   "description": "Zahlen bis 100 Millionen nach Stellenwerten lesen, schreiben, zerlegen und vergleichen und das Binärsystem kennen.",
+   "order": 9,
+   "prerequisites": [
+    "zahlen-zahlenraum-bis-20"
+   ]
+  },
+  "zahlen-plus-und-minus-bis-1000": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Plus und Minus bis 1000",
+    "en": "Addition and subtraction up to 1000",
+    "fr": "Addition et soustraction jusqu'à 1000",
+    "it": "Addizione e sottrazione fino a 1000"
+   },
+   "description": "Bis 1000 im Kopf und schriftlich addieren und subtrahieren, Summen schätzen und Umkehraufgaben lösen.",
+   "order": 10,
+   "prerequisites": [
+    "zahlen-plus-und-minus-bis-100",
+    "zahlen-stellenwerte-und-zahlensysteme"
+   ]
+  },
+  "zahlen-einmaleins-und-teilen": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Einmaleins und Teilen",
+    "en": "Times tables and division",
+    "fr": "Livrets et division",
+    "it": "Tabelline e divisione"
+   },
+   "description": "Verstehen, was Malrechnen und Teilen bedeutet, und mit den Einmaleinsreihen multiplizieren und dividieren.",
+   "order": 11,
+   "prerequisites": [
+    "zahlen-plus-und-minus-bis-10"
+   ]
+  },
+  "zahlen-mehrstellig-multiplizieren-und-dividieren": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Mehrstellig multiplizieren und dividieren",
+    "en": "Multiplying and dividing larger numbers",
+    "fr": "Multiplier et diviser de grands nombres",
+    "it": "Moltiplicare e dividere numeri a più cifre"
+   },
+   "description": "Mit Rest dividieren und mehrstellige Zahlen mit ein- und zweistelligen Zahlen multiplizieren und dividieren.",
+   "order": 12,
+   "prerequisites": [
+    "zahlen-einmaleins-und-teilen",
+    "zahlen-plus-und-minus-bis-1000"
+   ]
+  },
+  "zahlen-rechengesetze-und-rechenreihenfolge": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Rechengesetze und Rechenreihenfolge",
+    "en": "Laws of arithmetic and order of operations",
+    "fr": "Lois de calcul et priorité des opérations",
+    "it": "Proprietà delle operazioni e ordine di calcolo"
+   },
+   "description": "Punkt vor Strich und Klammern beachten und Rechengesetze zum geschickten Rechnen nutzen.",
+   "order": 13,
+   "prerequisites": [
+    "zahlen-einmaleins-und-teilen",
+    "zahlen-mehrstellig-multiplizieren-und-dividieren",
+    "zahlen-plus-und-minus-bis-100",
+    "zahlen-plus-und-minus-bis-1000"
+   ]
+  },
+  "zahlen-muster-und-knobelaufgaben": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Muster und Knobelaufgaben",
+    "en": "Patterns and puzzles",
+    "fr": "Suites et problèmes de logique",
+    "it": "Successioni e rompicapi"
+   },
+   "description": "Regeln in Zahlen- und Figurenfolgen erkennen und Knobel- und Sachaufgaben mit geschicktem Zählen und Rechnen lösen.",
+   "order": 14,
+   "prerequisites": [
+    "brueche-brueche-multiplizieren-und-dividieren",
+    "geometrie-strecken-geraden-senkrechte-und-parallelen",
+    "gleichungen-terme-aufstellen-und-berechnen",
+    "zahlen-plus-und-minus-bis-10",
+    "zahlen-rechengesetze-und-rechenreihenfolge",
+    "zahlen-stellenwerte-und-zahlensysteme"
+   ]
+  },
+  "zahlen-rechnen-mit-dezimalzahlen": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Rechnen mit Dezimalzahlen",
+    "en": "Calculating with decimals",
+    "fr": "Calculer avec les nombres décimaux",
+    "it": "Calcolare con i numeri decimali"
+   },
+   "description": "Dezimalzahlen addieren, subtrahieren, multiplizieren und dividieren und damit Sachaufgaben lösen.",
+   "order": 15,
+   "prerequisites": [
+    "brueche-brueche-und-dezimalzahlen-verstehen",
+    "gleichungen-ersetzen-und-groessenbeziehungen",
+    "zahlen-dezimalstellen-runden-und-ueberschlagen",
+    "zahlen-mehrstellig-multiplizieren-und-dividieren",
+    "zahlen-plus-und-minus-bis-100",
+    "zahlen-rechengesetze-und-rechenreihenfolge"
+   ]
+  },
+  "zahlen-mengenoperationen-und-logik": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Mengenoperationen und Logik",
+    "en": "Set operations and logic",
+    "fr": "Opérations sur les ensembles et logique",
+    "it": "Operazioni tra insiemi e logica"
+   },
+   "description": "Schnitt, Vereinigung und Komplement bilden, notwendige und hinreichende Bedingungen erkennen und Aussagen mit Quantoren verneinen.",
+   "order": 16,
+   "prerequisites": [
+    "zahlen-mengen-und-teilmengen",
+    "zahlen-plus-und-minus-bis-100"
+   ]
+  },
+  "zahlen-dezimalstellen-runden-und-ueberschlagen": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Dezimalstellen, Runden und Überschlagen",
+    "en": "Decimal places, rounding and estimating",
+    "fr": "Décimales, arrondis et estimations",
+    "it": "Cifre decimali, arrotondamento e stime"
+   },
+   "description": "Dezimalzahlen nach Stellenwerten vergleichen, Zahlen runden und Ergebnisse überschlagen.",
+   "order": 17,
+   "prerequisites": [
+    "brueche-brueche-und-dezimalzahlen-verstehen",
+    "zahlen-mehrstellig-multiplizieren-und-dividieren",
+    "zahlen-stellenwerte-und-zahlensysteme"
+   ]
+  },
+  "zahlen-teilbarkeit-primzahlen-ggt-kgv": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Teilbarkeit, Primzahlen, ggT und kgV",
+    "en": "Divisibility, primes, GCD and LCM",
+    "fr": "Divisibilité, nombres premiers, PGCD et PPCM",
+    "it": "Divisibilità, numeri primi, MCD e mcm"
+   },
+   "description": "Teilbarkeitsregeln anwenden, Teiler, Vielfache und Primzahlen finden und ggT und kgV bestimmen.",
+   "order": 18,
+   "prerequisites": [
+    "zahlen-mehrstellig-multiplizieren-und-dividieren"
+   ]
+  },
+  "zahlen-negative-und-rationale-zahlen": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Negative und rationale Zahlen",
+    "en": "Negative and rational numbers",
+    "fr": "Nombres négatifs et rationnels",
+    "it": "Numeri negativi e razionali"
+   },
+   "description": "Negative Zahlen verstehen, rationale Zahlen auf der Zahlengeraden darstellen, vergleichen und Gegenzahl und Betrag bestimmen.",
+   "order": 19,
+   "prerequisites": [
+    "brueche-brueche-und-dezimalzahlen-verstehen",
+    "zahlen-dezimalstellen-runden-und-ueberschlagen",
+    "zahlen-stellenwerte-und-zahlensysteme"
+   ]
+  },
+  "zahlen-rechnen-mit-rationalen-zahlen": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Rechnen mit rationalen Zahlen",
+    "en": "Calculating with rational numbers",
+    "fr": "Calculer avec les nombres rationnels",
+    "it": "Calcolare con i numeri razionali"
+   },
+   "description": "Rationale Zahlen nach den Vorzeichenregeln addieren, subtrahieren, multiplizieren und dividieren und Terme in der richtigen Reihenfolge berechnen.",
+   "order": 20,
+   "prerequisites": [
+    "zahlen-negative-und-rationale-zahlen"
+   ]
+  },
+  "zahlen-wurzeln-und-reelle-zahlen": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Wurzeln und reelle Zahlen",
+    "en": "Roots and real numbers",
+    "fr": "Racines et nombres réels",
+    "it": "Radici e numeri reali"
+   },
+   "description": "Quadrat- und Kubikwurzeln bestimmen und abschätzen, irrationale Zahlen erkennen und reelle Zahlen einteilen und darstellen.",
+   "order": 21,
+   "prerequisites": [
+    "zahlen-negative-und-rationale-zahlen",
+    "zahlen-potenzen-und-potenzgesetze",
+    "zahlen-rechnen-mit-rationalen-zahlen"
+   ]
+  },
+  "zahlen-potenzen-und-potenzgesetze": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Potenzen und Potenzgesetze",
+    "en": "Powers and laws of exponents",
+    "fr": "Puissances et règles de calcul",
+    "it": "Potenze e proprietà delle potenze"
+   },
+   "description": "Potenzen verstehen und berechnen, die Potenzgesetze anwenden und Zahlen in wissenschaftlicher Schreibweise darstellen.",
+   "order": 22,
+   "prerequisites": [
+    "zahlen-rechnen-mit-rationalen-zahlen"
+   ]
+  },
+  "zahlen-rechnen-mit-quadratwurzeln": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Rechnen mit Quadratwurzeln",
+    "en": "Calculating with square roots",
+    "fr": "Calculer avec les racines carrées",
+    "it": "Calcolare con le radici quadrate"
+   },
+   "description": "Quadratwurzelterme definieren, multiplizieren, dividieren, vereinfachen, Nenner rational machen und zusammenfassen.",
+   "order": 23,
+   "prerequisites": [
+    "gleichungen-lineare-ungleichungen-loesen-und-anwenden",
+    "gleichungen-rechnen-mit-polynomen",
+    "zahlen-wurzeln-und-reelle-zahlen"
+   ]
+  },
+  "zahlen-mengen-und-teilmengen": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Mengen und Teilmengen",
+    "en": "Sets and subsets",
+    "fr": "Ensembles et sous-ensembles",
+    "it": "Insiemi e sottoinsiemi"
+   },
+   "description": "Mengen aufzählend und beschreibend angeben, die Zahlenmengen kennen und Teilmengen erkennen.",
+   "order": 24,
+   "prerequisites": [
+    "zahlen-wurzeln-und-reelle-zahlen"
+   ]
+  },
+  "zahlen-komplexe-zahlen": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Komplexe Zahlen",
+    "en": "Complex numbers",
+    "fr": "Nombres complexes",
+    "it": "Numeri complessi"
+   },
+   "description": "Komplexe Zahlen in der Zahlenebene darstellen und mit ihnen addieren, subtrahieren, multiplizieren und dividieren.",
+   "order": 25,
+   "prerequisites": [
+    "geometrie-lage-richtung-und-koordinaten",
+    "zahlen-mengen-und-teilmengen"
+   ]
+  },
+  "zahlen-arithmetische-folgen": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Arithmetische Folgen",
+    "en": "Arithmetic sequences",
+    "fr": "Suites arithmétiques",
+    "it": "Successioni aritmetiche"
+   },
+   "description": "Arithmetische Folgen erkennen, Glieder, Mittel und Summen berechnen und in Sachsituationen anwenden.",
+   "order": 26,
+   "prerequisites": [
+    "zahlen-folgen-rekursion-und-induktion"
+   ]
+  },
+  "zahlen-folgen-rekursion-und-induktion": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Folgen, Rekursion und Induktion",
+    "en": "Sequences, recursion and induction",
+    "fr": "Suites, récurrence et induction",
+    "it": "Successioni, ricorsione e induzione"
+   },
+   "description": "Folgen darstellen, Glieder mit Bildungsgesetzen und Rekursionen berechnen und Aussagen mit vollständiger Induktion beweisen.",
+   "order": 27,
+   "prerequisites": [
+    "gleichungen-funktionen-und-funktionsmodelle"
+   ]
+  },
+  "zahlen-geometrische-folgen": {
+   "topic_id": "zahlen",
+   "subject_id": "mathematics",
+   "titles": {
+    "de": "Geometrische Folgen",
+    "en": "Geometric sequences",
+    "fr": "Suites géométriques",
+    "it": "Successioni geometriche"
+   },
+   "description": "Geometrische Folgen erkennen, Glieder, Mittel und Summen berechnen und Wachstum um einen festen Faktor beschreiben.",
+   "order": 28,
+   "prerequisites": [
+    "gleichungen-exponential-und-logarithmusfunktionen",
+    "zahlen-folgen-rekursion-und-induktion"
+   ]
+  }
+ }
+}

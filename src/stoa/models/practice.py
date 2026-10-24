@@ -43,6 +43,8 @@ class PracticeChallengePreview(_PracticeContract):
         validation_alias=AliasChoices("options", "choices"),
     )
     hint_available: bool = Field(alias="hintAvailable")
+    figure: str | None = None
+    option_figures: list[str] | None = Field(default=None, alias="optionFigures")
     unit_id: str | None = Field(default=None, alias="unitId")
     subject_id: str | None = Field(default=None, alias="subjectId")
     grade_level: str | None = Field(default=None, alias="gradeLevel")
@@ -77,6 +79,8 @@ class PracticeExercisePreview(_PracticeContract):
     type: NonEmptyText
     prompt: NonEmptyText
     choices: list[str] | None = None
+    figure: str | None = None
+    option_figures: list[str] | None = Field(default=None, alias="optionFigures")
     difficulty: str = "practice"
     estimated_minutes: int = Field(default=5, alias="estimatedMinutes", ge=0)
     skills: list[str] = Field(default_factory=list)
@@ -211,6 +215,8 @@ class ReviewCard(_PracticeContract):
     topic_id: str = Field(default="", alias="topicId")
     prompt: str = ""
     options: list[str] = Field(default_factory=list)
+    figure: str | None = None
+    option_figures: list[str] | None = Field(default=None, alias="optionFigures")
     type: str = DEFAULT_CHALLENGE_TYPE
     due_at: str = Field(default="", alias="dueAt")
     lapses: int = 0

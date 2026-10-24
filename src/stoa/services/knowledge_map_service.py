@@ -31,7 +31,12 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from stoa.db.repositories import practice_repo, review_repo
-from stoa.services import curriculum_translations, curriculum_service, knowledge_mastery_service
+from stoa.services import (
+    curriculum_service,
+    curriculum_translations,
+    knowledge_base_catalog,
+    knowledge_mastery_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +158,7 @@ def build_map(
     # untouched.
     chapter_order = {nebula["topicId"]: nebula["order"] for nebula in nebulae}
 
+    unit_names = {str(unit.get("id") or ""): str(unit.get("title") or "") for unit in units}
     stars: list[dict[str, Any]] = []
     for unit in sorted(
         units,
@@ -188,7 +194,7 @@ def build_map(
                 "recommendation": None,
                 "x": round(x, 5),
                 "y": round(y, 5),
-                "skills": _skills_of(unit_id, skill_states or {}, locale),
+                "skills": _skills_of(unit_id, skill_states or {}, locale, unit_names),
                 "chapter": {
                     "lessonCount": judged.lesson_count,
                     "lessonsDone": judged.lessons_done,
@@ -352,11 +358,18 @@ def acknowledge_lit(student_id: str, unit_ids: Sequence[str]) -> dict[str, Any]:
     return {"acknowledged": confirmed}
 
 
+#: What the whole sky is sent as. `skeleton` is every star with its state and
+#: position but none of its small stars: the client opens on it and asks for the
+#: few stars around where the student is with `neighbourhood`.
+MAP_VIEWS = ("full", "skeleton")
+
+
 def knowledge_map(
     student_id: str,
     *,
     subject_id: str | None = None,
     locale: str = "de",
+    view: str = "full",
 ) -> dict[str, Any]:
     """The whole sky for one student, with `subject_id` as the galaxy in focus."""
     catalog = curriculum_service.list_catalog(locale=locale)
@@ -364,9 +377,7 @@ def knowledge_map(
     # nothing in it; either way the first galaxy takes the focus as it always has.
     requested = str(subject_id or "").strip()
     _require_known_subject(requested, catalog)
-    states = knowledge_mastery_service.unit_states(
-        student_id, locale=locale, catalog=catalog
-    )
+    states = knowledge_mastery_service.unit_states(student_id, locale=locale, catalog=catalog)
     lessons = [item for item in catalog.get("lessons") or () if isinstance(item, Mapping)]
     summary = curriculum_service.get_progress_summary(student_id)
 
@@ -386,7 +397,7 @@ def knowledge_map(
         for item in practice_repo.get_progress(student_id, None)
         if item.get("subject_id")
     )
-    return build_map(
+    sky = build_map(
         subject_id=focus,
         catalog=catalog,
         unit_states=states,
@@ -395,11 +406,185 @@ def knowledge_map(
         score=0,
         enrolled_subject_ids=enrolled,
         lit_facts=_lit_facts(student_id, states),
-        skill_states=knowledge_mastery_service.skill_states(
-            student_id, locale=locale, catalog=catalog
+        skill_states=(
+            None if view == "skeleton"
+            else knowledge_mastery_service.skill_states(student_id, locale=locale, catalog=catalog)
         ),
         locale=locale,
     )
+    if view == "skeleton":
+        sky["view"] = "skeleton"
+    return sky
+
+
+#: How many stars of the same nebula, on each side of the one in focus, come with it.
+NEIGHBOURS_EACH_SIDE = 2
+#: The most stars one neighbourhood sends.
+MAX_NEIGHBOURHOOD = 15
+
+
+def neighbourhood(
+    student_id: str,
+    *,
+    subject_id: str | None = None,
+    around: str | None = None,
+    locale: str = "de",
+) -> dict[str, Any]:
+    """A few stars in full - small stars, practice sets, what is missing - around one.
+
+    The star in focus is `around`, else the one the student last finished
+    practice in, else the map's recommendation. With it come the stars it needs
+    (its prerequisites), the stars that need it, and its neighbours in its
+    nebula, so the client loads what the student is about to look at rather than
+    the whole sky."""
+    catalog = curriculum_service.list_catalog(locale=locale)
+    requested = str(subject_id or "").strip()
+    _require_known_subject(requested, catalog)
+    subjects = [item for item in catalog.get("subjects") or () if isinstance(item, Mapping)]
+    subject = (
+        practice_repo.normal_subject_id(requested)
+        if requested
+        else (str(subjects[0].get("id") or "") if subjects else "")
+    )
+    indexed = knowledge_mastery_service.indexed_lessons()
+    states = knowledge_mastery_service.unit_states(
+        student_id, locale=locale, catalog=catalog, indexed=indexed
+    )
+    units = {
+        str(unit.get("id") or ""): unit
+        for unit in catalog.get("units") or ()
+        if isinstance(unit, Mapping)
+        and practice_repo.normal_subject_id(unit.get("subjectId")) == subject
+        and states.get(str(unit.get("id") or "")) is not None
+        and states[str(unit.get("id") or "")].lesson_count > 0
+    }
+    focus = _focus(student_id, around, units, states)
+    if not focus:
+        return {"subjectId": subject, "focus": None, "stars": []}
+
+    picked = _around(focus, units)
+    narrowed = {
+        **catalog,
+        "units": [units[unit_id] for unit_id in picked],
+    }
+    lessons = [item for item in catalog.get("lessons") or () if isinstance(item, Mapping)]
+    sky = build_map(
+        subject_id=subject,
+        catalog=narrowed,
+        unit_states=states,
+        review_due_by_unit=_review_due_by_unit(student_id, lessons),
+        streak_days=0,
+        score=0,
+        enrolled_subject_ids=frozenset(),
+        skill_states=knowledge_mastery_service.skill_states(
+            student_id, locale=locale, catalog=catalog, indexed=indexed
+        ),
+        locale=locale,
+    )
+    done = frozenset(
+        str(item.get("lesson_id") or "")
+        for item in practice_repo.get_progress(student_id, None)
+        if item.get("status") == "completed"
+    )
+    stars = []
+    for star in sky["stars"]:
+        unit_id = star["unitId"]
+        stars.append({
+            **star,
+            "relation": picked[unit_id],
+            "prerequisiteUnitIds": _prerequisites_of(unit_id, units),
+            "practiceSets": _practice_sets(unit_id, lessons, indexed, done),
+        })
+    order = list(picked)
+    stars.sort(key=lambda star: order.index(star["unitId"]))
+    return {"subjectId": subject, "focus": focus, "stars": stars}
+
+
+def _prerequisites_of(unit_id: str, units: Mapping[str, Mapping[str, Any]]) -> list[str]:
+    """What a star needs: the unit row's own prerequisites, and for a knowledge-base
+    star those drawn from its knowledge points - shown, never locking."""
+    stated = [str(item) for item in units[unit_id].get("prerequisiteUnitIds") or () if item]
+    drawn = next(
+        (list(star.get("prerequisites") or []) for star in knowledge_base_catalog.units()
+         if star["unit_id"] == unit_id),
+        [],
+    )
+    return [item for item in dict.fromkeys([*stated, *drawn]) if item in units and item != unit_id]
+
+
+def _focus(
+    student_id: str,
+    around: str | None,
+    units: Mapping[str, Mapping[str, Any]],
+    states: Mapping[str, knowledge_mastery_service.UnitMastery],
+) -> str:
+    if around and around in units:
+        return around
+    finished = sorted(
+        (
+            item for item in practice_repo.get_progress(student_id, None)
+            if item.get("status") == "completed" and str(item.get("unit_id") or "") in units
+        ),
+        key=lambda item: str(item.get("completed_at") or ""),
+    )
+    if finished:
+        return str(finished[-1].get("unit_id") or "")
+    ordered = sorted(units.values(), key=lambda unit: (str(unit.get("topicId") or ""), int(unit.get("order") or 0)))
+    stars = [{"unitId": str(unit.get("id") or ""), "state": states[str(unit.get("id") or "")].state.value}
+             for unit in ordered]
+    return _recommended_unit(stars) or (stars[0]["unitId"] if stars else "")
+
+
+def _around(focus: str, units: Mapping[str, Mapping[str, Any]]) -> dict[str, str]:
+    """The stars that come with the one in focus, each with why, in this order."""
+    picked: dict[str, str] = {focus: "focus"}
+
+    def add(unit_id: str, role: str) -> None:
+        if unit_id in units and unit_id not in picked and len(picked) < MAX_NEIGHBOURHOOD:
+            picked[unit_id] = role
+
+    for unit_id in _prerequisites_of(focus, units):
+        add(unit_id, "prerequisite")
+    for unit_id in sorted(units):
+        if focus in _prerequisites_of(unit_id, units):
+            add(unit_id, "next")
+    nebula = sorted(
+        (unit for unit in units.values() if unit.get("topicId") == units[focus].get("topicId")),
+        key=lambda unit: (int(unit.get("order") or 0), str(unit.get("id") or "")),
+    )
+    position = [str(unit.get("id") or "") for unit in nebula].index(focus)
+    for unit in nebula[max(0, position - NEIGHBOURS_EACH_SIDE): position + NEIGHBOURS_EACH_SIDE + 1]:
+        add(str(unit.get("id") or ""), "neighbour")
+    return picked
+
+
+def _practice_sets(
+    unit_id: str,
+    lessons: Sequence[Mapping[str, Any]],
+    indexed: Mapping[str, list[dict[str, Any]]],
+    done: frozenset[str],
+) -> list[dict[str, Any]]:
+    """A star's practice, in the order it is worked through, each under its small star."""
+    mine = sorted(
+        (lesson for lesson in lessons if str(lesson.get("unitId") or "") == unit_id),
+        key=lambda lesson: (int(lesson.get("order") or 0), str(lesson.get("id") or "")),
+    )
+    sets = []
+    for lesson in mine:
+        lesson_id = str(lesson.get("id") or "")
+        skills = [skill for entry in indexed.get(lesson_id, []) for skill in entry.get("skills") or ()]
+        item: dict[str, Any] = {
+            "lessonId": lesson_id,
+            "title": str(lesson.get("title") or ""),
+            "order": int(lesson.get("order") or 0),
+            "exerciseCount": int(lesson.get("exerciseCount") or 0),
+            "skillId": skills[0] if skills else None,
+            "status": "completed" if lesson_id in done else "available",
+        }
+        if lesson.get("extension"):
+            item["extension"] = True
+        sets.append(item)
+    return sets
 
 
 def _known_subject_ids(catalog: Mapping[str, Any]) -> frozenset[str]:
@@ -450,17 +635,31 @@ def _skills_of(
     unit_id: str,
     states: Mapping[str, knowledge_mastery_service.SkillMastery],
     locale: str,
+    unit_names: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
-    """The skill points around one star, in a fixed order (#58)."""
+    """The skill points around one star, in a fixed order (#58).
+
+    A skill point that deepens its star says `extension`; one whose next
+    practice needs knowledge not mastered yet names where that knowledge is
+    (`missingPrerequisites`). Nothing is locked by it."""
+    names = unit_names or {}
     mine = [state for state in states.values() if state.unit_id == unit_id]
-    return [
-        {
+    out = []
+    for state in sorted(mine, key=lambda state: state.skill_id):
+        item: dict[str, Any] = {
             "skillId": state.skill_id,
             "name": curriculum_translations.skill_title(state.skill_id, locale),
             "lit": state.lit,
         }
-        for state in sorted(mine, key=lambda state: state.skill_id)
-    ]
+        if state.extension:
+            item["extension"] = True
+        if not state.ready:
+            item["missingPrerequisites"] = [
+                {"unitId": missing, "name": names.get(missing, missing)}
+                for missing in state.missing_unit_ids
+            ]
+        out.append(item)
+    return out
 
 
 def _prerequisite_edges(units: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:

@@ -48,7 +48,7 @@ def list_catalog(
         if _matches_state(unit, rollout_state, include_preview)
     ]
     lessons = [
-        _build_lesson(lesson, exercise_count=len(_active_exercises_for_lesson(lesson["lesson_id"], include_preview)), locale=locale)
+        _build_lesson(lesson, exercise_count=_exercise_count(lesson, include_preview), locale=locale)
         for lesson in sorted(practice_repo.get_lessons(), key=lambda item: (item.get("topic_id", ""), item.get("unit_id", ""), _as_int(item.get("order", 0))))
         if _lesson_matches(lesson, subject_id, grade_level) and _matches_state(lesson, rollout_state, include_preview)
     ]
@@ -75,7 +75,7 @@ def get_lesson_detail(
         return None
 
     exercises = [
-        practice_projection_service.build_exercise_preview(exercise)
+        practice_projection_service.build_exercise_preview(exercise, locale)
         for exercise in _active_exercises_for_lesson(lesson_id, include_preview)
     ]
     return practice_projection_service.build_curriculum_lesson_preview(lesson, exercises, locale=locale)
@@ -89,10 +89,11 @@ def list_exercises(
     difficulty: str | None = None,
     rollout_state: str | None = None,
     include_preview: bool = False,
+    locale: str = "de",
 ) -> dict[str, Any]:
     raw_items = practice_repo.get_all_challenges(lesson_id=lesson_id, subject_id=subject_id, topic_id=topic_id)
     items = [
-        practice_projection_service.build_exercise_preview(item)
+        practice_projection_service.build_exercise_preview(item, locale)
         for item in sorted(raw_items, key=lambda challenge: (challenge.get("lesson_id", ""), _as_int(challenge.get("order", 0))))
         if _matches_state(item, rollout_state, include_preview)
         and (difficulty is None or str(item.get("difficulty", "")).lower() == difficulty.lower())
@@ -263,6 +264,15 @@ def _all_units(topics: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return units
 
 
+def _exercise_count(lesson: dict[str, Any], include_preview: bool) -> int:
+    """From the lesson's own exercise index where it has one; a preview reader also
+    sees exercises not yet live, which only the challenge rows know of."""
+    index = practice_repo.indexed_exercises(lesson)
+    if index is not None and not include_preview:
+        return len(index)
+    return len(_active_exercises_for_lesson(lesson["lesson_id"], include_preview))
+
+
 def _active_exercises_for_lesson(lesson_id: str, include_preview: bool) -> list[dict[str, Any]]:
     return [
         challenge
@@ -365,7 +375,20 @@ def _build_lesson(raw: dict[str, Any], *, exercise_count: int, locale: str = "de
         "rolloutState": _content_state(raw),
         "exerciseCount": exercise_count,
         "source": raw.get("source", "practice_backfill"),
+        **_readiness(raw),
     }
+
+
+def _readiness(raw: dict[str, Any]) -> dict[str, Any]:
+    """A lesson that only deepens its unit, and the knowledge points that come
+    before it; absent on a lesson that states neither."""
+    out: dict[str, Any] = {}
+    if raw.get("extension"):
+        out["extension"] = True
+    points = [str(item) for item in raw.get("requires_points") or () if str(item).strip()]
+    if points:
+        out["requiresPoints"] = points
+    return out
 
 
 def _build_exercise(raw: dict[str, Any]) -> dict[str, Any]:

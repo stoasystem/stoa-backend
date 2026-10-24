@@ -13,6 +13,8 @@ translation is pending.
 """
 from __future__ import annotations
 
+from stoa.services import knowledge_base_catalog
+
 TITLE_TRANSLATIONS: dict[str, dict[str, str]] = {
     # subject
     "mathematics": {"en": "Mathematics", "fr": "Mathématiques", "it": "Matematica"},
@@ -631,6 +633,17 @@ SKILL_TRANSLATIONS: dict[str, dict[str, str]] = {
 }
 
 TITLE_TRANSLATIONS.update(SKILL_TRANSLATIONS)
+
+# The imported knowledge base (knowledge_base_catalog): the titles of its stars,
+# nebulae and subjects, and one skill per knowledge point, hanging under its star.
+# A knowledge point's lesson has the skill's id, so its title is translated too.
+TITLE_TRANSLATIONS.update(knowledge_base_catalog.title_translations())
+for _skill_id, _skill in knowledge_base_catalog.skills().items():
+    SKILL_UNITS.setdefault(_skill["subject"], {})[_skill_id] = _skill["unit"]
+    SKILL_TITLES[_skill_id] = _skill["titles"]["de"]
+    TITLE_TRANSLATIONS[_skill_id] = {
+        locale: _skill["titles"][locale] for locale in ("en", "fr", "it")
+    }
 
 
 def skill_unit_id(skill_id: str) -> str | None:

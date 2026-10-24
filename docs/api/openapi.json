@@ -3026,6 +3026,18 @@
             ],
             "title": "Explanation"
           },
+          "figure": {
+            "anyOf": [
+              {
+                "maxLength": 32000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Figure"
+          },
           "incorrectFeedback": {
             "anyOf": [
               {
@@ -3037,6 +3049,43 @@
               }
             ],
             "title": "Incorrectfeedback"
+          },
+          "knowledgePoint": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledgepoint"
+          },
+          "optionFigures": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxItems": 10,
+            "title": "Optionfigures",
+            "type": "array"
+          },
+          "options": {
+            "items": {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Options",
+            "type": "array"
           },
           "order": {
             "anyOf": [
@@ -3064,6 +3113,21 @@
             "title": "Skills",
             "type": "array"
           },
+          "translations": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CurriculumExerciseTranslation"
+            },
+            "propertyNames": {
+              "enum": [
+                "de",
+                "en",
+                "fr",
+                "it"
+              ]
+            },
+            "title": "Translations",
+            "type": "object"
+          },
           "type": {
             "default": "text_input",
             "maxLength": 50,
@@ -3076,6 +3140,94 @@
           "prompt"
         ],
         "title": "CurriculumExerciseDraftRequest",
+        "type": "object"
+      },
+      "CurriculumExerciseTranslation": {
+        "additionalProperties": false,
+        "description": "One exercise in another language: what a reader in that locale sees and answers.",
+        "properties": {
+          "acceptedAnswers": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Acceptedanswers",
+            "type": "array"
+          },
+          "correctAnswer": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correctanswer"
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation"
+          },
+          "figure": {
+            "anyOf": [
+              {
+                "maxLength": 32000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Figure"
+          },
+          "optionFigures": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxItems": 10,
+            "title": "Optionfigures",
+            "type": "array"
+          },
+          "options": {
+            "items": {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Options",
+            "type": "array"
+          },
+          "prompt": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "title": "CurriculumExerciseTranslation",
         "type": "object"
       },
       "CurriculumLessonDraftRequest": {
@@ -3113,6 +3265,11 @@
             },
             "title": "Exercises",
             "type": "array"
+          },
+          "extension": {
+            "default": false,
+            "title": "Extension",
+            "type": "boolean"
           },
           "gradeLevel": {
             "maxLength": 100,
@@ -3156,6 +3313,16 @@
             "minLength": 1,
             "title": "Publiclessonid",
             "type": "string"
+          },
+          "requiresPoints": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Requirespoints",
+            "type": "array"
           },
           "subjectId": {
             "maxLength": 100,
@@ -11020,6 +11187,17 @@
             "title": "Dueat",
             "type": "string"
           },
+          "figure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Figure"
+          },
           "lapses": {
             "default": 0,
             "title": "Lapses",
@@ -11029,6 +11207,20 @@
             "default": "",
             "title": "Lessonid",
             "type": "string"
+          },
+          "optionFigures": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Optionfigures"
           },
           "options": {
             "items": {
@@ -14040,7 +14232,7 @@
     }
   },
   "info": {
-    "description": "STOA learning platform backend â€” Zurich, Switzerland",
+    "description": "STOA learning platform backend — Zurich, Switzerland",
     "title": "STOA API",
     "version": "0.1.0"
   },
@@ -20782,7 +20974,7 @@
     },
     "/admin/stats": {
       "get": {
-        "description": "Return aggregate platform metrics (full-table scan â€” small scale only).",
+        "description": "Return aggregate platform metrics (full-table scan — small scale only).",
         "operationId": "get_stats_admin_stats_get",
         "responses": {
           "200": {
@@ -27865,7 +28057,7 @@
     },
     "/practice/knowledge-map": {
       "get": {
-        "description": "The star map: every subject, topic and knowledge point with its state.\n\nThe language comes from the request the way every other curriculum read\nhere takes it, not from a query parameter with German wired in as the\ndefault: the names on this map are galaxy, nebula and knowledge-point\ntitles, and a French student reading a sky labelled in German is the same\ndefect as any other untranslated screen.\n\nThe student is `authorized_student.ref.student_id` and nothing else. The\n`studentId` query parameter belongs to the authorization dependency, which\ndeclares and checks it; reading one here would be a way around the check.\n\nA `subjectId` naming no subject the curriculum has is a 422 rather than a\nsky labelled with it (#124). One the student has not started is not: the\nmap is there to be browsed ahead of enrolment.",
+        "description": "The star map: every subject, topic and knowledge point with its state.\n\nThe language comes from the request the way every other curriculum read\nhere takes it, not from a query parameter with German wired in as the\ndefault: the names on this map are galaxy, nebula and knowledge-point\ntitles, and a French student reading a sky labelled in German is the same\ndefect as any other untranslated screen.\n\nThe student is `authorized_student.ref.student_id` and nothing else. The\n`studentId` query parameter belongs to the authorization dependency, which\ndeclares and checks it; reading one here would be a way around the check.\n\nA `subjectId` naming no subject the curriculum has is a 422 rather than a\nsky labelled with it (#124). One the student has not started is not: the\nmap is there to be browsed ahead of enrolment.\n\n`view=skeleton` sends every star with its state and position but none of\nits small stars; `/knowledge-map/stars` then sends the few around one in full.",
         "operationId": "get_knowledge_map_practice_knowledge_map_get",
         "parameters": [
           {
@@ -27882,6 +28074,20 @@
                 }
               ],
               "title": "Subjectid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "view",
+            "required": false,
+            "schema": {
+              "default": "full",
+              "enum": [
+                "full",
+                "skeleton"
+              ],
+              "title": "View",
+              "type": "string"
             }
           },
           {
@@ -28038,6 +28244,134 @@
           ],
           "classification": "authorized",
           "identifiers": []
+        }
+      }
+    },
+    "/practice/knowledge-map/stars": {
+      "get": {
+        "description": "A few stars in full - small stars, practice sets, missing prerequisites -\naround `around`, or around where the student last practised.\n\nWith the star come the ones it needs, the ones that need it and its\nneighbours in its nebula, so the client loads the part of the sky the\nstudent is about to look at. The student is decided by the authorization\ndependency, exactly as for `/knowledge-map`.",
+        "operationId": "get_knowledge_map_neighbourhood_practice_knowledge_map_stars_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "subjectId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subjectid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "around",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Around"
+            }
+          },
+          {
+            "in": "query",
+            "name": "studentId",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Studentid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Knowledge Map Neighbourhood",
+        "tags": [
+          "practice"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "learning_assignment",
+              "resource_type": "student"
+            },
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "parent_oversight",
+              "resource_type": "student"
+            },
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "student"
+            },
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "support",
+              "resource_type": "student"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": [
+            "studentId"
+          ]
         }
       }
     },
@@ -28980,7 +29314,7 @@
     },
     "/questions/{question_id}/feedback": {
       "post": {
-        "description": "Rate a resolved question (1â€“5 stars).",
+        "description": "Rate a resolved question (1–5 stars).",
         "operationId": "submit_feedback_questions__question_id__feedback_post",
         "parameters": [
           {
