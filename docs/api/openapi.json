@@ -14232,7 +14232,7 @@
     }
   },
   "info": {
-    "description": "STOA learning platform backend — Zurich, Switzerland",
+    "description": "STOA learning platform backend â€” Zurich, Switzerland",
     "title": "STOA API",
     "version": "0.1.0"
   },
@@ -20974,7 +20974,7 @@
     },
     "/admin/stats": {
       "get": {
-        "description": "Return aggregate platform metrics (full-table scan — small scale only).",
+        "description": "Return aggregate platform metrics (full-table scan â€” small scale only).",
         "operationId": "get_stats_admin_stats_get",
         "responses": {
           "200": {
@@ -29314,7 +29314,7 @@
     },
     "/questions/{question_id}/feedback": {
       "post": {
-        "description": "Rate a resolved question (1–5 stars).",
+        "description": "Rate a resolved question (1â€“5 stars).",
         "operationId": "submit_feedback_questions__question_id__feedback_post",
         "parameters": [
           {

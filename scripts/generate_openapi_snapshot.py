@@ -40,7 +40,7 @@ def main() -> int:
     args = parser.parse_args()
     rendered = render_snapshot()
     if args.check:
-        if args.output.exists() and args.output.read_text() == rendered:
+        if args.output.exists() and args.output.read_text(encoding="utf-8") == rendered:
             return 0
         print(
             f"{args.output} is not what the app serves; "
@@ -49,7 +49,10 @@ def main() -> int:
         )
         return 1
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(rendered)
+    # Spelled out: `write_text` without it encodes in the platform's default,
+    # which on Windows is cp1252 - the em dash in the app's description went in
+    # as one byte and the snapshot stopped being readable at all.
+    args.output.write_text(rendered, encoding="utf-8")
     return 0
 
 

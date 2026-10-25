@@ -21,11 +21,11 @@ SCRIPT = ROOT / "scripts" / "generate_openapi_snapshot.py"
 def test_the_committed_snapshot_is_what_the_app_serves() -> None:
     import generate_openapi_snapshot
 
-    assert SNAPSHOT.read_text() == generate_openapi_snapshot.render_snapshot()
+    assert SNAPSHOT.read_text(encoding="utf-8") == generate_openapi_snapshot.render_snapshot()
 
 
 def test_the_snapshot_carries_each_route_s_authorization() -> None:
-    schema = json.loads(SNAPSHOT.read_text())
+    schema = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
 
     login = schema["paths"]["/auth/me"]["get"]
     assert "x-stoa-authorization" in login
@@ -33,7 +33,7 @@ def test_the_snapshot_carries_each_route_s_authorization() -> None:
 
 def test_check_mode_fails_on_a_stale_snapshot(tmp_path: Path) -> None:
     stale = tmp_path / "openapi.json"
-    stale.write_text(SNAPSHOT.read_text().replace('"title": "', '"title": "stale ', 1))
+    stale.write_text(SNAPSHOT.read_text(encoding="utf-8").replace('"title": "', '"title": "stale ', 1), encoding="utf-8")
 
     fresh = subprocess.run(
         [sys.executable, str(SCRIPT), "--check", "--output", str(SNAPSHOT)],

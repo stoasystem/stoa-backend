@@ -50,6 +50,11 @@ HAND_WRITTEN_DOUBLES: dict[str, str] = {
     "test_billing_fact_repo.py::AtomicBillingTable": "repo",
     "test_conversations.py::_PagedIndexTable": "script",
     "test_identity_authorization.py::FakeTable": "repo",
+    "test_knowledge_base_import.py::Paged": (
+        "repo: two canned pages for `get_lessons`, to show it follows the cursor "
+        "rather than stopping at the first page. It answers `query` and nothing "
+        "else, so it says nothing about what the real table would accept."
+    ),
     "test_parent_link_paid_downstream.py::ConditionalTable": "repo",
     "test_parent_relationship_current.py::_DeletionTable": (
         "repo: stands in for the deletion branch's own `delete_owned_row`, not for a "
