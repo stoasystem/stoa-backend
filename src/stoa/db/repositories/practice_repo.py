@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -317,6 +317,13 @@ def _valid_versioned_challenge(challenge: Any) -> bool:
 
 
 def _query_all_challenge_pages(table: object, **query: object) -> list[dict]:
+    """Every page of one query, with a cursor that must move forward.
+
+    Named for the challenge lists it was written for; every list read of the
+    practice partition goes through it now. A query returns at most 1 MB, and
+    the subjects, topics, units and lessons were each read as one page while
+    there were a few dozen of them - the knowledge base brings two thousand
+    lessons, and a first page would have dropped whichever came last."""
     items: list[dict] = []
     previous_marker: PracticeItem | None = None
     for _page in range(_MAX_CHALLENGE_PAGES):
@@ -381,20 +388,51 @@ def same_subject(stored: Any, requested: Any) -> bool:
 # ── Content read ──────────────────────────────────────────────────────────
 
 
+def exercise_index(challenges: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """What a lesson row says of its exercises: each live one's id, skills and
+    knowledge point, in lesson order.
+
+    Written with the lesson when it is published or seeded, so the catalog and
+    the star map can count a lesson's exercises and judge a student against them
+    from the lesson rows alone. They read every lesson's challenges one query at
+    a time before, which was nineteen queries for the ZAP curriculum and would be
+    two thousand per star map for the knowledge base."""
+    out: list[dict[str, Any]] = []
+    for challenge in sorted(challenges, key=lambda item: int(item.get("order") or 0)):
+        if str(challenge.get("rollout_state") or "").lower() == "archived":
+            continue
+        entry: dict[str, Any] = {
+            "id": str(challenge.get("challenge_id") or challenge.get("exercise_id") or ""),
+            "skills": [str(skill) for skill in challenge.get("skills") or () if skill],
+        }
+        point = str(challenge.get("knowledge_point") or "")
+        if point:
+            entry["knowledge_point"] = point
+        out.append(entry)
+    return out
+
+
+def indexed_exercises(lesson: Mapping[str, Any]) -> list[dict[str, Any]] | None:
+    """The exercise index a lesson row carries, or None for a row written before it."""
+    value = lesson.get("exercise_index")
+    if not isinstance(value, list):
+        return None
+    return [dict(entry) for entry in value if isinstance(entry, Mapping) and entry.get("id")]
+
+
+
 def get_subjects() -> list[dict]:
     table = get_table()
-    resp = _query(
+    return _query_all_challenge_pages(
         table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("SUBJECT#"))
     )
-    return _response_items(resp.get("Items", []))
 
 
 def get_topics(subject_id: str | None = None) -> list[dict]:
     table = get_table()
-    resp = _query(
+    items = _query_all_challenge_pages(
         table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("TOPIC#"))
     )
-    items = _response_items(resp.get("Items", []))
     if subject_id:
         items = [i for i in items if same_subject(i.get("subject_id", ""), subject_id)]
     return items
@@ -408,10 +446,9 @@ def get_topic(topic_id: str) -> dict | None:
 
 def get_lessons(topic_id: str | None = None, unit_id: str | None = None) -> list[dict]:
     table = get_table()
-    resp = _query(
+    items = _query_all_challenge_pages(
         table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("LESSON#"))
     )
-    items = _response_items(resp.get("Items", []))
     if topic_id:
         items = [i for i in items if i.get("topic_id") == topic_id]
     if unit_id:
@@ -499,10 +536,9 @@ def get_challenge(challenge_id: str) -> dict | None:
 
 def get_units(topic_id: str) -> list[dict]:
     table = get_table()
-    resp = _query(
+    items = _query_all_challenge_pages(
         table, KeyConditionExpression=(Key("PK").eq("PRACTICE") & Key("SK").begins_with("UNIT#"))
     )
-    items = _response_items(resp.get("Items", []))
     return [i for i in items if i.get("topic_id") == topic_id]
 
 
@@ -511,13 +547,12 @@ def get_units(topic_id: str) -> list[dict]:
 
 def get_progress(user_id: str, subject_id: str | None = None) -> list[dict]:
     table = get_table()
-    resp = _query(
+    items = _query_all_challenge_pages(
         table,
         KeyConditionExpression=(
             Key("PK").eq(f"PROGRESS#{user_id}") & Key("SK").begins_with("LESSON#")
         ),
     )
-    items = _response_items(resp.get("Items", []))
     if subject_id:
         items = [i for i in items if same_subject(i.get("subject_id", ""), subject_id)]
     return items

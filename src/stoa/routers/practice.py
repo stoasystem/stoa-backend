@@ -53,6 +53,7 @@ from stoa.services import (
     curriculum_analytics_service,
     curriculum_service,
     entitlement_service,
+    exercise_localization,
     lesson_quiz_service,
     locale_service,
     usage_ledger_service,
@@ -497,7 +498,7 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
         raise HTTPException(status_code=404, detail="No lessons available")
 
     challenges: list[Mapping[str, Any]] = [
-        practice_projection_service.build_challenge_preview(c)
+        practice_projection_service.build_challenge_preview(c, locale)
         for c in practice_repo.get_challenges(recommended_raw["lesson_id"])
     ]
     recommended = practice_projection_service.build_lesson_preview(recommended_raw, challenges,
@@ -611,6 +612,7 @@ async def list_curriculum_exercises(
         difficulty=difficulty,
         rollout_state=rollout_state,
         include_preview=include_preview,
+        locale=_actor_locale(user),
     )
 
 
@@ -641,6 +643,7 @@ async def get_curriculum_progress(
 @router.get("/knowledge-map")
 async def get_knowledge_map(
     subject_id: str | None = Query(default=None, alias="subjectId"),
+    view: Literal["full", "skeleton"] = Query(default="full"),
     authorized_student: AuthorizedResource = Depends(_practice_progress),
     actor: Actor = Depends(get_actor),
 ):
@@ -659,11 +662,44 @@ async def get_knowledge_map(
     A `subjectId` naming no subject the curriculum has is a 422 rather than a
     sky labelled with it (#124). One the student has not started is not: the
     map is there to be browsed ahead of enrolment.
+
+    `view=skeleton` sends every star with its state and position but none of
+    its small stars; `/knowledge-map/stars` then sends the few around one in full.
     """
     try:
         return knowledge_map_service.knowledge_map(
             authorized_student.ref.student_id,
             subject_id=subject_id,
+            locale=_actor_locale(actor),
+            view=view,
+        )
+    except knowledge_map_service.UnknownSubject:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="subjectId does not name a subject in the curriculum",
+        ) from None
+
+
+@router.get("/knowledge-map/stars")
+async def get_knowledge_map_neighbourhood(
+    subject_id: str | None = Query(default=None, alias="subjectId"),
+    around: str | None = Query(default=None, max_length=200),
+    authorized_student: AuthorizedResource = Depends(_practice_progress),
+    actor: Actor = Depends(get_actor),
+):
+    """A few stars in full - small stars, practice sets, missing prerequisites -
+    around `around`, or around where the student last practised.
+
+    With the star come the ones it needs, the ones that need it and its
+    neighbours in its nebula, so the client loads the part of the sky the
+    student is about to look at. The student is decided by the authorization
+    dependency, exactly as for `/knowledge-map`.
+    """
+    try:
+        return knowledge_map_service.neighbourhood(
+            authorized_student.ref.student_id,
+            subject_id=subject_id,
+            around=around,
             locale=_actor_locale(actor),
         )
     except knowledge_map_service.UnknownSubject:
@@ -819,7 +855,7 @@ async def get_path(
         unit_lessons = []
         for lesson in unit_lessons_raw:
             challenges: list[Mapping[str, Any]] = [
-                practice_projection_service.build_challenge_preview(c)
+                practice_projection_service.build_challenge_preview(c, locale)
                 for c in practice_repo.get_challenges(lesson["lesson_id"])
             ]
             st = _lesson_status(lesson["lesson_id"], completed_ids, current_lesson_id)
@@ -858,11 +894,12 @@ async def get_lesson(
         None,
     )
     st = _lesson_status(lesson_id, completed_ids, current_id)
+    locale = _actor_locale(actor)
     challenges: list[Mapping[str, Any]] = [
-        practice_projection_service.build_challenge_preview(c)
+        practice_projection_service.build_challenge_preview(c, locale)
         for c in practice_repo.get_challenges(lesson_id)
     ]
-    return practice_projection_service.build_lesson_preview(lesson, challenges, st, locale=_actor_locale(actor))
+    return practice_projection_service.build_lesson_preview(lesson, challenges, st, locale=locale)
 
 
 def _quiz_conflict(code: str, message: str, **extra: Any) -> HTTPException:
@@ -907,11 +944,11 @@ def _spend_quiz_credential(student_id: str, lesson_id: str, credential: str) -> 
         )
 
 
-def _quiz_exercise_preview(challenge_id: str) -> dict[str, Any] | None:
+def _quiz_exercise_preview(challenge_id: str, locale: str) -> dict[str, Any] | None:
     challenge = practice_repo.get_challenge(challenge_id)
     if not challenge:
         return None
-    return practice_projection_service.build_challenge_preview(challenge)
+    return practice_projection_service.build_challenge_preview(challenge, locale)
 
 
 def _quiz_view(
@@ -920,9 +957,10 @@ def _quiz_view(
     queue: list[str],
     mistakes: int,
     quiz_status: str,
+    locale: str,
 ) -> dict[str, Any]:
     exercise = (
-        _quiz_exercise_preview(queue[0])
+        _quiz_exercise_preview(queue[0], locale)
         if queue and quiz_status == lesson_quiz_service.IN_PROGRESS
         else None
     )
@@ -997,7 +1035,11 @@ async def start_lesson_quiz(
         created_at=now.isoformat(),
     )
     return _quiz_view(
-        session, queue=queue, mistakes=0, quiz_status=lesson_quiz_service.IN_PROGRESS
+        session,
+        queue=queue,
+        mistakes=0,
+        quiz_status=lesson_quiz_service.IN_PROGRESS,
+        locale=_actor_locale(actor),
     )
 
 
@@ -1085,7 +1127,9 @@ async def answer_lesson_quiz(
             },
         ) from error
 
-    correct = answer_judging.judge_challenge(student_answer, challenge)
+    correct = answer_judging.judge_challenge(
+        student_answer, exercise_localization.localized(challenge, _actor_locale(actor))
+    )
     mistakes = _as_int(session.get("mistakes"))
     asked, queue = queue[0], queue[1:]
     if not correct:
@@ -1115,7 +1159,13 @@ async def answer_lesson_quiz(
         account_fence_generation=None,
     )
 
-    view = _quiz_view(session, queue=queue, mistakes=mistakes, quiz_status=quiz_status)
+    view = _quiz_view(
+        session,
+        queue=queue,
+        mistakes=mistakes,
+        quiz_status=quiz_status,
+        locale=_actor_locale(actor),
+    )
     view["correct"] = correct
     view["credential"] = None
     view["credentialExpiresAt"] = None
@@ -1257,7 +1307,10 @@ async def submit_answer(
                 "correlationId": correlation_id,
             },
         ) from error
-    correct = answer_judging.judge_challenge(student_answer, challenge)
+    # Shown and judged in the reader's language; the stored row stays as it is,
+    # since its version is what the attempt records.
+    shown = exercise_localization.localized(challenge, _actor_locale(actor))
+    correct = answer_judging.judge_challenge(student_answer, shown)
 
     versioned_challenge = practice_repo.version_challenge(challenge)
     lesson_id = str(versioned_challenge.get("lesson_id") or "")
@@ -1281,15 +1334,15 @@ async def submit_answer(
             challenge_version=versioned_challenge["challenge_version"],
             challenge_content_hash=versioned_challenge["challenge_content_hash"],
             standard_answer=str(
-                challenge.get("correct_answer", challenge.get("answer_key")) or ""
+                shown.get("correct_answer", shown.get("answer_key")) or ""
             ),
-            explanation=str(challenge.get("explanation") or ""),
+            explanation=str(shown.get("explanation") or ""),
             correct_feedback=correct_feedback,
             incorrect_feedback=incorrect_feedback,
             feedback=feedback,
             next_challenge_id=next_challenge_id,
-            prompt=str(challenge.get("prompt") or ""),
-            options=_list_field(challenge, "options"),
+            prompt=str(shown.get("prompt") or ""),
+            options=_list_field(shown, "options"),
             challenge_type=str(challenge.get("type") or ""),
             created_at=created_at,
         )
@@ -1378,7 +1431,9 @@ async def get_due_review(
     shows on it. Without it, the answer is unchanged.
     """
     return ReviewDueResponse.model_validate(
-        review_service.due_review(student_id=actor.user_id, unit_id=unit_id)
+        review_service.due_review(
+            student_id=actor.user_id, unit_id=unit_id, locale=_actor_locale(actor)
+        )
     )
 
 

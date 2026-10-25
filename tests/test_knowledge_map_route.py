@@ -189,3 +189,41 @@ def test_a_confirmation_can_only_ever_be_for_the_caller(
 
     assert response.status_code == 200, response.text
     assert _confirmations == [("student-1", ["u1"])]
+
+
+def test_the_neighbourhood_answers_for_the_authorized_student_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The few stars in full come under the same check as the whole sky."""
+    asked: list[tuple[str, str | None]] = []
+    monkeypatch.setattr(
+        practice.knowledge_map_service,
+        "neighbourhood",
+        lambda student, **kwargs: asked.append((student, kwargs.get("around"))) or {"stars": []},
+    )
+
+    own = _client({"sub": "student-1", "role": "student"}).get(
+        "/practice/knowledge-map/stars", params={"around": "zahlen-einmaleins"}
+    )
+    other = _client({"sub": "student-1", "role": "student"}).get(
+        "/practice/knowledge-map/stars", params={"studentId": "student-2"}
+    )
+
+    assert own.status_code == 200, own.text
+    assert other.status_code in (403, 404), other.text
+    assert asked == [("student-1", "zahlen-einmaleins")]
+
+
+def test_the_skeleton_view_reaches_the_read_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[str] = []
+    monkeypatch.setattr(
+        practice.knowledge_map_service,
+        "knowledge_map",
+        lambda _student, **kwargs: seen.append(str(kwargs.get("view"))) or {"stars": []},
+    )
+
+    client = _client({"sub": "student-1", "role": "student"})
+    assert client.get("/practice/knowledge-map", params={"view": "skeleton"}).status_code == 200
+    assert client.get("/practice/knowledge-map").status_code == 200
+    assert client.get("/practice/knowledge-map", params={"view": "everything"}).status_code == 422
+    assert seen == ["skeleton", "full"]

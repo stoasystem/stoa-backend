@@ -24,9 +24,14 @@ def main() -> int:
     args = parser.parse_args()
     rendered = render_inventory()
     if args.check:
-        return 0 if args.output.exists() and args.output.read_text() == rendered else 1
+        current = args.output.read_text(encoding="utf-8") if args.output.exists() else None
+        return 0 if current == rendered else 1
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(rendered)
+    # The same unspelled encoding that corrupted the OpenAPI snapshot on a
+    # Windows run. This file is the authorization inventory, and the frontend's
+    # contract gate reads it from main: it stays ASCII today, but a single
+    # non-ASCII path or purpose name would break it the same way.
+    args.output.write_text(rendered, encoding="utf-8")
     return 0
 
 

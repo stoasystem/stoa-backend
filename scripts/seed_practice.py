@@ -19,7 +19,7 @@ import os
 from stoa.db.repositories import practice_repo
 from stoa.models.practice import DirectionalHintTemplateId
 from stoa.security.aws_operator_identity import require_sso_operator_session
-from stoa.services import practice_projection_service
+from stoa.services import knowledge_base_catalog, practice_projection_service
 
 
 DEFAULT_AWS_ACCOUNT_ID = "562923011260"
@@ -963,6 +963,65 @@ TOPIC_BUILDERS = (
 RETIRED_BUILDERS = (_retired_textaufgaben_data,)
 
 
+# ── Knowledge base stars, nebulae and subjects ────────────────────────────
+#
+# The imported knowledge base (scripts/knowledge_base_import.py) has a star per
+# knowledge point, read from knowledge_base_catalog: beside the ZAP stars in the
+# mathematics nebulae, and in the English and physics nebulae. They are written
+# only on request. With --knowledge-base they are written in preview - hidden
+# from every student read - so that the imported practice sets can name their
+# unit while they wait for review. With --knowledge-base-live, once the sets are
+# published, they are written active together with the English and physics
+# subjects; the subject list shows a subject whether or not it has lessons.
+#
+# The stars' prerequisites, drawn from the upstream edges between knowledge
+# points, are written only with --knowledge-base-prerequisites: a prerequisite
+# still locks a star until stoa-backend#125 lands, and a chain of them would
+# keep a student out of most of the map.
+
+KNOWLEDGE_BASE_PREVIEW = "preview"
+
+
+def knowledge_base_rows(*, live: bool, prerequisites: bool = False):
+    """The subjects, nebulae and stars of the knowledge base, as the seed writes them."""
+    state = "active" if live else KNOWLEDGE_BASE_PREVIEW
+    grade_levels = knowledge_base_catalog.SUBJECT_GRADE_LEVELS
+    subjects = [
+        {
+            "subject_id": subject["subject_id"], "name": subject["titles"]["de"],
+            "description": subject["description"],
+            "grade_levels": [
+                {"id": code, "label": code, "order": order}
+                for order, code in enumerate(grade_levels[subject["subject_id"]], start=1)
+            ],
+            "accent": subject["accent"], "order": subject["order"],
+        }
+        for subject in knowledge_base_catalog.SUBJECTS
+    ] if live else []
+    topics = [
+        {
+            "topic_id": row["topic_id"], "subject_id": row["subject_id"], "grade_level": "",
+            "grade_levels": list(grade_levels[row["subject_id"]]),
+            "title": row["titles"]["de"], "description": "", "order": row["order"],
+            "status": "available", "rollout_state": state,
+        }
+        for row in knowledge_base_catalog.topics()
+    ]
+    units = [
+        {
+            "unit_id": unit["unit_id"], "topic_id": unit["topic_id"],
+            "subject_id": unit["subject_id"],
+            "grade_level": "grade_6_primary" if unit["subject_id"] == "mathematics" else "",
+            "title": unit["titles"]["de"], "description": unit["description"],
+            "order": unit["order"],
+            "prerequisite_unit_ids": list(unit.get("prerequisites") or []) if prerequisites else [],
+            "rollout_state": state,
+        }
+        for unit in knowledge_base_catalog.units()
+    ]
+    return subjects, topics, units
+
+
 # ── DynamoDB writer ───────────────────────────────────────────────────────
 
 def prepare_challenge_items(challenges: list[dict]) -> list[dict]:
@@ -1014,8 +1073,11 @@ def seed(
     *,
     profile_name: str = "stoa",
     account_id: str = DEFAULT_AWS_ACCOUNT_ID,
+    knowledge_base: str | None = None,
+    knowledge_base_prerequisites: bool = False,
 ):
     all_topics, all_units, all_lessons, all_challenges = [], [], [], []
+    kb_subjects: list[dict] = []
 
     for fn in (*TOPIC_BUILDERS, *RETIRED_BUILDERS):
         topic, units, lessons, challenges = fn()
@@ -1023,11 +1085,21 @@ def seed(
         all_units.extend(units)
         all_lessons.extend(lessons)
         all_challenges.extend(challenges)
+    if knowledge_base:
+        kb_subjects, kb_topics, kb_units = knowledge_base_rows(
+            live=knowledge_base == "live", prerequisites=knowledge_base_prerequisites
+        )
+        all_topics.extend(kb_topics)
+        all_units.extend(kb_units)
 
     items_to_write = []
 
-    # Subject
-    items_to_write.append({"PK": "PRACTICE", "SK": f"SUBJECT#{SUBJECT['subject_id']}", **SUBJECT})
+    # Subjects
+    subjects = [SUBJECT, *kb_subjects]
+    for subject in subjects:
+        items_to_write.append(
+            {"PK": "PRACTICE", "SK": f"SUBJECT#{subject['subject_id']}", **subject}
+        )
 
     # Topics
     for t in all_topics:
@@ -1037,17 +1109,22 @@ def seed(
     for u in all_units:
         items_to_write.append({"PK": "PRACTICE", "SK": f"UNIT#{u['unit_id']}", **u})
 
-    # Lessons
+    # Lessons, each with the index of its exercises the star map reads.
     for lesson in all_lessons:
+        index = practice_repo.exercise_index(
+            challenge for challenge in all_challenges
+            if challenge["lesson_id"] == lesson["lesson_id"]
+        )
         items_to_write.append(
-            {"PK": "PRACTICE", "SK": f"LESSON#{lesson['lesson_id']}", **lesson}
+            {"PK": "PRACTICE", "SK": f"LESSON#{lesson['lesson_id']}", **lesson,
+             "exercise_index": index}
         )
 
     # Validate all IDs before any write, then add canonical rows and direct pointers.
     items_to_write.extend(prepare_challenge_items(all_challenges))
 
     print(f"Items to seed: {len(items_to_write)}")
-    print(f"  Subjects: 1 | Topics: {len(all_topics)} | Units: {len(all_units)} | "
+    print(f"  Subjects: {len(subjects)} | Topics: {len(all_topics)} | Units: {len(all_units)} | "
           f"Lessons: {len(all_lessons)} | Challenges: {len(all_challenges)}")
 
     if dry_run:
@@ -1080,6 +1157,19 @@ if __name__ == "__main__":
         default=os.environ.get("AWS_ACCOUNT_ID", DEFAULT_AWS_ACCOUNT_ID),
     )
     parser.add_argument("--dry-run", action="store_true")
+    knowledge_base = parser.add_mutually_exclusive_group()
+    knowledge_base.add_argument(
+        "--knowledge-base", dest="knowledge_base", action="store_const", const="preview",
+        help="also write the knowledge base stars and nebulae, hidden, for its drafts",
+    )
+    knowledge_base.add_argument(
+        "--knowledge-base-live", dest="knowledge_base", action="store_const", const="live",
+        help="write them active, with the English and physics subjects, once published",
+    )
+    parser.add_argument(
+        "--knowledge-base-prerequisites", action="store_true",
+        help="with either of the two, also write the stars' prerequisites (after #125)",
+    )
     args = parser.parse_args()
     seed(
         args.table,
@@ -1087,4 +1177,6 @@ if __name__ == "__main__":
         dry_run=args.dry_run,
         profile_name=args.profile,
         account_id=args.account_id,
+        knowledge_base=args.knowledge_base,
+        knowledge_base_prerequisites=args.knowledge_base_prerequisites,
     )
