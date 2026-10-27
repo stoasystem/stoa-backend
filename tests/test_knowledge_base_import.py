@@ -505,7 +505,8 @@ def test_a_star_is_layered_by_what_its_knowledge_points_need() -> None:
     assert kb.point_layers([f"p{i}" for i in range(7)], chain)["p6"] == kb.MAX_LAYERS
 
 
-def test_layers_become_stages_of_one_small_star_in_order(tmp_path: Path) -> None:
+def test_layers_become_stages_of_one_small_star_in_order(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(kb, "MIN_EXERCISES_PER_SET", 1)
     translated = _translated(tmp_path)
     built = _built(translated)
     # Both points in one star: p101 needs p100, so it is the second layer.
@@ -524,6 +525,43 @@ def test_layers_become_stages_of_one_small_star_in_order(tmp_path: Path) -> None
     assert vocabulary["practiceSets"]["brueche-brueche-addieren--kopfrechnen--2"]["en"] == (
         "Mental maths tricks · Level 2"
     )
+
+
+def test_a_thin_stage_joins_its_neighbour_so_no_set_is_a_question_or_two() -> None:
+    def layers(*sizes: int) -> dict[int, list[str]]:
+        return {layer: [f"{layer}.{i}" for i in range(size)] for layer, size in enumerate(sizes, start=1) if size}
+
+    spans = lambda staged: [(first, last, len(held)) for first, last, held in staged]  # noqa: E731
+    assert spans(kb.stages(layers(1, 2, 5))) == [(1, 2, 3), (3, 3, 5)]
+    assert spans(kb.stages(layers(4, 1))) == [(1, 2, 5)]  # a thin last stage joins the one before
+    assert spans(kb.stages(layers(2, 0, 3, 6))) == [(1, 3, 5), (4, 4, 6)]
+    assert spans(kb.stages(layers(2))) == [(1, 1, 2)]  # a small star with two exercises stays one set
+    assert kb.stages(layers(1, 2))[0][2] == ["1.0", "2.0", "2.1"]  # layer order kept
+
+
+def test_parts_are_even_so_none_is_a_leftover() -> None:
+    assert [len(p) for p in kb.parts(list(range(11)))] == [6, 5]
+    assert [len(p) for p in kb.parts(list(range(21)))] == [7, 7, 7]
+    assert [len(p) for p in kb.parts(list(range(10)))] == [10]
+    assert kb.parts([]) == []
+
+
+def test_thin_stages_join_into_one_practice_set(tmp_path: Path) -> None:
+    translated = _translated(tmp_path)
+    built = _built(translated)
+    star = built["stars"]["brueche-brueche-addieren"]
+    star["points"] = ["kb-m-p100", "kb-m-p101"]
+    del built["stars"]["brueche-bruchbegriff"]
+    built["points"]["kb-m-p100"] = "brueche-brueche-addieren"
+    built["exercises"]["kb-m-p100-q1"] = "kopfrechnen"
+
+    made, _report, _stars, vocabulary = kb.manifests(translated, built, "abc123")
+
+    ids = [row["publicLessonId"] for m in made for row in m["lessons"]]
+    assert "brueche-brueche-addieren--kopfrechnen--1" in ids
+    assert "brueche-brueche-addieren--kopfrechnen--2" not in ids
+    # One stage for the whole small star, so no "Stufe" in its title.
+    assert vocabulary["practiceSets"]["brueche-brueche-addieren--kopfrechnen--1"]["de"] == "Kopfrechnen-Trick"
 
 
 def test_an_exercise_over_the_authoring_limit_is_skipped_not_shortened(tmp_path: Path) -> None:
