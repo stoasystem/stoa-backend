@@ -4,6 +4,7 @@ from functools import lru_cache
 from typing import Any
 
 import boto3
+from botocore.config import Config
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -45,6 +46,22 @@ def get_dynamodb():
 def get_s3_client():
     settings = get_settings()
     return boto3.client("s3", region_name=settings.aws_region)
+
+
+def get_s3_presign_client():
+    """The client that signs URLs a browser uses on the images bucket itself.
+
+    Left to its defaults botocore signs for the global `s3.amazonaws.com` host,
+    which redirects a request for a Zurich bucket, and a browser does not follow a
+    redirected cross-origin PUT. Virtual-hosted addressing in the configured
+    region signs for the bucket's regional host.
+    """
+    settings = get_settings()
+    return boto3.client(
+        "s3",
+        region_name=settings.aws_region,
+        config=Config(signature_version="s3v4", s3={"addressing_style": "virtual"}),
+    )
 
 
 @lru_cache

@@ -13730,6 +13730,77 @@
         "title": "UploadIntentResponse",
         "type": "object"
       },
+      "UploadPartUrlRequest": {
+        "additionalProperties": false,
+        "description": "The one part a URL is signed for: its exact length and SHA-256 (hex).",
+        "properties": {
+          "checksumSha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checksumsha256",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "exclusiveMinimum": 0.0,
+            "title": "Sizebytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sizeBytes",
+          "checksumSha256"
+        ],
+        "title": "UploadPartUrlRequest",
+        "type": "object"
+      },
+      "UploadPartUrlResponse": {
+        "additionalProperties": false,
+        "description": "Where the browser puts one part's bytes, and the headers it must send.\n\nS3 refuses a body whose length or SHA-256 differs from what the URL was signed\nfor. The URL names the images bucket and the upload's staging object: ADR-004\nputs the bytes on S3 directly, since Lambda cannot take a part's request (#136).",
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "object"
+          },
+          "method": {
+            "pattern": "^PUT$",
+            "title": "Method",
+            "type": "string"
+          },
+          "partNumber": {
+            "minimum": 1.0,
+            "title": "Partnumber",
+            "type": "integer"
+          },
+          "uploadId": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Uploadid",
+            "type": "string"
+          },
+          "url": {
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uploadId",
+          "partNumber",
+          "url",
+          "method",
+          "headers",
+          "expiresAt"
+        ],
+        "title": "UploadPartUrlResponse",
+        "type": "object"
+      },
       "UploadPurpose": {
         "enum": [
           "question_image",
@@ -25058,6 +25129,8 @@
     },
     "/files/{upload_id}/chunks/{part_number}": {
       "put": {
+        "deprecated": true,
+        "description": "Superseded by POST /files/{upload_id}/parts/{part_number}: a full part sent here is over Lambda's 6 MB request limit once API Gateway base64-encodes it.",
         "operationId": "upload_owned_chunk_files__upload_id__chunks__part_number__put",
         "parameters": [
           {
@@ -25198,6 +25271,97 @@
           }
         ],
         "summary": "Complete Owned Upload",
+        "tags": [
+          "files"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "update",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "upload"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": [
+            "upload_id"
+          ]
+        }
+      }
+    },
+    "/files/{upload_id}/parts/{part_number}": {
+      "post": {
+        "description": "Sign a URL the browser puts one part on, straight to S3 (ADR-004, #136).",
+        "operationId": "sign_owned_upload_part_files__upload_id__parts__part_number__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "upload_id",
+            "required": true,
+            "schema": {
+              "title": "Upload Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "part_number",
+            "required": true,
+            "schema": {
+              "title": "Part Number",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadPartUrlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadPartUrlResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sign Owned Upload Part",
         "tags": [
           "files"
         ],

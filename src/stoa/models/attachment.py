@@ -90,6 +90,29 @@ class UploadChunkResponse(_AttachmentModel):
     status: str = Field(pattern=r"^accepted$")
 
 
+class UploadPartUrlRequest(_AttachmentModel):
+    """The one part a URL is signed for: its exact length and SHA-256 (hex)."""
+
+    size_bytes: int = Field(alias="sizeBytes", gt=0)
+    checksum_sha256: str = Field(alias="checksumSha256", pattern=r"^[0-9a-f]{64}$")
+
+
+class UploadPartUrlResponse(_AttachmentModel):
+    """Where the browser puts one part's bytes, and the headers it must send.
+
+    S3 refuses a body whose length or SHA-256 differs from what the URL was signed
+    for. The URL names the images bucket and the upload's staging object: ADR-004
+    puts the bytes on S3 directly, since Lambda cannot take a part's request (#136).
+    """
+
+    upload_id: OpaqueId = Field(alias="uploadId")
+    part_number: int = Field(alias="partNumber", ge=1)
+    url: str = Field(min_length=1)
+    method: str = Field(pattern=r"^PUT$")
+    headers: dict[str, str]
+    expires_at: datetime = Field(alias="expiresAt")
+
+
 class CompleteUploadRequest(_AttachmentModel):
     part_count: int = Field(alias="partCount", ge=1, le=10)
 

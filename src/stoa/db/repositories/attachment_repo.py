@@ -1641,6 +1641,68 @@ def claim_upload_part(
     }
 
 
+PRESIGNED_PART_OWNER = "presigned"
+
+
+def pin_upload_part(
+    upload_id: str,
+    part_number: int,
+    checksum_sha256: str,
+    length: int,
+    now_epoch: int,
+    *,
+    table: object | None = None,
+) -> dict[str, object]:
+    """Fix the bytes a part may hold before a URL is signed for it.
+
+    The browser writes the part on S3 itself, so there is no lease to hold: the
+    row only pins the length and SHA-256 the URL is signed for, and a request for
+    the same part with other bytes is a `chunk_conflict`. Completion records what
+    S3 acknowledged against this row.
+    """
+    part_number = _require_positive_integer(part_number)
+    checksum_sha256 = _require_canonical_sha256(checksum_sha256)
+    length = _require_positive_integer(length)
+    if isinstance(now_epoch, bool) or not isinstance(now_epoch, int) or now_epoch < 0:
+        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
+    target = table or get_table()
+    intent = get_upload_intent(upload_id, table=target)
+    if intent is None:
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    intent_expires_at = _required_integer(intent.get("expires_at"))
+    if intent_expires_at <= now_epoch:
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    item = {
+        **upload_part_key(upload_id, part_number),
+        "upload_id": upload_id,
+        "part_number": part_number,
+        "status": "uploading",
+        "checksum_sha256": checksum_sha256,
+        "content_length": length,
+        "lease_owner": PRESIGNED_PART_OWNER,
+        "expires_at": intent_expires_at,
+        "attempt": 1,
+    }
+    try:
+        _put_item(target,
+            Item=item,
+            ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+        )
+        return item
+    except ClientError as exc:
+        if not _conditional(exc):
+            raise AttachmentRepositoryConflict("dependency_failure") from None
+    current = get_upload_part(upload_id, part_number, table=target)
+    if not current:
+        raise AttachmentRepositoryConflict("dependency_failure")
+    if (
+        current.get("checksum_sha256") != checksum_sha256
+        or _required_integer(current.get("content_length", -1)) != length
+    ):
+        raise AttachmentRepositoryConflict("chunk_conflict")
+    return current
+
+
 def complete_upload_part(
     upload_id: str,
     part_number: int,
