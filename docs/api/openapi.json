@@ -2416,6 +2416,16 @@
             "default": "sent",
             "title": "Status",
             "type": "string"
+          },
+          "structured": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StructuredAnswer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -4663,6 +4673,30 @@
         "title": "InvitationClaimRequest",
         "type": "object"
       },
+      "KnowledgePoint": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "unitId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unitid"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "KnowledgePoint",
+        "type": "object"
+      },
       "LearningHistoryItem": {
         "properties": {
           "createdAt": {
@@ -5649,6 +5683,41 @@
         "title": "MessageQuote",
         "type": "object"
       },
+      "MessageQuotePart": {
+        "additionalProperties": false,
+        "description": "The section of an assistant answer a quote was taken from (#132).\n\nSections are named as `StructuredAnswer` names them. `index` counts from 0\nand names one entry of a list section; `answer` is a single text and takes\nnone.",
+        "properties": {
+          "index": {
+            "anyOf": [
+              {
+                "maximum": 99.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index"
+          },
+          "section": {
+            "enum": [
+              "steps",
+              "answer",
+              "hints",
+              "similarExercises",
+              "knowledgePoints"
+            ],
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section"
+        ],
+        "title": "MessageQuotePart",
+        "type": "object"
+      },
       "MessageQuoteSource": {
         "additionalProperties": false,
         "properties": {
@@ -5665,6 +5734,16 @@
             ],
             "title": "Kind",
             "type": "string"
+          },
+          "part": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageQuotePart"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -6438,6 +6517,10 @@
       },
       "NotificationPreferenceResponse": {
         "properties": {
+          "dispatchEmail": {
+            "title": "Dispatchemail",
+            "type": "boolean"
+          },
           "preferences": {
             "additionalProperties": {
               "additionalProperties": {
@@ -6481,6 +6564,7 @@
         "required": [
           "userId",
           "preferences",
+          "dispatchEmail",
           "supportedCategories",
           "supportedChannels"
         ],
@@ -6489,20 +6573,35 @@
       },
       "NotificationPreferenceUpdate": {
         "properties": {
-          "preferences": {
-            "additionalProperties": {
-              "additionalProperties": {
+          "dispatchEmail": {
+            "anyOf": [
+              {
                 "type": "boolean"
               },
-              "type": "object"
-            },
-            "title": "Preferences",
-            "type": "object"
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dispatchemail"
+          },
+          "preferences": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferences"
           }
         },
-        "required": [
-          "preferences"
-        ],
         "title": "NotificationPreferenceUpdate",
         "type": "object"
       },
@@ -11742,6 +11841,62 @@
         "title": "StripeWebhookResponse",
         "type": "object"
       },
+      "StructuredAnswer": {
+        "description": "An assistant answer in the sections the model wrote it in (#132).\n\nHanded on as the model wrote them; how they are laid out is the client's.\n`kind` is `followUp` when the model answered in plain words, with no\nsteps, hints, exercises or knowledge points: what it says when a student\nasks about one point of an earlier answer. A new question gets `answer`.",
+        "properties": {
+          "answer": {
+            "default": "",
+            "title": "Answer",
+            "type": "string"
+          },
+          "hints": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Hints",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "answer",
+              "followUp"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "knowledgePoints": {
+            "items": {
+              "$ref": "#/components/schemas/KnowledgePoint"
+            },
+            "title": "Knowledgepoints",
+            "type": "array"
+          },
+          "similarExercises": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Similarexercises",
+            "type": "array"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "suggestTeacher": {
+            "default": false,
+            "title": "Suggestteacher",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "StructuredAnswer",
+        "type": "object"
+      },
       "StudentDispatchView": {
         "description": "What a student is told about finding a teacher, and nothing more.",
         "properties": {
@@ -12963,6 +13118,16 @@
               }
             ],
             "title": "Responsetime"
+          },
+          "teacherSupport": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeacherSupportStanding"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -13507,6 +13672,56 @@
         "title": "TeacherSupportAllowanceCommand",
         "type": "object"
       },
+      "TeacherSupportStanding": {
+        "description": "Whether this student can still ask a teacher this Zurich week (#144).\n\n`blockedReason` is the code `POST /teacher-help/request` would refuse with:\n`teacher_support_allowance_exhausted` comes back at `resetsAt`;\n`teacher_support_not_included` does not come back with the week, so it has\nno `resetsAt`.",
+        "properties": {
+          "blockedReason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "teacher_support_allowance_exhausted",
+                  "teacher_support_not_included"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blockedreason"
+          },
+          "canRequest": {
+            "title": "Canrequest",
+            "type": "boolean"
+          },
+          "remainingCases": {
+            "title": "Remainingcases",
+            "type": "integer"
+          },
+          "resetsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resetsat"
+          },
+          "weeklyCases": {
+            "title": "Weeklycases",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "canRequest",
+          "remainingCases",
+          "weeklyCases"
+        ],
+        "title": "TeacherSupportStanding",
+        "type": "object"
+      },
       "UnauthenticatedResponse": {
         "additionalProperties": false,
         "description": "401: no usable bearer token.\n\nA request with no bearer header is refused by `HTTPBearer` itself with the\nsentence \"Not authenticated\"; a token that is malformed, expired or from\nthe wrong issuer is refused with the security body.",
@@ -13728,6 +13943,77 @@
           "acceptedTypes"
         ],
         "title": "UploadIntentResponse",
+        "type": "object"
+      },
+      "UploadPartUrlRequest": {
+        "additionalProperties": false,
+        "description": "The one part a URL is signed for: its exact length and SHA-256 (hex).",
+        "properties": {
+          "checksumSha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checksumsha256",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "exclusiveMinimum": 0.0,
+            "title": "Sizebytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sizeBytes",
+          "checksumSha256"
+        ],
+        "title": "UploadPartUrlRequest",
+        "type": "object"
+      },
+      "UploadPartUrlResponse": {
+        "additionalProperties": false,
+        "description": "Where the browser puts one part's bytes, and the headers it must send.\n\nS3 refuses a body whose length or SHA-256 differs from what the URL was signed\nfor. The URL names the images bucket and the upload's staging object: ADR-004\nputs the bytes on S3 directly, since Lambda cannot take a part's request (#136).",
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "object"
+          },
+          "method": {
+            "pattern": "^PUT$",
+            "title": "Method",
+            "type": "string"
+          },
+          "partNumber": {
+            "minimum": 1.0,
+            "title": "Partnumber",
+            "type": "integer"
+          },
+          "uploadId": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Uploadid",
+            "type": "string"
+          },
+          "url": {
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uploadId",
+          "partNumber",
+          "url",
+          "method",
+          "headers",
+          "expiresAt"
+        ],
+        "title": "UploadPartUrlResponse",
         "type": "object"
       },
       "UploadPurpose": {
@@ -24596,7 +24882,7 @@
     },
     "/conversations/{conv_id}/messages/stream": {
       "post": {
-        "description": "Send a message and stream the AI reply as Server-Sent Events.\n\nAPI Gateway buffers the full response before sending, so this is\npseudo-streaming: the client receives all SSE events at once, but\nthe SSE parser handles them correctly and the UI updates as expected.",
+        "description": "Send a message and stream the AI reply as Server-Sent Events.\n\nAPI Gateway buffers the full response before sending, so this is\npseudo-streaming: the client receives all SSE events at once, but\nthe SSE parser handles them correctly and the UI updates as expected.\n\nEvents: `student_message` (a `ChatMessage`), `message_start`, one or more\n`message_delta` with the answer's text, and `message_done`, which carries\nthe answer's sections as `structured` (a `StructuredAnswer`, #132).",
         "operationId": "stream_message_conversations__conv_id__messages_stream_post",
         "parameters": [
           {
@@ -25058,6 +25344,8 @@
     },
     "/files/{upload_id}/chunks/{part_number}": {
       "put": {
+        "deprecated": true,
+        "description": "Superseded by POST /files/{upload_id}/parts/{part_number}: a full part sent here is over Lambda's 6 MB request limit once API Gateway base64-encodes it.",
         "operationId": "upload_owned_chunk_files__upload_id__chunks__part_number__put",
         "parameters": [
           {
@@ -25198,6 +25486,97 @@
           }
         ],
         "summary": "Complete Owned Upload",
+        "tags": [
+          "files"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "update",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "upload"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": [
+            "upload_id"
+          ]
+        }
+      }
+    },
+    "/files/{upload_id}/parts/{part_number}": {
+      "post": {
+        "description": "Sign a URL the browser puts one part on, straight to S3 (ADR-004, #136).",
+        "operationId": "sign_owned_upload_part_files__upload_id__parts__part_number__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "upload_id",
+            "required": true,
+            "schema": {
+              "title": "Upload Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "part_number",
+            "required": true,
+            "schema": {
+              "title": "Part Number",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadPartUrlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadPartUrlResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sign Owned Upload Part",
         "tags": [
           "files"
         ],
@@ -31019,7 +31398,7 @@
     },
     "/teacher-help/availability": {
       "get": {
-        "description": "Return student-safe teacher availability for the chat indicator.",
+        "description": "Return student-safe teacher availability for the chat indicator.\n\nAlso the caller's own teacher-support week, so an \"ask a teacher\" button\ncan be greyed with its reason before the student presses it (#144).",
         "operationId": "get_teacher_help_availability_teacher_help_availability_get",
         "responses": {
           "200": {

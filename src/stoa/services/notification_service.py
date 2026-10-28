@@ -18,7 +18,7 @@ from fastapi import HTTPException
 from stoa.config import settings
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, notification_repo
-from stoa.services import locale_service, message_catalog, websocket_service
+from stoa.services import locale_service, message_catalog, notify_service, websocket_service
 from stoa.security.identity import Actor
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,7 @@ EVENT_TYPES = {
     "teacher_takeover",
     "teacher_reply",
     "teacher_help_expired",
+    "teacher_help_dispatched",
     "moderation_case_update",
     "subscription_request_update",
     "learning_profile_update",
@@ -46,11 +47,21 @@ PREFERENCE_CATEGORIES = {
 PREFERENCE_CHANNELS = {"in_app", "realtime", "email_digest", "push"}
 PUSH_TOKEN_STATUSES = {"active", "revoked"}
 PUSH_TOKEN_PLATFORMS = {"ios", "android", "web"}
+# Stored in the bell whatever the reader's in-app preference says. An offer
+# lapses in minutes, so a teacher who switched the bell off for the category
+# would let every one of them lapse unseen (#141); the email is what they can
+# switch off instead.
+ALWAYS_IN_APP_EVENT_TYPES = frozenset({"teacher_help_dispatched"})
+# The switch for the dispatch reminder email (#141), on until the teacher turns
+# it off. It is not a category x channel cell: the bell for the same offer
+# cannot be turned off, and the email is sent at once, not in a digest.
+DISPATCH_EMAIL_DEFAULT = True
 EVENT_CATEGORY_BY_TYPE = {
     "teacher_requested": "teacher_responses",
     "teacher_takeover": "teacher_responses",
     "teacher_reply": "teacher_responses",
     "teacher_help_expired": "teacher_responses",
+    "teacher_help_dispatched": "teacher_responses",
     "moderation_case_update": "admin_operations",
     "subscription_request_update": "admin_operations",
     "learning_profile_update": "learning_updates",
@@ -710,6 +721,8 @@ def create_event(
         preferences=preferences,
         realtime_configured=bool(settings.websocket_api_endpoint),
     )
+    if event_type in ALWAYS_IN_APP_EVENT_TYPES:
+        delivery["channels"]["in_app"] = {"enabled": True, "decision": "stored"}
     event_status = status
     if not delivery["channels"]["in_app"]["enabled"] and status == "created":
         event_status = "archived"
@@ -1151,6 +1164,82 @@ def emit_teacher_help_expired(*, conversation: Mapping[str, Any], case_returned:
     )
 
 
+def _subject_name(subject: object, locale: str) -> str:
+    """The subject as the reader says it, never the stored id (#105)."""
+    from stoa.services import learning_profile_service
+
+    try:
+        subject_id = learning_profile_service.normalize_subject(str(subject or ""))
+    except ValueError:
+        return message_catalog.text("activity.subject.unknown", locale)
+    return message_catalog.text(f"subject.{subject_id}", locale)
+
+
+def emit_teacher_help_dispatched(
+    *,
+    conversation: Mapping[str, Any],
+    teacher_id: str,
+    dispatch_id: str,
+    deadline_at: str,
+    accept_minutes: int,
+) -> None:
+    """Tell the teacher a chat help request was just offered to that it waits for them (#141).
+
+    Every offer, the first and each re-offer, leaves one bell notification,
+    which the teacher cannot switch off, and - unless they switched it off -
+    one reminder email. Both are in the teacher's own language and name the
+    subject and nothing of the student. Neither ever fails the offer: a failed
+    send is logged with its exception type only.
+    """
+    request_id = str(conversation.get("escalation_request_id") or "")
+    locale = _recipient_locale(teacher_id)
+    subject_name = _subject_name(conversation.get("subject"), locale)
+    create_event_safe(
+        recipient_id=teacher_id,
+        recipient_role="teacher",
+        event_type="teacher_help_dispatched",
+        target_type="question",
+        target_id=request_id,
+        title=message_catalog.text("teacher_help.dispatched.title", locale),
+        summary=message_catalog.text(
+            "teacher_help.dispatched.summary",
+            locale,
+            subject=subject_name,
+            minutes=accept_minutes,
+        ),
+        metadata={
+            "request_id": request_id,
+            "dispatch_id": dispatch_id,
+            "deadline_at": deadline_at,
+        },
+        actor_role="system",
+        # The request is the student's: their account's deletion takes this with it.
+        owner_id=str(conversation.get("student_id") or ""),
+        account_fence_generation=conversation.get("account_fence_generation"),
+        event_id=f"teacher-help-dispatched-{dispatch_id}",
+    )
+    if _best_effort_disabled():
+        return
+    try:
+        if not dispatch_email_enabled(teacher_id):
+            return
+        from stoa.db.repositories import user_repo
+
+        recipient = _safe_text((user_repo.get_user(teacher_id) or {}).get("email"))
+        if not recipient:
+            logger.warning("dispatch_reminder_email_skipped reason=no_address")
+            return
+        notify_service.send_dispatch_reminder_email(
+            recipient,
+            subject_name=subject_name,
+            request_id=request_id,
+            minutes=accept_minutes,
+            locale=locale,
+        )
+    except Exception as exc:  # noqa: BLE001 - best effort by contract
+        logger.warning("dispatch_reminder_email_failed error=%s", type(exc).__name__)
+
+
 def emit_moderation_update(
     *,
     case_item: dict[str, Any],
@@ -1327,19 +1416,47 @@ def get_preferences_for_user(user_id: str | None) -> dict[str, Any]:
     return _merged_preferences(stored.get("preferences"))
 
 
+def _stored_dispatch_email(stored: Mapping[str, Any]) -> bool:
+    value = stored.get("dispatch_email")
+    return value if isinstance(value, bool) else DISPATCH_EMAIL_DEFAULT
+
+
+def dispatch_email_enabled(user_id: str) -> bool:
+    """Whether this teacher wants the dispatch reminder email (#141)."""
+    return _stored_dispatch_email(notification_repo.get_preferences(user_id) or {})
+
+
 def preferences_response(user_id: str) -> dict[str, Any]:
     stored = notification_repo.get_preferences(user_id) or {}
     return {
         "userId": user_id,
         "preferences": _merged_preferences(stored.get("preferences")),
+        "dispatchEmail": _stored_dispatch_email(stored),
         "supportedCategories": sorted(PREFERENCE_CATEGORIES),
         "supportedChannels": sorted(PREFERENCE_CHANNELS),
         "updatedAt": stored.get("updated_at"),
     }
 
 
-def update_preferences(user_id: str, preferences: dict[str, Any]) -> dict[str, Any]:
-    merged = _merged_preferences(None)
+def update_preferences(
+    user_id: str,
+    preferences: dict[str, Any] | None,
+    *,
+    dispatch_email: bool | None = None,
+) -> dict[str, Any]:
+    """Write the matrix and the dispatch email switch; a part left out keeps what is stored.
+
+    A client that only knows the matrix must not turn a teacher's dispatch
+    email back on, and one that only flips the switch must not reset the matrix.
+    """
+    stored = notification_repo.get_preferences(user_id) or {}
+    if preferences is None:
+        merged = _merged_preferences(stored.get("preferences"))
+        preferences = {}
+    else:
+        merged = _merged_preferences(None)
+    if dispatch_email is None:
+        dispatch_email = _stored_dispatch_email(stored)
     for category, channel_updates in preferences.items():
         if category not in PREFERENCE_CATEGORIES:
             raise HTTPException(status_code=400, detail="Unsupported notification preference category")
@@ -1359,12 +1476,14 @@ def update_preferences(user_id: str, preferences: dict[str, Any]) -> dict[str, A
             "user_id": user_id,
             "owner_id": user_id,
             "preferences": merged,
+            "dispatch_email": dispatch_email,
             "updated_at": updated_at,
         }
     )
     return {
         "userId": user_id,
         "preferences": merged,
+        "dispatchEmail": dispatch_email,
         "supportedCategories": sorted(PREFERENCE_CATEGORIES),
         "supportedChannels": sorted(PREFERENCE_CHANNELS),
         "updatedAt": updated_at,

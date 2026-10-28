@@ -108,6 +108,66 @@ TEXT: dict[str, dict[str, str]] = {
             "L'aiuto dell'insegnante di questa settimana ti è stato restituito."
         ),
     },
+    # Read by the teacher an offer went to (#141). Teachers are addressed
+    # formally, like every other message this backend writes to them.
+    "teacher_help.dispatched.title": {
+        "de": "Neue Hilfeanfrage für Sie",
+        "en": "A new help request for you",
+        "fr": "Une nouvelle demande d'aide pour vous",
+        "it": "Una nuova richiesta di aiuto per Lei",
+    },
+    "teacher_help.dispatched.summary": {
+        "de": "Fach: {subject}. Bitte nehmen Sie die Anfrage innerhalb von {minutes} Minuten an.",
+        "en": "Subject: {subject}. Please accept the request within {minutes} minutes.",
+        "fr": "Matière : {subject}. Merci d'accepter la demande dans les {minutes} minutes.",
+        "it": "Materia: {subject}. Accetti la richiesta entro {minutes} minuti.",
+    },
+    # ── the dispatch reminder email (#141) ───────────────────────────────
+    #
+    # It leaves STOA, so it says that there is a request, its subject and where
+    # to open it - never what the student wrote, sent or is called.
+    "teacher_help.dispatched.email.subject": {
+        "de": "STOA – Neue Hilfeanfrage: bitte innerhalb von {minutes} Minuten annehmen",
+        "en": "STOA – New help request: please accept within {minutes} minutes",
+        "fr": "STOA – Nouvelle demande d'aide : à accepter dans les {minutes} minutes",
+        "it": "STOA – Nuova richiesta di aiuto: da accettare entro {minutes} minuti",
+    },
+    "teacher_help.dispatched.email.intro": {
+        "de": "Ihnen wurde eine neue Hilfeanfrage zugewiesen.",
+        "en": "A new help request has been offered to you.",
+        "fr": "Une nouvelle demande d'aide vous a été attribuée.",
+        "it": "Le è stata assegnata una nuova richiesta di aiuto.",
+    },
+    "teacher_help.dispatched.email.deadline": {
+        "de": (
+            "Bitte nehmen Sie sie innerhalb von {minutes} Minuten an, "
+            "sonst wird sie einer anderen Lehrperson angeboten."
+        ),
+        "en": (
+            "Please accept it within {minutes} minutes; "
+            "after that it is offered to another teacher."
+        ),
+        "fr": (
+            "Merci de l'accepter dans les {minutes} minutes ; "
+            "passé ce délai, elle sera proposée à un autre enseignant."
+        ),
+        "it": (
+            "La accetti entro {minutes} minuti, "
+            "altrimenti verrà proposta a un altro insegnante."
+        ),
+    },
+    "teacher_help.dispatched.email.action": {
+        "de": "Anfrage in STOA öffnen",
+        "en": "Open the request in STOA",
+        "fr": "Ouvrir la demande dans STOA",
+        "it": "Apri la richiesta in STOA",
+    },
+    "teacher_help.dispatched.email.footer": {
+        "de": "Diese Erinnerung können Sie in STOA in den Benachrichtigungseinstellungen abschalten.",
+        "en": "You can turn this reminder off in STOA's notification settings.",
+        "fr": "Vous pouvez désactiver ce rappel dans les paramètres de notification de STOA.",
+        "it": "Può disattivare questo promemoria nelle impostazioni delle notifiche di STOA.",
+    },
     # ── subjects, by `learning_profile_service.SUPPORTED_SUBJECTS` id ────
     "subject.math": {
         "de": "Mathematik",
