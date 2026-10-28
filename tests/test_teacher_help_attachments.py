@@ -345,3 +345,90 @@ def test_a_deleted_attachment_is_not_read(sent_image) -> None:
     response = _content(_client(TEACHER))
 
     assert response.status_code == 404
+
+
+# --- The detail opens even when the attachments cannot be read ---
+
+
+class _BatchReads:
+    """The table as DynamoDB serves BatchGetItem: at most 100 keys a call."""
+
+    name = "stoa-test"
+
+    def __init__(self, table, *, fail: bool = False) -> None:
+        self.table = table
+        self.fail = fail
+        self.calls: list[int] = []
+
+    def batch_get_item(self, RequestItems: dict[str, Any]) -> dict[str, Any]:
+        keys = RequestItems[self.name]["Keys"]
+        self.calls.append(len(keys))
+        if self.fail:
+            raise RuntimeError("ProvisionedThroughputExceededException")
+        if len(keys) > 100:
+            raise RuntimeError("ValidationException: Too many items requested")
+        rows = [
+            dict(self.table.rows[(key["PK"], key["SK"])])
+            for key in keys
+            if (key["PK"], key["SK"]) in self.table.rows
+        ]
+        return {"Responses": {self.name: rows}, "UnprocessedKeys": {}}
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.table, name)
+
+
+def _detail_messages(client: TestClient) -> dict[str, dict[str, Any]]:
+    response = client.get(f"/teachers/me/help-requests/{REQUEST}")
+    assert response.status_code == 200, response.text
+    return {message["id"]: message for message in response.json()["messages"]}
+
+
+@pytest.mark.parametrize("failure", ["store_fails", "row_missing"])
+def test_the_detail_opens_without_attachments_when_they_cannot_be_read(
+    sent_image, monkeypatch, caplog, failure
+) -> None:
+    # Before #140 the detail never touched attachments; a failed read of them
+    # must not keep the teacher out of the request.
+    from stoa.db.repositories import attachment_repo
+
+    if failure == "store_fails":
+        monkeypatch.setattr(
+            attachment_repo, "get_table", lambda: _BatchReads(sent_image, fail=True)
+        )
+    else:
+        del sent_image.rows[(f"ATTACHMENT#{ATTACHMENT}", "META")]
+    _dispatch_to(sent_image, TEACHER)
+
+    with caplog.at_level("WARNING"):
+        messages = _detail_messages(_client(TEACHER))
+
+    assert messages["msg-photo"]["content"] == "What is step 2 here?"
+    assert messages["msg-photo"]["attachments"] == []
+    assert any(
+        "help_request_attachment_summaries_unavailable" in record.getMessage()
+        for record in caplog.records
+    )
+
+
+def test_the_detail_names_more_attachments_than_one_batch_read_holds(
+    sent_image, monkeypatch
+) -> None:
+    from stoa.db.repositories import attachment_repo
+
+    many = [f"att-140-{index:03d}" for index in range(101)]
+    sent_image.seed(*(_attachment_row(value) for value in many))
+    sent_image.rows[(f"CONV#{CONV}", "MSG#2026-09-28T11:59:00+00:00#msg-text")][
+        "attachment_ids"
+    ] = many
+    reads = _BatchReads(sent_image)
+    monkeypatch.setattr(attachment_repo, "get_table", lambda: reads)
+    _dispatch_to(sent_image, TEACHER)
+
+    messages = _detail_messages(_client(TEACHER))
+
+    assert [item["attachmentId"] for item in messages["msg-text"]["attachments"]] == many
+    assert [item["attachmentId"] for item in messages["msg-photo"]["attachments"]] == [
+        ATTACHMENT
+    ]
+    assert max(reads.calls) <= 100

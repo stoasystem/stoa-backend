@@ -1,4 +1,5 @@
 """Teacher routes — work queue, takeover, reply, resolve."""
+import logging
 import uuid
 
 from collections.abc import Mapping
@@ -56,6 +57,7 @@ from stoa.services import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 type TeacherItem = dict[str, object]
 
@@ -1649,9 +1651,17 @@ async def get_help_request(
     )
 
     raw_messages = _get_messages(conv_id)
-    attachment_summaries = attachment_service.list_attachment_summaries(
-        [value for m in raw_messages for value in _attachment_ids(m)]
-    )
+    try:
+        attachment_summaries = attachment_service.list_attachment_summaries(
+            [value for m in raw_messages for value in _attachment_ids(m)]
+        )
+    except attachment_repo.AttachmentRepositoryConflict as exc:
+        # The request opens without them rather than not at all: before #140
+        # the detail never read attachments.
+        logger.warning(
+            "help_request_attachment_summaries_unavailable category=%s", exc
+        )
+        attachment_summaries = {}
     messages = [
         MessageOut(
             id=_required_text(m.get("message_id")),
