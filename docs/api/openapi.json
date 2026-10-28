@@ -2416,6 +2416,16 @@
             "default": "sent",
             "title": "Status",
             "type": "string"
+          },
+          "structured": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StructuredAnswer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -4663,6 +4673,30 @@
         "title": "InvitationClaimRequest",
         "type": "object"
       },
+      "KnowledgePoint": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "unitId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unitid"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "KnowledgePoint",
+        "type": "object"
+      },
       "LearningHistoryItem": {
         "properties": {
           "createdAt": {
@@ -5649,6 +5683,41 @@
         "title": "MessageQuote",
         "type": "object"
       },
+      "MessageQuotePart": {
+        "additionalProperties": false,
+        "description": "The section of an assistant answer a quote was taken from (#132).\n\nSections are named as `StructuredAnswer` names them. `index` counts from 0\nand names one entry of a list section; `answer` is a single text and takes\nnone.",
+        "properties": {
+          "index": {
+            "anyOf": [
+              {
+                "maximum": 99.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index"
+          },
+          "section": {
+            "enum": [
+              "steps",
+              "answer",
+              "hints",
+              "similarExercises",
+              "knowledgePoints"
+            ],
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section"
+        ],
+        "title": "MessageQuotePart",
+        "type": "object"
+      },
       "MessageQuoteSource": {
         "additionalProperties": false,
         "properties": {
@@ -5665,6 +5734,16 @@
             ],
             "title": "Kind",
             "type": "string"
+          },
+          "part": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageQuotePart"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -11740,6 +11819,62 @@
           "eventType"
         ],
         "title": "StripeWebhookResponse",
+        "type": "object"
+      },
+      "StructuredAnswer": {
+        "description": "An assistant answer in the sections the model wrote it in (#132).\n\nHanded on as the model wrote them; how they are laid out is the client's.\n`kind` is `followUp` when the model answered in plain words, with no\nsteps, hints, exercises or knowledge points: what it says when a student\nasks about one point of an earlier answer. A new question gets `answer`.",
+        "properties": {
+          "answer": {
+            "default": "",
+            "title": "Answer",
+            "type": "string"
+          },
+          "hints": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Hints",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "answer",
+              "followUp"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "knowledgePoints": {
+            "items": {
+              "$ref": "#/components/schemas/KnowledgePoint"
+            },
+            "title": "Knowledgepoints",
+            "type": "array"
+          },
+          "similarExercises": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Similarexercises",
+            "type": "array"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "suggestTeacher": {
+            "default": false,
+            "title": "Suggestteacher",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "StructuredAnswer",
         "type": "object"
       },
       "StudentDispatchView": {
@@ -24596,7 +24731,7 @@
     },
     "/conversations/{conv_id}/messages/stream": {
       "post": {
-        "description": "Send a message and stream the AI reply as Server-Sent Events.\n\nAPI Gateway buffers the full response before sending, so this is\npseudo-streaming: the client receives all SSE events at once, but\nthe SSE parser handles them correctly and the UI updates as expected.",
+        "description": "Send a message and stream the AI reply as Server-Sent Events.\n\nAPI Gateway buffers the full response before sending, so this is\npseudo-streaming: the client receives all SSE events at once, but\nthe SSE parser handles them correctly and the UI updates as expected.\n\nEvents: `student_message` (a `ChatMessage`), `message_start`, one or more\n`message_delta` with the answer's text, and `message_done`, which carries\nthe answer's sections as `structured` (a `StructuredAnswer`, #132).",
         "operationId": "stream_message_conversations__conv_id__messages_stream_post",
         "parameters": [
           {
