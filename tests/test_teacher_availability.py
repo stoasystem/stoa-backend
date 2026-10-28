@@ -26,6 +26,17 @@ def test_teacher_help_availability_reports_online_teacher_to_student(monkeypatch
             "responseTime": "Teacher support is available now.",
         },
     )
+    monkeypatch.setattr(
+        conversations.teacher_support_allowance_service,
+        "get_student_teacher_support_standing",
+        lambda **_kwargs: {
+            "canRequest": True,
+            "blockedReason": None,
+            "remainingCases": 7,
+            "weeklyCases": 7,
+            "resetsAt": "2026-11-01T23:00:00+00:00",
+        },
+    )
 
     response = _client(
         conversations.teacher_help_router,
@@ -39,6 +50,13 @@ def test_teacher_help_availability_reports_online_teacher_to_student(monkeypatch
         "availableTeachers": 1,
         "nextWindow": None,
         "responseTime": "Teacher support is available now.",
+        "teacherSupport": {
+            "canRequest": True,
+            "blockedReason": None,
+            "remainingCases": 7,
+            "weeklyCases": 7,
+            "resetsAt": "2026-11-01T23:00:00+00:00",
+        },
     }
 
 

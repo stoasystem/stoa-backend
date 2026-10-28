@@ -12963,6 +12963,16 @@
               }
             ],
             "title": "Responsetime"
+          },
+          "teacherSupport": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeacherSupportStanding"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -13505,6 +13515,56 @@
           "reason"
         ],
         "title": "TeacherSupportAllowanceCommand",
+        "type": "object"
+      },
+      "TeacherSupportStanding": {
+        "description": "Whether this student can still ask a teacher this Zurich week (#144).\n\n`blockedReason` is the code `POST /teacher-help/request` would refuse with:\n`teacher_support_allowance_exhausted` comes back at `resetsAt`;\n`teacher_support_not_included` does not come back with the week, so it has\nno `resetsAt`.",
+        "properties": {
+          "blockedReason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "teacher_support_allowance_exhausted",
+                  "teacher_support_not_included"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blockedreason"
+          },
+          "canRequest": {
+            "title": "Canrequest",
+            "type": "boolean"
+          },
+          "remainingCases": {
+            "title": "Remainingcases",
+            "type": "integer"
+          },
+          "resetsAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resetsat"
+          },
+          "weeklyCases": {
+            "title": "Weeklycases",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "canRequest",
+          "remainingCases",
+          "weeklyCases"
+        ],
+        "title": "TeacherSupportStanding",
         "type": "object"
       },
       "UnauthenticatedResponse": {
@@ -31019,7 +31079,7 @@
     },
     "/teacher-help/availability": {
       "get": {
-        "description": "Return student-safe teacher availability for the chat indicator.",
+        "description": "Return student-safe teacher availability for the chat indicator.\n\nAlso the caller's own teacher-support week, so a 「找老师」 button can be\ngreyed with its reason before the student presses it (#144).",
         "operationId": "get_teacher_help_availability_teacher_help_availability_get",
         "responses": {
           "200": {
