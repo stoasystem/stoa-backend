@@ -175,6 +175,10 @@ class TeacherAuthorizationFacts:
             return False
         if self._current_task_permits(actor_id, resource, action, purpose, now):
             return True
+        if resource.resource_type is ResourceType.ATTACHMENT:
+            # Only the request it was sent in opens it; a standing assignment
+            # to the student does not (#140).
+            return False
         assignment = self.assignment
         if not assignment or assignment.get("status") != "active":
             return False
@@ -218,11 +222,21 @@ class TeacherAuthorizationFacts:
             ResourceType.CONVERSATION,
             ResourceType.TEACHER_HELP_REQUEST,
             ResourceType.AI_TEACHER_DRAFT,
+            ResourceType.ATTACHMENT,
         }:
+            return False
+        if resource.resource_type is ResourceType.ATTACHMENT and (
+            action is not AuthorizationAction.READ
+            or not resource.question_id
+            or resource.owner_id != resource.student_id
+        ):
+            # A student's attachment is read, never changed, under the help
+            # request it was sent in (#140); `question_id` names that request.
             return False
         task_link_id = (
             str(resource.question_id or "")
-            if resource.resource_type is ResourceType.AI_TEACHER_DRAFT
+            if resource.resource_type
+            in {ResourceType.AI_TEACHER_DRAFT, ResourceType.ATTACHMENT}
             else resource.resource_id
         )
         if task_link_id not in linked_ids:
@@ -634,6 +648,10 @@ class CurrentAuthorizationFactRepository:
                     if resource.question_id
                     else resource_value
                 )
+            if resource.resource_type is ResourceType.ATTACHMENT:
+                # Read under the help request it was sent in: the resolver
+                # hands that request's row, as the request's own routes do (#140).
+                question = resource_value
             session_id = str(resource.session_id or (question or {}).get("session_id") or "")
             return AuthorizationFacts(
                 teacher=TeacherAuthorizationFacts(

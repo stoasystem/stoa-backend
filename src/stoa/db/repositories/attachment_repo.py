@@ -2396,6 +2396,10 @@ def get_attachment(attachment_id: str, *, table: object | None = None) -> dict[s
     return _optional_mapping(response.get("Item"))
 
 
+# BatchGetItem reads at most this many keys in one call.
+_BATCH_GET_KEY_LIMIT = 100
+
+
 def get_attachments(
     attachment_ids: list[str], *, table: object | None = None
 ) -> dict[str, dict[str, object]]:
@@ -2407,6 +2411,15 @@ def get_attachments(
     ):
         raise AttachmentRepositoryConflict("conditional_conflict")
     target = table or get_table()
+    if len(attachment_ids) > _BATCH_GET_KEY_LIMIT:
+        found: dict[str, dict[str, object]] = {}
+        for start in range(0, len(attachment_ids), _BATCH_GET_KEY_LIMIT):
+            found.update(
+                get_attachments(
+                    attachment_ids[start : start + _BATCH_GET_KEY_LIMIT], table=target
+                )
+            )
+        return found
     expected_keys: list[dict[str, object]] = [
         _mapping(attachment_key(value)) for value in attachment_ids
     ]

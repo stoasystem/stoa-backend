@@ -5626,6 +5626,13 @@
       },
       "MessageOut": {
         "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentSummary"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
           "content": {
             "title": "Content",
             "type": "string"
@@ -32841,6 +32848,92 @@
           ],
           "classification": "authorized",
           "identifiers": [
+            "request_id"
+          ]
+        }
+      }
+    },
+    "/teachers/me/help-requests/{request_id}/attachments/{attachment_id}/content": {
+      "get": {
+        "description": "The content of an attachment the student sent in this help request (#140).",
+        "operationId": "download_help_request_attachment_teachers_me_help_requests__request_id__attachments__attachment_id__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download Help Request Attachment",
+        "tags": [
+          "teachers"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "teacher_help",
+              "resource_type": "attachment"
+            },
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "teacher_help",
+              "resource_type": "teacher_help_request"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": [
+            "attachment_id",
             "request_id"
           ]
         }
