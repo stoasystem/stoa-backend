@@ -9,7 +9,7 @@ from uuid import uuid4
 from stoa.db.repositories import notification_repo
 from stoa.security.authorization import AuthorizedResource
 from stoa.security.identity import Actor
-from stoa.services import locale_service, message_catalog
+from stoa.services import learning_profile_service, locale_service, message_catalog
 
 
 def now_iso() -> str:
@@ -37,7 +37,7 @@ def build_summary_seed(
         "summary_id": f"assist-{uuid4().hex}",
         "question_id": question_id,
         "student_id": question.get("student_id"),
-        "subject": question.get("subject") or "general",
+        "subject": str(question.get("subject") or "general"),
         "student_context_summary": _student_context_summary(question, topic_labels, locale),
         "question_summary": _preview(question.get("content"), limit=360),
         "ai_answer_summary": _preview(ai_response.get("answer"), limit=360),
@@ -72,9 +72,11 @@ def summary_seed_response(seed: dict[str, Any]) -> dict[str, Any]:
 
 
 def _student_context_summary(question: dict[str, Any], topics: list[str], locale: str) -> str:
-    # The subject id and the topic labels are the values the rows carry, not
-    # copy: they go in as they are, the way `{status}` does elsewhere.
-    subject = question.get("subject") or "general"
+    # The subject is named in the reader's language: the stored id is a key,
+    # and «in mathematics» inside a German sentence was what teachers read
+    # (#105). The topic labels are content the assistant wrote, and go in as
+    # they are.
+    subject = learning_profile_service.subject_name(question.get("subject"), locale)
     if topics:
         return message_catalog.text(
             "assistance.context.with_topics",
