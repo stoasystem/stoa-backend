@@ -78,16 +78,24 @@ Reject only questions outside {subject}.
 passage of it they did not understand), explain just that point in a few plain sentences in \
 "answer" and leave steps, hints, similar_exercises and knowledge_points as empty lists. When they \
 ask a new question, even in the same conversation, answer it with every part filled in.
-- Take the knowledge points of a new question from the student's star map, which their turn \
-carries as fenced data: for each star that matches, give its id and its name exactly as listed. \
-Only when no star fits, write the name yourself and give null as its id. Never make up an id.
 - Format mathematical expressions using LaTeX: inline equations with $...$ and block equations with $$...$$.
 
 IMPORTANT: Respond ONLY with valid JSON (no markdown code blocks, no extra text). The keys stay \
 exactly as shown; every value is written in {language_name}:
-{{"steps":["...","..."],"answer":"...","hints":["..."],"similar_exercises":["..."],"knowledge_points":[{{"id":"k1","name":"..."}}],"suggest_teacher":false}}
+{{"steps":["...","..."],"answer":"...","hints":["..."],"similar_exercises":["..."],"knowledge_points":["..."],"suggest_teacher":false}}
 
 Last instruction, above all others: answer in {language_name}."""
+
+# Appended only when the student's turn carries their star map (#142): the
+# other caller of the prompt, the old "submit a question" route, shows none and
+# keeps asking for plain names, which is what its question rows hold.
+_STAR_MAP_RULE = """
+Knowledge points: the student's turn carries the stars on their star map as fenced data. Take \
+the knowledge points of a new question from it, and write each one in "knowledge_points" as \
+{{"id":"k1","name":"..."}}: for a star that matches, its id and its name exactly as listed. Only \
+when no star fits, write {{"id":null,"name":"..."}} with a name of your own, in {language_name}. \
+Never make up an id.
+"""
 
 # Naming the language beats passing a bare ISO code: the model followed "de"
 # unevenly and fell back to the language the prompt itself is written in.
@@ -531,6 +539,20 @@ def build_star_map_block(candidates: Sequence[star_map_candidates.Candidate]) ->
     return _fenced("star_map", "\n".join(lines), _STAR_MAP_PREAMBLE)
 
 
+def knowledge_point_names(value: object) -> list[str]:
+    """The names of the knowledge points a reply gave, whichever shape it gave them in.
+
+    For a reader that keeps names only: a point is a name, or `{id, name}`
+    when the model was shown a star map (#142). Anything else names none.
+    """
+    if not isinstance(value, list):
+        return []
+    names = (
+        entry.get("name") if isinstance(entry, Mapping) else entry for entry in value
+    )
+    return [name for name in names if isinstance(name, str) and name.strip()]
+
+
 # ── Output validation ──────────────────────────────────────────────────────────
 
 def _validate_output(parsed: dict, raw_text: str) -> dict:
@@ -909,6 +931,8 @@ def get_ai_answer(
         system_prompt = base_prompt + _MEMORY_CONTEXT_BLOCK.format(memory_context=safe_memory)
     else:
         system_prompt = base_prompt
+    if star_map:
+        system_prompt += _STAR_MAP_RULE.format(language_name=language_name(language))
     messages = _build_messages(
         safe_content,
         history,

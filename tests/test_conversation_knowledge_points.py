@@ -320,7 +320,8 @@ def test_the_model_is_told_to_pick_from_the_map_before_writing_its_own(
 
     system = bedrock.bodies[0]["system"]
     assert "star map" in system
-    assert '"knowledge_points":[{"id":' in system
+    assert '{"id":"k1","name":"..."}' in system
+    assert '{"id":null,"name":"..."}' in system
 
 
 # ── Picked, forged and free ──────────────────────────────────────────────────
@@ -547,6 +548,8 @@ def test_without_the_map_nothing_is_taken_for_a_gap(
     done = _done(_send(_client(), "key-1", language="de"))
 
     assert _shown_stars(bedrock.bodies[0]) == {}
+    # Nor is the model asked to pick from a map it was not shown.
+    assert "star map" not in bedrock.bodies[0]["system"]
     assert done["structured"]["knowledgePoints"] == [{"name": "Brüche kürzen", "unitId": None}]
     # It may well be on the map: the model just could not see it.
     assert _gaps(table) == {}
