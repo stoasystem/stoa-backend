@@ -3581,8 +3581,8 @@ async def get_teacher_help_availability(
 ):
     """Return student-safe teacher availability for the chat indicator.
 
-    Also the caller's own teacher-support week, so a 「找老师」 button can be
-    greyed with its reason before the student presses it (#144).
+    Also the caller's own teacher-support week, so an "ask a teacher" button
+    can be greyed with its reason before the student presses it (#144).
     """
     summary = teacher_dispatch_service.teacher_availability_summary()
     now = _now()

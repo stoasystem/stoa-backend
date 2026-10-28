@@ -31079,7 +31079,7 @@
     },
     "/teacher-help/availability": {
       "get": {
-        "description": "Return student-safe teacher availability for the chat indicator.\n\nAlso the caller's own teacher-support week, so a 「找老师」 button can be\ngreyed with its reason before the student presses it (#144).",
+        "description": "Return student-safe teacher availability for the chat indicator.\n\nAlso the caller's own teacher-support week, so an \"ask a teacher\" button\ncan be greyed with its reason before the student presses it (#144).",
         "operationId": "get_teacher_help_availability_teacher_help_availability_get",
         "responses": {
           "200": {
