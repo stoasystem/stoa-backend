@@ -35,6 +35,7 @@ from stoa.db.repositories import (
     account_deletion_repo,
     allowance_repo,
     attachment_repo,
+    knowledge_gap_repo,
     practice_repo,
     question_repo,
     user_repo,
@@ -85,6 +86,7 @@ from stoa.services import (
     message_catalog,
     practice_context_service,
     runtime_budget_service,
+    star_map_candidates,
     teacher_dispatch_service,
     teacher_support_allowance_service,
     usage_ledger_service,
@@ -1098,8 +1100,9 @@ def message_request_fingerprint(body: SendMessageRequest) -> str:
 
 class KnowledgePoint(BaseModel):
     name: str
-    # The star on the student's map this names; none until the model is given
-    # the map to choose from (#142), and none for a point it wrote freely.
+    # The star on the student's map this names, checked against the stars the
+    # model was shown (#142); none for a point it wrote freely, and none on
+    # answers written before it was shown any.
     unitId: str | None = None
 
 
@@ -1127,7 +1130,30 @@ def _texts(value: object) -> list[str]:
     return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
 
 
-def _structured_answer(ai_result: Mapping[str, object]) -> StructuredAnswer:
+def _knowledge_point(
+    value: object, star_map: list[star_map_candidates.Candidate] | None
+) -> KnowledgePoint | None:
+    """A point the model named: a star it was shown, or free text (#142).
+
+    The model answers with the ref of a star from the list it was shown. A ref
+    on that list names that star, under the star's own name; anything else -
+    a ref it made up, a unit id it was never shown - is the name it wrote.
+    """
+    if isinstance(value, str):
+        return KnowledgePoint(name=value) if value.strip() else None
+    if not isinstance(value, Mapping):
+        return None
+    star = star_map_candidates.find(star_map, value.get("id"))
+    if star is not None:
+        return KnowledgePoint(name=star["name"], unitId=star["unitId"])
+    name = value.get("name")
+    return KnowledgePoint(name=name) if isinstance(name, str) and name.strip() else None
+
+
+def _structured_answer(
+    ai_result: Mapping[str, object],
+    star_map: list[star_map_candidates.Candidate] | None = None,
+) -> StructuredAnswer:
     """The model's sections under the API's names.
 
     `steps`, `answer` and `hints` are checked before this, since the joined
@@ -1138,7 +1164,12 @@ def _structured_answer(ai_result: Mapping[str, object]) -> StructuredAnswer:
     steps = _texts(ai_result.get("steps"))
     hints = _texts(ai_result.get("hints"))
     similar = _texts(ai_result.get("similar_exercises"))
-    points = [KnowledgePoint(name=name) for name in _texts(ai_result.get("knowledge_points"))]
+    named = ai_result.get("knowledge_points")
+    points = [
+        point
+        for value in (named if isinstance(named, list) else [])
+        if (point := _knowledge_point(value, star_map)) is not None
+    ]
     return StructuredAnswer(
         kind="answer" if steps or hints or similar or points else "followUp",
         steps=steps,
@@ -2713,15 +2744,18 @@ def _resolve_generation_context(
     The practice context rides here rather than being looked up again when the
     answer is generated: the worker would otherwise read whatever the
     curriculum and the student's attempts say by then, not what they said when
-    the question was asked.
+    the question was asked. The star map does too, for the same reason and one
+    more: what the model picks is checked against the list it was shown (#142).
     """
+    locale = _student_locale(student_id)
     return {
         "schema_version": "generation-context.v1",
-        "locale": _student_locale(student_id),
+        "locale": locale,
         "subject": _SUBJECT_ALIASES.get(subject, "math"),
         "grade": grade,
         "memory_context": _memory_context_for_student(student_id, actor, subject),
         "practice_context": practice_context,
+        "star_map": star_map_candidates.for_student(student_id, locale=locale),
     }
 
 
@@ -3294,6 +3328,9 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     ):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     memory_context = context["memory_context"]
+    # None for a command stored before the map was (#142), or when it could not
+    # be read: then nothing the answer names can be told apart from a gap.
+    star_map = star_map_candidates.stored(context.get("star_map"))
     stored_practice_context = context.get("practice_context")
     practice_context = (
         dict(stored_practice_context)
@@ -3471,6 +3508,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 memory_context=memory_context,
                 practice_context=practice_context,
                 quote=_quote_payload(committed.quote),
+                star_map=star_map,
                 correlation_id=command_id,
                 deadline_monotonic=ai_deadline,
                 effect_id=allowance_client.allowance_effect_id,
@@ -3511,7 +3549,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             ai_content = f"{steps}\n\n{answer}{hint}".strip()
             if not ai_content:
                 raise ai_service.AIInvocationFailure("malformed_response")
-            structured = _structured_answer(ai_result)
+            structured = _structured_answer(ai_result, star_map)
         except _ConversationAllowanceFailure as failure:
             # Refused at counting, admission or the allowance itself, before the
             # model was paid for, the same message may be sent again. Refused over
@@ -3648,6 +3686,22 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         **({"structured": _structured_payload(structured)} if structured is not None else {}),
         **(allowance_metadata or {}),
     }
+    # What a new question named that is on no star of the map is counted for
+    # the knowledge-base gap list (#142), once per question. A follow-up counts
+    # nothing: the model answers one in plain words with no knowledge points,
+    # and a question about a part of an earlier answer is one whatever the
+    # model made of it. An answer given without the map could not have matched
+    # a star, so it counts nothing either.
+    follow_up = committed.quote is not None and committed.quote.source.part is not None
+    knowledge_gaps = (
+        knowledge_gap_repo.count_updates(
+            context["subject"],
+            [point.name for point in structured.knowledgePoints if point.unitId is None],
+            seen_at=assistant_created_at,
+        )
+        if structured is not None and star_map is not None and not follow_up
+        else []
+    )
     completion = _coerce_command_result(
         _conversation_repository_call(
             lambda: attachment_repo.complete_message_command(
@@ -3661,6 +3715,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 result_json=_message_result_json(result, allowance_metadata),
                 completed_at=assistant_created_at,
                 account_fence_generation=account_fence_generation,
+                knowledge_gap_updates=knowledge_gaps,
                 table=table,
             )
         ),
