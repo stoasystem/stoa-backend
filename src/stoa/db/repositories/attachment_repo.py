@@ -3211,7 +3211,10 @@ def complete_message_command(
     """Store the answer and settle the command, in one transaction.
 
     `knowledge_gap_updates` (#142) ride in the same transaction, so they count
-    once, and only for an answer that was stored.
+    once, and only for an answer that was stored. Two answers counting the same
+    gap at the same moment cancel each other (`TransactionConflict`); a count
+    is not worth an answer, so a transaction that fails with them is tried
+    once more without them.
     """
     if (
         isinstance(lease_attempt, bool)
@@ -3298,6 +3301,20 @@ def complete_message_command(
                 MessageCommandDisposition.COMPLETED,
                 command=dict(command),
                 counter_value=_optional_positive_int(command.get("counter_value")),
+            )
+        if knowledge_gap_updates:
+            return complete_message_command(
+                conversation_id=conversation_id,
+                idempotency_key=idempotency_key,
+                owner_id=owner_id,
+                lease_owner=lease_owner,
+                assistant_message=assistant_message,
+                result_json=result_json,
+                completed_at=completed_at,
+                lease_attempt=lease_attempt,
+                completed_epoch=completed_epoch,
+                account_fence_generation=account_fence_generation,
+                table=table,
             )
         return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
     return MessageCommandResult(MessageCommandDisposition.COMPLETED)

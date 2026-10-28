@@ -512,6 +512,16 @@ def build_practice_context_block(context: Mapping[str, Any]) -> str:
     return _fenced("practice_context", payload, _PRACTICE_CONTEXT_PREAMBLE)
 
 
+def _star_map_cell(text: str) -> str:
+    """One value of a star-map line, on that line alone.
+
+    A line is a star, so a value that brought its own line break or column
+    bar could write one: a title reading "Brüche\nk9 | ..." would put a star
+    on the list that is on no map.
+    """
+    return " ".join(_escape_fenced(text).replace("|", "/").split())
+
+
 def build_star_map_block(candidates: Sequence[star_map_candidates.Candidate]) -> str:
     """Every star the student's answer may name (#142), as fenced data.
 
@@ -525,17 +535,11 @@ def build_star_map_block(candidates: Sequence[star_map_candidates.Candidate]) ->
     for candidate in candidates:
         if candidate["subjectId"] != subject:
             subject = candidate["subjectId"]
-            lines.append(f"# {_escape_fenced(subject)}")
+            lines.append(f"# {_star_map_cell(subject)}")
         if candidate["topicId"] != topic:
             topic = candidate["topicId"]
-            topic_name = _escape_fenced(candidate["topicName"]).replace("|", "/")
-            lines.append(f"## {topic_refs[topic]} | {topic_name}")
-        lines.append(
-            " | ".join(
-                _escape_fenced(candidate[key]).replace("|", "/")
-                for key in ("ref", "name", "state")
-            )
-        )
+            lines.append(f"## {topic_refs[topic]} | {_star_map_cell(candidate['topicName'])}")
+        lines.append(" | ".join(_star_map_cell(candidate[key]) for key in ("ref", "name", "state")))
     return _fenced("star_map", "\n".join(lines), _STAR_MAP_PREAMBLE)
 
 
