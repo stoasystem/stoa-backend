@@ -193,12 +193,19 @@ def detect_language(text: str, *, minimum_hits: int = 2) -> str | None:
     return best
 
 
+def _segment(entry: Any) -> str:
+    """The words of one entry. A knowledge point is `{id, name}` (#142); its words are its name."""
+    if isinstance(entry, Mapping):
+        return str(entry.get("name") or "")
+    return str(entry)
+
+
 def _segments(content: Mapping[str, Any]) -> list[str]:
     parts: list[str] = []
     for key in ("steps", "hints", "similar_exercises", "knowledge_points"):
         value = content.get(key)
         if isinstance(value, list):
-            parts.extend(str(entry) for entry in value if str(entry).strip())
+            parts.extend(_segment(entry) for entry in value if _segment(entry).strip())
     answer = content.get("answer")
     if isinstance(answer, str) and answer.strip():
         parts.append(answer)

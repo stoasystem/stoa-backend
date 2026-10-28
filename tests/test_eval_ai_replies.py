@@ -324,6 +324,19 @@ def test_a_saved_reply_read_again_gives_the_same_reading() -> None:
         first.mixed, first.suggested_teacher, first.refused, first.language_ok)
 
 
+def test_a_knowledge_point_is_read_by_its_name() -> None:
+    # Knowledge points come as `{id, name}` since #142; the id is not words.
+    name = "Pense à la vitesse d'une voiture qui roule sur la route."
+    reading = evaluation.read_reply(
+        _item(language="en", expected_language="en"),
+        {"steps": ["A derivative tells you how fast something changes.",
+                   "Think of the speedometer: it shows how fast the distance changes."],
+         "answer": "It is the rate of change.",
+         "knowledge_points": [{"id": "k1", "name": name}]},
+    )
+    assert reading.mixed_segments == [name]
+
+
 def test_saying_it_is_advanced_and_then_explaining_is_not_a_refusal() -> None:
     # What a reply that follows E1 does with a question far above the grade.
     reading = evaluation.read_reply(
