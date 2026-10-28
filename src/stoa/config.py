@@ -16,6 +16,10 @@ UPLOAD_INTENT_TTL_SECONDS = 1800
 IMAGE_MAX_BYTES = 10 * 1024 * 1024
 DOCUMENT_MAX_BYTES = 50 * 1024 * 1024
 IMAGE_MAX_EDGE = 4096
+# Claude takes at most 5 MiB of base64 for one image, which is 3.75 MiB of the
+# image itself. A conversation image is handed to the model whole, so a larger
+# one is refused before the message is sent.
+MODEL_IMAGE_MAX_BYTES = 5 * 1024 * 1024 * 3 // 4
 FREE_STORAGE_BYTES = 5 * 1024 * 1024 * 1024
 PAID_STORAGE_BYTES = 15 * 1024 * 1024 * 1024
 FREE_TRIAL_DAYS = 14
