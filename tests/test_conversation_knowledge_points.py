@@ -87,6 +87,11 @@ SUBJECT_OF = {
     "ohne-lektion": ("math", "brueche"),
 }
 
+TOPICS: dict[str, dict[str, str]] = {
+    "brueche": {"de": "Brüche", "en": "Fractions", "fr": "Fractions", "it": "Frazioni"},
+    "mechanik": {"de": "Mechanik", "en": "Mechanics", "fr": "Mécanique", "it": "Meccanica"},
+}
+
 # What the model writes on its own, in the language of the answer.
 FREE: dict[str, str] = {
     "de": "Brüche im Alltag",
@@ -100,8 +105,8 @@ def _catalog(*, locale: str = "de", **_kwargs: Any) -> dict[str, Any]:
     return {
         "subjects": [{"id": "math", "order": 1}, {"id": "physics", "order": 2}],
         "topics": [
-            {"id": "brueche", "subjectId": "math", "order": 1},
-            {"id": "mechanik", "subjectId": "physics", "order": 1},
+            {"id": "brueche", "subjectId": "math", "title": TOPICS["brueche"][locale], "order": 1},
+            {"id": "mechanik", "subjectId": "physics", "title": TOPICS["mechanik"][locale], "order": 1},
         ],
         "units": [
             {
@@ -289,6 +294,21 @@ def test_the_model_is_shown_every_star_on_the_student_s_map(
     assert TITLES["kraefte"][locale] not in body["system"]
     # The model answers with the short ref, never with the unit id itself.
     assert "brueche-kuerzen" not in turn
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_each_topic_heads_its_stars(table, bedrock, star_map, locale) -> None:
+    """The topics are shown too, for #124 to name one the student asks about."""
+    bedrock.answers = [_answer(lambda _stars: [])]
+
+    _done(_send(_client(), "key-1", language=locale))
+
+    turn = _student_turn(bedrock.bodies[0])
+    fractions = turn.index(f"| {TOPICS['brueche'][locale]}\n")
+    mechanics = turn.index(f"| {TOPICS['mechanik'][locale]}\n")
+    assert turn.count(f"| {TOPICS['brueche'][locale]}\n") == 1
+    assert fractions < turn.index(TITLES["brueche-kuerzen"][locale]) < mechanics
+    assert mechanics < turn.index(TITLES["kraefte"][locale])
 
 
 def test_the_model_is_told_to_pick_from_the_map_before_writing_its_own(

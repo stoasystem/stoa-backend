@@ -10,7 +10,8 @@ that same list, so this module is the only place either is decided:
   map says by the time the answer is generated.
 * `find` is the whitelist. The model names a star by the short `ref` it was
   shown; anything that is not one of those refs names no star, however much it
-  looks like a unit id.
+  looks like a unit id. `find_topic` is the same for a topic (a nebula), which
+  the model is shown as a heading over its stars.
 
 Every star the map draws is on the list, in every subject: a question asked in
 the maths conversation may well be about a physics star. A star is drawn when it
@@ -41,6 +42,9 @@ class Candidate(TypedDict):
     #: In the language the list was read in, which is the answer's language.
     name: str
     subjectId: str
+    topicId: str
+    #: The topic's title, in the same language as `name`.
+    topicName: str
     #: `lit`, `in_progress`, `ready` or `locked`, as the map draws it.
     state: str
 
@@ -49,11 +53,12 @@ def from_catalog(
     catalog: Mapping[str, Any],
     states: Mapping[str, knowledge_mastery_service.UnitMastery],
 ) -> list[Candidate]:
-    """The list from facts already read. Pure; ordered by subject, chapter and unit."""
-    topic_order = {
-        str(topic.get("id") or ""): int(topic.get("order") or 0)
-        for topic in catalog.get("topics") or ()
-        if isinstance(topic, Mapping)
+    """The list from facts already read. Pure; in course order: subject, chapter, unit."""
+    topics = [topic for topic in catalog.get("topics") or () if isinstance(topic, Mapping)]
+    topic_order = {str(topic.get("id") or ""): int(topic.get("order") or 0) for topic in topics}
+    topic_names = {
+        str(topic.get("id") or ""): str(topic.get("title") or topic.get("id") or "")
+        for topic in topics
     }
     units = [unit for unit in catalog.get("units") or () if isinstance(unit, Mapping)]
     drawn = [
@@ -78,6 +83,8 @@ def from_catalog(
             unitId=str(unit["id"]),
             name=str(unit.get("title") or unit["id"]),
             subjectId=str(unit.get("subjectId") or ""),
+            topicId=str(unit.get("topicId") or ""),
+            topicName=topic_names.get(str(unit.get("topicId") or ""), str(unit.get("topicId") or "")),
             state=states[str(unit["id"])].state.value,
         )
         for index, unit in enumerate(drawn, start=1)
@@ -125,3 +132,20 @@ def find(candidates: Sequence[Candidate] | None, ref: object) -> Candidate | Non
         return None
     wanted = ref.strip()
     return next((candidate for candidate in candidates if candidate["ref"] == wanted), None)
+
+
+def topic_refs(candidates: Sequence[Candidate]) -> dict[str, str]:
+    """Each topic's ref (`t1`, `t2`, ...) by topic id, in the order the list holds them."""
+    refs: dict[str, str] = {}
+    for candidate in candidates:
+        refs.setdefault(candidate["topicId"], f"t{len(refs) + 1}")
+    return refs
+
+
+def find_topic(candidates: Sequence[Candidate] | None, ref: object) -> list[Candidate]:
+    """The stars of the topic `ref` names, in course order; none for any other ref."""
+    if not candidates or not isinstance(ref, str):
+        return []
+    wanted = ref.strip()
+    topic = next((topic_id for topic_id, shown in topic_refs(candidates).items() if shown == wanted), None)
+    return [candidate for candidate in candidates if topic is not None and candidate["topicId"] == topic]
