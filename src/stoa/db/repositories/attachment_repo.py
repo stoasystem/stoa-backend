@@ -2429,6 +2429,49 @@ def get_attachments(
     return {attachment_id: by_id[attachment_id] for attachment_id in attachment_ids}
 
 
+OWNER_INDEX_MAX_PAGES = 100
+
+
+def _owner_index_attachments(owner_id: str, *, table: object) -> list[dict[str, object]]:
+    """Every attachment row GSI-StudentId holds for `owner_id`, across its pages.
+
+    The owner's partition also holds their messages, usage events and uploads; the
+    filter drops those after they are read, so reading on until the index runs out
+    is what finds every attachment.
+    """
+    from boto3.dynamodb.conditions import Attr, Key
+
+    request: dict[str, object] = {
+        "IndexName": "GSI-StudentId",
+        "KeyConditionExpression": Key("student_id").eq(owner_id),
+        "FilterExpression": Attr("entity_type").eq("attachment"),
+    }
+    result: list[dict[str, object]] = []
+    seen_cursors: set[tuple[tuple[str, str], ...]] = set()
+    for _page in range(OWNER_INDEX_MAX_PAGES):
+        try:
+            response = _query(table, **request)
+        except AttachmentRepositoryConflict:
+            raise
+        except Exception:
+            raise AttachmentRepositoryConflict("dependency_failure") from None
+        raw_items = response.get("Items", [])
+        if not isinstance(raw_items, list):
+            raise AttachmentRepositoryConflict("dependency_failure")
+        result.extend(_mapping(raw_item) for raw_item in raw_items)
+        cursor = response.get("LastEvaluatedKey")
+        if cursor is None:
+            return result
+        if not isinstance(cursor, dict) or not cursor:
+            raise AttachmentRepositoryConflict("dependency_failure")
+        identity = tuple(sorted((str(key), str(value)) for key, value in cursor.items()))
+        if identity in seen_cursors:
+            raise AttachmentRepositoryConflict("dependency_failure")
+        seen_cursors.add(identity)
+        request["ExclusiveStartKey"] = cursor
+    raise AttachmentRepositoryConflict("dependency_failure")
+
+
 def list_saved_attachments(
     owner_id: str,
     *,
@@ -2436,7 +2479,15 @@ def list_saved_attachments(
     exclusive_start_key: dict[str, str] | None = None,
     table: object | None = None,
 ) -> tuple[list[dict[str, object]], dict[str, str] | None]:
-    """Return a stable owner page from the authoritative strongly-read base table."""
+    """Return a stable page of the owner's active attachments, read from GSI-StudentId.
+
+    Every attachment row carries `student_id` = `owner_id` and `created_at`, so the
+    index holds them under the owner. This used to be the exhaustive consistent scan
+    retention needs, which reads the whole shared table and gives up past 10,000
+    rows, so the list answered 503 in production (#136). The index is
+    eventually consistent, which a listing can afford; detail, download and delete
+    still read the base table strongly.
+    """
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
         raise AttachmentRepositoryConflict("conditional_conflict")
     if exclusive_start_key is not None and (
@@ -2446,16 +2497,13 @@ def list_saved_attachments(
         or not exclusive_start_key["attachment_id"]
     ):
         raise AttachmentRepositoryConflict("conditional_conflict")
-    items = list_owner_attachment_items(
-        owner_id,
-        table=table,
-        entity_types=frozenset({"attachment"}),
-    )
+    items = _owner_index_attachments(owner_id, table=table or get_table())
     active: list[tuple[str, AttachmentItem]] = []
     for item in items:
         attachment_id = item.get("attachment_id")
         if (
-            item.get("status") == "active"
+            item.get("owner_id") == owner_id
+            and item.get("status") == "active"
             and isinstance(attachment_id, str)
             and attachment_id
         ):
