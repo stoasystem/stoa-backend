@@ -37,7 +37,7 @@ def build_summary_seed(
         "summary_id": f"assist-{uuid4().hex}",
         "question_id": question_id,
         "student_id": question.get("student_id"),
-        "subject": question.get("subject") or "general",
+        "subject": str(question.get("subject") or "general"),
         "student_context_summary": _student_context_summary(question, topic_labels, locale),
         "question_summary": _preview(question.get("content"), limit=360),
         "ai_answer_summary": _preview(ai_response.get("answer"), limit=360),

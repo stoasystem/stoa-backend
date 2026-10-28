@@ -58,15 +58,16 @@ def normalize_subject(subject: str | None) -> str:
     return value
 
 
-def subject_name(subject: str | None, locale: str) -> str:
+def subject_name(subject: object, locale: str) -> str:
     """The subject as the reader says it, never the stored id (#105).
 
     A row with no subject, or one this backend does not teach, is "general"
     rather than mathematics: `normalize_subject` defaults to math for routing,
-    which would be a wrong claim in a sentence.
+    which would be a wrong claim in a sentence. Whatever the row holds is read
+    as text first; a stored number is a subject nobody teaches, not a crash.
     """
     try:
-        subject_id = normalize_subject(subject) if subject else None
+        subject_id = normalize_subject(str(subject)) if subject else None
     except ValueError:
         subject_id = None
     if subject_id is None:

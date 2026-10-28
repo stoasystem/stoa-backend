@@ -1226,7 +1226,8 @@ def test_the_context_sentence_names_the_subject_in_the_teacher_s_language(monkey
 
 
 def test_every_subject_id_and_alias_has_its_own_name(monkeypatch):
-    """The other subjects, the `math` id itself, and a row with no subject at all.
+    """The other subjects, the `math` id itself, a row with no subject at all,
+    and one whose subject is not text (DynamoDB hands numbers back as Decimal).
 
     Without this a summary that wrote «Mathematik» whatever the subject was
     would pass the test above.
@@ -1235,7 +1236,7 @@ def test_every_subject_id_and_alias_has_its_own_name(monkeypatch):
         subject: _summary_over_http(
             monkeypatch, "de", {**_bare_question(), "subject": subject}
         )["studentContextSummary"]
-        for subject in ("math", "physics", "german", "english", None)
+        for subject in ("math", "physics", "german", "english", None, Decimal(7))
     }
 
     assert {subject: sentence.split(" in ")[1].split(",")[0] for subject, sentence in names.items()} == {
@@ -1244,4 +1245,5 @@ def test_every_subject_id_and_alias_has_its_own_name(monkeypatch):
         "german": "Deutsch",
         "english": "Englisch",
         None: "Allgemein",
+        Decimal(7): "Allgemein",
     }
