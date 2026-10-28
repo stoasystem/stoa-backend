@@ -219,6 +219,25 @@ def test_an_allowance_that_cannot_be_read_leaves_the_indicator_working(table) ->
     assert "online" in body
 
 
+def test_a_read_failing_in_an_unexpected_way_still_leaves_the_indicator_working(
+    table, monkeypatch
+) -> None:
+    from stoa.services import teacher_support_allowance_service as allowance
+
+    def unreachable(*_args, **_kwargs):
+        raise RuntimeError("relationship read failed")
+
+    # Not every read on the way is wrapped: a parent binding's versions, say.
+    monkeypatch.setattr(allowance, "_resolve_scope", unreachable)
+
+    response = _student().get("/teacher-help/availability")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["teacherSupport"] is None
+    assert "online" in body
+
+
 def test_each_student_reads_their_own_week(table) -> None:
     _weekly_cases(table, 1)
     assert _ask(table, "conv-144-a").status_code == 200

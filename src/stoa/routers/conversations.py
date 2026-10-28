@@ -3591,8 +3591,12 @@ async def get_teacher_help_availability(
             beneficiary_id=actor.user_id,
             observed_at=datetime.fromisoformat(now.replace("Z", "+00:00")),
         )
-    except ValueError:
-        logger.warning("teacher_support_standing_unavailable student=%s", actor.user_id)
+    except Exception:
+        # Whatever stops the read, the indicator still answers: the request
+        # route applies the allowance either way.
+        logger.warning(
+            "teacher_support_standing_unavailable student=%s", actor.user_id, exc_info=True
+        )
         standing = None
     return {**summary, "teacherSupport": standing}
 
