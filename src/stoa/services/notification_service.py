@@ -18,7 +18,13 @@ from fastapi import HTTPException
 from stoa.config import settings
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, notification_repo
-from stoa.services import locale_service, message_catalog, notify_service, websocket_service
+from stoa.services import (
+    learning_profile_service,
+    locale_service,
+    message_catalog,
+    notify_service,
+    websocket_service,
+)
 from stoa.security.identity import Actor
 
 logger = logging.getLogger(__name__)
@@ -1164,17 +1170,6 @@ def emit_teacher_help_expired(*, conversation: Mapping[str, Any], case_returned:
     )
 
 
-def _subject_name(subject: object, locale: str) -> str:
-    """The subject as the reader says it, never the stored id (#105)."""
-    from stoa.services import learning_profile_service
-
-    try:
-        subject_id = learning_profile_service.normalize_subject(str(subject or ""))
-    except ValueError:
-        return message_catalog.text("activity.subject.unknown", locale)
-    return message_catalog.text(f"subject.{subject_id}", locale)
-
-
 def emit_teacher_help_dispatched(
     *,
     conversation: Mapping[str, Any],
@@ -1193,7 +1188,7 @@ def emit_teacher_help_dispatched(
     """
     request_id = str(conversation.get("escalation_request_id") or "")
     locale = _recipient_locale(teacher_id)
-    subject_name = _subject_name(conversation.get("subject"), locale)
+    subject_name = learning_profile_service.subject_name(conversation.get("subject"), locale)
     create_event_safe(
         recipient_id=teacher_id,
         recipient_role="teacher",
