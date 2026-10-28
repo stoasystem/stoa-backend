@@ -576,6 +576,14 @@ def dispatch_conversation(
     except Exception:
         return {"conversationId": conversation_id, "status": "claim_conflict"}
 
+    # Only after the offer is written, so a refused claim tells nobody (#141).
+    notification_service.emit_teacher_help_dispatched(
+        conversation={**conversation, "escalation_request_id": request_id},
+        teacher_id=str(candidate["teacherId"]),
+        dispatch_id=dispatch_id,
+        deadline_at=deadline,
+        accept_minutes=DISPATCH_ACCEPT_TIMEOUT_SECONDS // 60,
+    )
     return {
         "conversationId": conversation_id,
         "status": "dispatched",

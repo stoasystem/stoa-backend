@@ -6438,6 +6438,10 @@
       },
       "NotificationPreferenceResponse": {
         "properties": {
+          "dispatchEmail": {
+            "title": "Dispatchemail",
+            "type": "boolean"
+          },
           "preferences": {
             "additionalProperties": {
               "additionalProperties": {
@@ -6481,6 +6485,7 @@
         "required": [
           "userId",
           "preferences",
+          "dispatchEmail",
           "supportedCategories",
           "supportedChannels"
         ],
@@ -6489,20 +6494,35 @@
       },
       "NotificationPreferenceUpdate": {
         "properties": {
-          "preferences": {
-            "additionalProperties": {
-              "additionalProperties": {
+          "dispatchEmail": {
+            "anyOf": [
+              {
                 "type": "boolean"
               },
-              "type": "object"
-            },
-            "title": "Preferences",
-            "type": "object"
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dispatchemail"
+          },
+          "preferences": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": {
+                    "type": "boolean"
+                  },
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferences"
           }
         },
-        "required": [
-          "preferences"
-        ],
         "title": "NotificationPreferenceUpdate",
         "type": "object"
       },

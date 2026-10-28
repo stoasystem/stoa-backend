@@ -27,9 +27,16 @@ from test_chat_help_request_lifecycle import table as table  # noqa: F401 - the 
 
 @pytest.fixture
 def sent(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    # The student's bell only: the offer itself tells the teacher (#141), which
+    # test_teacher_dispatch_alerts.py covers.
     events: list[dict[str, Any]] = []
     monkeypatch.setattr(
-        notification_service, "create_event_safe", lambda **kwargs: events.append(kwargs) or kwargs
+        notification_service,
+        "create_event_safe",
+        lambda **kwargs: (
+            events.append(kwargs) if kwargs.get("recipient_role") == "student" else None
+        )
+        or kwargs,
     )
     return events
 
