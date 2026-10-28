@@ -58,6 +58,22 @@ def normalize_subject(subject: str | None) -> str:
     return value
 
 
+def subject_name(subject: str | None, locale: str) -> str:
+    """The subject as the reader says it, never the stored id (#105).
+
+    A row with no subject, or one this backend does not teach, is "general"
+    rather than mathematics: `normalize_subject` defaults to math for routing,
+    which would be a wrong claim in a sentence.
+    """
+    try:
+        subject_id = normalize_subject(subject) if subject else None
+    except ValueError:
+        subject_id = None
+    if subject_id is None:
+        return message_catalog.text("activity.subject.unknown", locale)
+    return message_catalog.text(f"subject.{subject_id}", locale)
+
+
 def subject_prompt_context(subject: str) -> str:
     meta = subject_metadata(subject)
     return (

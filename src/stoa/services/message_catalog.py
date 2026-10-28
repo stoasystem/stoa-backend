@@ -108,6 +108,31 @@ TEXT: dict[str, dict[str, str]] = {
             "L'aiuto dell'insegnante di questa settimana ti è stato restituito."
         ),
     },
+    # ── subjects, by `learning_profile_service.SUPPORTED_SUBJECTS` id ────
+    "subject.math": {
+        "de": "Mathematik",
+        "en": "Mathematics",
+        "fr": "Mathématiques",
+        "it": "Matematica",
+    },
+    "subject.physics": {
+        "de": "Physik",
+        "en": "Physics",
+        "fr": "Physique",
+        "it": "Fisica",
+    },
+    "subject.german": {
+        "de": "Deutsch",
+        "en": "German",
+        "fr": "Allemand",
+        "it": "Tedesco",
+    },
+    "subject.english": {
+        "de": "Englisch",
+        "en": "English",
+        "fr": "Anglais",
+        "it": "Inglese",
+    },
     "moderation.update.title": {
         "de": "Meldung aktualisiert",
         "en": "Moderation case updated",

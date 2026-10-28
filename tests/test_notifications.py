@@ -1085,6 +1085,15 @@ def _seed_in(monkeypatch, locale: str, question: dict) -> dict:
     return teacher_assistance_service.build_summary_seed(authorized, actor)
 
 
+# What `_bare_question`'s subject is called in each language (#105).
+SUBJECT_NAMES = {
+    "de": "Mathematik",
+    "en": "Mathematics",
+    "fr": "Mathématiques",
+    "it": "Matematica",
+}
+
+
 def _bare_question() -> dict:
     return {
         "student_id": "student-1",
@@ -1112,7 +1121,7 @@ def test_the_seed_is_written_in_the_language_of_the_teacher_reading_it(monkeypat
     assert produced == {
         locale: (
             message_catalog.text(
-                "assistance.context.without_topics", locale, subject="mathematics"
+                "assistance.context.without_topics", locale, subject=SUBJECT_NAMES[locale]
             ),
             message_catalog.text("assistance.focus.default", locale),
         )
@@ -1152,3 +1161,87 @@ def test_the_student_s_own_words_are_passed_through_not_rewritten(monkeypatch):
 
     assert seed["questionSummary"] == "Bitte hilf mir beim Dividieren."
     assert seed["weakTopics"] == ["Brüche"]
+
+
+# ── the subject is named, not its id (#105) ───────────────────────────────
+
+
+def _summary_over_http(monkeypatch, language: str, question: dict) -> dict:
+    """The assistance summary as the teacher's client fetches it, in `language`."""
+    from stoa.main import RequestLocaleMiddleware
+
+    monkeypatch.setattr(
+        teachers.question_repo,
+        "get_question",
+        lambda question_id: {
+            "question_id": question_id,
+            "status": "teacher_active",
+            "teacher_id": "teacher-1",
+            **question,
+        },
+    )
+    monkeypatch.setattr(
+        teacher_assistance_service.notification_repo, "put_summary_seed", lambda item: item
+    )
+    # No stored preference: the language the client is rendering decides.
+    monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_k: {"user_id": user_id})
+    app = FastAPI()
+    app.add_middleware(RequestLocaleMiddleware)
+    app.include_router(teachers.router, prefix="/teachers")
+    install_actor_overrides(app, {"sub": "teacher-1", "role": "teacher"})
+    response = TestClient(app).get(
+        "/teachers/questions/question-1/assistance-summary",
+        headers={"Accept-Language": language},
+    )
+    locale_service.set_request_locale(None)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def test_the_context_sentence_names_the_subject_in_the_teacher_s_language(monkeypatch):
+    """Both sentences, all four languages: «… in Mathematik …», never «… in mathematics …».
+
+    `mathematics` is how rows from the question lane spell the subject; the
+    sentence around it was already translated, the subject was not.
+    """
+    with_topics = {**_bare_question(), "topic_seeds": [{"label": "Brüche"}]}
+
+    produced = {
+        language: (
+            _summary_over_http(monkeypatch, language, with_topics)["studentContextSummary"],
+            _summary_over_http(monkeypatch, language, _bare_question())["studentContextSummary"],
+        )
+        for language in SUBJECT_NAMES
+    }
+
+    for language, sentences in produced.items():
+        for sentence in sentences:
+            assert SUBJECT_NAMES[language] in sentence, (language, sentence)
+            assert "mathematics" not in sentence, (language, sentence)
+    assert produced["de"] == (
+        "Die Schülerin oder der Schüler zeigt Hinweise in Mathematik rund um Brüche.",
+        "Die Schülerin oder der Schüler hat eine offene Anfrage in Mathematik, "
+        "noch ohne ausreichende Hinweise auf ein Thema.",
+    )
+
+
+def test_every_subject_id_and_alias_has_its_own_name(monkeypatch):
+    """The other subjects, the `math` id itself, and a row with no subject at all.
+
+    Without this a summary that wrote «Mathematik» whatever the subject was
+    would pass the test above.
+    """
+    names = {
+        subject: _summary_over_http(
+            monkeypatch, "de", {**_bare_question(), "subject": subject}
+        )["studentContextSummary"]
+        for subject in ("math", "physics", "german", "english", None)
+    }
+
+    assert {subject: sentence.split(" in ")[1].split(",")[0] for subject, sentence in names.items()} == {
+        "math": "Mathematik",
+        "physics": "Physik",
+        "german": "Deutsch",
+        "english": "Englisch",
+        None: "Allgemein",
+    }
