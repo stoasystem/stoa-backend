@@ -15,11 +15,16 @@ TAKEOVER_TARGET_SECONDS = 15 * 60
 
 _TEXT_BLOCK_TYPES = {"paragraph", "heading", "ordered_list", "unordered_list", "quote", "code"}
 _ALLOWED_BLOCK_TYPES = _TEXT_BLOCK_TYPES | {"formula"}
+# Only what a browser would read as a whole tag counts: "<" straight before the
+# tag name, and the tag closed by ">" (#109). "0 < a < 1", "0<a<1" and
+# "set one = 1" are maths and prose, not HTML. Mirrors the teacher reply
+# composer in stoa-frontend (stoasystem/stoa-frontend#286).
 _TAG_PATTERN = re.compile(
-    r"<\s*/?\s*(script|iframe|embed|object|style|link|meta|html|body|img|svg|video|audio|form|input|button|a)\b",
+    r"</?(script|iframe|frame|frameset|embed|object|applet|style|link|meta|base|html|body|img|svg|math|video|audio"
+    r"|form|input|button|a)(?:[\s/][^<>]*)?>",
     re.IGNORECASE,
 )
-_EVENT_HANDLER_PATTERN = re.compile(r"\bon[a-z]+\s*=", re.IGNORECASE)
+_EVENT_HANDLER_NAME = re.compile(r"on[a-z]+")
 _AWS_ACCESS_KEY_PATTERN = re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b")
 _SECRET_MARKERS = (
     "weekly-reports/",
@@ -202,9 +207,50 @@ def _sanitize_text(value: str, *, max_length: int, field: str) -> str:
     return text
 
 
+def _has_tag_with_event_handler(text: str) -> bool:
+    """Find an "on..." handler on any tag, walking attributes as the HTML tokenizer does.
+
+    A quoted ">" cannot hide a handler behind it. A scanner rather than a regex,
+    because walking attributes with a regex backtracks exponentially.
+    """
+    at = 0
+    end = len(text)
+    while (at := text.find("<", at)) != -1:
+        at += 1
+        if at >= end or not ("a" <= text[at] <= "z"):
+            continue
+        while at < end and not text[at].isspace() and text[at] not in "/>":
+            at += 1
+        while at < end and text[at] != ">":
+            if text[at].isspace() or text[at] == "/":
+                at += 1
+                continue
+            name_start = at
+            at += 1  # a leading "=" belongs to the name
+            while at < end and not text[at].isspace() and text[at] not in "/>=":
+                at += 1
+            name = text[name_start:at]
+            while at < end and text[at].isspace():
+                at += 1
+            if at >= end or text[at] != "=":
+                continue
+            if _EVENT_HANDLER_NAME.fullmatch(name):
+                return True
+            at += 1
+            while at < end and text[at].isspace():
+                at += 1
+            if at < end and text[at] in "\"'":
+                close = text.find(text[at], at + 1)
+                at = end if close == -1 else close + 1
+            else:
+                while at < end and not text[at].isspace() and text[at] != ">":
+                    at += 1
+    return False
+
+
 def _assert_no_private_or_unsafe_markers(text: str) -> None:
     lowered = text.lower()
-    if _TAG_PATTERN.search(text) or _EVENT_HANDLER_PATTERN.search(text):
+    if _TAG_PATTERN.search(text) or _has_tag_with_event_handler(lowered):
         raise TeacherReplyValidationError("teacher reply contains unsafe raw HTML")
     if _AWS_ACCESS_KEY_PATTERN.search(text):
         raise TeacherReplyValidationError("teacher reply contains private credentials")
