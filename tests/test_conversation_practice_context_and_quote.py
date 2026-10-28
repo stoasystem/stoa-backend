@@ -920,7 +920,8 @@ def test_a_quoted_message_is_read_back_with_its_quote(monkeypatch):
 
     assert response.status_code == 200
     messages = response.json()["messages"]
-    assert messages[0]["quote"] == quote
+    # A quote stored before parts existed (#132) reads back as naming none.
+    assert messages[0]["quote"] == {**quote, "source": {**quote["source"], "part": None}}
     assert messages[1]["quote"] is None
 
 
