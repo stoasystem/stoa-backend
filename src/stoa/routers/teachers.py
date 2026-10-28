@@ -4,24 +4,34 @@ import uuid
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Literal, NamedTuple, Protocol, runtime_checkable
+from typing import Any, Literal, NamedTuple, NoReturn, Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, Key
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from stoa.config import Settings, get_settings
 from stoa.db.repositories import account_deletion_repo, attachment_repo, question_repo, user_repo
 from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
-from stoa.deps import get_actor, get_authorization_audit_sink
+from stoa.deps import get_actor, get_authorization_audit_sink, get_s3_client
+from stoa.models.attachment import AttachmentSummary
 from stoa.models.question import QuestionStatus
+from stoa.security.attachment_errors import (
+    AttachmentDecisionError,
+    AttachmentErrorCode,
+    log_attachment_failure,
+)
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationPurpose,
     AuthorizationSpec,
     AuthorizedResource,
     CurrentAuthorizationFactRepository,
+    ResourceRef,
     ResourceType,
+    authorize_and_resolve,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import Actor, CanonicalRole
@@ -38,6 +48,7 @@ from stoa.security.route_authorization import (
 )
 from stoa.services import (
     ai_teacher_tools_service,
+    attachment_service,
     notification_service,
     teacher_assistance_service,
     teacher_dispatch_service,
@@ -812,6 +823,9 @@ class MessageOut(BaseModel):
     content: str
     createdAt: str
     status: str = "sent"
+    # What the student sent with the message (#140); the content is read at
+    # GET /teachers/me/help-requests/{requestId}/attachments/{attachmentId}/content.
+    attachments: list[AttachmentSummary] = Field(default_factory=list)
 
 
 class TeacherNoteOut(BaseModel):
@@ -1100,6 +1114,135 @@ _help_list_actor_dependency.authorization_specs = (  # type: ignore[attr-defined
         AuthorizationPurpose.TEACHER_HELP,
         _teacher_list_metadata_resolver,
     ),
+)
+
+
+class _HelpRequestAttachment(NamedTuple):
+    help_request: TeacherItem
+    attachment: TeacherItem
+
+
+def _attachment_ids(message: Mapping[str, object]) -> list[str]:
+    return [str(value) for value in _list_value(message.get("attachment_ids"))]
+
+
+def _raise_attachment(error: AttachmentDecisionError, correlation_id: str) -> NoReturn:
+    error.correlation_id = correlation_id
+    log_attachment_failure(error, route="teachers")
+    headers = {"X-Correlation-ID": correlation_id}
+    if error.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE:
+        headers["Retry-After"] = "30"
+    raise HTTPException(
+        status_code=error.status_code,
+        detail=error.public_body(),
+        headers=headers,
+    ) from error
+
+
+def _sent_in_help_request(
+    conv: Mapping[str, object], attachment_id: str
+) -> TeacherItem | None:
+    """The live attachment, if a message of this request carries it.
+
+    Whose it is is the policy's to judge: only the student's own is read.
+    """
+    conv_id = _required_text(conv.get("conversation_id"))
+    if not any(attachment_id in _attachment_ids(m) for m in _get_messages(conv_id)):
+        return None
+    item = attachment_repo.get_attachment(attachment_id)
+    if not isinstance(item, dict) or item.get("status") != "active":
+        return None
+    return item
+
+
+async def _help_request_attachment_dependency(
+    request_id: str,
+    attachment_id: str,
+    actor: Actor = Depends(get_actor),
+    facts: CurrentAuthorizationFactRepository = Depends(
+        get_authorization_fact_repository
+    ),
+    correlation_id: str = Depends(get_request_correlation_id),
+    audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
+) -> _HelpRequestAttachment:
+    """An attachment, read under the help request it was sent in (#140).
+
+    Whoever may read the request may read what the student sent in it: the
+    teacher it is offered to and the teacher who took it. Anyone else is
+    refused exactly as the request refuses them, before the attachment is
+    looked up, so a refusal says nothing about the attachment.
+    """
+    try:
+        conv = _resolve_help_request(request_id)
+        if not conv:
+            raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND, correlation_id)
+        await authorize_teacher_loaded_resource(
+            actor=actor,
+            facts=facts,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
+            loaded=conv,
+            resource_type=ResourceType.TEACHER_HELP_REQUEST,
+            action=AuthorizationAction.READ,
+        )
+        item = _sent_in_help_request(conv, attachment_id)
+        if item is None:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+        resolved = AuthorizedResource(
+            ResourceRef(
+                ResourceType.ATTACHMENT,
+                attachment_id,
+                _required_text(conv.get("student_id")),
+                owner_id=_text(item.get("owner_id")),
+                question_id=_required_text(conv.get("conversation_id")),
+            ),
+            conv,
+        )
+
+        async def resolve(_attachment_id: str):
+            return resolved
+
+        await authorize_and_resolve(
+            actor=actor,
+            resource_id=attachment_id,
+            spec=AuthorizationSpec(
+                ResourceType.ATTACHMENT,
+                AuthorizationAction.READ,
+                AuthorizationPurpose.TEACHER_HELP,
+                resolve,
+            ),
+            fact_repository=facts,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
+        )
+        return _HelpRequestAttachment(conv, item)
+    except AttachmentDecisionError as error:
+        _raise_attachment(error, correlation_id)
+    except SecurityDecisionError as error:
+        headers = {"X-Correlation-ID": error.correlation_id} if error.correlation_id else None
+        raise HTTPException(
+            status_code=error.status_code, detail=error.public_body(), headers=headers
+        ) from error
+    except Exception as exc:
+        dependency_error = SecurityDecisionError(
+            SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+            correlation_id,
+            internal_detail=type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=dependency_error.status_code,
+            detail=dependency_error.public_body(),
+        ) from exc
+
+
+_help_request_attachment_dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
+    AuthorizationSpec(
+        resource_type,
+        AuthorizationAction.READ,
+        AuthorizationPurpose.TEACHER_HELP,
+        _teacher_list_metadata_resolver,
+    )
+    for resource_type in (ResourceType.TEACHER_HELP_REQUEST, ResourceType.ATTACHMENT)
 )
 
 
@@ -1506,6 +1649,9 @@ async def get_help_request(
     )
 
     raw_messages = _get_messages(conv_id)
+    attachment_summaries = attachment_service.list_attachment_summaries(
+        [value for m in raw_messages for value in _attachment_ids(m)]
+    )
     messages = [
         MessageOut(
             id=_required_text(m.get("message_id")),
@@ -1513,6 +1659,11 @@ async def get_help_request(
             role=_required_text(m.get("role")),
             content=_required_text(m.get("content")),
             createdAt=_required_text(m.get("created_at")),
+            attachments=[
+                attachment_summaries[value]
+                for value in _attachment_ids(m)
+                if value in attachment_summaries
+            ],
         )
         for m in raw_messages
     ]
@@ -1581,6 +1732,30 @@ async def get_help_request(
         notes=notes,
         firstTeacherActionAt=_optional_text(first_teacher_action_at),
         sla=_sla_snapshot(conv),
+    )
+
+
+@router.get("/me/help-requests/{request_id}/attachments/{attachment_id}/content")
+async def download_help_request_attachment(
+    loaded: _HelpRequestAttachment = Depends(_help_request_attachment_dependency),
+    s3=Depends(get_s3_client),
+    settings: Settings = Depends(get_settings),
+    correlation_id: str = Depends(get_request_correlation_id),
+):
+    """The content of an attachment the student sent in this help request (#140)."""
+    try:
+        prepared = attachment_service.prepare_saved_attachment_download(
+            dict(loaded.attachment), s3=s3, settings=settings
+        )
+    except AttachmentDecisionError as error:
+        _raise_attachment(error, correlation_id)
+    return StreamingResponse(
+        prepared.iter_bytes(),
+        media_type=prepared.media_type,
+        headers={
+            **prepared.public_headers(),
+            "X-Correlation-ID": correlation_id,
+        },
     )
 
 
