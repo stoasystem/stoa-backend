@@ -33,17 +33,19 @@ def stub_memory_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep AI memory personalisation out of message-command tests.
 
     `conversations._execute_message_command` enriches the AI prompt with the
-    student's weak topics, which costs three table reads. Unstubbed, that turns
-    every message-command test into a network round trip and can push a
-    concurrent duplicate past its bounded replay wait.
+    student's weak topics, which costs three table reads, and with the stars on
+    the student's map (#142), which costs more. Unstubbed, that turns every
+    message-command test into a network round trip and can push a concurrent
+    duplicate past its bounded replay wait. The map is left out as unreadable.
     """
-    from stoa.services import adaptive_learning_service
+    from stoa.services import adaptive_learning_service, star_map_candidates
 
     monkeypatch.setattr(
         adaptive_learning_service,
         "get_memory_summary",
         lambda **_kwargs: {"weakTopics": [], "recommendations": [], "memorySnapshots": []},
     )
+    monkeypatch.setattr(star_map_candidates, "for_student", lambda *_a, **_k: None)
 
 
 @pytest.fixture(scope="session", autouse=True)

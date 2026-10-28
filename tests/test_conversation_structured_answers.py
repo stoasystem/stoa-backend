@@ -256,7 +256,8 @@ def test_a_section_of_the_wrong_shape_is_left_out_not_failed(table, model) -> No
         {
             **ANSWERS["de"][0],
             "similar_exercises": "Kürze 9/12.",
-            "knowledge_points": [7, "Brüche kürzen", {"name": "x"}],
+            # A point is a name or `{id, name}` (#142); none of the rest names one.
+            "knowledge_points": [7, "Brüche kürzen", {"id": "k1"}, {"name": 7}, ["x"]],
         }
     ]
 

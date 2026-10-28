@@ -6,7 +6,7 @@ import base64
 import logging
 import re
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
@@ -298,6 +298,7 @@ class TransactionOperationKind(StrEnum):
     MESSAGE_COMMAND_UPDATE = "message_command_update"
     MESSAGE_COMMAND_REJECT = "message_command_reject"
     ASSISTANT_MESSAGE_PUT = "assistant_message_put"
+    KNOWLEDGE_GAP_UPDATE = "knowledge_gap_update"
     RESOURCE_RETENTION_FENCE_CHECK = "resource_retention_fence_check"
     ACCOUNT_RETENTION_FENCE_CHECK = "account_retention_fence_check"
 
@@ -3217,8 +3218,17 @@ def complete_message_command(
     lease_attempt: int = 1,
     completed_epoch: int = 0,
     account_fence_generation: int = 1,
+    knowledge_gap_updates: Sequence[dict[str, object]] = (),
     table: object | None = None,
 ) -> MessageCommandResult:
+    """Store the answer and settle the command, in one transaction.
+
+    `knowledge_gap_updates` (#142) ride in the same transaction, so they count
+    once, and only for an answer that was stored. Two answers counting the same
+    gap at the same moment cancel each other (`TransactionConflict`); a count
+    is not worth an answer, so a transaction that fails with them is tried
+    once more without them.
+    """
     if (
         isinstance(lease_attempt, bool)
         or not isinstance(lease_attempt, int)
@@ -3279,6 +3289,10 @@ def complete_message_command(
                 }
             },
         ),
+        *(
+            TransactionOperation(TransactionOperationKind.KNOWLEDGE_GAP_UPDATE, dict(update))
+            for update in knowledge_gap_updates
+        ),
     ]
     try:
         transact(operations, table=table)
@@ -3300,6 +3314,20 @@ def complete_message_command(
                 MessageCommandDisposition.COMPLETED,
                 command=dict(command),
                 counter_value=_optional_positive_int(command.get("counter_value")),
+            )
+        if knowledge_gap_updates:
+            return complete_message_command(
+                conversation_id=conversation_id,
+                idempotency_key=idempotency_key,
+                owner_id=owner_id,
+                lease_owner=lease_owner,
+                assistant_message=assistant_message,
+                result_json=result_json,
+                completed_at=completed_at,
+                lease_attempt=lease_attempt,
+                completed_epoch=completed_epoch,
+                account_fence_generation=account_fence_generation,
+                table=table,
             )
         return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
     return MessageCommandResult(MessageCommandDisposition.COMPLETED)
