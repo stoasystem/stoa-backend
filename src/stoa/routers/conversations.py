@@ -2744,18 +2744,15 @@ def _resolve_generation_context(
     The practice context rides here rather than being looked up again when the
     answer is generated: the worker would otherwise read whatever the
     curriculum and the student's attempts say by then, not what they said when
-    the question was asked. The star map does too, for the same reason and one
-    more: what the model picks is checked against the list it was shown (#142).
+    the question was asked.
     """
-    locale = _student_locale(student_id)
     return {
         "schema_version": "generation-context.v1",
-        "locale": locale,
+        "locale": _student_locale(student_id),
         "subject": _SUBJECT_ALIASES.get(subject, "math"),
         "grade": grade,
         "memory_context": _memory_context_for_student(student_id, actor, subject),
         "practice_context": practice_context,
-        "star_map": star_map_candidates.for_student(student_id, locale=locale),
     }
 
 
@@ -2847,10 +2844,13 @@ def load_committed_message(command: dict) -> CommittedMessage:
 
 def _stored_provider_result(
     command: Mapping[str, object], attempt: int
-) -> tuple[str, StructuredAnswer | None, dict[str, object] | None] | None:
+) -> tuple[str, StructuredAnswer | None, dict[str, object] | None, bool] | None:
     """The answer a lost attempt kept on the command, if it kept one.
 
-    One kept before sections were (#132) is finished without them.
+    One kept before sections were (#132) is finished without them. The last
+    value says whether the model was shown the star map (#142): the knowledge
+    points kept are already checked against it, but whether the free ones may
+    be counted as gaps depends on it.
     """
     raw = command.get("provider_result_json")
     if stored_int(command.get("provider_result_attempt")) != attempt or not isinstance(raw, str):
@@ -2865,7 +2865,12 @@ def _stored_provider_result(
     validated = _validated_message_allowance_metadata(metadata)
     if metadata is not None and validated is None:
         return None
-    return payload["content"], _stored_structured(payload.get("structured")), validated
+    return (
+        payload["content"],
+        _stored_structured(payload.get("structured")),
+        validated,
+        payload.get("starMapShown") is True,
+    )
 
 
 def _record_generation_failure(
@@ -3328,9 +3333,9 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     ):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     memory_context = context["memory_context"]
-    # None for a command stored before the map was (#142), or when it could not
-    # be read: then nothing the answer names can be told apart from a gap.
-    star_map = star_map_candidates.stored(context.get("star_map"))
+    # A question about a part of an earlier answer is a follow-up whatever the
+    # model makes of it: it is shown no star map, and counts no gaps (#142).
+    follow_up = committed.quote is not None and committed.quote.source.part is not None
     stored_practice_context = context.get("practice_context")
     practice_context = (
         dict(stored_practice_context)
@@ -3427,7 +3432,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     # whichever earlier attempt called, however many attempts died since.
     leased = lease_result.command or {}
     invoked_attempt = stored_int(leased.get("provider_invoked_attempt"))
-    recovered: tuple[str, StructuredAnswer | None, dict[str, object] | None] | None = None
+    recovered: tuple[str, StructuredAnswer | None, dict[str, object] | None, bool] | None = None
     if lease_result.previous_status == "ai_running" and invoked_attempt is not None:
         recovered = _stored_provider_result(leased, invoked_attempt)
         if recovered is None:
@@ -3442,7 +3447,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     allowance_metadata: dict[str, object] | None = None
     structured: StructuredAnswer | None = None
     if recovered is not None:
-        ai_content, structured, allowance_metadata = recovered
+        ai_content, structured, allowance_metadata, star_map_shown = recovered
     else:
         _active_conversation_generation(student_id, table)
         attachment_context = ""
@@ -3478,6 +3483,15 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         normalized_subject = context["subject"]
         grade = context["grade"]
         student_locale = context["locale"]
+        # Read for this attempt, and the same list checks what the model picks
+        # from it (#142). None when it cannot be read: nothing the answer then
+        # names can be told apart from a gap.
+        star_map = (
+            None
+            if follow_up
+            else star_map_candidates.for_student(student_id, locale=student_locale)
+        )
+        star_map_shown = star_map is not None
         ai_deadline = runtime_budget_service.ai_deadline(
             fixed_seconds=_AI_INVOCATION_DEADLINE_SECONDS,
             reserve_seconds=_AI_PERSIST_RESERVE_SECONDS,
@@ -3609,6 +3623,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                         "content": ai_content,
                         "structured": _structured_payload(structured),
                         "allowance": allowance_metadata,
+                        "starMapShown": star_map_shown,
                     },
                     ensure_ascii=False,
                     separators=(",", ":"),
@@ -3689,17 +3704,16 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     # What a new question named that is on no star of the map is counted for
     # the knowledge-base gap list (#142), once per question. A follow-up counts
     # nothing: the model answers one in plain words with no knowledge points,
-    # and a question about a part of an earlier answer is one whatever the
-    # model made of it. An answer given without the map could not have matched
-    # a star, so it counts nothing either.
-    follow_up = committed.quote is not None and committed.quote.source.part is not None
+    # and is shown no map when it quotes a part of an earlier answer. An answer
+    # given without the map could not have matched a star, so it counts
+    # nothing either.
     knowledge_gaps = (
         knowledge_gap_repo.count_updates(
             context["subject"],
             [point.name for point in structured.knowledgePoints if point.unitId is None],
             seen_at=assistant_created_at,
         )
-        if structured is not None and star_map is not None and not follow_up
+        if structured is not None and star_map_shown
         else []
     )
     completion = _coerce_command_result(

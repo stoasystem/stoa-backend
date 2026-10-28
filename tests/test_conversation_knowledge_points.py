@@ -139,12 +139,33 @@ def _states(student_id: str, **_kwargs: Any) -> dict[str, knowledge_mastery_serv
     }
 
 
+class _Reads:
+    """How often each read the map is made of was made."""
+
+    def __init__(self) -> None:
+        self.catalog = 0
+        self.states = 0
+
+
 @pytest.fixture
-def star_map(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The map as its two reads would return it for this student."""
+def star_map(monkeypatch: pytest.MonkeyPatch) -> _Reads:
+    """The map as its reads would return it for this student, counted."""
+    reads = _Reads()
+
+    def catalog(**kwargs: Any) -> dict[str, Any]:
+        reads.catalog += 1
+        return _catalog(**kwargs)
+
+    def states(student_id: str, **kwargs: Any) -> dict[str, knowledge_mastery_service.UnitMastery]:
+        reads.states += 1
+        return _states(student_id, **kwargs)
+
     monkeypatch.setattr(star_map_candidates, "for_student", _READ_THE_MAP)
-    monkeypatch.setattr(curriculum_service, "list_catalog", _catalog)
-    monkeypatch.setattr(knowledge_mastery_service, "unit_states", _states)
+    monkeypatch.setattr(star_map_candidates, "_content", {})
+    monkeypatch.setattr(curriculum_service, "list_catalog", catalog)
+    monkeypatch.setattr(knowledge_mastery_service, "indexed_lessons", lambda: {})
+    monkeypatch.setattr(knowledge_mastery_service, "unit_states", states)
+    return reads
 
 
 # ── The provider ─────────────────────────────────────────────────────────────
@@ -448,6 +469,38 @@ def test_a_question_about_a_step_records_nothing_even_if_the_model_names_points_
 
     _done(response)
     assert _gaps(table) == {("math", "Brüche im Alltag"): 1}
+    # Nor is it shown the map, nor the map read for it.
+    assert _shown_stars(bedrock.bodies[1]) == {}
+    assert star_map.states == 1
+
+
+def test_the_list_is_not_kept_on_the_command(table, bedrock, star_map) -> None:
+    """A few hundred stars would be most of the command item, paid on every write."""
+    bedrock.answers = [_answer(lambda _stars: [])]
+
+    _done(_send(_client(), "key-1", language="de"))
+
+    command = table.rows[
+        tuple(conversations.attachment_repo.message_command_key(CONV, "key-1").values())
+    ]
+    kept = json.dumps(command, default=str, ensure_ascii=False)
+    assert "Teiler und Vielfache" not in kept
+    assert "teiler-vielfache" not in kept
+
+
+def test_the_content_of_the_map_is_read_once_for_many_questions(
+    table, bedrock, star_map
+) -> None:
+    bedrock.answers = [_answer(lambda _stars: []), _answer(lambda _stars: [])]
+    client = _client()
+
+    _done(_send(client, "key-1", language="de"))
+    _done(_send(client, "key-2", language="de", content="Und wie erweitere ich?"))
+
+    # The catalog is the same for everybody; the student's progress is not.
+    assert star_map.catalog == 1
+    assert star_map.states == 2
+    assert len(_shown_stars(bedrock.bodies[1])) == 3
 
 
 def test_the_same_question_sent_again_is_recorded_once(table, bedrock, star_map) -> None:
