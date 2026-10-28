@@ -1250,6 +1250,48 @@ def get_teacher_support_projection(
     }
 
 
+def get_student_teacher_support_standing(
+    *,
+    beneficiary_id: str,
+    observed_at: datetime | None = None,
+    table: object | None = None,
+) -> dict[str, object]:
+    """Whether a request made now would be admitted, and when a spent week is whole again.
+
+    Read the way admission reads it: the same scope, the same Zurich week, the
+    same counter. A refusal is named by the code the request route answers it
+    with, so the button and the refusal cannot disagree. A student with no
+    teacher support has no reset to wait for. Raises ``ValueError`` when the
+    allowance cannot be read right now.
+    """
+    observed = _aware(observed_at, "observed_at")
+    target = table or get_table()
+    week = allowance_service.zurich_week(observed)
+    try:
+        scope = _resolve_scope(beneficiary_id, table=target)
+        if scope is None:
+            return {
+                "canRequest": False,
+                "blockedReason": "teacher_support_not_included",
+                "remainingCases": 0,
+                "weeklyCases": 0,
+                "resetsAt": None,
+            }
+        item = _strong_get(target, _counter_key(scope.support_scope_id, _week_identity(week)))
+        admitted = 0 if item is None else _validated_counter(item, scope=scope, week=week)[0]
+    except _DependencyFailure:
+        raise ValueError("teacher-support standing is temporarily unavailable") from None
+    # An administrator may lower the figure below what the week already spent.
+    remaining = max(scope.limit - admitted, 0)
+    return {
+        "canRequest": remaining > 0,
+        "blockedReason": None if remaining else "teacher_support_allowance_exhausted",
+        "remainingCases": remaining,
+        "weeklyCases": scope.limit,
+        "resetsAt": _timestamp(week.window_end),
+    }
+
+
 __all__ = [
     "TeacherSupportAdmissionDisposition",
     "TeacherSupportAdmissionResult",
@@ -1258,6 +1300,7 @@ __all__ = [
     "TeacherSupportCaseAdmission",
     "admit_teacher_support_case",
     "current_week_identity",
+    "get_student_teacher_support_standing",
     "get_teacher_support_projection",
     "refund_teacher_support_case",
 ]

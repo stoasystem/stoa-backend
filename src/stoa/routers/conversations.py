@@ -1158,11 +1158,33 @@ class TeacherHelpResponse(BaseModel):
     updatedAt: str | None = None
 
 
+class TeacherSupportStanding(BaseModel):
+    """Whether this student can still ask a teacher this Zurich week (#144).
+
+    `blockedReason` is the code `POST /teacher-help/request` would refuse with:
+    `teacher_support_allowance_exhausted` comes back at `resetsAt`;
+    `teacher_support_not_included` does not come back with the week, so it has
+    no `resetsAt`.
+    """
+
+    canRequest: bool
+    blockedReason: (
+        Literal["teacher_support_allowance_exhausted", "teacher_support_not_included"]
+        | None
+    ) = None
+    remainingCases: int
+    weeklyCases: int
+    resetsAt: str | None = None
+
+
 class TeacherAvailabilityResponse(BaseModel):
     online: bool
     availableTeachers: int
     nextWindow: str | None = None
     responseTime: str | None = None
+    # The caller's own week. Null when it cannot be read right now; the request
+    # route still applies the allowance.
+    teacherSupport: TeacherSupportStanding | None = None
 
 
 _MESSAGE_ALLOWANCE_FIELDS = frozenset(
@@ -3553,12 +3575,30 @@ setattr(_teacher_help_conversation_dependency, "authorization_specs", (
 
 @teacher_help_router.get("/availability", response_model=TeacherAvailabilityResponse)
 async def get_teacher_help_availability(
-    _actor: Actor = Depends(
+    actor: Actor = Depends(
         student_actor_dependency(ResourceType.CONVERSATION, AuthorizationAction.LOOKUP)
     ),
 ):
-    """Return student-safe teacher availability for the chat indicator."""
-    return teacher_dispatch_service.teacher_availability_summary()
+    """Return student-safe teacher availability for the chat indicator.
+
+    Also the caller's own teacher-support week, so an "ask a teacher" button
+    can be greyed with its reason before the student presses it (#144).
+    """
+    summary = teacher_dispatch_service.teacher_availability_summary()
+    now = _now()
+    try:
+        standing = teacher_support_allowance_service.get_student_teacher_support_standing(
+            beneficiary_id=actor.user_id,
+            observed_at=datetime.fromisoformat(now.replace("Z", "+00:00")),
+        )
+    except Exception:
+        # Whatever stops the read, the indicator still answers: the request
+        # route applies the allowance either way.
+        logger.warning(
+            "teacher_support_standing_unavailable student=%s", actor.user_id, exc_info=True
+        )
+        standing = None
+    return {**summary, "teacherSupport": standing}
 
 
 def _escalated_question_operation(
