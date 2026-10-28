@@ -17,9 +17,11 @@ from __future__ import annotations
 import io
 import json
 import re
+from datetime import UTC, datetime, timedelta
 from typing import Any, Callable
 
 import pytest
+import time_machine
 
 from fakes.dynamodb import transaction_canceled
 from stoa.jobs import conversation_generation
@@ -635,6 +637,72 @@ def test_an_answer_whose_count_collides_is_stored_without_it(
     [assistant] = _read_back(client)
     assert assistant["structured"]["knowledgePoints"] == done["structured"]["knowledgePoints"]
     assert _gaps(table) == {}
+
+
+# ── What the record may hold, and for how long ───────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "personal",
+    [
+        "Frag anna.muster@example.ch",  # an e-mail address
+        "Ruf an: 079 123 45 67",  # a phone number, grouped
+        "Ruf an: +41791234567",  # a phone number, run together
+        "Mein Code 12345678",  # a long run of digits
+    ],
+)
+def test_a_name_that_looks_like_personal_data_is_not_recorded(
+    table, bedrock, star_map, personal
+) -> None:
+    bedrock.answers = [
+        _answer(lambda _stars: [{"id": None, "name": personal}, {"id": None, "name": "Brüche im Alltag"}])
+    ]
+
+    done = _done(_send(_client(), "key-1", language="de"))
+
+    # The student still sees what the model wrote; only the record leaves it out.
+    assert {"name": personal, "unitId": None} in done["structured"]["knowledgePoints"]
+    assert _gaps(table) == {("math", "Brüche im Alltag"): 1}
+
+
+@pytest.mark.parametrize(
+    "ordinary",
+    ["Gleichungen 2. Grades", "Zahlen bis 1 000 000", "Satz des Pythagoras: 3² + 4² = 5²"],
+)
+def test_a_name_with_a_few_numbers_in_it_is_still_recorded(
+    table, bedrock, star_map, ordinary
+) -> None:
+    bedrock.answers = [_answer(lambda _stars: [{"id": None, "name": ordinary}])]
+
+    _done(_send(_client(), "key-1", language="de"))
+
+    assert _gaps(table) == {("math", ordinary): 1}
+
+
+def _gap_row(table) -> dict[str, Any]:
+    [row] = [row for row in table.rows.values() if row.get("entity_type") == "knowledge_gap"]
+    return row
+
+
+def test_a_record_expires_180_days_after_its_name_was_last_seen(table, bedrock, star_map) -> None:
+    free = _answer(lambda _stars: [{"id": None, "name": "Brüche im Alltag"}])
+    bedrock.answers = [free, free]
+    client = _client()
+    first_seen = datetime(2026, 10, 1, 8, 0, tzinfo=UTC)
+    seen_again = first_seen + timedelta(days=10)
+
+    with time_machine.travel(first_seen, tick=False):
+        _done(_send(client, "key-1", language="de"))
+    row = _gap_row(table)
+    # Epoch seconds in the table's TTL attribute, never an ISO string.
+    assert row["expires_at"] == int((first_seen + timedelta(days=180)).timestamp())
+
+    with time_machine.travel(seen_again, tick=False):
+        _done(_send(client, "key-2", language="de", content="Und wie erweitere ich?"))
+    row = _gap_row(table)
+    assert row["expires_at"] == int((seen_again + timedelta(days=180)).timestamp())
+    assert row["count"] == 2
+    assert row["first_seen_at"].startswith("2026-10-01")
 
 
 def test_the_student_is_not_named_on_the_record(table, bedrock, star_map) -> None:
