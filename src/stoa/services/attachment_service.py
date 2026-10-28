@@ -1178,7 +1178,7 @@ def _adopt_presigned_parts(
         _provider_sha256(encoded, expected_hex=checksum)
         if provider_size != length:
             raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_INVALID)
-        if not _gateway_call(
+        if _gateway_call(
             lambda: repository.complete_upload_part(
                 item["upload_id"],
                 number,
@@ -1188,6 +1188,18 @@ def _adopt_presigned_parts(
                 expected_checksum_sha256=checksum,
                 content_length=length,
             )
+        ):
+            continue
+        # A concurrent completion recorded this part first; the same acknowledgement
+        # from S3 is as good as ours.
+        current = _gateway_call(
+            lambda: repository.get_upload_part(item["upload_id"], number)
+        )
+        if not (
+            isinstance(current, dict)
+            and current.get("status") == "completed"
+            and current.get("provider_etag") == provider_etag
+            and current.get("provider_checksum") == encoded
         ):
             raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     refreshed = _gateway_call(lambda: repository.list_upload_parts(item["upload_id"]))

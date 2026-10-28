@@ -66,6 +66,7 @@ class _S3:
         self.signed: dict[str, dict[str, Any]] = {}
         self.objects: dict[tuple[str, str], dict[str, Any]] = {}
         self.server_side_part_writes = 0
+        self.completions_sent = 0
 
     # -- what the API calls ---------------------------------------------------------
 
@@ -99,6 +100,7 @@ class _S3:
         }
 
     def complete_multipart_upload(self, **kwargs: Any) -> dict[str, Any]:
+        self.completions_sent += 1
         upload = self.uploads.pop(kwargs["UploadId"])
         listed = kwargs["MultipartUpload"]["Parts"]
         data = b""
@@ -323,7 +325,10 @@ def test_the_production_signer_uses_the_regional_endpoint_and_signs_the_part(mon
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "not-a-secret")
     monkeypatch.setenv("AWS_SHARED_CREDENTIALS_FILE", "/nonexistent")
     monkeypatch.setenv("AWS_CONFIG_FILE", "/nonexistent")
+    # The client is cached and holds the credentials it was built with.
+    get_s3_presign_client.cache_clear()
     signer = get_s3_presign_client()
+    get_s3_presign_client.cache_clear()
     region = get_settings().aws_region
 
     url = signer.generate_presigned_url(
@@ -343,4 +348,61 @@ def test_the_production_signer_uses_the_regional_endpoint_and_signs_the_part(mon
     parsed = urlparse(url)
     assert parsed.netloc == f"stoa-images-123456789012.s3.{region}.amazonaws.com"
     signed_headers = parse_qs(parsed.query)["X-Amz-SignedHeaders"][0].split(";")
-    assert {"content-length", "x-amz-checksum-sha256"} <= set(signed_headers)
+    # Exactly these: a header signed here that the browser does not send, after a
+    # botocore upgrade say, is a SignatureDoesNotMatch on every upload.
+    assert set(signed_headers) == {"content-length", "host", "x-amz-checksum-sha256"}
+
+
+class _RaceLostTable(FakeTable):
+    """A second completion records each part just before this one tries to.
+
+    Two `complete` calls for the same upload both find the part uploading on S3;
+    the one whose ledger write lands second has its condition refused.
+    """
+
+    def __init__(self, *, winner_etag: str | None = None) -> None:
+        super().__init__()
+        self.winner_etag = winner_etag
+
+    def update_item(self, **kwargs: Any) -> dict[str, Any]:
+        recording_part = str(kwargs["Key"]["SK"]).startswith("PART#") and "provider_etag" in str(
+            kwargs["UpdateExpression"]
+        )
+        if recording_part:
+            winner = {**kwargs, "ExpressionAttributeValues": dict(kwargs["ExpressionAttributeValues"])}
+            if self.winner_etag is not None:
+                winner["ExpressionAttributeValues"][":etag"] = self.winner_etag
+            super().update_item(**winner)
+        return super().update_item(**kwargs)
+
+
+def _complete_after_losing_the_race(monkeypatch, table: _RaceLostTable):
+    table.seed_active_account(OWNER)
+    data = _png_near_the_limit()
+    s3 = _S3()
+    api = _Api(monkeypatch, table, s3)
+    intent = _intent(api, data)
+    for number, part in enumerate(_parts(data, intent["chunkBytes"]), 1):
+        signed = _sign(api, intent["uploadId"], number, part).json()
+        assert s3.browser_put(signed["url"], "PUT", signed["headers"], part) == 200
+    return api.post(f"/files/{intent['uploadId']}/complete", {"partCount": 2}), s3
+
+
+def test_a_completion_that_loses_the_race_to_record_a_part_still_completes(monkeypatch) -> None:
+    completed, _s3 = _complete_after_losing_the_race(monkeypatch, _RaceLostTable())
+
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "validated"
+
+
+def test_a_part_recorded_with_another_etag_is_not_taken_on_trust(monkeypatch) -> None:
+    completed, s3 = _complete_after_losing_the_race(
+        monkeypatch, _RaceLostTable(winner_etag='"another-etag"')
+    )
+
+    assert (completed.status_code, completed.json()["detail"]["code"]) == (
+        503,
+        "upload_service_unavailable",
+    )
+    # Refused before assembly, not left for S3 to catch.
+    assert s3.completions_sent == 0

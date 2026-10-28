@@ -48,6 +48,7 @@ def get_s3_client():
     return boto3.client("s3", region_name=settings.aws_region)
 
 
+@lru_cache
 def get_s3_presign_client():
     """The client that signs URLs a browser uses on the images bucket itself.
 
