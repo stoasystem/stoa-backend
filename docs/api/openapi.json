@@ -2426,6 +2426,16 @@
                 "type": "null"
               }
             ]
+          },
+          "targetUnit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TargetUnit"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -12957,6 +12967,20 @@
           "notification_effect_status"
         ],
         "title": "TakeoverResponse",
+        "type": "object"
+      },
+      "TargetUnit": {
+        "description": "The star on the student's map an answer offers to take them to (#124).",
+        "properties": {
+          "unitId": {
+            "title": "Unitid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "unitId"
+        ],
+        "title": "TargetUnit",
         "type": "object"
       },
       "TeacherActivationClaimRequest": {
@@ -24882,7 +24906,7 @@
     },
     "/conversations/{conv_id}/messages/stream": {
       "post": {
-        "description": "Send a message and stream the AI reply as Server-Sent Events.\n\nAPI Gateway buffers the full response before sending, so this is\npseudo-streaming: the client receives all SSE events at once, but\nthe SSE parser handles them correctly and the UI updates as expected.\n\nEvents: `student_message` (a `ChatMessage`), `message_start`, one or more\n`message_delta` with the answer's text, and `message_done`, which carries\nthe answer's sections as `structured` (a `StructuredAnswer`, #132).",
+        "description": "Send a message and stream the AI reply as Server-Sent Events.\n\nAPI Gateway buffers the full response before sending, so this is\npseudo-streaming: the client receives all SSE events at once, but\nthe SSE parser handles them correctly and the UI updates as expected.\n\nEvents: `student_message` (a `ChatMessage`), `message_start`, one or more\n`message_delta` with the answer's text, and `message_done`, which carries\nthe answer's sections as `structured` (a `StructuredAnswer`, #132) and the\nstar the student asked to go to as `targetUnit` (a `TargetUnit` or null,\n#124).",
         "operationId": "stream_message_conversations__conv_id__messages_stream_post",
         "parameters": [
           {

@@ -97,6 +97,17 @@ when no star fits, write {{"id":null,"name":"..."}} with a name of your own, in 
 Never make up an id.
 """
 
+# Appended beside it (#124): the star the student wants to go to is picked from
+# the same list, so a prompt without the map never asks for one.
+_TARGET_UNIT_RULE = """
+Where the student wants to go: also give the key "target_unit_id" in the JSON. Set it only when \
+the student clearly wants to go and practise, review or look at one particular star or topic of \
+their star map, in whatever language they write: give that star's id, or the topic's id (`t...`) \
+when they name a whole topic. Otherwise it is null: for a question about a concept, for an open \
+wish such as "something harder", and when the wish fits several stars, in which case ask in \
+"answer" which one they mean.
+"""
+
 # Naming the language beats passing a bare ISO code: the model followed "de"
 # unevenly and fell back to the language the prompt itself is written in.
 _LANGUAGE_NAMES = {
@@ -912,8 +923,9 @@ def get_ai_answer(
         quote:          Optional passage the student highlighted (#61).
                         Both go into the student's turn inside an escaped
                         fence, never into the system prompt.
-        star_map:       Optional stars the knowledge points are picked from
-                        (#142), fenced into the student's turn the same way.
+        star_map:       Optional stars the knowledge points (#142) and the
+                        star the student wants to go to (#124) are picked
+                        from, fenced into the student's turn the same way.
     """
     safe_content = _sanitise_input(content, correlation_id=correlation_id)
     normalized_subject = learning_profile_service.normalize_subject(subject)
@@ -937,6 +949,7 @@ def get_ai_answer(
         system_prompt = base_prompt
     if star_map:
         system_prompt += _STAR_MAP_RULE.format(language_name=language_name(language))
+        system_prompt += _TARGET_UNIT_RULE
     messages = _build_messages(
         safe_content,
         history,

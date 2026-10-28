@@ -81,6 +81,7 @@ from stoa.services import (
     attachment_service,
     bedrock_token_count_service,
     entitlement_service,
+    knowledge_map_service,
     learning_profile_service,
     locale_service,
     message_catalog,
@@ -1195,6 +1196,34 @@ def _structured_payload(structured: StructuredAnswer | None) -> dict[str, object
     return None if structured is None else structured.model_dump(mode="json")
 
 
+class TargetUnit(BaseModel):
+    """The star on the student's map an answer offers to take them to (#124)."""
+
+    unitId: str
+
+
+def _target_unit_id(
+    ai_result: Mapping[str, object], star_map: list[star_map_candidates.Candidate] | None
+) -> str | None:
+    """The star the student asked to go to, if the model named one it was shown.
+
+    A topic named whole is narrowed to the star the map would recommend in it:
+    one already begun, else the first one ready; none when all of it is lit.
+    """
+    named = ai_result.get("target_unit_id")
+    star = star_map_candidates.find(star_map, named)
+    if star is not None:
+        return star["unitId"]
+    return (
+        knowledge_map_service._recommended_unit(star_map_candidates.find_topic(star_map, named))
+        or None
+    )
+
+
+def _target_unit(unit_id: object) -> TargetUnit | None:
+    return TargetUnit(unitId=unit_id) if isinstance(unit_id, str) and unit_id else None
+
+
 class ChatMessage(BaseModel):
     id: str
     conversationId: str
@@ -1213,6 +1242,9 @@ class ChatMessage(BaseModel):
     # joined into text. None on every other message and on answers written
     # before sections were kept.
     structured: StructuredAnswer | None = None
+    # The star the student asked to go to, on an assistant answer that
+    # recognised one on their map (#124). None on every other message.
+    targetUnit: TargetUnit | None = None
 
 
 class SendMessageResponse(BaseModel):
@@ -1919,6 +1951,7 @@ async def get_conversation(
             authorName=_author_name(m),
             quote=_stored_quote(m.get("quote")),
             structured=_stored_structured(m.get("structured")),
+            targetUnit=_target_unit(m.get("target_unit_id")),
         )
         for m in raw_messages
     ]
@@ -2130,7 +2163,9 @@ async def stream_message(
 
     Events: `student_message` (a `ChatMessage`), `message_start`, one or more
     `message_delta` with the answer's text, and `message_done`, which carries
-    the answer's sections as `structured` (a `StructuredAnswer`, #132).
+    the answer's sections as `structured` (a `StructuredAnswer`, #132) and the
+    star the student asked to go to as `targetUnit` (a `TargetUnit` or null,
+    #124).
     """
     conv_id = authorized.ref.resource_id
     student_id = authorized.ref.student_id
@@ -2188,6 +2223,11 @@ async def stream_message(
             "messageId": assistant_msg.id,
             "status": "completed",
             "structured": _structured_payload(assistant_msg.structured),
+            "targetUnit": (
+                None
+                if assistant_msg.targetUnit is None
+                else assistant_msg.targetUnit.model_dump(mode="json")
+            ),
         })
 
     return StreamingResponse(
@@ -2844,13 +2884,15 @@ def load_committed_message(command: dict) -> CommittedMessage:
 
 def _stored_provider_result(
     command: Mapping[str, object], attempt: int
-) -> tuple[str, StructuredAnswer | None, dict[str, object] | None, bool] | None:
+) -> tuple[str, StructuredAnswer | None, dict[str, object] | None, bool, str | None] | None:
     """The answer a lost attempt kept on the command, if it kept one.
 
-    One kept before sections were (#132) is finished without them. The last
+    One kept before sections were (#132) is finished without them. The fourth
     value says whether the model was shown the star map (#142): the knowledge
     points kept are already checked against it, but whether the free ones may
-    be counted as gaps depends on it.
+    be counted as gaps depends on it. The last is the star the student asked
+    to go to (#124), checked against the same map before it was kept; none on
+    one kept before targets were.
     """
     raw = command.get("provider_result_json")
     if stored_int(command.get("provider_result_attempt")) != attempt or not isinstance(raw, str):
@@ -2865,11 +2907,13 @@ def _stored_provider_result(
     validated = _validated_message_allowance_metadata(metadata)
     if metadata is not None and validated is None:
         return None
+    target = payload.get("target_unit_id")
     return (
         payload["content"],
         _stored_structured(payload.get("structured")),
         validated,
         payload.get("starMapShown") is True,
+        target if isinstance(target, str) and target else None,
     )
 
 
@@ -3432,7 +3476,9 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     # whichever earlier attempt called, however many attempts died since.
     leased = lease_result.command or {}
     invoked_attempt = stored_int(leased.get("provider_invoked_attempt"))
-    recovered: tuple[str, StructuredAnswer | None, dict[str, object] | None, bool] | None = None
+    recovered: (
+        tuple[str, StructuredAnswer | None, dict[str, object] | None, bool, str | None] | None
+    ) = None
     if lease_result.previous_status == "ai_running" and invoked_attempt is not None:
         recovered = _stored_provider_result(leased, invoked_attempt)
         if recovered is None:
@@ -3446,8 +3492,9 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
 
     allowance_metadata: dict[str, object] | None = None
     structured: StructuredAnswer | None = None
+    target_unit_id: str | None = None
     if recovered is not None:
-        ai_content, structured, allowance_metadata, star_map_shown = recovered
+        ai_content, structured, allowance_metadata, star_map_shown, target_unit_id = recovered
     else:
         _active_conversation_generation(student_id, table)
         attachment_context = ""
@@ -3564,6 +3611,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             if not ai_content:
                 raise ai_service.AIInvocationFailure("malformed_response")
             structured = _structured_answer(ai_result, star_map)
+            target_unit_id = _target_unit_id(ai_result, star_map)
         except _ConversationAllowanceFailure as failure:
             # Refused at counting, admission or the allowance itself, before the
             # model was paid for, the same message may be sent again. Refused over
@@ -3622,6 +3670,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                     {
                         "content": ai_content,
                         "structured": _structured_payload(structured),
+                        "target_unit_id": target_unit_id,
                         "allowance": allowance_metadata,
                         "starMapShown": star_map_shown,
                     },
@@ -3681,6 +3730,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         createdAt=assistant_created_at,
         status="sent",
         structured=structured,
+        targetUnit=_target_unit(target_unit_id),
     )
     result = SendMessageResponse(
         studentMessage=student_message, assistantMessage=assistant_message
@@ -3699,6 +3749,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         "content": ai_content,
         "created_at": assistant_created_at,
         **({"structured": _structured_payload(structured)} if structured is not None else {}),
+        **({"target_unit_id": target_unit_id} if target_unit_id is not None else {}),
         **(allowance_metadata or {}),
     }
     # What a new question named that is on no star of the map is counted for
