@@ -26,6 +26,7 @@ from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.services import ai_service
 from test_async_generation_cutover import invokes as invokes  # noqa: F401 - the fixture
+from test_conversation_token_finalization import _patch_allowance_table
 from test_async_generation_cutover import switched_on as switched_on  # noqa: F401
 from test_message_command_generation import (  # noqa: F401 - fixtures
     CONV,
@@ -39,6 +40,7 @@ from test_message_command_generation import (  # noqa: F401 - fixtures
 from test_message_command_generation import _no_memory_personalisation  # noqa: F401
 from test_message_command_generation import model as model  # noqa: F401 - the fixture
 from test_message_command_generation import table as table  # noqa: F401 - the fixture
+from test_token_allowances import AtomicAllowanceTable
 
 # One answer per language the platform speaks, as the model writes it, with
 # the hint label the joined text puts in front of the first hint.
@@ -269,8 +271,10 @@ def test_a_section_of_the_wrong_shape_is_left_out_not_failed(table, model) -> No
 # ── A quote can name one section of an earlier answer ────────────────────────
 
 
-def _quoted(part: dict[str, Any] | None, *, kind: str = "message") -> dict[str, Any]:
-    source: dict[str, Any] = {"kind": kind, "id": "m-1"}
+def _quoted(
+    part: dict[str, Any] | None, *, kind: str = "message", message_id: str = "m-1"
+) -> dict[str, Any]:
+    source: dict[str, Any] = {"kind": kind, "id": message_id}
     if part is not None:
         source["part"] = part
     return {
@@ -280,19 +284,115 @@ def _quoted(part: dict[str, Any] | None, *, kind: str = "message") -> dict[str, 
     }
 
 
-def test_a_quote_naming_a_step_reaches_the_model_and_reads_back(table, model) -> None:
-    client = _client()
+def _answered(client, model, outcome: dict[str, Any] | None = None) -> str:
+    """Ask a first question and return the id of the answer it got."""
+    model.outcomes = [outcome or ANSWERS["de"][0]]
+    assert _send(client, "key-a", language="de").status_code == 200
+    return _assistant(_read_back(client))["id"]
 
-    response = client.post(
+
+def _quote_send(client, part: dict[str, Any] | None, message_id: str):
+    return client.post(
         f"/conversations/{CONV}/messages/stream",
-        json=_quoted({"section": "steps", "index": 1}),
+        json=_quoted(part, message_id=message_id),
         headers={"Accept-Language": "de"},
     )
 
+
+def test_a_quote_naming_a_step_reaches_the_model_and_reads_back(table, model) -> None:
+    client = _client()
+    answer_id = _answered(client, model)
+
+    # The answer has two steps: index 1 is the last of them.
+    response = _quote_send(client, {"section": "steps", "index": 1}, answer_id)
+
     assert response.status_code == 200, response.text
-    assert model.calls[0]["quote"]["source"]["part"] == {"section": "steps", "index": 1}
-    [student] = [message for message in _read_back(client) if message["role"] == "student"]
+    assert model.calls[1]["quote"]["source"]["part"] == {"section": "steps", "index": 1}
+    student = [message for message in _read_back(client) if message["role"] == "student"][-1]
     assert student["quote"]["source"]["part"] == {"section": "steps", "index": 1}
+
+
+@pytest.mark.parametrize(
+    "part",
+    [
+        {"section": "steps", "index": 2},
+        {"section": "hints", "index": 2},
+        {"section": "similarExercises", "index": 1},
+        {"section": "knowledgePoints", "index": 2},
+    ],
+)
+def test_a_part_past_the_end_of_its_section_is_refused(table, model, part) -> None:
+    client = _client()
+    answer_id = _answered(client, model)
+
+    response = _quote_send(client, part, answer_id)
+
+    assert response.status_code == 422, response.text
+    assert len(model.calls) == 1
+
+
+def test_a_part_of_the_student_s_own_message_is_refused(table, model) -> None:
+    client = _client()
+    _answered(client, model)
+    [student] = [message for message in _read_back(client) if message["role"] == "student"]
+
+    response = _quote_send(client, {"section": "answer"}, student["id"])
+
+    assert response.status_code == 422, response.text
+    assert len(model.calls) == 1
+
+
+def test_a_part_of_a_follow_up_answer_is_refused(table, model) -> None:
+    client = _client()
+    follow_up_id = _answered(
+        client,
+        model,
+        {
+            "steps": [],
+            "answer": "Der ggT ist die grösste Zahl, die beide teilt.",
+            "hints": [],
+            "similar_exercises": [],
+            "knowledge_points": [],
+        },
+    )
+
+    response = _quote_send(client, {"section": "answer"}, follow_up_id)
+
+    assert response.status_code == 422, response.text
+    assert len(model.calls) == 1
+
+
+def test_a_part_of_an_answer_written_before_sections_is_refused(table, model) -> None:
+    client = _client()
+    answer_id = _answered(client, model)
+    [stored] = _messages(table, "assistant")
+    table.seed({key: value for key, value in stored.items() if key != "structured"})
+
+    response = _quote_send(client, {"section": "steps", "index": 0}, answer_id)
+
+    assert response.status_code == 422, response.text
+    assert len(model.calls) == 1
+
+
+def test_a_part_of_a_message_that_does_not_exist_is_refused(table, model) -> None:
+    response = _quote_send(_client(), {"section": "steps", "index": 0}, "no-such-message")
+
+    assert response.status_code == 422, response.text
+    assert model.calls == []
+
+
+def test_a_part_of_an_answer_in_another_conversation_is_refused(table, model) -> None:
+    client = _client()
+    answer_id = _answered(client, model)
+    [stored] = _messages(table, "assistant")
+    # The same answer, moved into another conversation of the same student.
+    table.seed({**stored, "PK": "CONV#conv-2", "conversation_id": "conv-2"})
+    table.rows.pop((stored["PK"], stored["SK"]))
+
+    response = _quote_send(client, {"section": "steps", "index": 0}, answer_id)
+
+    assert response.status_code == 422, response.text
+    assert len(model.calls) == 1
 
 
 def test_a_quote_without_a_part_reaches_the_model_as_it_did(table, model) -> None:
@@ -320,29 +420,37 @@ def test_a_quote_without_a_part_reaches_the_model_as_it_did(table, model) -> Non
     ],
 )
 def test_a_part_that_names_no_section_is_refused(table, model, part) -> None:
-    response = _client().post(f"/conversations/{CONV}/messages/stream", json=_quoted(part))
+    client = _client()
+    # A real answer, so only the shape of the part can be what is refused.
+    answer_id = _answered(client, model)
+
+    response = _quote_send(client, part, answer_id)
 
     assert response.status_code == 422
-    assert model.calls == []
+    assert len(model.calls) == 1
 
 
 def test_a_part_is_refused_on_a_quote_from_an_exercise(table, model) -> None:
-    response = _client().post(
+    client = _client()
+    answer_id = _answered(client, model)
+
+    response = client.post(
         f"/conversations/{CONV}/messages/stream",
-        json=_quoted({"section": "steps", "index": 0}, kind="challenge"),
+        json=_quoted({"section": "steps", "index": 0}, kind="challenge", message_id=answer_id),
     )
 
     assert response.status_code == 422
-    assert model.calls == []
+    assert len(model.calls) == 1
 
 
 def test_the_whole_answer_can_be_quoted_as_a_part_without_an_index(table, model) -> None:
-    response = _client().post(
-        f"/conversations/{CONV}/messages/stream", json=_quoted({"section": "answer"})
-    )
+    client = _client()
+    answer_id = _answered(client, model)
+
+    response = _quote_send(client, {"section": "answer"}, answer_id)
 
     assert response.status_code == 200, response.text
-    assert model.calls[0]["quote"]["source"]["part"] == {"section": "answer"}
+    assert model.calls[1]["quote"]["source"]["part"] == {"section": "answer"}
 
 
 def test_a_quote_without_a_part_keeps_its_exact_fingerprint() -> None:
@@ -381,8 +489,21 @@ def test_the_fingerprint_tells_two_parts_apart() -> None:
 
 
 class _CapturingBedrockClient:
-    def __init__(self) -> None:
+    """The Bedrock runtime as boto3 hands it out: counts, answers, streams.
+
+    Records the body it was sent and answers with `answer` as the model's
+    JSON. Nothing else of the provider is stood in for.
+    """
+
+    def __init__(self, answer: dict[str, Any] | None = None) -> None:
         self.request_body: dict | None = None
+        self.answer = answer or ANSWERS["de"][0]
+
+    def count_tokens(self, **_kwargs: object) -> dict[str, object]:
+        return {
+            "inputTokens": 90,
+            "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "count-1"},
+        }
 
     def invoke_model(self, *, modelId: str, body: str):  # noqa: N803 - boto3 casing
         self.request_body = json.loads(body)
@@ -390,12 +511,30 @@ class _CapturingBedrockClient:
             "id": "msg_test_1",
             "model": modelId,
             "stop_reason": "end_turn",
-            "content": [{"text": json.dumps(ANSWERS["de"][0])}],
+            "content": [{"text": json.dumps(self.answer)}],
             "usage": {"input_tokens": 10, "output_tokens": 5},
         }
         return {
             "ResponseMetadata": {"RequestId": "req-test-1"},
             "body": io.BytesIO(json.dumps(payload).encode()),
+        }
+
+    def invoke_model_with_response_stream(self, *, modelId: str, body: str):  # noqa: N803
+        self.request_body = json.loads(body)
+        text = json.dumps(self.answer, ensure_ascii=False)
+        events = [
+            {"type": "message_start", "message": {
+                "id": "msg_test_1", "model": modelId, "usage": {"input_tokens": 70},
+            }},
+            # Cut in two, so the steps are found in a partly received answer.
+            {"type": "content_block_delta", "delta": {"text": text[: len(text) // 2]}},
+            {"type": "content_block_delta", "delta": {"text": text[len(text) // 2 :]}},
+            {"type": "message_delta", "delta": {"stop_reason": "end_turn"},
+             "usage": {"output_tokens": 25}},
+        ]
+        return {
+            "ResponseMetadata": {"RequestId": "req-test-1"},
+            "body": [{"chunk": {"bytes": json.dumps(event).encode()}} for event in events],
         }
 
 
@@ -446,3 +585,31 @@ def test_the_model_is_told_a_follow_up_is_answered_in_plain_words() -> None:
 
     assert "follows up on your earlier answer" in system
     assert "a new question" in system
+
+
+# ── The production path, with only the provider stood in for ─────────────────
+
+
+@pytest.mark.parametrize("locale", LOCALES)
+def test_the_sections_come_through_the_real_model_path(
+    table, monkeypatch: pytest.MonkeyPatch, locale
+) -> None:
+    """The route, the allowance client, `get_ai_answer` and the stream parser
+    as production runs them; the other tests stand in for `get_ai_answer`."""
+    answer, label = ANSWERS[locale]
+    provider = _CapturingBedrockClient(answer)
+    _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
+    monkeypatch.setattr(conversations.ai_service.boto3, "client", lambda *_a, **_k: provider)
+    client = _client()
+
+    response = _send(client, "key-1", language=locale)
+
+    assert response.status_code == 200, response.text
+    assert _done(response)["structured"] == _expected(answer)
+    assistant = _assistant(_read_back(client))
+    assert assistant["structured"] == _expected(answer)
+    assert f"**{label}:** {answer['hints'][0]}" in assistant["content"]
+    # The model really was asked, and was told the follow-up rule.
+    assert provider.request_body is not None
+    assert "follows up on your earlier answer" in provider.request_body["system"]
+    assert QUESTION in _student_turn(provider.request_body)

@@ -883,6 +883,39 @@ def _resolved_practice_context(
         ) from None
 
 
+def _checked_quote_part(conv_id: str, quote: MessageQuote | None) -> None:
+    """Refuse a part that names no section of an answer in this conversation (#132).
+
+    The model is told which step or hint the student is asking about, so the
+    part is looked up rather than believed: it must name an entry of a full
+    answer this conversation holds. The key scopes the read to the
+    conversation the route already authorized. A quote without a part is not
+    looked up, as before parts existed.
+    """
+    part = None if quote is None else quote.source.part
+    if quote is None or part is None:
+        return
+    table = cast(_DynamoConversationTable, get_table())
+    item = table.get_item(
+        Key={"PK": _conv_pk(conv_id), "SK": _msg_sk(quote.source.id)},
+        ConsistentRead=True,
+    ).get("Item")
+    # Only an assistant answer is stored with sections.
+    structured = _stored_structured(item.get("structured")) if isinstance(item, Mapping) else None
+    if (
+        structured is None
+        or structured.kind != "answer"
+        or (
+            part.index is not None
+            and part.index >= len(getattr(structured, part.section))
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="quote.source.part does not name a section of an answer in this conversation",
+        )
+
+
 def _stored_quote(value: object) -> MessageQuote | None:
     """A quote as it was stored beside a message, or nothing if it is not one."""
     if not isinstance(value, Mapping):
@@ -941,6 +974,7 @@ async def _message_command_dependency(
     # First of all: an exercise this student cannot be shown is refused before
     # the command is looked up, let alone claimed.
     practice_context = _resolved_practice_context(actor.user_id, body.practiceContext)
+    _checked_quote_part(conv_id, body.quote)
     fingerprint = message_request_fingerprint(body)
     try:
         state = _conversation_repository_call(
