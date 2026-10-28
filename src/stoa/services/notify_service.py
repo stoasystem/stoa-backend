@@ -5,6 +5,7 @@ from html import escape
 from urllib.parse import quote
 from uuid import uuid4
 import boto3
+from botocore.config import Config
 from stoa.config import settings
 from stoa.db.repositories import account_deletion_repo, report_repo
 from stoa.services import message_catalog
@@ -281,6 +282,16 @@ def dispatch_reminder_message(
     return subject_line, body
 
 
+# Bounded well inside the request's 29 seconds: the first offer is sent from
+# the student's own request, and a slow SES must cost the email, not the
+# student's response to an offer already written.
+DISPATCH_REMINDER_SES_CONFIG = Config(
+    connect_timeout=2,
+    read_timeout=3,
+    retries={"max_attempts": 1, "mode": "standard"},
+)
+
+
 def send_dispatch_reminder_email(
     recipient: str,
     *,
@@ -294,7 +305,9 @@ def send_dispatch_reminder_email(
     subject_line, body = dispatch_reminder_message(
         subject_name=subject_name, request_id=request_id, minutes=minutes, locale=locale
     )
-    ses = ses_client or boto3.client("ses", region_name=settings.aws_region)
+    ses = ses_client or boto3.client(
+        "ses", region_name=settings.aws_region, config=DISPATCH_REMINDER_SES_CONFIG
+    )
     ses.send_email(
         Source=settings.notification_email_sender,
         Destination={"ToAddresses": [recipient]},

@@ -49,6 +49,7 @@ class RecordingSes:
     def __init__(self) -> None:
         self.sent: list[dict[str, Any]] = []
         self.failure: Exception | None = None
+        self.built_with: list[dict[str, Any]] = []
 
     def send_email(self, **kwargs: Any) -> dict[str, Any]:
         if self.failure is not None:
@@ -85,7 +86,12 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
 @pytest.fixture
 def ses(monkeypatch: pytest.MonkeyPatch) -> RecordingSes:
     client = RecordingSes()
-    monkeypatch.setattr(notify_service.boto3, "client", lambda *_a, **_k: client)
+
+    def build(*_args: Any, **kwargs: Any) -> RecordingSes:
+        client.built_with.append(kwargs)
+        return client
+
+    monkeypatch.setattr(notify_service.boto3, "client", build)
     return client
 
 
@@ -324,6 +330,43 @@ def test_a_failed_send_on_a_re_offer_still_re_offers(table, ses) -> None:
     assert outcome["conversationsDispatched"] == 1
     assert table.rows[CONV_KEY]["dispatched_teacher_id"] == OTHER_TEACHER
     assert len(_offers(OTHER_TEACHER)) == 1
+
+
+def test_the_email_gives_up_well_inside_the_students_request(table, ses) -> None:
+    # The first offer is sent from the student's own request, which API
+    # Gateway cuts off at 29 seconds; boto3's defaults wait 60 s per read and retry.
+    _on_duty(table, TEACHER)
+
+    _ask_for_a_teacher()
+
+    [built] = ses.built_with
+    config = built["config"]
+    assert config.connect_timeout <= 2
+    assert config.read_timeout <= 3
+    assert config.retries["max_attempts"] == 1
+
+
+def test_a_subject_the_catalog_cannot_name_still_dispatches(table, ses, monkeypatch, caplog) -> None:
+    # A subject added to the taxonomy before its catalog line: naming it raises.
+    from stoa.services import message_catalog
+
+    monkeypatch.delitem(message_catalog.TEXT, "subject.math")
+    _on_duty(table, TEACHER)
+
+    with caplog.at_level(logging.WARNING):
+        help_request = _ask_for_a_teacher()
+
+    assert help_request["status"] == "assigned"
+    assert table.rows[CONV_KEY]["dispatched_teacher_id"] == TEACHER
+    assert any("dispatch_teacher_alert_failed" in record.getMessage() for record in caplog.records)
+
+    _on_duty(table, TEACHER, OTHER_TEACHER)
+    _lapse_the_offer(table)
+    outcome = _sweep()
+
+    assert outcome["conversationSweep"] == "completed"
+    assert outcome["conversationsDispatched"] == 1
+    assert table.rows[CONV_KEY]["dispatched_teacher_id"] == OTHER_TEACHER
 
 
 # --- In the teacher's language ---
