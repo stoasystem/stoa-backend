@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -20,6 +20,7 @@ from stoa.config import (
     DOCUMENT_MAX_BYTES,
     FREE_STORAGE_BYTES,
     IMAGE_MAX_BYTES,
+    MESSAGE_IMAGES_MAX_BYTES,
     MODEL_IMAGE_MAX_BYTES,
     PAID_STORAGE_BYTES,
     UPLOAD_INTENT_TTL_SECONDS,
@@ -2331,12 +2332,21 @@ def _require_immutable_record(item: dict[str, Any]) -> None:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
 
 
-def _require_model_sized_image(item: dict[str, Any]) -> None:
-    """An image the model would refuse is refused here, before the message exists."""
-    if (
-        item.get("detected_type") in MESSAGE_IMAGE_TYPES
-        and int(item["content_length"]) > MODEL_IMAGE_MAX_BYTES
-    ):
+def _require_model_sized_images(items: Iterable[dict[str, Any]]) -> None:
+    """Images the model would refuse are refused here, before the message exists.
+
+    Each image has its own limit, and all of a message's images together have
+    one, so the request they ride in stays within what Bedrock accepts.
+    """
+    total = 0
+    for item in items:
+        if item.get("detected_type") not in MESSAGE_IMAGE_TYPES:
+            continue
+        length = int(item.get("content_length", 0))
+        if length > MODEL_IMAGE_MAX_BYTES:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_TOO_LARGE)
+        total += length
+    if total > MESSAGE_IMAGES_MAX_BYTES:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_TOO_LARGE)
 
 
@@ -2365,7 +2375,7 @@ def prepare_message_attachments(
                 str(reference.attachment_id), actor, repository=repository
             )
             prepared.append(("attachment", item))
-        _require_model_sized_image(item)
+    _require_model_sized_images(item for _, item in prepared)
     return prepared
 
 
@@ -2701,13 +2711,14 @@ def extract_message_attachment_context(
                 AttachmentContextDisposition.INVALID,
                 error_code=AttachmentErrorCode.UPLOAD_NOT_FOUND,
             )
-        try:
-            _require_model_sized_image(item)
-        except AttachmentDecisionError:
-            return AttachmentContextResult(
-                AttachmentContextDisposition.INVALID,
-                error_code=AttachmentErrorCode.UPLOAD_TOO_LARGE,
-            )
+    try:
+        _require_model_sized_images(item for _, item in prepared)
+    except AttachmentDecisionError:
+        return AttachmentContextResult(
+            AttachmentContextDisposition.INVALID,
+            error_code=AttachmentErrorCode.UPLOAD_TOO_LARGE,
+        )
+    for _, item in prepared:
         length = int(item["content_length"])
         body = None
         primary_error: DocumentExtractionFailure | None = None
