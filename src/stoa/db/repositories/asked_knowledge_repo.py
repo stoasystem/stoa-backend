@@ -7,7 +7,11 @@ read them too, without a question row behind them (#148 retires those).
 
 A record holds the subject, the names and the unit ids of the points that are
 stars on the student's map. It never holds the question: a parent reads these
-names, and the question stays the student's. It is written inside the
+names, and the question stays the student's. A name the model wrote freely is
+text the student can steer it into writing, and it travels on - to the parent,
+the weekly report's prompt, the teacher, the next answer's prompt - so one that
+looks like personal data (`knowledge_gap_repo.looks_personal`) is not recorded;
+a star's name is the catalog's and always is. It is written inside the
 transaction that stores the answer (`attachment_repo.complete_message_command`),
 whose assistant-message put only succeeds once, so an answer replayed, retried
 or finished by another attempt records once, and a follow-up records nothing.
@@ -24,6 +28,7 @@ from typing import Any
 from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.db.dynamodb import get_table
+from stoa.db.repositories import knowledge_gap_repo
 
 ENTITY_TYPE = "asked_knowledge_points"
 SCHEMA_VERSION = "asked-knowledge-points.v1"
@@ -66,6 +71,8 @@ def record_put(
     for name, unit_id in points:
         written = _written(name)
         if not written or written.casefold() in seen:
+            continue
+        if not unit_id and knowledge_gap_repo.looks_personal(name):
             continue
         seen.add(written.casefold())
         names.append(written)

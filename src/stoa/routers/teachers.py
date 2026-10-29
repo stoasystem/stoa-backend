@@ -1761,9 +1761,20 @@ _PREP_TOPIC_LIMIT = 5
 
 
 def _asked_topics(conversation_id: str) -> list[str]:
-    """What the questions of this conversation asked about, newest first, once each."""
+    """What the questions of this conversation asked about, newest first, once each.
+
+    The request opens without them rather than not at all, as it does without
+    its attachments.
+    """
+    try:
+        records = asked_knowledge_repo.list_for_conversation(conversation_id)
+    except Exception as exc:
+        logger.warning(
+            "help_request_asked_topics_unavailable error_class=%s", type(exc).__name__
+        )
+        return []
     topics: dict[str, str] = {}
-    for record in asked_knowledge_repo.list_for_conversation(conversation_id):
+    for record in records:
         for name in record.get("knowledge_points") or []:
             if isinstance(name, str) and name.casefold() not in topics:
                 topics[name.casefold()] = name

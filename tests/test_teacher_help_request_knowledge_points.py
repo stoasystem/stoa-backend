@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from stoa.db.repositories import asked_knowledge_repo
 from test_chat_help_request_lifecycle import (
     CONV,
@@ -64,3 +66,19 @@ def test_a_help_request_with_nothing_asked_names_nothing(table) -> None:
 
     assert response.status_code == 200, response.text
     assert response.json()["weakTopics"] == []
+
+
+def test_the_help_request_opens_without_them_when_they_cannot_be_read(
+    table, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unavailable(*_args: Any, **_kwargs: Any) -> list[dict[str, Any]]:
+        raise RuntimeError("table unavailable")
+
+    monkeypatch.setattr(asked_knowledge_repo, "list_for_conversation", unavailable)
+    _dispatch_to(table, TEACHER)
+
+    response = _client().get(f"/teachers/me/help-requests/{REQUEST}")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["weakTopics"] == []
+    assert response.json()["conversationId"] == CONV

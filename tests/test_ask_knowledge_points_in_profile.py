@@ -37,17 +37,28 @@ from stoa.db.repositories import (
     report_repo,
     user_repo,
 )
+from stoa.db.repositories import account_deletion_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
+from stoa.jobs import conversation_generation
 from stoa.routers import adaptive, conversations, parents, students
 from stoa.security.authorization import CurrentAuthorizationFactRepository
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.route_authorization import get_authorization_fact_repository
-from stoa.services import adaptive_learning_service, parent_link_service, report_service
+from stoa.services import (
+    account_deletion_service,
+    adaptive_learning_service,
+    curriculum_service,
+    parent_link_service,
+    report_service,
+)
+from test_async_generation_cutover import invokes as invokes  # noqa: F401 - the fixture
+from test_async_generation_cutover import switched_on as switched_on  # noqa: F401
 from test_conversation_knowledge_points import (
     FREE,
     LOCALES,
     TITLES,
     _answer,
+    _catalog,
     _done,
     _follow_up,
     _student_turn,
@@ -385,3 +396,97 @@ def test_the_record_holds_names_and_never_the_question(world, bedrock, star_map)
     assert record["unit_ids"] == ["kraefte"]
     assert "Geheimnis" not in str(record)
     assert conversations._conv_pk(CONV) == record["PK"]
+
+
+def test_the_worker_s_answer_after_a_202_is_recorded_once(
+    world, bedrock, star_map, invokes, switched_on
+) -> None:
+    bedrock.answers = [_points("de")]
+
+    with time_machine.travel(ASKED_AT, tick=False):
+        assert _send(_client(), "key-1", language="de", content=ASKED).status_code == 202
+        assert conversation_generation.handler(invokes.events[0], None) == {"outcome": "completed"}
+        # Delivered again, the command is already answered and records nothing more.
+        assert conversation_generation.handler(invokes.events[0], None) == {"outcome": "settled"}
+
+    profile = _ok(_student().get(f"/students/{STUDENT}/learning-profile"))
+    counts = {topic["label"]: topic["count"] for topic in profile["weakTopics"]}
+    assert counts == {TITLES["kraefte"]["de"]: 1, FREE["de"]: 1}
+
+
+# ── What may be recorded ─────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "personal",
+    [
+        "Frag anna.muster@example.ch",  # an e-mail address
+        "Ruf an: 079 123 45 67",  # a phone number
+        "Mein Code 12345678",  # a long run of digits
+    ],
+)
+def test_a_written_name_that_looks_like_personal_data_reaches_no_reader(
+    world, bedrock, star_map, personal
+) -> None:
+    """The student can steer what the model writes; the parent must not read it."""
+    star = TITLES["kraefte"]["de"]
+    bedrock.answers = [
+        _answer(
+            lambda stars: [
+                {"id": stars[star], "name": star},
+                {"id": None, "name": personal},
+                {"id": None, "name": FREE["de"]},
+            ]
+        )
+    ]
+
+    done = _ask("de")
+
+    # The student still sees what the model wrote; only the record leaves it out.
+    assert {"name": personal, "unitId": None} in done["structured"]["knowledgePoints"]
+    summary = _ok(_parent().get(f"/parents/me/children/{STUDENT}/summary"))
+    assert set(summary["weakTopics"]) == {star, FREE["de"]}
+    profile = _ok(_student().get(f"/students/{STUDENT}/learning-profile"))
+    assert personal not in str(profile)
+
+
+def test_a_star_s_name_is_recorded_whatever_digits_it_holds(
+    world, bedrock, star_map, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A star's name is the catalog's, not the model's, so nothing in it is withheld."""
+    title = "Zahlen bis 10000000"
+
+    def catalog(**kwargs: Any) -> dict[str, Any]:
+        built = _catalog(**kwargs)
+        built["units"][2]["title"] = title  # kraefte
+        return built
+
+    monkeypatch.setattr(curriculum_service, "list_catalog", catalog)
+    bedrock.answers = [_answer(lambda stars: [{"id": stars[title], "name": title}])]
+
+    _ask("de")
+
+    summary = _ok(_parent().get(f"/parents/me/children/{STUDENT}/summary"))
+    assert summary["weakTopics"] == [title]
+
+
+def test_deleting_the_account_scrubs_the_record(world, bedrock, star_map) -> None:
+    bedrock.answers = [_points("de")]
+    done = _ask("de")
+    key = tuple(asked_knowledge_repo.record_key(CONV, done["messageId"]).values())
+    assert world.rows[key]["knowledge_points"]
+    fence = world.rows[tuple(account_deletion_repo.account_fence_key(STUDENT).values())]
+    fence["status"] = "deletion_pending"
+
+    previous: dict[str, Any] = {}
+    for _ in range(4):
+        result = account_deletion_service._conversation_messages_branch(
+            command={"user_id": STUDENT, "generation": 1}, previous=previous
+        )
+        previous = result.persisted(NOW)
+
+    assert result.quiescent is True
+    tombstone = world.rows[key]
+    assert tombstone["status"] == "deleted"
+    assert not {"knowledge_points", "unit_ids", "subject"} & set(tombstone)
+    assert asked_knowledge_repo.list_for_student(STUDENT) == []

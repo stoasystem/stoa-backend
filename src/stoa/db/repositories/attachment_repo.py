@@ -365,6 +365,8 @@ CONVERSATION_PRIVATE_ROW_REGISTRY = frozenset(
         "chat_quota_operation",
         "chat_usage_event",
         "attachment_association",
+        # What a new Ask question asked about (#143).
+        "asked_knowledge_points",
     }
 )
 CONVERSATION_WRITER_REGISTRY = frozenset(
@@ -419,6 +421,8 @@ CONVERSATION_PRIVATE_FIELDS = frozenset(
         "error_code",
         "generation_context",
         "provider_result_json",
+        "knowledge_points",
+        "unit_ids",
     }
 )
 CONVERSATION_TOMBSTONE_ALLOWLIST = frozenset(
