@@ -127,9 +127,10 @@ def reader_locale(user_id: str | None) -> str:
     """The language to answer **this request** in, for the person making it.
 
     What the client is rendering right now wins over the stored preference, so
-    switching language in the UI does not wait for the preference write.
+    switching language in the UI does not wait for the preference write. The
+    profile is read only when the request named no language it can use.
     """
-    return resolve_locale(_stored_profile(user_id))
+    return request_locale() or effective_locale(_stored_profile(user_id))
 
 
 def stored_locale(user_id: str | None) -> str:
