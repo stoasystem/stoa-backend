@@ -1,11 +1,13 @@
+import re
 from decimal import Decimal
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stoa.config import Settings
 from stoa.routers import notifications, questions, teachers
-from stoa.db.repositories import user_repo
+from stoa.db.repositories import question_repo, user_repo
 from stoa.services import (
     locale_service,
     message_catalog,
@@ -1247,3 +1249,122 @@ def test_every_subject_id_and_alias_has_its_own_name(monkeypatch):
         None: "Allgemein",
         Decimal(7): "Allgemein",
     }
+
+
+# ── events sent to a whole role, read in each reader's language (#108) ─────
+
+ROLE_READER_LOCALES = sorted(locale_service.SUPPORTED_LOCALES)
+
+
+def _words(text: str) -> set[str]:
+    """The words of a sentence, lowercased; `medium-severity` stays one word."""
+    return {word.lower() for word in re.findall(r"[\w-]+", text)}
+
+
+def _moderation_case_created(severity: str = "medium") -> None:
+    notification_service.emit_moderation_created(
+        case_item={"case_id": "case-1", "question_id": "question-1", "severity": severity},
+        actor_id="student-1",
+        actor_role="student",
+        owner_id="student-1",
+        privacy_generation=1,
+    )
+
+
+def _bell(monkeypatch, user_id: str, role: str, locale: str) -> list[dict]:
+    """The reader's bell, read with their stored language and nothing else."""
+    reader = {"user_id": user_id, "role": role, "account_status": "active", "preferred_locale": locale}
+    monkeypatch.setattr(
+        user_repo, "get_user", lambda wanted, **_kwargs: reader if wanted == user_id else None
+    )
+    # A teacher's facts are looked up even for their own bell; they hold none here.
+    monkeypatch.setattr(question_repo, "get_teacher_session", lambda *_a, **_k: None)
+    monkeypatch.setattr(question_repo, "get_teacher_assignment", lambda *_a, **_k: None)
+    client = _app(notifications.router, "/notifications", {"sub": user_id, "role": role})
+    response = client.get("/notifications")
+    assert response.status_code == 200, response.text
+    return response.json()["items"]
+
+
+@pytest.mark.parametrize("locale", ROLE_READER_LOCALES)
+def test_a_new_moderation_case_reads_in_the_admin_s_language(monkeypatch, locale):
+    """Written once for the admin role, read by every admin in their own language."""
+    _install_notification_repo(monkeypatch)
+    _profiles(monkeypatch, {})
+    _moderation_case_created("medium")
+
+    [item] = _bell(monkeypatch, f"admin-{locale}", "admin", locale)
+
+    assert item["eventType"] == "moderation_case_update"
+    assert (item["title"], item["summary"]) == (
+        message_catalog.TEXT["moderation.created.title"][locale],
+        message_catalog.TEXT["moderation.created.summary.medium"][locale],
+    )
+    # Not the stored enum dropped into a sentence, in any language.
+    assert _words(item["summary"]).isdisjoint({"low", "medium", "high"})
+
+
+@pytest.mark.parametrize("locale", ROLE_READER_LOCALES)
+def test_a_teacher_request_reads_in_the_reader_s_language(monkeypatch, locale):
+    """The subject is named the way the reader says it, never by its stored id."""
+    _install_notification_repo(monkeypatch)
+    _profiles(monkeypatch, {})
+    notification_service.emit_teacher_requested(
+        question_id="question-1", student_id="student-1", subject="math", account_fence_generation=1
+    )
+
+    [item] = _bell(monkeypatch, f"teacher-{locale}", "teacher", locale)
+
+    assert item["eventType"] == "teacher_requested"
+    assert (item["title"], item["summary"]) == (
+        message_catalog.TEXT["teacher_requested.title"][locale],
+        message_catalog.TEXT["teacher_requested.summary"][locale].format(
+            subject=message_catalog.TEXT["subject.math"][locale]
+        ),
+    )
+    assert "math" not in _words(item["summary"])
+
+
+def test_one_role_event_is_read_differently_by_two_readers(monkeypatch):
+    """One stored row, two admins: neither is handed the other's language."""
+    _install_notification_repo(monkeypatch)
+    _profiles(monkeypatch, {})
+    _moderation_case_created("high")
+
+    [german] = _bell(monkeypatch, "admin-de", "admin", "de")
+    [french] = _bell(monkeypatch, "admin-fr", "admin", "fr")
+
+    assert german["eventId"] == french["eventId"]
+    assert german["summary"] == message_catalog.TEXT["moderation.created.summary.high"]["de"]
+    assert french["summary"] == message_catalog.TEXT["moderation.created.summary.high"]["fr"]
+
+
+def test_each_severity_says_its_own_sentence(monkeypatch):
+    """A summary that ignored the severity would pass every test above with `medium`."""
+    events, _ = _install_notification_repo(monkeypatch)
+    _profiles(monkeypatch, {})
+    for severity in ("low", "medium", "high"):
+        _moderation_case_created(severity)
+        for event_id in list(events):
+            events[f"{severity}-{event_id}"] = {**events.pop(event_id), "event_id": f"{severity}-{event_id}"}
+
+    summaries = {item["summary"] for item in _bell(monkeypatch, "admin-it", "admin", "it")}
+
+    assert summaries == {
+        message_catalog.TEXT[f"moderation.created.summary.{severity}"]["it"]
+        for severity in ("low", "medium", "high")
+    }
+
+
+def test_the_admin_operations_list_answers_in_the_admin_s_language(monkeypatch):
+    _install_notification_repo(monkeypatch)
+    _profiles(monkeypatch, {"admin-fr": "fr"})
+    _moderation_case_created()
+
+    client = _app(notifications.admin_router, "/admin", {"sub": "admin-fr", "role": "admin"})
+    response = client.get("/admin/notifications?event_type=moderation_case_update")
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["title"] == (
+        message_catalog.TEXT["moderation.created.title"]["fr"]
+    )

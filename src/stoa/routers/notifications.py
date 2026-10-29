@@ -13,7 +13,7 @@ from stoa.security.route_authorization import (
     authorized_notification_push_token_dependency,
     notification_self_dependency,
 )
-from stoa.services import notification_service
+from stoa.services import locale_service, notification_service
 
 router = APIRouter()
 
@@ -254,6 +254,7 @@ async def list_admin_notifications(
         status=status_filter,
         event_type=event_type,
         limit=limit,
+        locale=locale_service.reader_locale(str(user.get("sub") or "")),
     )
     return NotificationListResponse(
         items=[NotificationEventResponse.model_validate(item) for item in items],
