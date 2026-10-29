@@ -149,11 +149,11 @@ class _World:
     def admin(self) -> TestClient:
         return self.reader(ADMIN)
 
-    def intent(self, data: bytes, **extra: Any):
+    def intent(self, data: bytes, purpose: str = "conversation_attachment", **extra: Any):
         return self.student.post(
             "/files/intents",
             json={
-                "purpose": "conversation_attachment",
+                "purpose": purpose,
                 "filename": "homework.png",
                 "contentType": "image/png",
                 "sizeBytes": len(data),
@@ -161,9 +161,14 @@ class _World:
             },
         )
 
-    def upload(self, data: bytes, conversation_id: str | None = CONVERSATION) -> str:
+    def upload(
+        self,
+        data: bytes,
+        conversation_id: str | None = CONVERSATION,
+        purpose: str = "conversation_attachment",
+    ) -> str:
         extra = {"conversationId": conversation_id} if conversation_id else {}
-        intent = self.intent(data, **extra)
+        intent = self.intent(data, purpose, **extra)
         assert intent.status_code == 200, intent.text
         upload_id = intent.json()["uploadId"]
         signed = self.student.post(
@@ -528,25 +533,25 @@ def test_when_the_image_cannot_be_kept_the_upload_stays_retryable(world) -> None
     assert world.evidence() == [data]
 
 
-def test_a_teachers_refused_image_names_the_teacher(world) -> None:
-    """Teachers' uploads are moderated too (#145); the case names who uploaded it.
-
-    Until #145 lets a teacher open an intent, the student's intent is handed over.
-    """
-    upload_id = world.upload(_png())
-    key = attachment_repo.upload_key(upload_id)
-    row = world.table.get_item(Key=key)["Item"]
-    world.table.put_item(Item={**row, "owner_id": "teacher-1", "student_id": "teacher-1"})
-    world.table.seed_active_account("teacher-1", generation=3)
+def test_a_teachers_refused_reply_image_names_the_teacher(world) -> None:
+    """A teacher's image for a help reply (#145) is moderated and queued the same way."""
+    world.table.seed_active_account("teacher-1", generation=4)
     world.student.app.dependency_overrides[get_actor] = lambda: _actor("teacher-1", CanonicalRole.TEACHER)
+    data = _png(seed=145)
 
-    assert world.complete(upload_id).status_code == 422
+    upload_id = world.upload(data, conversation_id=None, purpose="help_reply_image")
+
+    refused = world.complete(upload_id)
+    assert (refused.status_code, refused.json()["detail"]["code"]) == (422, "upload_content_blocked")
     [case] = world.cases()
+    assert case["image_context"]["upload_id"] == upload_id
     assert (case["image_context"]["uploader_id"], case["image_context"]["uploader_role"]) == (
         "teacher-1",
         "teacher",
     )
+    assert case["image_context"]["hits"] == EXPECTED_HITS
     assert case["student_id"] == "teacher-1"
+    assert world.admin.get(f"/admin/moderation/cases/{case['case_id']}/image").content == data
 
 
 def test_a_case_closed_again_counts_from_its_last_handling(world) -> None:

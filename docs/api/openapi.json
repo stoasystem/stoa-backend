@@ -414,6 +414,21 @@
       },
       "AddNoteRequest": {
         "properties": {
+          "attachmentIds": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ReplyImageReference"
+                },
+                "maxItems": 8,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachmentids"
+          },
           "content": {
             "title": "Content",
             "type": "string"
@@ -10792,6 +10807,23 @@
         "title": "RegisterRequest",
         "type": "object"
       },
+      "ReplyImageReference": {
+        "additionalProperties": false,
+        "description": "A validated `help_reply_image` upload of the replying teacher (#145).",
+        "properties": {
+          "uploadId": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Uploadid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uploadId"
+        ],
+        "title": "ReplyImageReference",
+        "type": "object"
+      },
       "ReplyRequest": {
         "properties": {
           "content": {
@@ -13628,6 +13660,13 @@
       },
       "TeacherNoteOut": {
         "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentSummary"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
           "createdAt": {
             "title": "Createdat",
             "type": "string"
@@ -14199,7 +14238,8 @@
       "UploadPurpose": {
         "enum": [
           "question_image",
-          "conversation_attachment"
+          "conversation_attachment",
+          "help_reply_image"
         ],
         "title": "UploadPurpose",
         "type": "string"
@@ -33193,7 +33233,7 @@
     },
     "/teachers/me/help-requests/{request_id}/notes": {
       "post": {
-        "description": "Add a teacher note to a help request (stored in the conversation).",
+        "description": "Add a teacher note to a help request (stored in the conversation).\n\nOnly the teacher the request is with posts into it, and its images with it\n(#145): the request's authorization is settled before an upload is looked at.",
         "operationId": "add_note_teachers_me_help_requests__request_id__notes_post",
         "parameters": [
           {
@@ -33264,11 +33304,18 @@
               "capability": null,
               "purpose": "teacher_help",
               "resource_type": "teacher_help_request"
+            },
+            {
+              "action": "update",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "upload"
             }
           ],
           "classification": "authorized",
           "identifiers": [
-            "request_id"
+            "request_id",
+            "uploadId"
           ]
         }
       }

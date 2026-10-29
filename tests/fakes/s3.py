@@ -84,7 +84,11 @@ class MultipartS3:
 
     def get_object(self, **kwargs: Any) -> dict[str, Any]:
         stored = self.objects[(kwargs["Key"], kwargs["VersionId"])]
-        return {"Body": BytesIO(stored["data"]), "ContentLength": len(stored["data"])}
+        return {
+            "Body": BytesIO(stored["data"]),
+            "ContentLength": len(stored["data"]),
+            "ETag": stored["ETag"],
+        }
 
     def put_object(self, **kwargs: Any) -> dict[str, Any]:
         data = kwargs["Body"].read()

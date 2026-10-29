@@ -10,7 +10,7 @@ from typing import Any, Literal, NamedTuple, NoReturn, Protocol, runtime_checkab
 from boto3.dynamodb.conditions import Attr, Key
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import (
@@ -23,7 +23,7 @@ from stoa.db.repositories import (
 from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink, get_s3_client
-from stoa.models.attachment import AttachmentSummary
+from stoa.models.attachment import AttachmentSummary, ReplyImageReference
 from stoa.models.question import QuestionStatus
 from stoa.security.attachment_errors import (
     AttachmentDecisionError,
@@ -843,6 +843,8 @@ class TeacherNoteOut(BaseModel):
     teacher: dict
     richContent: dict | None = None
     responseFormat: str | None = None
+    # The images the reply carries (#145), read as each message's are.
+    attachments: list[AttachmentSummary] = Field(default_factory=list)
 
 
 class TeacherHelpRequestDetail(BaseModel):
@@ -872,6 +874,15 @@ class UpdateStatusRequest(BaseModel):
 class AddNoteRequest(BaseModel):
     content: str
     richContent: dict[str, Any] | None = None
+    # The teacher's own `help_reply_image` uploads, completed (#145).
+    attachmentIds: list[ReplyImageReference] | None = Field(default=None, max_length=8)
+
+    @model_validator(mode="after")
+    def unique_attachments(self) -> "AddNoteRequest":
+        upload_ids = [reference.upload_id for reference in self.attachmentIds or []]
+        if len(set(upload_ids)) != len(upload_ids):
+            raise ValueError("attachment references must be unique")
+        return self
 
 
 class TeacherAvailabilitySlot(BaseModel):
@@ -1255,6 +1266,26 @@ _help_request_attachment_dependency.authorization_specs = tuple(  # type: ignore
         _teacher_list_metadata_resolver,
     )
     for resource_type in (ResourceType.TEACHER_HELP_REQUEST, ResourceType.ATTACHMENT)
+)
+
+
+async def _reply_upload_inventory_resolver(upload_id: str):
+    return {"student_id": upload_id}
+
+
+async def _reply_upload_actor_dependency(actor: Actor = Depends(get_actor)) -> Actor:
+    return actor
+
+
+# A reply's images are the replying teacher's own uploads, consumed by it (#145):
+# resolved under the teacher's ownership, as the files routes resolve them.
+_reply_upload_actor_dependency.authorization_specs = (  # type: ignore[attr-defined]
+    AuthorizationSpec(
+        ResourceType.UPLOAD,
+        AuthorizationAction.UPDATE,
+        AuthorizationPurpose.SELF_SERVICE,
+        _reply_upload_inventory_resolver,
+    ),
 )
 
 
@@ -1713,6 +1744,11 @@ async def get_help_request(
                 else None
             ),
             responseFormat=_optional_text(n.get("teacher_response_format")),
+            attachments=[
+                attachment_summaries[value]
+                for value in _attachment_ids(n)
+                if value in attachment_summaries
+            ],
         )
         for n in _teacher_items(notes_resp)
     ]
@@ -1874,9 +1910,14 @@ async def add_note(
             resolver=_resolve_help_request,
         )
     ),
-    actor: Actor = Depends(get_actor),
+    actor: Actor = Depends(_reply_upload_actor_dependency),
+    correlation_id: str = Depends(get_request_correlation_id),
 ):
-    """Add a teacher note to a help request (stored in the conversation)."""
+    """Add a teacher note to a help request (stored in the conversation).
+
+    Only the teacher the request is with posts into it, and its images with it
+    (#145): the request's authorization is settled before an upload is looked at.
+    """
     table = get_table()
     conv = dict(authorized.value)
 
@@ -1892,6 +1933,12 @@ async def add_note(
         reply_fields = teacher_reply_service.normalize_teacher_reply(body.content, body.richContent)
     except teacher_reply_service.TeacherReplyValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        reply_images = attachment_service.prepare_reply_images(
+            [reference.upload_id for reference in body.attachmentIds or []], actor
+        )
+    except AttachmentDecisionError as error:
+        _raise_attachment(error, correlation_id)
 
     # A reply belongs to the student's conversation: stamped with the student
     # as owner and written behind their account fence, so the student's
@@ -1951,6 +1998,20 @@ async def add_note(
     author_name = (teacher_profile or {}).get("name")
     if isinstance(author_name, str) and author_name.strip():
         message_item["author_name"] = author_name.strip()
+    image_operations: list[dict[str, Any]] = []
+    attachments: list[AttachmentSummary] = []
+    if reply_images:
+        image_operations, attachments = attachment_service.reply_image_operations(
+            reply_images,
+            teacher_id=teacher_id,
+            student_id=student_id,
+            account_fence_generation=generation,
+            conversation_id=conv_id,
+            message_id=msg_id,
+        )
+        attachment_ids = [summary.attachment_id for summary in attachments]
+        message_item["attachment_ids"] = attachment_ids
+        note_item["attachment_ids"] = attachment_ids
 
     if not _takes_two_row_path(conv, teacher_id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_NOT_HELD)
@@ -1965,11 +2026,14 @@ async def add_note(
                 now=now,
                 # The queue row's CAS already carries the student's fence, and one
                 # transaction cannot check the same fence row twice.
-                extra_operations=tuple(
-                    attachment_repo.build_conversation_write_transaction(
-                        item=item, owner_id=student_id, generation=generation
-                    )[1]
-                    for item in (note_item, message_item)
+                extra_operations=(
+                    *(
+                        attachment_repo.build_conversation_write_transaction(
+                            item=item, owner_id=student_id, generation=generation
+                        )[1]
+                        for item in (note_item, message_item)
+                    ),
+                    *image_operations,
                 ),
                 table=table,
             )
@@ -1978,15 +2042,27 @@ async def add_note(
                 status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
             ) from exc
     else:
-        # The holder's reply: both rows behind the student's account fence.
+        # The holder's reply: both rows behind the student's account fence, and
+        # only while the request is still theirs. The route's check was a read,
+        # and the request can move on before this write.
         operations = attachment_repo.build_conversation_write_transaction(
             item=note_item, owner_id=student_id, generation=generation
+        )
+        operations.append(
+            {
+                "ConditionCheck": {
+                    "Key": {"PK": _conv_pk(conv_id), "SK": "CONV"},
+                    "ConditionExpression": "attribute_exists(PK) AND teacher_id = :teacher",
+                    "ExpressionAttributeValues": {":teacher": teacher_id},
+                }
+            }
         )
         operations.append(
             attachment_repo.build_conversation_write_transaction(
                 item=message_item, owner_id=student_id, generation=generation
             )[1]
         )
+        operations.extend(image_operations)
         try:
             account_deletion_repo.transact(operations, table=table)
         except account_deletion_repo.AccountDeletionConflict as exc:
@@ -2005,4 +2081,5 @@ async def add_note(
         teacher={"id": teacher_id, "name": teacher_name},
         richContent=reply_fields["teacher_response_rich"],
         responseFormat=reply_fields["teacher_response_format"],
+        attachments=attachments,
     )
