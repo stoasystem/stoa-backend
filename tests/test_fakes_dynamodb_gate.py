@@ -43,6 +43,11 @@ SHARED_DOUBLE = "FakeTable"
 #             019 group A converted the doubles behind the five known incidents
 #             first, and this list is what is left.
 HAND_WRITTEN_DOUBLES: dict[str, str] = {
+    "conftest.py::_EmptyAskedKnowledgeTable": (
+        "script: holds no Ask knowledge-point records on purpose, so a "
+        "learning-profile reader in a test that never installed one gets nothing "
+        "instead of reaching the real table"
+    ),
     "conftest.py::_EmptyParentLinkTable": (
         "script: holds nothing on purpose, so a test that never installed a link "
         "table fails here instead of reaching the real one"

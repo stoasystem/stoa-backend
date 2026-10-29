@@ -13,7 +13,7 @@ from stoa.security.route_authorization import (
     authorized_notification_push_token_dependency,
     notification_self_dependency,
 )
-from stoa.services import notification_service
+from stoa.services import locale_service, notification_service
 
 router = APIRouter()
 
@@ -44,7 +44,9 @@ class NotificationListResponse(BaseModel):
 
 
 class NotificationPreferenceUpdate(BaseModel):
-    preferences: dict[str, dict[str, bool]]
+    # Each part left out keeps what is stored.
+    preferences: dict[str, dict[str, bool]] | None = None
+    dispatchEmail: bool | None = None
 
 
 class NotificationDigestSendRequest(BaseModel):
@@ -86,6 +88,9 @@ class NotificationPushTokenResponse(BaseModel):
 class NotificationPreferenceResponse(BaseModel):
     userId: str
     preferences: dict[str, dict[str, bool]]
+    # The reminder email sent with each offer of a help request (#141). The bell
+    # notification for the same offer cannot be switched off.
+    dispatchEmail: bool
     supportedCategories: list[str]
     supportedChannels: list[str]
     updatedAt: str | None = None
@@ -155,7 +160,9 @@ async def update_notification_preferences(
     body: NotificationPreferenceUpdate,
     actor: Actor = Depends(notification_self_dependency(ResourceType.NOTIFICATION_PREFERENCE, AuthorizationAction.UPDATE)),
 ):
-    return notification_service.update_preferences(actor.user_id, body.preferences)
+    return notification_service.update_preferences(
+        actor.user_id, body.preferences, dispatch_email=body.dispatchEmail
+    )
 
 
 @router.get("/digest-preview", response_model=NotificationDigestPreviewResponse)
@@ -247,6 +254,7 @@ async def list_admin_notifications(
         status=status_filter,
         event_type=event_type,
         limit=limit,
+        locale=locale_service.reader_locale(str(user.get("sub") or "")),
     )
     return NotificationListResponse(
         items=[NotificationEventResponse.model_validate(item) for item in items],

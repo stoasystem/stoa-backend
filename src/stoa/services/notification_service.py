@@ -18,7 +18,13 @@ from fastapi import HTTPException
 from stoa.config import settings
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, notification_repo
-from stoa.services import locale_service, message_catalog, websocket_service
+from stoa.services import (
+    learning_profile_service,
+    locale_service,
+    message_catalog,
+    notify_service,
+    websocket_service,
+)
 from stoa.security.identity import Actor
 
 logger = logging.getLogger(__name__)
@@ -29,6 +35,7 @@ EVENT_TYPES = {
     "teacher_takeover",
     "teacher_reply",
     "teacher_help_expired",
+    "teacher_help_dispatched",
     "moderation_case_update",
     "subscription_request_update",
     "learning_profile_update",
@@ -46,11 +53,21 @@ PREFERENCE_CATEGORIES = {
 PREFERENCE_CHANNELS = {"in_app", "realtime", "email_digest", "push"}
 PUSH_TOKEN_STATUSES = {"active", "revoked"}
 PUSH_TOKEN_PLATFORMS = {"ios", "android", "web"}
+# Stored in the bell whatever the reader's in-app preference says. An offer
+# lapses in minutes, so a teacher who switched the bell off for the category
+# would let every one of them lapse unseen (#141); the email is what they can
+# switch off instead.
+ALWAYS_IN_APP_EVENT_TYPES = frozenset({"teacher_help_dispatched"})
+# The switch for the dispatch reminder email (#141), on until the teacher turns
+# it off. It is not a category x channel cell: the bell for the same offer
+# cannot be turned off, and the email is sent at once, not in a digest.
+DISPATCH_EMAIL_DEFAULT = True
 EVENT_CATEGORY_BY_TYPE = {
     "teacher_requested": "teacher_responses",
     "teacher_takeover": "teacher_responses",
     "teacher_reply": "teacher_responses",
     "teacher_help_expired": "teacher_responses",
+    "teacher_help_dispatched": "teacher_responses",
     "moderation_case_update": "admin_operations",
     "subscription_request_update": "admin_operations",
     "learning_profile_update": "learning_updates",
@@ -67,6 +84,50 @@ def _recipient_locale(recipient_id: str | None) -> str:
     wrong person here (#124).
     """
     return locale_service.stored_locale(recipient_id)
+
+
+def _moderation_created_message(params: Mapping[str, Any], locale: str) -> tuple[str, str]:
+    summary_key = f"moderation.created.summary.{params.get('severity')}"
+    if summary_key not in message_catalog.TEXT:
+        summary_key = "moderation.created.summary"
+    return (
+        message_catalog.text("moderation.created.title", locale),
+        message_catalog.text(summary_key, locale),
+    )
+
+
+def _teacher_requested_message(params: Mapping[str, Any], locale: str) -> tuple[str, str]:
+    return (
+        message_catalog.text("teacher_requested.title", locale),
+        message_catalog.text(
+            "teacher_requested.summary",
+            locale,
+            subject=learning_profile_service.subject_name(params.get("subject"), locale),
+        ),
+    )
+
+
+# Events written once for a whole role (`recipient_id=None`) have no reader
+# whose language is known when they are written. The row keeps one of these
+# keys and its raw parameters, and each reader is shown the title and summary
+# in their own language when they read it (#108). The stored title and summary
+# are the English, for whatever shows a row without a reader to render it for.
+ROLE_MESSAGES = {
+    "moderation.created": _moderation_created_message,
+    "teacher_requested": _teacher_requested_message,
+}
+ROLE_MESSAGE_STORED_LOCALE = "en"
+
+
+def _role_message_text(message_key: str, params: Mapping[str, Any]) -> dict[str, Any]:
+    """The `create_event` arguments for a role message, its stored text in English."""
+    title, summary = ROLE_MESSAGES[message_key](params, ROLE_MESSAGE_STORED_LOCALE)
+    return {
+        "title": title,
+        "summary": summary,
+        "message_key": message_key,
+        "message_params": dict(params),
+    }
 
 
 def now_iso() -> str:
@@ -648,6 +709,8 @@ def create_event(
     owner_id: str | None = None,
     account_fence_generation: int | None = None,
     global_nonprivate: bool = False,
+    message_key: str | None = None,
+    message_params: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     if event_type not in EVENT_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported notification event type")
@@ -710,6 +773,8 @@ def create_event(
         preferences=preferences,
         realtime_configured=bool(settings.websocket_api_endpoint),
     )
+    if event_type in ALWAYS_IN_APP_EVENT_TYPES:
+        delivery["channels"]["in_app"] = {"enabled": True, "decision": "stored"}
     event_status = status
     if not delivery["channels"]["in_app"]["enabled"] and status == "created":
         event_status = "archived"
@@ -750,6 +815,15 @@ def create_event(
             owner_target_type=ownership["target_type"],
             owner_target_id=ownership["target_id"],
         )
+    if message_key in ROLE_MESSAGES:
+        item.update(
+            message_key=message_key,
+            message_params={
+                str(name): str(value)
+                for name, value in (message_params or {}).items()
+                if value is not None
+            },
+        )
     persisted = notification_repo.put_event(item)
     if isinstance(persisted, dict):
         item = persisted
@@ -787,8 +861,7 @@ def emit_teacher_requested(
     """Tell whoever is on duty that a student asked for a person.
 
     One row per role, read by everybody holding it, so there is no reader whose
-    language it could be written in. It stays in one language until the console
-    renders these by key instead of by stored text (#124).
+    language it could be written in: each reader is shown it in theirs (#108).
     """
     for recipient_role in ("teacher", "admin"):
         create_event_safe(
@@ -797,8 +870,7 @@ def emit_teacher_requested(
             event_type="teacher_requested",
             target_type="question",
             target_id=question_id,
-            title="Teacher help requested",
-            summary=f"A student requested help for a {subject} question.",
+            **_role_message_text("teacher_requested", {"subject": subject}),
             metadata={"student_id": student_id, "subject": subject},
             actor_id=student_id,
             actor_role="student",
@@ -1151,6 +1223,71 @@ def emit_teacher_help_expired(*, conversation: Mapping[str, Any], case_returned:
     )
 
 
+def emit_teacher_help_dispatched(
+    *,
+    conversation: Mapping[str, Any],
+    teacher_id: str,
+    dispatch_id: str,
+    deadline_at: str,
+    accept_minutes: int,
+) -> None:
+    """Tell the teacher a chat help request was just offered to that it waits for them (#141).
+
+    Every offer, the first and each re-offer, leaves one bell notification,
+    which the teacher cannot switch off, and - unless they switched it off -
+    one reminder email. Both are in the teacher's own language and name the
+    subject and nothing of the student. Neither ever fails the offer: a failed
+    send is logged with its exception type only.
+    """
+    request_id = str(conversation.get("escalation_request_id") or "")
+    locale = _recipient_locale(teacher_id)
+    subject_name = learning_profile_service.subject_name(conversation.get("subject"), locale)
+    create_event_safe(
+        recipient_id=teacher_id,
+        recipient_role="teacher",
+        event_type="teacher_help_dispatched",
+        target_type="question",
+        target_id=request_id,
+        title=message_catalog.text("teacher_help.dispatched.title", locale),
+        summary=message_catalog.text(
+            "teacher_help.dispatched.summary",
+            locale,
+            subject=subject_name,
+            minutes=accept_minutes,
+        ),
+        metadata={
+            "request_id": request_id,
+            "dispatch_id": dispatch_id,
+            "deadline_at": deadline_at,
+        },
+        actor_role="system",
+        # The request is the student's: their account's deletion takes this with it.
+        owner_id=str(conversation.get("student_id") or ""),
+        account_fence_generation=conversation.get("account_fence_generation"),
+        event_id=f"teacher-help-dispatched-{dispatch_id}",
+    )
+    if _best_effort_disabled():
+        return
+    try:
+        if not dispatch_email_enabled(teacher_id):
+            return
+        from stoa.db.repositories import user_repo
+
+        recipient = _safe_text((user_repo.get_user(teacher_id) or {}).get("email"))
+        if not recipient:
+            logger.warning("dispatch_reminder_email_skipped reason=no_address")
+            return
+        notify_service.send_dispatch_reminder_email(
+            recipient,
+            subject_name=subject_name,
+            request_id=request_id,
+            minutes=accept_minutes,
+            locale=locale,
+        )
+    except Exception as exc:  # noqa: BLE001 - best effort by contract
+        logger.warning("dispatch_reminder_email_failed error=%s", type(exc).__name__)
+
+
 def emit_moderation_update(
     *,
     case_item: dict[str, Any],
@@ -1198,15 +1335,17 @@ def emit_moderation_created(
 ) -> None:
     _require_moderation_owner(owner_id, privacy_generation)
     # Addressed to the admin role rather than to one administrator, so there is
-    # no reader whose language this could be written in (#124).
+    # no reader whose language this could be written in: each admin is shown it
+    # in theirs (#108).
     create_event_safe(
         recipient_id=None,
         recipient_role="admin",
         event_type="moderation_case_update",
         target_type="moderation_case",
         target_id=str(case_item.get("case_id") or ""),
-        title="New moderation case",
-        summary=f"{case_item.get('severity', 'medium')} moderation case reported.",
+        **_role_message_text(
+            "moderation.created", {"severity": case_item.get("severity", "medium")}
+        ),
         metadata={
             "question_id": case_item.get("question_id"),
             "reason": case_item.get("reason"),
@@ -1282,12 +1421,13 @@ def list_user_events(
         raise HTTPException(status_code=400, detail="Unsupported notification status")
     user_id = _user_id(user)
     role = _user_role(user)
+    locale = locale_service.reader_locale(user_id)
     items = [
         item for item in notification_repo.list_events(limit=max(limit, 100))
         if _visible_to_user(item, user_id=user_id, role=role)
         and (status is None and item.get("status") != "archived" or status == item.get("status"))
     ]
-    return [event_response(item) for item in _sort_events(items)[:limit]]
+    return [event_response(item, locale=locale) for item in _sort_events(items)[:limit]]
 
 
 def list_admin_events(
@@ -1295,6 +1435,7 @@ def list_admin_events(
     status: str | None = None,
     event_type: str | None = None,
     limit: int = 50,
+    locale: str | None = None,
 ) -> list[dict[str, Any]]:
     if status is not None and status not in STATUSES:
         raise HTTPException(status_code=400, detail="Unsupported notification status")
@@ -1305,7 +1446,7 @@ def list_admin_events(
         if (status is None or item.get("status") == status)
         and (event_type is None or item.get("event_type") == event_type)
     ]
-    return [event_response(item) for item in _sort_events(items)[:limit]]
+    return [event_response(item, locale=locale) for item in _sort_events(items)[:limit]]
 
 
 def default_preferences() -> dict[str, Any]:
@@ -1327,19 +1468,47 @@ def get_preferences_for_user(user_id: str | None) -> dict[str, Any]:
     return _merged_preferences(stored.get("preferences"))
 
 
+def _stored_dispatch_email(stored: Mapping[str, Any]) -> bool:
+    value = stored.get("dispatch_email")
+    return value if isinstance(value, bool) else DISPATCH_EMAIL_DEFAULT
+
+
+def dispatch_email_enabled(user_id: str) -> bool:
+    """Whether this teacher wants the dispatch reminder email (#141)."""
+    return _stored_dispatch_email(notification_repo.get_preferences(user_id) or {})
+
+
 def preferences_response(user_id: str) -> dict[str, Any]:
     stored = notification_repo.get_preferences(user_id) or {}
     return {
         "userId": user_id,
         "preferences": _merged_preferences(stored.get("preferences")),
+        "dispatchEmail": _stored_dispatch_email(stored),
         "supportedCategories": sorted(PREFERENCE_CATEGORIES),
         "supportedChannels": sorted(PREFERENCE_CHANNELS),
         "updatedAt": stored.get("updated_at"),
     }
 
 
-def update_preferences(user_id: str, preferences: dict[str, Any]) -> dict[str, Any]:
-    merged = _merged_preferences(None)
+def update_preferences(
+    user_id: str,
+    preferences: dict[str, Any] | None,
+    *,
+    dispatch_email: bool | None = None,
+) -> dict[str, Any]:
+    """Write the matrix and the dispatch email switch; a part left out keeps what is stored.
+
+    A client that only knows the matrix must not turn a teacher's dispatch
+    email back on, and one that only flips the switch must not reset the matrix.
+    """
+    stored = notification_repo.get_preferences(user_id) or {}
+    if preferences is None:
+        merged = _merged_preferences(stored.get("preferences"))
+        preferences = {}
+    else:
+        merged = _merged_preferences(None)
+    if dispatch_email is None:
+        dispatch_email = _stored_dispatch_email(stored)
     for category, channel_updates in preferences.items():
         if category not in PREFERENCE_CATEGORIES:
             raise HTTPException(status_code=400, detail="Unsupported notification preference category")
@@ -1359,12 +1528,14 @@ def update_preferences(user_id: str, preferences: dict[str, Any]) -> dict[str, A
             "user_id": user_id,
             "owner_id": user_id,
             "preferences": merged,
+            "dispatch_email": dispatch_email,
             "updated_at": updated_at,
         }
     )
     return {
         "userId": user_id,
         "preferences": merged,
+        "dispatchEmail": dispatch_email,
         "supportedCategories": sorted(PREFERENCE_CATEGORIES),
         "supportedChannels": sorted(PREFERENCE_CHANNELS),
         "updatedAt": updated_at,
@@ -1962,8 +2133,13 @@ def _user_role(user: dict[str, Any] | Actor) -> str:
     return user.role.value if isinstance(user, Actor) else str(user.get("role") or "")
 
 
-def event_response(item: dict[str, Any]) -> dict[str, Any]:
+def event_response(item: dict[str, Any], *, locale: str | None = None) -> dict[str, Any]:
+    """One event as the API shows it; a role message in `locale` when given."""
     delivery = (item.get("metadata") or {}).get("delivery_decision") or {}
+    title, summary = item.get("title"), item.get("summary")
+    render = ROLE_MESSAGES.get(str(item.get("message_key") or ""))
+    if locale and render:
+        title, summary = render(item.get("message_params") or {}, locale)
     return {
         "eventId": item.get("event_id"),
         "recipientId": item.get("recipient_id"),
@@ -1971,8 +2147,8 @@ def event_response(item: dict[str, Any]) -> dict[str, Any]:
         "eventType": item.get("event_type"),
         "targetType": item.get("target_type"),
         "targetId": item.get("target_id"),
-        "title": item.get("title"),
-        "summary": item.get("summary"),
+        "title": title,
+        "summary": summary,
         "status": item.get("status"),
         "createdAt": item.get("created_at"),
         "readAt": item.get("read_at"),

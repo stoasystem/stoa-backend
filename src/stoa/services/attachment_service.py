@@ -36,6 +36,7 @@ from stoa.models.attachment import (
     SavedAttachmentDetail,
     SavedAttachmentPage,
     UploadIntentRequest,
+    UploadPartUrlRequest,
 )
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import Actor, CanonicalRole
@@ -1073,6 +1074,144 @@ async def put_upload_chunk(
     return _safe_part_receipt(upload_id, part_number, length, checksum)
 
 
+def sign_upload_part(
+    upload_id: str,
+    part_number: int,
+    request: UploadPartUrlRequest,
+    actor: Actor,
+    *,
+    signer: Any,
+    settings: Settings,
+    now: datetime | None = None,
+    repository: Any = attachment_repo,
+) -> dict[str, Any]:
+    """A URL on which the browser puts exactly this part's bytes on S3 (ADR-004).
+
+    A part of `UPLOAD_CHUNK_BYTES` sent through the API arrives at Lambda as base64,
+    over its 6 MB request limit (#136). The URL is signed for the part's length and
+    SHA-256, so S3 refuses any other body; completion then checks what S3 holds.
+    """
+    now = (now or datetime.now(UTC)).astimezone(UTC)
+    item = resolve_owned_upload(upload_id, actor, now=now, repository=repository)
+    if item.get("status") != "pending_upload":
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+    expected_parts = int(item["part_count"])
+    if not 1 <= part_number <= expected_parts:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_INVALID)
+    expected_length = (
+        UPLOAD_CHUNK_BYTES
+        if part_number < expected_parts
+        else int(item["expected_size"]) - UPLOAD_CHUNK_BYTES * (expected_parts - 1)
+    )
+    if request.size_bytes > expected_length:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_TOO_LARGE)
+    if request.size_bytes != expected_length:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_INVALID)
+    try:
+        repository.pin_upload_part(
+            upload_id,
+            part_number,
+            request.checksum_sha256,
+            request.size_bytes,
+            int(now.timestamp()),
+        )
+    except attachment_repo.AttachmentRepositoryConflict as exc:
+        if exc.category == "chunk_conflict":
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT) from None
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+    except AttachmentDecisionError:
+        raise
+    except Exception:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+    provider_checksum = base64.b64encode(bytes.fromhex(request.checksum_sha256)).decode("ascii")
+    expires_in = settings.s3_presign_expiry_seconds
+    try:
+        url = signer.generate_presigned_url(
+            ClientMethod="upload_part",
+            Params={
+                "Bucket": settings.s3_images_bucket,
+                "Key": item["staging_object_key"],
+                "UploadId": item["multipart_upload_id"],
+                "PartNumber": part_number,
+                "ContentLength": request.size_bytes,
+                "ChecksumSHA256": provider_checksum,
+            },
+            ExpiresIn=expires_in,
+            HttpMethod="PUT",
+        )
+    except Exception:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+    if not isinstance(url, str) or not url:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return {
+        "uploadId": upload_id,
+        "partNumber": part_number,
+        "url": url,
+        "method": "PUT",
+        "headers": {"x-amz-checksum-sha256": provider_checksum},
+        "expiresAt": datetime.fromtimestamp(int(now.timestamp()) + expires_in, UTC),
+    }
+
+
+def _adopt_presigned_parts(
+    item: dict[str, Any],
+    parts: list[dict[str, Any]],
+    *,
+    s3: Any,
+    settings: Settings,
+    repository: Any,
+) -> list[dict[str, Any]]:
+    """Record the parts the browser wrote on S3, or refuse completion without them.
+
+    Each part was pinned to a length and SHA-256 when its URL was signed. S3
+    checked the body against that checksum, and the listing must show the same
+    size and checksum before the ledger takes the part's ETag.
+    """
+    pending = [part for part in parts if part.get("status") == "uploading"]
+    if not pending:
+        return parts
+    held = _provider_parts(item, s3=s3, settings=settings)
+    for part in pending:
+        number = int(part["part_number"])
+        fact = held.get(number)
+        if fact is None:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_INVALID)
+        provider_size, provider_etag, encoded = fact
+        checksum = str(part["checksum_sha256"])
+        length = int(part["content_length"])
+        _provider_sha256(encoded, expected_hex=checksum)
+        if provider_size != length:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_INVALID)
+        if _gateway_call(
+            lambda: repository.complete_upload_part(
+                item["upload_id"],
+                number,
+                str(part["lease_owner"]),
+                provider_etag=provider_etag,
+                provider_checksum=encoded,
+                expected_checksum_sha256=checksum,
+                content_length=length,
+            )
+        ):
+            continue
+        # A concurrent completion recorded this part first; the same acknowledgement
+        # from S3 is as good as ours.
+        current = _gateway_call(
+            lambda: repository.get_upload_part(item["upload_id"], number)
+        )
+        if not (
+            isinstance(current, dict)
+            and current.get("status") == "completed"
+            and current.get("provider_etag") == provider_etag
+            and current.get("provider_checksum") == encoded
+        ):
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    refreshed = _gateway_call(lambda: repository.list_upload_parts(item["upload_id"]))
+    if not isinstance(refreshed, list) or any(not isinstance(part, dict) for part in refreshed):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return refreshed
+
+
 def _safe_part_receipt(
     upload_id: str, part_number: int, length: int, checksum: str
 ) -> dict[str, Any]:
@@ -1085,17 +1224,10 @@ def _safe_part_receipt(
     }
 
 
-def _reconcile_provider_part(
-    item: dict[str, Any],
-    part_number: int,
-    length: int,
-    checksum: str,
-    lease_owner: str,
-    *,
-    s3: Any,
-    settings: Settings,
-    repository: Any,
-) -> bool:
+def _provider_parts(
+    item: dict[str, Any], *, s3: Any, settings: Settings
+) -> dict[int, tuple[int, str, str]]:
+    """Every part S3 holds for the upload: number -> (size, ETag, base64 SHA-256)."""
     request: dict[str, Any] = {
         "Bucket": settings.s3_images_bucket,
         "Key": item["staging_object_key"],
@@ -1142,8 +1274,21 @@ def _reconcile_provider_part(
         request["PartNumberMarker"] = marker
     else:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return seen
 
-    match = seen.get(part_number)
+
+def _reconcile_provider_part(
+    item: dict[str, Any],
+    part_number: int,
+    length: int,
+    checksum: str,
+    lease_owner: str,
+    *,
+    s3: Any,
+    settings: Settings,
+    repository: Any,
+) -> bool:
+    match = _provider_parts(item, s3=s3, settings=settings).get(part_number)
     if match is None:
         return False
     provider_size, provider_etag, encoded = match
@@ -1236,6 +1381,9 @@ def complete_upload(
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     if [int(part.get("part_number", 0)) for part in parts] != list(range(1, part_count + 1)):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_INVALID)
+    parts = _adopt_presigned_parts(
+        item, parts, s3=s3, settings=settings, repository=repository
+    )
     if any(part.get("status") != "completed" for part in parts):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_INVALID)
     version = int(item["version"])

@@ -576,6 +576,19 @@ def dispatch_conversation(
     except Exception:
         return {"conversationId": conversation_id, "status": "claim_conflict"}
 
+    # Only after the offer is written, so a refused claim tells nobody (#141).
+    # The offer stands whatever telling the teacher does: raised here, the
+    # student would be told `pending` and the sweep would stop at this row.
+    try:
+        notification_service.emit_teacher_help_dispatched(
+            conversation={**conversation, "escalation_request_id": request_id},
+            teacher_id=str(candidate["teacherId"]),
+            dispatch_id=dispatch_id,
+            deadline_at=deadline,
+            accept_minutes=DISPATCH_ACCEPT_TIMEOUT_SECONDS // 60,
+        )
+    except Exception as exc:  # noqa: BLE001 - best effort by contract
+        logger.warning("dispatch_teacher_alert_failed error=%s", type(exc).__name__)
     return {
         "conversationId": conversation_id,
         "status": "dispatched",

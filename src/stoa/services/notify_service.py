@@ -5,8 +5,10 @@ from html import escape
 from urllib.parse import quote
 from uuid import uuid4
 import boto3
+from botocore.config import Config
 from stoa.config import settings
 from stoa.db.repositories import account_deletion_repo, report_repo
+from stoa.services import message_catalog
 
 
 def require_active_account_fence(owner_id: str, generation: int) -> bool:
@@ -248,6 +250,69 @@ def send_account_invitation_email(
         Destination={"ToAddresses": [recipient]},
         Message={
             "Subject": {"Data": subject},
+            "Body": {"Html": {"Data": body}},
+        },
+    )
+
+
+def dispatch_reminder_message(
+    *, subject_name: str, request_id: str, minutes: int, locale: str
+) -> tuple[str, str]:
+    """Render the subject and HTML body of one dispatch reminder in one language (#141).
+
+    Only the subject's name and a link into STOA: the email leaves STOA, so nothing
+    the student wrote, sent or is called goes with it.
+    """
+    base = settings.app_base_url.rstrip("/")
+    link = f"{base}/teacher/requests/{quote(request_id, safe='')}"
+    subject_line = message_catalog.text(
+        "teacher_help.dispatched.email.subject", locale, minutes=minutes
+    )
+    summary = message_catalog.text(
+        "teacher_help.dispatched.summary", locale, subject=subject_name, minutes=minutes
+    )
+    body = (
+        f"<p>{escape(message_catalog.text('teacher_help.dispatched.email.intro', locale))}</p>"
+        f"<p>{escape(summary)}</p>"
+        f"<p>{escape(message_catalog.text('teacher_help.dispatched.email.deadline', locale, minutes=minutes))}</p>"
+        f'<p><a href="{escape(link, quote=True)}">'
+        f"{escape(message_catalog.text('teacher_help.dispatched.email.action', locale))}</a></p>"
+        f"<p>{escape(message_catalog.text('teacher_help.dispatched.email.footer', locale))}</p>"
+    )
+    return subject_line, body
+
+
+# Bounded well inside the request's 29 seconds: the first offer is sent from
+# the student's own request, and a slow SES must cost the email, not the
+# student's response to an offer already written.
+DISPATCH_REMINDER_SES_CONFIG = Config(
+    connect_timeout=2,
+    read_timeout=3,
+    retries={"max_attempts": 1, "mode": "standard"},
+)
+
+
+def send_dispatch_reminder_email(
+    recipient: str,
+    *,
+    subject_name: str,
+    request_id: str,
+    minutes: int,
+    locale: str,
+    ses_client=None,
+) -> None:
+    """Remind the teacher an offer went to that it is waiting for them (#141)."""
+    subject_line, body = dispatch_reminder_message(
+        subject_name=subject_name, request_id=request_id, minutes=minutes, locale=locale
+    )
+    ses = ses_client or boto3.client(
+        "ses", region_name=settings.aws_region, config=DISPATCH_REMINDER_SES_CONFIG
+    )
+    ses.send_email(
+        Source=settings.notification_email_sender,
+        Destination={"ToAddresses": [recipient]},
+        Message={
+            "Subject": {"Data": subject_line},
             "Body": {"Html": {"Data": body}},
         },
     )

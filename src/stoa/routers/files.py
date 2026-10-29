@@ -7,7 +7,12 @@ from fastapi.responses import StreamingResponse
 
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import attachment_repo
-from stoa.deps import get_actor, get_authorization_audit_sink, get_s3_client
+from stoa.deps import (
+    get_actor,
+    get_authorization_audit_sink,
+    get_s3_client,
+    get_s3_presign_client,
+)
 from stoa.models.attachment import (
     CompleteUploadRequest,
     CompleteUploadResponse,
@@ -17,6 +22,8 @@ from stoa.models.attachment import (
     UploadChunkResponse,
     UploadIntentRequest,
     UploadIntentResponse,
+    UploadPartUrlRequest,
+    UploadPartUrlResponse,
 )
 from stoa.security.attachment_errors import (
     AttachmentDecisionError,
@@ -46,6 +53,7 @@ from stoa.services.attachment_service import (
     prepare_saved_attachment_download,
     put_upload_chunk,
     saved_attachment_detail,
+    sign_upload_part,
 )
 
 
@@ -238,7 +246,39 @@ async def create_owned_upload_intent(
         _raise_safe(error, correlation_id)
 
 
-@router.put("/{upload_id}/chunks/{part_number}", response_model=UploadChunkResponse)
+@router.post("/{upload_id}/parts/{part_number}", response_model=UploadPartUrlResponse)
+async def sign_owned_upload_part(
+    upload_id: str,
+    part_number: int,
+    body: UploadPartUrlRequest,
+    actor: Actor = Depends(_upload_actor_dependency),
+    signer=Depends(get_s3_presign_client),
+    settings: Settings = Depends(get_settings),
+    correlation_id: str = Depends(get_request_correlation_id),
+):
+    """Sign a URL the browser puts one part on, straight to S3 (ADR-004, #136)."""
+    try:
+        return sign_upload_part(
+            upload_id,
+            part_number,
+            body,
+            actor,
+            signer=signer,
+            settings=settings,
+        )
+    except AttachmentDecisionError as error:
+        _raise_safe(error, correlation_id)
+
+
+@router.put(
+    "/{upload_id}/chunks/{part_number}",
+    response_model=UploadChunkResponse,
+    deprecated=True,
+    description=(
+        "Superseded by POST /files/{upload_id}/parts/{part_number}: a full part sent "
+        "here is over Lambda's 6 MB request limit once API Gateway base64-encodes it."
+    ),
+)
 async def upload_owned_chunk(
     upload_id: str,
     part_number: int,

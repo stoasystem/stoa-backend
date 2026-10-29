@@ -25,7 +25,7 @@ from stoa.db.repositories import attachment_repo
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.security.attachment_errors import AttachmentDecisionError
-from stoa.services import ai_service
+from stoa.services import ai_service, star_map_candidates
 from test_message_command_generation import (  # noqa: F401 - fixtures
     ANSWER,
     CONV,
@@ -216,6 +216,76 @@ def test_an_attempt_lost_after_its_answer_was_stored_is_only_finished(
     [assistant] = _messages(table, "assistant")
     assert "So kürzt man." in assistant["content"]
     assert "provider_result_json" not in _command_row(table, "key-1")
+
+
+def test_an_answer_finished_by_the_next_attempt_keeps_its_sections(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The kept answer carries its sections (#132), not only the joined text."""
+    _commit("key-1")
+    model.outcomes = [
+        _Called({**ANSWER, "hints": ["Erst den ggT"], "suggest_teacher": True})
+    ]
+    renew = attachment_repo.renew_message_ai_lease
+    calls = {"renew": 0}
+
+    def die_on_first_renewal(**kwargs: Any) -> bool:
+        calls["renew"] += 1
+        if calls["renew"] == 1:
+            raise _Killed()
+        return renew(**kwargs)
+
+    monkeypatch.setattr(attachment_repo, "renew_message_ai_lease", die_on_first_renewal)
+    with pytest.raises(_Killed):
+        _deliver("key-1")
+    _expire_lease(table, "key-1")
+
+    assert _deliver("key-1") == {"outcome": "completed"}
+
+    assert len(model.calls) == 1
+    response = _client().get(f"/conversations/{CONV}")
+    [assistant] = [m for m in response.json()["messages"] if m["role"] == "assistant"]
+    assert assistant["structured"]["steps"] == ANSWER["steps"]
+    assert assistant["structured"]["hints"] == ["Erst den ggT"]
+    assert assistant["structured"]["suggestTeacher"] is True
+
+
+def test_an_answer_finished_by_the_next_attempt_keeps_its_target(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The kept answer carries the target it was checked to have (#124)."""
+    star = star_map_candidates.Candidate(
+        ref="k1",
+        unitId="funktionen-ableitung",
+        name="Ableitungen",
+        subjectId="mathematics",
+        topicId="funktionen",
+        topicName="Funktionen",
+        state="ready",
+    )
+    monkeypatch.setattr(star_map_candidates, "for_student", lambda *_a, **_k: [star])
+    _commit("key-1")
+    model.outcomes = [_Called({**ANSWER, "target_unit_id": "k1"})]
+    renew = attachment_repo.renew_message_ai_lease
+    calls = {"renew": 0}
+
+    def die_on_first_renewal(**kwargs: Any) -> bool:
+        calls["renew"] += 1
+        if calls["renew"] == 1:
+            raise _Killed()
+        return renew(**kwargs)
+
+    monkeypatch.setattr(attachment_repo, "renew_message_ai_lease", die_on_first_renewal)
+    with pytest.raises(_Killed):
+        _deliver("key-1")
+    _expire_lease(table, "key-1")
+
+    assert _deliver("key-1") == {"outcome": "completed"}
+
+    assert len(model.calls) == 1
+    response = _client().get(f"/conversations/{CONV}")
+    [assistant] = [m for m in response.json()["messages"] if m["role"] == "assistant"]
+    assert assistant["targetUnit"] == {"unitId": "funktionen-ableitung"}
 
 
 def test_an_attempt_lost_after_the_model_was_called_is_not_called_again(

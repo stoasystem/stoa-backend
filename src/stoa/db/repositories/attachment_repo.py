@@ -6,7 +6,7 @@ import base64
 import logging
 import re
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
@@ -298,6 +298,8 @@ class TransactionOperationKind(StrEnum):
     MESSAGE_COMMAND_UPDATE = "message_command_update"
     MESSAGE_COMMAND_REJECT = "message_command_reject"
     ASSISTANT_MESSAGE_PUT = "assistant_message_put"
+    KNOWLEDGE_GAP_UPDATE = "knowledge_gap_update"
+    ASKED_KNOWLEDGE_PUT = "asked_knowledge_put"
     RESOURCE_RETENTION_FENCE_CHECK = "resource_retention_fence_check"
     ACCOUNT_RETENTION_FENCE_CHECK = "account_retention_fence_check"
 
@@ -363,6 +365,8 @@ CONVERSATION_PRIVATE_ROW_REGISTRY = frozenset(
         "chat_quota_operation",
         "chat_usage_event",
         "attachment_association",
+        # What a new Ask question asked about (#143).
+        "asked_knowledge_points",
     }
 )
 CONVERSATION_WRITER_REGISTRY = frozenset(
@@ -417,6 +421,8 @@ CONVERSATION_PRIVATE_FIELDS = frozenset(
         "error_code",
         "generation_context",
         "provider_result_json",
+        "knowledge_points",
+        "unit_ids",
     }
 )
 CONVERSATION_TOMBSTONE_ALLOWLIST = frozenset(
@@ -1641,6 +1647,68 @@ def claim_upload_part(
     }
 
 
+PRESIGNED_PART_OWNER = "presigned"
+
+
+def pin_upload_part(
+    upload_id: str,
+    part_number: int,
+    checksum_sha256: str,
+    length: int,
+    now_epoch: int,
+    *,
+    table: object | None = None,
+) -> dict[str, object]:
+    """Fix the bytes a part may hold before a URL is signed for it.
+
+    The browser writes the part on S3 itself, so there is no lease to hold: the
+    row only pins the length and SHA-256 the URL is signed for, and a request for
+    the same part with other bytes is a `chunk_conflict`. Completion records what
+    S3 acknowledged against this row.
+    """
+    part_number = _require_positive_integer(part_number)
+    checksum_sha256 = _require_canonical_sha256(checksum_sha256)
+    length = _require_positive_integer(length)
+    if isinstance(now_epoch, bool) or not isinstance(now_epoch, int) or now_epoch < 0:
+        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
+    target = table or get_table()
+    intent = get_upload_intent(upload_id, table=target)
+    if intent is None:
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    intent_expires_at = _required_integer(intent.get("expires_at"))
+    if intent_expires_at <= now_epoch:
+        raise AttachmentRepositoryConflict("conditional_conflict")
+    item = {
+        **upload_part_key(upload_id, part_number),
+        "upload_id": upload_id,
+        "part_number": part_number,
+        "status": "uploading",
+        "checksum_sha256": checksum_sha256,
+        "content_length": length,
+        "lease_owner": PRESIGNED_PART_OWNER,
+        "expires_at": intent_expires_at,
+        "attempt": 1,
+    }
+    try:
+        _put_item(target,
+            Item=item,
+            ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
+        )
+        return item
+    except ClientError as exc:
+        if not _conditional(exc):
+            raise AttachmentRepositoryConflict("dependency_failure") from None
+    current = get_upload_part(upload_id, part_number, table=target)
+    if not current:
+        raise AttachmentRepositoryConflict("dependency_failure")
+    if (
+        current.get("checksum_sha256") != checksum_sha256
+        or _required_integer(current.get("content_length", -1)) != length
+    ):
+        raise AttachmentRepositoryConflict("chunk_conflict")
+    return current
+
+
 def complete_upload_part(
     upload_id: str,
     part_number: int,
@@ -2334,6 +2402,10 @@ def get_attachment(attachment_id: str, *, table: object | None = None) -> dict[s
     return _optional_mapping(response.get("Item"))
 
 
+# BatchGetItem reads at most this many keys in one call.
+_BATCH_GET_KEY_LIMIT = 100
+
+
 def get_attachments(
     attachment_ids: list[str], *, table: object | None = None
 ) -> dict[str, dict[str, object]]:
@@ -2345,6 +2417,15 @@ def get_attachments(
     ):
         raise AttachmentRepositoryConflict("conditional_conflict")
     target = table or get_table()
+    if len(attachment_ids) > _BATCH_GET_KEY_LIMIT:
+        found: dict[str, dict[str, object]] = {}
+        for start in range(0, len(attachment_ids), _BATCH_GET_KEY_LIMIT):
+            found.update(
+                get_attachments(
+                    attachment_ids[start : start + _BATCH_GET_KEY_LIMIT], table=target
+                )
+            )
+        return found
     expected_keys: list[dict[str, object]] = [
         _mapping(attachment_key(value)) for value in attachment_ids
     ]
@@ -2429,6 +2510,49 @@ def get_attachments(
     return {attachment_id: by_id[attachment_id] for attachment_id in attachment_ids}
 
 
+OWNER_INDEX_MAX_PAGES = 100
+
+
+def _owner_index_attachments(owner_id: str, *, table: object) -> list[dict[str, object]]:
+    """Every attachment row GSI-StudentId holds for `owner_id`, across its pages.
+
+    The owner's partition also holds their messages, usage events and uploads; the
+    filter drops those after they are read, so reading on until the index runs out
+    is what finds every attachment.
+    """
+    from boto3.dynamodb.conditions import Attr, Key
+
+    request: dict[str, object] = {
+        "IndexName": "GSI-StudentId",
+        "KeyConditionExpression": Key("student_id").eq(owner_id),
+        "FilterExpression": Attr("entity_type").eq("attachment"),
+    }
+    result: list[dict[str, object]] = []
+    seen_cursors: set[tuple[tuple[str, str], ...]] = set()
+    for _page in range(OWNER_INDEX_MAX_PAGES):
+        try:
+            response = _query(table, **request)
+        except AttachmentRepositoryConflict:
+            raise
+        except Exception:
+            raise AttachmentRepositoryConflict("dependency_failure") from None
+        raw_items = response.get("Items", [])
+        if not isinstance(raw_items, list):
+            raise AttachmentRepositoryConflict("dependency_failure")
+        result.extend(_mapping(raw_item) for raw_item in raw_items)
+        cursor = response.get("LastEvaluatedKey")
+        if cursor is None:
+            return result
+        if not isinstance(cursor, dict) or not cursor:
+            raise AttachmentRepositoryConflict("dependency_failure")
+        identity = tuple(sorted((str(key), str(value)) for key, value in cursor.items()))
+        if identity in seen_cursors:
+            raise AttachmentRepositoryConflict("dependency_failure")
+        seen_cursors.add(identity)
+        request["ExclusiveStartKey"] = cursor
+    raise AttachmentRepositoryConflict("dependency_failure")
+
+
 def list_saved_attachments(
     owner_id: str,
     *,
@@ -2436,7 +2560,15 @@ def list_saved_attachments(
     exclusive_start_key: dict[str, str] | None = None,
     table: object | None = None,
 ) -> tuple[list[dict[str, object]], dict[str, str] | None]:
-    """Return a stable owner page from the authoritative strongly-read base table."""
+    """Return a stable page of the owner's active attachments, read from GSI-StudentId.
+
+    Every attachment row carries `student_id` = `owner_id` and `created_at`, so the
+    index holds them under the owner. This used to be the exhaustive consistent scan
+    retention needs, which reads the whole shared table and gives up past 10,000
+    rows, so the list answered 503 in production (#136). The index is
+    eventually consistent, which a listing can afford; detail, download and delete
+    still read the base table strongly.
+    """
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
         raise AttachmentRepositoryConflict("conditional_conflict")
     if exclusive_start_key is not None and (
@@ -2446,16 +2578,13 @@ def list_saved_attachments(
         or not exclusive_start_key["attachment_id"]
     ):
         raise AttachmentRepositoryConflict("conditional_conflict")
-    items = list_owner_attachment_items(
-        owner_id,
-        table=table,
-        entity_types=frozenset({"attachment"}),
-    )
+    items = _owner_index_attachments(owner_id, table=table or get_table())
     active: list[tuple[str, AttachmentItem]] = []
     for item in items:
         attachment_id = item.get("attachment_id")
         if (
-            item.get("status") == "active"
+            item.get("owner_id") == owner_id
+            and item.get("status") == "active"
             and isinstance(attachment_id, str)
             and attachment_id
         ):
@@ -3094,8 +3223,20 @@ def complete_message_command(
     lease_attempt: int = 1,
     completed_epoch: int = 0,
     account_fence_generation: int = 1,
+    knowledge_gap_updates: Sequence[dict[str, object]] = (),
+    asked_knowledge_put: dict[str, object] | None = None,
     table: object | None = None,
 ) -> MessageCommandResult:
+    """Store the answer and settle the command, in one transaction.
+
+    `knowledge_gap_updates` (#142) and `asked_knowledge_put` (#143) ride in the
+    same transaction, so they count once, and only for an answer that was
+    stored. Two answers counting the same gap at the same moment cancel each
+    other (`TransactionConflict`); a count is not worth an answer, so a
+    transaction that fails with them is tried once more without them. The
+    record of what the question asked about is the student's own and collides
+    with nothing, so it is kept on that retry.
+    """
     if (
         isinstance(lease_attempt, bool)
         or not isinstance(lease_attempt, int)
@@ -3156,6 +3297,15 @@ def complete_message_command(
                 }
             },
         ),
+        *(
+            TransactionOperation(TransactionOperationKind.KNOWLEDGE_GAP_UPDATE, dict(update))
+            for update in knowledge_gap_updates
+        ),
+        *(
+            [TransactionOperation(TransactionOperationKind.ASKED_KNOWLEDGE_PUT, dict(asked_knowledge_put))]
+            if asked_knowledge_put is not None
+            else []
+        ),
     ]
     try:
         transact(operations, table=table)
@@ -3177,6 +3327,21 @@ def complete_message_command(
                 MessageCommandDisposition.COMPLETED,
                 command=dict(command),
                 counter_value=_optional_positive_int(command.get("counter_value")),
+            )
+        if knowledge_gap_updates:
+            return complete_message_command(
+                conversation_id=conversation_id,
+                idempotency_key=idempotency_key,
+                owner_id=owner_id,
+                lease_owner=lease_owner,
+                assistant_message=assistant_message,
+                result_json=result_json,
+                completed_at=completed_at,
+                lease_attempt=lease_attempt,
+                completed_epoch=completed_epoch,
+                account_fence_generation=account_fence_generation,
+                asked_knowledge_put=asked_knowledge_put,
+                table=table,
             )
         return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
     return MessageCommandResult(MessageCommandDisposition.COMPLETED)

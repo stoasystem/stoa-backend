@@ -2063,6 +2063,31 @@
       {
         "action": "read",
         "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "attachment"
+      },
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "teacher_help",
+        "resource_type": "teacher_help_request"
+      }
+    ],
+    "classification": "authorized",
+    "family": "teachers",
+    "identifiers": [
+      "attachment_id",
+      "request_id"
+    ],
+    "method": "GET",
+    "path": "/teachers/me/help-requests/{request_id}/attachments/{attachment_id}/content",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
         "purpose": "self_service",
         "resource_type": "teacher_portal"
       }
@@ -3686,6 +3711,24 @@
     ],
     "method": "POST",
     "path": "/files/{upload_id}/complete",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "upload"
+      }
+    ],
+    "classification": "authorized",
+    "family": "files",
+    "identifiers": [
+      "upload_id"
+    ],
+    "method": "POST",
+    "path": "/files/{upload_id}/parts/{part_number}",
     "sensitive": true
   },
   {

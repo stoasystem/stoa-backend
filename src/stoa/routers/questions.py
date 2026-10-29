@@ -1063,6 +1063,10 @@ def _recover_missing_question_effect(
                 ai_response = dict(ai_provider_result)
             else:
                 raise ValueError("AI provider result is invalid")
+            # A question row holds knowledge points as names (#142).
+            ai_response["knowledge_points"] = ai_service.knowledge_point_names(
+                ai_response.get("knowledge_points")
+            )
             try:
                 topic_seeds = learning_profile_service.topic_seeds_from_ai_response(
                     subject=subject,
@@ -1581,6 +1585,10 @@ async def submit_question(
             ai_resp = dict(ai_provider_result)
         else:
             raise ValueError("AI provider result is invalid")
+        # A question row holds knowledge points as names (#142).
+        ai_resp["knowledge_points"] = ai_service.knowledge_point_names(
+            ai_resp.get("knowledge_points")
+        )
         try:
             topic_seeds = learning_profile_service.topic_seeds_from_ai_response(
                 subject=subject,

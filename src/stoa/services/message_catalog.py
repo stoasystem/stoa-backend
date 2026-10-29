@@ -108,6 +108,91 @@ TEXT: dict[str, dict[str, str]] = {
             "L'aiuto dell'insegnante di questa settimana ti è stato restituito."
         ),
     },
+    # Read by the teacher an offer went to (#141). Teachers are addressed
+    # formally, like every other message this backend writes to them.
+    "teacher_help.dispatched.title": {
+        "de": "Neue Hilfeanfrage für Sie",
+        "en": "A new help request for you",
+        "fr": "Une nouvelle demande d'aide pour vous",
+        "it": "Una nuova richiesta di aiuto per Lei",
+    },
+    "teacher_help.dispatched.summary": {
+        "de": "Fach: {subject}. Bitte nehmen Sie die Anfrage innerhalb von {minutes} Minuten an.",
+        "en": "Subject: {subject}. Please accept the request within {minutes} minutes.",
+        "fr": "Matière : {subject}. Merci d'accepter la demande dans les {minutes} minutes.",
+        "it": "Materia: {subject}. Accetti la richiesta entro {minutes} minuti.",
+    },
+    # ── the dispatch reminder email (#141) ───────────────────────────────
+    #
+    # It leaves STOA, so it says that there is a request, its subject and where
+    # to open it - never what the student wrote, sent or is called.
+    "teacher_help.dispatched.email.subject": {
+        "de": "STOA – Neue Hilfeanfrage: bitte innerhalb von {minutes} Minuten annehmen",
+        "en": "STOA – New help request: please accept within {minutes} minutes",
+        "fr": "STOA – Nouvelle demande d'aide : à accepter dans les {minutes} minutes",
+        "it": "STOA – Nuova richiesta di aiuto: da accettare entro {minutes} minuti",
+    },
+    "teacher_help.dispatched.email.intro": {
+        "de": "Ihnen wurde eine neue Hilfeanfrage zugewiesen.",
+        "en": "A new help request has been offered to you.",
+        "fr": "Une nouvelle demande d'aide vous a été attribuée.",
+        "it": "Le è stata assegnata una nuova richiesta di aiuto.",
+    },
+    "teacher_help.dispatched.email.deadline": {
+        "de": (
+            "Bitte nehmen Sie sie innerhalb von {minutes} Minuten an, "
+            "sonst wird sie einer anderen Lehrperson angeboten."
+        ),
+        "en": (
+            "Please accept it within {minutes} minutes; "
+            "after that it is offered to another teacher."
+        ),
+        "fr": (
+            "Merci de l'accepter dans les {minutes} minutes ; "
+            "passé ce délai, elle sera proposée à un autre enseignant."
+        ),
+        "it": (
+            "La accetti entro {minutes} minuti, "
+            "altrimenti verrà proposta a un altro insegnante."
+        ),
+    },
+    "teacher_help.dispatched.email.action": {
+        "de": "Anfrage in STOA öffnen",
+        "en": "Open the request in STOA",
+        "fr": "Ouvrir la demande dans STOA",
+        "it": "Apri la richiesta in STOA",
+    },
+    "teacher_help.dispatched.email.footer": {
+        "de": "Diese Erinnerung können Sie in STOA in den Benachrichtigungseinstellungen abschalten.",
+        "en": "You can turn this reminder off in STOA's notification settings.",
+        "fr": "Vous pouvez désactiver ce rappel dans les paramètres de notification de STOA.",
+        "it": "Può disattivare questo promemoria nelle impostazioni delle notifiche di STOA.",
+    },
+    # ── subjects, by `learning_profile_service.SUPPORTED_SUBJECTS` id ────
+    "subject.math": {
+        "de": "Mathematik",
+        "en": "Mathematics",
+        "fr": "Mathématiques",
+        "it": "Matematica",
+    },
+    "subject.physics": {
+        "de": "Physik",
+        "en": "Physics",
+        "fr": "Physique",
+        "it": "Fisica",
+    },
+    "subject.german": {
+        "de": "Deutsch",
+        "en": "German",
+        "fr": "Allemand",
+        "it": "Tedesco",
+    },
+    "subject.english": {
+        "de": "Englisch",
+        "en": "English",
+        "fr": "Anglais",
+        "it": "Inglese",
+    },
     "moderation.update.title": {
         "de": "Meldung aktualisiert",
         "en": "Moderation case updated",
@@ -119,6 +204,52 @@ TEXT: dict[str, dict[str, str]] = {
         "en": "Moderation case status is {status}.",
         "fr": "Le statut de ton signalement est {status}.",
         "it": "Lo stato della tua segnalazione è {status}.",
+    },
+    # ── written once for a whole role, rendered for each reader (#108) ───
+    "moderation.created.title": {
+        "de": "Neuer Moderationsfall",
+        "en": "New moderation case",
+        "fr": "Nouveau cas de modération",
+        "it": "Nuovo caso di moderazione",
+    },
+    # One sentence per severity: the adjective agrees with its noun differently
+    # in each language, so a severity word dropped into one sentence would not.
+    "moderation.created.summary.low": {
+        "de": "Ein Moderationsfall mit niedrigem Schweregrad wurde gemeldet.",
+        "en": "A low-severity moderation case was reported.",
+        "fr": "Un cas de modération de gravité faible a été signalé.",
+        "it": "È stato segnalato un caso di moderazione di gravità bassa.",
+    },
+    "moderation.created.summary.medium": {
+        "de": "Ein Moderationsfall mit mittlerem Schweregrad wurde gemeldet.",
+        "en": "A medium-severity moderation case was reported.",
+        "fr": "Un cas de modération de gravité moyenne a été signalé.",
+        "it": "È stato segnalato un caso di moderazione di gravità media.",
+    },
+    "moderation.created.summary.high": {
+        "de": "Ein Moderationsfall mit hohem Schweregrad wurde gemeldet.",
+        "en": "A high-severity moderation case was reported.",
+        "fr": "Un cas de modération de gravité élevée a été signalé.",
+        "it": "È stato segnalato un caso di moderazione di gravità alta.",
+    },
+    # A severity this table does not know is left out rather than shown raw.
+    "moderation.created.summary": {
+        "de": "Ein Moderationsfall wurde gemeldet.",
+        "en": "A moderation case was reported.",
+        "fr": "Un cas de modération a été signalé.",
+        "it": "È stato segnalato un caso di moderazione.",
+    },
+    "teacher_requested.title": {
+        "de": "Hilfe angefragt",
+        "en": "Teacher help requested",
+        "fr": "Aide demandée",
+        "it": "Aiuto richiesto",
+    },
+    "teacher_requested.summary": {
+        "de": "Eine Schülerin oder ein Schüler bittet um Hilfe bei einer Frage in {subject}.",
+        "en": "A student requested help with a {subject} question.",
+        "fr": "Un·e élève demande de l’aide pour une question en {subject}.",
+        "it": "Un/a allievo/a chiede aiuto per una domanda di {subject}.",
     },
     "subscription.update.title": {
         "de": "Abo-Anfrage aktualisiert",

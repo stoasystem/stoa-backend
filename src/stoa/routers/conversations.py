@@ -34,7 +34,9 @@ from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import (
     account_deletion_repo,
     allowance_repo,
+    asked_knowledge_repo,
     attachment_repo,
+    knowledge_gap_repo,
     practice_repo,
     question_repo,
     user_repo,
@@ -80,11 +82,13 @@ from stoa.services import (
     attachment_service,
     bedrock_token_count_service,
     entitlement_service,
+    knowledge_map_service,
     learning_profile_service,
     locale_service,
     message_catalog,
     practice_context_service,
     runtime_budget_service,
+    star_map_candidates,
     teacher_dispatch_service,
     teacher_support_allowance_service,
     usage_ledger_service,
@@ -770,11 +774,39 @@ class PracticeContextReference(BaseModel):
     unitId: str = Field(min_length=1, max_length=128)
 
 
+class MessageQuotePart(BaseModel):
+    """The section of an assistant answer a quote was taken from (#132).
+
+    Sections are named as `StructuredAnswer` names them. `index` counts from 0
+    and names one entry of a list section; `answer` is a single text and takes
+    none.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    section: Literal["steps", "answer", "hints", "similarExercises", "knowledgePoints"]
+    index: int | None = Field(default=None, ge=0, le=99)
+
+    @model_validator(mode="after")
+    def index_matches_section(self) -> "MessageQuotePart":
+        if (self.section == "answer") != (self.index is None):
+            raise ValueError("index names an entry of a list section, and only of one")
+        return self
+
+
 class MessageQuoteSource(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["challenge", "message"]
     id: str = Field(min_length=1, max_length=128)
+    # Which section of the quoted answer, when the student quoted one (#132).
+    part: MessageQuotePart | None = None
+
+    @model_validator(mode="after")
+    def part_only_of_a_message(self) -> "MessageQuoteSource":
+        if self.part is not None and self.kind != "message":
+            raise ValueError("only a quoted message has parts")
+        return self
 
 
 class MessageQuote(BaseModel):
@@ -855,6 +887,39 @@ def _resolved_practice_context(
         ) from None
 
 
+def _checked_quote_part(conv_id: str, quote: MessageQuote | None) -> None:
+    """Refuse a part that names no section of an answer in this conversation (#132).
+
+    The model is told which step or hint the student is asking about, so the
+    part is looked up rather than believed: it must name an entry of a full
+    answer this conversation holds. The key scopes the read to the
+    conversation the route already authorized. A quote without a part is not
+    looked up, as before parts existed.
+    """
+    part = None if quote is None else quote.source.part
+    if quote is None or part is None:
+        return
+    table = cast(_DynamoConversationTable, get_table())
+    item = table.get_item(
+        Key={"PK": _conv_pk(conv_id), "SK": _msg_sk(quote.source.id)},
+        ConsistentRead=True,
+    ).get("Item")
+    # Only an assistant answer is stored with sections.
+    structured = _stored_structured(item.get("structured")) if isinstance(item, Mapping) else None
+    if (
+        structured is None
+        or structured.kind != "answer"
+        or (
+            part.index is not None
+            and part.index >= len(getattr(structured, part.section))
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="quote.source.part does not name a section of an answer in this conversation",
+        )
+
+
 def _stored_quote(value: object) -> MessageQuote | None:
     """A quote as it was stored beside a message, or nothing if it is not one."""
     if not isinstance(value, Mapping):
@@ -866,7 +931,8 @@ def _stored_quote(value: object) -> MessageQuote | None:
 
 
 def _quote_payload(quote: MessageQuote | None) -> dict[str, object] | None:
-    return None if quote is None else quote.model_dump(mode="json")
+    # Without a part, stored and handed to the model exactly as before parts.
+    return None if quote is None else quote.model_dump(mode="json", exclude_none=True)
 
 
 def _conversation_repository_call(
@@ -912,6 +978,7 @@ async def _message_command_dependency(
     # First of all: an exercise this student cannot be shown is refused before
     # the command is looked up, let alone claimed.
     practice_context = _resolved_practice_context(actor.user_id, body.practiceContext)
+    _checked_quote_part(conv_id, body.quote)
     fingerprint = message_request_fingerprint(body)
     try:
         state = _conversation_repository_call(
@@ -1024,7 +1091,138 @@ def message_request_fingerprint(body: SendMessageRequest) -> str:
         _frame(framed, body.quote.text)
         _frame(framed, body.quote.source.kind)
         _frame(framed, body.quote.source.id)
+        part = body.quote.source.part
+        if part is not None:
+            # Appended only when present, like the fields above (#132).
+            framed.extend(b"\x12")
+            _frame(framed, part.section)
+            framed.extend(struct.pack(">i", -1 if part.index is None else part.index))
     return hashlib.sha256(bytes(framed)).hexdigest()
+
+
+class KnowledgePoint(BaseModel):
+    name: str
+    # The star on the student's map this names, checked against the stars the
+    # model was shown (#142); none for a point it wrote freely, and none on
+    # answers written before it was shown any.
+    unitId: str | None = None
+
+
+class StructuredAnswer(BaseModel):
+    """An assistant answer in the sections the model wrote it in (#132).
+
+    Handed on as the model wrote them; how they are laid out is the client's.
+    `kind` is `followUp` when the model answered in plain words, with no
+    steps, hints, exercises or knowledge points: what it says when a student
+    asks about one point of an earlier answer. A new question gets `answer`.
+    """
+
+    kind: Literal["answer", "followUp"]
+    steps: list[str] = Field(default_factory=list)
+    answer: str = ""
+    hints: list[str] = Field(default_factory=list)
+    similarExercises: list[str] = Field(default_factory=list)
+    knowledgePoints: list[KnowledgePoint] = Field(default_factory=list)
+    # The model thinks a human teacher should take over.
+    suggestTeacher: bool = False
+
+
+def _texts(value: object) -> list[str]:
+    """The text entries of a section, or none if it is not a list of them."""
+    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
+
+
+def _knowledge_point(
+    value: object, star_map: list[star_map_candidates.Candidate] | None
+) -> KnowledgePoint | None:
+    """A point the model named: a star it was shown, or free text (#142).
+
+    The model answers with the ref of a star from the list it was shown. A ref
+    on that list names that star, under the star's own name; anything else -
+    a ref it made up, a unit id it was never shown - is the name it wrote.
+    """
+    if isinstance(value, str):
+        return KnowledgePoint(name=value) if value.strip() else None
+    if not isinstance(value, Mapping):
+        return None
+    star = star_map_candidates.find(star_map, value.get("id"))
+    if star is not None:
+        return KnowledgePoint(name=star["name"], unitId=star["unitId"])
+    name = value.get("name")
+    return KnowledgePoint(name=name) if isinstance(name, str) and name.strip() else None
+
+
+def _structured_answer(
+    ai_result: Mapping[str, object],
+    star_map: list[star_map_candidates.Candidate] | None = None,
+) -> StructuredAnswer:
+    """The model's sections under the API's names.
+
+    `steps`, `answer` and `hints` are checked before this, since the joined
+    text is made of them. The rest are taken as they are and an entry of the
+    wrong shape is left out: one is no reason to fail an answer already paid
+    for.
+    """
+    steps = _texts(ai_result.get("steps"))
+    hints = _texts(ai_result.get("hints"))
+    similar = _texts(ai_result.get("similar_exercises"))
+    named = ai_result.get("knowledge_points")
+    points = [
+        point
+        for value in (named if isinstance(named, list) else [])
+        if (point := _knowledge_point(value, star_map)) is not None
+    ]
+    return StructuredAnswer(
+        kind="answer" if steps or hints or similar or points else "followUp",
+        steps=steps,
+        answer=str(ai_result.get("answer") or ""),
+        hints=hints,
+        similarExercises=similar,
+        knowledgePoints=points,
+        suggestTeacher=ai_result.get("suggest_teacher") is True,
+    )
+
+
+def _stored_structured(value: object) -> StructuredAnswer | None:
+    """The sections stored beside an answer, or nothing for one written before them."""
+    if not isinstance(value, Mapping):
+        return None
+    try:
+        return StructuredAnswer.model_validate(dict(value))
+    except ValueError:
+        return None
+
+
+def _structured_payload(structured: StructuredAnswer | None) -> dict[str, object] | None:
+    return None if structured is None else structured.model_dump(mode="json")
+
+
+class TargetUnit(BaseModel):
+    """The star on the student's map an answer offers to take them to (#124)."""
+
+    unitId: str
+
+
+def _target_unit_id(
+    ai_result: Mapping[str, object], star_map: list[star_map_candidates.Candidate] | None
+) -> str | None:
+    """The star the student asked to go to, if the model named one it was shown.
+
+    A topic named whole is narrowed to the star the map would recommend in it:
+    one already begun, else the first one ready; none when all of it is lit.
+    """
+    named = ai_result.get("target_unit_id")
+    star = star_map_candidates.find(star_map, named)
+    if star is not None:
+        return star["unitId"]
+    return (
+        knowledge_map_service._recommended_unit(star_map_candidates.find_topic(star_map, named))
+        or None
+    )
+
+
+def _target_unit(unit_id: object) -> TargetUnit | None:
+    return TargetUnit(unitId=unit_id) if isinstance(unit_id, str) and unit_id else None
 
 
 class ChatMessage(BaseModel):
@@ -1041,6 +1239,13 @@ class ChatMessage(BaseModel):
     # The passage the student highlighted when they asked (#61); absent on
     # every other message and on messages sent before quoting existed.
     quote: MessageQuote | None = None
+    # An assistant answer's sections (#132); `content` is the same answer
+    # joined into text. None on every other message and on answers written
+    # before sections were kept.
+    structured: StructuredAnswer | None = None
+    # The star the student asked to go to, on an assistant answer that
+    # recognised one on their map (#124). None on every other message.
+    targetUnit: TargetUnit | None = None
 
 
 class SendMessageResponse(BaseModel):
@@ -1158,11 +1363,33 @@ class TeacherHelpResponse(BaseModel):
     updatedAt: str | None = None
 
 
+class TeacherSupportStanding(BaseModel):
+    """Whether this student can still ask a teacher this Zurich week (#144).
+
+    `blockedReason` is the code `POST /teacher-help/request` would refuse with:
+    `teacher_support_allowance_exhausted` comes back at `resetsAt`;
+    `teacher_support_not_included` does not come back with the week, so it has
+    no `resetsAt`.
+    """
+
+    canRequest: bool
+    blockedReason: (
+        Literal["teacher_support_allowance_exhausted", "teacher_support_not_included"]
+        | None
+    ) = None
+    remainingCases: int
+    weeklyCases: int
+    resetsAt: str | None = None
+
+
 class TeacherAvailabilityResponse(BaseModel):
     online: bool
     availableTeachers: int
     nextWindow: str | None = None
     responseTime: str | None = None
+    # The caller's own week. Null when it cannot be read right now; the request
+    # route still applies the allowance.
+    teacherSupport: TeacherSupportStanding | None = None
 
 
 _MESSAGE_ALLOWANCE_FIELDS = frozenset(
@@ -1724,6 +1951,8 @@ async def get_conversation(
             ],
             authorName=_author_name(m),
             quote=_stored_quote(m.get("quote")),
+            structured=_stored_structured(m.get("structured")),
+            targetUnit=_target_unit(m.get("target_unit_id")),
         )
         for m in raw_messages
     ]
@@ -1932,6 +2161,12 @@ async def stream_message(
     API Gateway buffers the full response before sending, so this is
     pseudo-streaming: the client receives all SSE events at once, but
     the SSE parser handles them correctly and the UI updates as expected.
+
+    Events: `student_message` (a `ChatMessage`), `message_start`, one or more
+    `message_delta` with the answer's text, and `message_done`, which carries
+    the answer's sections as `structured` (a `StructuredAnswer`, #132) and the
+    star the student asked to go to as `targetUnit` (a `TargetUnit` or null,
+    #124).
     """
     conv_id = authorized.ref.resource_id
     student_id = authorized.ref.student_id
@@ -1988,6 +2223,12 @@ async def stream_message(
         yield _sse("message_done", {
             "messageId": assistant_msg.id,
             "status": "completed",
+            "structured": _structured_payload(assistant_msg.structured),
+            "targetUnit": (
+                None
+                if assistant_msg.targetUnit is None
+                else assistant_msg.targetUnit.model_dump(mode="json")
+            ),
         })
 
     return StreamingResponse(
@@ -2644,8 +2885,16 @@ def load_committed_message(command: dict) -> CommittedMessage:
 
 def _stored_provider_result(
     command: Mapping[str, object], attempt: int
-) -> tuple[str, dict[str, object] | None] | None:
-    """The answer a lost attempt kept on the command, if it kept one."""
+) -> tuple[str, StructuredAnswer | None, dict[str, object] | None, bool, str | None] | None:
+    """The answer a lost attempt kept on the command, if it kept one.
+
+    One kept before sections were (#132) is finished without them. The fourth
+    value says whether the model was shown the star map (#142): the knowledge
+    points kept are already checked against it, but whether the free ones may
+    be counted as gaps depends on it. The last is the star the student asked
+    to go to (#124), checked against the same map before it was kept; none on
+    one kept before targets were.
+    """
     raw = command.get("provider_result_json")
     if stored_int(command.get("provider_result_attempt")) != attempt or not isinstance(raw, str):
         return None
@@ -2659,7 +2908,14 @@ def _stored_provider_result(
     validated = _validated_message_allowance_metadata(metadata)
     if metadata is not None and validated is None:
         return None
-    return payload["content"], validated
+    target = payload.get("target_unit_id")
+    return (
+        payload["content"],
+        _stored_structured(payload.get("structured")),
+        validated,
+        payload.get("starMapShown") is True,
+        target if isinstance(target, str) and target else None,
+    )
 
 
 def _record_generation_failure(
@@ -3122,6 +3378,9 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     ):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     memory_context = context["memory_context"]
+    # A question about a part of an earlier answer is a follow-up whatever the
+    # model makes of it: it is shown no star map, and counts no gaps (#142).
+    follow_up = committed.quote is not None and committed.quote.source.part is not None
     stored_practice_context = context.get("practice_context")
     practice_context = (
         dict(stored_practice_context)
@@ -3218,7 +3477,9 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     # whichever earlier attempt called, however many attempts died since.
     leased = lease_result.command or {}
     invoked_attempt = stored_int(leased.get("provider_invoked_attempt"))
-    recovered: tuple[str, dict[str, object] | None] | None = None
+    recovered: (
+        tuple[str, StructuredAnswer | None, dict[str, object] | None, bool, str | None] | None
+    ) = None
     if lease_result.previous_status == "ai_running" and invoked_attempt is not None:
         recovered = _stored_provider_result(leased, invoked_attempt)
         if recovered is None:
@@ -3231,8 +3492,10 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_FAILED)
 
     allowance_metadata: dict[str, object] | None = None
+    structured: StructuredAnswer | None = None
+    target_unit_id: str | None = None
     if recovered is not None:
-        ai_content, allowance_metadata = recovered
+        ai_content, structured, allowance_metadata, star_map_shown, target_unit_id = recovered
     else:
         _active_conversation_generation(student_id, table)
         attachment_context = ""
@@ -3270,6 +3533,15 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         normalized_subject = context["subject"]
         grade = context["grade"]
         student_locale = context["locale"]
+        # Read for this attempt, and the same list checks what the model picks
+        # from it (#142). None when it cannot be read: nothing the answer then
+        # names can be told apart from a gap.
+        star_map = (
+            None
+            if follow_up
+            else star_map_candidates.for_student(student_id, locale=student_locale)
+        )
+        star_map_shown = star_map is not None
         ai_deadline = runtime_budget_service.ai_deadline(
             fixed_seconds=_AI_INVOCATION_DEADLINE_SECONDS,
             reserve_seconds=_AI_PERSIST_RESERVE_SECONDS,
@@ -3301,6 +3573,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 memory_context=memory_context,
                 practice_context=practice_context,
                 quote=_quote_payload(committed.quote),
+                star_map=star_map,
                 correlation_id=command_id,
                 deadline_monotonic=ai_deadline,
                 effect_id=allowance_client.allowance_effect_id,
@@ -3341,6 +3614,8 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             ai_content = f"{steps}\n\n{answer}{hint}".strip()
             if not ai_content:
                 raise ai_service.AIInvocationFailure("malformed_response")
+            structured = _structured_answer(ai_result, star_map)
+            target_unit_id = _target_unit_id(ai_result, star_map)
         except _ConversationAllowanceFailure as failure:
             # Refused at counting, admission or the allowance itself, before the
             # model was paid for, the same message may be sent again. Refused over
@@ -3396,7 +3671,13 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 lease_attempt=lease_attempt_number,
                 now_epoch=int(datetime.now(timezone.utc).timestamp()),
                 result_json=json.dumps(
-                    {"content": ai_content, "allowance": allowance_metadata},
+                    {
+                        "content": ai_content,
+                        "structured": _structured_payload(structured),
+                        "target_unit_id": target_unit_id,
+                        "allowance": allowance_metadata,
+                        "starMapShown": star_map_shown,
+                    },
                     ensure_ascii=False,
                     separators=(",", ":"),
                 ),
@@ -3452,6 +3733,8 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         content=ai_content,
         createdAt=assistant_created_at,
         status="sent",
+        structured=structured,
+        targetUnit=_target_unit(target_unit_id),
     )
     result = SendMessageResponse(
         studentMessage=student_message, assistantMessage=assistant_message
@@ -3469,8 +3752,41 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         "role": "assistant",
         "content": ai_content,
         "created_at": assistant_created_at,
+        **({"structured": _structured_payload(structured)} if structured is not None else {}),
+        **({"target_unit_id": target_unit_id} if target_unit_id is not None else {}),
         **(allowance_metadata or {}),
     }
+    # What a new question named that is on no star of the map is counted for
+    # the knowledge-base gap list (#142), once per question. A follow-up counts
+    # nothing: the model answers one in plain words with no knowledge points,
+    # and is shown no map when it quotes a part of an earlier answer. An answer
+    # given without the map could not have matched a star, so it counts
+    # nothing either.
+    knowledge_gaps = (
+        knowledge_gap_repo.count_updates(
+            context["subject"],
+            [point.name for point in structured.knowledgePoints if point.unitId is None],
+            seen_at=assistant_created_at,
+        )
+        if structured is not None and star_map_shown
+        else []
+    )
+    # What a new question asked about reaches the learning profile, the weekly
+    # report and the parent's dashboard (#143), once per question, names and
+    # stars alike. A follow-up records nothing, as above; an answer given
+    # without the map still records what it named, as names.
+    asked_knowledge = (
+        asked_knowledge_repo.record_put(
+            conversation_id=conv_id,
+            message_id=assistant_msg_id,
+            student_id=student_id,
+            subject=context["subject"],
+            points=[(point.name, point.unitId) for point in structured.knowledgePoints],
+            asked_at=assistant_created_at,
+        )
+        if structured is not None and not follow_up
+        else None
+    )
     completion = _coerce_command_result(
         _conversation_repository_call(
             lambda: attachment_repo.complete_message_command(
@@ -3484,6 +3800,8 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 result_json=_message_result_json(result, allowance_metadata),
                 completed_at=assistant_created_at,
                 account_fence_generation=account_fence_generation,
+                knowledge_gap_updates=knowledge_gaps,
+                asked_knowledge_put=asked_knowledge,
                 table=table,
             )
         ),
@@ -3556,12 +3874,30 @@ setattr(_teacher_help_conversation_dependency, "authorization_specs", (
 
 @teacher_help_router.get("/availability", response_model=TeacherAvailabilityResponse)
 async def get_teacher_help_availability(
-    _actor: Actor = Depends(
+    actor: Actor = Depends(
         student_actor_dependency(ResourceType.CONVERSATION, AuthorizationAction.LOOKUP)
     ),
 ):
-    """Return student-safe teacher availability for the chat indicator."""
-    return teacher_dispatch_service.teacher_availability_summary()
+    """Return student-safe teacher availability for the chat indicator.
+
+    Also the caller's own teacher-support week, so an "ask a teacher" button
+    can be greyed with its reason before the student presses it (#144).
+    """
+    summary = teacher_dispatch_service.teacher_availability_summary()
+    now = _now()
+    try:
+        standing = teacher_support_allowance_service.get_student_teacher_support_standing(
+            beneficiary_id=actor.user_id,
+            observed_at=datetime.fromisoformat(now.replace("Z", "+00:00")),
+        )
+    except Exception:
+        # Whatever stops the read, the indicator still answers: the request
+        # route applies the allowance either way.
+        logger.warning(
+            "teacher_support_standing_unavailable student=%s", actor.user_id, exc_info=True
+        )
+        standing = None
+    return {**summary, "teacherSupport": standing}
 
 
 def _escalated_question_operation(
