@@ -234,8 +234,17 @@ def open_image_case(
     try:
         moderation_repo.put_case(item, event)
     except Exception:
-        # Nothing refers to the image without its case.
-        _delete_image_version(s3, settings, image_key, image_version, quiet=True)
+        # Nothing refers to the image without its case. A write that landed
+        # but answered with an error did make the case, so ask before deleting.
+        try:
+            written = moderation_repo.get_case(case_id)
+        except Exception:
+            written = None
+            orphaned = False
+        else:
+            orphaned = not written or written.get("image_version_id") != image_version
+        if orphaned:
+            _delete_image_version(s3, settings, image_key, image_version, quiet=True)
         raise
     notification_service.emit_moderation_created(
         case_item=item,
@@ -428,8 +437,14 @@ def update_case(case_id: str, body: ModerationCaseUpdateRequest, user: dict[str,
     if body.status is not None and body.status.value != existing.get("status"):
         updates["status"] = body.status.value
         changes["status"] = body.status.value
-        if body.status.value in TERMINAL_STATUSES:
-            updates["closed_at"] = existing.get("closed_at") or now
+        # Handled is when it was last closed: a refused image is deleted 90 days
+        # after that (#139), so a reopened case starts over when closed again.
+        # While open, its old `closed_at` stays and counts for nothing.
+        if (
+            body.status.value in TERMINAL_STATUSES
+            and existing.get("status") not in TERMINAL_STATUSES
+        ):
+            updates["closed_at"] = now
     if body.assigned_admin_id is not None and body.assigned_admin_id != existing.get("assigned_admin_id"):
         updates["assigned_admin_id"] = body.assigned_admin_id
         changes["assigned_admin_id"] = body.assigned_admin_id

@@ -32,6 +32,10 @@ def run(
     )
 
 
+class CaseImageRetentionIncomplete(RuntimeError):
+    """Some image due for deletion is still kept; the run counts as failed."""
+
+
 def handler(event: dict[str, Any] | None, _context: Any) -> dict[str, int]:
     event = event or {}
     s3 = boto3.client("s3", region_name=settings.aws_region)
@@ -41,4 +45,8 @@ def handler(event: dict[str, Any] | None, _context: Any) -> dict[str, int]:
         now=_now(),
         limit=min(max(int(event.get("limit", 100)), 1), 500),
     )
+    if summary.retryable:
+        # A failed run, not a quiet success: the schedule retries it, and what
+        # still fails lands in the dead-letter queue and its alarm.
+        raise CaseImageRetentionIncomplete(f"retention incomplete: {asdict(summary)}")
     return asdict(summary)

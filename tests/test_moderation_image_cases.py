@@ -517,3 +517,77 @@ def test_a_teachers_refused_image_names_the_teacher(world) -> None:
         "teacher",
     )
     assert case["student_id"] == "teacher-1"
+
+
+def test_a_case_closed_again_counts_from_its_last_handling(world) -> None:
+    """Reopened and closed again: the 90 days start at the second close."""
+    _upload_id, case = _blocked(world)
+    _handle(world, case["case_id"])
+    key = (f"MODERATION#{case['case_id']}", "SUMMARY")
+    first_close = datetime.now(UTC).replace(microsecond=0) - timedelta(days=60)
+    world.table.rows[key] = {**world.table.rows[key], "closed_at": first_close.isoformat()}
+    reopened = world.admin.patch(f"/admin/moderation/cases/{case['case_id']}", json={"status": "in_review"})
+    assert reopened.status_code == 200, reopened.text
+
+    closed_again = _handle(world, case["case_id"], "closed")
+
+    assert closed_again > first_close + timedelta(days=59)
+    _retain(world, closed_again + timedelta(days=89))
+    assert len(world.evidence()) == 1
+    _retain(world, closed_again + timedelta(days=90))
+    assert world.evidence() == []
+
+
+def test_a_run_that_could_not_delete_fails_so_the_schedule_retries_and_alarms(world, monkeypatch) -> None:
+    _upload_id, case = _blocked(world)
+    _handle(world, case["case_id"])
+
+    def refuse(**_kwargs: Any) -> dict[str, Any]:
+        raise ClientError({"Error": {"Code": "AccessDenied", "Message": "x"}}, "DeleteObject")
+
+    world.s3.delete_object = refuse
+    monkeypatch.setattr(moderation_image_retention.boto3, "client", lambda *_a, **_k: world.s3)
+    monkeypatch.setattr(moderation_image_retention, "settings", world.settings)
+    later = datetime.now(UTC) + timedelta(days=91)
+    monkeypatch.setattr(moderation_image_retention, "_now", lambda: later)
+
+    from stoa.jobs import account_deletion
+
+    with pytest.raises(RuntimeError, match="retention incomplete"):
+        account_deletion.handler({"source": "stoa.scheduler", "job": "moderation_image_retention"}, None)
+    assert len(world.evidence()) == 1
+
+
+def test_handling_an_image_case_tells_no_reporter(world) -> None:
+    """Moderation opened it; there is no person behind `system:image_moderation`."""
+    _upload_id, case = _blocked(world)
+    _handle(world, case["case_id"])
+    noted = world.admin.post(f"/admin/moderation/cases/{case['case_id']}/notes", json={"note": "seen"})
+    assert noted.status_code == 200, noted.text
+
+    recipients = {row.get("recipient_id") for row in world.table.rows.values()}
+
+    assert "system:image_moderation" not in recipients
+
+
+def test_a_case_written_despite_an_error_keeps_its_image(world, monkeypatch) -> None:
+    """The write landed but answered with an error: the image the case points to stays."""
+    data = _png(seed=21)
+    upload_id = world.upload(data)
+    put_case = moderation_repo.put_case
+    lost = [TimeoutError("response lost")]
+
+    def landed_then_failed(*args: Any, **kwargs: Any) -> Any:
+        result = put_case(*args, **kwargs)
+        if lost:
+            raise lost.pop()
+        return result
+
+    monkeypatch.setattr(moderation_repo, "put_case", landed_then_failed)
+
+    assert world.complete(upload_id).status_code == 503
+    assert world.complete(upload_id).status_code == 422
+    [case] = world.cases()
+    shown = world.admin.get(f"/admin/moderation/cases/{case['case_id']}/image")
+    assert shown.status_code == 200, shown.text
+    assert shown.content == data
