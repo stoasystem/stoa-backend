@@ -14138,7 +14138,7 @@
       },
       "UploadCodeStatusResponse": {
         "additionalProperties": false,
-        "description": "Where the phone has got to. `uploadId` appears once the image has passed.",
+        "description": "Where the phone has got to. `uploadId` appears once the image has passed.\n\nWhoever scans the QR first holds the code, so `redeemedAt` says when a phone\ntook it, and the computer shows the photo for the student to confirm rather\nthan sending it on its own.",
         "properties": {
           "codeId": {
             "maxLength": 200,
@@ -14150,6 +14150,18 @@
             "format": "date-time",
             "title": "Expiresat",
             "type": "string"
+          },
+          "redeemedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redeemedat"
           },
           "status": {
             "$ref": "#/components/schemas/UploadCodeStatus"
@@ -25433,6 +25445,83 @@
           }
         ],
         "summary": "Read Upload Code",
+        "tags": [
+          "upload-codes"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "conversation"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": []
+        }
+      }
+    },
+    "/conversations/{conv_id}/upload-codes/{code_id}/content": {
+      "get": {
+        "description": "The photo the phone put in, once it has passed, for the student to confirm.\n\nWhoever scans the QR first holds the code, so the computer shows this photo\nand lets the student choose to send it; it never attaches a ready upload alone.",
+        "operationId": "preview_upload_code_photo_conversations__conv_id__upload_codes__code_id__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code_id",
+            "required": true,
+            "schema": {
+              "title": "Code Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "conv_id",
+            "required": true,
+            "schema": {
+              "title": "Conv Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Upload Code Photo",
         "tags": [
           "upload-codes"
         ],

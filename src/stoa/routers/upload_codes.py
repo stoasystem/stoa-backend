@@ -10,6 +10,7 @@ Its paths sit under their own prefix rather than `/files`, whose
 from typing import Never
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import upload_code_repo
@@ -127,6 +128,42 @@ async def read_upload_code(
         )
     except AttachmentDecisionError as error:
         _raise_safe(error, correlation_id, settings)
+
+
+@conversation_router.get("/{conv_id}/upload-codes/{code_id}/content")
+async def preview_upload_code_photo(
+    code_id: str,
+    authorized: AuthorizedResource = Depends(
+        authorized_conversation_dependency(
+            action=AuthorizationAction.READ,
+            purposes=STUDENT_SELF,
+            resolver=_live_conversation,
+        )
+    ),
+    actor: Actor = Depends(get_actor),
+    s3=Depends(get_s3_client),
+    settings: Settings = Depends(get_settings),
+    correlation_id: str = Depends(get_request_correlation_id),
+):
+    """The photo the phone put in, once it has passed, for the student to confirm.
+
+    Whoever scans the QR first holds the code, so the computer shows this photo
+    and lets the student choose to send it; it never attaches a ready upload alone.
+    """
+    try:
+        prepared = upload_code_service.preview_upload(
+            authorized.ref.resource_id, code_id, actor, s3=s3, settings=settings
+        )
+    except AttachmentDecisionError as error:
+        _raise_safe(error, correlation_id, settings)
+    return StreamingResponse(
+        prepared.iter_bytes(),
+        media_type=prepared.media_type,
+        headers={
+            **prepared.public_headers(),
+            "X-Correlation-ID": correlation_id,
+        },
+    )
 
 
 @router.post("/redeem", response_model=UploadCodeRedeemResponse)

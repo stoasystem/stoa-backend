@@ -145,7 +145,15 @@ class _Api:
             "resolve_student_entitlement",
             lambda *_a, **_k: {"effectivePlan": "free_trial", "allowanceVersion": 1},
         )
-        monkeypatch.setattr(conversations.user_repo, "get_user", lambda *_a, **_k: {})
+        self.profiles = {
+            student: {"user_id": student, "role": "student", "account_status": "active"}
+            for student in (STUDENT, OTHER_STUDENT)
+        }
+        monkeypatch.setattr(
+            conversations.user_repo,
+            "get_user",
+            lambda user_id, **_k: self.profiles.get(user_id, {}),
+        )
 
         app = FastAPI()
         app.include_router(conversations.router, prefix="/conversations")
@@ -256,6 +264,12 @@ class _Api:
         self.put_parts(body["uploadToken"], data, body["chunkBytes"])
         return body["uploadToken"], self.complete(body["uploadToken"])
 
+    def preview(self, code_id: str, student: str = STUDENT):
+        return self.client.get(
+            f"/conversations/{CONV}/upload-codes/{code_id}/content",
+            headers={"Authorization": f"Bearer {student}"},
+        )
+
     def rows(self, entity_type: str) -> list[dict[str, Any]]:
         return [row for row in self.table.rows.values() if row.get("entity_type") == entity_type]
 
@@ -309,6 +323,8 @@ def test_a_phone_with_the_code_puts_a_photo_into_that_conversation_without_signi
     assert completed.status_code == 200, completed.text
     assert completed.json() == {"status": "validated"}
     assert [call["Image"] for call in api.moderation.calls] == [{"Bytes": data}]
+    # Where #139's moderation queue reads the learning session of a blocked image.
+    assert [row["conversation_id"] for row in api.rows("upload_intent")] == [CONV]
     ready = api.status(issued["codeId"]).json()
     assert ready["status"] == "ready"
     sent = api.send(ready["uploadId"])
@@ -327,14 +343,47 @@ def test_the_computer_learns_the_upload_only_once_it_has_passed(monkeypatch, tab
     api = _Api(monkeypatch, table)
     data = _png()
     issued = api.code()
+    assert api.status(issued["codeId"]).json()["redeemedAt"] is None
+    api.clock.now = START + timedelta(minutes=2)
     redeemed = api.redeem(issued["code"], data).json()
 
     uploading = api.status(issued["codeId"]).json()
     assert (uploading["status"], uploading.get("uploadId")) == ("uploading", None)
+    assert datetime.fromisoformat(uploading["redeemedAt"]) == START + timedelta(minutes=2)
+    assert api.preview(issued["codeId"]).status_code == 404
 
     api.put_parts(redeemed["uploadToken"], data, redeemed["chunkBytes"])
     assert api.complete(redeemed["uploadToken"]).status_code == 200
     assert api.status(issued["codeId"]).json()["status"] == "ready"
+
+
+def test_the_student_sees_the_phones_photo_before_sending_it(monkeypatch, table) -> None:
+    """Whoever scans first holds the code, so the computer shows what arrived."""
+    api = _Api(monkeypatch, table)
+    data = _png()
+    issued = api.code()
+    _token, completed = api.phone_upload(issued["code"], data)
+    assert completed.status_code == 200
+
+    preview = api.preview(issued["codeId"])
+
+    assert preview.status_code == 200
+    assert preview.content == data
+    assert preview.headers["content-type"] == "image/png"
+    assert api.preview(issued["codeId"], OTHER_STUDENT).status_code in {403, 404}
+
+
+def test_a_code_spent_on_a_failed_start_shows_failed(monkeypatch, table) -> None:
+    api = _Api(monkeypatch, table)
+    issued = api.code()
+
+    def unavailable(**_kwargs: Any):
+        raise RuntimeError("s3 down")
+
+    monkeypatch.setattr(api.s3, "create_multipart_upload", unavailable)
+
+    assert _refusal(api.redeem(issued["code"])) == (503, "upload_service_unavailable")
+    assert api.status(issued["codeId"]).json()["status"] == "failed"
 
 
 # -- single use --------------------------------------------------------------------
@@ -546,6 +595,38 @@ def test_an_upload_in_flight_dies_when_the_account_enters_deletion(monkeypatch, 
     assert api.moderation.calls == []
 
 
+def test_a_code_dies_when_the_account_is_suspended(monkeypatch, table) -> None:
+    """Suspension leaves the fence alone and refuses sessions; the phone has none."""
+    api = _Api(monkeypatch, table)
+    data = _png()
+    waiting = api.code()
+    redeemed = api.redeem(api.code()["code"], data).json()
+    api.put_parts(redeemed["uploadToken"], data, redeemed["chunkBytes"])
+
+    api.profiles[STUDENT]["account_status"] = "suspended"
+
+    assert _refusal(api.redeem(waiting["code"])) == INVALID
+    assert _refusal(api.complete(redeemed["uploadToken"])) == INVALID
+    assert api.moderation.calls == []
+
+
+def test_a_code_minted_while_deletion_begins_is_taken_back(monkeypatch, table) -> None:
+    """Deletion's sweep can run between the fence read and the write of the code."""
+    api = _Api(monkeypatch, table)
+    real_put = table.put_item
+
+    def deletion_begins_meanwhile(**kwargs: Any):
+        result = real_put(**kwargs)
+        if kwargs["Item"]["PK"].startswith("UPLOADCODE#"):
+            _enter_deletion(table)
+        return result
+
+    monkeypatch.setattr(table, "put_item", deletion_begins_meanwhile)
+
+    assert api.issue().status_code == 404
+    assert api.rows("upload_code") == []
+
+
 def test_a_code_from_an_earlier_account_generation_is_dead(monkeypatch, table) -> None:
     api = _Api(monkeypatch, table)
     issued = api.code()
@@ -589,6 +670,7 @@ def test_every_way_a_code_can_be_wrong_looks_the_same(monkeypatch, table) -> Non
         "no separator": api.redeem(secret),
         "garbage": api.redeem("x"),
         "empty": api.redeem(""),
+        "trailing newline": api.redeem(live["code"] + "\n"),
     }
     api.clock.now = START + timedelta(minutes=11)
     answers["expired"] = api.redeem(expired["code"])
@@ -647,37 +729,52 @@ def test_the_secrets_never_reach_a_log(monkeypatch, table, caplog) -> None:
         assert secret not in logged
 
 
-def test_redemption_is_rate_limited_per_source(monkeypatch, table) -> None:
+def test_refused_codes_are_limited_per_source(monkeypatch, table) -> None:
     # A window shorter than a code's life, so the next window is reachable.
     settings = Settings(
         s3_images_bucket=BUCKET,
-        upload_code_redeem_max_per_window=3,
+        upload_code_refusals_max_per_window=3,
         upload_code_window_seconds=300,
     )
     api = _Api(monkeypatch, table, settings=settings)
-    live = api.code()
+    guess = f"{'f' * 32}.{'a' * 43}"
 
     for _ in range(3):
-        assert _refusal(api.redeem(f"{'f' * 32}.{'a' * 43}")) == INVALID
-    limited = api.redeem(live["code"])
+        assert _refusal(api.redeem(guess)) == INVALID
+    limited = api.redeem(guess)
 
     assert _refusal(limited) == (429, "upload_code_rate_limited")
     assert int(limited.headers["Retry-After"]) > 0
-    assert api.rows("upload_intent") == []
     api.clock.now = START + timedelta(seconds=settings.upload_code_window_seconds)
-    assert api.redeem(live["code"]).status_code == 200
+    assert _refusal(api.redeem(guess)) == INVALID
 
 
-def test_the_phone_upload_calls_are_rate_limited_per_source(monkeypatch, table) -> None:
-    settings = Settings(s3_images_bucket=BUCKET, upload_code_upload_max_per_window=2)
+def test_refused_tokens_count_against_the_same_source(monkeypatch, table) -> None:
+    settings = Settings(s3_images_bucket=BUCKET, upload_code_refusals_max_per_window=2)
+    api = _Api(monkeypatch, table, settings=settings)
+    guess = f"{'f' * 32}.{'a' * 43}"
+
+    assert _refusal(api.sign(guess, 1, b"x")) == INVALID
+    assert _refusal(api.complete(guess)) == INVALID
+
+    assert _refusal(api.redeem(guess)) == (429, "upload_code_rate_limited")
+
+
+def test_a_flood_of_bad_codes_does_not_lock_out_a_real_phone_on_the_same_address(
+    monkeypatch, table
+) -> None:
+    """One script behind a school's NAT must not stop every phone there."""
+    settings = Settings(s3_images_bucket=BUCKET, upload_code_refusals_max_per_window=3)
     api = _Api(monkeypatch, table, settings=settings)
     data = _png()
-    redeemed = api.redeem(api.code()["code"], data).json()
+    issued = api.code()
+    for _ in range(10):
+        api.redeem(f"{'f' * 32}.{'a' * 43}")
 
-    assert api.sign(redeemed["uploadToken"], 1, data).status_code == 200
-    assert api.sign(redeemed["uploadToken"], 1, data).status_code == 200
+    _token, completed = api.phone_upload(issued["code"], data)
 
-    assert _refusal(api.complete(redeemed["uploadToken"])) == (429, "upload_code_rate_limited")
+    assert completed.status_code == 200, completed.text
+    assert api.status(issued["codeId"]).json()["status"] == "ready"
 
 
 def test_a_student_cannot_mint_codes_without_limit(monkeypatch, table) -> None:

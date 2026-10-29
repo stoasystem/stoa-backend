@@ -889,7 +889,10 @@ def create_upload_intent(
         "expires_at": expires_epoch,
     }
     if conversation_id is not None:
+        # `bound_conversation_id` is enforced when the upload is sent;
+        # `conversation_id` is where the moderation queue (#139) records it.
         item["bound_conversation_id"] = conversation_id
+        item["conversation_id"] = conversation_id
     multipart_upload_id: str | None = None
     try:
         prepare = getattr(repository, "prepare_staging_issuance", repository.create_upload_intent)

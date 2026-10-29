@@ -1012,6 +1012,22 @@
     "sensitive": true
   },
   {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "conversation"
+      }
+    ],
+    "classification": "authorized",
+    "family": "conversations",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/conversations/{conv_id}/upload-codes/{code_id}/content",
+    "sensitive": true
+  },
+  {
     "authorization": [],
     "classification": "authenticated-global",
     "family": "files",

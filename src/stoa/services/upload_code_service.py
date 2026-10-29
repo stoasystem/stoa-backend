@@ -9,8 +9,10 @@ nothing else, so a code seen over a shoulder after the scan opens nothing.
 
 Every refusal of a code or token is the same `upload_code_invalid`, whether it was
 wrong, spent, expired, made for a since-deleted conversation, or belongs to an
-account in deletion: the answer tells a guesser nothing. Neither secret is logged,
-stored, or put in a URL.
+account in deletion or no longer active: the answer tells a guesser nothing.
+Neither secret is logged, stored, or put in a URL. Only refusals are counted
+against the caller's address: 256 random bits need no guessing limit, and counting
+every call would let one script behind a school's NAT lock out every phone there.
 
 What the phone uploads is an ordinary upload owned by the student, bound to the
 conversation the code was made in, and completed through the same path as any
@@ -24,11 +26,16 @@ import hashlib
 import hmac
 import re
 import secrets
-from typing import Any
+from typing import Any, Callable, Never, TypeVar
 from uuid import uuid4
 
 from stoa.config import IMAGE_MAX_BYTES, Settings
-from stoa.db.repositories import account_deletion_repo, attachment_repo, upload_code_repo
+from stoa.db.repositories import (
+    account_deletion_repo,
+    attachment_repo,
+    upload_code_repo,
+    user_repo,
+)
 from stoa.models.attachment import UploadIntentRequest, UploadPartUrlRequest, UploadPurpose
 from stoa.models.upload_code import (
     UploadCodeCompleteRequest,
@@ -44,6 +51,12 @@ from stoa.services.file_validation_service import MIME_BY_EXTENSION
 CODE_TTL_SECONDS = 600
 UPLOAD_TOKEN_TTL_SECONDS = 600
 _IMAGE_EXTENSIONS = frozenset({"jpg", "jpeg", "png"})
+# Upload states from which the phone can still finish; anything else has failed.
+_LIVE_UPLOAD_STATES = frozenset(
+    {"issuing", "pending_upload", "assembling", "validating", "promoting"}
+)
+_READY_UPLOAD_STATES = frozenset({"validated", "consuming", "consumed"})
+_T = TypeVar("_T")
 _CODE_ID = re.compile(r"^[0-9a-f]{32}$")
 _SECRET = re.compile(r"^[A-Za-z0-9_-]{43}$")
 # Compared against when there is no row, so a miss costs what a hit costs.
@@ -77,6 +90,30 @@ def _admit(scope: str, source_digest: str, limit: int, settings: Settings) -> No
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_CODE_RATE_LIMITED)
 
 
+def _refuse(source_digest: str, settings: Settings) -> Never:
+    """Charge one refusal to the caller's address; past the limit, say wait instead.
+
+    Neither answer says anything about the code. A code or token that verifies
+    is never charged or held back.
+    """
+    _admit(
+        "UPLOAD_CODE_REFUSED",
+        source_digest,
+        settings.upload_code_refusals_max_per_window,
+        settings,
+    )
+    raise _invalid()
+
+
+def _counting_refusals(source_digest: str, settings: Settings, verify: Callable[[], _T]) -> _T:
+    try:
+        return verify()
+    except AttachmentDecisionError as error:
+        if error.code is AttachmentErrorCode.UPLOAD_CODE_INVALID:
+            _refuse(source_digest, settings)
+        raise
+
+
 def _owner_actor(row: dict[str, Any]) -> Actor:
     """The student the code was made by, as the upload path expects its owner."""
     return Actor(
@@ -92,7 +129,7 @@ def _owner_actor(row: dict[str, Any]) -> Actor:
 def _verified_row(presented: str, digest_field: str) -> dict[str, Any] | None:
     """The row whose `digest_field` matches the presented secret, else None."""
     code_id, _, secret = presented.partition(".")
-    well_formed = bool(_CODE_ID.match(code_id) and _SECRET.match(secret))
+    well_formed = bool(_CODE_ID.fullmatch(code_id) and _SECRET.fullmatch(secret))
     try:
         row = upload_code_repo.get_code(code_id) if well_formed else None
     except Exception:
@@ -105,14 +142,27 @@ def _verified_row(presented: str, digest_field: str) -> dict[str, Any] | None:
 
 
 def _require_live_account(row: dict[str, Any]) -> None:
+    """The fence the code was made under, and a student account still active.
+
+    Suspending an account leaves the fence alone and refuses its sessions; the
+    phone, which has none, is refused here.
+    """
+    owner_id = str(row["owner_id"])
     try:
         account_deletion_repo.require_active_account_fence(
-            str(row["owner_id"]), int(row["account_fence_generation"])
+            owner_id, int(row["account_fence_generation"])
         )
+        profile = user_repo.get_user(owner_id)
     except account_deletion_repo.AccountDeletionConflict:
         raise _invalid() from None
     except Exception:
         raise _unavailable() from None
+    if (
+        not isinstance(profile, dict)
+        or profile.get("role") != CanonicalRole.STUDENT.value
+        or (profile.get("account_status") or profile.get("status")) != AccountStatus.ACTIVE.value
+    ):
+        raise _invalid()
 
 
 def _require_image(request: UploadCodeRedeemRequest) -> None:
@@ -163,6 +213,20 @@ def issue_code(conversation_id: str, actor: Actor, *, settings: Settings) -> dic
         )
     except Exception:
         raise _unavailable() from None
+    # Deletion's sweep may have run between the fence read and the write; a row
+    # written after it would outlive the account, so it is taken back.
+    try:
+        account_deletion_repo.require_active_account_fence(
+            actor.user_id, int(fence["generation"])
+        )
+    except Exception as error:
+        try:
+            upload_code_repo.delete_code(code_id)
+        except Exception:
+            pass
+        if isinstance(error, account_deletion_repo.AccountDeletionConflict):
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from None
+        raise _unavailable() from None
     return {
         "codeId": code_id,
         "code": f"{code_id}.{secret}",
@@ -170,8 +234,8 @@ def issue_code(conversation_id: str, actor: Actor, *, settings: Settings) -> dic
     }
 
 
-def code_status(conversation_id: str, code_id: str, actor: Actor) -> dict[str, Any]:
-    if not _CODE_ID.match(code_id):
+def _owned_code_row(conversation_id: str, code_id: str, actor: Actor) -> dict[str, Any]:
+    if not _CODE_ID.fullmatch(code_id):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     try:
         row = upload_code_repo.get_code(code_id)
@@ -183,6 +247,11 @@ def code_status(conversation_id: str, code_id: str, actor: Actor) -> dict[str, A
         or row.get("conversation_id") != conversation_id
     ):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+    return row
+
+
+def code_status(conversation_id: str, code_id: str, actor: Actor) -> dict[str, Any]:
+    row = _owned_code_row(conversation_id, code_id, actor)
     now_epoch = int(_now().timestamp())
     status, upload_id = "waiting", None
     expires_at = int(row["expires_at"])
@@ -193,20 +262,48 @@ def code_status(conversation_id: str, code_id: str, actor: Actor) -> dict[str, A
         except Exception:
             raise _unavailable() from None
         upload_status = (upload or {}).get("status")
-        if upload_status in {"validated", "consuming", "consumed"}:
+        if upload_status in _READY_UPLOAD_STATES:
             status, upload_id = "ready", str(row["upload_id"])
-        elif upload_status in {"invalid", "expired", None}:
-            status = "failed"
-        else:
+        elif upload_status in _LIVE_UPLOAD_STATES:
             status = "uploading"
+        else:
+            status = "failed"
     if status in {"waiting", "uploading"} and now_epoch >= expires_at:
         status = "expired"
+    # When a phone took the code, so the computer can say so: whoever scans the QR
+    # first holds it, and the student confirms the photo before it is sent.
+    redeemed_at = row.get("redeemed_at") if row.get("status") == "redeemed" else None
     return {
         "codeId": code_id,
         "status": status,
         "expiresAt": datetime.fromtimestamp(expires_at, UTC),
+        "redeemedAt": redeemed_at,
         "uploadId": upload_id,
     }
+
+
+def preview_upload(
+    conversation_id: str, code_id: str, actor: Actor, *, s3: Any, settings: Settings
+) -> attachment_service.PreparedSavedAttachmentDownload:
+    """The photo a phone put in, for the student to look at before sending it.
+
+    Whoever scans the QR first holds the code; this is how the student sees that
+    the photo is theirs rather than taking a ready upload on trust.
+    """
+    row = _owned_code_row(conversation_id, code_id, actor)
+    if row.get("status") != "redeemed":
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+    try:
+        upload = attachment_repo.get_upload_intent(str(row["upload_id"]))
+    except Exception:
+        raise _unavailable() from None
+    if (
+        not isinstance(upload, dict)
+        or upload.get("owner_id") != actor.user_id
+        or upload.get("status") not in _READY_UPLOAD_STATES
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+    return attachment_service.prepare_saved_attachment_download(upload, s3=s3, settings=settings)
 
 
 # -- the phone ------------------------------------------------------------------
@@ -220,24 +317,12 @@ def redeem_code(
     settings: Settings,
 ) -> dict[str, Any]:
     """Spend the code on one image upload into its conversation; hand back the token."""
-    _admit("UPLOAD_CODE_REDEEM", source_digest, settings.upload_code_redeem_max_per_window, settings)
     _require_image(request)
     now = _now()
     now_epoch = int(now.timestamp())
-    row = _verified_row(request.code.get_secret_value(), "secret_sha256")
-    if row is None or row.get("status") != "issued" or now_epoch >= int(row["expires_at"]):
-        raise _invalid()
-    _require_live_account(row)
-    try:
-        conversation = upload_code_repo.get_conversation(str(row["conversation_id"]))
-    except Exception:
-        raise _unavailable() from None
-    if (
-        conversation is None
-        or conversation.get("student_id") != row["owner_id"]
-        or conversation.get("status") == "deleted"
-    ):
-        raise _invalid()
+    row = _counting_refusals(
+        source_digest, settings, lambda: _issued_row(request.code.get_secret_value(), now_epoch)
+    )
     upload_id = str(uuid4())
     token_secret = secrets.token_urlsafe(32)
     token_expires_at = now_epoch + UPLOAD_TOKEN_TTL_SECONDS
@@ -253,21 +338,27 @@ def redeem_code(
     except Exception:
         raise _unavailable() from None
     if not claimed:
-        raise _invalid()
-    intent = attachment_service.create_upload_intent(
-        UploadIntentRequest(
-            purpose=UploadPurpose.CONVERSATION_ATTACHMENT,
-            filename=request.filename,
-            contentType=request.content_type,
-            sizeBytes=request.size_bytes,
-        ),
-        _owner_actor(row),
-        s3=s3,
-        settings=settings,
-        now=now,
-        upload_id=upload_id,
-        conversation_id=str(row["conversation_id"]),
-    )
+        _refuse(source_digest, settings)
+    try:
+        intent = attachment_service.create_upload_intent(
+            UploadIntentRequest(
+                purpose=UploadPurpose.CONVERSATION_ATTACHMENT,
+                filename=request.filename,
+                contentType=request.content_type,
+                sizeBytes=request.size_bytes,
+            ),
+            _owner_actor(row),
+            s3=s3,
+            settings=settings,
+            now=now,
+            upload_id=upload_id,
+            conversation_id=str(row["conversation_id"]),
+        )
+    except AttachmentDecisionError:
+        raise
+    except Exception:
+        # The code is spent either way; the computer sees `failed` and offers a new one.
+        raise _unavailable() from None
     return {
         "uploadToken": f"{row['code_id']}.{token_secret}",
         "expiresAt": datetime.fromtimestamp(token_expires_at, UTC),
@@ -275,6 +366,24 @@ def redeem_code(
         "chunkBytes": intent["chunkBytes"],
         "acceptedTypes": intent["acceptedTypes"],
     }
+
+
+def _issued_row(code: str, now_epoch: int) -> dict[str, Any]:
+    row = _verified_row(code, "secret_sha256")
+    if row is None or row.get("status") != "issued" or now_epoch >= int(row["expires_at"]):
+        raise _invalid()
+    _require_live_account(row)
+    try:
+        conversation = upload_code_repo.get_conversation(str(row["conversation_id"]))
+    except Exception:
+        raise _unavailable() from None
+    if (
+        conversation is None
+        or conversation.get("student_id") != row["owner_id"]
+        or conversation.get("status") == "deleted"
+    ):
+        raise _invalid()
+    return row
 
 
 def _redeemed_row(token: str) -> dict[str, Any]:
@@ -297,8 +406,9 @@ def sign_part(
     signer: Any,
     settings: Settings,
 ) -> dict[str, Any]:
-    _admit("UPLOAD_CODE_UPLOAD", source_digest, settings.upload_code_upload_max_per_window, settings)
-    row = _redeemed_row(request.upload_token.get_secret_value())
+    row = _counting_refusals(
+        source_digest, settings, lambda: _redeemed_row(request.upload_token.get_secret_value())
+    )
     signed = attachment_service.sign_upload_part(
         str(row["upload_id"]),
         part_number,
@@ -308,6 +418,7 @@ def sign_part(
         settings=settings,
         now=_now(),
     )
+    # The phone has no use for the id; it is no credential, and the URL holds it.
     return {key: value for key, value in signed.items() if key != "uploadId"}
 
 
@@ -319,8 +430,9 @@ def complete(
     settings: Settings,
     moderation: Any,
 ) -> dict[str, Any]:
-    _admit("UPLOAD_CODE_UPLOAD", source_digest, settings.upload_code_upload_max_per_window, settings)
-    row = _redeemed_row(request.upload_token.get_secret_value())
+    row = _counting_refusals(
+        source_digest, settings, lambda: _redeemed_row(request.upload_token.get_secret_value())
+    )
     completed = attachment_service.complete_upload(
         str(row["upload_id"]),
         request.part_count,

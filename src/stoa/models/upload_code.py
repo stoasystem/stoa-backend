@@ -34,11 +34,17 @@ class UploadCodeResponse(_AttachmentModel):
 
 
 class UploadCodeStatusResponse(_AttachmentModel):
-    """Where the phone has got to. `uploadId` appears once the image has passed."""
+    """Where the phone has got to. `uploadId` appears once the image has passed.
+
+    Whoever scans the QR first holds the code, so `redeemedAt` says when a phone
+    took it, and the computer shows the photo for the student to confirm rather
+    than sending it on its own.
+    """
 
     code_id: OpaqueId = Field(alias="codeId")
     status: UploadCodeStatus
     expires_at: datetime = Field(alias="expiresAt")
+    redeemed_at: datetime | None = Field(default=None, alias="redeemedAt")
     upload_id: OpaqueId | None = Field(default=None, alias="uploadId")
 
 
