@@ -218,3 +218,26 @@ def test_without_an_acceptable_request_language_the_profile_decides(header):
         assert locale_service.resolve_locale(None) == locale_service.DEFAULT_LOCALE
     finally:
         locale_service.set_request_locale(None)
+
+
+def test_a_request_that_names_its_language_does_not_read_the_profile(monkeypatch):
+    """The bell polls every 30 seconds; a header that already decides must not cost a read."""
+    from stoa.db.repositories import user_repo
+
+    reads: list[str] = []
+
+    def get_user(user_id, **_kwargs):
+        reads.append(user_id)
+        return {"user_id": user_id, "preferred_locale": "it"}
+
+    monkeypatch.setattr(user_repo, "get_user", get_user)
+    locale_service.set_request_locale("fr")
+    try:
+        assert locale_service.reader_locale("reader-1") == "fr"
+        assert reads == []
+    finally:
+        locale_service.set_request_locale(None)
+
+    # Without one, the stored preference still decides.
+    assert locale_service.reader_locale("reader-1") == "it"
+    assert reads == ["reader-1"]

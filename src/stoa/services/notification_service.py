@@ -86,6 +86,50 @@ def _recipient_locale(recipient_id: str | None) -> str:
     return locale_service.stored_locale(recipient_id)
 
 
+def _moderation_created_message(params: Mapping[str, Any], locale: str) -> tuple[str, str]:
+    summary_key = f"moderation.created.summary.{params.get('severity')}"
+    if summary_key not in message_catalog.TEXT:
+        summary_key = "moderation.created.summary"
+    return (
+        message_catalog.text("moderation.created.title", locale),
+        message_catalog.text(summary_key, locale),
+    )
+
+
+def _teacher_requested_message(params: Mapping[str, Any], locale: str) -> tuple[str, str]:
+    return (
+        message_catalog.text("teacher_requested.title", locale),
+        message_catalog.text(
+            "teacher_requested.summary",
+            locale,
+            subject=learning_profile_service.subject_name(params.get("subject"), locale),
+        ),
+    )
+
+
+# Events written once for a whole role (`recipient_id=None`) have no reader
+# whose language is known when they are written. The row keeps one of these
+# keys and its raw parameters, and each reader is shown the title and summary
+# in their own language when they read it (#108). The stored title and summary
+# are the English, for whatever shows a row without a reader to render it for.
+ROLE_MESSAGES = {
+    "moderation.created": _moderation_created_message,
+    "teacher_requested": _teacher_requested_message,
+}
+ROLE_MESSAGE_STORED_LOCALE = "en"
+
+
+def _role_message_text(message_key: str, params: Mapping[str, Any]) -> dict[str, Any]:
+    """The `create_event` arguments for a role message, its stored text in English."""
+    title, summary = ROLE_MESSAGES[message_key](params, ROLE_MESSAGE_STORED_LOCALE)
+    return {
+        "title": title,
+        "summary": summary,
+        "message_key": message_key,
+        "message_params": dict(params),
+    }
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -665,6 +709,8 @@ def create_event(
     owner_id: str | None = None,
     account_fence_generation: int | None = None,
     global_nonprivate: bool = False,
+    message_key: str | None = None,
+    message_params: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     if event_type not in EVENT_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported notification event type")
@@ -769,6 +815,15 @@ def create_event(
             owner_target_type=ownership["target_type"],
             owner_target_id=ownership["target_id"],
         )
+    if message_key in ROLE_MESSAGES:
+        item.update(
+            message_key=message_key,
+            message_params={
+                str(name): str(value)
+                for name, value in (message_params or {}).items()
+                if value is not None
+            },
+        )
     persisted = notification_repo.put_event(item)
     if isinstance(persisted, dict):
         item = persisted
@@ -806,8 +861,7 @@ def emit_teacher_requested(
     """Tell whoever is on duty that a student asked for a person.
 
     One row per role, read by everybody holding it, so there is no reader whose
-    language it could be written in. It stays in one language until the console
-    renders these by key instead of by stored text (#124).
+    language it could be written in: each reader is shown it in theirs (#108).
     """
     for recipient_role in ("teacher", "admin"):
         create_event_safe(
@@ -816,8 +870,7 @@ def emit_teacher_requested(
             event_type="teacher_requested",
             target_type="question",
             target_id=question_id,
-            title="Teacher help requested",
-            summary=f"A student requested help for a {subject} question.",
+            **_role_message_text("teacher_requested", {"subject": subject}),
             metadata={"student_id": student_id, "subject": subject},
             actor_id=student_id,
             actor_role="student",
@@ -1282,15 +1335,17 @@ def emit_moderation_created(
 ) -> None:
     _require_moderation_owner(owner_id, privacy_generation)
     # Addressed to the admin role rather than to one administrator, so there is
-    # no reader whose language this could be written in (#124).
+    # no reader whose language this could be written in: each admin is shown it
+    # in theirs (#108).
     create_event_safe(
         recipient_id=None,
         recipient_role="admin",
         event_type="moderation_case_update",
         target_type="moderation_case",
         target_id=str(case_item.get("case_id") or ""),
-        title="New moderation case",
-        summary=f"{case_item.get('severity', 'medium')} moderation case reported.",
+        **_role_message_text(
+            "moderation.created", {"severity": case_item.get("severity", "medium")}
+        ),
         metadata={
             "question_id": case_item.get("question_id"),
             "reason": case_item.get("reason"),
@@ -1366,12 +1421,13 @@ def list_user_events(
         raise HTTPException(status_code=400, detail="Unsupported notification status")
     user_id = _user_id(user)
     role = _user_role(user)
+    locale = locale_service.reader_locale(user_id)
     items = [
         item for item in notification_repo.list_events(limit=max(limit, 100))
         if _visible_to_user(item, user_id=user_id, role=role)
         and (status is None and item.get("status") != "archived" or status == item.get("status"))
     ]
-    return [event_response(item) for item in _sort_events(items)[:limit]]
+    return [event_response(item, locale=locale) for item in _sort_events(items)[:limit]]
 
 
 def list_admin_events(
@@ -1379,6 +1435,7 @@ def list_admin_events(
     status: str | None = None,
     event_type: str | None = None,
     limit: int = 50,
+    locale: str | None = None,
 ) -> list[dict[str, Any]]:
     if status is not None and status not in STATUSES:
         raise HTTPException(status_code=400, detail="Unsupported notification status")
@@ -1389,7 +1446,7 @@ def list_admin_events(
         if (status is None or item.get("status") == status)
         and (event_type is None or item.get("event_type") == event_type)
     ]
-    return [event_response(item) for item in _sort_events(items)[:limit]]
+    return [event_response(item, locale=locale) for item in _sort_events(items)[:limit]]
 
 
 def default_preferences() -> dict[str, Any]:
@@ -2076,8 +2133,13 @@ def _user_role(user: dict[str, Any] | Actor) -> str:
     return user.role.value if isinstance(user, Actor) else str(user.get("role") or "")
 
 
-def event_response(item: dict[str, Any]) -> dict[str, Any]:
+def event_response(item: dict[str, Any], *, locale: str | None = None) -> dict[str, Any]:
+    """One event as the API shows it; a role message in `locale` when given."""
     delivery = (item.get("metadata") or {}).get("delivery_decision") or {}
+    title, summary = item.get("title"), item.get("summary")
+    render = ROLE_MESSAGES.get(str(item.get("message_key") or ""))
+    if locale and render:
+        title, summary = render(item.get("message_params") or {}, locale)
     return {
         "eventId": item.get("event_id"),
         "recipientId": item.get("recipient_id"),
@@ -2085,8 +2147,8 @@ def event_response(item: dict[str, Any]) -> dict[str, Any]:
         "eventType": item.get("event_type"),
         "targetType": item.get("target_type"),
         "targetId": item.get("target_id"),
-        "title": item.get("title"),
-        "summary": item.get("summary"),
+        "title": title,
+        "summary": summary,
         "status": item.get("status"),
         "createdAt": item.get("created_at"),
         "readAt": item.get("read_at"),
