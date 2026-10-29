@@ -1368,3 +1368,45 @@ def test_the_admin_operations_list_answers_in_the_admin_s_language(monkeypatch):
     assert response.json()["items"][0]["title"] == (
         message_catalog.TEXT["moderation.created.title"]["fr"]
     )
+
+
+def test_a_role_row_written_before_message_keys_is_shown_as_stored(monkeypatch):
+    """The frontend still translates these by their exact English (#518)."""
+    events, _ = _install_notification_repo(monkeypatch)
+    events["notif-old"] = {
+        "event_id": "notif-old",
+        "recipient_id": None,
+        "recipient_role": "admin",
+        "event_type": "moderation_case_update",
+        "target_type": "moderation_case",
+        "target_id": "case-1",
+        "title": "New moderation case",
+        "summary": "medium moderation case reported.",
+        "status": "created",
+        "created_at": "2026-10-01T10:00:00+00:00",
+    }
+
+    [item] = _bell(monkeypatch, "admin-de", "admin", "de")
+
+    assert (item["title"], item["summary"]) == (
+        "New moderation case",
+        "medium moderation case reported.",
+    )
+
+
+def test_a_role_event_cannot_be_marked_by_one_reader(monkeypatch):
+    """Read and archive never answer with a role message, so they need no language.
+
+    A role row has no single recipient to bind it to. Should that change, the
+    answer would carry the stored English: render it there too.
+    """
+    events, _ = _install_notification_repo(monkeypatch)
+    _profiles(monkeypatch, {"admin-de": "de"})
+    _moderation_case_created()
+    [event_id] = events
+
+    client = _app(notifications.router, "/notifications", {"sub": "admin-de", "role": "admin"})
+
+    assert client.post(f"/notifications/{event_id}/read").status_code == 404
+    assert client.post(f"/notifications/{event_id}/archive").status_code == 404
+
