@@ -15,6 +15,7 @@ from fastapi import HTTPException
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
     adaptive_learning_repo,
+    asked_knowledge_repo,
     ai_teacher_tools_repo,
     practice_repo,
     question_repo,
@@ -60,16 +61,19 @@ def get_memory_summary(
     normalized_subject = _safe_subject(subject) if subject else None
     questions = _question_rows(student_id)
     mistakes = practice_repo.get_mistakes(student_id)
+    asked = asked_knowledge_repo.list_for_student(student_id)
     profile = learning_profile_service.build_learning_profile(
         student_id=student_id,
         questions=questions,
         mistakes=mistakes,
+        asked=asked,
     )
     snapshots = _build_memory_snapshots(
         student_id=student_id,
         questions=questions,
         mistakes=mistakes,
         subject=normalized_subject,
+        asked=asked,
     )
     stored = adaptive_learning_repo.list_memory_snapshots(student_id, normalized_subject)
     if persist:
@@ -1302,6 +1306,7 @@ def _build_memory_snapshots(
     questions: list[dict[str, Any]],
     mistakes: list[dict[str, Any]],
     subject: str | None,
+    asked: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     now = now_iso()
     topic_counts: Counter[tuple[str, str]] = Counter()
@@ -1331,6 +1336,18 @@ def _build_memory_snapshots(
             feedback = question.get("student_feedback")
             if isinstance(feedback, int):
                 feedback_by_topic.setdefault(key, []).append(feedback)
+
+    # What Ask questions named (#143): topics with no question behind them.
+    for record in asked or []:
+        record_subject = _safe_subject(record.get("subject"))
+        if subject and record_subject != subject:
+            continue
+        timestamp = str(record.get("created_at") or now)
+        for label in record.get("knowledge_points") or []:
+            key = (record_subject, learning_profile_service.normalize_topic_id(str(label)))
+            topic_counts[key] += 1
+            if timestamp > latest.get(key, ""):
+                latest[key] = timestamp
 
     for mistake in mistakes:
         mistake_subject = _safe_subject(mistake.get("subject_id") or mistake.get("subject"))

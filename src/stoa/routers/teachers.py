@@ -13,7 +13,13 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from stoa.config import Settings, get_settings
-from stoa.db.repositories import account_deletion_repo, attachment_repo, question_repo, user_repo
+from stoa.db.repositories import (
+    account_deletion_repo,
+    asked_knowledge_repo,
+    attachment_repo,
+    question_repo,
+    user_repo,
+)
 from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink, get_s3_client
@@ -850,6 +856,10 @@ class TeacherHelpRequestDetail(BaseModel):
     notes: list[TeacherNoteOut]
     firstTeacherActionAt: str | None = None
     sla: dict | None = None
+    # The prep for a help request raised from Ask (#143): the knowledge points
+    # the answers in this conversation named, newest first, as the prep summary
+    # of a question names its topics. Empty when none were recorded.
+    weakTopics: list[str] = Field(default_factory=list)
 
 
 class UpdateStatusRequest(BaseModel):
@@ -1742,7 +1752,22 @@ async def get_help_request(
         notes=notes,
         firstTeacherActionAt=_optional_text(first_teacher_action_at),
         sla=_sla_snapshot(conv),
+        weakTopics=_asked_topics(conv_id),
     )
+
+
+# As many topics as a question's prep summary names.
+_PREP_TOPIC_LIMIT = 5
+
+
+def _asked_topics(conversation_id: str) -> list[str]:
+    """What the questions of this conversation asked about, newest first, once each."""
+    topics: dict[str, str] = {}
+    for record in asked_knowledge_repo.list_for_conversation(conversation_id):
+        for name in record.get("knowledge_points") or []:
+            if isinstance(name, str) and name.casefold() not in topics:
+                topics[name.casefold()] = name
+    return list(topics.values())[:_PREP_TOPIC_LIMIT]
 
 
 @router.get("/me/help-requests/{request_id}/attachments/{attachment_id}/content")

@@ -255,8 +255,14 @@ def build_learning_profile(
     student_id: str,
     questions: list[dict[str, Any]],
     mistakes: list[dict[str, Any]] | None = None,
+    asked: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Build subject activity and weak-topic seed aggregates from existing records."""
+    """Build subject activity and weak-topic seed aggregates from existing records.
+
+    `asked` are the records of what the student's Ask questions named
+    (`asked_knowledge_repo`, #143). They add to the weak topics as a question's
+    knowledge points do, and to nothing else: they are not questions.
+    """
     mistakes = mistakes or []
     activity: dict[str, dict[str, Any]] = {}
     feedback_totals: dict[str, list[int]] = defaultdict(list)
@@ -266,6 +272,17 @@ def build_learning_profile(
 
     for subject_id in SUPPORTED_SUBJECTS:
         activity[subject_id] = _empty_subject_activity(subject_id)
+
+    def count_topics(source: dict[str, Any], subject_id: str) -> None:
+        for seed in _question_topic_entries(source, subject_id):
+            key = (seed["subject"], seed["topic_id"], seed["label"])
+            topic_counter[key] += 1
+            latest = seed.get("last_seen_at") or source.get("created_at") or ""
+            if latest and latest > topic_latest.get(key, ""):
+                topic_latest[key] = latest
+            for evidence_id in seed.get("evidence_question_ids") or [source.get("question_id")]:
+                if evidence_id:
+                    topic_evidence[key].add(str(evidence_id))
 
     for question in questions:
         subject_id = _safe_subject(question.get("subject"))
@@ -281,15 +298,10 @@ def build_learning_profile(
         if feedback is not None:
             feedback_totals[subject_id].append(feedback)
 
-        for seed in _question_topic_entries(question, subject_id):
-            key = (seed["subject"], seed["topic_id"], seed["label"])
-            topic_counter[key] += 1
-            latest = seed.get("last_seen_at") or question.get("created_at") or ""
-            if latest and latest > topic_latest.get(key, ""):
-                topic_latest[key] = latest
-            for evidence_id in seed.get("evidence_question_ids") or [question.get("question_id")]:
-                if evidence_id:
-                    topic_evidence[key].add(str(evidence_id))
+        count_topics(question, subject_id)
+
+    for record in asked or []:
+        count_topics(record, _safe_subject(record.get("subject")))
 
     for mistake in mistakes:
         subject_id = _safe_subject(mistake.get("subject_id") or mistake.get("subject"))

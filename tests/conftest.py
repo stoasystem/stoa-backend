@@ -104,3 +104,23 @@ def _default_parent_link_table(monkeypatch: pytest.MonkeyPatch) -> None:
     from stoa.db.repositories import parent_link_repo
 
     monkeypatch.setattr(parent_link_repo, "get_table", _EmptyParentLinkTable)
+
+
+class _EmptyAskedKnowledgeTable:
+    """A table holding no Ask knowledge-point records."""
+
+    def query(self, **_kwargs: object) -> dict[str, object]:
+        return {"Items": []}
+
+
+@pytest.fixture(autouse=True)
+def _default_asked_knowledge_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every learning-profile reader now reads what Ask questions named (#143).
+
+    A test that stubs a reader's question and mistake reads would otherwise
+    fall through to the live `get_table()` for these. Tests that need records
+    patch the same attribute afterwards and win.
+    """
+    from stoa.db.repositories import asked_knowledge_repo
+
+    monkeypatch.setattr(asked_knowledge_repo, "get_table", _EmptyAskedKnowledgeTable)

@@ -299,6 +299,7 @@ class TransactionOperationKind(StrEnum):
     MESSAGE_COMMAND_REJECT = "message_command_reject"
     ASSISTANT_MESSAGE_PUT = "assistant_message_put"
     KNOWLEDGE_GAP_UPDATE = "knowledge_gap_update"
+    ASKED_KNOWLEDGE_PUT = "asked_knowledge_put"
     RESOURCE_RETENTION_FENCE_CHECK = "resource_retention_fence_check"
     ACCOUNT_RETENTION_FENCE_CHECK = "account_retention_fence_check"
 
@@ -3219,15 +3220,18 @@ def complete_message_command(
     completed_epoch: int = 0,
     account_fence_generation: int = 1,
     knowledge_gap_updates: Sequence[dict[str, object]] = (),
+    asked_knowledge_put: dict[str, object] | None = None,
     table: object | None = None,
 ) -> MessageCommandResult:
     """Store the answer and settle the command, in one transaction.
 
-    `knowledge_gap_updates` (#142) ride in the same transaction, so they count
-    once, and only for an answer that was stored. Two answers counting the same
-    gap at the same moment cancel each other (`TransactionConflict`); a count
-    is not worth an answer, so a transaction that fails with them is tried
-    once more without them.
+    `knowledge_gap_updates` (#142) and `asked_knowledge_put` (#143) ride in the
+    same transaction, so they count once, and only for an answer that was
+    stored. Two answers counting the same gap at the same moment cancel each
+    other (`TransactionConflict`); a count is not worth an answer, so a
+    transaction that fails with them is tried once more without them. The
+    record of what the question asked about is the student's own and collides
+    with nothing, so it is kept on that retry.
     """
     if (
         isinstance(lease_attempt, bool)
@@ -3293,6 +3297,11 @@ def complete_message_command(
             TransactionOperation(TransactionOperationKind.KNOWLEDGE_GAP_UPDATE, dict(update))
             for update in knowledge_gap_updates
         ),
+        *(
+            [TransactionOperation(TransactionOperationKind.ASKED_KNOWLEDGE_PUT, dict(asked_knowledge_put))]
+            if asked_knowledge_put is not None
+            else []
+        ),
     ]
     try:
         transact(operations, table=table)
@@ -3327,6 +3336,7 @@ def complete_message_command(
                 lease_attempt=lease_attempt,
                 completed_epoch=completed_epoch,
                 account_fence_generation=account_fence_generation,
+                asked_knowledge_put=asked_knowledge_put,
                 table=table,
             )
         return MessageCommandResult(MessageCommandDisposition.RETRYABLE)

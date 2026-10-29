@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import (
+    asked_knowledge_repo,
     checkout_command_repo,
     parent_link_repo,
     practice_repo,
@@ -1011,7 +1012,9 @@ def _conversation_activity(item: dict[str, Any]) -> ParentChildActivity | None:
             "activity.teacher_help_requested" if escalated else "activity.ai_conversation",
             locale_service.resolve_locale(None),
         ),
-        summary=_response_text(item.get("last_message_preview") or item.get("title")) or "",
+        # A conversation's title and preview are the child's own words; a
+        # parent reads what was asked about, never the question (#143).
+        summary="",
         subject=_response_text(item.get("subject")),
         createdAt=created_at,
     )
@@ -1512,6 +1515,9 @@ async def get_child_summary(
     weak_topics_counter: Counter[str] = Counter()
     for question in questions:
         weak_topics_counter.update(_response_string_list(question.get("knowledge_points", [])))
+    # What Ask questions named, by name only (#143).
+    for record in asked_knowledge_repo.list_for_student(child_id):
+        weak_topics_counter.update(_response_string_list(record.get("knowledge_points", [])))
     for mistake in mistakes:
         for key in ("topic_id", "subject_id"):
             value = _response_text(mistake.get(key))
@@ -1566,6 +1572,7 @@ async def get_child_learning_profile(
         student_id=child_id,
         questions=questions,
         mistakes=mistakes,
+        asked=asked_knowledge_repo.list_for_student(child_id),
     )
 
 

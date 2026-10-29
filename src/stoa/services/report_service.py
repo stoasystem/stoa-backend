@@ -16,6 +16,7 @@ from stoa.config import settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import (
     account_deletion_repo,
+    asked_knowledge_repo,
     practice_repo,
     question_repo,
     report_repo,
@@ -118,6 +119,12 @@ def build_weekly_learning_payload(
     progress = practice_repo.get_progress(student_id)
     mistakes = practice_repo.get_mistakes(student_id)
     conversations = _list_conversations_for_student(student_id)
+    # What Ask questions named that week (#143), read from its first day on.
+    weekly_asked = [
+        item
+        for item in asked_knowledge_repo.list_for_student(student_id, since=start.isoformat())
+        if _is_in_window(item.get("created_at"), start, end)
+    ]
 
     weekly_questions = [
         item for item in questions if _is_in_window(item.get("created_at") or item.get("createdAt"), start, end)
@@ -145,7 +152,7 @@ def build_weekly_learning_payload(
         if item.get("escalated") and _is_in_window(item.get("escalated_at") or item.get("updated_at"), start, end)
     )
 
-    weak_topics = _rank_weak_topics(weekly_questions, weekly_mistakes)
+    weak_topics = _rank_weak_topics(weekly_questions, weekly_mistakes, weekly_asked)
     activities = _sort_activities(
         [
             *[_question_activity(item) for item in weekly_questions],
@@ -748,8 +755,11 @@ def _question_requested_teacher_help(question: dict[str, Any]) -> bool:
 def _rank_weak_topics(
     questions: list[dict[str, Any]],
     mistakes: list[dict[str, Any]],
+    asked: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     counter: Counter[str] = Counter()
+    for record in asked or []:
+        counter.update(topic for topic in record.get("knowledge_points", []) if topic)
     for question in questions:
         counter.update(topic for topic in question.get("knowledge_points", []) if topic)
         if question.get("subject"):
@@ -812,7 +822,9 @@ def _conversation_activity(conversation: dict[str, Any]) -> dict[str, Any]:
         "id": conversation.get("conversation_id") or f"conversation-{created_at}",
         "type": "teacher_help" if escalated else "conversation",
         "title": "Teacher help requested" if escalated else "AI conversation",
-        "summary": conversation.get("last_message_preview") or conversation.get("title") or "",
+        # A conversation's title and preview are the student's own words; the
+        # report names what was asked about, never the question (#143).
+        "summary": "",
         "subject": conversation.get("subject"),
         "createdAt": created_at,
     }
