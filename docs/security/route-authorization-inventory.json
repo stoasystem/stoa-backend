@@ -4452,12 +4452,19 @@
         "capability": null,
         "purpose": "teacher_help",
         "resource_type": "teacher_help_request"
+      },
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "upload"
       }
     ],
     "classification": "authorized",
     "family": "teachers",
     "identifiers": [
-      "request_id"
+      "request_id",
+      "uploadId"
     ],
     "method": "POST",
     "path": "/teachers/me/help-requests/{request_id}/notes",

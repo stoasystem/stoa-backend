@@ -101,12 +101,18 @@ class _Api:
         app.dependency_overrides[get_settings] = lambda: settings or Settings(s3_images_bucket=BUCKET)
         self.client = TestClient(app)
 
-    def upload(self, data: bytes, filename: str = "work.png", content_type: str = "image/png") -> str:
+    def upload(
+        self,
+        data: bytes,
+        filename: str = "work.png",
+        content_type: str = "image/png",
+        purpose: str = "conversation_attachment",
+    ) -> str:
         """Every step but completion: an intent, then each part put on its signed URL."""
         intent = self.client.post(
             "/files/intents",
             json={
-                "purpose": "conversation_attachment",
+                "purpose": purpose,
                 "filename": filename,
                 "contentType": content_type,
                 "sizeBytes": len(data),
@@ -373,25 +379,15 @@ def test_a_document_is_not_sent_to_image_moderation(monkeypatch, table) -> None:
     assert moderation.calls == []
 
 
-def _hand_over_to_teacher(api: _Api, table: FakeTable, upload_id: str) -> None:
-    """A teacher-owned upload, which #145 will let a teacher create for a reply.
-
-    Until then only a student can open an intent, so the intent is opened by the
-    student and handed to the teacher; completion is the same route for both.
-    """
-    key = attachment_repo.upload_key(upload_id)
-    item = table.get_item(Key=key)["Item"]
-    table.put_item(Item={**item, "owner_id": TEACHER, "student_id": TEACHER})
-    api.actor = _actor(TEACHER, CanonicalRole.TEACHER)
-
-
 def test_a_teachers_image_is_moderated_the_same_way(monkeypatch, table) -> None:
+    """A teacher's image for a reply to a help request (#145): the same completion."""
+    table.seed_active_account(TEACHER)
     moderation = FakeRekognition(BLOCKED["rude gestures"])
     api = _Api(monkeypatch, table, moderation)
+    api.actor = _actor(TEACHER, CanonicalRole.TEACHER)
     blocked, clean = _png(), _png(seed=139)
-    blocked_id, clean_id = api.upload(blocked), api.upload(clean)
-    _hand_over_to_teacher(api, table, blocked_id)
-    _hand_over_to_teacher(api, table, clean_id)
+    blocked_id = api.upload(blocked, purpose="help_reply_image")
+    clean_id = api.upload(clean, purpose="help_reply_image")
 
     refused = api.complete(blocked_id, blocked)
     moderation.labels = []

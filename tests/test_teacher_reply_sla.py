@@ -372,7 +372,11 @@ def test_teacher_note_accepts_rich_teacher_reply_payload(monkeypatch):
     assert body["richContent"]["blocks"][1] == {"type": "formula", "latex": "3x = 15"}
     assert captured[0]["ConditionCheck"]["Key"] == {"PK": "USER#student-1", "SK": "ACCOUNT_FENCE"}
     assert captured[0]["ConditionCheck"]["ExpressionAttributeValues"][":generation"] == 4
-    note, message = (op["Put"]["Item"] for op in captured[1:])
+    # ...and only while the request is still the replying teacher's (#145).
+    [holder] = [op["ConditionCheck"] for op in captured[1:] if "ConditionCheck" in op]
+    assert holder["Key"] == {"PK": "CONV#conv-1", "SK": "CONV"}
+    assert holder["ExpressionAttributeValues"] == {":teacher": "teacher-1"}
+    note, message = (op["Put"]["Item"] for op in captured if "Put" in op)
     assert note["teacher_response_format"] == "stoa_teacher_reply_v1"
     assert message["teacher_response_rich"]["blocks"][1]["type"] == "formula"
 
