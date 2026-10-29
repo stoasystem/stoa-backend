@@ -2005,6 +2005,7 @@ async def add_note(
             reply_images,
             teacher_id=teacher_id,
             student_id=student_id,
+            account_fence_generation=generation,
             conversation_id=conv_id,
             message_id=msg_id,
         )
@@ -2041,9 +2042,20 @@ async def add_note(
                 status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
             ) from exc
     else:
-        # The holder's reply: both rows behind the student's account fence.
+        # The holder's reply: both rows behind the student's account fence, and
+        # only while the request is still theirs. The route's check was a read,
+        # and the request can move on before this write.
         operations = attachment_repo.build_conversation_write_transaction(
             item=note_item, owner_id=student_id, generation=generation
+        )
+        operations.append(
+            {
+                "ConditionCheck": {
+                    "Key": {"PK": _conv_pk(conv_id), "SK": "CONV"},
+                    "ConditionExpression": "attribute_exists(PK) AND teacher_id = :teacher",
+                    "ExpressionAttributeValues": {":teacher": teacher_id},
+                }
+            }
         )
         operations.append(
             attachment_repo.build_conversation_write_transaction(

@@ -3037,16 +3037,21 @@ def build_reply_image_operations(
     associations: list[dict[str, object]],
     uploader_id: str,
     owner_id: str,
+    account_fence_generation: int,
     conversation_id: str,
     now_iso: str,
 ) -> list[dict[str, object]]:
     """A teacher's reply images, as part of the reply's own transaction (#145).
 
-    Each upload is consumed under its uploader, the teacher; the attachment and
-    its reference are the owner's, the student whose conversation it is. The
-    student's account fence is the reply's to check: one transaction cannot
-    check a row twice. The owner's usage grows by the images, but the owner's
-    quota does not refuse them: a teacher cannot free a student's storage.
+    Each upload is consumed under its uploader, the teacher, and handed with
+    the attachment it becomes to the owner, the student whose conversation it
+    is: the upload row's cleanup belongs with the attachment it points at.
+    Left the teacher's, it would hold the teacher's account deletion forever,
+    since the teacher's purge can neither clean it nor see the attachment that
+    keeps it. The student's account fence is the reply's to check: one
+    transaction cannot check a row twice. The owner's usage grows by the
+    images, but the owner's quota does not refuse them: a teacher cannot free
+    a student's storage.
     """
     operations: list[dict[str, object]] = [
         {
@@ -3067,10 +3072,12 @@ def build_reply_image_operations(
                 "Update": {
                     "Key": upload_key(_required_text(upload.get("upload_id"))),
                     "UpdateExpression": (
-                        "SET #s=:consumed, #v=#v+:one, durable_attachment_id=:attachment_id"
+                        "SET #s=:consumed, #v=#v+:one, durable_attachment_id=:attachment_id, "
+                        "#owner=:owner, student_id=:owner, "
+                        "account_fence_generation=:generation"
                     ),
                     "ConditionExpression": (
-                        "#owner=:owner AND #s=:validated AND #v=:version AND expires_at>:now"
+                        "#owner=:uploader AND #s=:validated AND #v=:version AND expires_at>:now"
                     ),
                     "ExpressionAttributeNames": {
                         "#owner": "owner_id",
@@ -3078,7 +3085,9 @@ def build_reply_image_operations(
                         "#v": "version",
                     },
                     "ExpressionAttributeValues": {
-                        ":owner": uploader_id,
+                        ":uploader": uploader_id,
+                        ":owner": owner_id,
+                        ":generation": account_fence_generation,
                         ":validated": "validated",
                         ":consumed": "consumed",
                         ":version": _required_integer(upload.get("version"), minimum=1),

@@ -278,6 +278,63 @@ def test_the_image_goes_with_the_students_conversation(table, api) -> None:
     assert (f"ATTACHMENT#{sent['attachmentId']}", "META") not in table.rows
 
 
+PURGE_ROUNDS = 4
+
+
+def _purge_account(table, api: _Api, user_id: str) -> list[str]:
+    """Run the account purge's attachment branch for `user_id`, as the deletion job does.
+
+    Each round is one job pass; the job stops at the first one that completes.
+    """
+    table.rows[(f"USER#{user_id}", "ACCOUNT_FENCE")]["status"] = "deletion_pending"
+    outcomes = []
+    for _round in range(PURGE_ROUNDS):
+        result = attachment_service.purge_student_attachments(
+            user_id,
+            account_fence_generation=1,
+            s3=api.s3,
+            settings=Settings(s3_images_bucket=BUCKET),
+        )
+        outcomes.append(result.status.value)
+        if result.status.value == "complete":
+            break
+    return outcomes
+
+
+def test_the_teachers_account_deletion_completes_and_the_image_stays_the_students(
+    table, api
+) -> None:
+    # Once sent, the image is no longer the teacher's to delete: the teacher's
+    # deletion finishes without it, and the student keeps reading it.
+    _dispatch_to(table, TEACHER)
+    teacher = api.client()
+    data = _png()
+    upload_id = api.uploaded(teacher, data)
+    [sent] = _reply(teacher, upload_id).json()["attachments"]
+
+    outcomes = _purge_account(table, api, TEACHER)
+
+    assert outcomes[-1] == "complete", outcomes
+    student = api.client(STUDENT, role="student")
+    content = student.get(f"/files/attachments/{sent['attachmentId']}/content")
+    assert content.status_code == 200, content.text
+    assert content.content == data
+
+
+def test_the_students_account_deletion_takes_the_teachers_image(table, api) -> None:
+    _dispatch_to(table, TEACHER)
+    teacher = api.client()
+    upload_id = api.uploaded(teacher, _png())
+    [sent] = _reply(teacher, upload_id).json()["attachments"]
+
+    outcomes = _purge_account(table, api, STUDENT)
+
+    assert outcomes[-1] == "complete", outcomes
+    assert [key for key in api.s3.objects if key[0].startswith("objects/")] == []
+    assert (f"ATTACHMENT#{sent['attachmentId']}", "META") not in table.rows
+    assert (f"UPLOAD#{upload_id}", "META") not in table.rows
+
+
 def test_a_reply_carries_several_images_in_order(table, api) -> None:
     _dispatch_to(table, TEACHER)
     teacher = api.client()
@@ -433,6 +490,40 @@ def test_a_teacher_assigned_to_the_student_but_not_to_the_request_is_refused(
     refused = _reply(client, upload_id)
 
     assert refused.status_code == 403
+    assert _written_replies(table) == []
+    assert _upload_status(table, upload_id) == "validated"
+
+
+@pytest.mark.parametrize(
+    "moved_on",
+    [
+        lambda conv: conv.update(teacher_id=OTHER_TEACHER),
+        lambda conv: conv.pop("teacher_id"),
+    ],
+    ids=["held-by-another", "let-go"],
+)
+def test_a_holders_reply_lands_only_while_they_still_hold_the_request(
+    table, api, monkeypatch, moved_on
+) -> None:
+    # The request was this teacher's when the route authorized the reply, and
+    # stopped being theirs before the write: the reply and its image must not land.
+    _dispatch_to(table, TEACHER)
+    teacher = api.client()
+    assert _set_status(teacher, "in_progress").status_code == 200
+    upload_id = api.uploaded(teacher, _png())
+    prepare = attachment_service.prepare_reply_images
+
+    def authorized_then_moved_on(*args, **kwargs):
+        prepared = prepare(*args, **kwargs)
+        moved_on(_conv(table))
+        return prepared
+
+    monkeypatch.setattr(attachment_service, "prepare_reply_images", authorized_then_moved_on)
+
+    refused = _reply(teacher, upload_id)
+
+    assert refused.status_code == 409
+    assert refused.json()["detail"]["code"] == "help_request_changed"
     assert _written_replies(table) == []
     assert _upload_status(table, upload_id) == "validated"
 

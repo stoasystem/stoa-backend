@@ -2511,15 +2511,18 @@ def reply_image_operations(
     *,
     teacher_id: str,
     student_id: str,
+    account_fence_generation: int,
     conversation_id: str,
     message_id: str,
     now: datetime | None = None,
 ) -> tuple[list[dict[str, Any]], list[AttachmentSummary]]:
     """Put a teacher's reply images into the student's conversation (#145).
 
-    The upload is the teacher's; the attachment it becomes is the student's, as
-    the reply it rides in is the student's message (#74). So the student reads
-    it as their own, and it goes with the conversation and with their account.
+    The upload was the teacher's; it and the attachment it becomes are the
+    student's from here, as the reply it rides in is the student's message
+    (#74). So the student reads it as their own, it goes with the conversation
+    and with their account, and the teacher's account deletion does not wait
+    on it.
     The operations ride in the reply's own transaction, which already checks
     the student's account fence.
     """
@@ -2551,6 +2554,7 @@ def reply_image_operations(
         associations=associations,
         uploader_id=teacher_id,
         owner_id=student_id,
+        account_fence_generation=account_fence_generation,
         conversation_id=conversation_id,
         now_iso=now.isoformat(),
     )
