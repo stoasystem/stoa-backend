@@ -78,6 +78,25 @@ def get_rekognition_client():
 
 
 @lru_cache
+def get_image_moderation_client():
+    """Rekognition in the moderation region, not the API's own (ADR-010).
+
+    Short timeouts and a few standard-mode retries keep a throttled or slow call
+    inside the completion request; past them the upload fails as retryable.
+    """
+    settings = get_settings()
+    return boto3.client(
+        "rekognition",
+        region_name=settings.image_moderation_region,
+        config=Config(
+            connect_timeout=3,
+            read_timeout=10,
+            retries={"mode": "standard", "total_max_attempts": 3},
+        ),
+    )
+
+
+@lru_cache
 def get_sqs_client():
     settings = get_settings()
     return boto3.client("sqs", region_name=settings.aws_region)

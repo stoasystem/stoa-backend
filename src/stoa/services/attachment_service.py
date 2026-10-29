@@ -44,6 +44,12 @@ from stoa.security.identity import Actor, CanonicalRole
 from stoa.services.ai_service import PromptImage
 from stoa.services.file_validation_service import MIME_BY_EXTENSION
 from stoa.services.file_validation_service import ValidationFailure, validate_uploaded_file
+from stoa.services.image_moderation_service import (
+    MODERATED_TYPES,
+    ImageContentBlocked,
+    ImageModerationUnavailable,
+    require_image_passes_moderation,
+)
 from stoa.services.document_extraction_service import (
     MAX_EXTRACTED_CHARACTERS,
     DocumentExtractionFailure,
@@ -1349,8 +1355,13 @@ def complete_upload(
     settings: Settings,
     now: datetime | None = None,
     repository: Any = attachment_repo,
+    moderation: Any = None,
 ) -> dict[str, Any]:
-    """Assemble only server-ledger ETags; validation/promotion follows this transition."""
+    """Assemble only server-ledger ETags; validation/promotion follows this transition.
+
+    `moderation` is the Rekognition client every image must pass before promotion
+    (#138); without one, no image completes.
+    """
     now = (now or datetime.now(UTC)).astimezone(UTC)
     item = resolve_owned_upload(upload_id, actor, now=now, repository=repository)
     if item.get("status") == "validated":
@@ -1374,6 +1385,7 @@ def complete_upload(
             settings=settings,
             now=now,
             repository=repository,
+            moderation=moderation,
         )
     if item.get("status") != "pending_upload" or part_count != int(item["part_count"]):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
@@ -1482,6 +1494,7 @@ def complete_upload(
         settings=settings,
         now=now,
         repository=repository,
+        moderation=moderation,
     )
 
 
@@ -1756,6 +1769,7 @@ def _validate_and_promote_completed(
     settings: Settings,
     now: datetime,
     repository: Any,
+    moderation: Any = None,
 ) -> dict[str, Any]:
     staging_version = str(item.get("staging_version_id") or "")
     if not staging_version or not item.get("staging_object_key"):
@@ -1807,6 +1821,15 @@ def _validate_and_promote_completed(
                 detected = validate_uploaded_file(
                     spool, item["original_filename"], item["declared_type"]
                 )
+                if detected.media_type in MODERATED_TYPES:
+                    spool.seek(0)
+                    _require_moderated_image(
+                        spool.read(),
+                        detected,
+                        item,
+                        moderation=moderation,
+                        settings=settings,
+                    )
                 spool.seek(0)
                 operation_fence = uuid4().hex
                 begin = getattr(repository, "begin_immutable_promotion", None)
@@ -1959,6 +1982,16 @@ def _validate_and_promote_completed(
         return {"uploadId": item["upload_id"], "status": "validated", "attachment": None}
     except ValidationFailure as exc:
         failure_code = exc.code
+        if isinstance(exc, ImageContentBlocked):
+            # The one place a refused image is seen before its staging copy is
+            # deleted: the admin review queue (#139) takes its record here.
+            logger.warning(
+                "image_moderation_blocked upload_id=%s labels=%s",
+                item["upload_id"],
+                ",".join(
+                    f"{hit.category}/{hit.label}:{hit.confidence:.1f}" for hit in exc.hits
+                ),
+            )
         if not promotion_started:
             _gateway_call(
                 lambda: repository.mark_invalid(
@@ -1983,6 +2016,38 @@ def _validate_and_promote_completed(
         if immutable_version and not promotion_started:
             _delete_exact_if_present(s3, settings, immutable_key, immutable_version)
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+
+
+def _require_moderated_image(
+    data: bytes,
+    detected: Any,
+    item: dict[str, Any],
+    *,
+    moderation: Any,
+    settings: Settings,
+) -> None:
+    """Let an image be promoted only on a moderation answer that found nothing.
+
+    A refusal is a `ValidationFailure` and ends the upload. No answer leaves the
+    upload validating, so the next completion asks again; it is never a pass.
+    """
+    try:
+        require_image_passes_moderation(
+            data,
+            width=int(detected.width),
+            height=int(detected.height),
+            client=moderation,
+            settings=settings,
+        )
+    except ImageModerationUnavailable as exc:
+        logger.error(
+            "image_moderation_unavailable upload_id=%s cause=%s",
+            item["upload_id"],
+            exc.cause,
+        )
+        raise AttachmentDecisionError(
+            AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+        ) from None
 
 
 def _delete_exact_if_present(

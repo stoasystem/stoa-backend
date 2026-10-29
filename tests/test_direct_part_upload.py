@@ -13,7 +13,6 @@ way S3 does.
 
 from __future__ import annotations
 
-import base64
 import hashlib
 from io import BytesIO
 import random
@@ -27,16 +26,17 @@ import pytest
 
 from stoa.config import IMAGE_MAX_BYTES, Settings, get_settings
 from stoa.db.repositories import account_deletion_repo, attachment_repo
-from stoa.deps import get_actor, get_s3_client, get_s3_presign_client
+from stoa.deps import get_actor, get_image_moderation_client, get_s3_client, get_s3_presign_client
 from stoa.routers import files
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from fakes.dynamodb import FakeTable
+from fakes.rekognition import FakeRekognition
+from fakes.s3 import MIN_PART_BYTES, MultipartS3, b64_sha256
 
 
 OWNER = "student-1"
 BUCKET = "images-bucket-canary"
 LAMBDA_REQUEST_LIMIT = 6 * 1024 * 1024
-MIN_PART_BYTES = 5 * 1024 * 1024
 
 
 def _actor() -> Actor:
@@ -54,136 +54,14 @@ def _png_near_the_limit() -> bytes:
     return data
 
 
-def _b64_sha256(data: bytes) -> str:
-    return base64.b64encode(hashlib.sha256(data).digest()).decode("ascii")
-
-
-class _S3:
-    """Multipart state, presigned PUTs and the checks S3 makes on them."""
-
-    def __init__(self) -> None:
-        self.uploads: dict[str, dict[str, Any]] = {}
-        self.signed: dict[str, dict[str, Any]] = {}
-        self.objects: dict[tuple[str, str], dict[str, Any]] = {}
-        self.server_side_part_writes = 0
-        self.completions_sent = 0
-
-    # -- what the API calls ---------------------------------------------------------
-
-    def create_multipart_upload(self, **kwargs: Any) -> dict[str, Any]:
-        assert kwargs["Bucket"] == BUCKET and kwargs["ChecksumAlgorithm"] == "SHA256"
-        upload_id = f"mp-{len(self.uploads) + 1}"
-        self.uploads[upload_id] = {"Key": kwargs["Key"], "parts": {}}
-        return {"UploadId": upload_id}
-
-    def generate_presigned_url(self, ClientMethod: str, Params: dict[str, Any], ExpiresIn: int, HttpMethod: str) -> str:
-        assert ClientMethod == "upload_part" and HttpMethod == "PUT" and ExpiresIn > 0
-        token = f"sig-{len(self.signed) + 1}"
-        self.signed[token] = dict(Params)
-        return (
-            f"https://{Params['Bucket']}.s3.test/{Params['Key']}"
-            f"?uploadId={Params['UploadId']}&partNumber={Params['PartNumber']}&X-Amz-Signature={token}"
-        )
-
-    def upload_part(self, **kwargs: Any) -> dict[str, Any]:
-        self.server_side_part_writes += 1
-        raise AssertionError("part bytes must not pass through the API")
-
-    def list_parts(self, **kwargs: Any) -> dict[str, Any]:
-        parts = self.uploads[kwargs["UploadId"]]["parts"]
-        return {
-            "Parts": [
-                {"PartNumber": number, **{k: v for k, v in part.items() if k != "data"}}
-                for number, part in sorted(parts.items())
-            ],
-            "IsTruncated": False,
-        }
-
-    def complete_multipart_upload(self, **kwargs: Any) -> dict[str, Any]:
-        self.completions_sent += 1
-        upload = self.uploads.pop(kwargs["UploadId"])
-        listed = kwargs["MultipartUpload"]["Parts"]
-        data = b""
-        for index, entry in enumerate(listed):
-            part = upload["parts"][entry["PartNumber"]]
-            assert entry["ETag"] == part["ETag"]
-            assert entry["ChecksumSHA256"] == part["ChecksumSHA256"]
-            if index < len(listed) - 1:
-                assert part["Size"] >= MIN_PART_BYTES, "EntityTooSmall"
-            data += part["data"]
-        return self._store(kwargs["Key"], data, {"upload-id": "staging"})
-
-    def abort_multipart_upload(self, **kwargs: Any) -> dict[str, Any]:
-        self.uploads.pop(kwargs["UploadId"], None)
-        return {}
-
-    def get_object(self, **kwargs: Any) -> dict[str, Any]:
-        stored = self.objects[(kwargs["Key"], kwargs["VersionId"])]
-        return {"Body": BytesIO(stored["data"]), "ContentLength": len(stored["data"])}
-
-    def put_object(self, **kwargs: Any) -> dict[str, Any]:
-        data = kwargs["Body"].read()
-        assert len(data) == kwargs["ContentLength"]
-        assert _b64_sha256(data) == kwargs["ChecksumSHA256"]
-        return self._store(kwargs["Key"], data, dict(kwargs["Metadata"]))
-
-    def head_object(self, **kwargs: Any) -> dict[str, Any]:
-        stored = self.objects[(kwargs["Key"], kwargs["VersionId"])]
-        return {key: value for key, value in stored.items() if key != "data"}
-
-    def delete_object(self, **kwargs: Any) -> dict[str, Any]:
-        self.objects.pop((kwargs["Key"], kwargs.get("VersionId")), None)
-        return {}
-
-    def list_object_versions(self, **kwargs: Any) -> dict[str, Any]:
-        return {
-            "Versions": [
-                {"Key": key, "VersionId": version, "ETag": stored["ETag"]}
-                for (key, version), stored in self.objects.items()
-                if key == kwargs.get("Prefix")
-            ]
-        }
-
-    def _store(self, key: str, data: bytes, metadata: dict[str, str]) -> dict[str, Any]:
-        version = f"v-{len(self.objects) + 1}"
-        stored = {
-            "data": data,
-            "VersionId": version,
-            "ETag": f'"{hashlib.md5(data).hexdigest()}"',
-            "ContentLength": len(data),
-            "ChecksumSHA256": _b64_sha256(data),
-            "Metadata": metadata,
-        }
-        self.objects[(key, version)] = stored
-        return {"VersionId": version, "ETag": stored["ETag"], "ChecksumSHA256": stored["ChecksumSHA256"]}
-
-    # -- what the browser does -----------------------------------------------------
-
-    def browser_put(self, url: str, method: str, headers: dict[str, str], body: bytes) -> int:
-        """A PUT on a presigned URL, refused the way S3 refuses a signature mismatch."""
-        assert method == "PUT"
-        token = parse_qs(urlparse(url).query)["X-Amz-Signature"][0]
-        params = self.signed[token]
-        if len(body) != params["ContentLength"]:
-            return 403
-        if headers.get("x-amz-checksum-sha256") != params["ChecksumSHA256"]:
-            return 403
-        if _b64_sha256(body) != params["ChecksumSHA256"]:
-            return 400  # BadDigest
-        upload = self.uploads[params["UploadId"]]
-        upload["parts"][params["PartNumber"]] = {
-            "data": body,
-            "Size": len(body),
-            "ETag": f'"{hashlib.md5(body).hexdigest()}"',
-            "ChecksumSHA256": params["ChecksumSHA256"],
-        }
-        return 200
+def _S3() -> MultipartS3:
+    return MultipartS3(BUCKET)
 
 
 class _Api:
     """The real files router; it records the size of every request it is sent."""
 
-    def __init__(self, monkeypatch: pytest.MonkeyPatch, table: FakeTable, s3: _S3) -> None:
+    def __init__(self, monkeypatch: pytest.MonkeyPatch, table: FakeTable, s3: MultipartS3) -> None:
         monkeypatch.setattr(attachment_repo, "get_table", lambda: table)
         monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
         app = FastAPI()
@@ -191,6 +69,7 @@ class _Api:
         app.dependency_overrides[get_actor] = _actor
         app.dependency_overrides[get_s3_client] = lambda: s3
         app.dependency_overrides[get_s3_presign_client] = lambda: s3
+        app.dependency_overrides[get_image_moderation_client] = lambda: FakeRekognition()
         app.dependency_overrides[get_settings] = lambda: Settings(s3_images_bucket=BUCKET)
         self.client = TestClient(app)
         self.request_sizes: list[int] = []
@@ -265,7 +144,7 @@ def test_a_url_is_signed_for_one_part_exactly(monkeypatch, table) -> None:
     signed = _sign(api, intent["uploadId"], 1, first).json()
 
     assert signed["uploadId"] == intent["uploadId"] and signed["partNumber"] == 1
-    assert signed["headers"] == {"x-amz-checksum-sha256": _b64_sha256(first)}
+    assert signed["headers"] == {"x-amz-checksum-sha256": b64_sha256(first)}
     # Other bytes, or the same bytes cut short, are refused by S3 on that URL.
     assert s3.browser_put(signed["url"], "PUT", signed["headers"], bytes(reversed(first))) == 400
     assert s3.browser_put(signed["url"], "PUT", signed["headers"], first[:-1]) == 403
@@ -339,7 +218,7 @@ def test_the_production_signer_uses_the_regional_endpoint_and_signs_the_part(mon
             "UploadId": "mp-1",
             "PartNumber": 1,
             "ContentLength": 3,
-            "ChecksumSHA256": _b64_sha256(b"abc"),
+            "ChecksumSHA256": b64_sha256(b"abc"),
         },
         ExpiresIn=300,
         HttpMethod="PUT",
