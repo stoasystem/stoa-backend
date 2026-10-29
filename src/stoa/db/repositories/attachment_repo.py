@@ -3031,6 +3031,103 @@ def build_message_attachment_transaction(
     return operations
 
 
+def build_reply_image_operations(
+    *,
+    fresh: list[tuple[dict[str, object], dict[str, object]]],
+    associations: list[dict[str, object]],
+    uploader_id: str,
+    owner_id: str,
+    conversation_id: str,
+    now_iso: str,
+) -> list[dict[str, object]]:
+    """A teacher's reply images, as part of the reply's own transaction (#145).
+
+    Each upload is consumed under its uploader, the teacher; the attachment and
+    its reference are the owner's, the student whose conversation it is. The
+    student's account fence is the reply's to check: one transaction cannot
+    check a row twice. The owner's usage grows by the images, but the owner's
+    quota does not refuse them: a teacher cannot free a student's storage.
+    """
+    operations: list[dict[str, object]] = [
+        {
+            "ConditionCheck": {
+                "Key": retention_fence_key(
+                    owner_id, resource_type="conversation", resource_id=conversation_id
+                ),
+                "ConditionExpression": "attribute_not_exists(PK) OR #status=:complete",
+                "ExpressionAttributeNames": {"#status": "status"},
+                "ExpressionAttributeValues": {":complete": "complete"},
+            }
+        }
+    ]
+    for upload, attachment in fresh:
+        attachment_id = _required_text(attachment.get("attachment_id"))
+        operations.append(
+            {
+                "Update": {
+                    "Key": upload_key(_required_text(upload.get("upload_id"))),
+                    "UpdateExpression": (
+                        "SET #s=:consumed, #v=#v+:one, durable_attachment_id=:attachment_id"
+                    ),
+                    "ConditionExpression": (
+                        "#owner=:owner AND #s=:validated AND #v=:version AND expires_at>:now"
+                    ),
+                    "ExpressionAttributeNames": {
+                        "#owner": "owner_id",
+                        "#s": "status",
+                        "#v": "version",
+                    },
+                    "ExpressionAttributeValues": {
+                        ":owner": uploader_id,
+                        ":validated": "validated",
+                        ":consumed": "consumed",
+                        ":version": _required_integer(upload.get("version"), minimum=1),
+                        ":one": 1,
+                        ":now": _required_integer(upload.get("consume_epoch")),
+                        ":attachment_id": attachment_id,
+                    },
+                }
+            }
+        )
+        operations.append(
+            {
+                "Put": {
+                    "Item": {**attachment_key(attachment_id), **attachment},
+                    "ConditionExpression": "attribute_not_exists(PK)",
+                }
+            }
+        )
+    operations.extend(
+        {
+            "Put": {
+                "Item": association,
+                "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+            }
+        }
+        for association in associations
+    )
+    if fresh:
+        operations.append(
+            {
+                "Update": {
+                    "Key": storage_key(owner_id),
+                    "UpdateExpression": (
+                        "SET used_bytes=if_not_exists(used_bytes,:zero)+:size, updated_at=:updated"
+                    ),
+                    "ExpressionAttributeValues": {
+                        ":zero": 0,
+                        ":size": sum(
+                            _require_positive_integer(attachment.get("content_length"))
+                            for _, attachment in fresh
+                        ),
+                        ":updated": now_iso,
+                    },
+                }
+            }
+        )
+    return operations
+
+
 def kept_answer_attempt(command: Mapping[str, object]) -> int | None:
     """The attempt that called the model and stored its answer on the command.
 
