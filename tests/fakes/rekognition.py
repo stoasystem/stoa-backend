@@ -15,6 +15,7 @@ from typing import Any
 class FakeRekognition:
     def __init__(self, labels: list[dict[str, Any]] | None = None) -> None:
         self.labels = labels or []
+        self.model_version = "7.0"
         self.error: Exception | None = None
         self.calls: list[dict[str, Any]] = []
 
@@ -25,6 +26,6 @@ class FakeRekognition:
         floor = kwargs.get("MinConfidence", 50.0)
         return {
             "ModerationLabels": [label for label in self.labels if label["Confidence"] >= floor],
-            "ModerationModelVersion": "7.0",
+            "ModerationModelVersion": self.model_version,
             "ContentTypes": [],
         }

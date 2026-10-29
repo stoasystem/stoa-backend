@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from io import BytesIO
+import logging
 import math
 from typing import Any
 
@@ -29,7 +30,13 @@ from stoa.config import Settings
 from stoa.security.attachment_errors import AttachmentErrorCode
 from stoa.services.file_validation_service import ValidationFailure
 
+logger = logging.getLogger(__name__)
+
 MODERATED_TYPES = frozenset({"image/jpeg", "image/png"})
+# The taxonomy the blocked categories and the parent table below are written
+# against. A new model may rename a category, and a renamed one would simply stop
+# matching, so another version is logged for someone to check the names.
+EXPECTED_MODEL_VERSION = "7.0"
 
 # Rekognition's set quotas for an image passed as bytes.
 REKOGNITION_MAX_IMAGE_BYTES = 5 * 1000 * 1000
@@ -119,6 +126,13 @@ def require_image_passes_moderation(
         raise ImageModerationUnavailable(code) from None
     except Exception as exc:
         raise ImageModerationUnavailable(type(exc).__name__) from None
+    version = response.get("ModerationModelVersion") if isinstance(response, dict) else None
+    if version != EXPECTED_MODEL_VERSION:
+        logger.warning(
+            "image_moderation_model_version_unexpected version=%s expected=%s",
+            str(version)[:16],
+            EXPECTED_MODEL_VERSION,
+        )
     hits = _hits(response, settings)
     if hits:
         raise ImageContentBlocked(hits)

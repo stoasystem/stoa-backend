@@ -147,6 +147,11 @@ def validate_image(stream, extension: str, size: int) -> DetectedFile:
                 expected = "JPEG" if extension in {"jpg", "jpeg"} else "PNG"
                 if image.format != expected:
                     _fail(AttachmentErrorCode.UPLOAD_CONTENT_MISMATCH)
+                # An animated PNG plays its frames in a browser, but moderation
+                # and the model see only its default image (#138), so a harmless
+                # first frame would carry the rest through unseen.
+                if getattr(image, "is_animated", False):
+                    _fail(AttachmentErrorCode.UPLOAD_INVALID)
                 width, height = image.size
                 image.verify()
         if max(width, height) > IMAGE_MAX_EDGE:

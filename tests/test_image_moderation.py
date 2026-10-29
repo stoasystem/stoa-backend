@@ -419,3 +419,76 @@ def test_the_production_client_calls_rekognition_in_frankfurt(monkeypatch) -> No
     assert client.meta.endpoint_url == "https://rekognition.eu-central-1.amazonaws.com"
     # Throttling is retried a little inside the request, then reported as retryable.
     assert client.meta.config.retries["mode"] == "standard"
+
+
+# API Gateway and the Lambda both stop at 29 s; completion also reads and writes
+# S3 around the moderation call. Past the gateway's limit the student gets a bare
+# 504 instead of our retryable 503 with Retry-After.
+GATEWAY_LIMIT_SECONDS = 29
+MODERATION_BUDGET_SECONDS = 17
+# Standard mode backs off at most 2 ** (attempt - 1) seconds before each retry.
+STANDARD_BACKOFF_CAP_SECONDS = 20
+
+
+def test_the_production_client_gives_up_well_inside_the_gateway_limit(monkeypatch) -> None:
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIDEXAMPLE")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "not-a-secret")
+    get_image_moderation_client.cache_clear()
+    config = get_image_moderation_client().meta.config
+    get_image_moderation_client.cache_clear()
+
+    attempts = config.retries["total_max_attempts"]
+    backoff = sum(min(2 ** retry, STANDARD_BACKOFF_CAP_SECONDS) for retry in range(attempts - 1))
+    worst = attempts * (config.connect_timeout + config.read_timeout) + backoff
+
+    assert (config.connect_timeout, config.read_timeout, attempts) == (2, 5, 2)
+    assert worst <= MODERATION_BUDGET_SECONDS < GATEWAY_LIMIT_SECONDS
+
+
+def _animated_png(frames: list[Image.Image]) -> bytes:
+    output = BytesIO()
+    frames[0].save(output, "PNG", save_all=True, append_images=frames[1:], default_image=True)
+    return output.getvalue()
+
+
+def test_an_animated_png_is_refused_before_moderation(monkeypatch, table) -> None:
+    """Moderation sees only an APNG's default image; a browser plays every frame."""
+    moderation = FakeRekognition()
+    api = _Api(monkeypatch, table, moderation)
+    harmless = Image.new("RGB", (200, 200), (255, 255, 255))
+    hidden = Image.frombytes("RGB", (200, 200), random.Random(138).randbytes(200 * 200 * 3))
+    data = _animated_png([harmless, hidden, hidden])
+    with Image.open(BytesIO(data)) as decoded:
+        assert decoded.format == "PNG" and decoded.n_frames == 3
+
+    refused = api.complete(api.upload(data), data)
+
+    assert (refused.status_code, _code(refused)) == (422, "upload_invalid")
+    assert api.promoted() == []
+    assert moderation.calls == []
+
+
+def test_another_moderation_model_is_logged_for_review(monkeypatch, table, caplog) -> None:
+    """A renamed category would stop matching without a word; this says so."""
+    moderation = FakeRekognition()
+    moderation.model_version = "8.0"
+    api = _Api(monkeypatch, table, moderation)
+    data = _png()
+
+    with caplog.at_level("WARNING", logger="stoa.services.image_moderation_service"):
+        completed = api.complete(api.upload(data), data)
+
+    assert completed.status_code == 200, completed.text
+    warnings = [r.getMessage() for r in caplog.records if "model_version" in r.getMessage()]
+    assert warnings == ["image_moderation_model_version_unexpected version=8.0 expected=7.0"]
+
+
+def test_the_expected_moderation_model_logs_nothing(monkeypatch, table, caplog) -> None:
+    api = _Api(monkeypatch, table, FakeRekognition())
+    data = _png()
+
+    with caplog.at_level("WARNING", logger="stoa.services.image_moderation_service"):
+        completed = api.complete(api.upload(data), data)
+
+    assert completed.status_code == 200, completed.text
+    assert not [r for r in caplog.records if "model_version" in r.getMessage()]
