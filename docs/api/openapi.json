@@ -6044,6 +6044,17 @@
             "title": "Upload Id",
             "type": "string"
           },
+          "uploaded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploaded At"
+          },
           "uploader_id": {
             "title": "Uploader Id",
             "type": "string"

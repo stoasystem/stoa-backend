@@ -74,12 +74,15 @@ class ModerationImageContext(BaseModel):
 
     upload_id: str
     conversation_id: str | None = None
+    # When the image was uploaded; it is deleted 365 days later at the latest.
+    uploaded_at: str | None = None
     uploader_id: str
     uploader_role: str
     media_type: str
     size_bytes: int
     hits: list[ModerationImageHit]
-    # `deleted` once the image is gone, 90 days after the case was handled.
+    # `deleted` once the image is gone: 90 days after the case was handled, or
+    # 365 days after upload, whichever came first.
     image_status: ModerationImageStatus
     image_deleted_at: str | None = None
 

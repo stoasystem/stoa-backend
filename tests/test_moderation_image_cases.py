@@ -219,9 +219,13 @@ def test_a_refused_image_opens_a_case_with_its_hits_uploader_and_session(world) 
     assert case["question_id"] is None
     assert case["student_id"] == STUDENT
     assert case["reporter_role"] == "system"
+    uploaded_at = datetime.fromisoformat(case["image_context"]["uploaded_at"])
+    assert uploaded_at.tzinfo is not None
+    assert uploaded_at <= datetime.fromisoformat(case["created_at"]) + timedelta(seconds=1)
     assert case["image_context"] == {
         "upload_id": upload_id,
         "conversation_id": CONVERSATION,
+        "uploaded_at": case["image_context"]["uploaded_at"],
         "uploader_id": STUDENT,
         "uploader_role": "student",
         "media_type": "image/png",
@@ -355,14 +359,40 @@ def test_the_image_is_deleted_ninety_days_after_the_case_is_handled(world, statu
     assert _retain(world, handled_at + timedelta(days=91)).deleted == 0
 
 
-def test_an_unhandled_case_keeps_its_image(world) -> None:
+def test_an_unhandled_case_keeps_its_image_for_365_days_from_upload(world) -> None:
+    """No one handled it: deleted when a year has passed, as promised to parents."""
     _upload_id, case = _blocked(world)
-    created = datetime.fromisoformat(case["created_at"])
+    uploaded_at = datetime.fromisoformat(case["image_context"]["uploaded_at"])
+    image = f"/admin/moderation/cases/{case['case_id']}/image"
 
-    _retain(world, created + timedelta(days=400))
+    _retain(world, uploaded_at + timedelta(days=364))
+    _retain(world, uploaded_at + timedelta(days=365) - timedelta(seconds=1))
 
     assert len(world.evidence()) == 1
-    assert world.admin.get(f"/admin/moderation/cases/{case['case_id']}/image").status_code == 200
+    assert world.admin.get(image).status_code == 200
+
+    assert _retain(world, uploaded_at + timedelta(days=365)).deleted == 1
+
+    assert world.evidence() == []
+    assert world.admin.get(image).status_code == 404
+    [kept] = world.cases()
+    assert kept["status"] == "open"
+    assert kept["image_context"]["image_status"] == "deleted"
+
+
+def test_a_case_handled_late_is_still_deleted_at_365_days(world) -> None:
+    """Handled on day 300: the year from upload comes before the 90 days."""
+    _upload_id, case = _blocked(world)
+    uploaded_at = datetime.fromisoformat(case["image_context"]["uploaded_at"])
+    _handle(world, case["case_id"])
+    key = (f"MODERATION#{case['case_id']}", "SUMMARY")
+    late = (uploaded_at + timedelta(days=300)).replace(microsecond=0)
+    world.table.rows[key] = {**world.table.rows[key], "closed_at": late.isoformat()}
+
+    _retain(world, uploaded_at + timedelta(days=365) - timedelta(seconds=1))
+    assert len(world.evidence()) == 1
+    _retain(world, uploaded_at + timedelta(days=365))
+    assert world.evidence() == []
 
 
 def test_a_reopened_case_keeps_its_image(world) -> None:

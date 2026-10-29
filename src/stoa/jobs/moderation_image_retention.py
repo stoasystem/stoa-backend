@@ -1,4 +1,5 @@
-"""Scheduled deletion of refused images 90 days after their case is handled (#139).
+"""Scheduled deletion of refused images: 90 days after their case is handled, at
+most 365 days after upload (#139).
 
 Runs on the account-deletion function, which already holds the table and the
 images bucket; its schedule sends `{"job": "moderation_image_retention"}`.
@@ -27,7 +28,7 @@ def run(
     now: datetime | None = None,
     limit: int = 100,
 ) -> moderation_service.CaseImageRetentionSummary:
-    return moderation_service.delete_handled_case_images(
+    return moderation_service.delete_due_case_images(
         s3=s3, settings=settings_obj, now=now or _now(), limit=limit
     )
 

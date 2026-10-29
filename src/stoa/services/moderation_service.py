@@ -40,10 +40,12 @@ TERMINAL_STATUSES = {
 }
 
 # A refused image is kept in the images bucket (eu-central-2, ADR-010) under its
-# own prefix, readable only through the admin case route, and deleted this long
-# after its case is handled (#139, Q18).
+# own prefix, readable only through the admin case route. It is deleted 90 days
+# after its case is handled (#139, Q18), and in any case 365 days after it was
+# uploaded, the longest any child's image is kept: whichever comes first.
 CASE_IMAGE_PREFIX = "moderation/"
 CASE_IMAGE_RETENTION = timedelta(days=90)
+CASE_IMAGE_MAXIMUM_AGE = timedelta(days=365)
 IMAGE_MODERATION_ACTOR = "system:image_moderation"
 
 
@@ -195,6 +197,7 @@ def open_image_case(
         "image_context": {
             "upload_id": upload_id,
             "conversation_id": upload.get("conversation_id"),
+            "uploaded_at": str(upload.get("created_at") or created_at),
             "uploader_id": owner_id,
             "uploader_role": uploader_role,
             "media_type": media_type,
@@ -298,28 +301,22 @@ class CaseImageRetentionSummary:
     retryable: int = 0
 
 
-def delete_handled_case_images(
+def delete_due_case_images(
     *, s3: Any, settings: Settings, now: datetime, limit: int = 100
 ) -> CaseImageRetentionSummary:
-    """Delete each refused image whose case was handled 90 days ago or more.
+    """Delete each refused image that is due: 90 days after its case was handled,
+    or 365 days after it was uploaded, whichever comes first.
 
-    A case that is open again keeps its image. The case itself stays, with its
-    hits, and records that the image is gone.
+    A case that is open again waits for the 365 days. The case itself stays,
+    with its hits, and records that the image is gone.
     """
     now = now.astimezone(timezone.utc)
-    cutoff = now - CASE_IMAGE_RETENTION
     scanned = deleted = retryable = 0
     for item in moderation_repo.list_cases(limit=None):
         if deleted + retryable >= limit:
             break
         scanned += 1
-        if not _holds_image(item) or item.get("status") not in TERMINAL_STATUSES:
-            continue
-        try:
-            closed_at = datetime.fromisoformat(str(item.get("closed_at")))
-        except ValueError:
-            continue
-        if closed_at.tzinfo is None or closed_at > cutoff:
+        if not _holds_image(item) or not _image_due(item, now):
             continue
         case_id = str(item["case_id"])
         try:
@@ -361,6 +358,27 @@ def delete_handled_case_images(
             )
             retryable += 1
     return CaseImageRetentionSummary(scanned=scanned, deleted=deleted, retryable=retryable)
+
+
+def _image_due(item: Mapping[str, Any], now: datetime) -> bool:
+    context = item["image_context"]
+    uploaded_at = _aware(context.get("uploaded_at") or item.get("created_at"))
+    if uploaded_at is not None and uploaded_at <= now - CASE_IMAGE_MAXIMUM_AGE:
+        return True
+    closed_at = _aware(item.get("closed_at"))
+    return (
+        item.get("status") in TERMINAL_STATUSES
+        and closed_at is not None
+        and closed_at <= now - CASE_IMAGE_RETENTION
+    )
+
+
+def _aware(value: Any) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
 
 
 def delete_case_image(item: Mapping[str, Any], *, s3: Any, settings: Settings) -> None:
