@@ -27,7 +27,7 @@ from stoa.config import (
     Settings,
 )
 from stoa.db.dynamodb import stored_int
-from stoa.db.repositories import account_deletion_repo, attachment_repo
+from stoa.db.repositories import account_deletion_repo, attachment_repo, upload_code_repo
 from stoa.models.attachment import (
     AttachmentReference,
     AttachmentStatus,
@@ -837,7 +837,10 @@ def create_upload_intent(
     settings: Settings,
     now: datetime | None = None,
     repository: Any = attachment_repo,
+    upload_id: str | None = None,
+    conversation_id: str | None = None,
 ) -> dict[str, Any]:
+    """Open an upload; `conversation_id` binds it to that one conversation (#146)."""
     if actor.role != CanonicalRole.STUDENT:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     try:
@@ -857,7 +860,7 @@ def create_upload_intent(
     max_bytes = IMAGE_MAX_BYTES if extension in {"jpg", "jpeg", "png"} else DOCUMENT_MAX_BYTES
     if request.size_bytes > max_bytes:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_TOO_LARGE)
-    upload_id = str(uuid4())
+    upload_id = upload_id or str(uuid4())
     staging_object_key = f"staging/{uuid4().hex}/{upload_id}.{extension}"
     operation_fence = uuid4().hex
     expires_epoch = int(now.timestamp()) + UPLOAD_INTENT_TTL_SECONDS
@@ -885,6 +888,8 @@ def create_upload_intent(
         "created_at": now.isoformat(),
         "expires_at": expires_epoch,
     }
+    if conversation_id is not None:
+        item["bound_conversation_id"] = conversation_id
     multipart_upload_id: str | None = None
     try:
         prepare = getattr(repository, "prepare_staging_issuance", repository.create_upload_intent)
@@ -2421,16 +2426,23 @@ def prepare_message_attachments(
     *,
     now: datetime | None = None,
     repository: Any = attachment_repo,
+    conversation_id: str | None = None,
 ) -> list[tuple[str, dict[str, Any]]]:
-    """Resolve the complete owner list before any message, quota, or AI effect."""
+    """Resolve the complete owner list before any message, quota, or AI effect.
+
+    An upload bound to a conversation (a phone upload, #146) goes into that one
+    conversation and no other.
+    """
     now = now or datetime.now(UTC)
     prepared: list[tuple[str, dict[str, Any]]] = []
     for reference in references:
         if reference.upload_id is not None:
             item = resolve_owned_upload(reference.upload_id, actor, now=now, repository=repository)
+            bound_to = item.get("bound_conversation_id")
             if (
                 item.get("status") != "validated"
                 or item.get("expected_kind") != "conversation_attachment"
+                or (bound_to is not None and bound_to != conversation_id)
             ):
                 raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
             _require_immutable_record(item)
@@ -3092,6 +3104,17 @@ def purge_student_attachments(
         return AttachmentPurgeBranchResult(
             AttachmentPurgeBranchStatus.RETRYABLE, cursors=progress
         )
+    # Phone upload codes (#146) are already dead once the fence leaves active;
+    # this removes the rows themselves.
+    for item in items:
+        if item.get("entity_type") != upload_code_repo.ENTITY_TYPE:
+            continue
+        try:
+            upload_code_repo.delete_code(str(item["code_id"]))
+        except Exception:
+            return AttachmentPurgeBranchResult(
+                AttachmentPurgeBranchStatus.RETRYABLE, cursors=progress
+            )
     resources = {
         (str(item["resource_type"]), str(item["resource_id"]))
         for item in items

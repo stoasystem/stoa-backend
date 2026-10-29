@@ -3136,7 +3136,7 @@ def commit_message_command(
         # command lost before its deterministic message transaction.
         prepared = _conversation_repository_call(
             lambda: attachment_service.prepare_message_attachments(
-                body.attachmentIds or [], actor
+                body.attachmentIds or [], actor, conversation_id=conv_id
             )
         )
         effective_plan = "free_trial"

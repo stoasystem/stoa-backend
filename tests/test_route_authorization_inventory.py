@@ -629,6 +629,11 @@ GATEWAY_PUBLIC_PATHS = {
     ("POST", "/billing/webhooks/stripe"),
     ("POST", "/teacher-applications"),
     ("POST", "/teacher-applications/activation/claim"),
+    # The phone that scanned a one-time upload code is not signed in (#146); the
+    # code, then the upload token it is exchanged for, are the credential.
+    ("POST", "/upload-codes/complete"),
+    ("POST", "/upload-codes/parts/{part_number}"),
+    ("POST", "/upload-codes/redeem"),
 }
 
 # Declared public here, but the handler takes a verified token, so the authorizer in

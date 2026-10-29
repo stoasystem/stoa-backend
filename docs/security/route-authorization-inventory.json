@@ -996,6 +996,22 @@
     "sensitive": true
   },
   {
+    "authorization": [
+      {
+        "action": "read",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "conversation"
+      }
+    ],
+    "classification": "authorized",
+    "family": "conversations",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/conversations/{conv_id}/upload-codes/{code_id}",
+    "sensitive": true
+  },
+  {
     "authorization": [],
     "classification": "authenticated-global",
     "family": "files",
@@ -3687,6 +3703,22 @@
     "sensitive": true
   },
   {
+    "authorization": [
+      {
+        "action": "respond",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "conversation"
+      }
+    ],
+    "classification": "authorized",
+    "family": "conversations",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/conversations/{conv_id}/upload-codes",
+    "sensitive": true
+  },
+  {
     "authorization": [],
     "classification": "authenticated-global",
     "family": "files",
@@ -4522,6 +4554,33 @@
     "method": "POST",
     "path": "/teachers/questions/{question_id}/takeover",
     "sensitive": true
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "upload-codes",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/upload-codes/complete",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "upload-codes",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/upload-codes/parts/{part_number}",
+    "sensitive": false
+  },
+  {
+    "authorization": [],
+    "classification": "public",
+    "family": "upload-codes",
+    "identifiers": [],
+    "method": "POST",
+    "path": "/upload-codes/redeem",
+    "sensitive": false
   },
   {
     "authorization": [
