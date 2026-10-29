@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -20,6 +20,8 @@ from stoa.config import (
     DOCUMENT_MAX_BYTES,
     FREE_STORAGE_BYTES,
     IMAGE_MAX_BYTES,
+    MESSAGE_IMAGES_MAX_BYTES,
+    MODEL_IMAGE_MAX_BYTES,
     PAID_STORAGE_BYTES,
     UPLOAD_INTENT_TTL_SECONDS,
     Settings,
@@ -39,6 +41,7 @@ from stoa.models.attachment import (
 )
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import Actor, CanonicalRole
+from stoa.services.ai_service import PromptImage
 from stoa.services.file_validation_service import MIME_BY_EXTENSION
 from stoa.services.file_validation_service import ValidationFailure, validate_uploaded_file
 from stoa.services.document_extraction_service import (
@@ -59,6 +62,8 @@ PROVIDER_VERSION_MAX_PAGES = 10
 PROVIDER_VERSION_MAX_ITEMS = 10_000
 CLEANUP_RECONCILIATION_MAX_PAGES = 10
 CLEANUP_RECONCILIATION_MAX_ITEMS = 10_000
+# Attached to a conversation message, these go to the model as images.
+MESSAGE_IMAGE_TYPES = frozenset({"image/jpeg", "image/png"})
 
 
 def _require_active_account_fence_for_repository(
@@ -2327,6 +2332,24 @@ def _require_immutable_record(item: dict[str, Any]) -> None:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
 
 
+def _require_model_sized_images(items: Iterable[dict[str, Any]]) -> None:
+    """Images the model would refuse are refused here, before the message exists.
+
+    Each image has its own limit, and all of a message's images together have
+    one, so the request they ride in stays within what Bedrock accepts.
+    """
+    total = 0
+    for item in items:
+        if item.get("detected_type") not in MESSAGE_IMAGE_TYPES:
+            continue
+        length = int(item.get("content_length", 0))
+        if length > MODEL_IMAGE_MAX_BYTES:
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_TOO_LARGE)
+        total += length
+    if total > MESSAGE_IMAGES_MAX_BYTES:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_TOO_LARGE)
+
+
 def prepare_message_attachments(
     references: list[AttachmentReference],
     actor: Actor,
@@ -2348,14 +2371,11 @@ def prepare_message_attachments(
             _require_immutable_record(item)
             prepared.append(("upload", item))
         else:
-            prepared.append(
-                (
-                    "attachment",
-                    resolve_owned_attachment(
-                        str(reference.attachment_id), actor, repository=repository
-                    ),
-                )
+            item = resolve_owned_attachment(
+                str(reference.attachment_id), actor, repository=repository
             )
+            prepared.append(("attachment", item))
+    _require_model_sized_images(item for _, item in prepared)
     return prepared
 
 
@@ -2666,6 +2686,7 @@ class AttachmentContextResult:
     disposition: AttachmentContextDisposition
     context: str = ""
     error_code: AttachmentErrorCode | None = None
+    images: tuple[PromptImage, ...] = ()
 
 
 def extract_message_attachment_context(
@@ -2674,8 +2695,13 @@ def extract_message_attachment_context(
     s3: Any,
     settings: Settings,
 ) -> AttachmentContextResult:
-    """Return one all-or-nothing typed context from exact immutable private bytes."""
+    """Return one all-or-nothing typed context from exact immutable private bytes.
+
+    Documents become text. Images go to the model as they are, in the order the
+    student attached them: there is no text in a photo to extract.
+    """
     parts: list[str] = []
+    images: list[PromptImage] = []
     total = 0
     for _, item in prepared:
         try:
@@ -2685,10 +2711,19 @@ def extract_message_attachment_context(
                 AttachmentContextDisposition.INVALID,
                 error_code=AttachmentErrorCode.UPLOAD_NOT_FOUND,
             )
+    try:
+        _require_model_sized_images(item for _, item in prepared)
+    except AttachmentDecisionError:
+        return AttachmentContextResult(
+            AttachmentContextDisposition.INVALID,
+            error_code=AttachmentErrorCode.UPLOAD_TOO_LARGE,
+        )
+    for _, item in prepared:
         length = int(item["content_length"])
         body = None
         primary_error: DocumentExtractionFailure | None = None
         value = ""
+        image: PromptImage | None = None
         try:
             response = _provider_mapping(
                 lambda: s3.get_object(
@@ -2744,10 +2779,13 @@ def extract_message_attachment_context(
                 if detected.media_type != item["detected_type"]:
                     raise DocumentExtractionFailure("immutable_bytes_changed")
                 spool.seek(0)
-                parsed = parse_document_isolated(spool, item["detected_type"])
-                if parsed.category is not None:
-                    raise DocumentExtractionFailure(parsed.category)
-                value = (parsed.text or "").strip()
+                if detected.media_type in MESSAGE_IMAGE_TYPES:
+                    image = PromptImage(detected.media_type, spool.read())
+                else:
+                    parsed = parse_document_isolated(spool, item["detected_type"])
+                    if parsed.category is not None:
+                        raise DocumentExtractionFailure(parsed.category)
+                    value = (parsed.text or "").strip()
         except DocumentExtractionFailure as error:
             primary_error = error
         except Exception:
@@ -2774,17 +2812,21 @@ def extract_message_attachment_context(
                 AttachmentContextDisposition.RETRYABLE,
                 error_code=AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE,
             )
+        if image is not None:
+            images.append(image)
+            continue
         if not value:
             continue
         remaining = MAX_EXTRACTED_CHARACTERS - total
         if remaining <= 0:
-            break
+            continue
         value = value[:remaining]
         parts.append(value)
         total += len(value)
     return AttachmentContextResult(
         AttachmentContextDisposition.READY,
         context="\n\n".join(parts),
+        images=tuple(images),
     )
 
 

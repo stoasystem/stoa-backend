@@ -3499,6 +3499,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     else:
         _active_conversation_generation(student_id, table)
         attachment_context = ""
+        attachment_images: tuple[ai_service.PromptImage, ...] = ()
         if prepared:
             s3 = _conversation_repository_call(
                 lambda: boto3.client("s3", region_name=settings.aws_region)
@@ -3528,6 +3529,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 )
                 raise AttachmentDecisionError(code)
             attachment_context = context_result.context
+            attachment_images = context_result.images
         normalized_subject = context["subject"]
         grade = context["grade"]
         student_locale = context["locale"]
@@ -3567,6 +3569,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 language=student_locale,
                 history=prior_messages,
                 attachment_context=attachment_context,
+                images=attachment_images,
                 memory_context=memory_context,
                 practice_context=practice_context,
                 quote=_quote_payload(committed.quote),

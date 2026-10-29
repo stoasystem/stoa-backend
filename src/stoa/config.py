@@ -16,6 +16,14 @@ UPLOAD_INTENT_TTL_SECONDS = 1800
 IMAGE_MAX_BYTES = 10 * 1024 * 1024
 DOCUMENT_MAX_BYTES = 50 * 1024 * 1024
 IMAGE_MAX_EDGE = 4096
+# Claude takes at most 5 MiB of base64 for one image, which is 3.75 MiB of the
+# image itself. A conversation image is handed to the model whole, so a larger
+# one is refused before the message is sent.
+MODEL_IMAGE_MAX_BYTES = 5 * 1024 * 1024 * 3 // 4
+# Bedrock refuses an InvokeModel body over 25,000,000 bytes. Four full-size
+# images are 20 MiB of base64 (about 21 MB), which leaves room for the prompt,
+# the history and any document text in the same request.
+MESSAGE_IMAGES_MAX_BYTES = 4 * MODEL_IMAGE_MAX_BYTES
 FREE_STORAGE_BYTES = 5 * 1024 * 1024 * 1024
 PAID_STORAGE_BYTES = 15 * 1024 * 1024 * 1024
 FREE_TRIAL_DAYS = 14

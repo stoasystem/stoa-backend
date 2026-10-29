@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from enum import StrEnum
+import base64
 import hashlib
 import json
 import logging
@@ -198,6 +199,14 @@ class AIInvocationClass(StrEnum):
 
     USER_ALLOWANCE = "user_allowance"
     PROVIDER_COST_ONLY = "provider_cost_only"
+
+
+@dataclass(frozen=True, slots=True)
+class PromptImage:
+    """One image the student attached, handed to the model as it is (#135)."""
+
+    media_type: str
+    data: bytes
 
 
 AIContent = TypeVar("AIContent")
@@ -817,11 +826,14 @@ def _build_messages(
     practice_context: Mapping[str, Any] | None = None,
     quote: Mapping[str, Any] | None = None,
     star_map: Sequence[star_map_candidates.Candidate] | None = None,
+    images: Sequence[PromptImage] = (),
 ) -> list[dict]:
     """Build the Anthropic messages array from sanitised history + current turn.
 
     Only student/assistant turns are included; teacher, system, and note
-    messages are excluded to keep the context clean.
+    messages are excluded to keep the context clean. Images ride in the current
+    turn as image blocks ahead of its text, the order Anthropic recommends; a
+    turn without images stays a plain string.
     """
     messages: list[dict] = []
 
@@ -861,6 +873,21 @@ def _build_messages(
         else:
             merged.append(dict(msg))
 
+    if images:
+        merged[-1]["content"] = [
+            *(
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": image.media_type,
+                        "data": base64.b64encode(image.data).decode("ascii"),
+                    },
+                }
+                for image in images
+            ),
+            {"type": "text", "text": merged[-1]["content"]},
+        ]
     return merged
 
 
@@ -892,6 +919,7 @@ def get_ai_answer(
     practice_context: Mapping[str, Any] | None = None,
     quote: Mapping[str, Any] | None = None,
     star_map: Sequence[star_map_candidates.Candidate] | None = None,
+    images: Sequence[PromptImage] = (),
     correlation_id: str | None = None,
     deadline_monotonic: float | None = None,
     clock: Callable[[], float] | None = None,
@@ -926,6 +954,8 @@ def get_ai_answer(
         star_map:       Optional stars the knowledge points (#142) and the
                         star the student wants to go to (#124) are picked
                         from, fenced into the student's turn the same way.
+        images:         Images attached to the latest message (#135), sent to
+                        the model as image blocks in the student's turn.
     """
     safe_content = _sanitise_input(content, correlation_id=correlation_id)
     normalized_subject = learning_profile_service.normalize_subject(subject)
@@ -957,6 +987,7 @@ def get_ai_answer(
         practice_context=practice_context,
         quote=quote,
         star_map=star_map,
+        images=images,
     )
 
     clock = clock or time.monotonic
@@ -987,7 +1018,7 @@ def get_ai_answer(
     emit_private_event(
         "ai_request_started",
         input_size=len(safe_content),
-        attachment_count=1 if attachment_context else 0,
+        attachment_count=(1 if attachment_context else 0) + len(images),
         correlation_id=correlation_id,
     )
     if deadline_monotonic is not None and clock() >= deadline_monotonic:
