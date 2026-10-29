@@ -10,6 +10,7 @@ from stoa.db.repositories import attachment_repo
 from stoa.deps import (
     get_actor,
     get_authorization_audit_sink,
+    get_image_moderation_client,
     get_s3_client,
     get_s3_presign_client,
 )
@@ -307,6 +308,7 @@ async def complete_owned_upload(
     body: CompleteUploadRequest,
     actor: Actor = Depends(_upload_actor_dependency),
     s3=Depends(get_s3_client),
+    moderation=Depends(get_image_moderation_client),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
@@ -317,6 +319,7 @@ async def complete_owned_upload(
             actor,
             s3=s3,
             settings=settings,
+            moderation=moderation,
         )
     except AttachmentDecisionError as error:
         _raise_safe(error, correlation_id)

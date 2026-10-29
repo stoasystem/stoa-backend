@@ -296,6 +296,17 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def validate_image_moderation_configuration(self) -> "Settings":
+        # ADR-010 allows images to be processed in the EU and nowhere else.
+        if not re.fullmatch(r"eu-[a-z]+-\d", self.image_moderation_region):
+            raise ValueError("image_moderation_region must be an EU region")
+        if not 0 < self.image_moderation_min_confidence <= 100:
+            raise ValueError("image_moderation_min_confidence must be in (0, 100]")
+        if not self.image_moderation_blocked_labels:
+            raise ValueError("image_moderation_blocked_labels must not be empty")
+        return self
+
+    @model_validator(mode="after")
     def validate_billing_callback_configuration(self) -> "Settings":
         from stoa.services.billing_callback_service import BillingWebOriginPolicy
 
@@ -354,6 +365,23 @@ class Settings(BaseSettings):
     # EU cross-region inference profile — no manual model access approval needed
     bedrock_model_id: str = "eu.anthropic.claude-sonnet-4-6"
     bedrock_max_tokens: int = 2048
+
+    # Image moderation (#138). Rekognition is not offered in Zurich, so every
+    # uploaded image -- the image alone -- is shown to DetectModerationLabels in
+    # Frankfurt (ADR-010). A label at or above the confidence below, whose own
+    # name or any ancestor in the moderation taxonomy is listed here, refuses
+    # the upload. Alcohol, tobacco, drugs and gambling are deliberately absent.
+    image_moderation_region: str = "eu-central-1"
+    image_moderation_min_confidence: float = 80.0
+    image_moderation_blocked_labels: List[str] = [
+        "Explicit",
+        "Non-Explicit Nudity",
+        "Obstructed Intimate Parts",
+        "Graphic Violence",
+        "Visually Disturbing",
+        "Hate Symbols",
+        "Rude Gestures",
+    ]
 
     # Limits (per role per day)
     free_tier_daily_question_limit: int = 5

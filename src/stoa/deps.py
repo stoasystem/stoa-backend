@@ -78,6 +78,27 @@ def get_rekognition_client():
 
 
 @lru_cache
+def get_image_moderation_client():
+    """Rekognition in the moderation region, not the API's own (ADR-010).
+
+    The API Gateway and the Lambda both stop at 29 s, and completion also reads
+    and writes S3. Two attempts of at most 2 s connect and 5 s read, plus standard
+    mode's backoff, stay near 17 s, so a slow or throttled Rekognition ends as our
+    retryable 503 with Retry-After rather than the gateway's bare 504.
+    """
+    settings = get_settings()
+    return boto3.client(
+        "rekognition",
+        region_name=settings.image_moderation_region,
+        config=Config(
+            connect_timeout=2,
+            read_timeout=5,
+            retries={"mode": "standard", "total_max_attempts": 2},
+        ),
+    )
+
+
+@lru_cache
 def get_sqs_client():
     settings = get_settings()
     return boto3.client("sqs", region_name=settings.aws_region)

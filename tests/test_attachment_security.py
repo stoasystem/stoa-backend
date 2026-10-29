@@ -15,6 +15,7 @@ from moto import mock_aws
 from fastapi import HTTPException
 from botocore.exceptions import ClientError
 from pydantic import ValidationError
+from fakes.rekognition import FakeRekognition
 from fakes.dynamodb import as_stored as _as_stored
 
 from stoa.config import (
@@ -786,6 +787,7 @@ def test_gateway_completion_uses_only_contiguous_server_etags() -> None:
         settings=Settings(s3_images_bucket="bucket"),
         now=ATTACHMENT_TEST_NOW,
         repository=repository,
+        moderation=FakeRekognition(),
     )
     assert result == {"uploadId": "upload-1", "status": "validated", "attachment": None}
     assert s3.complete["MultipartUpload"]["Parts"] == [
@@ -878,6 +880,7 @@ def test_fifty_mib_document_promotion_uses_bounded_spool_and_exact_version() -> 
         settings=Settings(s3_images_bucket="private-bucket"),
         now=datetime(2026, 7, 16, tzinfo=timezone.utc),
         repository=repository,
+        moderation=FakeRekognition(),
     )
     assert result["status"] == "validated"
     assert body.total_read == DOCUMENT_MAX_BYTES
@@ -904,6 +907,7 @@ def test_max_plus_one_is_rejected_after_exact_sentinel_read_and_no_promotion() -
             settings=Settings(s3_images_bucket="private-bucket"),
             now=datetime(2026, 7, 16, tzinfo=timezone.utc),
             repository=repository,
+            moderation=FakeRekognition(),
         )
     assert error.value.code is AttachmentErrorCode.UPLOAD_TOO_LARGE
     assert body.total_read == 1025
@@ -983,6 +987,7 @@ def test_validation_non_readable_body_ownership_closes_once(read_shape: str) -> 
             settings=Settings(s3_images_bucket="private-bucket"),
             now=datetime(2026, 7, 16, tzinfo=timezone.utc),
             repository=repository,
+            moderation=FakeRekognition(),
         )
 
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
@@ -1007,6 +1012,7 @@ def test_validation_close_property_shape_preserves_primary_outcome(
             settings=Settings(s3_images_bucket="private-bucket"),
             now=datetime(2026, 7, 16, tzinfo=timezone.utc),
             repository=_PromotionRepository(),
+            moderation=FakeRekognition(),
         )
 
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
@@ -1044,6 +1050,7 @@ def test_validation_provider_body_closes_once_on_every_read_exit(
             settings=Settings(s3_images_bucket="private-bucket"),
             now=datetime(2026, 7, 16, tzinfo=timezone.utc),
             repository=repository,
+            moderation=FakeRekognition(),
         )
     assert captured.value.code is expected_code
     assert body.close_count == 1
@@ -1068,6 +1075,7 @@ def test_validation_failure_and_close_exception_preserve_stable_error(monkeypatc
             settings=Settings(s3_images_bucket="private-bucket"),
             now=datetime(2026, 7, 16, tzinfo=timezone.utc),
             repository=_PromotionRepository(),
+            moderation=FakeRekognition(),
         )
     assert captured.value.code is AttachmentErrorCode.UPLOAD_CONTENT_MISMATCH
     assert body.close_count == 1
@@ -1338,6 +1346,7 @@ def test_assembling_provider_success_repository_split_recovers_after_restart() -
             "upload-1", 1, _student_actor(), s3=s3,
             settings=Settings(s3_images_bucket="private-bucket"),
             now=started, repository=repository,
+            moderation=FakeRekognition(),
         )
     assert error.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
     assert repository.item is not None
@@ -1346,6 +1355,7 @@ def test_assembling_provider_success_repository_split_recovers_after_restart() -
         "upload-1", 1, _student_actor(), s3=s3,
         settings=Settings(s3_images_bucket="private-bucket"),
         now=started + timedelta(seconds=121), repository=repository,
+        moderation=FakeRekognition(),
     )
     assert recovered["status"] == "validated"
     assert s3.complete_calls == 1
@@ -1371,6 +1381,7 @@ def test_promotion_provider_success_repository_split_recovers_exact_version() ->
             repository.item, _student_actor(), s3=s3,
             settings=Settings(s3_images_bucket="private-bucket"),
             now=started, repository=repository,
+            moderation=FakeRekognition(),
         )
     assert error.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
     assert repository.item is not None
@@ -1380,6 +1391,7 @@ def test_promotion_provider_success_repository_split_recovers_exact_version() ->
         "upload-1", 1, _student_actor(), s3=s3,
         settings=Settings(s3_images_bucket="private-bucket"),
         now=started + timedelta(seconds=121), repository=repository,
+        moderation=FakeRekognition(),
     )
     assert recovered["status"] == "validated"
     assert repository.item["immutable_version_id"] == "immutable-version-recovered"
@@ -1417,6 +1429,7 @@ def test_malformed_success_staging_coordinate_retains_assembly_fence(
             settings=Settings(s3_images_bucket="private-bucket-canary"),
             now=datetime(2026, 7, 16, tzinfo=timezone.utc),
             repository=repository,
+            moderation=FakeRekognition(),
         )
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
     assert repository.item is not None
@@ -1461,6 +1474,7 @@ def test_malformed_success_immutable_coordinate_retains_promotion_fence(
             settings=Settings(s3_images_bucket="private-bucket-canary"),
             now=datetime(2026, 7, 16, tzinfo=timezone.utc),
             repository=repository,
+            moderation=FakeRekognition(),
         )
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
     assert repository.item is not None
@@ -1493,6 +1507,7 @@ def test_malformed_success_coordinates_recover_after_restart_without_new_mutatio
             settings=Settings(s3_images_bucket="private-bucket-canary"),
             now=started,
             repository=repository,
+            moderation=FakeRekognition(),
         )
     assert repository.item is not None
     assert repository.item["status"] == "assembling"
@@ -1504,6 +1519,7 @@ def test_malformed_success_coordinates_recover_after_restart_without_new_mutatio
         settings=Settings(s3_images_bucket="private-bucket-canary"),
         now=started + timedelta(seconds=121),
         repository=repository,
+        moderation=FakeRekognition(),
     )
     assert recovered["status"] == "validated"
     assert s3.complete_calls == 1
