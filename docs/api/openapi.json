@@ -5852,6 +5852,16 @@
             "title": "History",
             "type": "array"
           },
+          "image_context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModerationImageContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "question_context": {
             "anyOf": [
               {
@@ -5865,8 +5875,15 @@
             "title": "Question Context"
           },
           "question_id": {
-            "title": "Question Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Id"
           },
           "reason": {
             "$ref": "#/components/schemas/ModerationReason"
@@ -5932,7 +5949,6 @@
           "reason",
           "severity",
           "surface",
-          "question_id",
           "reporter_id",
           "reporter_role",
           "created_at",
@@ -5980,6 +5996,106 @@
         },
         "title": "ModerationCaseUpdateRequest",
         "type": "object"
+      },
+      "ModerationImageContext": {
+        "description": "What an `image_upload` case is about. The image itself is read separately.",
+        "properties": {
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "hits": {
+            "items": {
+              "$ref": "#/components/schemas/ModerationImageHit"
+            },
+            "title": "Hits",
+            "type": "array"
+          },
+          "image_deleted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Deleted At"
+          },
+          "image_status": {
+            "$ref": "#/components/schemas/ModerationImageStatus"
+          },
+          "media_type": {
+            "title": "Media Type",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "upload_id": {
+            "title": "Upload Id",
+            "type": "string"
+          },
+          "uploader_id": {
+            "title": "Uploader Id",
+            "type": "string"
+          },
+          "uploader_role": {
+            "title": "Uploader Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "upload_id",
+          "uploader_id",
+          "uploader_role",
+          "media_type",
+          "size_bytes",
+          "hits",
+          "image_status"
+        ],
+        "title": "ModerationImageContext",
+        "type": "object"
+      },
+      "ModerationImageHit": {
+        "description": "One label that refused the image, and the blocked category it fell under.",
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "category",
+          "confidence"
+        ],
+        "title": "ModerationImageHit",
+        "type": "object"
+      },
+      "ModerationImageStatus": {
+        "enum": [
+          "stored",
+          "deleted"
+        ],
+        "title": "ModerationImageStatus",
+        "type": "string"
       },
       "ModerationReason": {
         "enum": [
@@ -6048,7 +6164,8 @@
         "enum": [
           "question",
           "ai_answer",
-          "teacher_reply"
+          "teacher_reply",
+          "image_upload"
         ],
         "title": "ModerationSurface",
         "type": "string"
@@ -13913,6 +14030,19 @@
             "title": "Contenttype",
             "type": "string"
           },
+          "conversationId": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversationid"
+          },
           "filename": {
             "maxLength": 255,
             "minLength": 1,
@@ -18412,6 +18542,76 @@
           "authorization": [
             {
               "action": "update",
+              "capability": "student_safety_review",
+              "purpose": "moderation_operations",
+              "resource_type": "operator_resource"
+            }
+          ],
+          "classification": "admin-capability",
+          "identifiers": []
+        }
+      }
+    },
+    "/admin/moderation/cases/{case_id}/image": {
+      "get": {
+        "description": "The image moderation refused, for an `image_upload` case. Admins only.",
+        "operationId": "get_moderation_case_image_admin_moderation_cases__case_id__image_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {},
+              "image/png": {}
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "404": {
+            "description": "The case has no image, or it was deleted"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Moderation Case Image",
+        "tags": [
+          "admin"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "read",
               "capability": "student_safety_review",
               "purpose": "moderation_operations",
               "resource_type": "operator_resource"
@@ -25375,9 +25575,18 @@
           "files"
         ],
         "x-stoa-authorization": {
-          "authorization": [],
-          "classification": "authenticated-global",
-          "identifiers": []
+          "authorization": [
+            {
+              "action": "update",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "conversation"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": [
+            "conversationId"
+          ]
         }
       }
     },

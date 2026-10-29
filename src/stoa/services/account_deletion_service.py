@@ -28,7 +28,7 @@ from stoa.db.repositories import (
     websocket_repo,
 )
 from stoa.security.tokens import VerifiedAccessToken
-from stoa.services import attachment_service
+from stoa.services import attachment_service, moderation_service
 
 
 ACCOUNT_DELETION_BRANCH_IDS = (
@@ -780,9 +780,16 @@ def _moderation_support_branch(
     now = datetime.now(UTC).isoformat()
     debt: dict[str, int] = {}
     processed = 0
+    s3: Any = None
     for item in page.items:
         identity = f"{item.get('PK', '')}|{item.get('SK', '')}"
         try:
+            if item.get("SK") == "SUMMARY" and item.get("image_object_key"):
+                # A refused image goes before the case that points to it (#139);
+                # if it cannot, the case keeps its coordinates for the next pass.
+                settings = get_settings()
+                s3 = s3 or boto3.client("s3", region_name=settings.aws_region)
+                moderation_service.delete_case_image(item, s3=s3, settings=settings)
             moderation_repo.scrub_moderation_row(
                 item,
                 user_id=str(command["user_id"]),

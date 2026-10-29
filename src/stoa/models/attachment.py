@@ -48,6 +48,9 @@ class UploadIntentRequest(_AttachmentModel):
     filename: str = Field(min_length=1, max_length=255)
     content_type: str = Field(alias="contentType", min_length=1, max_length=200)
     size_bytes: int = Field(alias="sizeBytes", gt=0)
+    # The student's own learning session the file is for, when there is one. A
+    # refused image's moderation case records it (#139).
+    conversation_id: OpaqueId | None = Field(default=None, alias="conversationId")
 
 
 class UploadIntentResponse(_AttachmentModel):

@@ -33,6 +33,12 @@ MODERATION_PRIVATE_FIELDS = frozenset(
         "reporter_role",
         "assigned_admin_id",
         "student_id",
+        # A refused image's case (#139): its hits, uploader and session, and
+        # where the image is kept.
+        "image_context",
+        "image_object_key",
+        "image_version_id",
+        "image_sha256",
     }
 )
 MODERATION_TOMBSTONE_ALLOWLIST = frozenset(
@@ -190,16 +196,22 @@ def _resolve_private_owner(
     )
     if not summary:
         return None
-    question_id = str(summary.get("question_id") or "")
-    question = (
-        _strong_item(target, pk=f"QUESTION#{question_id}", sk="META")
-        if question_id
-        else None
-    )
-    if not question:
-        return None
-    owner = question.get("student_id")
-    generation = stored_int(question.get("account_fence_generation"))
+    if summary.get("surface") == "image_upload":
+        # A refused image's case has no question. It was written under its
+        # uploader's active fence, so its own owner is the authority (#139).
+        owner = summary.get("student_id")
+        generation = stored_int(summary.get("privacy_generation"))
+    else:
+        question_id = str(summary.get("question_id") or "")
+        question = (
+            _strong_item(target, pk=f"QUESTION#{question_id}", sk="META")
+            if question_id
+            else None
+        )
+        if not question:
+            return None
+        owner = question.get("student_id")
+        generation = stored_int(question.get("account_fence_generation"))
     if not isinstance(owner, str) or not owner or generation is None or generation <= 0:
         return None
     for candidate in (summary, row):
@@ -475,7 +487,8 @@ def list_case_events(case_id: str, limit: int = 100) -> list[dict[str, Any]]:
     ]
 
 
-def list_cases(limit: int = 50) -> list[dict[str, Any]]:
+def list_cases(limit: int | None = 50) -> list[dict[str, Any]]:
+    """Live cases, at most `limit` of them; every one when it is None."""
     table = get_table()
     # The cap is applied after the privacy filter, not before it: a page of
     # deleted cases must not be what a reader gets instead of live ones.

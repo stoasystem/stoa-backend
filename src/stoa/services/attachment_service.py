@@ -44,6 +44,7 @@ from stoa.security.identity import Actor, CanonicalRole
 from stoa.services.ai_service import PromptImage
 from stoa.services.file_validation_service import MIME_BY_EXTENSION
 from stoa.services.file_validation_service import ValidationFailure, validate_uploaded_file
+from stoa.services import moderation_service
 from stoa.services.image_moderation_service import (
     MODERATED_TYPES,
     ImageContentBlocked,
@@ -845,6 +846,10 @@ def create_upload_intent(
     except account_deletion_repo.AccountDeletionConflict:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from None
     account_fence_generation = int(account_fence["generation"])
+    if request.conversation_id is not None and not _gateway_call(
+        lambda: repository.owns_conversation(request.conversation_id, actor.user_id)
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     now = (now or datetime.now(UTC)).astimezone(UTC)
     extension = request.filename.rsplit(".", 1)[-1].lower() if "." in request.filename else ""
     allowed = MIME_BY_EXTENSION.get(extension)
@@ -885,6 +890,8 @@ def create_upload_intent(
         "created_at": now.isoformat(),
         "expires_at": expires_epoch,
     }
+    if request.conversation_id is not None:
+        item["conversation_id"] = request.conversation_id
     multipart_upload_id: str | None = None
     try:
         prepare = getattr(repository, "prepare_staging_issuance", repository.create_upload_intent)
@@ -1827,8 +1834,11 @@ def _validate_and_promote_completed(
                         spool.read(),
                         detected,
                         item,
+                        actor,
                         moderation=moderation,
+                        s3=s3,
                         settings=settings,
+                        now=now,
                     )
                 spool.seek(0)
                 operation_fence = uuid4().hex
@@ -1983,8 +1993,8 @@ def _validate_and_promote_completed(
     except ValidationFailure as exc:
         failure_code = exc.code
         if isinstance(exc, ImageContentBlocked):
-            # The one place a refused image is seen before its staging copy is
-            # deleted: the admin review queue (#139) takes its record here.
+            # Its case and a kept copy are already in the admin review queue
+            # (#139, `_require_moderated_image`), so the staging copy can go.
             logger.warning(
                 "image_moderation_blocked upload_id=%s labels=%s",
                 item["upload_id"],
@@ -2022,13 +2032,17 @@ def _require_moderated_image(
     data: bytes,
     detected: Any,
     item: dict[str, Any],
+    actor: Actor,
     *,
     moderation: Any,
+    s3: Any,
     settings: Settings,
+    now: datetime,
 ) -> None:
     """Let an image be promoted only on a moderation answer that found nothing.
 
-    A refusal is a `ValidationFailure` and ends the upload. No answer leaves the
+    A refusal is a `ValidationFailure` and ends the upload, once the image and its
+    case are in the admin review queue (#139). No answer, or no case, leaves the
     upload validating, so the next completion asks again; it is never a pass.
     """
     try:
@@ -2039,6 +2053,28 @@ def _require_moderated_image(
             client=moderation,
             settings=settings,
         )
+    except ImageContentBlocked as blocked:
+        try:
+            moderation_service.open_image_case(
+                item,
+                uploader_role=actor.role.value,
+                data=data,
+                media_type=detected.media_type,
+                hits=blocked.hits,
+                s3=s3,
+                settings=settings,
+                now=now,
+            )
+        except Exception as exc:
+            logger.error(
+                "image_moderation_case_failed upload_id=%s error_class=%s",
+                item["upload_id"],
+                type(exc).__name__,
+            )
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            ) from None
+        raise
     except ImageModerationUnavailable as exc:
         logger.error(
             "image_moderation_unavailable upload_id=%s cause=%s",

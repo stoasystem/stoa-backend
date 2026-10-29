@@ -1,3 +1,4 @@
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -232,3 +233,20 @@ def test_admin_can_open_update_and_note_moderation_case(monkeypatch):
     assert updates[0]["resolution_note"] == "Removed bad answer"
     assert events[0]["event_type"] == "updated"
     assert events[1]["event_type"] == "note_added"
+
+
+def test_nobody_can_report_an_image_case_themselves(monkeypatch):
+    """`image_upload` cases are opened by image moderation only (#139)."""
+    monkeypatch.setattr(moderation_service.question_repo, "get_question", lambda question_id: _question())
+    monkeypatch.setattr(
+        moderation_service.moderation_repo,
+        "put_case",
+        lambda *_args, **_kwargs: pytest.fail("no case may be written"),
+    )
+
+    response = _questions_app({"sub": "student-1", "role": "student"}).post(
+        "/questions/question-1/reports",
+        json={"surface": "image_upload", "reason": "unsafe_content", "severity": "high"},
+    )
+
+    assert response.status_code == 400

@@ -79,6 +79,26 @@ _upload_actor_dependency.authorization_specs = (  # type: ignore[attr-defined]
 )
 
 
+async def _upload_intent_conversation_resolver(conversation_id: str):
+    return {"student_id": conversation_id}
+
+
+async def _upload_intent_actor_dependency(actor: Actor = Depends(get_actor)) -> Actor:
+    return actor
+
+
+# An intent may name the learning session it is for; `create_upload_intent`
+# refuses one that is not the student's own (#139).
+_upload_intent_actor_dependency.authorization_specs = (  # type: ignore[attr-defined]
+    AuthorizationSpec(
+        ResourceType.CONVERSATION,
+        AuthorizationAction.UPDATE,
+        AuthorizationPurpose.SELF_SERVICE,
+        _upload_intent_conversation_resolver,
+    ),
+)
+
+
 def _raise_safe(error: AttachmentDecisionError, correlation_id: str) -> Never:
     error.correlation_id = correlation_id
     log_attachment_failure(error, route="files")
@@ -233,10 +253,9 @@ async def remove_saved_attachment(
 
 
 @router.post("/intents", response_model=UploadIntentResponse)
-@explicit_route_classification("authenticated-global", "Actor-owned generated upload intent")
 async def create_owned_upload_intent(
     body: UploadIntentRequest,
-    actor: Actor = Depends(get_actor),
+    actor: Actor = Depends(_upload_intent_actor_dependency),
     s3=Depends(get_s3_client),
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
