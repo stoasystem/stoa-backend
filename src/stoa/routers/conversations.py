@@ -34,6 +34,7 @@ from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import (
     account_deletion_repo,
     allowance_repo,
+    asked_knowledge_repo,
     attachment_repo,
     knowledge_gap_repo,
     practice_repo,
@@ -3767,6 +3768,22 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         if structured is not None and star_map_shown
         else []
     )
+    # What a new question asked about reaches the learning profile, the weekly
+    # report and the parent's dashboard (#143), once per question, names and
+    # stars alike. A follow-up records nothing, as above; an answer given
+    # without the map still records what it named, as names.
+    asked_knowledge = (
+        asked_knowledge_repo.record_put(
+            conversation_id=conv_id,
+            message_id=assistant_msg_id,
+            student_id=student_id,
+            subject=context["subject"],
+            points=[(point.name, point.unitId) for point in structured.knowledgePoints],
+            asked_at=assistant_created_at,
+        )
+        if structured is not None and not follow_up
+        else None
+    )
     completion = _coerce_command_result(
         _conversation_repository_call(
             lambda: attachment_repo.complete_message_command(
@@ -3781,6 +3798,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 completed_at=assistant_created_at,
                 account_fence_generation=account_fence_generation,
                 knowledge_gap_updates=knowledge_gaps,
+                asked_knowledge_put=asked_knowledge,
                 table=table,
             )
         ),

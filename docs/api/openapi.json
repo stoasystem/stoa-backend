@@ -13335,6 +13335,13 @@
           "subject": {
             "title": "Subject",
             "type": "string"
+          },
+          "weakTopics": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Weaktopics",
+            "type": "array"
           }
         },
         "required": [

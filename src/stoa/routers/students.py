@@ -11,7 +11,13 @@ from typing import NoReturn, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
-from stoa.db.repositories import parent_link_repo, practice_repo, question_repo, user_repo
+from stoa.db.repositories import (
+    asked_knowledge_repo,
+    parent_link_repo,
+    practice_repo,
+    question_repo,
+    user_repo,
+)
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizedResource,
@@ -607,6 +613,10 @@ async def get_summary(
     for q in questions:
         for kp in _knowledge_points(q, correlation_id):
             kp_counter[kp] += 1
+    # What Ask questions named counts the same (#143).
+    for record in asked_knowledge_repo.list_for_student(student_id):
+        for kp in _knowledge_points(record, correlation_id):
+            kp_counter[kp] += 1
     weak_kps = [kp for kp, _ in kp_counter.most_common(10)]
 
     return SummaryResponse(
@@ -639,6 +649,7 @@ async def get_learning_profile(
         student_id=student_id,
         questions=questions,
         mistakes=mistakes,
+        asked=asked_knowledge_repo.list_for_student(student_id),
     )
 
 
