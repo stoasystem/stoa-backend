@@ -31,6 +31,7 @@ class MultipartS3:
         self.objects: dict[tuple[str, str], dict[str, Any]] = {}
         self.server_side_part_writes = 0
         self.completions_sent = 0
+        self._versions = 0
 
     # -- what the API calls ---------------------------------------------------------
 
@@ -113,7 +114,10 @@ class MultipartS3:
         }
 
     def _store(self, key: str, data: bytes, metadata: dict[str, str]) -> dict[str, Any]:
-        version = f"v-{len(self.objects) + 1}"
+        # Never reused, as S3's are not: counting stored objects handed a deleted
+        # object's id to the next one.
+        self._versions += 1
+        version = f"v-{self._versions}"
         stored = {
             "data": data,
             "VersionId": version,

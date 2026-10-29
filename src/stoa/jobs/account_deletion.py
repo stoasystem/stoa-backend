@@ -218,5 +218,11 @@ async def continue_deletion_command(
 
 def handler(event: dict[str, Any] | None, _context: Any) -> dict[str, int]:
     event = event or {}
+    if event.get("job") == "moderation_image_retention":
+        # A second, daily schedule on this function, which already holds the
+        # table and the images bucket (#139).
+        from stoa.jobs import moderation_image_retention
+
+        return moderation_image_retention.handler(event, _context)
     summary = run_pending_deletions(limit=min(max(int(event.get("limit", 25)), 1), 100))
     return asdict(summary)

@@ -700,6 +700,25 @@ def record_generation_progress(
     return True
 
 
+def owns_conversation(
+    conversation_id: str, owner_id: str, *, table: object | None = None
+) -> bool:
+    """Whether this learning session exists and is the owner's own."""
+    target = table or get_table()
+    item = _optional_mapping(
+        _get_item(
+            target,
+            Key={"PK": f"CONV#{conversation_id}", "SK": "CONV"},
+            ConsistentRead=True,
+        ).get("Item")
+    )
+    return (
+        item is not None
+        and item.get("entity_type") == "conversation"
+        and item.get("student_id") == owner_id
+    )
+
+
 def read_generation_progress(
     conversation_id: str,
     *,

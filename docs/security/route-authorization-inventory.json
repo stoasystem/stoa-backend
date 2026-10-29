@@ -468,6 +468,22 @@
     "authorization": [
       {
         "action": "read",
+        "capability": "student_safety_review",
+        "purpose": "moderation_operations",
+        "resource_type": "operator_resource"
+      }
+    ],
+    "classification": "admin-capability",
+    "family": "admin",
+    "identifiers": [],
+    "method": "GET",
+    "path": "/admin/moderation/cases/{case_id}/image",
+    "sensitive": true
+  },
+  {
+    "authorization": [
+      {
+        "action": "read",
         "capability": "notification_event_inspector",
         "purpose": "notification_event_inspection",
         "resource_type": "notification_event"
@@ -3687,13 +3703,22 @@
     "sensitive": true
   },
   {
-    "authorization": [],
-    "classification": "authenticated-global",
+    "authorization": [
+      {
+        "action": "update",
+        "capability": null,
+        "purpose": "self_service",
+        "resource_type": "conversation"
+      }
+    ],
+    "classification": "authorized",
     "family": "files",
-    "identifiers": [],
+    "identifiers": [
+      "conversationId"
+    ],
     "method": "POST",
     "path": "/files/intents",
-    "sensitive": false
+    "sensitive": true
   },
   {
     "authorization": [

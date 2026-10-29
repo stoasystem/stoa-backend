@@ -12,10 +12,11 @@ from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
 from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table, stored_int
+from stoa.deps import get_s3_client
 from stoa.db.repositories import (
     account_deletion_repo,
     account_invitation_repo,
@@ -1252,6 +1253,35 @@ async def get_moderation_case(
 ):
     """Open a moderation case with context and audit history."""
     return moderation_service.get_case(case_id)
+
+
+@router.get(
+    "/moderation/cases/{case_id}/image",
+    response_class=Response,
+    responses={
+        200: {"content": {"image/jpeg": {}, "image/png": {}}},
+        404: {"description": "The case has no image, or it was deleted"},
+    },
+)
+async def get_moderation_case_image(
+    case_id: str,
+    user: dict = Depends(require_role("admin")),
+    s3=Depends(get_s3_client),
+    settings: Settings = Depends(get_settings),
+):
+    """The image moderation refused, for an `image_upload` case. Admins only."""
+    data, media_type = moderation_service.read_case_image(
+        case_id, s3=s3, settings=settings
+    )
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": "inline",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.patch("/moderation/cases/{case_id}", response_model=ModerationCaseResponse)

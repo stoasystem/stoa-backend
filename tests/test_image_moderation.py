@@ -26,7 +26,12 @@ from PIL import Image
 import pytest
 
 from stoa.config import Settings
-from stoa.db.repositories import account_deletion_repo, attachment_repo
+from stoa.db.repositories import (
+    account_deletion_repo,
+    attachment_repo,
+    moderation_repo,
+    notification_repo,
+)
 from stoa.deps import (
     get_actor,
     get_image_moderation_client,
@@ -89,6 +94,9 @@ class _Api:
     ) -> None:
         monkeypatch.setattr(attachment_repo, "get_table", lambda: table)
         monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
+        # A refused image opens a review case (#139), on the same table.
+        monkeypatch.setattr(moderation_repo, "get_table", lambda: table)
+        monkeypatch.setattr(notification_repo, "get_table", lambda: table)
         self.table = table
         self.s3 = MultipartS3(BUCKET)
         self.actor = _actor(STUDENT, CanonicalRole.STUDENT)
@@ -212,9 +220,11 @@ def test_each_blocked_category_refuses_the_image(monkeypatch, table, category) -
     refused = api.complete(upload_id, data)
 
     assert (refused.status_code, _code(refused)) == (422, "upload_content_blocked")
-    # Neither the image nor its staging copy is kept, and completing again
-    # cannot turn the refused upload into an attachment.
-    assert api.s3.objects == {}
+    # Only the admin review queue's copy is kept (#139): not the staging copy,
+    # and completing again cannot turn the refused upload into an attachment.
+    assert [key for key, _version in api.s3.objects] == [
+        key for key, _version in api.s3.objects if key.startswith("moderation/")
+    ] != []
     again = api.complete(upload_id, data)
     assert again.status_code != 200 and api.promoted() == []
 
