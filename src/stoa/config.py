@@ -293,6 +293,13 @@ class Settings(BaseSettings):
             raise ValueError("analytics_payload_max_entries must be positive")
         if self.analytics_payload_max_value_length <= 0:
             raise ValueError("analytics_payload_max_value_length must be positive")
+        if min(
+            self.upload_code_window_seconds,
+            self.upload_code_refusals_max_per_window,
+            self.upload_code_refusals_hard_max_per_window,
+            self.upload_code_issue_max_per_window,
+        ) <= 0:
+            raise ValueError("upload code limits must be positive")
         return self
 
     @model_validator(mode="after")
@@ -419,6 +426,18 @@ class Settings(BaseSettings):
     analytics_ingest_max_events_per_window: int = 600
     analytics_payload_max_entries: int = 32
     analytics_payload_max_value_length: int = 256
+
+    # Phone upload codes (#146). The phone is not signed in, so refused codes and
+    # tokens are counted per source; one that verifies is never counted, so a
+    # script behind a school's NAT cannot lock the school's phones out. The code
+    # is 256 random bits, so this bounds load, not guessing. Minting is capped per
+    # student, so one account cannot fill the table.
+    upload_code_window_seconds: int = 600
+    upload_code_refusals_max_per_window: int = 30
+    # Far past that, a source is a flood: it is refused before any other work
+    # for the rest of the window, valid code or not.
+    upload_code_refusals_hard_max_per_window: int = 300
+    upload_code_issue_max_per_window: int = 20
 
     # SQS
     teacher_queue_url: str = ""

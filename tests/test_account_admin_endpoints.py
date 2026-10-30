@@ -93,6 +93,7 @@ def build_app_without_analytics() -> FastAPI:
         questions,
         teacher_applications,
         teachers,
+        upload_codes,
     )
 
     app = FastAPI()
@@ -111,6 +112,8 @@ def build_app_without_analytics() -> FastAPI:
     app.include_router(adaptive.router, prefix="/adaptive")
     app.include_router(admin.router, prefix="/admin")
     app.include_router(files.router, prefix="/files")
+    app.include_router(upload_codes.conversation_router, prefix="/conversations")
+    app.include_router(upload_codes.router, prefix="/upload-codes")
 
     @app.get("/health")
     @explicit_route_classification("public", "load-balancer health probe")

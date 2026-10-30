@@ -26,6 +26,7 @@ from stoa.routers import (
     students,
     teacher_applications,
     teachers,
+    upload_codes,
 )
 
 app = FastAPI(
@@ -142,6 +143,10 @@ app.include_router(notifications.admin_router, prefix="/admin", tags=["admin-not
 app.include_router(adaptive.router, prefix="/adaptive", tags=["adaptive"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
 app.include_router(files.router, prefix="/files", tags=["files"])
+app.include_router(
+    upload_codes.conversation_router, prefix="/conversations", tags=["upload-codes"]
+)
+app.include_router(upload_codes.router, prefix="/upload-codes", tags=["upload-codes"])
 
 
 @app.get("/health")

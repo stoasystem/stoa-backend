@@ -1925,6 +1925,8 @@
           "upload_chunk_conflict",
           "storage_quota_exceeded",
           "upload_service_unavailable",
+          "upload_code_invalid",
+          "upload_code_rate_limited",
           "message_idempotency_conflict",
           "message_in_progress",
           "message_daily_limit",
@@ -14071,6 +14073,288 @@
         "title": "UploadChunkResponse",
         "type": "object"
       },
+      "UploadCodeCompleteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "partCount": {
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Partcount",
+            "type": "integer"
+          },
+          "uploadToken": {
+            "format": "password",
+            "maxLength": 200,
+            "title": "Uploadtoken",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "uploadToken",
+          "partCount"
+        ],
+        "title": "UploadCodeCompleteRequest",
+        "type": "object"
+      },
+      "UploadCodeCompleteResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "pattern": "^validated$",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "UploadCodeCompleteResponse",
+        "type": "object"
+      },
+      "UploadCodePartRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "checksumSha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Checksumsha256",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "exclusiveMinimum": 0.0,
+            "title": "Sizebytes",
+            "type": "integer"
+          },
+          "uploadToken": {
+            "format": "password",
+            "maxLength": 200,
+            "title": "Uploadtoken",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "uploadToken",
+          "sizeBytes",
+          "checksumSha256"
+        ],
+        "title": "UploadCodePartRequest",
+        "type": "object"
+      },
+      "UploadCodePartResponse": {
+        "additionalProperties": false,
+        "description": "Where the phone puts one part's bytes, straight to S3 (ADR-004).",
+        "properties": {
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "object"
+          },
+          "method": {
+            "pattern": "^PUT$",
+            "title": "Method",
+            "type": "string"
+          },
+          "partNumber": {
+            "minimum": 1.0,
+            "title": "Partnumber",
+            "type": "integer"
+          },
+          "url": {
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "partNumber",
+          "url",
+          "method",
+          "headers",
+          "expiresAt"
+        ],
+        "title": "UploadCodePartResponse",
+        "type": "object"
+      },
+      "UploadCodeRedeemRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "format": "password",
+            "maxLength": 200,
+            "title": "Code",
+            "type": "string",
+            "writeOnly": true
+          },
+          "contentType": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Contenttype",
+            "type": "string"
+          },
+          "filename": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Filename",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "exclusiveMinimum": 0.0,
+            "title": "Sizebytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "filename",
+          "contentType",
+          "sizeBytes"
+        ],
+        "title": "UploadCodeRedeemRequest",
+        "type": "object"
+      },
+      "UploadCodeRedeemResponse": {
+        "additionalProperties": false,
+        "description": "The token the phone presents for the rest of this one upload.",
+        "properties": {
+          "acceptedTypes": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Acceptedtypes",
+            "type": "array"
+          },
+          "chunkBytes": {
+            "exclusiveMinimum": 0.0,
+            "title": "Chunkbytes",
+            "type": "integer"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "maxBytes": {
+            "exclusiveMinimum": 0.0,
+            "title": "Maxbytes",
+            "type": "integer"
+          },
+          "uploadToken": {
+            "minLength": 1,
+            "title": "Uploadtoken",
+            "type": "string"
+          }
+        },
+        "required": [
+          "uploadToken",
+          "expiresAt",
+          "maxBytes",
+          "chunkBytes",
+          "acceptedTypes"
+        ],
+        "title": "UploadCodeRedeemResponse",
+        "type": "object"
+      },
+      "UploadCodeResponse": {
+        "additionalProperties": false,
+        "description": "A fresh code. `code` is shown once, here, and stored only as a hash.",
+        "properties": {
+          "code": {
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "codeId": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Codeid",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "codeId",
+          "code",
+          "expiresAt"
+        ],
+        "title": "UploadCodeResponse",
+        "type": "object"
+      },
+      "UploadCodeStatus": {
+        "enum": [
+          "waiting",
+          "uploading",
+          "ready",
+          "failed",
+          "expired"
+        ],
+        "title": "UploadCodeStatus",
+        "type": "string"
+      },
+      "UploadCodeStatusResponse": {
+        "additionalProperties": false,
+        "description": "Where the phone has got to. `uploadId` appears once the image has passed.\n\nWhoever scans the QR first holds the code, so `redeemedAt` says when a phone\ntook it, and the computer shows the photo for the student to confirm rather\nthan sending it on its own.",
+        "properties": {
+          "codeId": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Codeid",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "redeemedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Redeemedat"
+          },
+          "status": {
+            "$ref": "#/components/schemas/UploadCodeStatus"
+          },
+          "uploadId": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploadid"
+          }
+        },
+        "required": [
+          "codeId",
+          "status",
+          "expiresAt"
+        ],
+        "title": "UploadCodeStatusResponse",
+        "type": "object"
+      },
       "UploadIntentRequest": {
         "additionalProperties": false,
         "properties": {
@@ -25280,6 +25564,232 @@
         }
       }
     },
+    "/conversations/{conv_id}/upload-codes": {
+      "post": {
+        "description": "A one-time code a phone can put one image into this conversation with.\n\nThe code is in this response only. It is spent by the first redemption and\nrefused from ten minutes on, or once the account enters deletion.",
+        "operationId": "issue_upload_code_conversations__conv_id__upload_codes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conv_id",
+            "required": true,
+            "schema": {
+              "title": "Conv Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadCodeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Issue Upload Code",
+        "tags": [
+          "upload-codes"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "respond",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "conversation"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": []
+        }
+      }
+    },
+    "/conversations/{conv_id}/upload-codes/{code_id}": {
+      "get": {
+        "description": "Where the phone has got to; `uploadId` to attach once the image has passed.",
+        "operationId": "read_upload_code_conversations__conv_id__upload_codes__code_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code_id",
+            "required": true,
+            "schema": {
+              "title": "Code Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "conv_id",
+            "required": true,
+            "schema": {
+              "title": "Conv Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadCodeStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Upload Code",
+        "tags": [
+          "upload-codes"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "conversation"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": []
+        }
+      }
+    },
+    "/conversations/{conv_id}/upload-codes/{code_id}/content": {
+      "get": {
+        "description": "The photo the phone put in, once it has passed, for the student to confirm.\n\nWhoever scans the QR first holds the code, so the computer shows this photo\nand lets the student choose to send it; it never attaches a ready upload alone.",
+        "operationId": "preview_upload_code_photo_conversations__conv_id__upload_codes__code_id__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code_id",
+            "required": true,
+            "schema": {
+              "title": "Code Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "conv_id",
+            "required": true,
+            "schema": {
+              "title": "Conv Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Upload Code Photo",
+        "tags": [
+          "upload-codes"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "conversation"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": []
+        }
+      }
+    },
     "/files/attachments": {
       "get": {
         "operationId": "list_saved_attachments_files_attachments_get",
@@ -33840,6 +34350,158 @@
             }
           ],
           "classification": "authorized",
+          "identifiers": []
+        }
+      }
+    },
+    "/upload-codes/complete": {
+      "post": {
+        "description": "Finish the upload; the image is moderated before it counts (#138).",
+        "operationId": "complete_upload_code_upload_codes_complete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadCodeCompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadCodeCompleteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Complete Upload Code",
+        "tags": [
+          "upload-codes"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [],
+          "classification": "public",
+          "identifiers": []
+        }
+      }
+    },
+    "/upload-codes/parts/{part_number}": {
+      "post": {
+        "description": "Sign the URL the phone puts one part on, straight to S3 (ADR-004).",
+        "operationId": "sign_upload_code_part_upload_codes_parts__part_number__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "part_number",
+            "required": true,
+            "schema": {
+              "title": "Part Number",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadCodePartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadCodePartResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sign Upload Code Part",
+        "tags": [
+          "upload-codes"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [],
+          "classification": "public",
+          "identifiers": []
+        }
+      }
+    },
+    "/upload-codes/redeem": {
+      "post": {
+        "description": "Spend a code on one image upload into the conversation it was made in.",
+        "operationId": "redeem_upload_code_upload_codes_redeem_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadCodeRedeemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadCodeRedeemResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Redeem Upload Code",
+        "tags": [
+          "upload-codes"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [],
+          "classification": "public",
           "identifiers": []
         }
       }

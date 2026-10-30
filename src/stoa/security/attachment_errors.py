@@ -26,6 +26,8 @@ class AttachmentErrorCode(StrEnum):
     UPLOAD_CHUNK_CONFLICT = "upload_chunk_conflict"
     STORAGE_QUOTA_EXCEEDED = "storage_quota_exceeded"
     UPLOAD_SERVICE_UNAVAILABLE = "upload_service_unavailable"
+    UPLOAD_CODE_INVALID = "upload_code_invalid"
+    UPLOAD_CODE_RATE_LIMITED = "upload_code_rate_limited"
     MESSAGE_IDEMPOTENCY_CONFLICT = "message_idempotency_conflict"
     MESSAGE_IN_PROGRESS = "message_in_progress"
     MESSAGE_DAILY_LIMIT = "message_daily_limit"
@@ -40,6 +42,7 @@ class AttachmentClientAction(StrEnum):
     REDUCE_SIZE = "reduce_size"
     DELETE_OR_UPGRADE = "delete_or_upgrade"
     RETRY_LATER = "retry_later"
+    NEW_UPLOAD_CODE = "new_upload_code"
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +103,19 @@ ATTACHMENT_ERROR_REGISTRY: dict[AttachmentErrorCode, AttachmentErrorContract] = 
         retryable=True,
         idempotent_only=True,
         max_attempts=2,
+    ),
+    # A phone upload code that is wrong, used, expired, or whose account is in
+    # deletion (#146). One answer for all of them, so a refusal tells a guesser
+    # nothing; the phone page asks for a fresh code from the computer.
+    AttachmentErrorCode.UPLOAD_CODE_INVALID: AttachmentErrorContract(
+        404,
+        "This code is no longer valid. Show a new code on your computer.",
+        AttachmentClientAction.NEW_UPLOAD_CODE,
+    ),
+    AttachmentErrorCode.UPLOAD_CODE_RATE_LIMITED: AttachmentErrorContract(
+        429,
+        "Too many attempts. Try again later.",
+        AttachmentClientAction.RETRY_LATER,
     ),
     AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT: AttachmentErrorContract(
         409,

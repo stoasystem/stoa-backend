@@ -553,6 +553,45 @@ def client_source_digest(request: Any, *, trusted_proxy_hops: int | None = None)
     return hashlib.sha256((source or "unknown").encode("utf-8")).hexdigest()
 
 
+def _source_window_key(scope: str, source_digest: str, window_start: int) -> dict[str, str]:
+    bucket = _required_text(scope, "scope").upper()
+    digest = _sha256_digest(source_digest, "source_digest")
+    return {"PK": f"SOURCEWINDOW#{bucket}#{digest}", "SK": f"WINDOW#{window_start}"}
+
+
+def source_window_count(
+    *,
+    scope: str,
+    source_digest: str,
+    window_seconds: int,
+    now: datetime | None = None,
+    table: object | None = None,
+) -> int | None:
+    """What one source has been charged in the current window, without charging it.
+
+    None when the counter cannot be read; a caller that guards with this refuses
+    then, as `admit_source_window` does.
+    """
+    if (
+        isinstance(window_seconds, bool)
+        or not isinstance(window_seconds, int)
+        or window_seconds <= 0
+    ):
+        raise ValueError("window_seconds must be a positive integer")
+    observed_now = now or datetime.now(timezone.utc)
+    if observed_now.tzinfo is None or observed_now.utcoffset() is None:
+        raise ValueError("now must be timezone-aware")
+    moment = int(observed_now.timestamp())
+    key = _source_window_key(scope, source_digest, moment - (moment % window_seconds))
+    try:
+        item = _get_item(table if table is not None else get_table(), key)
+    except _RateDependencyFailure:
+        return None
+    if item is None:
+        return 0
+    return _stored_nonnegative_int(item.get("count"))
+
+
 def admit_source_window(
     *,
     scope: str,
@@ -591,10 +630,7 @@ def admit_source_window(
         return False
     try:
         response = updater(
-            Key={
-                "PK": f"SOURCEWINDOW#{bucket}#{digest}",
-                "SK": f"WINDOW#{window_start}",
-            },
+            Key=_source_window_key(bucket, digest, window_start),
             # DynamoDB's grammar puts SET before ADD; count is reserved, so it is named.
             UpdateExpression=(
                 "SET entity_type = :entity, expires_at = :expires ADD #count :one"
