@@ -83,8 +83,10 @@ NOW = "2026-10-26T09:00:00+00:00"
 WEEK = "2026-10-26"
 # Every question here is asked in that week.
 ASKED_AT = datetime(2026, 10, 27, 10, 0, tzinfo=UTC)
-# What the student wrote, word for word; a parent must never read it.
-ASKED = "Mein Geheimnis: wie kürze ich 6/8 ganz genau?"
+# What the student wrote, word for word; a parent must never read it. No
+# listed word of any language (#172), so the answer follows the display
+# language each test asks in.
+ASKED = "Mein Geheimnis: 6/8 ganz genau?"
 
 
 def _profile(user_id: str, role: str) -> dict[str, Any]:
