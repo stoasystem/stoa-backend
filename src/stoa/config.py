@@ -296,6 +296,7 @@ class Settings(BaseSettings):
         if min(
             self.upload_code_window_seconds,
             self.upload_code_refusals_max_per_window,
+            self.upload_code_refusals_hard_max_per_window,
             self.upload_code_issue_max_per_window,
         ) <= 0:
             raise ValueError("upload code limits must be positive")
@@ -433,6 +434,9 @@ class Settings(BaseSettings):
     # student, so one account cannot fill the table.
     upload_code_window_seconds: int = 600
     upload_code_refusals_max_per_window: int = 30
+    # Far past that, a source is a flood: it is refused before any other work
+    # for the rest of the window, valid code or not.
+    upload_code_refusals_hard_max_per_window: int = 300
     upload_code_issue_max_per_window: int = 20
 
     # SQS

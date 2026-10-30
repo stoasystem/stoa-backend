@@ -386,6 +386,27 @@ def test_the_student_sees_the_phones_photo_before_sending_it(monkeypatch, table)
     assert api.preview(issued["codeId"], OTHER_STUDENT).status_code in {403, 404}
 
 
+def test_the_moment_between_spending_the_code_and_opening_the_upload_is_progress(
+    monkeypatch, table
+) -> None:
+    """The computer polls; reading `failed` here would end its wait for a photo that comes."""
+    api = _Api(monkeypatch, table)
+    issued = api.code()
+    seen: list[str] = []
+    real_open = upload_code_service.attachment_service.create_upload_intent
+
+    def computer_polls_first(*args: Any, **kwargs: Any):
+        seen.append(api.status(issued["codeId"]).json()["status"])
+        return real_open(*args, **kwargs)
+
+    monkeypatch.setattr(
+        upload_code_service.attachment_service, "create_upload_intent", computer_polls_first
+    )
+
+    assert api.redeem(issued["code"]).status_code == 200
+    assert seen == ["uploading"]
+
+
 def test_a_code_spent_on_a_failed_start_shows_failed(monkeypatch, table) -> None:
     api = _Api(monkeypatch, table)
     issued = api.code()
@@ -666,7 +687,26 @@ def test_account_deletion_sweeps_the_students_codes(monkeypatch, table) -> None:
         STUDENT, account_fence_generation=1, s3=api.s3, settings=api.settings
     )
 
-    assert [row["student_id"] for row in api.rows("upload_code")] == [OTHER_STUDENT]
+    assert [row["owner_id"] for row in api.rows("upload_code")] == [OTHER_STUDENT]
+
+
+def test_codes_stay_out_of_the_students_index(monkeypatch, table) -> None:
+    """GSI-StudentId feeds paged reads such as the parent's conversation list.
+
+    A student minting codes in a burst must not crowd those pages until TTL.
+    """
+    api = _Api(monkeypatch, table)
+    api.code()
+    api.redeem(api.code()["code"])
+
+    indexed = table.query(
+        IndexName="GSI-StudentId",
+        KeyConditionExpression="student_id = :student",
+        ExpressionAttributeValues={":student": STUDENT},
+    )["Items"]
+
+    assert [row for row in indexed if row.get("entity_type") == "upload_code"] == []
+    assert len(api.rows("upload_code")) == 2
 
 
 # -- the code as a secret ----------------------------------------------------------
@@ -793,6 +833,38 @@ def test_a_flood_of_bad_codes_does_not_lock_out_a_real_phone_on_the_same_address
 
     assert completed.status_code == 200, completed.text
     assert api.status(issued["codeId"]).json()["status"] == "ready"
+
+
+def test_a_flooding_source_is_turned_away_before_anything_is_read(monkeypatch, table) -> None:
+    """Far past the refusal limit, even a valid code costs one counter read and no more."""
+    settings = Settings(
+        s3_images_bucket=BUCKET,
+        upload_code_refusals_max_per_window=2,
+        upload_code_refusals_hard_max_per_window=4,
+    )
+    api = _Api(monkeypatch, table, settings=settings)
+    data = _png()
+    live = api.code()
+    redeemed = api.redeem(api.code()["code"], data).json()
+    for _ in range(4):
+        api.redeem(f"{'f' * 32}.{'a' * 43}")
+    reads: list[str] = []
+    real_get = table.get_item
+
+    def counting_get(**kwargs: Any):
+        reads.append(kwargs["Key"]["PK"])
+        return real_get(**kwargs)
+
+    monkeypatch.setattr(table, "get_item", counting_get)
+
+    for response in (
+        api.redeem(live["code"]),
+        api.sign(redeemed["uploadToken"], 1, data),
+        api.complete(redeemed["uploadToken"]),
+    ):
+        assert _refusal(response) == (429, "upload_code_rate_limited")
+    assert all(pk.startswith("SOURCEWINDOW#") for pk in reads), reads
+    assert len(api.rows("upload_intent")) == 1
 
 
 def test_a_student_cannot_mint_codes_without_limit(monkeypatch, table) -> None:

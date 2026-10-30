@@ -105,6 +105,24 @@ def _refuse(source_digest: str, settings: Settings) -> Never:
     raise _invalid()
 
 
+def _turn_away_flooding_source(source_digest: str, settings: Settings) -> None:
+    """Refuse, before any other work, a source far past its refusal limit.
+
+    Under the ordinary limit a code is still verified first, so one script behind
+    a school's NAT cannot lock the school's phones out by sending bad codes. A
+    source many times past it is a flood, not a classroom; it is turned away for
+    the rest of the window at the cost of one counter read.
+    """
+    count = rate_limit.source_window_count(
+        scope="UPLOAD_CODE_REFUSED",
+        source_digest=source_digest,
+        window_seconds=settings.upload_code_window_seconds,
+        now=_now(),
+    )
+    if count is None or count >= settings.upload_code_refusals_hard_max_per_window:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_CODE_RATE_LIMITED)
+
+
 def _counting_refusals(source_digest: str, settings: Settings, verify: Callable[[], _T]) -> _T:
     try:
         return verify()
@@ -201,8 +219,10 @@ def issue_code(conversation_id: str, actor: Actor, *, settings: Settings) -> dic
         upload_code_repo.put_code(
             {
                 "code_id": code_id,
+                # No `student_id`: that would put every code in GSI-StudentId,
+                # where a burst of codes crowds the parent's conversation pages
+                # until TTL. Deletion's sweep finds the row by `owner_id`.
                 "owner_id": actor.user_id,
-                "student_id": actor.user_id,
                 "conversation_id": conversation_id,
                 "secret_sha256": _digest(secret),
                 "status": "issued",
@@ -264,7 +284,9 @@ def code_status(conversation_id: str, code_id: str, actor: Actor) -> dict[str, A
         upload_status = (upload or {}).get("status")
         if upload_status in _READY_UPLOAD_STATES:
             status, upload_id = "ready", str(row["upload_id"])
-        elif upload_status in _LIVE_UPLOAD_STATES:
+        elif upload is None or upload_status in _LIVE_UPLOAD_STATES:
+            # No row yet: the phone has spent the code and its upload is being
+            # opened. Until the token runs out that is progress, not failure.
             status = "uploading"
         else:
             status = "failed"
@@ -317,6 +339,7 @@ def redeem_code(
     settings: Settings,
 ) -> dict[str, Any]:
     """Spend the code on one image upload into its conversation; hand back the token."""
+    _turn_away_flooding_source(source_digest, settings)
     _require_image(request)
     now = _now()
     now_epoch = int(now.timestamp())
@@ -406,6 +429,7 @@ def sign_part(
     signer: Any,
     settings: Settings,
 ) -> dict[str, Any]:
+    _turn_away_flooding_source(source_digest, settings)
     row = _counting_refusals(
         source_digest, settings, lambda: _redeemed_row(request.upload_token.get_secret_value())
     )
@@ -430,6 +454,7 @@ def complete(
     settings: Settings,
     moderation: Any,
 ) -> dict[str, Any]:
+    _turn_away_flooding_source(source_digest, settings)
     row = _counting_refusals(
         source_digest, settings, lambda: _redeemed_row(request.upload_token.get_secret_value())
     )
