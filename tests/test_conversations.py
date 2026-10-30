@@ -14,6 +14,7 @@ import pytest
 from datetime import datetime, timezone
 
 from audit_helpers import MemoryAuthorizationAuditSink
+from fakes.bedrock import FakeBedrock, answer_without_allowance
 from fakes.dynamodb import as_stored as _as_stored
 from stoa.db.repositories import attachment_repo, question_repo, user_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
@@ -686,7 +687,7 @@ def test_new_foreign_attachment_has_zero_command_quota_or_ai_effect(monkeypatch)
         lambda **_kwargs: effects.append("claim"),
     )
     monkeypatch.setattr(
-        conversations.ai_service, "get_ai_answer", lambda **_kwargs: effects.append("ai")
+        conversations.ask_answer, "answer", lambda *_args, **_kwargs: effects.append("ai")
     )
     with pytest.raises(AttachmentDecisionError) as captured:
         conversations._execute_message_command(
@@ -796,16 +797,14 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
             conversations.attachment_service.AttachmentContextDisposition.READY
         )
 
-    def get_ai_answer(**_kwargs: object) -> dict[str, Any]:
-        effects["ai"] += 1
-        return {"steps": ["one"], "answer": "safe", "hints": []}
-
+    model = answer_without_allowance(
+        monkeypatch, FakeBedrock(answer={"steps": ["one"], "answer": "safe", "hints": []})
+    )
     monkeypatch.setattr(
         conversations.attachment_service,
         "extract_message_attachment_context",
         extract_context,
     )
-    monkeypatch.setattr(conversations.ai_service, "get_ai_answer", get_ai_answer)
     results = []
     failures = []
 
@@ -832,6 +831,7 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
     assert failures == []
     assert len(results) == 2
     assert results[0].model_dump() == results[1].model_dump()
+    effects["ai"] = len(model.requests)
     assert effects == {
         "claim": 2, "bind": 1, "extract": 1, "ai": 1, "complete": 1
     }
@@ -955,16 +955,15 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
             context="private text",
         )
 
-    def get_ai_answer(**_kwargs: object) -> dict[str, Any]:
-        effects["ai"] += 1
-        return {"steps": [], "answer": "original safe answer", "hints": []}
-
+    model = answer_without_allowance(
+        monkeypatch,
+        FakeBedrock(answer={"steps": [], "answer": "original safe answer", "hints": []}),
+    )
     monkeypatch.setattr(
         conversations.attachment_service,
         "extract_message_attachment_context",
         extract_context,
     )
-    monkeypatch.setattr(conversations.ai_service, "get_ai_answer", get_ai_answer)
 
     first = conversations._execute_message_command(
         conv_id="conv-1",
@@ -988,6 +987,7 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
     )
 
     assert first.model_dump() == replay.model_dump()
+    effects["ai"] = len(model.requests)
     assert effects == {"claim": 1, "bind": 1, "extract": 1, "ai": 1, "complete": 1}
     assert len(stored_attachments) == 1
     assert "private-canary" not in first.model_dump_json()
@@ -1212,10 +1212,8 @@ def _install_transport_happy_path(monkeypatch) -> None:
         "claim_message_ai_lease",
         lambda **_kwargs: (True, 1),
     )
-    monkeypatch.setattr(
-        conversations.ai_service,
-        "get_ai_answer",
-        lambda **_kwargs: {"steps": [], "answer": "safe", "hints": []},
+    answer_without_allowance(
+        monkeypatch, FakeBedrock(answer={"steps": [], "answer": "safe", "hints": []})
     )
     monkeypatch.setattr(
         conversations.attachment_repo,
@@ -1612,9 +1610,7 @@ def test_conversation_dependency_cancellation_stable_error_has_zero_message_ai_e
         lambda *args, **kwargs: effects.append("extract"),
     )
     monkeypatch.setattr(
-        conversations.ai_service,
-        "get_ai_answer",
-        lambda **kwargs: effects.append("ai"),
+        conversations.ask_answer, "answer", lambda *_args, **_kwargs: effects.append("ai")
     )
     response = _client(conversations.router).post(
         "/conversations/conv-1/messages",
@@ -1826,7 +1822,7 @@ def test_streaming_reports_steps_and_still_returns_the_whole_answer(monkeypatch)
     """Streaming must not change what the caller finally receives."""
     import json as _json
 
-    from stoa.services import ai_service
+    from stoa.services import ask_answer
 
     answer = {
         "steps": ["Schritt 1: erst dies", "Schritt 2: dann das"],
@@ -1847,17 +1843,17 @@ def test_streaming_reports_steps_and_still_returns_the_whole_answer(monkeypatch)
             return {"body": _events(), "ResponseMetadata": {"RequestId": "req-1"}}
 
     seen = []
-    result = ai_service.get_ai_answer(
-        content="Wie loese ich 2x = 8?",
-        subject="math",
-        grade="9",
-        language="de",
-        client=_Client(),
-        on_step=lambda index, step: seen.append((index, step)),
+    result = ask_answer.answer(
+        ask_answer.Asked(content="Wie loese ich 2x = 8?"),
+        ask_answer.Asker(student_id="student-1", subject="math", grade="9", locale="de"),
+        ask_answer.ModelCall(
+            model=_Client(), on_step=lambda index, step: seen.append((index, step))
+        ),
+        read_star_map=lambda *_a, **_k: None,
     )
 
     assert [step for _index, step in seen] == answer["steps"]
-    assert result.content["answer"] == "x = 4"
+    assert result.structured.answer == "x = 4"
 
 
 

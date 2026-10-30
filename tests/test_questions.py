@@ -269,7 +269,7 @@ def _patch_question_submit_dependencies(monkeypatch) -> None:
     )
     monkeypatch.setattr(questions.question_repo, "update_status", lambda *args, **kwargs: None)
     monkeypatch.setattr(
-        questions.ai_service,
+        questions.ask_answer,
         "get_ai_answer",
         lambda **kwargs: {
             "answer": "AI answer",
@@ -329,7 +329,7 @@ def test_submit_question_uses_corrected_ocr_text_and_hides_image_key(monkeypatch
     )
     monkeypatch.setattr(questions.question_repo, "update_status", lambda *args, **kwargs: None)
     monkeypatch.setattr(
-        questions.ai_service,
+        questions.ask_answer,
         "get_ai_answer",
         lambda **kwargs: {"answer": "AI answer", "steps": [], "hints": [], "similar_exercises": []},
     )
@@ -410,7 +410,7 @@ def test_submit_question_appends_ocr_text_when_no_correction(monkeypatch):
         questions.usage_ledger_service, "record_question_usage_event", lambda **kwargs: {}
     )
     monkeypatch.setattr(
-        questions.ai_service,
+        questions.ask_answer,
         "get_ai_answer",
         lambda **kwargs: {"answer": "AI answer", "steps": [], "hints": [], "similar_exercises": []},
     )
@@ -458,7 +458,7 @@ def test_question_quota_race_stable_error_has_no_question_or_ai_effect(monkeypat
         lambda *args, **kwargs: effects.append("released"),
     )
     monkeypatch.setattr(
-        questions.ai_service,
+        questions.ask_answer,
         "get_ai_answer",
         lambda **kwargs: effects.append("ai"),
     )
@@ -615,7 +615,7 @@ def test_submit_question_records_privacy_safe_usage_ledger_event(monkeypatch):
     )
     monkeypatch.setattr(questions.question_repo, "update_status", lambda *args, **kwargs: None)
     monkeypatch.setattr(
-        questions.ai_service,
+        questions.ask_answer,
         "get_ai_answer",
         lambda **kwargs: {"answer": "AI answer", "steps": [], "hints": [], "similar_exercises": []},
     )

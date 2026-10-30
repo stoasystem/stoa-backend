@@ -22,9 +22,10 @@ from typing import Any
 
 import pytest
 
+from fakes.bedrock import FakeBedrock
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
-from stoa.services import ai_service
+from stoa.services import ask_answer
 from test_async_generation_cutover import invokes as invokes  # noqa: F401 - the fixture
 from test_conversation_token_finalization import _patch_allowance_table
 from test_async_generation_cutover import switched_on as switched_on  # noqa: F401
@@ -308,7 +309,7 @@ def test_a_quote_naming_a_step_reaches_the_model_and_reads_back(table, model) ->
     response = _quote_send(client, {"section": "steps", "index": 1}, answer_id)
 
     assert response.status_code == 200, response.text
-    assert model.calls[1]["quote"]["source"]["part"] == {"section": "steps", "index": 1}
+    assert 'part="step 2"' in model.student_turn(1)
     student = [message for message in _read_back(client) if message["role"] == "student"][-1]
     assert student["quote"]["source"]["part"] == {"section": "steps", "index": 1}
 
@@ -404,10 +405,9 @@ def test_a_quote_without_a_part_reaches_the_model_as_it_did(table, model) -> Non
     )
 
     assert response.status_code == 200, response.text
-    assert model.calls[0]["quote"] == {
-        "text": "Durch den ggT",
-        "source": {"kind": "message", "id": "m-1"},
-    }
+    turn = model.student_turn(0)
+    assert 'source="message"\nDurch den ggT' in turn
+    assert "part=" not in turn
 
 
 @pytest.mark.parametrize(
@@ -451,7 +451,7 @@ def test_the_whole_answer_can_be_quoted_as_a_part_without_an_index(table, model)
     response = _quote_send(client, {"section": "answer"}, answer_id)
 
     assert response.status_code == 200, response.text
-    assert model.calls[1]["quote"]["source"]["part"] == {"section": "answer"}
+    assert 'part="answer"' in model.student_turn(1)
 
 
 def test_a_quote_without_a_part_keeps_its_exact_fingerprint() -> None:
@@ -540,17 +540,14 @@ class _CapturingBedrockClient:
 
 
 def _sent(quote: dict[str, Any]) -> dict[str, Any]:
-    client = _CapturingBedrockClient()
-    ai_service.get_ai_answer(
-        content="Diesen Schritt verstehe ich nicht.",
-        subject="math",
-        grade="Sek1",
-        quote=quote,
-        client=client,
-        effect_id="effect-test-1",
+    model = FakeBedrock(answer=ANSWERS["de"][0])
+    ask_answer.answer(
+        ask_answer.Asked(content="Diesen Schritt verstehe ich nicht.", quote=quote),
+        ask_answer.Asker(student_id=STUDENT, subject="math", grade="Sek1", locale="de"),
+        ask_answer.ModelCall(model=model, effect_id="effect-test-1"),
+        read_star_map=lambda *_a, **_k: None,
     )
-    assert client.request_body is not None
-    return client.request_body
+    return model.requests[-1]
 
 
 def _student_turn(body: dict[str, Any]) -> str:
@@ -595,8 +592,8 @@ def test_the_model_is_told_a_follow_up_is_answered_in_plain_words() -> None:
 def test_the_sections_come_through_the_real_model_path(
     table, monkeypatch: pytest.MonkeyPatch, locale
 ) -> None:
-    """The route, the allowance client, `get_ai_answer` and the stream parser
-    as production runs them; the other tests stand in for `get_ai_answer`."""
+    """The route, the allowance client, `ask_answer` and the stream parser as
+    production runs them, with only the Bedrock runtime stood in for."""
     answer, label = ANSWERS[locale]
     provider = _CapturingBedrockClient(answer)
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())

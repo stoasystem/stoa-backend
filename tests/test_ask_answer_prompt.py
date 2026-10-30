@@ -1,65 +1,50 @@
-"""Tests for the system prompt ai_service actually sends to Bedrock.
+"""Tests for the prompt an Ask answer actually sends to Bedrock (#176).
 
-A fake Bedrock client captures the real request body, so these exercise the
-prompt assembly inside `get_ai_answer` rather than a copy of it. That matters:
-a mirrored test cannot catch the memory block being dropped on the way out.
+The Bedrock double captures the real request body, so these exercise the
+prompt assembly inside `ask_answer.answer` rather than a copy of it. That
+matters: a mirrored test cannot catch the memory block being dropped on the
+way out.
 """
 from __future__ import annotations
 
-import io
 import json
 
 import pytest
 
-from stoa.services import ai_service, learning_profile_service
+from fakes.bedrock import FakeBedrock
+from stoa.services import ask_answer, learning_profile_service
+
+_REPLY = {
+    "steps": ["step one"],
+    "answer": "42",
+    "hints": ["a hint"],
+    "knowledge_points": [],
+    "suggest_teacher": False,
+}
 
 
-class _CapturingBedrockClient:
-    """Stands in for bedrock-runtime, recording the request and replying validly."""
-
-    def __init__(self) -> None:
-        self.request_body: dict | None = None
-
-    def invoke_model(self, *, modelId: str, body: str):  # noqa: N803 - boto3 casing
-        self.request_body = json.loads(body)
-        payload = {
-            "id": "msg_test_1",
-            "model": modelId,
-            "stop_reason": "end_turn",
-            "content": [
-                {
-                    "text": json.dumps(
-                        {
-                            "steps": ["step one"],
-                            "answer": "42",
-                            "hints": [],
-                            "knowledge_points": [],
-                            "suggest_teacher": False,
-                        }
-                    )
-                }
-            ],
-            "usage": {"input_tokens": 10, "output_tokens": 5},
-        }
-        return {
-            "ResponseMetadata": {"RequestId": "req-test-1"},
-            "body": io.BytesIO(json.dumps(payload).encode()),
-        }
+def _answer(reply: dict | None = None, **kwargs) -> tuple[ask_answer.AskAnswer, dict]:
+    """Ask once with the Bedrock double; return the answer and the sent request body."""
+    model = FakeBedrock(answer=reply or _REPLY)
+    answer = ask_answer.answer(
+        ask_answer.Asked(content=kwargs.pop("content", "how do I add fractions?")),
+        ask_answer.Asker(
+            student_id="student-1",
+            subject=kwargs.pop("subject", "math"),
+            grade=kwargs.pop("grade", "grade_6_primary"),
+            locale=kwargs.pop("language", "de"),
+            memory_context=kwargs.pop("memory_context", None),
+        ),
+        ask_answer.ModelCall(model=model, effect_id="effect-test-1"),
+        read_star_map=lambda *_a, **_k: None,
+    )
+    assert not kwargs, kwargs
+    assert model.requests, "Bedrock client was never invoked"
+    return answer, model.requests[-1]
 
 
 def _invoke(**kwargs) -> dict:
-    """Run get_ai_answer against a fake client and return the sent request body."""
-    client = _CapturingBedrockClient()
-    ai_service.get_ai_answer(
-        content=kwargs.pop("content", "how do I add fractions?"),
-        subject=kwargs.pop("subject", "math"),
-        grade=kwargs.pop("grade", "grade_6_primary"),
-        client=client,
-        effect_id=kwargs.pop("effect_id", "effect-test-1"),
-        **kwargs,
-    )
-    assert client.request_body is not None, "Bedrock client was never invoked"
-    return client.request_body
+    return _answer(**kwargs)[1]
 
 
 def _system_prompt(**kwargs) -> str:
@@ -187,11 +172,14 @@ def test_the_model_reports_the_language_it_answered_in():
     [("de", "de"), ("IT", "it"), (" fr ", "fr"), ("es", "en"), ("", "en"), (None, "en"), (3, "en")],
 )
 def test_the_reported_language_counts_only_when_it_is_one_of_the_four(reported, expected):
-    assert ai_service.answer_language({"language": reported}, default="en") == expected
+    answer, _ = _answer({**_REPLY, "language": reported}, language="en")
+    label = {"de": "Hinweis", "en": "Hint", "fr": "Indice", "it": "Indizio"}[expected]
+    assert answer.content.endswith(f"**{label}:** a hint")
 
 
 def test_a_reply_without_a_language_keeps_the_default():
-    assert ai_service.answer_language({"steps": []}, default="it") == "it"
+    answer, _ = _answer(language="it")
+    assert answer.content.endswith("**Indizio:** a hint")
 
 
 @pytest.mark.parametrize("subject", ["math", "physics", "german", "english"])
@@ -245,7 +233,7 @@ def test_a_blank_grade_is_sent_as_unknown_not_as_nothing(grade):
     unknown. Such a conversation stays valid; the prompt has to say so.
     """
     prompt = _system_prompt(subject="math", grade=grade, content="Was ist eine Ableitung?", language="de")
-    unknown = ai_service.UNKNOWN_GRADE
+    unknown = ask_answer.UNKNOWN_GRADE
     assert f"The student is in {unknown}: use that to choose the depth" in prompt
     assert f"far above {unknown}, first give a short accessible explanation" in prompt
     assert "The student is in :" not in prompt

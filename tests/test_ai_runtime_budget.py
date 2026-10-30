@@ -79,9 +79,9 @@ def _factory(monkeypatch: pytest.MonkeyPatch, provider: _Provider) -> list[dict[
 
 
 def _answer(client: Any, clock: _Clock, deadline: float) -> Any:
-    return ai_service.get_ai_answer(
-        "What is a half?", "math", "Grade 4", language="en",
-        deadline_monotonic=deadline, clock=clock, client=client,
+    return ai_service.invoke_answer(
+        "Answer the question.", [{"role": "user", "content": "What is a half?"}],
+        input_size=15, deadline_monotonic=deadline, clock=clock, client=client,
         effect_id=getattr(client, "allowance_effect_id", "effect-1"),
         observed_at=NOW, on_step=lambda *_: None,
     )
@@ -232,13 +232,13 @@ def test_the_message_route_gives_the_answer_the_requests_deadline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     seen: list[float | None] = []
-    real = ai_service.get_ai_answer
+    real = conversations.ask_answer.answer
 
-    def spy(**kwargs: Any) -> Any:
-        seen.append(kwargs.get("deadline_monotonic"))
-        return real(**kwargs)
+    def spy(asked: Any, asker: Any, call: Any, **kwargs: Any) -> Any:
+        seen.append(call.deadline_monotonic)
+        return real(asked, asker, call, **kwargs)
 
-    monkeypatch.setattr(conversations.ai_service, "get_ai_answer", spy)
+    monkeypatch.setattr(conversations.ask_answer, "answer", spy)
     monkeypatch.setattr(
         conversations.runtime_budget_service,
         "ai_deadline",

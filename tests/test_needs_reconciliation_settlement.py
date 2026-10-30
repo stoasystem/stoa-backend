@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 
+from fakes.bedrock import FakeBedrock
 from stoa.db.repositories import allowance_repo, attachment_repo
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
@@ -43,21 +44,23 @@ def _no_memory_personalisation(stub_memory_summary) -> None:
 
 
 class _Model:
-    """Stands in for `ai_service.get_ai_answer`, reserving the way admission does.
+    """Scripts the allowance client the answer is asked through (#176).
 
-    Each outcome is a dict of steps: `reserve` (admission reserved), `usage`
-    (the provider reported these counts), `call` (the call was recorded), and
-    `then`, the answer or the exception that ends it.
+    The worker hands `ask_answer` a `_ConversationAllowanceBedrockClient`; this
+    one does not admit by itself but takes each outcome as a dict of steps:
+    `reserve` (admission reserved), `usage` (the provider reported these
+    counts), `call` (the call was recorded), and `then`, the answer the Bedrock
+    double writes back or the exception that ends it.
     """
 
     def __init__(self) -> None:
         self.outcomes: list[dict[str, Any]] = []
         self.calls = 0
+        self.runtime = FakeBedrock(answer=ANSWER)
 
-    def __call__(self, **kwargs: Any) -> Any:
+    def invoke(self, client: Any, method: str, **kwargs: Any) -> Any:
         self.calls += 1
         outcome = self.outcomes.pop(0) if self.outcomes else {"then": ANSWER}
-        client = kwargs["client"]
         if outcome.get("reserve"):
             reserved = allowance_service.reserve_token_allowance(
                 beneficiary_id=STUDENT,
@@ -85,13 +88,19 @@ class _Model:
         then = outcome.get("then", ANSWER)
         if isinstance(then, BaseException):
             raise then
-        return dict(then)
+        self.runtime.outcomes = [then]
+        return getattr(self.runtime, method)(**kwargs)
 
 
 @pytest.fixture
 def model(monkeypatch: pytest.MonkeyPatch, table) -> _Model:
     model = _Model()
-    monkeypatch.setattr(conversations.ai_service, "get_ai_answer", model)
+
+    class Scripted(conversations._ConversationAllowanceBedrockClient):
+        def invoke_model(self, **kwargs: object) -> object:
+            return model.invoke(self, self._invocation_method, **kwargs)
+
+    monkeypatch.setattr(conversations, "_ConversationAllowanceBedrockClient", Scripted)
     monkeypatch.setattr(allowance_repo, "get_table", lambda: table)
     return model
 
@@ -272,13 +281,15 @@ def test_completed_and_other_retryable_commands_are_not_settled(
     ]
     _deliver("other")
     _failed_minutes_ago(table, "other", 30)
-    reserved = _counter(table, "done")["reserved_output_tokens"]
+    before = dict(_counter(table, "done"))
 
     summary = _sweep()
 
     assert summary["reconciled"] == 0
-    assert _counter(table, "done")["reserved_output_tokens"] == reserved
-    assert _counter(table, "done")["provider_cost_output_tokens"] == 0
+    # The answer settled what it cost when it was stored; the sweep adds nothing.
+    after = _counter(table, "done")
+    for field in ("reserved_output_tokens", "provider_cost_output_tokens"):
+        assert after[field] == before[field]
     assert "allowance_settled_at" not in _command_row(table, "done")
     assert "allowance_settled_at" not in _command_row(table, "other")
     assert events == []

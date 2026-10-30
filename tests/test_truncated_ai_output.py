@@ -111,7 +111,7 @@ def _invoke(
     stop_reason: str,
     streamed: bool,
 ) -> tuple[AtomicAllowanceTable, dict[str, object], Any]:
-    """Run get_ai_answer through the real allowance client; return the outcome."""
+    """Ask the model through the real allowance client; return the outcome."""
     table = AtomicAllowanceTable()
     provider = _Provider(text=text, stop_reason=stop_reason)
     _patch_allowance_table(monkeypatch, table)
@@ -119,9 +119,9 @@ def _invoke(
     command = _command()
     client = conversations._ConversationAllowanceBedrockClient(command)
     kwargs: dict[str, Any] = {
-        "content": "Wie kürze ich Brüche?",
-        "subject": "math",
-        "grade": "Grade 6",
+        "system_prompt": "Answer the question.",
+        "messages": [{"role": "user", "content": "Wie kürze ich Brüche?"}],
+        "input_size": 21,
         "effect_id": client.allowance_effect_id,
         "client": client,
         "observed_at": NOW,
@@ -129,7 +129,7 @@ def _invoke(
     if streamed:
         kwargs["on_step"] = lambda _index, _step: None
     try:
-        outcome: Any = ai_service.get_ai_answer(**kwargs)
+        outcome: Any = ai_service.invoke_answer(**kwargs)
     except ai_service.AIInvocationFailure as failure:
         outcome = failure
     return table, command, outcome

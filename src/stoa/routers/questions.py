@@ -50,6 +50,7 @@ from stoa.models.moderation import ModerationCaseResponse, ModerationReportReque
 from stoa.services import (
     ai_service,
     allowance_service,
+    ask_answer,
     bedrock_token_count_service,
     learning_profile_service,
     locale_service,
@@ -1045,7 +1046,7 @@ def _recover_missing_question_effect(
                     if body.content
                     else ocr_text
                 )
-            ai_provider_result = ai_service.get_ai_answer(
+            ai_provider_result = ask_answer.get_ai_answer(
                 content=ai_content,
                 subject=subject,
                 grade=grade,
@@ -1064,7 +1065,7 @@ def _recover_missing_question_effect(
             else:
                 raise ValueError("AI provider result is invalid")
             # A question row holds knowledge points as names (#142).
-            ai_response["knowledge_points"] = ai_service.knowledge_point_names(
+            ai_response["knowledge_points"] = ask_answer.knowledge_point_names(
                 ai_response.get("knowledge_points")
             )
             try:
@@ -1567,7 +1568,7 @@ async def submit_question(
             correlation_id=correlation_id,
         )
     try:
-        ai_provider_result = ai_service.get_ai_answer(
+        ai_provider_result = ask_answer.get_ai_answer(
             content=ai_content,
             subject=subject,
             grade=grade,
@@ -1586,7 +1587,7 @@ async def submit_question(
         else:
             raise ValueError("AI provider result is invalid")
         # A question row holds knowledge points as names (#142).
-        ai_resp["knowledge_points"] = ai_service.knowledge_point_names(
+        ai_resp["knowledge_points"] = ask_answer.knowledge_point_names(
             ai_resp.get("knowledge_points")
         )
         try:

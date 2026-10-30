@@ -22,7 +22,7 @@ from typing import Any
 
 import pytest
 
-from stoa.services import ai_service
+from stoa.services import ai_service, ask_answer
 from stoa.services.curriculum_service import SUPPORTED_SUBJECTS
 
 import eval_ai_replies as evaluation
@@ -95,15 +95,7 @@ class FakeModel:
 
 def _asker(model: FakeModel):
     def ask(item: dict[str, Any]):
-        result = ai_service.get_ai_answer(
-            content=item["question"],
-            subject=item["subject"],
-            grade=item["grade"],
-            language=item["language"],
-            client=model,
-            effect_id=f"eval-{item['id']}",
-        )
-        return result.content, result.usage.input_tokens, result.usage.output_tokens
+        return evaluation.ask_reply(item, model)
 
     return ask
 
@@ -368,10 +360,10 @@ def test_the_language_poisoning_names_german_for_everyone_and_is_undone() -> Non
 
 
 def test_the_pre_e1_poisoning_puts_back_both_passages_and_is_undone() -> None:
-    before = ai_service.SYSTEM_PROMPT
+    before = ask_answer.SYSTEM_PROMPT
     with evaluation.poisoned("pre-e1"):
-        poisoned_prompt = ai_service.SYSTEM_PROMPT
-    assert ai_service.SYSTEM_PROMPT == before
+        poisoned_prompt = ask_answer.SYSTEM_PROMPT
+    assert ask_answer.SYSTEM_PROMPT == before
     for current, old in evaluation.E1_CHANGES:
         assert old in poisoned_prompt
         assert current not in poisoned_prompt
@@ -400,7 +392,7 @@ def test_the_pre_e1_prompt_is_the_prompt_before_e1(monkeypatch) -> None:
 
 
 def test_the_pre_e1_poisoning_refuses_to_run_once_the_prompt_moved_on(monkeypatch) -> None:
-    monkeypatch.setattr(ai_service, "SYSTEM_PROMPT", "something else entirely")
+    monkeypatch.setattr(ask_answer, "SYSTEM_PROMPT", "something else entirely")
     with pytest.raises(evaluation.EvalError, match="E1"):
         with evaluation.poisoned("pre-e1"):
             pass

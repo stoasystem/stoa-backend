@@ -1,7 +1,7 @@
 """Integration tests for AI memory personalisation.
 
 These drive the real `conversations._execute_message_command` code path and
-capture the kwargs handed to `ai_service.get_ai_answer`, so they fail if the
+read the system prompt the Bedrock double is sent, so they fail if the
 memory-context wiring breaks — unlike a test that re-implements the logic.
 
 Covers the regression where the extraction read snake_case keys that
@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from fakes.bedrock import FakeBedrock, answer_without_allowance
 from stoa.db.repositories import attachment_repo
 from stoa.routers import conversations
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
@@ -42,7 +43,6 @@ def _run_message_command(monkeypatch, *, memory_summary: Any) -> dict[str, Any]:
         {"content": "how do I add fractions?", "idempotencyKey": "memory-test-key"}
     )
     command_state: dict[str, Any] = {}
-    captured: dict[str, Any] = {}
 
     monkeypatch.setattr(conversations, "get_table", lambda: object())
     monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
@@ -92,11 +92,9 @@ def _run_message_command(monkeypatch, *, memory_summary: Any) -> dict[str, Any]:
 
     monkeypatch.setattr(adaptive_learning_service, "get_memory_summary", fake_memory_summary)
 
-    def fake_get_ai_answer(**kwargs):
-        captured.update(kwargs)
-        return {"steps": ["one"], "answer": "safe", "hints": []}
-
-    monkeypatch.setattr(conversations.ai_service, "get_ai_answer", fake_get_ai_answer)
+    model = answer_without_allowance(
+        monkeypatch, FakeBedrock(answer={"steps": ["one"], "answer": "safe", "hints": []})
+    )
 
     conversations._execute_message_command(
         conv_id="conv-1",
@@ -110,8 +108,16 @@ def _run_message_command(monkeypatch, *, memory_summary: Any) -> dict[str, Any]:
             "existing": None,
         },
     )
-    assert captured, "ai_service.get_ai_answer was never invoked"
-    return captured
+    assert model.requests, "the model was never asked"
+    return {"content": model.student_turn(), "memory_context": _memory_context(model.system())}
+
+
+def _memory_context(system: str) -> str | None:
+    """The weak-topic summary the system prompt carries, if it carries one."""
+    marker = "Student learning context (use this to tailor your explanation):\n"
+    if marker not in system:
+        return None
+    return system.split(marker, 1)[1].split("\n", 1)[0]
 
 
 def _summary(weak_topics: list[dict[str, Any]]) -> dict[str, Any]:

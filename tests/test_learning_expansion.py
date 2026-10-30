@@ -9,7 +9,7 @@ from stoa.db.repositories import question_submission_repo
 from stoa.deps import get_actor, get_current_user
 from stoa.routers import parents, questions, students
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.services import ai_service, learning_profile_service
+from stoa.services import ai_service, ask_answer, learning_profile_service
 from actor_helpers import install_actor_overrides
 
 
@@ -150,7 +150,7 @@ def test_submit_question_accepts_foundation_subject_and_stores_topic_seeds(monke
         complete_effect,
     )
     monkeypatch.setattr(
-        questions.ai_service,
+        questions.ask_answer,
         "get_ai_answer",
         lambda **kwargs: {
             "answer": "Use force equals mass times acceleration.",
@@ -237,19 +237,20 @@ def test_ai_prompt_context_differs_for_language_subject(monkeypatch):
 
     monkeypatch.setattr(ai_service.boto3, "client", lambda *args, **kwargs: FakeBedrock())
 
-    answer = ai_service.get_ai_answer(
-        content="Correct this sentence",
-        subject="german",
-        grade="Grade 8",
-        language="de",
+    answer = ask_answer.answer(
+        ask_answer.Asked(content="Correct this sentence"),
+        ask_answer.Asker(student_id="student-1", subject="german", grade="Grade 8", locale="de"),
+        ask_answer.ModelCall(),
+        read_star_map=lambda *_a, **_k: None,
     )
 
     payload = json.loads(captured["body"])
     assert "language learning" in payload["system"]
     assert "Subject label: German" in payload["system"]
-    assert answer.content["knowledge_points"] == ["word order"]
-    assert answer.usage.input_tokens == 31
-    assert answer.usage.output_tokens == 12
+    assert [point.name for point in answer.structured.knowledgePoints] == ["word order"]
+    assert answer.provider is not None
+    assert answer.provider.usage.input_tokens == 31
+    assert answer.provider.usage.output_tokens == 12
 
 
 def test_learning_profile_aggregates_subject_activity_and_topic_seeds(monkeypatch):

@@ -20,11 +20,12 @@ from typing import Any
 import pytest
 from PIL import Image
 
+from fakes.bedrock import FakeBedrock
 from fakes.dynamodb import FakeTable
 from stoa.db.repositories import attachment_repo
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
-from stoa.services import ai_service, attachment_service
+from stoa.services import attachment_service
 from stoa.services.document_extraction_service import (
     DocumentExtractionFailure,
     extract_attachment_text,
@@ -87,27 +88,6 @@ class _Bucket:
         }
 
 
-class _Model:
-    """Bedrock as the real prompt assembly calls it; keeps every request body."""
-
-    def __init__(self) -> None:
-        self.bodies: list[dict[str, Any]] = []
-
-    def invoke_model_with_response_stream(self, *, modelId: str, body: str):  # noqa: N803
-        self.bodies.append(json.loads(body))
-        events = [
-            {"type": "message_start", "message": {"id": "msg-images-1", "model": modelId,
-                                                  "usage": {"input_tokens": 10}}},
-            {"type": "content_block_delta", "delta": {"text": json.dumps(MODEL_ANSWER)}},
-            {"type": "message_delta", "delta": {"stop_reason": "end_turn"},
-             "usage": {"output_tokens": 5}},
-        ]
-        return {
-            "ResponseMetadata": {"RequestId": "req-images-1"},
-            "body": [{"chunk": {"bytes": json.dumps(event).encode()}} for event in events],
-        }
-
-
 @pytest.fixture
 def bucket(monkeypatch: pytest.MonkeyPatch) -> _Bucket:
     bucket = _Bucket()
@@ -116,20 +96,12 @@ def bucket(monkeypatch: pytest.MonkeyPatch) -> _Bucket:
 
 
 @pytest.fixture
-def model(monkeypatch: pytest.MonkeyPatch) -> _Model:
-    """The real `get_ai_answer`, handed a capturing Bedrock client.
-
-    The token allowance is not what these tests are about, so the answer goes
-    back as a plain mapping, the way the other route harnesses return it.
-    """
-    model = _Model()
-    real = ai_service.get_ai_answer
-
-    def get_ai_answer(**kwargs: Any):
-        kwargs["client"] = model
-        return real(**kwargs).content
-
-    monkeypatch.setattr(conversations.ai_service, "get_ai_answer", get_ai_answer)
+def model(monkeypatch: pytest.MonkeyPatch, bucket: _Bucket) -> FakeBedrock:
+    """The Bedrock double behind the real allowance client; S3 is the bucket."""
+    model = FakeBedrock(answer=MODEL_ANSWER)
+    clients = {"s3": bucket, "bedrock-runtime": model}
+    monkeypatch.setattr(conversations.boto3, "client", lambda name, *_a, **_k: clients[name])
+    _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
     return model
 
 
@@ -234,7 +206,7 @@ def test_an_image_attachment_reaches_the_model_as_an_image_block(
     response = _send("upload-image")
 
     assert response.status_code == 200, response.text
-    [body] = model.bodies
+    [body] = model.requests
     [block] = _image_blocks(body)
     assert block["source"] == {
         "type": "base64",
@@ -258,7 +230,7 @@ def test_each_image_of_a_message_is_its_own_block_in_the_order_sent(
     response = _send("upload-a", "upload-b")
 
     assert response.status_code == 200, response.text
-    [body] = model.bodies
+    [body] = model.requests
     assert [block["source"]["data"] for block in _image_blocks(body)] == [
         base64.b64encode(first).decode("ascii"),
         base64.b64encode(second).decode("ascii"),
@@ -272,7 +244,7 @@ def test_a_document_attachment_is_still_read_as_text(table, bucket, model) -> No
     response = _send("upload-doc")
 
     assert response.status_code == 200, response.text
-    [body] = model.bodies
+    [body] = model.requests
     assert _image_blocks(body) == []
     # Unchanged from before: the text rides in the student's own turn, fenced.
     assert isinstance(body["messages"][-1]["content"], str)
@@ -297,7 +269,7 @@ def test_an_image_and_a_document_in_one_message_each_go_their_own_way(
     response = _send("upload-image", "upload-doc")
 
     assert response.status_code == 200, response.text
-    [body] = model.bodies
+    [body] = model.requests
     [block] = _image_blocks(body)
     assert block["source"]["data"] == base64.b64encode(image).decode("ascii")
     assert "Notizen zur Aufgabe" in _text(body)
@@ -310,7 +282,7 @@ def test_a_message_without_attachments_still_sends_plain_text(table, bucket, mod
     )
 
     assert response.status_code == 200, response.text
-    [body] = model.bodies
+    [body] = model.requests
     assert body["messages"][-1]["content"] == "Was ist ein Bruch?"
 
 
@@ -332,7 +304,7 @@ def test_an_image_over_the_model_limit_is_refused_with_a_code_before_anything_ha
 
     assert response.status_code == 422, response.text
     assert _code(response) == "upload_too_large"
-    assert model.bodies == []
+    assert model.requests == []
     assert _messages(table, "student") == []
     assert _messages(table, "assistant") == []
 
@@ -349,7 +321,7 @@ def test_an_image_exactly_at_the_model_limit_is_accepted(table, bucket, model) -
     response = _send("upload-edge")
 
     assert response.status_code == 200, response.text
-    [block] = _image_blocks(model.bodies[0])
+    [block] = _image_blocks(model.requests[0])
     assert len(block["source"]["data"]) == 5 * 1024 * 1024
 
 
@@ -365,7 +337,7 @@ def test_an_image_that_cannot_be_read_back_fails_with_a_code_instead_of_vanishin
 
     assert response.status_code == 503, response.text
     assert _code(response) == "upload_service_unavailable"
-    assert model.bodies == []
+    assert model.requests == []
 
 
 def test_bytes_that_are_not_the_image_they_claim_fail_as_invalid(table, bucket, model) -> None:
@@ -376,7 +348,7 @@ def test_bytes_that_are_not_the_image_they_claim_fail_as_invalid(table, bucket, 
 
     assert response.status_code == 422, response.text
     assert _code(response) == "upload_invalid"
-    assert model.bodies == []
+    assert model.requests == []
 
 
 def _commit(*upload_ids: str, key: str) -> None:
@@ -408,7 +380,7 @@ def _assert_worker_refused(table, model, key: str) -> None:
     )
 
     assert outcome == {"outcome": "failed"}
-    assert model.bodies == []
+    assert model.requests == []
     command = _command_row(table, key)
     assert command["status"] == "failed"
     assert command["failure_category"] == "attachment_invalid"
@@ -453,7 +425,7 @@ def test_images_of_one_message_exactly_at_the_total_limit_are_sent_within_the_bo
     response = _send(*(f"upload-{index}" for index in range(count)))
 
     assert response.status_code == 200, response.text
-    [body] = model.bodies
+    [body] = model.requests
     assert len(_image_blocks(body)) == count
     # Room for the rest: the system prompt, history, star map and document text.
     assert len(json.dumps(body)) < 25_000_000 - 4_000_000
@@ -489,7 +461,7 @@ def test_images_of_one_message_over_the_total_limit_are_refused_before_anything_
 
     assert response.status_code == 422, response.text
     assert _code(response) == "upload_too_large"
-    assert model.bodies == []
+    assert model.requests == []
     assert _messages(table, "student") == []
 
 
@@ -523,19 +495,16 @@ def test_images_committed_before_the_total_limit_fail_the_worker_without_a_call(
 
 # ── Through the allowance client: counted as it is sent ──────────────────────
 
-class _Bedrock(_Model):
+class _Bedrock(FakeBedrock):
     """The runtime client the allowance wrapper builds: counts, then answers."""
 
     def __init__(self) -> None:
-        super().__init__()
-        self.counted: list[dict[str, Any]] = []
+        super().__init__(answer=MODEL_ANSWER)
+        self.counted_bodies: list[dict[str, Any]] = []
 
     def count_tokens(self, *, modelId: str, input: dict[str, Any]):  # noqa: N803, A002
-        self.counted.append(json.loads(input["invokeModel"]["body"]))
-        return {
-            "inputTokens": 1600,
-            "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "count-images-1"},
-        }
+        self.counted_bodies.append(json.loads(input["invokeModel"]["body"]))
+        return super().count_tokens()
 
 
 def test_the_image_is_in_the_body_that_is_counted_and_the_body_that_is_sent(
@@ -553,8 +522,8 @@ def test_the_image_is_in_the_body_that_is_counted_and_the_body_that_is_sent(
     response = _send("upload-image")
 
     assert response.status_code == 200, response.text
-    [counted] = bedrock.counted
-    [sent] = bedrock.bodies
+    [counted] = bedrock.counted_bodies
+    [sent] = bedrock.requests
     assert counted == sent
     [block] = _image_blocks(sent)
     assert block["source"]["data"] == base64.b64encode(data).decode("ascii")

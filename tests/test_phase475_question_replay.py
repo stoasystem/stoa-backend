@@ -239,7 +239,7 @@ def test_invalid_idempotency_input_is_redacted_and_effect_free(
         lambda *_args, **_kwargs: observed("ocr", ""),
     )
     monkeypatch.setattr(
-        questions.ai_service,
+        questions.ask_answer,
         "get_ai_answer",
         lambda **_kwargs: observed("ai", {}),
     )
@@ -375,7 +375,7 @@ def test_raw_caller_key_is_absent_from_route_body_and_diagnostics(
         questions.question_submission_repo, "admit_question_submission", admit
     )
     monkeypatch.setattr(
-        questions.ai_service,
+        questions.ask_answer,
         "get_ai_answer",
         lambda **_kwargs: (_ for _ in ()).throw(TimeoutError("provider unavailable")),
     )
@@ -451,7 +451,7 @@ def test_changed_payload_returns_structured_new_submission_action(monkeypatch) -
         lambda **_kwargs: effects.append("admit"),
     )
     monkeypatch.setattr(
-        questions.ai_service,
+        questions.ask_answer,
         "get_ai_answer",
         lambda **_kwargs: effects.append("ai"),
     )
@@ -483,7 +483,7 @@ def test_quota_and_retryable_admission_are_structured_and_effect_free(monkeypatc
     )
     effects: list[str] = []
     monkeypatch.setattr(
-        questions.ai_service,
+        questions.ask_answer,
         "get_ai_answer",
         lambda **_kwargs: effects.append("ai"),
     )
@@ -572,7 +572,7 @@ def test_ai_failure_returns_queryable_durable_pending_question(monkeypatch) -> N
         questions.question_submission_repo, "admit_question_submission", admit
     )
     monkeypatch.setattr(
-        questions.ai_service,
+        questions.ask_answer,
         "get_ai_answer",
         lambda **_kwargs: (_ for _ in ()).throw(TimeoutError("private-provider-canary")),
     )
@@ -716,7 +716,7 @@ def test_route_foreign_question_replay_is_redacted_and_effect_free(monkeypatch) 
         lambda **_kwargs: effects.append("admit"),
     )
     monkeypatch.setattr(
-        questions.ai_service,
+        questions.ask_answer,
         "get_ai_answer",
         lambda **_kwargs: effects.append("ai"),
     )
