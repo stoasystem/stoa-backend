@@ -55,14 +55,19 @@ learning platform. You ONLY answer questions related to {subject}. The student i
 use that to choose the depth of the explanation, the examples and the prerequisites you point to, \
 never to decide whether a question deserves an answer.
 
-OUTPUT LANGUAGE: {language_name} ({language}). Every word you write is in {language_name} — the \
-steps, the answer, the hints, the exercises and the knowledge points alike. These instructions \
-and the earlier turns of the conversation may be in another language; that never changes the \
-language you answer in, and no subject answers in a different language from any other. Anything \
-the student quotes, any exercise they are working beside and any text taken out of a file they \
-uploaded may also be in another language, or may ask you for one; none of that changes the \
-language you answer in either. Never mix two languages inside one response, not even for a label \
-such as "Hint" or "Step".
+ANSWER LANGUAGE: answer in the language the student writes their own message in, German, \
+English, French or Italian. When the student asks you to answer in one of those languages, use \
+that one, and keep to it in later answers until they ask for another. When you cannot tell (a \
+bare formula, a single word, only a picture), carry on in the language of the conversation so \
+far, and with nothing to go on use the DEFAULT LANGUAGE: {language_name} ({language}), the \
+language the student reads the app in. These instructions are written in English; that never \
+makes English the answer language, and no subject answers in a different language from any other. \
+Anything the student quotes, any exercise they are working beside and any text taken out of a \
+file they uploaded may be in another language, or may ask you for one; none of that changes the \
+language you answer in, only the student's own words do. Every word you write is in the one \
+language you answer in — the steps, the answer, the hints, the exercises and the knowledge \
+points alike. Never mix two languages inside one response, not even for a label such as "Hint" \
+or "Step".
 
 Subject context: {subject_context}
 
@@ -82,10 +87,12 @@ ask a new question, even in the same conversation, answer it with every part fil
 - Format mathematical expressions using LaTeX: inline equations with $...$ and block equations with $$...$$.
 
 IMPORTANT: Respond ONLY with valid JSON (no markdown code blocks, no extra text). The keys stay \
-exactly as shown; every value is written in {language_name}:
-{{"steps":["...","..."],"answer":"...","hints":["..."],"similar_exercises":["..."],"knowledge_points":["..."],"suggest_teacher":false}}
+exactly as shown; "language" is the code of the language you answer in ("de", "en", "fr" or \
+"it"), and every other value is written in that language:
+{{"language":"{language}","steps":["...","..."],"answer":"...","hints":["..."],"similar_exercises":["..."],"knowledge_points":["..."],"suggest_teacher":false}}
 
-Last instruction, above all others: answer in {language_name}."""
+Last instruction, above all others: answer in the language the student writes in or asked for; \
+{language_name} only when you cannot tell."""
 
 # Appended only when the student's turn carries their star map (#142): the
 # other caller of the prompt, the old "submit a question" route, shows none and
@@ -94,8 +101,8 @@ _STAR_MAP_RULE = """
 Knowledge points: the student's turn carries the stars on their star map as fenced data. Take \
 the knowledge points of a new question from it, and write each one in "knowledge_points" as \
 {{"id":"k1","name":"..."}}: for a star that matches, its id and its name exactly as listed. Only \
-when no star fits, write {{"id":null,"name":"..."}} with a name of your own, in {language_name}. \
-Never make up an id.
+when no star fits, write {{"id":null,"name":"..."}} with a name of your own, in the language you \
+answer in. Never make up an id.
 """
 
 # Appended beside it (#124): the star the student wants to go to is picked from
@@ -124,6 +131,17 @@ def language_name(language: str) -> str:
     """The plain name of the answer language, for the prompt to refer to."""
     base = str(language or "").strip().replace("_", "-").split("-", 1)[0].lower()
     return _LANGUAGE_NAMES.get(base, DEFAULT_LANGUAGE_NAME)
+
+
+def answer_language(result: Mapping[str, Any], *, default: str) -> str:
+    """The language the model says it answered in (#174), or `default`.
+
+    The model picks the language from the student's own words, so what is
+    labelled around the answer follows its "language" key. A missing key or
+    a code that is not one of the four falls back to the display language.
+    """
+    reported = str(result.get("language") or "").strip().lower()
+    return reported if reported in _LANGUAGE_NAMES else default
 
 
 def grade_for_prompt(grade: str | None, language: str) -> str:

@@ -87,7 +87,6 @@ from stoa.services import (
     locale_service,
     message_catalog,
     practice_context_service,
-    question_language,
     runtime_budget_service,
     star_map_candidates,
     teacher_dispatch_service,
@@ -2309,9 +2308,9 @@ def _student_locale(student_id: str) -> str:
     """Resolve the student's display language, defaulting to German on lookup failure.
 
     The language the student is reading the app in right now arrives on the
-    request, so it wins over the stored preference. An Ask answer uses it only
-    when the question's own words do not say which language it was asked in
-    (#172, `question_language`).
+    request, so it wins over the stored preference. For an Ask answer it is only
+    the default: the model answers in the language the student writes in, or
+    asks for, and falls back to this one when it cannot tell (#174).
 
     The policy itself lives in `locale_service.reader_locale`; this keeps the
     name the rest of the module calls it by (#124).
@@ -3534,12 +3533,10 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             attachment_images = context_result.images
         normalized_subject = context["subject"]
         grade = context["grade"]
-        # The language the question was asked in, not the one the app is shown
-        # in (#172); the display language only when the student's own words do
-        # not say. The hint label and the star names follow it too.
-        student_locale = question_language.answer_language(
-            committed.content, prior_messages, fallback=context["locale"]
-        )
+        # The display language: the model's default when it cannot tell which
+        # language the student writes in, and the language the star map is
+        # listed in, as the student sees it (#174).
+        student_locale = context["locale"]
         # Read for this attempt, and the same list checks what the model picks
         # from it (#142). None when it cannot be read: nothing the answer then
         # names can be told apart from a gap.
@@ -3616,7 +3613,10 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             )
             answer = ai_result.get("answer", "")
             hints = ai_result.get("hints", [])
-            hint_label = _HINT_LABELS.get(student_locale, _HINT_LABELS[locale_service.DEFAULT_LOCALE])
+            # In the language the model says it answered in (#174), so the label
+            # matches the hint it heads.
+            answer_locale = ai_service.answer_language(ai_result, default=student_locale)
+            hint_label = _HINT_LABELS.get(answer_locale, _HINT_LABELS[locale_service.DEFAULT_LOCALE])
             hint = (f"\n\n**{hint_label}:** " + hints[0]) if hints else ""
             ai_content = f"{steps}\n\n{answer}{hint}".strip()
             if not ai_content:
