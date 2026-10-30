@@ -14,8 +14,8 @@ Four readings, over the question set in docs/evals/ai-reply-questions.json:
 - mixed-language replies: replies with parts in another language;
 - refusal rate: out-of-syllabus questions the model declined to explain.
 
-Calls go through ai_service.get_ai_answer - production's prompt builder and
-model call, without the chat lane's memory context and streaming - with a
+Calls go through ask_answer.answer - production's prompt builder and model
+call, without the chat lane's star map, memory context and streaming - with a
 Bedrock client from an SSO session. Nothing is written to any table. Two
 poisonings are applied in-process, without touching the source:
 `language-german` (every language named German) and `pre-e1` (the two
@@ -281,8 +281,8 @@ def read_reply(
 
 @contextmanager
 def poisoned(poison: str | None) -> Iterator[None]:
-    """Apply one poisoning to ai_service in this process, and undo it after."""
-    from stoa.services import ai_service
+    """Apply one poisoning to the Ask prompt in this process, and undo it after."""
+    from stoa.services import ai_service, ask_answer
 
     if poison is None:
         yield
@@ -296,17 +296,17 @@ def poisoned(poison: str | None) -> Iterator[None]:
             ai_service.language_name = original
         return
     if poison == "pre-e1":
-        original_prompt = ai_service.SYSTEM_PROMPT
+        original_prompt = ask_answer.SYSTEM_PROMPT
         poisoned_prompt = original_prompt
         for current, before in E1_CHANGES:
             if current not in poisoned_prompt:
                 raise EvalError("the system prompt no longer reads as E1 left it")
             poisoned_prompt = poisoned_prompt.replace(current, before, 1)
-        ai_service.SYSTEM_PROMPT = poisoned_prompt
+        ask_answer.SYSTEM_PROMPT = poisoned_prompt
         try:
             yield
         finally:
-            ai_service.SYSTEM_PROMPT = original_prompt
+            ask_answer.SYSTEM_PROMPT = original_prompt
         return
     raise EvalError(f"unknown poisoning {poison!r}")
 
@@ -384,9 +384,8 @@ def summarize(readings: Sequence[Reading]) -> dict[str, Any]:
 def bedrock_asker(
     profile: str, region: str, account_id: str
 ) -> Callable[[dict[str, Any]], tuple[Mapping[str, Any], int, int]]:
-    """Ask through get_ai_answer with a Bedrock client from an SSO session."""
+    """Ask through `ask_answer.answer` with a Bedrock client from an SSO session."""
     from stoa.security.aws_operator_identity import require_sso_operator_session
-    from stoa.services import ai_service
 
     session = require_sso_operator_session(
         profile_name=profile, region_name=region, expected_account_id=account_id
@@ -394,18 +393,34 @@ def bedrock_asker(
     client = session.client("bedrock-runtime", region_name=region)
 
     def ask(item: dict[str, Any]) -> tuple[Mapping[str, Any], int, int]:
-        result = ai_service.get_ai_answer(
-            content=item["question"],
-            subject=item["subject"],
-            grade=item["grade"],
-            language=item["language"],
-            client=client,
-            correlation_id=f"eval-{uuid.uuid4().hex[:12]}",
-            effect_id=f"eval-{item['id']}",
-        )
-        return result.content, result.usage.input_tokens, result.usage.output_tokens
+        return ask_reply(item, client, correlation_id=f"eval-{uuid.uuid4().hex[:12]}")
 
     return ask
+
+
+def ask_reply(
+    item: dict[str, Any], client: Any, *, correlation_id: str | None = None
+) -> tuple[Mapping[str, Any], int, int]:
+    """One question asked the way production asks it, without a star map:
+    the reply as the model wrote it, and its token counts."""
+    from stoa.services import ask_answer
+
+    result = ask_answer.answer(
+        ask_answer.Asked(content=item["question"]),
+        ask_answer.Asker(
+            student_id="eval",
+            subject=item["subject"],
+            grade=item["grade"],
+            locale=item["language"],
+        ),
+        ask_answer.ModelCall(
+            model=client, correlation_id=correlation_id, effect_id=f"eval-{item['id']}"
+        ),
+        read_star_map=lambda *_args, **_kwargs: None,
+    )
+    assert result.provider is not None
+    provider = result.provider
+    return provider.content, provider.usage.input_tokens, provider.usage.output_tokens
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:

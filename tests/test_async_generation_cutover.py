@@ -32,6 +32,7 @@ from test_message_command_generation import (  # noqa: F401 - fixtures
     _messages,
     _send,
 )
+from test_message_command_generation import default_language
 from test_message_command_generation import model as model  # noqa: F401 - the fixture
 from test_message_command_generation import table as table  # noqa: F401 - the fixture
 
@@ -99,7 +100,7 @@ def test_the_worker_then_writes_the_answer_the_poll_reports(
     assert generation["status"] == "completed"
     assert len(_messages(table, "assistant")) == 1
     # The language the request asked in, carried on the command.
-    assert model.calls[0]["language"] == "fr"
+    assert default_language(model, 0) == "fr"
 
 
 def test_a_lost_invoke_leaves_the_command_for_the_sweep(
@@ -241,11 +242,13 @@ def test_an_answer_longer_than_the_gateway_waits_no_longer_holds_the_request(
     """The audit's last latency contract: a 30-second answer and a 29-second gateway."""
     clock = {"now": 0.0}
 
-    def thirty_second_answer(**kwargs: Any) -> Any:
-        clock["now"] += 30.0
-        return model(**kwargs)
+    answer = conversations.ask_answer.answer
 
-    monkeypatch.setattr(conversations.ai_service, "get_ai_answer", thirty_second_answer)
+    def thirty_second_answer(*args: Any, **kwargs: Any) -> Any:
+        clock["now"] += 30.0
+        return answer(*args, **kwargs)
+
+    monkeypatch.setattr(conversations.ask_answer, "answer", thirty_second_answer)
 
     response = _send(_client(), "key-1")
 

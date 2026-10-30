@@ -13,20 +13,19 @@ otherwise let an implementation returning nothing pass.
 
 from __future__ import annotations
 
-import io
-import json
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from fakes.bedrock import FakeBedrock
 from fakes.dynamodb import FakeTable, as_stored
 
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import students
 from stoa.security import route_authorization
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.services import ai_service, learning_profile_service, message_catalog
+from stoa.services import ask_answer, learning_profile_service, message_catalog
 
 from audit_helpers import MemoryAuthorizationAuditSink
 from scripts import backfill_student_grade_codes as backfill
@@ -299,7 +298,7 @@ def test_what_that_door_lets_through_still_cannot_reach_the_model(typed):
     """
     prompt = _system_prompt(grade=typed)
     assert typed not in prompt
-    assert f"The student is in {ai_service.UNREADABLE_GRADE}:" in prompt
+    assert f"The student is in {ask_answer.UNREADABLE_GRADE}:" in prompt
 
 
 @pytest.mark.parametrize("blank", ["", "   "])
@@ -329,49 +328,15 @@ def test_a_stored_legacy_grade_is_still_readable(profile_client):
 
 # ── What the model is told ───────────────────────────────────────────────────
 
-class _CapturingBedrockClient:
-    def __init__(self) -> None:
-        self.request_body: dict | None = None
-
-    def invoke_model(self, *, modelId: str, body: str):  # noqa: N803 - boto3 casing
-        self.request_body = json.loads(body)
-        payload = {
-            "id": "msg_test_1",
-            "model": modelId,
-            "stop_reason": "end_turn",
-            "content": [
-                {
-                    "text": json.dumps(
-                        {
-                            "steps": ["step one"],
-                            "answer": "42",
-                            "hints": [],
-                            "knowledge_points": [],
-                            "suggest_teacher": False,
-                        }
-                    )
-                }
-            ],
-            "usage": {"input_tokens": 10, "output_tokens": 5},
-        }
-        return {
-            "ResponseMetadata": {"RequestId": "req-test-1"},
-            "body": io.BytesIO(json.dumps(payload).encode()),
-        }
-
-
 def _system_prompt(*, grade: str, language: str = "de") -> str:
-    client = _CapturingBedrockClient()
-    ai_service.get_ai_answer(
-        content="how do I add fractions?",
-        subject="math",
-        grade=grade,
-        language=language,
-        client=client,
-        effect_id="effect-grade-1",
+    model = FakeBedrock()
+    ask_answer.answer(
+        ask_answer.Asked(content="how do I add fractions?"),
+        ask_answer.Asker(student_id="student-1", subject="math", grade=grade, locale=language),
+        ask_answer.ModelCall(model=model, effect_id="effect-grade-1"),
+        read_star_map=lambda *_a, **_k: None,
     )
-    assert client.request_body is not None
-    return client.request_body["system"]
+    return model.system()
 
 
 @pytest.mark.parametrize("language", LOCALES)
@@ -398,12 +363,12 @@ def test_every_code_reaches_the_model_as_words_and_never_as_a_code():
 def test_the_sentence_for_a_student_who_said_nothing_is_untouched(blank):
     """#50's wording, to the word. It is not this card's to rewrite."""
     prompt = _system_prompt(grade=blank)
-    assert ai_service.UNKNOWN_GRADE == (
+    assert ask_answer.UNKNOWN_GRADE == (
         "an unknown year group (none was given; pitch it at lower secondary school)"
     )
-    assert f"The student is in {ai_service.UNKNOWN_GRADE}: use that to choose the depth" in prompt
+    assert f"The student is in {ask_answer.UNKNOWN_GRADE}: use that to choose the depth" in prompt
     assert (
-        f"far above {ai_service.UNKNOWN_GRADE}, first give a short accessible explanation"
+        f"far above {ask_answer.UNKNOWN_GRADE}, first give a short accessible explanation"
         in prompt
     )
     assert "The student is in :" not in prompt
@@ -414,9 +379,9 @@ def test_a_value_the_platform_cannot_read_never_reaches_the_model(stored):
     """The defect itself: the model was told "The student is in 14"."""
     prompt = _system_prompt(grade=stored)
     assert f"The student is in {stored}" not in prompt
-    assert f"The student is in {ai_service.UNREADABLE_GRADE}:" in prompt
+    assert f"The student is in {ask_answer.UNREADABLE_GRADE}:" in prompt
     # And it is not told the profile is empty, because the profile is not empty.
-    assert ai_service.UNKNOWN_GRADE not in prompt
+    assert ask_answer.UNKNOWN_GRADE not in prompt
 
 
 def test_free_text_still_in_the_table_is_named_properly_before_the_backfill_runs():

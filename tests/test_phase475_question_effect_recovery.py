@@ -555,7 +555,7 @@ def test_ai_success_then_completion_failure_replays_durable_receipt_without_prov
         provider_results.append(result)
         return copy.deepcopy(result)
 
-    monkeypatch.setattr(questions.ai_service, "get_ai_answer", answer)
+    monkeypatch.setattr(questions.ask_answer, "get_ai_answer", answer)
 
     first = _client().post("/questions", json=_request())
     receipt_after_failure = copy.deepcopy(_effect(table, "ai"))
@@ -590,7 +590,7 @@ def test_committed_completion_response_loss_reconciles_exact_original_result(
         provider_calls += 1
         return _ai_answer()
 
-    monkeypatch.setattr(questions.ai_service, "get_ai_answer", answer)
+    monkeypatch.setattr(questions.ask_answer, "get_ai_answer", answer)
 
     first = _client().post("/questions", json=_request())
     second = _client().post("/questions", json=_request())
@@ -615,7 +615,7 @@ def test_result_receipt_failure_retries_validated_result_until_completion(
         provider_calls += 1
         return _ai_answer()
 
-    monkeypatch.setattr(questions.ai_service, "get_ai_answer", answer)
+    monkeypatch.setattr(questions.ask_answer, "get_ai_answer", answer)
 
     first = _client().post("/questions", json=_request())
     second = _client().post("/questions", json=_request())
@@ -640,7 +640,7 @@ def test_intent_response_loss_continues_same_owned_invocation_once(
         provider_calls += 1
         return _ai_answer()
 
-    monkeypatch.setattr(questions.ai_service, "get_ai_answer", answer)
+    monkeypatch.setattr(questions.ask_answer, "get_ai_answer", answer)
 
     first = _client().post("/questions", json=_request())
     second = _client().post("/questions", json=_request())
@@ -665,7 +665,7 @@ def test_missing_intent_dependency_recovers_on_replay_and_invokes_once(
         provider_calls += 1
         return _ai_answer()
 
-    monkeypatch.setattr(questions.ai_service, "get_ai_answer", answer)
+    monkeypatch.setattr(questions.ask_answer, "get_ai_answer", answer)
 
     first = _client().post("/questions", json=_request())
     second = _client().post("/questions", json=_request())
@@ -698,7 +698,7 @@ def test_crash_after_provider_before_receipt_expires_to_exact_once_compensation(
         provider_calls += 1
         return _ai_answer()
 
-    monkeypatch.setattr(questions.ai_service, "get_ai_answer", answer)
+    monkeypatch.setattr(questions.ask_answer, "get_ai_answer", answer)
     real_record = question_submission_repo.record_question_effect_result
     crashed = False
 
@@ -791,7 +791,7 @@ def test_malformed_dependency_response_remains_recoverable_without_refund(
         provider_calls += 1
         raise questions.ai_service.AIInvocationFailure("malformed_response")
 
-    monkeypatch.setattr(questions.ai_service, "get_ai_answer", malformed)
+    monkeypatch.setattr(questions.ask_answer, "get_ai_answer", malformed)
 
     first = _client().post("/questions", json=_request())
     second = _client().post("/questions", json=_request())
@@ -828,7 +828,7 @@ def test_foreign_stale_and_malformed_receipts_are_rejected_without_write(
     table.fail_completion_before_commit = 1
     _patch_runtime(monkeypatch, table)
     monkeypatch.setattr(
-        questions.ai_service,
+        questions.ask_answer,
         "get_ai_answer",
         lambda **_kwargs: _ai_answer(),
     )
@@ -899,7 +899,7 @@ def test_ocr_success_receipt_recovers_real_question_and_command_transaction(
         return _ai_answer()
 
     monkeypatch.setattr(questions.ocr_service, "extract_text_from_attachment", ocr)
-    monkeypatch.setattr(questions.ai_service, "get_ai_answer", ai)
+    monkeypatch.setattr(questions.ask_answer, "get_ai_answer", ai)
 
     first = _client().post("/questions", json=_request(attachment=True))
     second = _client().post("/questions", json=_request(attachment=True))

@@ -378,10 +378,10 @@ def test_ai_invocation_crossing_injected_deadline_is_rejected_without_result() -
             }
 
     with pytest.raises(ai_service.AIInvocationFailure) as captured:
-        ai_service.get_ai_answer(
-            content="question",
-            subject="math",
-            grade="Sek1",
+        ai_service.invoke_answer(
+            "Answer the question.",
+            [{"role": "user", "content": "question"}],
+            input_size=8,
             deadline_monotonic=100.0,
             clock=lambda: next(ticks),
             client=Client(),

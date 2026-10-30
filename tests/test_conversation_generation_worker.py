@@ -21,11 +21,12 @@ from typing import Any
 
 import pytest
 
+from fakes.bedrock import Unsent
 from stoa.db.repositories import attachment_repo
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.security.attachment_errors import AttachmentDecisionError
-from stoa.services import ai_service, star_map_candidates
+from stoa.services import ai_service, ask_answer, star_map_candidates
 from test_message_command_generation import (  # noqa: F401 - fixtures
     ANSWER,
     CONV,
@@ -35,6 +36,8 @@ from test_message_command_generation import (  # noqa: F401 - fixtures
     _generation,
     _messages,
 )
+from test_message_command_generation import default_language
+from test_message_command_generation import model as model  # noqa: F401 - the fixture
 from test_message_command_generation import table as table  # noqa: F401 - the fixture
 
 
@@ -42,42 +45,9 @@ class _Killed(BaseException):
     """The Lambda stopped here: nothing after this line ran."""
 
 
-class _Model:
-    """Stands in for `ai_service.get_ai_answer`.
-
-    Each outcome is the answer, an exception, or a `_Called(then)`: the call got
-    as far as the provider (the allowance client's invocation hook ran) and then
-    did `then`.
-    """
-
-    def __init__(self) -> None:
-        self.calls: list[dict[str, Any]] = []
-        self.outcomes: list[Any] = []
-        self.gate: threading.Event | None = None
-
-    def __call__(self, **kwargs: Any) -> Any:
-        self.calls.append(kwargs)
-        if self.gate is not None:
-            self.gate.wait(5)
-        outcome = self.outcomes.pop(0) if self.outcomes else ANSWER
-        if isinstance(outcome, _Called):
-            kwargs["client"].mark_invocation()
-            outcome = outcome.then
-        if isinstance(outcome, BaseException):
-            raise outcome
-        return dict(outcome)
-
-
-class _Called:
-    def __init__(self, then: Any = None) -> None:
-        self.then = ANSWER if then is None else then
-
-
-@pytest.fixture
-def model(monkeypatch: pytest.MonkeyPatch) -> _Model:
-    model = _Model()
-    monkeypatch.setattr(conversations.ai_service, "get_ai_answer", model)
-    return model
+def _called(then: Any = None) -> Any:
+    """The model was asked (the allowance client recorded the call) and then did `then`."""
+    return ANSWER if then is None else then
 
 
 def _deliver(key: str) -> dict[str, Any]:
@@ -126,7 +96,7 @@ def test_the_worker_generates_a_committed_command(table, model) -> None:
     assert outcome == {"outcome": "completed"}
     assert _command_row(table, "key-1")["status"] == "completed"
     assert len(_messages(table, "assistant")) == 1
-    assert model.calls[0]["language"] == "de"
+    assert default_language(model, 0) == "de"
 
 
 def test_a_second_delivery_of_the_same_command_changes_nothing(table, model) -> None:
@@ -178,7 +148,7 @@ def test_an_attempt_lost_before_the_model_was_called_is_generated_again(
     table, model
 ) -> None:
     _commit("key-1")
-    model.outcomes = [_Killed()]
+    model.outcomes = [Unsent(_Killed())]
     with pytest.raises(_Killed):
         _deliver("key-1")
     _expire_lease(table, "key-1")
@@ -186,7 +156,8 @@ def test_an_attempt_lost_before_the_model_was_called_is_generated_again(
     outcome = _deliver("key-1")
 
     assert outcome == {"outcome": "completed"}
-    assert len(model.calls) == 2
+    # The first attempt never reached the model.
+    assert len(model.calls) == 1
     assert _generation(_client(), "key-1")["attempt"] == 2
 
 
@@ -194,7 +165,7 @@ def test_an_attempt_lost_after_its_answer_was_stored_is_only_finished(
     table, model, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _commit("key-1")
-    model.outcomes = [_Called()]
+    model.outcomes = [_called()]
     renew = attachment_repo.renew_message_ai_lease
     calls = {"renew": 0}
 
@@ -224,7 +195,7 @@ def test_an_answer_finished_by_the_next_attempt_keeps_its_sections(
     """The kept answer carries its sections (#132), not only the joined text."""
     _commit("key-1")
     model.outcomes = [
-        _Called({**ANSWER, "hints": ["Erst den ggT"], "suggest_teacher": True})
+        _called({**ANSWER, "hints": ["Erst den ggT"], "suggest_teacher": True})
     ]
     renew = attachment_repo.renew_message_ai_lease
     calls = {"renew": 0}
@@ -265,7 +236,7 @@ def test_an_answer_finished_by_the_next_attempt_keeps_its_target(
     )
     monkeypatch.setattr(star_map_candidates, "for_student", lambda *_a, **_k: [star])
     _commit("key-1")
-    model.outcomes = [_Called({**ANSWER, "target_unit_id": "k1"})]
+    model.outcomes = [_called({**ANSWER, "target_unit_id": "k1"})]
     renew = attachment_repo.renew_message_ai_lease
     calls = {"renew": 0}
 
@@ -292,7 +263,7 @@ def test_an_attempt_lost_after_the_model_was_called_is_not_called_again(
     table, model
 ) -> None:
     _commit("key-1")
-    model.outcomes = [_Called(_Killed())]
+    model.outcomes = [_called(_Killed())]
     with pytest.raises(_Killed):
         _deliver("key-1")
     _expire_lease(table, "key-1")
@@ -322,9 +293,9 @@ def test_a_command_without_context_is_generated_in_the_profile_language(
 
     assert _deliver("key-1") == {"outcome": "completed"}
 
-    assert model.calls[0]["language"] == "it"
-    assert model.calls[0]["subject"] == "math"
-    assert model.calls[0]["grade"] == "Grade 6"
+    assert default_language(model, 0) == "it"
+    assert "ONLY answer questions related to math." in model.system(0)
+    assert ask_answer.grade_for_prompt("Grade 6", "it") in model.system(0)
 
 
 def test_the_sweep_finishes_unclaimed_commands_and_expired_leases(table, model) -> None:
@@ -333,7 +304,7 @@ def test_the_sweep_finishes_unclaimed_commands_and_expired_leases(table, model) 
     old = dict(_command_row(table, "old"))
     old["message_committed_at"] = _minutes_ago(2)
     table.seed(old)
-    model.outcomes = [_Killed()]
+    model.outcomes = [Unsent(_Killed())]
     with pytest.raises(_Killed):
         _deliver("expired")
     _expire_lease(table, "expired")
@@ -408,10 +379,10 @@ def _allowance_client(monkeypatch: pytest.MonkeyPatch):
 def _ask(client) -> Any:
     from test_conversation_token_finalization import NOW
 
-    return ai_service.get_ai_answer(
-        content="Wie kürze ich Brüche?",
-        subject="math",
-        grade="Grade 6",
+    return ai_service.invoke_answer(
+        "Answer the question.",
+        [{"role": "user", "content": "Wie kürze ich Brüche?"}],
+        input_size=21,
         effect_id=client.allowance_effect_id,
         client=client,
         observed_at=NOW,
@@ -478,7 +449,7 @@ def test_a_kept_answer_survives_a_recovering_attempt_that_also_dies(
     table, model, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _commit("key-1")
-    model.outcomes = [_Called()]
+    model.outcomes = [_called()]
     _die_on_renewals(monkeypatch, 2)
     for _ in range(2):
         with pytest.raises(_Killed):
@@ -497,7 +468,7 @@ def test_a_call_whose_failure_was_recorded_does_not_block_a_later_attempt(
 ) -> None:
     """A recorded failure is a known outcome; only an unrecorded call is unknown."""
     committed = _commit("key-1")
-    model.outcomes = [_Called(RuntimeError("provider refused")), _Killed()]
+    model.outcomes = [_called(RuntimeError("provider refused")), Unsent(_Killed())]
     with pytest.raises(conversations.AttachmentDecisionError):
         conversations.generate_for_command(committed)
     assert "provider_invoked_attempt" not in _command_row(table, "key-1")
@@ -508,7 +479,8 @@ def test_a_call_whose_failure_was_recorded_does_not_block_a_later_attempt(
     _expire_lease(table, "key-1")
 
     assert _deliver("key-1") == {"outcome": "completed"}
-    assert len(model.calls) == 3
+    # The refused call and the last one; the attempt in between never reached it.
+    assert len(model.calls) == 2
 
 
 def test_a_duplicate_delivery_does_not_retry_a_failed_command(table, model) -> None:
@@ -556,7 +528,7 @@ def test_a_claim_does_not_act_on_a_copy_read_before_a_call_was_marked(
     table, model, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _commit("key-1")
-    model.outcomes = [_Called(_Killed())]
+    model.outcomes = [_called(_Killed())]
     with pytest.raises(_Killed):
         _deliver("key-1")
     _expire_lease(table, "key-1")
@@ -757,7 +729,7 @@ def _last_attempt_kept_its_answer(
 ) -> None:
     """The answer was stored, then the Lambda died; that attempt was the last."""
     _commit(key)
-    model.outcomes = [_Called()]
+    model.outcomes = [_called()]
     renew = attachment_repo.renew_message_ai_lease
 
     def die(**_: Any) -> bool:
@@ -818,7 +790,7 @@ def test_an_earlier_attempts_kept_answer_is_finished_outside_the_window(
     table, model, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _commit("early")
-    model.outcomes = [_Called()]
+    model.outcomes = [_called()]
     renew = attachment_repo.renew_message_ai_lease
 
     def die(**_: Any) -> bool:

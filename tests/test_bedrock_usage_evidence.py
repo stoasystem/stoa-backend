@@ -82,10 +82,10 @@ class _InvokeClient:
 def test_answer_result_embeds_exact_provider_usage_without_content() -> None:
     client = _InvokeClient(_provider_payload())
 
-    result = ai_service.get_ai_answer(
-        content="PRIVATE-STUDENT-PROMPT",
-        subject="math",
-        grade="Sek1",
+    result = ai_service.invoke_answer(
+        "Answer the question.",
+        [{"role": "user", "content": "PRIVATE-STUDENT-PROMPT"}],
+        input_size=1,
         correlation_id="server-correlation",
         effect_id=EFFECT_ID,
         observed_at=OBSERVED_AT,
@@ -138,10 +138,10 @@ def test_missing_or_malformed_usage_fails_closed(field: str, value: object) -> N
         usage[field] = value
 
     with pytest.raises(ai_service.AIInvocationFailure) as captured:
-        ai_service.get_ai_answer(
-            content="question",
-            subject="math",
-            grade="Sek1",
+        ai_service.invoke_answer(
+            "Answer the question.",
+            [{"role": "user", "content": "question"}],
+            input_size=1,
             effect_id=EFFECT_ID,
             client=_InvokeClient(payload),
         )
@@ -446,7 +446,7 @@ def test_inventory_classifies_every_source_invoke_model_call() -> None:
         "src/stoa/routers/conversations.py:invoke_model_with_response_stream": (
             ai_service.AIInvocationClass.USER_ALLOWANCE
         ),
-        "src/stoa/services/ai_service.py:get_ai_answer": (
+        "src/stoa/services/ai_service.py:invoke_answer": (
             ai_service.AIInvocationClass.USER_ALLOWANCE
         ),
         "src/stoa/services/ai_service.py:get_hint_answer": (

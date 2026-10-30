@@ -15,6 +15,7 @@ double. Only the model call and the entitlement lookup are replaced.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import pytest
@@ -22,6 +23,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
+from fakes.bedrock import FakeBedrock
 from fakes.dynamodb import FakeTable
 from stoa.db.repositories import attachment_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
@@ -42,25 +44,6 @@ ANSWER = {
 @pytest.fixture(autouse=True)
 def _no_memory_personalisation(stub_memory_summary) -> None:
     """The prompt enrichment reads three tables; keep it out."""
-
-
-class _Model:
-    """Stands in for `ai_service.get_ai_answer`; records what each call was given."""
-
-    def __init__(self) -> None:
-        self.calls: list[dict[str, Any]] = []
-        self.outcomes: list[Any] = []
-
-    def __call__(self, **kwargs: Any) -> Any:
-        self.calls.append(kwargs)
-        outcome = self.outcomes.pop(0) if self.outcomes else ANSWER
-        if isinstance(outcome, BaseException):
-            raise outcome
-        if not isinstance(outcome, dict):
-            return outcome
-        for index, step in enumerate(outcome.get("steps", [])):
-            kwargs["on_step"](index, step)
-        return dict(outcome)
 
 
 class _Table(FakeTable):
@@ -105,10 +88,22 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
 
 
 @pytest.fixture
-def model(monkeypatch: pytest.MonkeyPatch) -> _Model:
-    model = _Model()
-    monkeypatch.setattr(conversations.ai_service, "get_ai_answer", model)
+def model(monkeypatch: pytest.MonkeyPatch) -> FakeBedrock:
+    """The Bedrock runtime the answer is asked of, behind the real allowance client."""
+    from test_conversation_token_finalization import _patch_allowance_table
+    from test_token_allowances import AtomicAllowanceTable
+
+    model = FakeBedrock(answer=ANSWER)
+    _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
+    monkeypatch.setattr(conversations.ai_service.boto3, "client", lambda *_a, **_k: model)
     return model
+
+
+def default_language(model: FakeBedrock, index: int = -1) -> str:
+    """The language the model was told to fall back on, as its code."""
+    match = re.search(r"DEFAULT LANGUAGE: \w+ \((\w+)\)", model.system(index))
+    assert match is not None
+    return match.group(1)
 
 
 def _client() -> TestClient:
@@ -203,7 +198,7 @@ def test_the_command_carries_what_the_request_resolved_for_the_answer(table, mod
     assert context["subject"] == "math"
     assert context["grade"] == "Grade 6"
     assert "memory_context" in context
-    assert model.calls[0]["language"] == "fr"
+    assert default_language(model, 0) == "fr"
 
 
 def test_the_hint_is_labelled_in_the_language_the_model_answered_in(table, model) -> None:
@@ -215,7 +210,7 @@ def test_the_hint_is_labelled_in_the_language_the_model_answered_in(table, model
     [assistant] = _messages(table, "assistant")
     assert assistant["content"].endswith("**Hinweis:** Such den ggT.")
     # The display language is still what the model was given as its default.
-    assert model.calls[0]["language"] == "en"
+    assert default_language(model, 0) == "en"
 
 
 def test_a_reply_without_a_language_is_labelled_in_the_display_language(table, model) -> None:
@@ -257,7 +252,7 @@ def test_generating_takes_the_language_from_the_command_not_the_request(
     result = conversations.generate_for_command(committed)
 
     assert isinstance(result, conversations.SendMessageResponse)
-    assert model.calls[-1]["language"] == "fr"
+    assert default_language(model) == "fr"
     assert _command_row(table, "key-1")["status"] == "completed"
 
 
@@ -318,7 +313,6 @@ def test_an_answer_refused_over_its_usage_evidence_is_not_generated_again(
         raise conversations._allowance_recoverable_failure()
 
     monkeypatch.setattr(conversations, "_message_allowance_metadata_from_provider", refuse)
-    model.outcomes = [ai_service.AIProviderResult.__new__(ai_service.AIProviderResult)]
     client = _client()
 
     assert _send(client, "key-1").status_code == 503
@@ -396,7 +390,7 @@ def test_a_command_written_before_the_split_still_reads_and_resumes(
     resumed = _send(client, "key-1", language="it")
 
     assert resumed.status_code == 200, resumed.text
-    assert model.calls[-1]["language"] == "it"
+    assert default_language(model) == "it"
     assert _generation(client, "key-1")["status"] == "completed"
     assert len(_messages(table, "student")) == 1
 

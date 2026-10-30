@@ -183,7 +183,10 @@ def test_a_star_on_the_student_s_map_is_kept_and_reads_back(table, model) -> Non
     assert _target(response) == {"unitId": "funktionen-ableitung"}
     assert _assistant(_read_back(client))["targetUnit"] == {"unitId": "funktionen-ableitung"}
     # It was named out of the list the model was shown.
-    assert model.calls[0]["star_map"] == _shown()
+    turn = model.student_turn(0)
+    assert all(
+        f"{star['ref']} | {star['name']} | {star['state']}" in turn for star in _shown()
+    )
 
 
 @pytest.mark.parametrize(
@@ -387,7 +390,7 @@ def test_a_follow_up_on_an_earlier_answer_is_shown_no_map_and_has_no_target(
     )
 
     assert response.status_code == 200, response.text
-    assert model.calls[1]["star_map"] is None
+    assert "<star_map-" not in model.student_turn(1)
     assert _target(response) is None
 
 

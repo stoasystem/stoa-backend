@@ -79,20 +79,20 @@ from stoa.services import (
     adaptive_learning_service,
     ai_service,
     allowance_service,
+    ask_answer,
     attachment_service,
     bedrock_token_count_service,
     entitlement_service,
-    knowledge_map_service,
     learning_profile_service,
     locale_service,
     message_catalog,
     practice_context_service,
     runtime_budget_service,
-    star_map_candidates,
     teacher_dispatch_service,
     teacher_support_allowance_service,
     usage_ledger_service,
 )
+from stoa.services.ask_answer import StructuredAnswer
 
 logger = logging.getLogger(__name__)
 
@@ -650,7 +650,7 @@ class _ConversationAllowanceBedrockClient:
             raise ai_service.AIInvocationFailure("lease_lost")
 
     def bind_deadline(self, deadline_monotonic: float, clock: Callable[[], float]) -> None:
-        """Take the answer's deadline from `ai_service.get_ai_answer`, its one source."""
+        """Take the answer's deadline from `ai_service.invoke_answer`, its one source."""
         self._deadline_monotonic = deadline_monotonic
         self._clock = clock
 
@@ -814,7 +814,7 @@ class MessageQuote(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    text: str = Field(min_length=1, max_length=ai_service.QUOTE_MAX_CHARS)
+    text: str = Field(min_length=1, max_length=ask_answer.QUOTE_MAX_CHARS)
     source: MessageQuoteSource
 
 
@@ -1100,89 +1100,6 @@ def message_request_fingerprint(body: SendMessageRequest) -> str:
     return hashlib.sha256(bytes(framed)).hexdigest()
 
 
-class KnowledgePoint(BaseModel):
-    name: str
-    # The star on the student's map this names, checked against the stars the
-    # model was shown (#142); none for a point it wrote freely, and none on
-    # answers written before it was shown any.
-    unitId: str | None = None
-
-
-class StructuredAnswer(BaseModel):
-    """An assistant answer in the sections the model wrote it in (#132).
-
-    Handed on as the model wrote them; how they are laid out is the client's.
-    `kind` is `followUp` when the model answered in plain words, with no
-    steps, hints, exercises or knowledge points: what it says when a student
-    asks about one point of an earlier answer. A new question gets `answer`.
-    """
-
-    kind: Literal["answer", "followUp"]
-    steps: list[str] = Field(default_factory=list)
-    answer: str = ""
-    hints: list[str] = Field(default_factory=list)
-    similarExercises: list[str] = Field(default_factory=list)
-    knowledgePoints: list[KnowledgePoint] = Field(default_factory=list)
-    # The model thinks a human teacher should take over.
-    suggestTeacher: bool = False
-
-
-def _texts(value: object) -> list[str]:
-    """The text entries of a section, or none if it is not a list of them."""
-    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
-
-
-def _knowledge_point(
-    value: object, star_map: list[star_map_candidates.Candidate] | None
-) -> KnowledgePoint | None:
-    """A point the model named: a star it was shown, or free text (#142).
-
-    The model answers with the ref of a star from the list it was shown. A ref
-    on that list names that star, under the star's own name; anything else -
-    a ref it made up, a unit id it was never shown - is the name it wrote.
-    """
-    if isinstance(value, str):
-        return KnowledgePoint(name=value) if value.strip() else None
-    if not isinstance(value, Mapping):
-        return None
-    star = star_map_candidates.find(star_map, value.get("id"))
-    if star is not None:
-        return KnowledgePoint(name=star["name"], unitId=star["unitId"])
-    name = value.get("name")
-    return KnowledgePoint(name=name) if isinstance(name, str) and name.strip() else None
-
-
-def _structured_answer(
-    ai_result: Mapping[str, object],
-    star_map: list[star_map_candidates.Candidate] | None = None,
-) -> StructuredAnswer:
-    """The model's sections under the API's names.
-
-    `steps`, `answer` and `hints` are checked before this, since the joined
-    text is made of them. The rest are taken as they are and an entry of the
-    wrong shape is left out: one is no reason to fail an answer already paid
-    for.
-    """
-    steps = _texts(ai_result.get("steps"))
-    hints = _texts(ai_result.get("hints"))
-    similar = _texts(ai_result.get("similar_exercises"))
-    named = ai_result.get("knowledge_points")
-    points = [
-        point
-        for value in (named if isinstance(named, list) else [])
-        if (point := _knowledge_point(value, star_map)) is not None
-    ]
-    return StructuredAnswer(
-        kind="answer" if steps or hints or similar or points else "followUp",
-        steps=steps,
-        answer=str(ai_result.get("answer") or ""),
-        hints=hints,
-        similarExercises=similar,
-        knowledgePoints=points,
-        suggestTeacher=ai_result.get("suggest_teacher") is True,
-    )
-
-
 def _stored_structured(value: object) -> StructuredAnswer | None:
     """The sections stored beside an answer, or nothing for one written before them."""
     if not isinstance(value, Mapping):
@@ -1201,24 +1118,6 @@ class TargetUnit(BaseModel):
     """The star on the student's map an answer offers to take them to (#124)."""
 
     unitId: str
-
-
-def _target_unit_id(
-    ai_result: Mapping[str, object], star_map: list[star_map_candidates.Candidate] | None
-) -> str | None:
-    """The star the student asked to go to, if the model named one it was shown.
-
-    A topic named whole is narrowed to the star the map would recommend in it:
-    one already begun, else the first one ready; none when all of it is lit.
-    """
-    named = ai_result.get("target_unit_id")
-    star = star_map_candidates.find(star_map, named)
-    if star is not None:
-        return star["unitId"]
-    return (
-        knowledge_map_service._recommended_unit(star_map_candidates.find_topic(star_map, named))
-        or None
-    )
 
 
 def _target_unit(unit_id: object) -> TargetUnit | None:
@@ -2262,14 +2161,6 @@ _MAX_MEMORY_TOPICS = 8
 
 # The hint label is added around the model output, so it has to be translated here
 # or the answer comes back with one German word in it.
-_HINT_LABELS = {
-    "de": "Hinweis",
-    "en": "Hint",
-    "fr": "Indice",
-    "it": "Indizio",
-}
-
-
 def _memory_context_for_student(student_id: str, actor: Actor, subject: str) -> str | None:
     """Summarise the student's weak topics for AI personalisation.
 
@@ -2886,16 +2777,8 @@ def load_committed_message(command: dict) -> CommittedMessage:
 
 def _stored_provider_result(
     command: Mapping[str, object], attempt: int
-) -> tuple[str, StructuredAnswer | None, dict[str, object] | None, bool, str | None] | None:
-    """The answer a lost attempt kept on the command, if it kept one.
-
-    One kept before sections were (#132) is finished without them. The fourth
-    value says whether the model was shown the star map (#142): the knowledge
-    points kept are already checked against it, but whether the free ones may
-    be counted as gaps depends on it. The last is the star the student asked
-    to go to (#124), checked against the same map before it was kept; none on
-    one kept before targets were.
-    """
+) -> tuple[ask_answer.AskAnswer, dict[str, object] | None] | None:
+    """The answer a lost attempt kept on the command, and its allowance, if it kept one."""
     raw = command.get("provider_result_json")
     if stored_int(command.get("provider_result_attempt")) != attempt or not isinstance(raw, str):
         return None
@@ -2903,20 +2786,16 @@ def _stored_provider_result(
         payload = json.loads(raw)
     except json.JSONDecodeError:
         return None
-    if not isinstance(payload, Mapping) or not isinstance(payload.get("content"), str):
+    if not isinstance(payload, Mapping):
+        return None
+    answer = ask_answer.AskAnswer.from_json(payload.get("answer"))
+    if answer is None:
         return None
     metadata = payload.get("allowance")
     validated = _validated_message_allowance_metadata(metadata)
     if metadata is not None and validated is None:
         return None
-    target = payload.get("target_unit_id")
-    return (
-        payload["content"],
-        _stored_structured(payload.get("structured")),
-        validated,
-        payload.get("starMapShown") is True,
-        target if isinstance(target, str) and target else None,
-    )
+    return answer, validated
 
 
 def _record_generation_failure(
@@ -3478,9 +3357,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     # whichever earlier attempt called, however many attempts died since.
     leased = lease_result.command or {}
     invoked_attempt = stored_int(leased.get("provider_invoked_attempt"))
-    recovered: (
-        tuple[str, StructuredAnswer | None, dict[str, object] | None, bool, str | None] | None
-    ) = None
+    recovered: tuple[ask_answer.AskAnswer, dict[str, object] | None] | None = None
     if lease_result.previous_status == "ai_running" and invoked_attempt is not None:
         recovered = _stored_provider_result(leased, invoked_attempt)
         if recovered is None:
@@ -3493,10 +3370,9 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_FAILED)
 
     allowance_metadata: dict[str, object] | None = None
-    structured: StructuredAnswer | None = None
-    target_unit_id: str | None = None
+    answer: ask_answer.AskAnswer
     if recovered is not None:
-        ai_content, structured, allowance_metadata, star_map_shown, target_unit_id = recovered
+        answer, allowance_metadata = recovered
     else:
         _active_conversation_generation(student_id, table)
         attachment_context = ""
@@ -3531,21 +3407,6 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 raise AttachmentDecisionError(code)
             attachment_context = context_result.context
             attachment_images = context_result.images
-        normalized_subject = context["subject"]
-        grade = context["grade"]
-        # The display language: the model's default when it cannot tell which
-        # language the student writes in, and the language the star map is
-        # listed in, as the student sees it (#174).
-        student_locale = context["locale"]
-        # Read for this attempt, and the same list checks what the model picks
-        # from it (#142). None when it cannot be read: nothing the answer then
-        # names can be told apart from a gap.
-        star_map = (
-            None
-            if follow_up
-            else star_map_candidates.for_student(student_id, locale=student_locale)
-        )
-        star_map_shown = star_map is not None
         ai_deadline = runtime_budget_service.ai_deadline(
             fixed_seconds=_AI_INVOCATION_DEADLINE_SECONDS,
             reserve_seconds=_AI_PERSIST_RESERVE_SECONDS,
@@ -3566,63 +3427,39 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         provider_answered = False
 
         try:
-            provider_result = ai_service.get_ai_answer(
-                content=committed.content,
-                subject=normalized_subject,
-                grade=grade,
-                language=student_locale,
-                history=prior_messages,
-                attachment_context=attachment_context,
-                images=attachment_images,
-                memory_context=memory_context,
-                practice_context=practice_context,
-                quote=_quote_payload(committed.quote),
-                star_map=star_map,
-                correlation_id=command_id,
-                deadline_monotonic=ai_deadline,
-                effect_id=allowance_client.allowance_effect_id,
-                client=allowance_client,
-                invocation_class=ai_service.AIInvocationClass.USER_ALLOWANCE,
-                on_step=_publish_generation_step(
-                    conv_id, student_id, command_id=command_id, attempt=lease_result.attempt
+            answer = ask_answer.answer(
+                ask_answer.Asked(
+                    content=committed.content,
+                    history=prior_messages,
+                    attachment_context=attachment_context,
+                    images=attachment_images,
+                    quote=_quote_payload(committed.quote),
+                    practice_context=practice_context,
+                    follow_up=follow_up,
+                ),
+                ask_answer.Asker(
+                    student_id=student_id,
+                    subject=context["subject"],
+                    grade=context["grade"],
+                    locale=context["locale"],
+                    memory_context=memory_context,
+                ),
+                ask_answer.ModelCall(
+                    model=allowance_client,
+                    deadline_monotonic=ai_deadline,
+                    correlation_id=command_id,
+                    effect_id=allowance_client.allowance_effect_id,
+                    on_step=_publish_generation_step(
+                        conv_id, student_id, command_id=command_id, attempt=lease_result.attempt
+                    ),
                 ),
             )
             provider_answered = True
-            if isinstance(provider_result, ai_service.AIProviderResult):
-                allowance_metadata = _message_allowance_metadata_from_provider(
-                    provider_result,
-                    allowance_effect_id=allowance_client.allowance_effect_id,
-                )
-                ai_result = provider_result.content
-            elif isinstance(provider_result, Mapping):
-                # Narrow compatibility for inherited tests that replace the complete
-                # provider function. Production always returns AIProviderResult.
-                ai_result = dict(provider_result)
-            else:
-                raise ai_service.AIInvocationFailure("malformed_response")
-            if (
-                not isinstance(ai_result.get("steps", []), list)
-                or any(not isinstance(value, str) for value in ai_result.get("steps", []))
-                or not isinstance(ai_result.get("answer", ""), str)
-                or not isinstance(ai_result.get("hints", []), list)
-                or any(not isinstance(value, str) for value in ai_result.get("hints", []))
-            ):
-                raise ai_service.AIInvocationFailure("malformed_response")
-            steps = "\n".join(
-                f"{index + 1}. {value}" for index, value in enumerate(ai_result.get("steps", []))
+            assert answer.provider is not None
+            allowance_metadata = _message_allowance_metadata_from_provider(
+                answer.provider,
+                allowance_effect_id=allowance_client.allowance_effect_id,
             )
-            answer = ai_result.get("answer", "")
-            hints = ai_result.get("hints", [])
-            # In the language the model says it answered in (#174), so the label
-            # matches the hint it heads.
-            answer_locale = ai_service.answer_language(ai_result, default=student_locale)
-            hint_label = _HINT_LABELS.get(answer_locale, _HINT_LABELS[locale_service.DEFAULT_LOCALE])
-            hint = (f"\n\n**{hint_label}:** " + hints[0]) if hints else ""
-            ai_content = f"{steps}\n\n{answer}{hint}".strip()
-            if not ai_content:
-                raise ai_service.AIInvocationFailure("malformed_response")
-            structured = _structured_answer(ai_result, star_map)
-            target_unit_id = _target_unit_id(ai_result, star_map)
         except _ConversationAllowanceFailure as failure:
             # Refused at counting, admission or the allowance itself, before the
             # model was paid for, the same message may be sent again. Refused over
@@ -3678,13 +3515,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 lease_attempt=lease_attempt_number,
                 now_epoch=int(datetime.now(timezone.utc).timestamp()),
                 result_json=json.dumps(
-                    {
-                        "content": ai_content,
-                        "structured": _structured_payload(structured),
-                        "target_unit_id": target_unit_id,
-                        "allowance": allowance_metadata,
-                        "starMapShown": star_map_shown,
-                    },
+                    {"answer": answer.to_json(), "allowance": allowance_metadata},
                     ensure_ascii=False,
                     separators=(",", ":"),
                 ),
@@ -3737,11 +3568,11 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         id=assistant_msg_id,
         conversationId=conv_id,
         role="assistant",
-        content=ai_content,
+        content=answer.content,
         createdAt=assistant_created_at,
         status="sent",
-        structured=structured,
-        targetUnit=_target_unit(target_unit_id),
+        structured=answer.structured,
+        targetUnit=_target_unit(answer.target_unit_id),
     )
     result = SendMessageResponse(
         studentMessage=student_message, assistantMessage=assistant_message
@@ -3757,42 +3588,25 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         "owner_id": student_id,
         "account_fence_generation": account_fence_generation,
         "role": "assistant",
-        "content": ai_content,
+        "content": answer.content,
         "created_at": assistant_created_at,
-        **({"structured": _structured_payload(structured)} if structured is not None else {}),
-        **({"target_unit_id": target_unit_id} if target_unit_id is not None else {}),
+        "structured": _structured_payload(answer.structured),
+        **({"target_unit_id": answer.target_unit_id} if answer.target_unit_id else {}),
         **(allowance_metadata or {}),
     }
-    # What a new question named that is on no star of the map is counted for
-    # the knowledge-base gap list (#142), once per question. A follow-up counts
-    # nothing: the model answers one in plain words with no knowledge points,
-    # and is shown no map when it quotes a part of an earlier answer. An answer
-    # given without the map could not have matched a star, so it counts
-    # nothing either.
-    knowledge_gaps = (
-        knowledge_gap_repo.count_updates(
-            context["subject"],
-            [point.name for point in structured.knowledgePoints if point.unitId is None],
-            seen_at=assistant_created_at,
-        )
-        if structured is not None and star_map_shown
-        else []
+    # What the answer counts on the knowledge-base gap list (#142) and records
+    # as asked knowledge points (#143), once per question; which those are is
+    # the answer's to say (`ask_answer`).
+    knowledge_gaps = knowledge_gap_repo.count_updates(
+        context["subject"], answer.knowledge_gaps, seen_at=assistant_created_at
     )
-    # What a new question asked about reaches the learning profile, the weekly
-    # report and the parent's dashboard (#143), once per question, names and
-    # stars alike. A follow-up records nothing, as above; an answer given
-    # without the map still records what it named, as names.
-    asked_knowledge = (
-        asked_knowledge_repo.record_put(
-            conversation_id=conv_id,
-            message_id=assistant_msg_id,
-            student_id=student_id,
-            subject=context["subject"],
-            points=[(point.name, point.unitId) for point in structured.knowledgePoints],
-            asked_at=assistant_created_at,
-        )
-        if structured is not None and not follow_up
-        else None
+    asked_knowledge = asked_knowledge_repo.record_put(
+        conversation_id=conv_id,
+        message_id=assistant_msg_id,
+        student_id=student_id,
+        subject=context["subject"],
+        points=[(point.name, point.unitId) for point in answer.asked_points],
+        asked_at=assistant_created_at,
     )
     completion = _coerce_command_result(
         _conversation_repository_call(

@@ -7,7 +7,6 @@ than in production.
 """
 from __future__ import annotations
 
-import io
 import json
 import re
 from decimal import Decimal
@@ -19,6 +18,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from audit_helpers import MemoryAuthorizationAuditSink
+from fakes.bedrock import FakeBedrock, answer_without_allowance
 from fakes.dynamodb import as_stored
 from stoa.db.repositories import attachment_repo, practice_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
@@ -26,7 +26,7 @@ from stoa.routers import conversations
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import (
     adaptive_learning_service,
-    ai_service,
+    ask_answer,
     curriculum_service,
     knowledge_map_service,
     knowledge_mastery_service,
@@ -513,49 +513,34 @@ def test_an_answer_the_backend_never_judged_is_not_shown_as_a_mistake(monkeypatc
 
 # ── Prompt assembly: the quote is data, never an instruction ─────────────────
 
-class _CapturingBedrockClient:
-    def __init__(self) -> None:
-        self.request_body: dict | None = None
-
-    def invoke_model(self, *, modelId: str, body: str):  # noqa: N803 - boto3 casing
-        self.request_body = json.loads(body)
-        payload = {
-            "id": "msg_test_1",
-            "model": modelId,
-            "stop_reason": "end_turn",
-            "content": [
-                {
-                    "text": json.dumps(
-                        {
-                            "steps": ["step one"],
-                            "answer": "42",
-                            "hints": [],
-                            "knowledge_points": [],
-                            "suggest_teacher": False,
-                        }
-                    )
-                }
-            ],
-            "usage": {"input_tokens": 10, "output_tokens": 5},
-        }
-        return {
-            "ResponseMetadata": {"RequestId": "req-test-1"},
-            "body": io.BytesIO(json.dumps(payload).encode()),
-        }
-
-
 def _sent(**kwargs) -> dict:
-    client = _CapturingBedrockClient()
-    ai_service.get_ai_answer(
-        content=kwargs.pop("content", "warum ist das falsch?"),
-        subject=kwargs.pop("subject", "math"),
-        grade=kwargs.pop("grade", "Sek1"),
-        client=client,
-        effect_id="effect-test-1",
-        **kwargs,
+    """The request body the model is sent for one Ask answer."""
+    model = FakeBedrock(
+        answer={
+            "steps": ["step one"],
+            "answer": "42",
+            "hints": [],
+            "knowledge_points": [],
+            "suggest_teacher": False,
+        }
     )
-    assert client.request_body is not None
-    return client.request_body
+    ask_answer.answer(
+        ask_answer.Asked(
+            content=kwargs.pop("content", "warum ist das falsch?"),
+            quote=kwargs.pop("quote", None),
+            practice_context=kwargs.pop("practice_context", None),
+        ),
+        ask_answer.Asker(
+            student_id=STUDENT,
+            subject=kwargs.pop("subject", "math"),
+            grade=kwargs.pop("grade", "Sek1"),
+            locale=kwargs.pop("language", "de"),
+        ),
+        ask_answer.ModelCall(model=model, effect_id="effect-test-1"),
+        read_star_map=lambda *_a, **_k: None,
+    )
+    assert not kwargs, kwargs
+    return model.requests[-1]
 
 
 def _quote(text: str) -> dict[str, Any]:
@@ -727,7 +712,6 @@ def _run_message_command(monkeypatch, *, body_payload: dict[str, Any]) -> dict[s
     body = conversations.SendMessageRequest.model_validate(body_payload)
     command_state: dict[str, Any] = {}
     stored_messages: dict[str, Any] = {}
-    captured: dict[str, Any] = {}
 
     monkeypatch.setattr(conversations, "get_table", lambda: object())
     monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
@@ -783,11 +767,9 @@ def _run_message_command(monkeypatch, *, body_payload: dict[str, Any]) -> dict[s
     monkeypatch.setattr(attachment_repo, "renew_message_ai_lease", lambda **_k: True)
     monkeypatch.setattr(attachment_repo, "complete_message_command", complete)
 
-    def fake_get_ai_answer(**kwargs):
-        captured.update(kwargs)
-        return {"steps": ["one"], "answer": "safe", "hints": []}
-
-    monkeypatch.setattr(conversations.ai_service, "get_ai_answer", fake_get_ai_answer)
+    model = answer_without_allowance(
+        monkeypatch, FakeBedrock(answer={"steps": ["one"], "answer": "safe", "hints": []})
+    )
 
     resolved = None
     if body.practiceContext is not None:
@@ -805,8 +787,14 @@ def _run_message_command(monkeypatch, *, body_payload: dict[str, Any]) -> dict[s
             "practice_context": resolved,
         },
     )
-    assert captured, "ai_service.get_ai_answer was never invoked"
-    return {"ai": captured, "command": command_state, "message": stored_messages}
+    assert model.requests, "the model was never asked"
+    turn = model.student_turn()
+    seen = {"quote": None, "practice_context": None}
+    if "<student_quote-" in turn:
+        seen["quote"] = {"text": _fenced_payload(turn, "student_quote").strip().split("\n", 1)[1]}
+    if "<practice_context-" in turn:
+        seen["practice_context"] = json.loads(_fenced_payload(turn, "practice_context"))
+    return {"ai": seen, "command": command_state, "message": stored_messages}
 
 
 def test_the_resolved_practice_context_is_stored_on_the_command(monkeypatch):
@@ -1098,14 +1086,14 @@ def test_the_fenced_block_is_built_from_the_context_as_the_table_returns_it(
     stored = as_stored(resolved)
     assert isinstance(stored["reviewDue"], Decimal)
 
-    block = ai_service.build_practice_context_block(stored)
+    block = ask_answer.build_practice_context_block(stored)
     payload = json.loads(_fenced_payload(block, "practice_context"))
     assert payload["reviewDue"] == review_due
     assert type(payload["reviewDue"]) is int
 
 
 @pytest.mark.parametrize("review_due", [0, 3])
-def test_get_ai_answer_accepts_the_context_in_the_shape_the_worker_holds(
+def test_the_answer_accepts_the_context_in_the_shape_the_worker_holds(
     monkeypatch, review_due
 ):
     """One level up: the entry point `generate_for_command` actually calls."""

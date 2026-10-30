@@ -53,6 +53,7 @@ from stoa.routers import conversations, upload_codes
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import attachment_service, rate_limit, upload_code_service
+from fakes.bedrock import FakeBedrock, answer_without_allowance
 from fakes.dynamodb import FakeTable
 from fakes.rekognition import FakeRekognition
 from fakes.s3 import MultipartS3
@@ -144,13 +145,7 @@ class _Api:
         self.moderation = moderation or FakeRekognition()
         self.settings = settings or Settings(s3_images_bucket=BUCKET)
         monkeypatch.setattr(conversations.boto3, "client", lambda *_a, **_k: self.s3)
-        self.model_calls: list[dict[str, Any]] = []
-
-        def get_ai_answer(**kwargs: Any) -> dict[str, Any]:
-            self.model_calls.append(kwargs)
-            return dict(ANSWER)
-
-        monkeypatch.setattr(conversations.ai_service, "get_ai_answer", get_ai_answer)
+        self.model = answer_without_allowance(monkeypatch, FakeBedrock(answer=ANSWER))
         monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 50)
         monkeypatch.setattr(conversations, "_attachment_plan_for_student", lambda *_: "free_trial")
         monkeypatch.setattr(
@@ -504,7 +499,7 @@ def test_the_photo_cannot_be_sent_into_another_conversation(monkeypatch, table) 
     refused = api.send(upload_id, OTHER_CONV)
 
     assert _refusal(refused) == (404, "upload_not_found")
-    assert api.model_calls == []
+    assert api.model.requests == []
     assert api.rows("attachment") == []
     assert api.send(upload_id, CONV, key="key-2").status_code in {200, 202}
 

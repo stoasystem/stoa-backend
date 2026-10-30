@@ -163,10 +163,10 @@ def _provider_result(
     )
     command = _command()
     client = conversations._ConversationAllowanceBedrockClient(command)
-    result = ai_service.get_ai_answer(
-        content="private-message-canary",
-        subject="math",
-        grade="Sek1",
+    result = ai_service.invoke_answer(
+        "Answer the question.",
+        [{"role": "user", "content": "private-message-canary"}],
+        input_size=1,
         correlation_id="transport-correlation-that-must-not-own-the-effect",
         effect_id=client.allowance_effect_id,
         client=client,
@@ -197,10 +197,10 @@ def test_count_failure_never_reserves_or_invokes(monkeypatch: pytest.MonkeyPatch
     client = conversations._ConversationAllowanceBedrockClient(_command())
 
     with pytest.raises(conversations._ConversationAllowanceFailure) as captured:
-        ai_service.get_ai_answer(
-            content="message",
-            subject="math",
-            grade="Sek1",
+        ai_service.invoke_answer(
+            "Answer the question.",
+            [{"role": "user", "content": "message"}],
+            input_size=1,
             effect_id=client.allowance_effect_id,
             client=client,
         )
@@ -233,10 +233,10 @@ def test_allowance_denial_never_invokes_provider(monkeypatch: pytest.MonkeyPatch
     client = conversations._ConversationAllowanceBedrockClient(_command())
 
     with pytest.raises(conversations._ConversationAllowanceFailure) as captured:
-        ai_service.get_ai_answer(
-            content="message",
-            subject="math",
-            grade="Sek1",
+        ai_service.invoke_answer(
+            "Answer the question.",
+            [{"role": "user", "content": "message"}],
+            input_size=1,
             effect_id=client.allowance_effect_id,
             client=client,
         )
@@ -260,10 +260,10 @@ def test_provider_timeout_after_reserve_remains_reserved(
     client = conversations._ConversationAllowanceBedrockClient(_command())
 
     with pytest.raises(TimeoutError):
-        ai_service.get_ai_answer(
-            content="message",
-            subject="math",
-            grade="Sek1",
+        ai_service.invoke_answer(
+            "Answer the question.",
+            [{"role": "user", "content": "message"}],
+            input_size=1,
             effect_id=client.allowance_effect_id,
             client=client,
         )
