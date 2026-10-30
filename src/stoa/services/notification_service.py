@@ -1297,7 +1297,8 @@ def emit_moderation_update(
     privacy_generation: int,
 ) -> None:
     _require_moderation_owner(owner_id, privacy_generation)
-    if case_item.get("reporter_id") and case_item.get("reporter_role") != "admin":
+    # A case moderation opened itself (#139) has no person to tell.
+    if case_item.get("reporter_id") and case_item.get("reporter_role") not in {"admin", "system"}:
         reporter_id = str(case_item["reporter_id"])
         locale = _recipient_locale(reporter_id)
         create_event_safe(

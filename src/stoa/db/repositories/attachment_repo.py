@@ -700,6 +700,25 @@ def record_generation_progress(
     return True
 
 
+def owns_conversation(
+    conversation_id: str, owner_id: str, *, table: object | None = None
+) -> bool:
+    """Whether this learning session exists and is the owner's own."""
+    target = table or get_table()
+    item = _optional_mapping(
+        _get_item(
+            target,
+            Key={"PK": f"CONV#{conversation_id}", "SK": "CONV"},
+            ConsistentRead=True,
+        ).get("Item")
+    )
+    return (
+        item is not None
+        and item.get("entity_type") == "conversation"
+        and item.get("student_id") == owner_id
+    )
+
+
 def read_generation_progress(
     conversation_id: str,
     *,
@@ -3027,6 +3046,112 @@ def build_message_attachment_transaction(
                     }
                 },
             )
+        )
+    return operations
+
+
+def build_reply_image_operations(
+    *,
+    fresh: list[tuple[dict[str, object], dict[str, object]]],
+    associations: list[dict[str, object]],
+    uploader_id: str,
+    owner_id: str,
+    account_fence_generation: int,
+    conversation_id: str,
+    now_iso: str,
+) -> list[dict[str, object]]:
+    """A teacher's reply images, as part of the reply's own transaction (#145).
+
+    Each upload is consumed under its uploader, the teacher, and handed with
+    the attachment it becomes to the owner, the student whose conversation it
+    is: the upload row's cleanup belongs with the attachment it points at.
+    Left the teacher's, it would hold the teacher's account deletion forever,
+    since the teacher's purge can neither clean it nor see the attachment that
+    keeps it. The student's account fence is the reply's to check: one
+    transaction cannot check a row twice. The owner's usage grows by the
+    images, but the owner's quota does not refuse them: a teacher cannot free
+    a student's storage.
+    """
+    operations: list[dict[str, object]] = [
+        {
+            "ConditionCheck": {
+                "Key": retention_fence_key(
+                    owner_id, resource_type="conversation", resource_id=conversation_id
+                ),
+                "ConditionExpression": "attribute_not_exists(PK) OR #status=:complete",
+                "ExpressionAttributeNames": {"#status": "status"},
+                "ExpressionAttributeValues": {":complete": "complete"},
+            }
+        }
+    ]
+    for upload, attachment in fresh:
+        attachment_id = _required_text(attachment.get("attachment_id"))
+        operations.append(
+            {
+                "Update": {
+                    "Key": upload_key(_required_text(upload.get("upload_id"))),
+                    "UpdateExpression": (
+                        "SET #s=:consumed, #v=#v+:one, durable_attachment_id=:attachment_id, "
+                        "#owner=:owner, student_id=:owner, "
+                        "account_fence_generation=:generation"
+                    ),
+                    "ConditionExpression": (
+                        "#owner=:uploader AND #s=:validated AND #v=:version AND expires_at>:now"
+                    ),
+                    "ExpressionAttributeNames": {
+                        "#owner": "owner_id",
+                        "#s": "status",
+                        "#v": "version",
+                    },
+                    "ExpressionAttributeValues": {
+                        ":uploader": uploader_id,
+                        ":owner": owner_id,
+                        ":generation": account_fence_generation,
+                        ":validated": "validated",
+                        ":consumed": "consumed",
+                        ":version": _required_integer(upload.get("version"), minimum=1),
+                        ":one": 1,
+                        ":now": _required_integer(upload.get("consume_epoch")),
+                        ":attachment_id": attachment_id,
+                    },
+                }
+            }
+        )
+        operations.append(
+            {
+                "Put": {
+                    "Item": {**attachment_key(attachment_id), **attachment},
+                    "ConditionExpression": "attribute_not_exists(PK)",
+                }
+            }
+        )
+    operations.extend(
+        {
+            "Put": {
+                "Item": association,
+                "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+            }
+        }
+        for association in associations
+    )
+    if fresh:
+        operations.append(
+            {
+                "Update": {
+                    "Key": storage_key(owner_id),
+                    "UpdateExpression": (
+                        "SET used_bytes=if_not_exists(used_bytes,:zero)+:size, updated_at=:updated"
+                    ),
+                    "ExpressionAttributeValues": {
+                        ":zero": 0,
+                        ":size": sum(
+                            _require_positive_integer(attachment.get("content_length"))
+                            for _, attachment in fresh
+                        ),
+                        ":updated": now_iso,
+                    },
+                }
+            }
         )
     return operations
 

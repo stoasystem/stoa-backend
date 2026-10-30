@@ -34,7 +34,13 @@ from PIL import Image
 import pytest
 
 from stoa.config import Settings
-from stoa.db.repositories import account_deletion_repo, attachment_repo, upload_code_repo
+from stoa.db.repositories import (
+    account_deletion_repo,
+    attachment_repo,
+    moderation_repo,
+    notification_repo,
+    upload_code_repo,
+)
 from stoa.deps import (
     get_actor,
     get_authorization_audit_sink,
@@ -121,7 +127,14 @@ class _Api:
         moderation: FakeRekognition | None = None,
         settings: Settings | None = None,
     ) -> None:
-        for module in (conversations, attachment_repo, upload_code_repo, rate_limit):
+        for module in (
+            conversations,
+            attachment_repo,
+            upload_code_repo,
+            rate_limit,
+            moderation_repo,
+            notification_repo,
+        ):
             monkeypatch.setattr(module, "get_table", lambda table=table: table)
         monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
         self.clock = _Clock()
@@ -546,6 +559,11 @@ def test_a_blocked_photo_never_reaches_the_conversation(monkeypatch, table) -> N
     assert _refusal(completed) == (422, "upload_content_blocked")
     status = api.status(issued["codeId"]).json()
     assert (status["status"], status.get("uploadId")) == ("failed", None)
+    # It still reaches the admin review queue (#139), with the conversation it was for.
+    [case] = api.rows("moderation_case")
+    assert case["student_id"] == STUDENT
+    assert case["image_context"]["conversation_id"] == CONV
+    assert case["image_context"]["uploader_role"] == "student"
 
 
 def test_when_moderation_cannot_answer_the_phone_may_finish_later(monkeypatch, table) -> None:

@@ -19,6 +19,9 @@ class _AttachmentModel(BaseModel):
 class UploadPurpose(StrEnum):
     QUESTION_IMAGE = "question_image"
     CONVERSATION_ATTACHMENT = "conversation_attachment"
+    # A teacher's image for their reply to a help request (#145); the one
+    # purpose a teacher may open an upload for.
+    HELP_REPLY_IMAGE = "help_reply_image"
 
 
 class UploadStatus(StrEnum):
@@ -48,6 +51,9 @@ class UploadIntentRequest(_AttachmentModel):
     filename: str = Field(min_length=1, max_length=255)
     content_type: str = Field(alias="contentType", min_length=1, max_length=200)
     size_bytes: int = Field(alias="sizeBytes", gt=0)
+    # The student's own learning session the file is for, when there is one. A
+    # refused image's moderation case records it (#139).
+    conversation_id: OpaqueId | None = Field(default=None, alias="conversationId")
 
 
 class UploadIntentResponse(_AttachmentModel):
@@ -140,6 +146,12 @@ class AttachmentReference(_AttachmentModel):
         if self.upload_id is not None:
             return ("upload", self.upload_id)
         return ("attachment", str(self.attachment_id))
+
+
+class ReplyImageReference(_AttachmentModel):
+    """A validated `help_reply_image` upload of the replying teacher (#145)."""
+
+    upload_id: OpaqueId = Field(alias="uploadId")
 
 
 def public_attachment_schema_fields(model: type[BaseModel]) -> set[str]:

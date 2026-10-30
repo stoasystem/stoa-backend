@@ -38,12 +38,14 @@ from stoa.models.attachment import (
     SavedAttachmentPage,
     UploadIntentRequest,
     UploadPartUrlRequest,
+    UploadPurpose,
 )
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import Actor, CanonicalRole
 from stoa.services.ai_service import PromptImage
 from stoa.services.file_validation_service import MIME_BY_EXTENSION
 from stoa.services.file_validation_service import ValidationFailure, validate_uploaded_file
+from stoa.services import moderation_service
 from stoa.services.image_moderation_service import (
     MODERATED_TYPES,
     ImageContentBlocked,
@@ -70,6 +72,16 @@ CLEANUP_RECONCILIATION_MAX_PAGES = 10
 CLEANUP_RECONCILIATION_MAX_ITEMS = 10_000
 # Attached to a conversation message, these go to the model as images.
 MESSAGE_IMAGE_TYPES = frozenset({"image/jpeg", "image/png"})
+# Who may open an upload, and for what: a teacher only for a reply (#145).
+_UPLOAD_PURPOSES_BY_ROLE = {
+    CanonicalRole.STUDENT: frozenset(
+        {UploadPurpose.QUESTION_IMAGE, UploadPurpose.CONVERSATION_ATTACHMENT}
+    ),
+    CanonicalRole.TEACHER: frozenset({UploadPurpose.HELP_REPLY_IMAGE}),
+}
+_IMAGE_ONLY_PURPOSES = frozenset(
+    {UploadPurpose.QUESTION_IMAGE, UploadPurpose.HELP_REPLY_IMAGE}
+)
 
 
 def _require_active_account_fence_for_repository(
@@ -841,13 +853,17 @@ def create_upload_intent(
     conversation_id: str | None = None,
 ) -> dict[str, Any]:
     """Open an upload; `conversation_id` binds it to that one conversation (#146)."""
-    if actor.role != CanonicalRole.STUDENT:
+    if request.purpose not in _UPLOAD_PURPOSES_BY_ROLE.get(actor.role, frozenset()):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     try:
         account_fence = _require_active_account_fence_for_repository(repository, actor.user_id)
     except account_deletion_repo.AccountDeletionConflict:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from None
     account_fence_generation = int(account_fence["generation"])
+    if request.conversation_id is not None and not _gateway_call(
+        lambda: repository.owns_conversation(request.conversation_id, actor.user_id)
+    ):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     now = (now or datetime.now(UTC)).astimezone(UTC)
     extension = request.filename.rsplit(".", 1)[-1].lower() if "." in request.filename else ""
     allowed = MIME_BY_EXTENSION.get(extension)
@@ -855,7 +871,7 @@ def create_upload_intent(
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_TYPE_NOT_SUPPORTED)
     if request.content_type not in allowed:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_CONTENT_MISMATCH)
-    if request.purpose.value == "question_image" and extension not in {"jpg", "jpeg", "png"}:
+    if request.purpose in _IMAGE_ONLY_PURPOSES and extension not in {"jpg", "jpeg", "png"}:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_TYPE_NOT_SUPPORTED)
     max_bytes = IMAGE_MAX_BYTES if extension in {"jpg", "jpeg", "png"} else DOCUMENT_MAX_BYTES
     if request.size_bytes > max_bytes:
@@ -888,9 +904,11 @@ def create_upload_intent(
         "created_at": now.isoformat(),
         "expires_at": expires_epoch,
     }
+    if request.conversation_id is not None:
+        item["conversation_id"] = request.conversation_id
     if conversation_id is not None:
-        # `bound_conversation_id` is enforced when the upload is sent;
-        # `conversation_id` is where the moderation queue (#139) records it.
+        # A phone upload (#146): `bound_conversation_id` is enforced when it is
+        # sent; `conversation_id` is where the moderation queue (#139) records it.
         item["bound_conversation_id"] = conversation_id
         item["conversation_id"] = conversation_id
     multipart_upload_id: str | None = None
@@ -1835,8 +1853,11 @@ def _validate_and_promote_completed(
                         spool.read(),
                         detected,
                         item,
+                        actor,
                         moderation=moderation,
+                        s3=s3,
                         settings=settings,
+                        now=now,
                     )
                 spool.seek(0)
                 operation_fence = uuid4().hex
@@ -1991,8 +2012,8 @@ def _validate_and_promote_completed(
     except ValidationFailure as exc:
         failure_code = exc.code
         if isinstance(exc, ImageContentBlocked):
-            # The one place a refused image is seen before its staging copy is
-            # deleted: the admin review queue (#139) takes its record here.
+            # Its case and a kept copy are already in the admin review queue
+            # (#139, `_require_moderated_image`), so the staging copy can go.
             logger.warning(
                 "image_moderation_blocked upload_id=%s labels=%s",
                 item["upload_id"],
@@ -2030,13 +2051,17 @@ def _require_moderated_image(
     data: bytes,
     detected: Any,
     item: dict[str, Any],
+    actor: Actor,
     *,
     moderation: Any,
+    s3: Any,
     settings: Settings,
+    now: datetime,
 ) -> None:
     """Let an image be promoted only on a moderation answer that found nothing.
 
-    A refusal is a `ValidationFailure` and ends the upload. No answer leaves the
+    A refusal is a `ValidationFailure` and ends the upload, once the image and its
+    case are in the admin review queue (#139). No answer, or no case, leaves the
     upload validating, so the next completion asks again; it is never a pass.
     """
     try:
@@ -2047,6 +2072,28 @@ def _require_moderated_image(
             client=moderation,
             settings=settings,
         )
+    except ImageContentBlocked as blocked:
+        try:
+            moderation_service.open_image_case(
+                item,
+                uploader_role=actor.role.value,
+                data=data,
+                media_type=detected.media_type,
+                hits=blocked.hits,
+                s3=s3,
+                settings=settings,
+                now=now,
+            )
+        except Exception as exc:
+            logger.error(
+                "image_moderation_case_failed upload_id=%s error_class=%s",
+                item["upload_id"],
+                type(exc).__name__,
+            )
+            raise AttachmentDecisionError(
+                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+            ) from None
+        raise
     except ImageModerationUnavailable as exc:
         logger.error(
             "image_moderation_unavailable upload_id=%s cause=%s",
@@ -2459,6 +2506,112 @@ def prepare_message_attachments(
     return prepared
 
 
+def _attachment_from_upload(
+    upload: dict[str, Any], *, attachment_id: str, owner_id: str, now: datetime
+) -> dict[str, Any]:
+    """The durable attachment a validated upload becomes, owned by `owner_id`."""
+    return {
+        "attachment_id": attachment_id,
+        "owner_id": owner_id,
+        "student_id": owner_id,
+        "entity_type": "attachment",
+        "schema_version": "attachment.v1",
+        "immutable_object_key": upload["immutable_object_key"],
+        "immutable_version_id": upload["immutable_version_id"],
+        "immutable_etag": upload["immutable_etag"],
+        "content_sha256": upload["content_sha256"],
+        "original_filename": upload["original_filename"],
+        "detected_type": upload["detected_type"],
+        "content_length": int(upload["content_length"]),
+        "status": "active",
+        "created_at": now.isoformat(),
+        "source_upload_id": upload["upload_id"],
+        "ref_count": 1,
+    }
+
+
+def prepare_reply_images(
+    upload_ids: Sequence[str],
+    actor: Actor,
+    *,
+    now: datetime | None = None,
+    repository: Any = attachment_repo,
+) -> list[dict[str, Any]]:
+    """The replying teacher's own reply images, resolved before the reply exists (#145).
+
+    Only a completed upload is `validated`: one moderation refused, or could not
+    judge, never is (#138).
+    """
+    now = now or datetime.now(UTC)
+    uploads: list[dict[str, Any]] = []
+    for upload_id in upload_ids:
+        item = resolve_owned_upload(upload_id, actor, now=now, repository=repository)
+        if (
+            item.get("status") != "validated"
+            or item.get("expected_kind") != UploadPurpose.HELP_REPLY_IMAGE
+            or item.get("detected_type") not in MESSAGE_IMAGE_TYPES
+        ):
+            raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+        _require_immutable_record(item)
+        uploads.append(item)
+    return uploads
+
+
+def reply_image_operations(
+    uploads: Sequence[dict[str, Any]],
+    *,
+    teacher_id: str,
+    student_id: str,
+    account_fence_generation: int,
+    conversation_id: str,
+    message_id: str,
+    now: datetime | None = None,
+) -> tuple[list[dict[str, Any]], list[AttachmentSummary]]:
+    """Put a teacher's reply images into the student's conversation (#145).
+
+    The upload was the teacher's; it and the attachment it becomes are the
+    student's from here, as the reply it rides in is the student's message
+    (#74). So the student reads it as their own, it goes with the conversation
+    and with their account, and the teacher's account deletion does not wait
+    on it.
+    The operations ride in the reply's own transaction, which already checks
+    the student's account fence.
+    """
+    now = (now or datetime.now(UTC)).astimezone(UTC)
+    fresh: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    associations: list[dict[str, Any]] = []
+    for upload in uploads:
+        attachment = _attachment_from_upload(
+            upload, attachment_id=str(uuid4()), owner_id=student_id, now=now
+        )
+        fresh.append(({**upload, "consume_epoch": int(now.timestamp())}, attachment))
+        associations.append(
+            {
+                **attachment_repo.association_key(
+                    attachment["attachment_id"], "conversation", conversation_id, message_id
+                ),
+                "attachment_id": attachment["attachment_id"],
+                "owner_id": student_id,
+                "student_id": student_id,
+                "entity_type": "attachment_association",
+                "resource_type": "conversation",
+                "resource_id": conversation_id,
+                "message_id": message_id,
+                "created_at": now.isoformat(),
+            }
+        )
+    operations = attachment_repo.build_reply_image_operations(
+        fresh=fresh,
+        associations=associations,
+        uploader_id=teacher_id,
+        owner_id=student_id,
+        account_fence_generation=account_fence_generation,
+        conversation_id=conversation_id,
+        now_iso=now.isoformat(),
+    )
+    return operations, [_attachment_summary(attachment) for _, attachment in fresh]
+
+
 def reserve_question_attachment(
     reference: AttachmentReference,
     actor: Actor,
@@ -2487,25 +2640,9 @@ def reserve_question_attachment(
             str(reference.upload_id), actor.user_id, version, int(now.timestamp())
         ):
             raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
-        attachment_id = str(uuid4())
-        attachment = {
-            "attachment_id": attachment_id,
-            "owner_id": actor.user_id,
-            "student_id": actor.user_id,
-            "entity_type": "attachment",
-            "schema_version": "attachment.v1",
-            "immutable_object_key": upload["immutable_object_key"],
-            "immutable_version_id": upload["immutable_version_id"],
-            "immutable_etag": upload["immutable_etag"],
-            "content_sha256": upload["content_sha256"],
-            "original_filename": upload["original_filename"],
-            "detected_type": upload["detected_type"],
-            "content_length": int(upload["content_length"]),
-            "status": "active",
-            "created_at": now.isoformat(),
-            "source_upload_id": upload["upload_id"],
-            "ref_count": 1,
-        }
+        attachment = _attachment_from_upload(
+            upload, attachment_id=str(uuid4()), owner_id=actor.user_id, now=now
+        )
         return {
             "kind": "upload",
             "identity": reference.identity,
@@ -2667,24 +2804,9 @@ def bind_message_attachments(
                 if deterministic_attachment_ids is not None
                 else str(uuid4())
             )
-            attachment = {
-                "attachment_id": attachment_id,
-                "owner_id": actor.user_id,
-                "student_id": actor.user_id,
-                "entity_type": "attachment",
-                "schema_version": "attachment.v1",
-                "immutable_object_key": item["immutable_object_key"],
-                "immutable_version_id": item["immutable_version_id"],
-                "immutable_etag": item["immutable_etag"],
-                "content_sha256": item["content_sha256"],
-                "original_filename": item["original_filename"],
-                "detected_type": item["detected_type"],
-                "content_length": int(item["content_length"]),
-                "status": "active",
-                "created_at": now.isoformat(),
-                "source_upload_id": item["upload_id"],
-                "ref_count": 1,
-            }
+            attachment = _attachment_from_upload(
+                item, attachment_id=attachment_id, owner_id=actor.user_id, now=now
+            )
             item = {**item, "consume_epoch": int(now.timestamp())}
             fresh.append((item, attachment))
         else:
