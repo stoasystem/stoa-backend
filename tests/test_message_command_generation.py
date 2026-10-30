@@ -31,7 +31,9 @@ from test_conversations import _actor
 
 CONV = "conv-1"
 STUDENT = "student-1"
-QUESTION = "Wie kürze ich Brüche?"
+# No word of any one language (#172), so the answer is in the language the
+# request is displayed in, which is what the tests importing it set.
+QUESTION = "6/8 = ?"
 ANSWER = {
     "steps": ["Zähler und Nenner teilen", "Durch den ggT"],
     "answer": "So kürzt man.",
@@ -204,6 +206,19 @@ def test_the_command_carries_what_the_request_resolved_for_the_answer(table, mod
     assert context["grade"] == "Grade 6"
     assert "memory_context" in context
     assert model.calls[0]["language"] == "fr"
+
+
+def test_the_answer_is_in_the_language_the_question_was_asked_in(table, model) -> None:
+    """The app shown in English, the question asked in German (#172)."""
+    client = _client()
+
+    _send(client, "key-1", language="en", content="Wie löse ich die Gleichung auf dem Foto?")
+    # A reply that says nothing about language keeps the conversation's.
+    _send(client, "key-2", language="en", content="ok")
+
+    assert [call["language"] for call in model.calls] == ["de", "de"]
+    # The display language is still what the request resolved.
+    assert _command_row(table, "key-1")["generation_context"]["locale"] == "en"
 
 
 def _commit(key: str) -> Any:

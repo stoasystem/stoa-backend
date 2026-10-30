@@ -449,7 +449,7 @@ def test_free_text_is_recorded_with_its_subject_and_counted(
     _done(_send(client, "key-1", language=locale))
     assert _gaps(table) == {("math", free): 1}
 
-    _done(_send(client, "key-2", language=locale, content="Und wie erweitere ich?"))
+    _done(_send(client, "key-2", language=locale, content="3/9 = ?"))
     # One record, counted twice, under the name it was first written as; the
     # point that was on the map is not a gap.
     assert _gaps(table) == {("math", free): 2}

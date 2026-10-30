@@ -87,6 +87,7 @@ from stoa.services import (
     locale_service,
     message_catalog,
     practice_context_service,
+    question_language,
     runtime_budget_service,
     star_map_candidates,
     teacher_dispatch_service,
@@ -2305,11 +2306,12 @@ def _memory_context_for_student(student_id: str, actor: Actor, subject: str) -> 
 
 
 def _student_locale(student_id: str) -> str:
-    """Resolve the student's answer language, defaulting to German on lookup failure.
+    """Resolve the student's display language, defaulting to German on lookup failure.
 
     The language the student is reading the app in right now arrives on the
-    request, so it wins over the stored preference — an answer should come back
-    in the language the question was asked in.
+    request, so it wins over the stored preference. An Ask answer uses it only
+    when the question's own words do not say which language it was asked in
+    (#172, `question_language`).
 
     The policy itself lives in `locale_service.reader_locale`; this keeps the
     name the rest of the module calls it by (#124).
@@ -3532,7 +3534,12 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             attachment_images = context_result.images
         normalized_subject = context["subject"]
         grade = context["grade"]
-        student_locale = context["locale"]
+        # The language the question was asked in, not the one the app is shown
+        # in (#172); the display language only when the student's own words do
+        # not say. The hint label and the star names follow it too.
+        student_locale = question_language.answer_language(
+            committed.content, prior_messages, fallback=context["locale"]
+        )
         # Read for this attempt, and the same list checks what the model picks
         # from it (#142). None when it cannot be read: nothing the answer then
         # names can be told apart from a gap.
