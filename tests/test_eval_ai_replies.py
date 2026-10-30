@@ -4,7 +4,7 @@ These prove the evaluation's own logic - the question set, the readings, the
 two poisonings and the cost guard - without a paid call. What the real model
 answers is only shown by a real run (the readings recorded on #43).
 
-The fake model answers in whatever language the system prompt names and
+The fake model answers in the default language the system prompt names and
 declines when the prompt ties the subject to the grade, which is what the real
 one was seen to do before E1. So both poisonings move the readings here the
 way the card expects them to move against Bedrock - which proves the
@@ -61,7 +61,7 @@ REFUSALS = {
 
 
 class FakeModel:
-    """Answers in the language the prompt names; declines under the pre-E1 sentence."""
+    """Answers in the default language the prompt names; declines under the pre-E1 sentence."""
 
     def __init__(self) -> None:
         self.calls = 0
@@ -72,7 +72,7 @@ class FakeModel:
         system = request["system"] if isinstance(request["system"], str) else json.dumps(
             request["system"]
         )
-        language = re.search(r"OUTPUT LANGUAGE: (\w+)", system).group(1)
+        language = re.search(r"DEFAULT LANGUAGE: (\w+)", system).group(1)
         if re.search(r"related to \w+ at .+? level\.", system):
             content = {"steps": [], "answer": REFUSALS[language], "hints": [],
                        "knowledge_points": [], "suggest_teacher": False}

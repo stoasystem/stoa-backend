@@ -160,7 +160,38 @@ def test_answer_language_is_named_in_the_system_prompt(language, expected):
     questions in English.
     """
     prompt = _system_prompt(language=language)
-    assert f"OUTPUT LANGUAGE: {expected}" in prompt
+    assert f"DEFAULT LANGUAGE: {expected}" in prompt
+
+
+def test_the_model_answers_in_the_language_the_student_writes_or_asks_for():
+    """The display language is only the default (#174).
+
+    A German question asked with the app shown in English was answered in
+    English; the model can tell the student's language, and follow a request
+    for another, itself.
+    """
+    prompt = _system_prompt(language="en")
+    assert "answer in the language the student writes their own message in" in prompt
+    assert "When the student asks you to answer in one of those languages, use that one" in prompt
+    assert "only the student's own words do" in prompt
+    assert prompt.rstrip().endswith("English only when you cannot tell.")
+
+
+def test_the_model_reports_the_language_it_answered_in():
+    prompt = _system_prompt(language="fr")
+    assert '{"language":"fr","steps":' in prompt
+
+
+@pytest.mark.parametrize(
+    ("reported", "expected"),
+    [("de", "de"), ("IT", "it"), (" fr ", "fr"), ("es", "en"), ("", "en"), (None, "en"), (3, "en")],
+)
+def test_the_reported_language_counts_only_when_it_is_one_of_the_four(reported, expected):
+    assert ai_service.answer_language({"language": reported}, default="en") == expected
+
+
+def test_a_reply_without_a_language_keeps_the_default():
+    assert ai_service.answer_language({"steps": []}, default="it") == "it"
 
 
 @pytest.mark.parametrize("subject", ["math", "physics", "german", "english"])
@@ -171,7 +202,7 @@ def test_answer_language_does_not_vary_by_subject(subject):
     instruction is asserted to be identical for every subject.
     """
     prompt = _system_prompt(subject=subject, language="de")
-    assert "OUTPUT LANGUAGE: German" in prompt
+    assert "DEFAULT LANGUAGE: German" in prompt
 
 
 # ── Grade sets the depth of the answer, not whether there is one (#19) ──────

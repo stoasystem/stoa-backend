@@ -31,9 +31,7 @@ from test_conversations import _actor
 
 CONV = "conv-1"
 STUDENT = "student-1"
-# No word of any one language (#172), so the answer is in the language the
-# request is displayed in, which is what the tests importing it set.
-QUESTION = "6/8 = ?"
+QUESTION = "Wie kürze ich Brüche?"
 ANSWER = {
     "steps": ["Zähler und Nenner teilen", "Durch den ggT"],
     "answer": "So kürzt man.",
@@ -208,17 +206,25 @@ def test_the_command_carries_what_the_request_resolved_for_the_answer(table, mod
     assert model.calls[0]["language"] == "fr"
 
 
-def test_the_answer_is_in_the_language_the_question_was_asked_in(table, model) -> None:
-    """The app shown in English, the question asked in German (#172)."""
-    client = _client()
+def test_the_hint_is_labelled_in_the_language_the_model_answered_in(table, model) -> None:
+    """The app shown in English, the question answered in German (#174)."""
+    model.outcomes = [{**ANSWER, "hints": ["Such den ggT."], "language": "de"}]
 
-    _send(client, "key-1", language="en", content="Wie löse ich die Gleichung auf dem Foto?")
-    # A reply that says nothing about language keeps the conversation's.
-    _send(client, "key-2", language="en", content="ok")
+    _send(_client(), "key-1", language="en")
 
-    assert [call["language"] for call in model.calls] == ["de", "de"]
-    # The display language is still what the request resolved.
-    assert _command_row(table, "key-1")["generation_context"]["locale"] == "en"
+    [assistant] = _messages(table, "assistant")
+    assert assistant["content"].endswith("**Hinweis:** Such den ggT.")
+    # The display language is still what the model was given as its default.
+    assert model.calls[0]["language"] == "en"
+
+
+def test_a_reply_without_a_language_is_labelled_in_the_display_language(table, model) -> None:
+    model.outcomes = [{**ANSWER, "hints": ["Find the gcd."]}]
+
+    _send(_client(), "key-1", language="en")
+
+    [assistant] = _messages(table, "assistant")
+    assert assistant["content"].endswith("**Hint:** Find the gcd.")
 
 
 def _commit(key: str) -> Any:
