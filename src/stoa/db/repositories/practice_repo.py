@@ -1389,3 +1389,241 @@ def consume_quiz_credential(
     except Exception:  # noqa: BLE001
         return False
     return True
+
+
+# ── Star quiz papers and their cooldowns (#165) ─────────────────────────────
+
+STAR_QUIZ_PREFIX = "STARQUIZ#"
+STAR_QUIZ_COOLDOWN_PREFIX = "STARQUIZ_COOLDOWN#"
+STAR_QUIZ_ENTITY = "practice_star_quiz"
+STAR_QUIZ_COOLDOWN_ENTITY = "practice_star_quiz_cooldown"
+
+
+class StarQuizAnswerConflict(Exception):
+    """Another answer to the same paper was recorded first."""
+
+
+def put_star_quiz(
+    student_id: str,
+    *,
+    quiz_id: str,
+    unit_id: str,
+    paper: Sequence[str],
+    expires_at: int,
+    expires_at_iso: str,
+    created_at: str,
+    account_fence_generation: int | None = None,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Open one paper. It lives in the student's quiz partition, beside lesson quizzes."""
+    item = {
+        "PK": quiz_partition(student_id),
+        "SK": f"{STAR_QUIZ_PREFIX}{quiz_id}",
+        "entity_type": STAR_QUIZ_ENTITY,
+        "student_id": student_id,
+        "quiz_id": quiz_id,
+        "unit_id": unit_id,
+        "paper": list(paper),
+        "answers": [],
+        "answered": 0,
+        "status": "inProgress",
+        "created_at": created_at,
+        "expires_at": expires_at,
+        "expires_at_iso": expires_at_iso,
+    }
+    return _quiz_write(
+        student_id, item, account_fence_generation=account_fence_generation, table=table
+    )
+
+
+def get_star_quiz(student_id: str, quiz_id: str, *, table: Any | None = None) -> dict | None:
+    """Read one paper of this student, strongly: the answer just before it wrote."""
+    target = table or get_table()
+    response = _get_item(
+        target,
+        Key={"PK": quiz_partition(student_id), "SK": f"{STAR_QUIZ_PREFIX}{quiz_id}"},
+        ConsistentRead=True,
+    )
+    return _optional_item(response.get("Item"))
+
+
+def list_star_quizzes(student_id: str, *, table: Any | None = None) -> list[dict]:
+    """Every paper of this student still kept, any star, any status."""
+    target = table or get_table()
+    request: dict[str, Any] = {
+        "KeyConditionExpression": (
+            Key("PK").eq(quiz_partition(student_id)) & Key("SK").begins_with(STAR_QUIZ_PREFIX)
+        ),
+        "ConsistentRead": True,
+    }
+    items: list[dict] = []
+    while True:
+        response = _query(target, **request)
+        items.extend(_response_items(response.get("Items", [])))
+        cursor = response.get("LastEvaluatedKey")
+        if not cursor:
+            return items
+        request["ExclusiveStartKey"] = cursor
+
+
+def record_star_quiz_answer(
+    student_id: str,
+    quiz_id: str,
+    *,
+    answers: Sequence[Mapping[str, Any]],
+    status: str,
+    account_fence_generation: int | None = None,
+    table: Any | None = None,
+) -> None:
+    """Write the paper's answers, on condition nobody answered it in between.
+
+    `answers` is the whole list after this answer; the condition is that the
+    stored list is exactly one shorter. Two requests carrying the same answer
+    cannot both be recorded: the second finds the count moved and is refused.
+    """
+    target: Any = table or get_table()
+    generation = _write_generation(student_id, account_fence_generation, target)
+    operations = build_practice_write_transaction(
+        item={"PK": quiz_partition(student_id), "SK": f"{STAR_QUIZ_PREFIX}{quiz_id}"},
+        owner_id=student_id,
+        generation=generation,
+        mode="update",
+        updates={
+            "answers": [dict(answer) for answer in answers],
+            "answered": len(answers),
+            "status": status,
+        },
+    )
+    update = operations[1]["Update"]
+    update["ConditionExpression"] += " AND #answered = :before"
+    update["ExpressionAttributeValues"][":before"] = len(answers) - 1
+    try:
+        if _atomic_table(target):
+            account_deletion_repo.transact(operations, table=target)
+        else:
+            target.update_item(**update)
+    except Exception as error:  # noqa: BLE001
+        raise StarQuizAnswerConflict(quiz_id) from error
+
+
+def put_star_quiz_cooldown(
+    student_id: str,
+    *,
+    unit_id: str,
+    quiz_id: str,
+    retry_at: str,
+    expires_at: int,
+    account_fence_generation: int | None = None,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Record that this star was lost and when it can be taken again.
+
+    One row per lost paper, so a second loss after the first cooldown is a new
+    row rather than an overwrite; `expires_at` lets the table drop it once it
+    no longer holds anything back.
+    """
+    item = {
+        "PK": quiz_partition(student_id),
+        "SK": f"{STAR_QUIZ_COOLDOWN_PREFIX}{unit_id}#{quiz_id}",
+        "entity_type": STAR_QUIZ_COOLDOWN_ENTITY,
+        "student_id": student_id,
+        "unit_id": unit_id,
+        "quiz_id": quiz_id,
+        "retry_at": retry_at,
+        "expires_at": expires_at,
+    }
+    return _quiz_write(
+        student_id, item, account_fence_generation=account_fence_generation, table=table
+    )
+
+
+def list_star_quiz_cooldowns(student_id: str, *, table: Any | None = None) -> list[dict]:
+    """Every cooldown row of this student still kept; the caller decides which still hold."""
+    target = table or get_table()
+    request: dict[str, Any] = {
+        "KeyConditionExpression": (
+            Key("PK").eq(quiz_partition(student_id))
+            & Key("SK").begins_with(STAR_QUIZ_COOLDOWN_PREFIX)
+        ),
+    }
+    items: list[dict] = []
+    while True:
+        response = _query(target, **request)
+        items.extend(_response_items(response.get("Items", [])))
+        cursor = response.get("LastEvaluatedKey")
+        if not cursor:
+            return items
+        request["ExclusiveStartKey"] = cursor
+
+
+STAR_QUIZ_PASS_PREFIX = "STARQUIZ_PASSED#"
+STAR_QUIZ_PASS_ENTITY = "practice_star_quiz_pass"
+
+
+def put_star_quiz_pass(
+    student_id: str,
+    *,
+    unit_id: str,
+    quiz_id: str,
+    passed_at: str,
+    account_fence_generation: int | None = None,
+    table: Any | None = None,
+) -> bool:
+    """Record that this student passed this star's quiz; say whether this was the first time.
+
+    This row is what keeps the star lit, whatever its lessons say later, so it
+    never expires. A second pass of the same star changes nothing.
+    """
+    item = {
+        "PK": quiz_partition(student_id),
+        "SK": f"{STAR_QUIZ_PASS_PREFIX}{unit_id}",
+        "entity_type": STAR_QUIZ_PASS_ENTITY,
+        "student_id": student_id,
+        "unit_id": unit_id,
+        "quiz_id": quiz_id,
+        "passed_at": passed_at,
+    }
+    try:
+        _quiz_write(
+            student_id, item, account_fence_generation=account_fence_generation, table=table
+        )
+    except Exception:  # noqa: BLE001
+        if get_star_quiz_pass(student_id, unit_id, table=table) is None:
+            raise
+        return False
+    return True
+
+
+def get_star_quiz_pass(
+    student_id: str, unit_id: str, *, table: Any | None = None
+) -> dict | None:
+    target = table or get_table()
+    response = _get_item(
+        target,
+        Key={"PK": quiz_partition(student_id), "SK": f"{STAR_QUIZ_PASS_PREFIX}{unit_id}"},
+        ConsistentRead=True,
+    )
+    return _optional_item(response.get("Item"))
+
+
+def star_quiz_passed_unit_ids(student_id: str, *, table: Any | None = None) -> frozenset[str]:
+    """Every star this student lit by passing its quiz."""
+    target = table or get_table()
+    request: dict[str, Any] = {
+        "KeyConditionExpression": (
+            Key("PK").eq(quiz_partition(student_id))
+            & Key("SK").begins_with(STAR_QUIZ_PASS_PREFIX)
+        ),
+    }
+    found: set[str] = set()
+    while True:
+        response = _query(target, **request)
+        found.update(
+            str(item.get("unit_id"))
+            for item in _response_items(response.get("Items", []))
+            if item.get("entity_type") == STAR_QUIZ_PASS_ENTITY and item.get("unit_id")
+        )
+        cursor = response.get("LastEvaluatedKey")
+        if not cursor:
+            return frozenset(found)
+        request["ExclusiveStartKey"] = cursor

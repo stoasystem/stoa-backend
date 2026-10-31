@@ -124,3 +124,28 @@ def _default_asked_knowledge_table(monkeypatch: pytest.MonkeyPatch) -> None:
     from stoa.db.repositories import asked_knowledge_repo
 
     monkeypatch.setattr(asked_knowledge_repo, "get_table", _EmptyAskedKnowledgeTable)
+
+
+@pytest.fixture(autouse=True)
+def _no_star_quiz_passed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every star-map judgement now reads the star quizzes passed (#165).
+
+    A test that stubs the mastery service's lesson and attempt reads would
+    otherwise fall through to the live `get_table()` for this one. Tests that
+    need passes patch the same attribute afterwards and win.
+    """
+    from stoa.services import knowledge_mastery_service
+
+    monkeypatch.setattr(knowledge_mastery_service, "_star_quiz_passed", lambda _student_id: frozenset())
+
+
+@pytest.fixture(autouse=True)
+def _no_star_quiz_cooldowns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The star map now says when a lost star quiz can be taken again (#165).
+
+    Same reason as above: map tests that stub the practice reads one by one
+    would otherwise reach the live table for this one.
+    """
+    from stoa.services import knowledge_map_service
+
+    monkeypatch.setattr(knowledge_map_service, "_star_quiz_retry_at", lambda _student_id: {})

@@ -50,12 +50,14 @@ from stoa.security.route_authorization import (
 from stoa.services import (
     answer_judging,
     knowledge_map_service,
+    knowledge_mastery_service,
     curriculum_analytics_service,
     curriculum_service,
     entitlement_service,
     exercise_localization,
     lesson_quiz_service,
     locale_service,
+    star_quiz_service,
     usage_ledger_service,
 )
 from stoa.services import practice_projection_service, review_service
@@ -669,7 +671,9 @@ async def get_knowledge_map(
     A star's `state` is `lit`, `in_progress` or `ready`; nothing is locked
     (#125). `unlitPrerequisiteIds` lists the star's stated prerequisites that
     are not lit yet, in the order stated - empty for a lit star - so the map
-    can mark it and say which to learn first.
+    can mark it and say which to learn first. `litAtSource` is `quiz` for a
+    star lit by passing its star quiz, and `starQuizRetryAt` says when a star
+    whose quiz was lost can be taken again - None when it can now (#165).
     """
     try:
         return knowledge_map_service.knowledge_map(
@@ -739,6 +743,300 @@ async def acknowledge_lit_knowledge_points(
     addresses a row that does not exist and confirms nothing.
     """
     return knowledge_map_service.acknowledge_lit(actor.user_id, body.unit_ids)
+
+
+# ── Star quiz: one paper that lights a whole knowledge point (#165) ─────────
+
+
+class StarQuizAnswer(BaseModel):
+    """One answer to the exercise the paper is asking now.
+
+    `exerciseId` names that exercise, so the same answer sent twice - a retry
+    after a lost response - is recognised and answered with the first result
+    rather than judged against the next exercise (#113).
+    """
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    exercise_id: str = Field(alias="exerciseId", min_length=1, max_length=200)
+    answer: object
+
+
+def _star_quiz_error(status_code: int, code: str, message: str, **extra: Any) -> HTTPException:
+    return HTTPException(status_code=status_code, detail={"code": code, "message": message, **extra})
+
+
+def _star_quiz_view(
+    session: Mapping[str, Any], *, answers: list[dict[str, Any]], locale: str
+) -> dict[str, Any]:
+    paper = [str(item) for item in session.get("paper") or []]
+    outcome = star_quiz_service.after_answer(
+        paper=paper, answers=[bool(answer.get("correct")) for answer in answers]
+    )
+    exercise = (
+        _quiz_exercise_preview(outcome.remaining[0], locale)
+        if outcome.status == star_quiz_service.IN_PROGRESS
+        else None
+    )
+    return {
+        "quizId": str(session.get("quiz_id") or ""),
+        "unitId": str(session.get("unit_id") or ""),
+        "status": outcome.status,
+        "total": len(paper),
+        "answered": len(answers),
+        "mistakes": outcome.mistakes,
+        "mistakesAllowed": star_quiz_service.MAX_MISTAKES,
+        "expiresAt": str(session.get("expires_at_iso") or ""),
+        "exercise": exercise,
+        "retryAt": None,
+    }
+
+
+def _star_quiz_retry_at(student_id: str, unit_id: str, now: datetime) -> str | None:
+    return star_quiz_service.retry_times(
+        practice_repo.list_star_quiz_cooldowns(student_id), now
+    ).get(unit_id)
+
+
+@router.post(
+    "/knowledge-map/stars/{unit_id}/quiz",
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "description": "`star_quiz_unknown_star`: no knowledge point with lessons has this id."
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": (
+                "`star_quiz_already_lit`: the star is lit already; "
+                "`star_quiz_cooling_down`: a quiz of this star was lost less than "
+                "24 hours ago, `retryAt` says when it can be taken again; "
+                "`star_quiz_unavailable`: the star has no exercise to ask."
+            )
+        },
+    },
+)
+async def start_star_quiz(
+    unit_id: str,
+    actor: Actor = Depends(_practice_update),
+):
+    """Open the star quiz of one knowledge point, or the one already open (#165).
+
+    Every star not lit can be taken, in progress or not, whatever its
+    prerequisites. The paper asks at least one exercise from each core lesson,
+    6 to 10 in all, each once; a second wrong answer loses it. A paper still
+    open for this star is handed back rather than replaced, so leaving and
+    coming back does not draw a fresh set of exercises.
+    """
+    locale = _actor_locale(actor)
+    student_id = actor.user_id
+    catalog = curriculum_service.list_catalog(locale=locale)
+    indexed = knowledge_mastery_service.indexed_lessons()
+    states = knowledge_mastery_service.unit_states(
+        student_id, locale=locale, catalog=catalog, indexed=indexed
+    )
+    judged = states.get(unit_id)
+    if judged is None or judged.lesson_count == 0:
+        raise _star_quiz_error(404, "star_quiz_unknown_star", "There is no such knowledge point.")
+    if judged.state is knowledge_mastery_service.LearningState.LIT:
+        raise _star_quiz_error(409, "star_quiz_already_lit", "This knowledge point is lit already.")
+
+    now = datetime.now(timezone.utc)
+    retry = _star_quiz_retry_at(student_id, unit_id, now)
+    if retry:
+        raise _star_quiz_error(
+            409,
+            "star_quiz_cooling_down",
+            "This quiz can be taken again later.",
+            retryAt=retry,
+        )
+
+    for session in practice_repo.list_star_quizzes(student_id):
+        if (
+            str(session.get("unit_id") or "") == unit_id
+            and str(session.get("status") or "") == star_quiz_service.IN_PROGRESS
+            and _as_int(session.get("expires_at")) > int(now.timestamp())
+        ):
+            return _star_quiz_view(
+                session, answers=list(session.get("answers") or []), locale=locale
+            )
+
+    paper = star_quiz_service.compose(
+        knowledge_mastery_service.star_quiz_exercises(unit_id, catalog=catalog, indexed=indexed)
+    )
+    if not paper:
+        raise _star_quiz_error(
+            409, "star_quiz_unavailable", "This knowledge point has no exercise to ask."
+        )
+    expires = now + star_quiz_service.SESSION_TTL
+    session = practice_repo.put_star_quiz(
+        student_id,
+        quiz_id=star_quiz_service.new_quiz_id(),
+        unit_id=unit_id,
+        paper=paper,
+        expires_at=int(expires.timestamp()),
+        expires_at_iso=expires.isoformat(),
+        created_at=now.isoformat(),
+    )
+    return _star_quiz_view(session, answers=[], locale=locale)
+
+
+def _replayed_star_quiz_answer(
+    session: Mapping[str, Any], exercise_id: str, locale: str
+) -> dict[str, Any] | None:
+    answers = [dict(answer) for answer in session.get("answers") or []]
+    for answer in answers:
+        if str(answer.get("exerciseId") or "") == exercise_id:
+            view = _star_quiz_view(session, answers=answers, locale=locale)
+            view["correct"] = bool(answer.get("correct"))
+            view["retryAt"] = session.get("retry_at")
+            return view
+    return None
+
+
+def _light_by_star_quiz(
+    student_id: str, unit_id: str, quiz_id: str, answers: list[dict[str, Any]], now: datetime
+) -> None:
+    """What passing does: the star lit for good, and every answer scheduled for review."""
+    practice_repo.put_star_quiz_pass(
+        student_id, unit_id=unit_id, quiz_id=quiz_id, passed_at=now.isoformat()
+    )
+    try:
+        practice_repo.record_lit_unit(
+            student_id,
+            unit_id,
+            lit_at=now.isoformat(),
+            source=knowledge_mastery_service.LitSource.QUIZ.value,
+        )
+    except Exception:  # noqa: BLE001
+        # Lit once before, by its lessons: that lighting keeps its moment.
+        logger.info("Star quiz lighting already recorded", extra={"unit_id": unit_id})
+    for answer in answers:
+        challenge = practice_repo.get_challenge(str(answer.get("exerciseId") or ""))
+        if challenge:
+            review_service.record_answer(
+                student_id=student_id,
+                challenge=challenge,
+                correct=bool(answer.get("correct")),
+                answered_at=datetime.fromisoformat(str(answer.get("answeredAt"))),
+            )
+
+
+@router.post(
+    "/knowledge-map/stars/{unit_id}/quiz/{quiz_id}/answer",
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "description": "`star_quiz_not_found`: this student has no such quiz of this star."
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": (
+                "`star_quiz_finished`: the quiz was already passed or lost; "
+                "`star_quiz_expired`: it is past its expiry; "
+                "`star_quiz_out_of_order`: `exerciseId` is not the exercise the quiz "
+                "is asking now; `star_quiz_unavailable`: the exercise it asked is gone."
+            )
+        },
+    },
+)
+async def answer_star_quiz(
+    unit_id: str,
+    quiz_id: str,
+    body: StarQuizAnswer,
+    actor: Actor = Depends(_practice_update),
+    correlation_id: str = Depends(get_request_correlation_id),
+):
+    """Judge one answer of a star quiz (#165).
+
+    The answer names its exercise; an exercise already answered is answered
+    again with its first result and nothing changes. Passing lights the star
+    with the source `quiz` and schedules every answer of the paper for review,
+    right or wrong, as ordinary practice would. Losing records nothing but
+    when the star can be taken again (`retryAt`, 24 hours on): no evidence,
+    no review card. The lessons are not touched either way.
+    """
+    locale = _actor_locale(actor)
+    student_id = actor.user_id
+    session = practice_repo.get_star_quiz(student_id, quiz_id)
+    if not session or str(session.get("unit_id") or "") != unit_id:
+        raise _star_quiz_error(404, "star_quiz_not_found", "This quiz is not open.")
+
+    replayed = _replayed_star_quiz_answer(session, body.exercise_id, locale)
+    if replayed is not None:
+        return replayed
+    if str(session.get("status") or "") != star_quiz_service.IN_PROGRESS:
+        raise _star_quiz_error(409, "star_quiz_finished", "This quiz is already over.")
+    now = datetime.now(timezone.utc)
+    if _as_int(session.get("expires_at")) <= int(now.timestamp()):
+        raise _star_quiz_error(409, "star_quiz_expired", "This quiz has expired. Start a new one.")
+
+    paper = [str(item) for item in session.get("paper") or []]
+    answers = [dict(answer) for answer in session.get("answers") or []]
+    asking = paper[len(answers)] if len(answers) < len(paper) else None
+    if body.exercise_id != asking:
+        raise _star_quiz_error(
+            409, "star_quiz_out_of_order", "This is not the exercise the quiz is asking now."
+        )
+    challenge = practice_repo.get_challenge(asking)
+    if not challenge:
+        raise _star_quiz_error(
+            409, "star_quiz_unavailable", "This quiz asked an exercise that is no longer available."
+        )
+    try:
+        student_answer = practice_projection_service.normalize_submitted_answer(body.answer)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "practice_answer_invalid",
+                "message": "Your answer is not supported or is too large.",
+                "correlationId": correlation_id,
+            },
+        ) from error
+
+    correct = answer_judging.judge_challenge(
+        student_answer, exercise_localization.localized(challenge, locale)
+    )
+    answers.append({"exerciseId": asking, "correct": correct, "answeredAt": now.isoformat()})
+    outcome = star_quiz_service.after_answer(
+        paper=paper, answers=[bool(answer["correct"]) for answer in answers]
+    )
+    try:
+        practice_repo.record_star_quiz_answer(
+            student_id, quiz_id, answers=answers, status=outcome.status
+        )
+    except practice_repo.StarQuizAnswerConflict:
+        current = practice_repo.get_star_quiz(student_id, quiz_id) or session
+        replayed = _replayed_star_quiz_answer(current, asking, locale)
+        if replayed is not None:
+            return replayed
+        raise _star_quiz_error(
+            409, "star_quiz_out_of_order", "This is not the exercise the quiz is asking now."
+        ) from None
+
+    retry = None
+    if outcome.status == star_quiz_service.FAILED:
+        retry_moment = star_quiz_service.retry_at(now)
+        retry = retry_moment.isoformat()
+        practice_repo.put_star_quiz_cooldown(
+            student_id,
+            unit_id=unit_id,
+            quiz_id=quiz_id,
+            retry_at=retry,
+            expires_at=int(retry_moment.timestamp()),
+        )
+    elif outcome.status == star_quiz_service.PASSED:
+        _light_by_star_quiz(student_id, unit_id, quiz_id, answers, now)
+
+    _record_practice_usage(
+        student_id=student_id,
+        action=usage_ledger_service.PRACTICE_QUIZ_ANSWER_ACTION,
+        resource_id=f"{quiz_id}:{len(answers)}",
+        metadata={"quizId": quiz_id, "unitId": unit_id, "correct": correct, "status": outcome.status},
+        account_fence_generation=None,
+    )
+
+    view = _star_quiz_view({**session, "answers": answers}, answers=answers, locale=locale)
+    view["correct"] = correct
+    view["retryAt"] = retry
+    return view
 
 
 @router.get("/{subject_id}/{topic_id}/roadmap")
