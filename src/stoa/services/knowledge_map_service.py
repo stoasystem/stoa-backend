@@ -186,6 +186,7 @@ def build_map(
                 "nebulaId": topic_id,
                 "order": int(unit.get("order") or 0),
                 "state": judged.state.value,
+                "unlitPrerequisiteIds": list(judged.unlit_prerequisite_ids),
                 "litAt": fact.lit_at if fact else None,
                 "litAtSource": fact.source.value if fact else None,
                 "progress": round(judged.progress, 4),

@@ -61,7 +61,7 @@ def _client(actor: Actor | None = None) -> TestClient:
     return TestClient(app)
 
 
-def _judged(state: knowledge_mastery_service.LearningState):
+def _judged(state: knowledge_mastery_service.LearningState, *, unlit=()):
     return knowledge_mastery_service.UnitMastery(
         unit_id="unit-1",
         topic_id="algebra",
@@ -72,10 +72,11 @@ def _judged(state: knowledge_mastery_service.LearningState):
         lesson_count=1,
         lessons_done=0,
         next_lesson=None,
+        unlit_prerequisite_ids=tuple(unlit),
     )
 
 
-def _world(monkeypatch, *, exercises, answered_right=(), locked=False):
+def _world(monkeypatch, *, exercises, answered_right=(), behind_unlit=False):
     """One lesson of `exercises`, with a quiz store the routes really write to."""
     table = FakeTable()
     table.seed_active_account("student-1")
@@ -113,9 +114,8 @@ def _world(monkeypatch, *, exercises, answered_right=(), locked=False):
         "unit_states",
         lambda _student_id, **_kwargs: {
             "unit-1": _judged(
-                knowledge_mastery_service.LearningState.LOCKED
-                if locked
-                else knowledge_mastery_service.LearningState.READY
+                knowledge_mastery_service.LearningState.READY,
+                unlit=("unit-0",) if behind_unlit else (),
             )
         },
     )
@@ -188,40 +188,30 @@ def test_a_test_out_quiz_draws_five_exercises_at_most():
     assert len(set(drawn)) == 5
 
 
-# ── A locked lesson ─────────────────────────────────────────────────────────
-
-def test_a_unit_with_no_stated_prerequisite_is_never_locked(monkeypatch):
-    _, writes = _world(monkeypatch, exercises=[_exercise(0)], answered_right={"c-0"}, locked=True)
-    monkeypatch.setattr(practice.curriculum_service, "get_prerequisites", lambda _subject: {})
-
-    response = _client().post("/practice/lessons/lesson-1/complete")
-
-    assert response.status_code == 200
-    assert writes == [("student-1", "lesson-1")]
+# ── A lesson behind a prerequisite not lit yet (#125) ───────────────────────
 
 
-def test_a_locked_lesson_cannot_be_completed(monkeypatch):
+def test_a_lesson_behind_an_unlit_prerequisite_can_be_completed(monkeypatch):
+    # A prerequisite is advice (stoa-frontend ADR 0004): it never refuses.
     _, writes = _world(
         monkeypatch,
         exercises=[_exercise(0)],
         answered_right={"c-0"},
-        locked=True,
+        behind_unlit=True,
     )
 
     response = _client().post("/practice/lessons/lesson-1/complete")
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "lesson_locked"
-    assert writes == []
+    assert response.status_code == 200, response.text
+    assert writes == [("student-1", "lesson-1")]
 
 
-def test_a_locked_lesson_has_no_quiz_to_start(monkeypatch):
-    _world(monkeypatch, exercises=[_exercise(0), _exercise(1)], locked=True)
+def test_a_lesson_behind_an_unlit_prerequisite_can_be_tested_out(monkeypatch):
+    _world(monkeypatch, exercises=[_exercise(0), _exercise(1)], behind_unlit=True)
 
     response = _client().post("/practice/lessons/lesson-1/quiz", json={"kind": "testOut"})
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "lesson_locked"
+    assert response.status_code == 200, response.text
 
 
 def test_an_open_lesson_with_every_exercise_right_is_still_completed(monkeypatch):

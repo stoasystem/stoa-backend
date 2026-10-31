@@ -67,7 +67,7 @@ STARS = {
     "brueche-kuerzen": ("brueche", "Brüche kürzen", _State.LIT),
     "brueche-addieren": ("brueche", "Brüche addieren", _State.READY),
     "brueche-dividieren": ("brueche", "Brüche dividieren", _State.IN_PROGRESS),
-    "funktionen-linear": ("funktionen", "Lineare Funktionen", _State.LOCKED),
+    "funktionen-linear": ("funktionen", "Lineare Funktionen", _State.READY),
     "funktionen-ableitung": ("funktionen", "Ableitungen", _State.READY),
     "funktionen-quadratisch": ("funktionen", "Quadratische Funktionen", _State.READY),
     "zahlen-teilbarkeit": ("zahlen", "Teilbarkeit", _State.LIT),
@@ -252,11 +252,11 @@ def test_a_topic_goes_to_the_star_the_student_has_begun(table, model) -> None:
     assert _target(_send(_client(), "key-1", language="de")) == {"unitId": "brueche-dividieren"}
 
 
-def test_a_topic_with_nothing_begun_goes_to_its_first_reachable_star(table, model) -> None:
-    """The first star in course order whose prerequisites are lit, not a locked one."""
+def test_a_topic_with_nothing_begun_goes_to_its_first_star(table, model) -> None:
+    """The first star in course order not yet lit: nothing is locked (#125)."""
     model.outcomes = [_answer(_topic_ref("funktionen"))]
 
-    assert _target(_send(_client(), "key-1", language="de")) == {"unitId": "funktionen-ableitung"}
+    assert _target(_send(_client(), "key-1", language="de")) == {"unitId": "funktionen-linear"}
 
 
 def test_a_topic_that_is_all_lit_has_no_target(table, model) -> None:

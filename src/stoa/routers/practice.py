@@ -665,6 +665,11 @@ async def get_knowledge_map(
 
     `view=skeleton` sends every star with its state and position but none of
     its small stars; `/knowledge-map/stars` then sends the few around one in full.
+
+    A star's `state` is `lit`, `in_progress` or `ready`; nothing is locked
+    (#125). `unlitPrerequisiteIds` lists the star's stated prerequisites that
+    are not lit yet, in the order stated - empty for a lit star - so the map
+    can mark it and say which to learn first.
     """
     try:
         return knowledge_map_service.knowledge_map(
@@ -909,15 +914,6 @@ def _quiz_conflict(code: str, message: str, **extra: Any) -> HTTPException:
     )
 
 
-def _refuse_locked_lesson(student_id: str, lesson: Mapping[str, Any]) -> None:
-    """Keep a lesson behind an unlit prerequisite shut (#83 step 1)."""
-    if lesson_quiz_service.lesson_is_locked(student_id, lesson):
-        raise _quiz_conflict(
-            "lesson_locked",
-            "Finish what comes before this knowledge point first.",
-        )
-
-
 def _spend_quiz_credential(student_id: str, lesson_id: str, credential: str) -> None:
     """Take one credential out of circulation, or refuse the completion."""
     stored = practice_repo.get_quiz_credential(student_id, credential)
@@ -982,8 +978,7 @@ def _quiz_view(
     responses={
         status.HTTP_409_CONFLICT: {
             "description": (
-                "`lesson_locked`: the lesson's knowledge point still has an unlit "
-                "prerequisite; `lesson_quiz_unavailable`: the lesson has no exercise "
+                "`lesson_quiz_unavailable`: the lesson has no exercise "
                 "to draw a quiz from."
             )
         }
@@ -1001,9 +996,6 @@ async def start_lesson_quiz(
     what the quiz asks and how many mistakes are left are facts the client
     cannot restate. Nothing in the answer-free projection carries the answer.
     """
-    lesson = dict(authorized_lesson.value)
-    _refuse_locked_lesson(actor.user_id, lesson)
-
     kind = body.kind if body else lesson_quiz_service.SKIP_QUIZ
     exercise_ids = [
         str(challenge.get("challenge_id"))
@@ -1192,8 +1184,7 @@ async def answer_lesson_quiz(
     responses={
         status.HTTP_409_CONFLICT: {
             "description": (
-                "`lesson_locked`: the lesson's knowledge point still has an unlit "
-                "prerequisite; `lesson_exercises_unanswered`: an exercise of the lesson "
+                "`lesson_exercises_unanswered`: an exercise of the lesson "
                 "has never been answered right and no quiz credential was sent, "
                 "`unansweredCount` says how many; `lesson_quiz_credential_invalid`: the "
                 "credential is unknown, already spent, or belongs to another student or "
@@ -1210,7 +1201,6 @@ async def complete_lesson(
     authorized_lesson: AuthorizedResource = Depends(_authorized_lesson_update),
 ):
     lesson = dict(authorized_lesson.value)
-    _refuse_locked_lesson(actor.user_id, lesson)
 
     credential = (body.quiz_credential or "").strip() if body else ""
     if credential:
