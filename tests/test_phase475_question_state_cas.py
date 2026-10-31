@@ -394,12 +394,10 @@ def _direct_question_updates(path: Path) -> set[str]:
 
 
 def test_production_question_writer_registry_is_closed_over_cas_calls():
+    # The question routes that wrote here (submit, request-teacher, feedback)
+    # were retired in #148; the report route that stays writes no question.
     registry = {
-        "src/stoa/routers/questions.py": {
-            ("persist_case", "mutate_question"),
-            ("request_teacher", "mutate_question"),
-            ("submit_feedback", "mutate_question"),
-        },
+        "src/stoa/routers/questions.py": set(),
         "src/stoa/routers/teachers.py": {
             ("reply", "mutate_question"),
             ("resolve", "mutate_question"),
@@ -423,8 +421,6 @@ def test_production_question_writer_registry_is_closed_over_cas_calls():
             "_question_mutation_operation",
         },
         "src/stoa/db/repositories/question_submission_repo.py": {
-            "complete_question_effect",
-            "prove_terminal_question_failure",
             "reverse_terminal_question_admission",
         },
     }
@@ -432,5 +428,5 @@ def test_production_question_writer_registry_is_closed_over_cas_calls():
     for path in (ROOT / "src/stoa").rglob("*.py"):
         functions = _direct_question_updates(path)
         if functions:
-            discovered[str(path.relative_to(ROOT))] = functions
+            discovered[path.relative_to(ROOT).as_posix()] = functions
     assert discovered == direct_registry
