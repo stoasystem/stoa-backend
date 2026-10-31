@@ -54,7 +54,7 @@ class Candidate(TypedDict):
     topicId: str
     #: The topic's title, in the same language as `name`.
     topicName: str
-    #: `lit`, `in_progress`, `ready` or `locked`, as the map draws it.
+    #: `lit`, `in_progress` or `ready`, as the map draws it.
     state: str
 
 

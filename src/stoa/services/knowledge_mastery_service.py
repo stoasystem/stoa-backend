@@ -20,10 +20,10 @@ knowledge point, such as a proof - does not count for lighting: a unit lights
 from its core lessons, and its extension lessons are practice beside it. A unit
 whose every lesson is an extension lights from all of them.
 
-The states are ordered: lit > in_progress > ready > locked. `locked` needs a
-prerequisite that is not lit yet; until stoa-backend#56 stores prerequisites,
-nothing is locked, which is what #9 point 7 asks for ("no prerequisite edge,
-no lock").
+The states are ordered: lit > in_progress > ready. A prerequisite never locks
+(stoa-frontend ADR 0004, #125): every knowledge point can be learnt, and one
+whose stated prerequisites are not all lit yet carries their ids beside its
+state (`unlit_prerequisite_ids`) so the map can say what to learn first.
 
 The core here is a pure function over facts the caller has already read. That
 is deliberate: this service is the shared one (#57) behind the read model
@@ -45,12 +45,11 @@ from stoa.services import curriculum_service, practice_projection_service
 
 
 class LearningState(StrEnum):
-    """The four states a knowledge point is drawn in (#9 point 3)."""
+    """The three states a knowledge point is drawn in (#9 point 3, #125)."""
 
     LIT = "lit"
     IN_PROGRESS = "in_progress"
     READY = "ready"
-    LOCKED = "locked"
 
 
 class LitSource(StrEnum):
@@ -163,6 +162,9 @@ class UnitMastery:
     lesson_count: int
     lessons_done: int
     next_lesson: NextLesson | None
+    #: Stated prerequisites not lit yet, in the order stated; empty once this
+    #: unit is lit. Advice for the map, never a lock (#125).
+    unlit_prerequisite_ids: tuple[str, ...] = ()
 
 
 def _lesson_exercise_ids(
@@ -182,7 +184,6 @@ def judge_unit(
     exercises_by_lesson: Mapping[str, Sequence[str]],
     completed_lesson_ids: frozenset[str],
     exercises_answered_right: frozenset[str],
-    unlit_prerequisites: int = 0,
 ) -> UnitMastery:
     """One unit's state from facts already read. Pure; no I/O.
 
@@ -208,15 +209,6 @@ def judge_unit(
 
     if every_lesson_done and every_exercise_right:
         state = LearningState.LIT
-    elif unlit_prerequisites > 0:
-        # A prerequisite that is not lit keeps this one shut, but only while
-        # the student has not already started it: taking a lock back after
-        # somebody is inside it would strand their progress.
-        state = (
-            LearningState.IN_PROGRESS
-            if lessons_done or len(unmet) < len(exercise_ids)
-            else LearningState.LOCKED
-        )
     elif lessons_done or len(unmet) < len(exercise_ids):
         state = LearningState.IN_PROGRESS
     else:
@@ -442,42 +434,57 @@ def unit_states(
     completed = _completed_lesson_ids(student_id, subject_id)
     answered_right = _exercises_answered_right(student_id)
 
-    def judge(unit: Mapping[str, Any], unlit_prerequisites: int = 0) -> UnitMastery:
-        return judge_unit(
+    judged = {
+        str(unit.get("id") or ""): judge_unit(
             unit=unit,
             lessons=lessons_by_unit.get(str(unit.get("id") or ""), []),
             exercises_by_lesson=exercises_by_lesson,
             completed_lesson_ids=completed,
             exercises_answered_right=answered_right,
-            unlit_prerequisites=unlit_prerequisites,
         )
-
-    # Two passes, because a lock depends on what is lit and lighting does not
-    # depend on locks: a unit lights when its lessons are done and its
-    # exercises are right, whether or not anything was supposed to come first.
-    # Judging once with no prerequisites settles that, and the second pass can
-    # then count how many of each unit's prerequisites are still dark.
-    lit = {
-        str(unit.get("id") or "")
         for unit in units
-        if judge(unit).state is LearningState.LIT
     }
+    # A unit lights whether or not anything was supposed to come first, so
+    # what is lit is settled before any prerequisite is read.
+    lit = {unit_id for unit_id, state in judged.items() if state.state is LearningState.LIT}
+    learnable = {unit_id for unit_id, state in judged.items() if state.lesson_count > 0}
     return {
-        str(unit.get("id") or ""): judge(unit, _unlit_prerequisites(unit, lit))
+        unit_id: (
+            state
+            if state.state is LearningState.LIT
+            else replace(
+                state,
+                unlit_prerequisite_ids=_unlit_prerequisite_ids(
+                    unit, unit_id=unit_id, lit=lit, learnable=learnable
+                ),
+            )
+        )
         for unit in units
+        for unit_id, state in [(str(unit.get("id") or ""), judged[str(unit.get("id") or "")])]
     }
 
 
-def _unlit_prerequisites(unit: Mapping[str, Any], lit: AbstractSet[str]) -> int:
-    """How many of this unit's prerequisites are not lit yet (#56).
+def _unlit_prerequisite_ids(
+    unit: Mapping[str, Any],
+    *,
+    unit_id: str,
+    lit: AbstractSet[str],
+    learnable: AbstractSet[str],
+) -> tuple[str, ...]:
+    """This unit's stated prerequisites that are not lit yet (#56, #125).
 
-    No prerequisites means no lock: the decision is that locking comes only
-    from a stated relation, never from a unit's position in an order.
+    Only a stated relation counts, never a unit's position in an order. A
+    prerequisite the catalog does not hold, or one with no active lesson, can
+    never be lit, so naming it would flag this unit for ever: it is left out.
     """
     stated = unit.get("prerequisiteUnitIds")
     if not isinstance(stated, list | tuple):
-        return 0
-    return sum(1 for item in stated if str(item) and str(item) not in lit)
+        return ()
+    return tuple(
+        item
+        for item in dict.fromkeys(str(entry or "") for entry in stated)
+        if item and item != unit_id and item in learnable and item not in lit
+    )
 
 
 def skill_states(

@@ -11,10 +11,10 @@ from __future__ import annotations
 
 import random
 import secrets
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Collection, Sequence
 from typing import Any
 
-from stoa.services import answer_judging, curriculum_service, knowledge_mastery_service
+from stoa.services import answer_judging
 
 #: Wrong answers a quiz forgives; the next one loses it.
 QUIZ_MAX_MISTAKES = 1
@@ -99,33 +99,3 @@ def judge_answer(submitted: Any, correct_answer: Any) -> bool:
 
 def new_token() -> str:
     return secrets.token_urlsafe(32)
-
-
-def lesson_is_locked(student_id: str, lesson: Mapping[str, Any]) -> bool:
-    """Whether the lesson sits in a knowledge point the student may not open yet.
-
-    The judgement is `knowledge_mastery_service.unit_states`, which is the one
-    place prerequisites are counted (#56). A lesson outside any unit, or a unit
-    the catalog does not carry, is not locked: there is no stated relation to
-    lock it, and the exercise gate still applies either way.
-
-    A unit with no stated prerequisite can never be locked, so that case is
-    settled from the prerequisite graph alone rather than by building the whole
-    star map - which reads every lesson's exercises and every attempt - on each
-    completion.
-
-    That short cut reads a different table from the map: the graph comes from
-    the units of one subject, the map from the catalog's topics. They agree on
-    real data and disagree on broken data - a lesson row with no subject, or a
-    unit the graph does not carry, is never locked here while the map may draw
-    it locked (independent audit of #92).
-    """
-    unit_id = str(lesson.get("unit_id") or "")
-    if not unit_id:
-        return False
-    subject_id = str(lesson.get("subject_id") or "")
-    if not curriculum_service.get_prerequisites(subject_id).get(unit_id):
-        return False
-    states = knowledge_mastery_service.unit_states(student_id, subject_id=subject_id or None)
-    judged = states.get(unit_id)
-    return judged is not None and judged.state is knowledge_mastery_service.LearningState.LOCKED

@@ -29,7 +29,6 @@ def judge(
     exercises: dict[str, list[str]],
     completed: set[str] = frozenset(),
     right: set[str] = frozenset(),
-    unlit_prerequisites: int = 0,
 ) -> mastery.UnitMastery:
     return mastery.judge_unit(
         unit=unit(),
@@ -37,7 +36,6 @@ def judge(
         exercises_by_lesson=exercises,
         completed_lesson_ids=frozenset(completed),
         exercises_answered_right=frozenset(right),
-        unlit_prerequisites=unlit_prerequisites,
     )
 
 
@@ -110,41 +108,6 @@ def test_one_lesson_done_out_of_three_is_in_progress_at_a_third() -> None:
     assert result.next_lesson is not None and result.next_lesson.lesson_id == "l2"
 
 
-def test_an_unlit_prerequisite_locks_a_unit_nobody_has_started() -> None:
-    result = judge(
-        lessons=[lesson("l1")],
-        exercises={"l1": ["e1"]},
-        unlit_prerequisites=1,
-    )
-
-    assert result.state is mastery.LearningState.LOCKED
-
-
-def test_a_prerequisite_appearing_later_does_not_strand_a_student_already_inside() -> None:
-    """Locking someone out of what they have started would lose their place.
-
-    Prerequisites are maintained by hand (stoa-backend#56), so one can appear
-    above a unit a student is already working through.
-    """
-    result = judge(
-        lessons=[lesson("l1"), lesson("l2")],
-        exercises={"l1": ["e1"], "l2": ["e2"]},
-        completed={"l1"},
-        right={"e1"},
-        unlit_prerequisites=1,
-    )
-
-    assert result.state is mastery.LearningState.IN_PROGRESS
-
-
-def test_nothing_is_locked_while_no_prerequisites_are_stored() -> None:
-    """#9 point 7: no prerequisite edge, no lock. True for the whole platform
-    until stoa-backend#56 lands, so it is the state the first star map ships in."""
-    result = judge(lessons=[lesson("l1")], exercises={"l1": ["e1"]}, unlit_prerequisites=0)
-
-    assert result.state is not mastery.LearningState.LOCKED
-
-
 def test_a_unit_with_no_active_lesson_is_never_lit() -> None:
     """Units with no active lesson are never sent to the map, but a judgement
     that lit them on an empty set would light every empty unit on the platform."""
@@ -184,13 +147,16 @@ def test_the_next_lesson_is_the_first_one_not_done_in_order() -> None:
     assert result.next_lesson.lesson_id == "l2"
 
 
-def test_the_states_are_the_four_the_design_decided_on() -> None:
-    """A fifth state, or a renamed one, silently changes what the map draws."""
+def test_the_states_are_the_three_the_design_decided_on() -> None:
+    """A fourth state, or a renamed one, silently changes what the map draws.
+
+    `locked` is gone (stoa-frontend ADR 0004, #125): a prerequisite is advice,
+    carried beside the state as `unlit_prerequisite_ids`, never a state.
+    """
     assert [state.value for state in mastery.LearningState] == [
         "lit",
         "in_progress",
         "ready",
-        "locked",
     ]
 
 
