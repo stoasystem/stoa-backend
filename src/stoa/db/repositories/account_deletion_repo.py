@@ -2406,42 +2406,6 @@ def finalize_account_deletion(
     return terminal_command, terminal_fence
 
 
-def create_teacher_escalation_intent(
-    *,
-    owner_id: str,
-    question_id: str,
-    operation_id: str,
-    generation: int,
-    table: Any | None = None,
-) -> None:
-    """Persist opaque delivery debt before the external queue mutation."""
-    item = {
-        "PK": f"TEACHER_ESCALATION#{_required(operation_id, 'operation_id')}",
-        "SK": "INTENT",
-        "entity_type": "teacher_escalation_intent",
-        "operation_id": operation_id,
-        "question_id": _required(question_id, "question_id"),
-        "owner_id": _required(owner_id, "owner_id"),
-        "generation": generation,
-        "status": "pending_delivery",
-        "version": 1,
-    }
-    transact(
-        [
-            active_fence_condition(owner_id, generation),
-            {
-                "Put": {
-                    "Item": item,
-                    "ConditionExpression": (
-                        "attribute_not_exists(PK) AND attribute_not_exists(SK)"
-                    ),
-                }
-            },
-        ],
-        table=table,
-    )
-
-
 def transact(operations: Iterable[dict[str, Any]], *, table: Any | None = None) -> None:
     import boto3 as _boto3
 

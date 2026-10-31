@@ -152,25 +152,6 @@ def test_message_association_transaction_checks_resource_and_account_fences() ->
     assert account["ConditionExpression"] == "#status=:active AND generation=:generation"
 
 
-def test_question_association_transaction_checks_resource_and_account_fences() -> None:
-    prepared: dict[str, object] = {"kind": "attachment", "record": _attachment()}
-    operations = attachment_repo.build_question_attachment_transaction(
-        question={"PK": "STUDENT#1", "SK": "QUESTION#question-1", "question_id": "question-1"},
-        prepared=prepared,
-        attachment=_attachment(),
-        association={**_association(resource_id="question-1"), "resource_type": "question"},
-        owner_id=OWNER,
-        limit_bytes=100,
-        now_iso="2026-07-17T00:00:00+00:00",
-    )
-
-    checks = _condition_checks(operations)
-    assert {check["Key"]["SK"] for check in checks} == {
-        "ACCOUNT_FENCE",
-        "RETENTION#RESOURCE#question#question-1",
-    }
-
-
 class _VersionListingS3:
     def __init__(self, *, retained: bool, raise_after_delete: bool = False) -> None:
         self.retained = retained

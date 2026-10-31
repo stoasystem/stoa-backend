@@ -371,7 +371,6 @@ def test_the_counter_write_is_a_compare_and_set(student) -> None:
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from stoa.routers import conversations  # noqa: E402
 from test_account_admin_endpoints import (  # noqa: E402
     _admin_user,
     _app,
@@ -658,22 +657,3 @@ def test_an_administrator_raising_the_figure_mid_request_does_not_503_the_studen
     counter = next(row for k, row in table.items.items() if k[1].startswith("WEEK#"))
     assert int(counter["limit"]) == 30
     assert int(table.items[key]["weekly_cases"]) == 30
-
-
-def test_the_refusal_does_not_send_the_student_to_a_shop(admin_table) -> None:
-    """Both lanes refuse the same way, and neither names a plan.
-
-    Payments are frozen and an assigned account never had anything to buy, so
-    "choose a paid plan" is an instruction the student cannot carry out.
-    """
-    import inspect
-
-    from stoa.routers import questions
-
-    for source in (
-        inspect.getsource(conversations.request_teacher_help),
-        inspect.getsource(questions.request_teacher),
-    ):
-        assert '"code": "teacher_support_not_included"' in source
-        assert "choose_paid_plan" not in source
-        assert '"action": "contact_administrator"' in source

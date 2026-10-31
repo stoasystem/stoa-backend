@@ -14,9 +14,11 @@ Two more things the same incident showed, stoasystem/stoa-backend#52:
 - `put_usage_event` answered every `AccountDeletionConflict` as "already written",
   and the account seam reports every refusal that way. Only an event that is in the
   table now is a duplicate.
-- `request-teacher` writes its ledger row after the case is admitted and dispatched,
-  and a retry that found the case replayed returned before writing it. The retry now
-  owes the row, and once it is there every later retry is a duplicate.
+- A teacher-help request writes its ledger row after the case is admitted and
+  dispatched, and a retry that found the case replayed returned before writing it.
+  The retry now owes the row, and once it is there every later retry is a duplicate.
+  (The question route's request-teacher, where this was first seen, went with #148;
+  the conversation lane keeps the rule.)
 """
 
 from __future__ import annotations
@@ -24,17 +26,14 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from botocore.exceptions import ClientError
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
-from audit_helpers import MemoryAuthorizationAuditSink
 from fakes.dynamodb import FakeTable
-from stoa.config import Settings, get_settings
+from stoa.config import Settings
 from stoa.db.repositories import account_deletion_repo, curriculum_ops_repo, usage_ledger_repo
-from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.models.billing import BillingPlanId
-from stoa.routers import conversations, questions
+from stoa.routers import conversations
 from stoa.services import (
     curriculum_ops_service,
     teacher_support_allowance_service,
@@ -42,7 +41,6 @@ from stoa.services import (
 )
 from test_curriculum_ops import DRAFT_UNIT, _draft_payload, _operator_user
 from test_conversations import _client as _conversation_client
-from test_questions import _actor
 
 
 NOW = "2026-09-26T12:00:00+00:00"
@@ -182,15 +180,6 @@ def _settings() -> Settings:
     return Settings(free_tier_daily_question_limit=2)
 
 
-def _question_client() -> TestClient:
-    app = FastAPI()
-    app.include_router(questions.router, prefix="/questions")
-    app.dependency_overrides[get_settings] = _settings
-    app.dependency_overrides[get_actor] = lambda: _actor()
-    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
-    return TestClient(app, raise_server_exceptions=False)
-
-
 def _admission(admitted_at: datetime, case_id: str = "question-1") -> teacher_support_allowance_service.TeacherSupportCaseAdmission:
     return teacher_support_allowance_service.TeacherSupportCaseAdmission(
         support_case_id=case_id,
@@ -204,59 +193,6 @@ def _admission(admitted_at: datetime, case_id: str = "question-1") -> teacher_su
         limit=2,
         admitted_at=admitted_at,
     )
-
-
-def _escalation_scaffold(
-    monkeypatch: pytest.MonkeyPatch, ledger: FakeTable
-) -> tuple[TestClient, dict[str, object], list[str]]:
-    """`request-teacher` with admission, mutation and dispatch stubbed, the ledger real.
-
-    Admission is granted once and replayed after, and the replay hands back the
-    admission the first call persisted - `admitted_at` included - as the service
-    does. The question row keeps the state the mutation gave it.
-    """
-    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: ledger)
-    question: dict[str, object] = {
-        "question_id": "question-1",
-        "student_id": "student-1",
-        "subject": "math",
-        "status": "ai_answered",
-        "version": 1,
-    }
-    dispatches: list[str] = []
-    service = questions.teacher_support_allowance_service
-    persisted: dict[str, object] = {}
-
-    def admit(*, persist_case, observed_at, **_kwargs):
-        if persist_case(()):
-            persisted["admission"] = _admission(observed_at)
-            return service.TeacherSupportAdmissionResult(
-                service.TeacherSupportAdmissionDisposition.ADMITTED, persisted["admission"]
-            )
-        return service.TeacherSupportAdmissionResult(
-            service.TeacherSupportAdmissionDisposition.REPLAYED, persisted.get("admission")
-        )
-
-    monkeypatch.setattr(service, "admit_teacher_support_case", admit)
-    monkeypatch.setattr(questions.question_repo, "get_question", lambda question_id: dict(question))
-
-    def mutate(item: dict[str, object], *, status: str, extra_attrs: dict[str, object], **_kwargs: object):
-        question.update({**extra_attrs, "status": status, "version": int(item["version"]) + 1})
-        return questions.question_repo.QuestionMutationResult(
-            questions.question_repo.QuestionMutationDisposition.APPLIED, "question-1", dict(question)
-        )
-
-    monkeypatch.setattr(questions.question_repo, "mutate_question", mutate)
-    monkeypatch.setattr(questions.notify_service, "enqueue_teacher_request", lambda **_kwargs: None)
-    monkeypatch.setattr(
-        questions.notification_service, "emit_teacher_requested", lambda **_kwargs: None
-    )
-    monkeypatch.setattr(
-        questions.teacher_dispatch_service,
-        "dispatch_question",
-        lambda question_id, **_kwargs: dispatches.append(question_id) or {"status": "deferred"},
-    )
-    return _question_client(), question, dispatches
 
 
 def _refuse_put_once(monkeypatch: pytest.MonkeyPatch, table: FakeTable) -> None:
@@ -273,102 +209,6 @@ def _refuse_put_once(monkeypatch: pytest.MonkeyPatch, table: FakeTable) -> None:
         return real_put_item(**kwargs)
 
     monkeypatch.setattr(table, "put_item", put_item_refused_once)
-
-
-def test_a_retry_after_a_failed_ledger_write_records_exactly_one_event(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """First attempt: admitted, dispatched, ledger refused. Retries: replayed, one row."""
-    ledger = FakeTable()
-    client, question, dispatches = _escalation_scaffold(monkeypatch, ledger)
-    _refuse_put_once(monkeypatch, ledger)
-
-    first = client.post("/questions/question-1/request-teacher")
-    assert first.status_code == 500
-    assert question["status"] == "escalated"
-    assert dispatches == ["question-1"]
-    assert _ledger_rows(ledger) == []
-
-    second = client.post("/questions/question-1/request-teacher")
-    assert second.status_code == 202
-    assert second.json()["dispatch"] == {"questionId": "question-1", "status": "replayed"}
-    assert dispatches == ["question-1"]
-    (row,) = _ledger_rows(ledger)
-    assert row["action"] == usage_ledger_service.QUESTION_TEACHER_HELP_ACTION
-    assert row["request_correlation_id"] == "question-1"
-    assert row["metadata"]["question_id"] == "question-1"
-    assert "parent_id" not in row
-
-    third = client.post("/questions/question-1/request-teacher")
-    assert third.status_code == 202
-    assert dispatches == ["question-1"]
-    assert len(_ledger_rows(ledger)) == 1
-
-
-def test_a_retry_on_a_later_day_keys_the_row_by_the_admission_day(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The period in the key is the admission's, so a replay tomorrow is still a duplicate."""
-    import time_machine
-
-    ledger = FakeTable()
-    client, question, _dispatches = _escalation_scaffold(monkeypatch, ledger)
-    _refuse_put_once(monkeypatch, ledger)
-
-    with time_machine.travel("2026-09-26T23:30:00+00:00", tick=False):
-        assert client.post("/questions/question-1/request-teacher").status_code == 500
-    with time_machine.travel("2026-09-27T09:00:00+00:00", tick=False):
-        assert client.post("/questions/question-1/request-teacher").status_code == 202
-        assert client.post("/questions/question-1/request-teacher").status_code == 202
-
-    (row,) = _ledger_rows(ledger)
-    assert row["quota_period"] == "2026-09-26"
-    assert str(row["created_at"]).startswith("2026-09-26T23:30:00")
-    assert str(question["teacher_requested_at"]).startswith("2026-09-26T23:30:00")
-
-
-def test_a_replay_from_a_stale_question_snapshot_is_keyed_by_the_persisted_admission(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The snapshot this request authorized against was read before another request
-    admitted the case, so it has no `teacher_requested_at`; the day comes from the
-    admission the service persisted, not from the retry."""
-    import time_machine
-
-    ledger = FakeTable()
-    client, question, dispatches = _escalation_scaffold(monkeypatch, ledger)
-    admitted_at = datetime(2026, 9, 26, 23, 59, 59, tzinfo=timezone.utc)
-    service = questions.teacher_support_allowance_service
-    monkeypatch.setattr(
-        service,
-        "admit_teacher_support_case",
-        lambda **_kwargs: service.TeacherSupportAdmissionResult(
-            service.TeacherSupportAdmissionDisposition.REPLAYED, _admission(admitted_at)
-        ),
-    )
-    question.update({"status": "escalated"})  # admitted elsewhere; no teacher_requested_at
-
-    with time_machine.travel("2026-09-27T09:00:00+00:00", tick=False):
-        response = client.post("/questions/question-1/request-teacher")
-
-    assert response.status_code == 202
-    assert dispatches == []
-    (row,) = _ledger_rows(ledger)
-    assert row["quota_period"] == "2026-09-26"
-    assert str(row["created_at"]).startswith("2026-09-26T23:59:59")
-
-
-def test_the_first_attempt_still_records_the_event_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The control: with nothing refused, one call is one row, and a replay adds none."""
-    ledger = FakeTable()
-    client, _question, dispatches = _escalation_scaffold(monkeypatch, ledger)
-
-    assert client.post("/questions/question-1/request-teacher").status_code == 202
-    assert client.post("/questions/question-1/request-teacher").status_code == 202
-
-    assert dispatches == ["question-1"]
-    assert len(_ledger_rows(ledger)) == 1
-    assert datetime.fromisoformat(str(_ledger_rows(ledger)[0]["created_at"])).tzinfo is timezone.utc
 
 
 # -- the conversation lane has the same debt -------------------------------------------

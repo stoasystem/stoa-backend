@@ -348,12 +348,3 @@ def test_anything_else_kept_reads_back_as_no_answer(kept) -> None:
 
 
 # ── The old route's answer, until #148 ───────────────────────────────────────
-
-
-def test_the_old_route_gets_the_reply_as_written_without_a_map() -> None:
-    model = FakeBedrock(_reply(knowledge_points=["Brüche kürzen"]))
-
-    result = ask_answer.get_ai_answer("Wie kürze ich 6/8?", "Mathematik", "", "de", client=model)
-
-    assert result.content["knowledge_points"] == ["Brüche kürzen"]
-    assert '"target_unit_id"' not in model.system()

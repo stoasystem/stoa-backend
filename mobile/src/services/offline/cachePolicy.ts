@@ -99,8 +99,6 @@ export const FORBIDDEN_CACHE_CATEGORIES: ForbiddenCacheCategory[] = [
 ];
 
 export const ONLINE_ONLY_MUTATION_PATHS = [
-  "/questions",
-  "/questions/{questionId}/request-teacher",
   "/practice/teacher-help",
   "/practice/challenges/{challengeId}/answer",
   "/parents/me/subscription/requests",

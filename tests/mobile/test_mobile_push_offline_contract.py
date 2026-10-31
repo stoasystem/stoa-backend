@@ -51,7 +51,7 @@ def test_deep_links_validate_auth_account_and_role() -> None:
 
     for href in [
         "/student/practice",
-        "/student/questions",
+        "/student/history",
         "/parent/children/",
         "/notifications/",
     ]:
@@ -74,7 +74,6 @@ def test_offline_cache_policy_limits_sensitive_categories_and_mutations() -> Non
         assert category in source
 
     for mutation in [
-        "/questions",
         "/practice/teacher-help",
         "/parents/me/subscription/requests",
         "/parents/me/subscription/billing",

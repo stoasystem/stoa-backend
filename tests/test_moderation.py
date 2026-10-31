@@ -2,6 +2,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from stoa.db.repositories import user_repo
 from stoa.deps import get_actor
 from stoa.routers import admin, questions
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
@@ -87,7 +88,7 @@ def _stub_teacher_authorization_facts(monkeypatch):
     monkeypatch.setattr(moderation_service.question_repo, "get_teacher_session", lambda *_: None)
     monkeypatch.setattr(moderation_service.question_repo, "get_teacher_assignment", lambda *_: None)
     monkeypatch.setattr(
-        questions.user_repo,
+        user_repo,
         "get_user",
         lambda user_id, **_kwargs: {
             "user_id": user_id,

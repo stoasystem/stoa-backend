@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.routers import admin, questions, teachers
+from stoa.db.repositories import question_repo
+from stoa.routers import admin, teachers
 from stoa.security.route_authorization import get_authorization_fact_repository
 from actor_helpers import install_actor_overrides
 
@@ -32,56 +33,11 @@ def _applied_mutation(question, status, attrs):
         "version": int(question["version"]) + 1,
         **attrs,
     }
-    return questions.question_repo.QuestionMutationResult(
-        questions.question_repo.QuestionMutationDisposition.APPLIED,
+    return question_repo.QuestionMutationResult(
+        question_repo.QuestionMutationDisposition.APPLIED,
         str(question["question_id"]),
         updated,
     )
-
-
-def test_request_teacher_records_request_and_queue_timestamps(monkeypatch):
-    updates = []
-    monkeypatch.setattr(
-        questions.teacher_support_allowance_service,
-        "admit_teacher_support_case",
-        lambda *, persist_case, **_kwargs: (
-            questions.teacher_support_allowance_service.TeacherSupportAdmissionResult(
-                questions.teacher_support_allowance_service.TeacherSupportAdmissionDisposition.ADMITTED
-            )
-            if persist_case(())
-            else None
-        ),
-    )
-    monkeypatch.setattr(
-        questions.question_repo,
-        "get_question",
-        lambda question_id: {
-            "question_id": question_id,
-            "student_id": "student-1",
-            "subject": "math",
-            "status": "ai_answered",
-            "version": 1,
-        },
-    )
-    monkeypatch.setattr(
-        questions.question_repo,
-        "mutate_question",
-        lambda question, *, status, extra_attrs, **_kwargs: updates.append(
-            (question["question_id"], status, extra_attrs)
-        )
-        or _applied_mutation(question, status, extra_attrs),
-    )
-    monkeypatch.setattr(questions.notify_service, "enqueue_teacher_request", lambda **kwargs: None)
-    monkeypatch.setattr(questions.usage_ledger_service, "record_usage_event", lambda **kwargs: None)
-
-    client = _app(questions.router, "/questions", {"sub": "student-1", "role": "student"})
-    response = client.post("/questions/question-1/request-teacher")
-
-    assert response.status_code == 202
-    assert updates[0][1] == "escalated"
-    attrs = updates[0][2]
-    assert attrs["teacher_requested_at"]
-    assert attrs["queue_visible_at"] == attrs["teacher_requested_at"]
 
 
 def test_teacher_reply_accepts_formula_payload_and_records_sla(monkeypatch):

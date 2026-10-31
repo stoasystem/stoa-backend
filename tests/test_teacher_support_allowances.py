@@ -16,9 +16,8 @@ from typing import Any, Callable
 from fastapi import HTTPException
 import pytest
 
-from stoa.config import Settings
 from stoa.db.repositories import account_deletion_repo
-from stoa.routers import conversations, questions, teachers
+from stoa.routers import conversations, teachers
 from stoa.security.authorization import AuthorizedResource, ResourceRef, ResourceType
 from stoa.services import paid_entitlement_service, teacher_support_allowance_service
 
@@ -518,7 +517,6 @@ def test_projection_reports_exact_scope_week_count_and_limit(
 
 
 def test_routes_admit_only_at_first_case_and_later_actions_do_not_mutate_allowance() -> None:
-    question_source = inspect.getsource(questions.request_teacher)
     conversation_source = inspect.getsource(conversations.request_teacher_help)
     later_source = "\n".join(
         inspect.getsource(member)
@@ -530,38 +528,26 @@ def test_routes_admit_only_at_first_case_and_later_actions_do_not_mutate_allowan
         )
     )
 
-    assert "admit_teacher_support_case" in question_source
     assert "admit_teacher_support_case" in conversation_source
-    assert "persist_case=" in question_source
     assert "persist_case=" in conversation_source
     assert "admit_teacher_support_case" not in later_source
-    assert question_source.index("admit_teacher_support_case") < question_source.index(
-        "enqueue_teacher_request"
-    )
 
 
-def test_both_escalation_lanes_dispatch_to_a_teacher() -> None:
+def test_the_chat_escalation_dispatches_to_a_teacher() -> None:
     """An escalation that never dispatches is invisible to every teacher.
 
     The chat lane used to set escalation flags and stop, so the teacher queue
-    stayed empty no matter how many students asked for help.
+    stayed empty no matter how many students asked for help. (The question
+    lane it was once checked beside was retired in #148.)
     """
-    question_source = inspect.getsource(questions.request_teacher)
     conversation_source = inspect.getsource(conversations.request_teacher_help)
 
-    assert "dispatch_question" in question_source
     assert "_dispatch_escalated_conversation" in conversation_source
     assert "dispatch_conversation" in inspect.getsource(
         conversations._dispatch_escalated_conversation
     )
     assert conversation_source.index("admit_teacher_support_case") < conversation_source.index(
         "_dispatch_escalated_conversation"
-    )
-    assert question_source.index("admit_teacher_support_case") < question_source.index(
-        "emit_teacher_requested"
-    )
-    assert question_source.index("admit_teacher_support_case") < question_source.index(
-        "dispatch_question"
     )
     # The usage row is written after the case is admitted. The one call before
     # admission is the repeat path, which answers with an escalation the admission
@@ -584,55 +570,6 @@ def test_service_reuses_allowance_week_budget_and_conditional_effect_counter() -
     assert "allowance_service.plan_allowance_budget" in source
     assert "attribute_not_exists(PK) AND attribute_not_exists(SK)" in source
     assert "state_version=:expected_state_version" in source
-
-
-def test_question_plan_denial_runs_before_case_queue_notification_and_assignment(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    authorized = AuthorizedResource(
-        ResourceRef(
-            resource_type=ResourceType.QUESTION,
-            resource_id="question-denied",
-            student_id="student-1",
-        ),
-        {
-            "question_id": "question-denied",
-            "student_id": "student-1",
-            "subject": "math",
-            "status": "ai_answered",
-            "version": 1,
-        },
-    )
-    monkeypatch.setattr(questions, "get_table", lambda: object())
-    monkeypatch.setattr(
-        questions.teacher_support_allowance_service,
-        "admit_teacher_support_case",
-        lambda **_kwargs: teacher_support_allowance_service.TeacherSupportAdmissionResult(
-            teacher_support_allowance_service.TeacherSupportAdmissionDisposition.PLAN_DENIED
-        ),
-    )
-    for dependency, name in (
-        (questions.question_repo, "mutate_question"),
-        (questions.notify_service, "enqueue_teacher_request"),
-        (questions.notification_service, "emit_teacher_requested"),
-        (questions.teacher_dispatch_service, "dispatch_question"),
-        (questions.usage_ledger_service, "record_usage_event"),
-    ):
-        monkeypatch.setattr(
-            dependency,
-            name,
-            lambda *_args, **_kwargs: pytest.fail("denied downstream effect ran"),
-        )
-
-    with pytest.raises(HTTPException) as denied:
-        asyncio.run(
-            questions.request_teacher(
-                authorized=authorized,
-                settings=Settings(),
-            )
-        )
-
-    assert denied.value.status_code == 403
 
 
 def test_conversation_plan_denial_runs_before_case_message_and_usage_effect(

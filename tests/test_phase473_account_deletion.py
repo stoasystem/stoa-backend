@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import importlib
 import inspect
-import json
 from dataclasses import asdict
 from typing import Any, Mapping
 
@@ -20,7 +19,6 @@ from stoa.db.repositories import (
 from stoa.security.errors import SecurityDecisionError
 from stoa.security.identity import AccountStatus, resolve_actor
 from stoa.security.tokens import VerifiedAccessToken
-from stoa.services import notify_service
 
 
 STUDENT_ID = "student-delete-1"
@@ -283,8 +281,12 @@ def test_every_primary_writer_uses_the_same_active_fence_and_exact_generation() 
         status="resolved",
         expected_generation=4,
     )
-    attachment_checks = attachment_repo._retention_fence_checks(
-        STUDENT_ID, "question", "q-1", account_fence_generation=4
+    # The question attachment writer this checked went with #148; a
+    # conversation write is the attachment repository's writer now.
+    attachment_checks = attachment_repo.build_conversation_write_transaction(
+        item={"PK": "CONV#c-1", "SK": "CONV", "conversation_id": "c-1"},
+        owner_id=STUDENT_ID,
+        generation=4,
     )
     def payload(operation: object) -> dict[str, Any]:
         if isinstance(operation, attachment_repo.TransactionOperation):
@@ -405,35 +407,6 @@ def test_question_and_session_scrub_allowlists_exclude_all_private_learning_fiel
     assert private.isdisjoint(repository.QUESTION_TOMBSTONE_ALLOWLIST)
     assert private.isdisjoint(repository.SESSION_TOMBSTONE_ALLOWLIST)
     assert service.PRIMARY_BRANCH_IDS <= set(service.BRANCH_HANDLERS)
-
-
-def test_teacher_queue_payload_is_opaque_and_generation_fenced(monkeypatch) -> None:
-    sent: list[dict[str, Any]] = []
-
-    class _Sqs:
-        def send_message(self, **kwargs: Any) -> None:
-            sent.append(kwargs)
-
-    monkeypatch.setattr(notify_service.boto3, "client", lambda *_args, **_kwargs: _Sqs())
-    monkeypatch.setattr(
-        notify_service,
-        "require_active_account_fence",
-        lambda _owner, generation: generation == 7,
-    )
-    notify_service.enqueue_teacher_request(
-        question_id="question-1",
-        operation_id="teacher-intent-1",
-        generation=7,
-    )
-    payload = json.loads(sent[0]["MessageBody"])
-    assert payload == {
-        "operation_id": "teacher-intent-1",
-        "question_id": "question-1",
-        "generation": 7,
-    }
-    rendered = repr(sent[0]).lower()
-    assert STUDENT_ID.lower() not in rendered
-    assert "subject" not in rendered
 
 
 def test_scheduled_discovery_recovers_lost_route_trigger_and_reconstructs_service(

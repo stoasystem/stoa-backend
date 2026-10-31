@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
+
 import copy
-from datetime import UTC, datetime
 from decimal import Decimal
 import threading
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from typing import TypeGuard
 
 from botocore.exceptions import ClientError
-import pytest
 
 from stoa.db.repositories import question_submission_repo
-from stoa.jobs import reconcile_question_submissions
 from stoa.services import usage_ledger_service
 from dynamodb_expression_assertions import (
     assert_expression_placeholders_closed,
@@ -22,9 +21,9 @@ from fakes.dynamodb import as_stored as _as_stored
 
 
 STUDENT_ID = "student-opaque-1"
-REQUEST_ID = question_submission_repo.question_submission_command_digest(
-    STUDENT_ID, "request-opaque-1"
-)
+# A command digest as the retired submission route derived it (#148): any
+# sha256 hex reads the same to the reconciliation.
+REQUEST_ID = hashlib.sha256(f"{STUDENT_ID}:request-opaque-1".encode()).hexdigest()
 QUESTION_ID = "question-opaque-1"
 PERIOD = "2026-07-22"
 COMMAND_KEY = (f"USER#{STUDENT_ID}", f"QUESTION_SUBMISSION#{REQUEST_ID}")
@@ -343,19 +342,6 @@ def _preview(
     )
 
 
-def _apply(
-    table: _ReconciliationTable,
-    preview: question_submission_repo.QuestionReconciliationPreview,
-) -> question_submission_repo.QuestionReconciliationPreview:
-    return question_submission_repo.apply_question_submission_reconciliation(
-        preview,
-        student_id=STUDENT_ID,
-        idempotency_key=REQUEST_ID,
-        applied_at="2026-07-22T09:00:00+00:00",
-        table=table,
-    )
-
-
 def test_preview_is_write_free_and_classifies_current_and_legacy_states() -> None:
     complete = _ReconciliationTable(_seed())
     terminal = _ReconciliationTable(_seed(terminal=True))
@@ -378,23 +364,6 @@ def test_preview_is_write_free_and_classifies_current_and_legacy_states() -> Non
     assert historical.disposition.value == "legacy_counter_ledger_without_question"
     assert historical.proposed_action == "report_only"
     assert complete.transactions == terminal.transactions == legacy.transactions == []
-
-
-def test_apply_repairs_durable_result_once_and_retry_writes_nothing() -> None:
-    table = _ReconciliationTable(_seed())
-    preview = _preview(table)
-
-    first = _apply(table, preview)
-    writes_after_first = len(table.transactions)
-    second = _apply(table, preview)
-
-    assert first.disposition.value == "committed"
-    assert first.mutation_count == 1
-    assert table.items[COMMAND_KEY]["status"] == "completed"
-    assert table.items[COMMAND_KEY]["version"] == 2
-    assert second.disposition.value == "changed_after_preview"
-    assert second.mutation_count == 0
-    assert len(table.transactions) == writes_after_first == 1
 
 
 def test_terminal_reversal_is_exact_once_and_attachment_storage_are_unchanged() -> None:
@@ -440,75 +409,6 @@ def test_terminal_reversal_is_exact_once_and_attachment_storage_are_unchanged() 
     )
 
 
-def test_changed_after_preview_and_conflicting_history_are_report_only() -> None:
-    table = _ReconciliationTable(_seed())
-    preview = _preview(table)
-    table.items[QUESTION_KEY]["ai_response"] = {"answer": "newer-private-answer"}
-
-    changed = _apply(table, preview)
-
-    conflict_items = _seed()
-    conflict_items[LEDGER_KEY]["question_id"] = "different-question"
-    conflict = _preview(_ReconciliationTable(conflict_items))
-    assert changed.disposition.value == "changed_after_preview"
-    assert changed.mutation_count == 0
-    assert table.transactions == []
-    assert conflict.disposition.value == "conflicting_evidence"
-    assert conflict.proposed_action == "report_only"
-
-
-def test_two_concurrent_reversals_commit_one_exact_compensation() -> None:
-    table = _ReconciliationTable(_seed(terminal=True), synchronize_transactions=True)
-    preview = _preview(table)
-    outcomes: list[question_submission_repo.QuestionReconciliationPreview] = []
-
-    def run() -> None:
-        outcomes.append(_apply(table, preview))
-
-    workers = [threading.Thread(target=run), threading.Thread(target=run)]
-    for worker in workers:
-        worker.start()
-    for worker in workers:
-        worker.join(timeout=10)
-        assert not worker.is_alive()
-
-    assert table.items[COUNTER_KEY]["count"] == 0
-    assert table.items[LEDGER_KEY]["status"] == "reversed"
-    assert len(table.transactions) == 1
-    assert {result.disposition.value for result in outcomes} <= {
-        "committed",
-        "changed_after_preview",
-    }
-
-
-def test_lost_apply_response_reconciles_without_second_compensation() -> None:
-    table = _ReconciliationTable(_seed(terminal=True), fail_after_commit=True)
-    preview = _preview(table)
-
-    first = _apply(table, preview)
-    second = _apply(table, preview)
-
-    assert first.disposition.value == "committed"
-    assert second.disposition.value == "changed_after_preview"
-    assert table.items[COUNTER_KEY]["count"] == 0
-    assert len(table.transactions) == 1
-
-
-def test_each_terminal_transaction_boundary_fails_without_partial_compensation() -> None:
-    for operation_index in range(4):
-        table = _ReconciliationTable(
-            _seed(terminal=True), fail_operation_index=operation_index
-        )
-        before = copy.deepcopy(table.items)
-
-        outcome = _apply(table, _preview(table))
-
-        assert outcome.disposition.value == "changed_after_preview"
-        assert outcome.mutation_count == 0
-        assert table.items == before
-        assert table.transactions == []
-
-
 def test_reversed_events_do_not_count_as_consumed_but_keep_audit_quantity(monkeypatch) -> None:
     events = [copy.deepcopy(_seed(terminal=True)[LEDGER_KEY])]
     events[0]["status"] = "reversed"
@@ -533,37 +433,6 @@ def test_reversed_events_do_not_count_as_consumed_but_keep_audit_quantity(monkey
     assert events[0]["quantity"] == 1
 
 
-def test_job_defaults_to_preview_and_apply_uses_only_bounded_coordinates() -> None:
-    table = _ReconciliationTable(_seed())
-    coordinate = reconcile_question_submissions.QuestionReconciliationCoordinate(
-        student_id=STUDENT_ID,
-        command_digest=REQUEST_ID,
-    )
-
-    preview = reconcile_question_submissions.reconcile_question_submissions(
-        (coordinate,), table=table
-    )
-    applied = reconcile_question_submissions.reconcile_question_submissions(
-        (coordinate,),
-        apply=True,
-        table=table,
-        now=datetime(2026, 7, 22, 9, tzinfo=UTC),
-    )
-
-    assert preview.mode == "preview"
-    assert preview.mutated == 0
-    assert table.items[COMMAND_KEY]["status"] == "completed"
-    assert applied.mode == "apply"
-    assert applied.inspected == 1
-    assert applied.mutated == 1
-    public_output = str(preview.public_dict())
-    assert "request-opaque-1" not in public_output
-    assert "private-question-canary" not in public_output
-    assert "private-answer-canary" not in public_output
-    assert "private/object/key" not in public_output
-    assert "private-version-id" not in public_output
-
-
 class _PreviewRepositorySpy:
     def __init__(self) -> None:
         self.preview_calls: list[dict[str, object]] = []
@@ -583,173 +452,3 @@ class _PreviewRepositorySpy:
             observed_digest="e" * 64,
             proposed_action="none",
         )
-
-
-def test_privacy_rejects_malformed_coordinate_before_repository_access() -> None:
-    raw_key_canary = "student@example.invalid private question text"
-    repository = _PreviewRepositorySpy()
-    coordinate = reconcile_question_submissions.QuestionReconciliationCoordinate(
-        student_id=STUDENT_ID,
-        command_digest=raw_key_canary,
-    )
-
-    with pytest.raises(ValueError) as raised:
-        reconcile_question_submissions.reconcile_question_submissions(
-            (coordinate,), repository=repository
-        )
-
-    assert repository.preview_calls == []
-    assert raw_key_canary not in str(raised.value)
-
-
-def test_lambda_accepts_only_closed_opaque_coordinate_fields(monkeypatch) -> None:
-    raw_key_canary = "raw-lambda-private-canary"
-    calls: list[
-        tuple[reconcile_question_submissions.QuestionReconciliationCoordinate, ...]
-    ] = []
-
-    def fake_reconcile(
-        coordinates: Sequence[
-            reconcile_question_submissions.QuestionReconciliationCoordinate
-        ],
-        **_kwargs: object,
-    ) -> reconcile_question_submissions.QuestionReconciliationJobResult:
-        calls.append(tuple(coordinates))
-        return reconcile_question_submissions.QuestionReconciliationJobResult(
-            mode="preview", inspected=1, mutated=0, results=()
-        )
-
-    monkeypatch.setattr(
-        reconcile_question_submissions,
-        "reconcile_question_submissions",
-        fake_reconcile,
-    )
-
-    result = reconcile_question_submissions.handler(
-        {
-            "coordinates": [
-                {"studentId": STUDENT_ID, "commandDigest": REQUEST_ID}
-            ]
-        },
-        None,
-    )
-
-    assert result == {
-        "mode": "preview",
-        "inspected": 1,
-        "mutated": 0,
-        "results": (),
-    }
-    assert len(calls) == 1
-    assert calls[0][0].student_id == STUDENT_ID
-    assert calls[0][0].command_digest == REQUEST_ID
-
-    for invalid in (
-        {
-            "coordinates": [
-                {"studentId": STUDENT_ID, "idempotencyKey": raw_key_canary}
-            ]
-        },
-        {
-            "coordinates": [
-                {
-                    "studentId": STUDENT_ID,
-                    "commandDigest": REQUEST_ID,
-                    "questionText": raw_key_canary,
-                }
-            ]
-        },
-        {
-            "coordinates": [
-                {"studentId": STUDENT_ID, "commandDigest": raw_key_canary}
-            ]
-        },
-    ):
-        with pytest.raises(ValueError) as raised:
-            reconcile_question_submissions.handler(invalid, None)
-        assert raw_key_canary not in str(raised.value)
-
-    assert len(calls) == 1
-
-
-def test_cli_uses_command_digest_and_redacts_invalid_input(monkeypatch, capsys) -> None:
-    raw_key_canary = "raw-cli-private-canary"
-    captured_coordinates: list[
-        reconcile_question_submissions.QuestionReconciliationCoordinate
-    ] = []
-
-    def fake_reconcile(
-        coordinates: Sequence[
-            reconcile_question_submissions.QuestionReconciliationCoordinate
-        ],
-        **_kwargs: object,
-    ) -> reconcile_question_submissions.QuestionReconciliationJobResult:
-        captured_coordinates.extend(coordinates)
-        return reconcile_question_submissions.QuestionReconciliationJobResult(
-            mode="preview", inspected=1, mutated=0, results=()
-        )
-
-    monkeypatch.setattr(
-        reconcile_question_submissions,
-        "reconcile_question_submissions",
-        fake_reconcile,
-    )
-
-    assert (
-        reconcile_question_submissions.main(
-            [
-                "--student-id",
-                STUDENT_ID,
-                "--command-digest",
-                REQUEST_ID,
-            ]
-        )
-        == 0
-    )
-    assert captured_coordinates[0].command_digest == REQUEST_ID
-
-    with pytest.raises(SystemExit):
-        reconcile_question_submissions.main(
-            [
-                "--student-id",
-                STUDENT_ID,
-                "--idempotency-key",
-                raw_key_canary,
-            ]
-        )
-
-    diagnostics = capsys.readouterr().err
-    assert raw_key_canary not in diagnostics
-
-
-def test_preview_output_is_closed_and_contains_only_opaque_identities() -> None:
-    repository = _PreviewRepositorySpy()
-    coordinate = reconcile_question_submissions.QuestionReconciliationCoordinate(
-        student_id=STUDENT_ID,
-        command_digest=REQUEST_ID,
-    )
-
-    result = reconcile_question_submissions.reconcile_question_submissions(
-        (coordinate,), repository=repository
-    ).public_dict()
-
-    assert set(result) == {"mode", "inspected", "mutated", "results"}
-    result_item = _required_mapping(_required_tuple(result["results"])[0])
-    assert set(result_item) == {
-        "disposition",
-        "commandId",
-        "questionId",
-        "observedCommandVersion",
-        "observedQuestionVersion",
-        "observedDigest",
-        "proposedAction",
-        "mutationCount",
-    }
-    assert result_item["commandId"] == REQUEST_ID
-    assert repository.preview_calls == [
-        {
-            "student_id": STUDENT_ID,
-            "idempotency_key": REQUEST_ID,
-            "table": None,
-        }
-    ]

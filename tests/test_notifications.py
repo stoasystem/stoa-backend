@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stoa.config import Settings
-from stoa.routers import notifications, questions, teachers
+from stoa.routers import notifications, teachers
 from stoa.db.repositories import question_repo, user_repo
 from stoa.services import (
     locale_service,
@@ -774,65 +774,6 @@ def test_digest_preview_filters_by_time_window(monkeypatch):
     assert body["items"][0]["eventId"] != older["eventId"]
 
 
-def test_request_teacher_emits_teacher_and_admin_events(monkeypatch):
-    updates = []
-    emitted = []
-    monkeypatch.setattr(
-        questions.teacher_support_allowance_service,
-        "admit_teacher_support_case",
-        lambda *, persist_case, **_kwargs: (
-            questions.teacher_support_allowance_service.TeacherSupportAdmissionResult(
-                questions.teacher_support_allowance_service.TeacherSupportAdmissionDisposition.ADMITTED
-            )
-            if persist_case(())
-            else None
-        ),
-    )
-    monkeypatch.setattr(
-        questions.question_repo,
-        "get_question",
-        lambda question_id: {
-            "question_id": question_id,
-            "student_id": "student-1",
-            "subject": "math",
-            "status": "ai_answered",
-            "version": 1,
-        },
-    )
-    monkeypatch.setattr(
-        questions.question_repo,
-        "mutate_question",
-        lambda question, *, status, extra_attrs, **_kwargs: updates.append(
-            (question["question_id"], status, extra_attrs)
-        )
-        or questions.question_repo.QuestionMutationResult(
-            questions.question_repo.QuestionMutationDisposition.APPLIED,
-            str(question["question_id"]),
-            {
-                **question,
-                "status": status,
-                "version": int(question["version"]) + 1,
-                **extra_attrs,
-            },
-        ),
-    )
-    monkeypatch.setattr(questions.notify_service, "enqueue_teacher_request", lambda **kwargs: None)
-    monkeypatch.setattr(questions.usage_ledger_service, "record_usage_event", lambda **kwargs: None)
-    monkeypatch.setattr(
-        questions.notification_service,
-        "create_event_safe",
-        lambda **kwargs: emitted.append(kwargs),
-    )
-
-    client = _app(questions.router, "/questions", {"sub": "student-1", "role": "student"})
-    response = client.post("/questions/question-1/request-teacher")
-
-    assert response.status_code == 202
-    assert updates[0][1] == "escalated"
-    assert {event["recipient_role"] for event in emitted} == {"teacher", "admin"}
-    assert {event["event_type"] for event in emitted} == {"teacher_requested"}
-
-
 def test_teacher_can_build_assistance_summary_seed(monkeypatch):
     stored = []
     monkeypatch.setattr(
@@ -1304,27 +1245,6 @@ def test_a_new_moderation_case_reads_in_the_admin_s_language(monkeypatch, locale
     assert _words(item["summary"]).isdisjoint({"low", "medium", "high"})
 
 
-@pytest.mark.parametrize("locale", ROLE_READER_LOCALES)
-def test_a_teacher_request_reads_in_the_reader_s_language(monkeypatch, locale):
-    """The subject is named the way the reader says it, never by its stored id."""
-    _install_notification_repo(monkeypatch)
-    _profiles(monkeypatch, {})
-    notification_service.emit_teacher_requested(
-        question_id="question-1", student_id="student-1", subject="math", account_fence_generation=1
-    )
-
-    [item] = _bell(monkeypatch, f"teacher-{locale}", "teacher", locale)
-
-    assert item["eventType"] == "teacher_requested"
-    assert (item["title"], item["summary"]) == (
-        message_catalog.TEXT["teacher_requested.title"][locale],
-        message_catalog.TEXT["teacher_requested.summary"][locale].format(
-            subject=message_catalog.TEXT["subject.math"][locale]
-        ),
-    )
-    assert "math" not in _words(item["summary"])
-
-
 def test_one_role_event_is_read_differently_by_two_readers(monkeypatch):
     """One stored row, two admins: neither is handed the other's language."""
     _install_notification_repo(monkeypatch)
@@ -1409,4 +1329,3 @@ def test_a_role_event_cannot_be_marked_by_one_reader(monkeypatch):
 
     assert client.post(f"/notifications/{event_id}/read").status_code == 404
     assert client.post(f"/notifications/{event_id}/archive").status_code == 404
-
