@@ -35,8 +35,13 @@ ATTRIBUTES = frozenset({
     "markerWidth", "markerHeight", "refX", "refY", "orient", "markerUnits",
     "marker-start", "marker-mid", "marker-end",
 })
-#: The only reference a figure may make: to a marker of its own.
-_LOCAL_REFERENCE = re.compile(r"url\(#[A-Za-z_][\w.-]*\)")
+#: The only reference a figure may make: to a marker of its own, written just so.
+#: A paint or marker attribute is read as CSS, which reads `URL(` and the escape
+#: `\75 rl(` as `url(` too and fetches whatever follows (#168): any value that
+#: mentions `url(` in any case or spacing, or holds a backslash at all, must be
+#: exactly this, pointing at an id the figure has.
+_LOCAL_REFERENCE = re.compile(r"url\(#([A-Za-z_][\w.-]*)\)")
+_MENTIONS_URL = re.compile(r"url\s*\(", re.IGNORECASE)
 _FORBIDDEN_TEXT = re.compile(r"<!DOCTYPE|<!ENTITY|<\?|javascript:|data:|expression\(", re.IGNORECASE)
 
 
@@ -45,6 +50,15 @@ def _name(tag: str) -> tuple[str, str]:
         namespace, _, local = tag[1:].partition("}")
         return namespace, local
     return "", tag
+
+
+def _refers_out(attr: str, value: str, ids: set[str]) -> bool:
+    """Whether a value may be read as anything but itself or a reference to the figure's own ids."""
+    # A name is read out, never parsed as CSS: a backslash there is just text.
+    if attr == "aria-label" or ("\\" not in value and _MENTIONS_URL.search(value) is None):
+        return False
+    local = _LOCAL_REFERENCE.fullmatch(value.strip())
+    return local is None or local.group(1) not in ids
 
 
 def figure_issues(svg: object) -> list[str]:
@@ -60,6 +74,7 @@ def figure_issues(svg: object) -> list[str]:
     except ET.ParseError:
         return ["A figure must be well-formed SVG."]
     issues: list[str] = []
+    ids = {element.attrib["id"] for element in root.iter() if "id" in element.attrib}
     if _name(root.tag) != (SVG_NAMESPACE, "svg"):
         issues.append("A figure's root must be an svg element in the SVG namespace.")
     for element in root.iter():
@@ -71,7 +86,7 @@ def figure_issues(svg: object) -> list[str]:
             attr_namespace, attr = _name(raw_name)
             if attr_namespace or attr not in ATTRIBUTES:
                 issues.append(f"Attribute '{attr}' is not allowed in a figure.")
-            elif "url(" in value and _LOCAL_REFERENCE.fullmatch(value.strip()) is None:
+            elif _refers_out(attr, value, ids):
                 issues.append(f"Attribute '{attr}' may only refer to a marker of the figure itself.")
     return list(dict.fromkeys(issues))
 

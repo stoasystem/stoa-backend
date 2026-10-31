@@ -47,6 +47,31 @@ def test_anything_beyond_a_diagram_is_refused(svg: str, problem: str) -> None:
     assert any(problem in message for message in figure_svg.figure_issues(svg))
 
 
+@pytest.mark.parametrize(
+    "attribute",
+    [
+        # CSS reads a function name in any case, and an escape as the letter (#168).
+        'fill="URL(https://example.com/p.svg#p)"',
+        'fill="\\75 rl(https://example.com/p.svg#p)"',
+        'marker-end="URL(https://example.com/m.svg#m)"',
+        'stroke="url (https://example.com/p.svg#p)"',
+        'fill="Url(#arrow)"',
+        'stroke="red\\"',
+        # Written just so, but to an id the figure does not have.
+        'marker-end="url(#elsewhere)"',
+        'marker-end="url(#elsewhere.svg)"',
+    ],
+)
+def test_a_reference_out_of_the_figure_is_refused(attribute: str) -> None:
+    svg = TRIANGLE.replace("</svg>", f'<rect width="1" height="1" {attribute}/></svg>')
+    assert any("only refer to a marker" in message for message in figure_svg.figure_issues(svg))
+
+
+def test_a_backslash_in_a_name_is_just_text() -> None:
+    svg = SVG.format(body='<rect width="1" height="1" aria-label="A \\ B"/>')
+    assert figure_svg.figure_issues(svg) == []
+
+
 def _exercise(**extra: object) -> dict:
     return curriculum_ops_service._exercise_payloads("lesson-1", [{  # noqa: SLF001
         "exerciseId": "lesson-1-q1", "type": "multiple_choice", "prompt": "Welche Figur?",
