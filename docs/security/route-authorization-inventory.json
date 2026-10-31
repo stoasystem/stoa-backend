@@ -2154,22 +2154,6 @@
   {
     "authorization": [
       {
-        "action": "read",
-        "capability": null,
-        "purpose": "self_service",
-        "resource_type": "teacher_portal"
-      }
-    ],
-    "classification": "authorized",
-    "family": "teachers",
-    "identifiers": [],
-    "method": "GET",
-    "path": "/teachers/queue",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
         "action": "curriculum_mutation",
         "capability": "curriculum_author",
         "purpose": "curriculum_operations",
@@ -4398,58 +4382,6 @@
   {
     "authorization": [
       {
-        "action": "read",
-        "capability": "teacher_dispatch_operator",
-        "purpose": "teacher_dispatch",
-        "resource_type": "teacher_portal"
-      }
-    ],
-    "classification": "authorized",
-    "family": "teachers",
-    "identifiers": [
-      "question_id"
-    ],
-    "method": "POST",
-    "path": "/teachers/dispatch/preview",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "assign",
-        "capability": "teacher_dispatch_operator",
-        "purpose": "teacher_dispatch",
-        "resource_type": "teacher_portal"
-      }
-    ],
-    "classification": "authorized",
-    "family": "teachers",
-    "identifiers": [],
-    "method": "POST",
-    "path": "/teachers/dispatch/reassign-stale",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "assign",
-        "capability": "teacher_dispatch_operator",
-        "purpose": "teacher_dispatch",
-        "resource_type": "teacher_portal"
-      }
-    ],
-    "classification": "authorized",
-    "family": "teachers",
-    "identifiers": [
-      "question_id"
-    ],
-    "method": "POST",
-    "path": "/teachers/dispatch/run",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
         "action": "respond",
         "capability": null,
         "purpose": "teacher_help",
@@ -4494,42 +4426,6 @@
     ],
     "method": "POST",
     "path": "/teachers/questions/{question_id}/ai-tools/summary-draft",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "respond",
-        "capability": null,
-        "purpose": "teacher_help",
-        "resource_type": "question"
-      }
-    ],
-    "classification": "authorized",
-    "family": "teachers",
-    "identifiers": [
-      "question_id"
-    ],
-    "method": "POST",
-    "path": "/teachers/questions/{question_id}/reply",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "claim",
-        "capability": null,
-        "purpose": "teacher_help",
-        "resource_type": "question"
-      }
-    ],
-    "classification": "authorized",
-    "family": "teachers",
-    "identifiers": [
-      "question_id"
-    ],
-    "method": "POST",
-    "path": "/teachers/questions/{question_id}/takeover",
     "sensitive": true
   },
   {
@@ -4593,24 +4489,6 @@
     ],
     "method": "PUT",
     "path": "/files/{upload_id}/chunks/{part_number}",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "resolve",
-        "capability": null,
-        "purpose": "teacher_help",
-        "resource_type": "question"
-      }
-    ],
-    "classification": "authorized",
-    "family": "teachers",
-    "identifiers": [
-      "question_id"
-    ],
-    "method": "PUT",
-    "path": "/teachers/questions/{question_id}/resolve",
     "sensitive": true
   }
 ]

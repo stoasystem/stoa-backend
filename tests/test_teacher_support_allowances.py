@@ -523,8 +523,8 @@ def test_routes_admit_only_at_first_case_and_later_actions_do_not_mutate_allowan
         for member in (
             conversations.send_message,
             conversations.stream_message,
-            teachers.reply,
-            teachers.resolve,
+            teachers.update_help_request,
+            teachers.add_note,
         )
     )
 

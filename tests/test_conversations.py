@@ -2250,9 +2250,10 @@ def _escalate(monkeypatch, table, conversation_id: str = "conv-1"):
 
 
 def test_the_escalation_lands_in_the_queue_the_teacher_actually_reads(monkeypatch):
-    from stoa.routers import teachers
+    from stoa.services import teacher_dispatch_service
 
     table = _escalation_table()
+    monkeypatch.setattr(teacher_dispatch_service, "get_table", lambda: table)
 
     response = _escalate(monkeypatch, table)
 
@@ -2266,9 +2267,9 @@ def test_the_escalation_lands_in_the_queue_the_teacher_actually_reads(monkeypatc
     assert stored["conversation_id"] == "conv-1"
 
     # The teacher side, reading the same table through its own query.
-    page = teachers._list_escalated_questions()
-    assert [item["question_id"] for item in page.items] == [request_id]
-    assert page.items[0]["subject"] == "physics"
+    page = teacher_dispatch_service.list_teacher_dispatch_questions()
+    assert [item["question_id"] for item in page] == [request_id]
+    assert page[0]["subject"] == "physics"
 
 
 def test_the_case_the_student_spent_is_on_the_table_too(monkeypatch):

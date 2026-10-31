@@ -52,8 +52,8 @@ def test_reporting_writes_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
     assert table.rows == before
 
 
-def test_applying_writes_the_row_the_teacher_queue_reads() -> None:
-    from stoa.routers import teachers
+def test_applying_writes_the_row_the_teacher_queue_reads(monkeypatch) -> None:
+    from stoa.services import teacher_dispatch_service
 
     table = _table()
 
@@ -66,9 +66,9 @@ def test_applying_writes_the_row_the_teacher_queue_reads() -> None:
     assert row["source"] == "conversation_escalation"
     # The row the repair writes has to satisfy the query that reads the queue,
     # not merely look like one.
-    teachers.get_table = lambda: table
-    page = teachers._list_escalated_questions()
-    assert [item["question_id"] for item in page.items] == [REQUEST]
+    monkeypatch.setattr(teacher_dispatch_service, "get_table", lambda: table)
+    page = teacher_dispatch_service.list_teacher_dispatch_questions()
+    assert [item["question_id"] for item in page] == [REQUEST]
 
 
 def test_running_it_twice_writes_once() -> None:

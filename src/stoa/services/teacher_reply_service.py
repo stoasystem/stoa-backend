@@ -71,26 +71,6 @@ def normalize_teacher_reply(content: str | None, rich_content: dict[str, Any] | 
     }
 
 
-def compute_sla_fields(item: dict[str, Any], now: str) -> dict[str, Any]:
-    """Compute per-question SLA duration fields where timestamps are available."""
-    requested_at = _parse_timestamp(item.get("teacher_requested_at") or item.get("queue_visible_at"))
-    taken_over_at = _parse_timestamp(item.get("teacher_taken_over_at") or item.get("teacher_started_at"))
-    replied_at = _parse_timestamp(now)
-    resolved_at = _parse_timestamp(item.get("resolved_at"))
-    fields: dict[str, Any] = {}
-
-    if requested_at and taken_over_at:
-        fields["sla_request_to_takeover_seconds"] = _duration_seconds(requested_at, taken_over_at)
-    if requested_at and replied_at:
-        fields["sla_request_to_first_reply_seconds"] = _duration_seconds(requested_at, replied_at)
-        fields["teacher_first_reply_sla_bucket"] = sla_bucket(fields["sla_request_to_first_reply_seconds"])
-    if taken_over_at and replied_at:
-        fields["sla_takeover_to_first_reply_seconds"] = _duration_seconds(taken_over_at, replied_at)
-    if requested_at and resolved_at:
-        fields["sla_request_to_resolved_seconds"] = _duration_seconds(requested_at, resolved_at)
-    return fields
-
-
 def compute_takeover_sla_fields(item: dict[str, Any], now: str) -> dict[str, Any]:
     requested_at = _parse_timestamp(item.get("teacher_requested_at") or item.get("queue_visible_at"))
     taken_over_at = _parse_timestamp(now)

@@ -288,7 +288,6 @@ class TransactionOperationKind(StrEnum):
     ATTACHMENT_REF = "attachment_ref"
     ASSOCIATION_PUT = "association_put"
     STORAGE_QUOTA_UPDATE = "storage_quota_update"
-    QUESTION_PUT = "question_put"
     MESSAGE_COMMAND_PUT = "message_command_put"
     CHAT_QUOTA_OPERATION_PUT = "chat_quota_operation_put"
     CHAT_QUOTA_UPDATE = "chat_quota_update"
@@ -4082,51 +4081,6 @@ def mark_message_command_terminal(
     return MessageCommandResult(
         MessageCommandDisposition.TERMINAL, previous_status="ai_running"
     )
-
-
-def invalidate_question_upload_reservation(
-    upload_id: str,
-    owner_id: str,
-    version: int,
-    failure_category: str,
-    *,
-    table: object | None = None,
-) -> bool:
-    return _transition(
-        upload_id,
-        owner_id,
-        "consuming",
-        "invalid",
-        version,
-        None,
-        attributes={"validation_failure": failure_category},
-        table=table,
-    )
-
-
-def invalidate_attachment(
-    attachment_id: str,
-    owner_id: str,
-    *,
-    table: object | None = None,
-) -> bool:
-    try:
-        _update_item(table or get_table(),
-            Key=attachment_key(attachment_id),
-            UpdateExpression="SET #status=:invalid",
-            ConditionExpression="owner_id=:owner AND #status=:active",
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues={
-                ":owner": owner_id,
-                ":active": "active",
-                ":invalid": "invalid",
-            },
-        )
-    except ClientError as exc:
-        if _conditional(exc):
-            return False
-        raise AttachmentRepositoryConflict("dependency_failure") from None
-    return True
 
 
 def get_storage_usage(owner_id: str, *, table: object | None = None) -> int:

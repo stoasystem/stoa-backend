@@ -2612,24 +2612,6 @@ def reply_image_operations(
     return operations, [_attachment_summary(attachment) for _, attachment in fresh]
 
 
-def invalidate_question_attachment(
-    prepared: dict[str, Any],
-    actor: Actor,
-    *,
-    repository: Any = attachment_repo,
-) -> None:
-    if prepared["kind"] == "upload":
-        upload = prepared["record"]
-        repository.invalidate_question_upload_reservation(
-            upload["upload_id"],
-            actor.user_id,
-            int(upload["version"]),
-            AttachmentErrorCode.UPLOAD_INVALID.value,
-        )
-        return
-    repository.invalidate_attachment(prepared["attachment"]["attachment_id"], actor.user_id)
-
-
 def ensure_message_attachment_capacity(
     prepared: list[tuple[str, dict[str, Any]]],
     owner_id: str,
