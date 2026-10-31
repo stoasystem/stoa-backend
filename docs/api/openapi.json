@@ -11589,6 +11589,26 @@
         "description": "401 from sign-in and refresh, which take no bearer token.\n\nThe identity provider's refusal (`invalid_credentials`, `invalid_token`) is\nsent by `public_auth_error_response` as the security body itself, with no\n`detail` envelope. A token the provider issued that then fails verification\nhere is refused inside `detail`, like any other route.",
         "title": "SignInUnauthorizedResponse"
       },
+      "StarQuizAnswer": {
+        "description": "One answer to the exercise the paper is asking now.\n\n`exerciseId` names that exercise, so the same answer sent twice - a retry\nafter a lost response - is recognised and answered with the first result\nrather than judged against the next exercise (#113).",
+        "properties": {
+          "answer": {
+            "title": "Answer"
+          },
+          "exerciseId": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Exerciseid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "exerciseId",
+          "answer"
+        ],
+        "title": "StarQuizAnswer",
+        "type": "object"
+      },
       "StatsResponse": {
         "properties": {
           "ai_resolved": {
@@ -28900,7 +28920,7 @@
     },
     "/practice/knowledge-map": {
       "get": {
-        "description": "The star map: every subject, topic and knowledge point with its state.\n\nThe language comes from the request the way every other curriculum read\nhere takes it, not from a query parameter with German wired in as the\ndefault: the names on this map are galaxy, nebula and knowledge-point\ntitles, and a French student reading a sky labelled in German is the same\ndefect as any other untranslated screen.\n\nThe student is `authorized_student.ref.student_id` and nothing else. The\n`studentId` query parameter belongs to the authorization dependency, which\ndeclares and checks it; reading one here would be a way around the check.\n\nA `subjectId` naming no subject the curriculum has is a 422 rather than a\nsky labelled with it (#124). One the student has not started is not: the\nmap is there to be browsed ahead of enrolment.\n\n`view=skeleton` sends every star with its state and position but none of\nits small stars; `/knowledge-map/stars` then sends the few around one in full.\n\nA star's `state` is `lit`, `in_progress` or `ready`; nothing is locked\n(#125). `unlitPrerequisiteIds` lists the star's stated prerequisites that\nare not lit yet, in the order stated - empty for a lit star - so the map\ncan mark it and say which to learn first.",
+        "description": "The star map: every subject, topic and knowledge point with its state.\n\nThe language comes from the request the way every other curriculum read\nhere takes it, not from a query parameter with German wired in as the\ndefault: the names on this map are galaxy, nebula and knowledge-point\ntitles, and a French student reading a sky labelled in German is the same\ndefect as any other untranslated screen.\n\nThe student is `authorized_student.ref.student_id` and nothing else. The\n`studentId` query parameter belongs to the authorization dependency, which\ndeclares and checks it; reading one here would be a way around the check.\n\nA `subjectId` naming no subject the curriculum has is a 422 rather than a\nsky labelled with it (#124). One the student has not started is not: the\nmap is there to be browsed ahead of enrolment.\n\n`view=skeleton` sends every star with its state and position but none of\nits small stars; `/knowledge-map/stars` then sends the few around one in full.\n\nA star's `state` is `lit`, `in_progress` or `ready`; nothing is locked\n(#125). `unlitPrerequisiteIds` lists the star's stated prerequisites that\nare not lit yet, in the order stated - empty for a lit star - so the map\ncan mark it and say which to learn first. `litAtSource` is `quiz` for a\nstar lit by passing its star quiz, and `starQuizRetryAt` says when a star\nwhose quiz was lost can be taken again - None when it can now (#165).",
         "operationId": "get_knowledge_map_practice_knowledge_map_get",
         "parameters": [
           {
@@ -29215,6 +29235,173 @@
           "identifiers": [
             "studentId"
           ]
+        }
+      }
+    },
+    "/practice/knowledge-map/stars/{unit_id}/quiz": {
+      "post": {
+        "description": "Open the star quiz of one knowledge point, or the one already open (#165).\n\nEvery star not lit can be taken, in progress or not, whatever its\nprerequisites. The paper asks at least one exercise from each core lesson,\n6 to 10 in all, each once; a second wrong answer loses it. A paper still\nopen for this star is handed back rather than replaced, so leaving and\ncoming back does not draw a fresh set of exercises.",
+        "operationId": "start_star_quiz_practice_knowledge_map_stars__unit_id__quiz_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "unit_id",
+            "required": true,
+            "schema": {
+              "title": "Unit Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "404": {
+            "description": "`star_quiz_unknown_star`: no knowledge point with lessons has this id."
+          },
+          "409": {
+            "description": "`star_quiz_already_lit`: the star is lit already; `star_quiz_cooling_down`: a quiz of this star was lost less than 24 hours ago, `retryAt` says when it can be taken again; `star_quiz_unavailable`: the star has no exercise to ask."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Star Quiz",
+        "tags": [
+          "practice"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "update",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "practice"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": []
+        }
+      }
+    },
+    "/practice/knowledge-map/stars/{unit_id}/quiz/{quiz_id}/answer": {
+      "post": {
+        "description": "Judge one answer of a star quiz (#165).\n\nThe answer names its exercise; an exercise already answered is answered\nagain with its first result and nothing changes. Passing lights the star\nwith the source `quiz` and schedules every answer of the paper for review,\nright or wrong, as ordinary practice would. Losing records nothing but\nwhen the star can be taken again (`retryAt`, 24 hours on): no evidence,\nno review card. The lessons are not touched either way.",
+        "operationId": "answer_star_quiz_practice_knowledge_map_stars__unit_id__quiz__quiz_id__answer_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "unit_id",
+            "required": true,
+            "schema": {
+              "title": "Unit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "quiz_id",
+            "required": true,
+            "schema": {
+              "title": "Quiz Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StarQuizAnswer"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "404": {
+            "description": "`star_quiz_not_found`: this student has no such quiz of this star."
+          },
+          "409": {
+            "description": "`star_quiz_finished`: the quiz was already passed or lost; `star_quiz_expired`: it is past its expiry; `star_quiz_out_of_order`: `exerciseId` is not the exercise the quiz is asking now; `star_quiz_unavailable`: the exercise it asked is gone."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Answer Star Quiz",
+        "tags": [
+          "practice"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "update",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "practice"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": []
         }
       }
     },

@@ -36,6 +36,7 @@ from stoa.services import (
     curriculum_translations,
     knowledge_base_catalog,
     knowledge_mastery_service,
+    star_quiz_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -122,9 +123,11 @@ def build_map(
     lit_facts: Mapping[str, knowledge_mastery_service.LitFact] | None = None,
     skill_states: Mapping[str, knowledge_mastery_service.SkillMastery] | None = None,
     locale: str = "de",
+    star_quiz_retry_at: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """One sky from facts already read. Pure; no I/O."""
     facts = lit_facts or {}
+    retry_at = star_quiz_retry_at or {}
     subjects = [item for item in catalog.get("subjects") or () if isinstance(item, Mapping)]
     topics = [item for item in catalog.get("topics") or () if isinstance(item, Mapping)]
     units = [item for item in catalog.get("units") or () if isinstance(item, Mapping)]
@@ -187,6 +190,8 @@ def build_map(
                 "order": int(unit.get("order") or 0),
                 "state": judged.state.value,
                 "unlitPrerequisiteIds": list(judged.unlit_prerequisite_ids),
+                # When a lost star quiz can be taken again; None when it can now (#165).
+                "starQuizRetryAt": retry_at.get(unit_id),
                 "litAt": fact.lit_at if fact else None,
                 "litAtSource": fact.source.value if fact else None,
                 "progress": round(judged.progress, 4),
@@ -289,6 +294,17 @@ def _review_due_by_unit(student_id: str, lessons: Sequence[Mapping[str, Any]]) -
         if unit_id:
             counts[unit_id] = counts.get(unit_id, 0) + 1
     return counts
+
+
+def _star_quiz_retry_at(student_id: str) -> dict[str, str]:
+    """Per star, when a lost star quiz can be taken again (#165)."""
+    try:
+        rows = practice_repo.list_star_quiz_cooldowns(student_id)
+    except Exception:  # noqa: BLE001
+        # The quiz route refuses a star still cooling down whatever the map says.
+        logger.warning("Star quiz cooldowns unavailable for the star map", exc_info=True)
+        return {}
+    return star_quiz_service.retry_times(rows, datetime.now(timezone.utc))
 
 
 def _stored_lit_facts(rows: Sequence[Mapping[str, Any]]) -> dict[str, knowledge_mastery_service.LitFact]:
@@ -407,6 +423,7 @@ def knowledge_map(
         score=0,
         enrolled_subject_ids=enrolled,
         lit_facts=_lit_facts(student_id, states),
+        star_quiz_retry_at=_star_quiz_retry_at(student_id),
         skill_states=(
             None if view == "skeleton"
             else knowledge_mastery_service.skill_states(student_id, locale=locale, catalog=catalog)
@@ -481,6 +498,7 @@ def neighbourhood(
             student_id, locale=locale, catalog=catalog, indexed=indexed
         ),
         locale=locale,
+        star_quiz_retry_at=_star_quiz_retry_at(student_id),
     )
     done = frozenset(
         str(item.get("lesson_id") or "")

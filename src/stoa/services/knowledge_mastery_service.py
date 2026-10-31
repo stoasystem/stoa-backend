@@ -2,7 +2,9 @@
 
 The judgement is the one decided in stoasystem/stoa-frontend#9: a unit is
 **lit** when every one of its active lessons is completed *and* every exercise
-under those lessons has been answered right at least once. Completing the
+under those lessons has been answered right at least once - or when the
+student has passed its star quiz (stoa-frontend#475, #165), which keeps it lit
+whatever its lessons say afterwards. Completing the
 lessons is not enough on its own - a student can finish a lesson with a wrong
 answer, and a unit that lit on lesson completion alone would claim knowledge
 the evidence does not support.
@@ -58,10 +60,13 @@ class LitSource(StrEnum):
     `observed` means this lighting became true while the ledger was already
     open, so it is a real first lighting and may be celebrated. `backfilled`
     means it was already true when the ledger opened: history, not an event.
+    `quiz` means the student passed the star quiz (#165): written when the
+    quiz is passed, and celebrated like an observed one.
     """
 
     OBSERVED = "observed"
     BACKFILLED = "backfilled"
+    QUIZ = "quiz"
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,15 +114,15 @@ def unacknowledged_lit(
 ) -> tuple[str, ...]:
     """Lightings this student saw happen and has not confirmed yet. Pure.
 
-    Only `observed` ones. A backfilled lighting is never in here, whatever the
-    student has or has not confirmed, so an account that arrives with a hundred
-    lit knowledge points gets no celebrations rather than a hundred.
+    Only `observed` and `quiz` ones. A backfilled lighting is never in here,
+    whatever the student has or has not confirmed, so an account that arrives
+    with a hundred lit knowledge points gets no celebrations rather than a hundred.
     """
     visible = None if among is None else frozenset(among)
     chosen = [
         fact
         for fact in facts.values()
-        if fact.source is LitSource.OBSERVED
+        if fact.source in (LitSource.OBSERVED, LitSource.QUIZ)
         and not fact.acknowledged
         and (visible is None or fact.unit_id in visible)
     ]
@@ -167,6 +172,38 @@ class UnitMastery:
     unlit_prerequisite_ids: tuple[str, ...] = ()
 
 
+def core_lessons(lessons: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """The lessons a unit lights from: all but its extensions, or all if every one is."""
+    return [lesson for lesson in lessons if not lesson.get("extension")] or list(lessons)
+
+
+def star_quiz_exercises(
+    unit_id: str,
+    *,
+    catalog: Mapping[str, Any],
+    indexed: Mapping[str, list[dict[str, Any]]] | None = None,
+) -> list[list[str]]:
+    """The exercises a star quiz may ask: per core lesson, in course order (#165).
+
+    The same lessons and exercises that light the unit the ordinary way, so
+    passing the quiz stands in for exactly what it replaces.
+    """
+    lessons = [
+        lesson
+        for lesson in catalog.get("lessons") or ()
+        if isinstance(lesson, Mapping) and str(lesson.get("unitId") or "") == unit_id
+    ]
+    indexed = _indexed_lessons() if indexed is None else indexed
+    return [
+        (
+            [str(entry["id"]) for entry in indexed[str(lesson.get("id") or "")]]
+            if str(lesson.get("id") or "") in indexed
+            else _active_exercise_ids(str(lesson.get("id") or ""))
+        )
+        for lesson in core_lessons(lessons)
+    ]
+
+
 def _lesson_exercise_ids(
     lessons: Sequence[Mapping[str, Any]],
     exercises_by_lesson: Mapping[str, Sequence[str]],
@@ -192,10 +229,10 @@ def judge_unit(
     hold a unit back or light it.
     """
     unit_id = str(unit.get("id") or "")
-    extension = [lesson for lesson in lessons if lesson.get("extension")]
-    core = [lesson for lesson in lessons if not lesson.get("extension")] or list(lessons)
-    if len(core) == len(lessons):
-        extension = []
+    core = core_lessons(lessons)
+    extension = [] if len(core) == len(lessons) else [
+        lesson for lesson in lessons if lesson.get("extension")
+    ]
     lesson_count = len(core)
     done = [lesson for lesson in core if str(lesson.get("id") or "") in completed_lesson_ids]
     lessons_done = len(done)
@@ -348,6 +385,11 @@ def _exercises_answered_right(student_id: str) -> frozenset[str]:
     return frozenset(practice_repo.all_challenges_answered_right(student_id))
 
 
+def _star_quiz_passed(student_id: str) -> frozenset[str]:
+    """Every star this student lit by passing its quiz (#165)."""
+    return practice_repo.star_quiz_passed_unit_ids(student_id)
+
+
 def _active_exercises(lesson_id: str) -> list[Mapping[str, Any]]:
     return [
         challenge
@@ -433,6 +475,7 @@ def unit_states(
 
     completed = _completed_lesson_ids(student_id, subject_id)
     answered_right = _exercises_answered_right(student_id)
+    passed_quiz = _star_quiz_passed(student_id)
 
     judged = {
         str(unit.get("id") or ""): judge_unit(
@@ -443,6 +486,12 @@ def unit_states(
             exercises_answered_right=answered_right,
         )
         for unit in units
+    }
+    # A star whose quiz was passed is lit, and stays lit; its lessons, its
+    # progress and its next lesson are still what the student has done.
+    judged = {
+        unit_id: replace(state, state=LearningState.LIT) if unit_id in passed_quiz else state
+        for unit_id, state in judged.items()
     }
     # A unit lights whether or not anything was supposed to come first, so
     # what is lit is settled before any prerequisite is read.
