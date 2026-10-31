@@ -169,97 +169,6 @@ def plan_dispatch(
     }
 
 
-def dispatch_question(
-    question_id: str,
-    *,
-    question: dict[str, Any] | None = None,
-    now: str | None = None,
-) -> dict[str, Any]:
-    """Conditionally claim an escalated question for the best available teacher."""
-    timestamp = now or _now()
-    question = question or question_repo.get_question(question_id)
-    if not question:
-        return {"questionId": question_id, "status": "not_found", "reason": "question_not_found"}
-    if question.get("status") != QuestionStatus.ESCALATED.value:
-        return {"questionId": question_id, "status": "not_dispatchable", "reason": "not_escalated"}
-    if is_chat_question_row(question):
-        # A chat request is offered by dispatch_conversation, both rows at once;
-        # offering its queue row alone would split it (#73, #75). Refused here so
-        # no caller of the question lane can do it.
-        return {"questionId": question_id, "status": "not_dispatchable", "reason": "chat_help_request"}
-    question = _versioned_dispatch_question(question)
-    if question is None:
-        return {"questionId": question_id, "status": "claim_conflict", "reason": "question_changed"}
-    if _has_current_dispatch(question, timestamp):
-        return {
-            "questionId": question_id,
-            "status": "already_dispatched",
-            "teacherId": question.get("dispatched_teacher_id"),
-            "dispatchId": question.get("dispatch_id"),
-        }
-
-    plan = plan_dispatch(question, now=timestamp)
-    if not plan["selected"]:
-        mutation = question_repo.mutate_question(
-            question,
-            status=QuestionStatus.ESCALATED.value,
-            allowed_source_statuses=_DISPATCH_SOURCE_STATES,
-            extra_attrs={
-                "dispatch_status": "unassigned",
-                "dispatch_no_candidate_reason": (
-                    plan["summary"]["noCandidateReason"] or "no_eligible_teacher"
-                ),
-                "dispatch_updated_at": timestamp,
-            },
-        )
-        if mutation.disposition is not question_repo.QuestionMutationDisposition.APPLIED:
-            return {
-                "questionId": question_id,
-                "status": "claim_conflict",
-                "reason": "question_changed",
-                "plan": plan,
-            }
-        return {"questionId": question_id, "status": "no_candidate", "plan": plan}
-
-    candidate = plan["selected"][0]
-    previous = _previous_assignees(question)
-    if question.get("dispatch_status") in {"timed_out", "reassigned"} and question.get("dispatched_teacher_id"):
-        previous.append(str(question["dispatched_teacher_id"]))
-
-    dispatch_id = str(uuid.uuid4())
-    deadline = _deadline(timestamp)
-    attempt_count = int(question.get("dispatch_attempt_count") or 0) + 1
-    mutation = question_repo.mutate_question(
-        question,
-        status=QuestionStatus.ESCALATED.value,
-        allowed_source_statuses=_DISPATCH_SOURCE_STATES,
-        additional_conditions=_teacher_assignment_conditions(candidate),
-        extra_attrs={
-            "dispatch_id": dispatch_id,
-            "dispatch_status": "dispatched",
-            "dispatched_teacher_id": candidate["teacherId"],
-            "dispatch_reason": candidate["reason"],
-            "dispatch_deadline_at": deadline,
-            "dispatch_updated_at": timestamp,
-            "dispatch_attempt_count": attempt_count,
-            "previous_dispatch_teacher_ids": previous,
-            "dispatch_no_candidate_reason": None,
-        },
-    )
-    if mutation.disposition is not question_repo.QuestionMutationDisposition.APPLIED:
-        return {"questionId": question_id, "status": "claim_conflict", "plan": plan}
-
-    return {
-        "questionId": question_id,
-        "status": "dispatched",
-        "dispatchId": dispatch_id,
-        "teacherId": candidate["teacherId"],
-        "deadlineAt": deadline,
-        "attemptCount": attempt_count,
-        "plan": plan,
-    }
-
-
 def reassign_timed_out_dispatches(
     questions: list[dict[str, Any]] | None = None,
     *,
@@ -315,20 +224,12 @@ def reassign_timed_out_dispatches(
                 }
             )
             continue
-        refreshed = dict(timeout_mutation.question)
-        if is_chat_question_row(refreshed):
-            # The timeout is recorded on the queue row, where the conversation
-            # lane and accepting read it; the conversation lane re-offers both
-            # rows. Re-offering the queue row here alone would split it (#75).
-            results.append(
-                {"questionId": question_id, "previousTeacherId": current_teacher, "status": "timed_out"}
-            )
-            continue
-        result = dispatch_question(question_id, question=refreshed, now=timestamp)
-        results.append({"questionId": question_id, "previousTeacherId": current_teacher, **result})
-        if result["status"] == "not_found":
-            plan = plan_dispatch(refreshed, now=timestamp)
-            results[-1] = {"questionId": question_id, "previousTeacherId": current_teacher, "status": "no_candidate", "plan": plan}
+        # The timeout is recorded on the queue row, where the conversation
+        # lane and accepting read it; the conversation lane re-offers both
+        # rows (#75). Every queue row is a chat request's since #188.
+        results.append(
+            {"questionId": question_id, "previousTeacherId": current_teacher, "status": "timed_out"}
+        )
     return {"processed": len(stale), "results": results, "generatedAt": timestamp}
 
 
@@ -1144,8 +1045,7 @@ def _queue_row_transition(
             else QuestionStatus.TEACHER_ACTIVE.value
         ),
         expected_generation=int(_int(question.get("account_fence_generation"), 1)),
-        # An offer is taken only while it is live, checked where it is written,
-        # as question_repo.claim_teacher_takeover does for the question lane.
+        # An offer is taken only while it is live, checked where it is written.
         condition_expression="dispatch_deadline_at > :offer_live_at" if accepting else None,
         condition_values={":offer_live_at": now} if accepting else None,
         extra_attrs=extra,
@@ -1212,19 +1112,6 @@ def teacher_availability_status(profile: dict[str, Any] | None) -> str | None:
     if availability in PAUSED_STATES:
         return "paused"
     return None
-
-
-def student_dispatch_status(question: dict[str, Any]) -> str:
-    """Return a simple student-safe dispatch status."""
-    if question.get("status") == QuestionStatus.RESOLVED.value:
-        return "resolved"
-    if question.get("teacher_first_replied_at") or question.get("teacher_response"):
-        return "replied"
-    if question.get("status") == QuestionStatus.TEACHER_ACTIVE.value:
-        return "active"
-    if question.get("dispatch_status") == "dispatched":
-        return "assigned"
-    return "waiting"
 
 
 def _normalize_teacher_profile(profile: dict[str, Any]) -> dict[str, Any]:
@@ -1402,14 +1289,6 @@ def _scan_filtered_items(
     return items[:limit]
 
 
-def _has_current_dispatch(question: dict[str, Any], now: str) -> bool:
-    return (
-        question.get("dispatch_status") == "dispatched"
-        and bool(question.get("dispatched_teacher_id"))
-        and not _deadline_expired(question.get("dispatch_deadline_at"), now)
-    )
-
-
 def _deadline_expired(deadline: Any, now: str) -> bool:
     parsed_deadline = _parse_timestamp(deadline)
     parsed_now = _parse_timestamp(now)
@@ -1541,31 +1420,11 @@ def reconcile_dispatches(
     timestamp = now or _now()
     items = questions if questions is not None else list_teacher_dispatch_questions()
 
+    # First, so the conversation sweep below finds the teacher who let the
+    # deadline pass among those already tried and offers someone else.
     reassigned = reassign_timed_out_dispatches(items, now=timestamp)
 
-    # Re-read, because reassignment has moved some of them on.
-    refreshed = questions if questions is not None else list_teacher_dispatch_questions()
-    # A chat request's queue row is offered by the conversation lane below,
-    # both rows at once; offering it here alone would split the request (#75).
-    waiting = [
-        item
-        for item in refreshed
-        if item.get("status") == QuestionStatus.ESCALATED.value
-        and not _has_current_dispatch(item, timestamp)
-        and not is_chat_question_row(item)
-    ]
-
-    dispatched: list[dict[str, Any]] = []
-    for item in waiting:
-        question_id = str(item.get("question_id") or "")
-        if not question_id:
-            continue
-        result = dispatch_question(question_id, question=dict(item), now=timestamp)
-        if result.get("status") in {"dispatched", "no_candidate"}:
-            dispatched.append({"questionId": question_id, "status": result["status"]})
-
-    # The chat lane is what a student actually uses, and it records its
-    # dispatch on the conversation rather than on a question.
+    # The dispatch itself is recorded on the conversation.
     conversations_waiting = 0
     conversations_dispatched: list[dict[str, Any]] = []
     conversations_expired: list[str] = []
@@ -1619,8 +1478,6 @@ def reconcile_dispatches(
     return {
         "reassigned": reassigned["processed"],
         "reassignments": reassigned["results"],
-        "waiting": len(waiting),
-        "dispatched": dispatched,
         "conversationSweep": conversation_sweep,
         "conversationsWaiting": conversations_waiting,
         "conversationsDispatched": conversations_dispatched,

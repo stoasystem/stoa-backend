@@ -1994,7 +1994,7 @@ def test_generic_transaction_client_error_is_retryable_and_redacted() -> None:
         "TransactWriteItems",
     )
     operation = attachment_repo.TransactionOperation(
-        attachment_repo.TransactionOperationKind.QUESTION_PUT,
+        attachment_repo.TransactionOperationKind.MESSAGE_PUT,
         {"Put": {"Item": {"PK": "QUESTION#opaque"}}},
     )
     with pytest.raises(attachment_repo.AttachmentTransactionError) as captured:

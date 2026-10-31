@@ -42,38 +42,6 @@ def _only(table, teacher_id: str) -> None:
         )
 
 
-def test_a_question_lane_question_is_dispatched_and_the_old_reason_cleared(table):
-    row = _question_lane(table)
-    assert row["dispatch_no_candidate_reason"] == "not_available"
-    _only(table, lifecycle.TEACHER)
-    before = int(row["version"])
-
-    result = teacher_dispatch_service.dispatch_question(lifecycle.REQUEST, now=NOW)
-
-    assert result["status"] == "dispatched", result
-    row = table.rows[lifecycle.QUESTION_KEY]
-    assert row["dispatch_status"] == "dispatched"
-    assert row["dispatched_teacher_id"] == lifecycle.TEACHER
-    assert row["dispatch_id"] == result["dispatchId"]
-    assert "dispatch_no_candidate_reason" not in row
-    assert int(row["version"]) == before + 1
-
-
-def test_a_lapsed_question_lane_offer_goes_to_the_next_teacher(table):
-    _question_lane(table)
-    _only(table, lifecycle.TEACHER)
-    assert teacher_dispatch_service.dispatch_question(lifecycle.REQUEST, now=NOW)["status"] == "dispatched"
-    table.rows[lifecycle.QUESTION_KEY]["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
-    _only(table, lifecycle.OTHER_TEACHER)
-
-    outcome = teacher_dispatch_service.reassign_timed_out_dispatches(now=NOW)
-
-    assert outcome["results"][0]["status"] == "dispatched", outcome
-    row = table.rows[lifecycle.QUESTION_KEY]
-    assert row["dispatched_teacher_id"] == lifecycle.OTHER_TEACHER
-    assert lifecycle.TEACHER in row["previous_dispatch_teacher_ids"]
-
-
 def test_the_question_lane_does_not_offer_a_chat_queue_row_on_its_own(table, monkeypatch):
     # With the question lane's offer working again, it would split a chat
     # request: offer the queue row to one teacher while the conversation waits.
@@ -129,15 +97,3 @@ def test_the_transaction_builder_clears_a_field_given_none(table):
     assert int(row["version"]) == before + 1
 
 
-def test_dispatch_question_itself_refuses_a_chat_queue_row(table):
-    # Every caller of the question lane's dispatch, present and future, is
-    # covered here rather than by each caller remembering to skip chat rows.
-    # The fixture's queue row is a chat request's.
-    _only(table, lifecycle.TEACHER)
-    before = dict(table.rows[lifecycle.QUESTION_KEY])
-
-    result = teacher_dispatch_service.dispatch_question(lifecycle.REQUEST, now=NOW)
-
-    assert result["status"] == "not_dispatchable"
-    assert result["reason"] == "chat_help_request"
-    assert table.rows[lifecycle.QUESTION_KEY] == before

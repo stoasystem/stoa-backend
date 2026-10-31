@@ -10,14 +10,6 @@ from stoa.db.repositories import account_deletion_repo, report_repo
 from stoa.services import message_catalog
 
 
-def require_active_account_fence(owner_id: str, generation: int) -> bool:
-    try:
-        account_deletion_repo.require_active_account_fence(owner_id, generation)
-    except account_deletion_repo.AccountDeletionConflict:
-        return False
-    return True
-
-
 def send_teacher_invitation_email(
     recipient: str,
     *,

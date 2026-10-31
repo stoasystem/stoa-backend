@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 import threading
 from collections.abc import Mapping
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from stoa.db.repositories import account_deletion_repo, question_repo
@@ -216,80 +215,6 @@ def test_disallowed_observed_source_returns_invalid_transition_without_write():
     assert table.transactions == []
 
 
-def test_takeover_first_makes_barriered_stale_ai_completion_lose():
-    stale_ai_snapshot = _question()
-    escalated = _question(status="escalated", version=2)
-    table = QuestionCasTable(escalated)
-    table.before_ai_commit = threading.Barrier(2)
-    table.release_ai_commit = threading.Event()
-
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        ai_future = pool.submit(
-            question_repo.mutate_question,
-            stale_ai_snapshot,
-            status="ai_answered",
-            allowed_source_statuses=frozenset({"pending"}),
-            extra_attrs={"ai_response": {"answer": "stale"}},
-            table=table,
-        )
-        table.before_ai_commit.wait(timeout=5)
-        takeover = question_repo.claim_teacher_takeover(
-            "question-1",
-            "teacher-1",
-            claimed_at=NOW,
-            question=escalated,
-            teacher_profile_key={"PK": "USER#teacher-1", "SK": "PROFILE"},
-            teacher_profile_version=7,
-            table=table,
-        )
-        table.release_ai_commit.set()
-        ai = ai_future.result(timeout=5)
-
-    assert takeover.disposition is question_repo.TeacherTakeoverDisposition.CLAIMED
-    assert ai.disposition is question_repo.QuestionMutationDisposition.STALE
-    assert table.question["status"] == "teacher_active"
-    assert table.question["teacher_id"] == "teacher-1"
-    assert table.question["session_id"] == takeover.session_id
-    assert "ai_response" not in table.question
-
-
-def test_ai_first_allows_refreshed_escalation_then_takeover():
-    table = QuestionCasTable(_question())
-
-    ai = question_repo.mutate_question(
-        _question(),
-        status="ai_answered",
-        allowed_source_statuses=frozenset({"pending"}),
-        extra_attrs={"ai_response": {"answer": "fresh"}},
-        table=table,
-    )
-    assert ai.question is not None
-    escalation = question_repo.mutate_question(
-        ai.question,
-        status="escalated",
-        allowed_source_statuses=frozenset({"pending", "ai_answered"}),
-        extra_attrs={"teacher_requested_at": NOW},
-        table=table,
-    )
-    assert escalation.question is not None
-    takeover = question_repo.claim_teacher_takeover(
-        "question-1",
-        "teacher-1",
-        claimed_at=NOW,
-        question=escalation.question,
-        teacher_profile_key={"PK": "USER#teacher-1", "SK": "PROFILE"},
-        teacher_profile_version=7,
-        table=table,
-    )
-
-    assert ai.disposition is question_repo.QuestionMutationDisposition.APPLIED
-    assert escalation.disposition is question_repo.QuestionMutationDisposition.APPLIED
-    assert takeover.disposition is question_repo.TeacherTakeoverDisposition.CLAIMED
-    assert table.question["version"] == 4
-    assert table.question["status"] == "teacher_active"
-    assert table.question["ai_response"] == {"answer": "fresh"}
-
-
 def test_stale_same_state_metadata_writers_cannot_replay_after_later_states():
     cases = (
         (
@@ -398,12 +323,9 @@ def test_production_question_writer_registry_is_closed_over_cas_calls():
     # were retired in #148; the report route that stays writes no question.
     registry = {
         "src/stoa/routers/questions.py": set(),
-        "src/stoa/routers/teachers.py": {
-            ("reply", "mutate_question"),
-            ("resolve", "mutate_question"),
-        },
+        # The teacher-side question routes went with the question lane (#188).
+        "src/stoa/routers/teachers.py": set(),
         "src/stoa/services/teacher_dispatch_service.py": {
-            ("dispatch_question", "mutate_question"),
             ("reassign_timed_out_dispatches", "mutate_question"),
         },
     }
@@ -416,7 +338,6 @@ def test_production_question_writer_registry_is_closed_over_cas_calls():
 
     direct_registry = {
         "src/stoa/db/repositories/question_repo.py": {
-            "claim_teacher_takeover",
             "build_question_update_transaction",
             "_question_mutation_operation",
         },

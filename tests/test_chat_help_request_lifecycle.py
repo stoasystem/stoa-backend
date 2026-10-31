@@ -166,7 +166,6 @@ def _question(table: FakeTable) -> dict:
 
 def _nothing_waits() -> None:
     outcome = teacher_dispatch_service.reconcile_dispatches()
-    assert outcome["waiting"] == 0
     assert outcome["conversationsWaiting"] == 0
 
 
@@ -317,28 +316,6 @@ def test_only_in_progress_and_resolved_are_accepted(table):
 
     assert response.status_code == 422
     assert _conv(table) == before
-
-
-def test_question_lane_writes_refuse_a_chat_question_row(table):
-    # Taking over, replying to or resolving the queue row on its own would split
-    # the case again; a chat request is handled through the help-request routes.
-    _dispatch_to(table, TEACHER)
-    client = _client()
-    takeover = client.post(f"/teachers/questions/{REQUEST}/takeover")
-    assert takeover.status_code == 409
-    assert takeover.json()["detail"]["code"] == "chat_help_request_use_help_request_routes"
-
-    assert _set_status(client, "in_progress").status_code == 200
-    before = (dict(_conv(table)), dict(_question(table)))
-    for response in (
-        client.post(
-            f"/teachers/questions/{REQUEST}/reply", json={"content": "Queue-side answer."}
-        ),
-        client.put(f"/teachers/questions/{REQUEST}/resolve"),
-    ):
-        assert response.status_code == 409
-        assert response.json()["detail"]["code"] == "chat_help_request_use_help_request_routes"
-    assert (_conv(table), _question(table)) == before
 
 
 # --- What the independent audit of the first version found ---
@@ -865,25 +842,7 @@ def test_the_student_reads_the_teachers_reply_before_and_after_resolving(table, 
     assert [m["role"] for m in after_resolve.json()["messages"]].count("teacher") == 1
 
 
-
 # --- #73: chat requests are dispatched by the conversation lane only ---
-
-
-def test_the_operator_dispatch_route_refuses_a_chat_queue_row(table):
-    import asyncio
-
-    from fastapi import HTTPException
-
-    before = (dict(_conv(table)), dict(_question(table)))
-
-    with pytest.raises(HTTPException) as refused:
-        asyncio.run(
-            teachers.run_dispatch(teachers.DispatchRunRequest(question_id=REQUEST), _actor=None)
-        )
-
-    assert refused.value.status_code == 409
-    assert refused.value.detail["code"] == "chat_help_request_use_help_request_routes"
-    assert _unchanged(table, before)
 
 
 @pytest.mark.parametrize("missing", ["queue_row", "request_id"])
