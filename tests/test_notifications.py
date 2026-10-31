@@ -16,6 +16,7 @@ from stoa.services import (
     websocket_service,
 )
 from actor_helpers import install_actor_overrides
+from fakes.dynamodb import FakeTable
 
 
 def _app(router, prefix: str, user: dict) -> TestClient:
@@ -1190,6 +1191,99 @@ def test_every_subject_id_and_alias_has_its_own_name(monkeypatch):
         None: "Allgemein",
         Decimal(7): "Allgemein",
     }
+
+
+# ── a request raised from an Ask conversation (#178) ──────────────────────
+
+
+def _escalated_conversation(note: str = "") -> dict:
+    """The row `conversations._escalated_question_operation` writes: no answer on it."""
+    return {
+        **_bare_question(),
+        "source": "conversation_escalation",
+        "conversation_id": "conv-1",
+        "content": note,
+    }
+
+
+def _message(message_id: str, role: str, content: str, created_at: str) -> dict:
+    return {
+        "PK": "CONV#conv-1",
+        "SK": f"MSG#{message_id}",
+        "entity_type": "conversation_message",
+        "schema_version": "conversation-message.v1",
+        "message_id": message_id,
+        "conversation_id": "conv-1",
+        "student_id": "student-1",
+        "role": role,
+        "content": content,
+        "created_at": created_at,
+    }
+
+
+def _conversation_summary(monkeypatch, question: dict, *messages: dict) -> dict:
+    table = FakeTable()
+    table.seed(*messages)
+    monkeypatch.setattr(teacher_assistance_service, "get_table", lambda: table)
+    return _summary_over_http(monkeypatch, "de", question)
+
+
+# Message ids are random, so their keys do not run in the order they were sent.
+_CONVERSATION = (
+    _message("d", "student", "Was ist 1/2 + 1/3?", "2026-10-31T09:00:00+00:00"),
+    _message("c", "assistant", "Bring beide Brüche auf den Nenner 6.", "2026-10-31T09:00:05+00:00"),
+    _message("a", "student", "Und 2/3 + 1/4?", "2026-10-31T09:01:00+00:00"),
+    _message("b", "assistant", "Der gemeinsame Nenner ist 12.", "2026-10-31T09:01:05+00:00"),
+    _message("e", "system", "Eine Lehrperson wurde angefragt.", "2026-10-31T09:02:00+00:00"),
+)
+
+
+def test_a_conversation_request_is_summarised_from_its_last_question_and_answer(monkeypatch):
+    summary = _conversation_summary(
+        monkeypatch, _escalated_conversation("Ich verstehe den Nenner nicht."), *_CONVERSATION
+    )
+
+    assert summary["questionSummary"] == "Und 2/3 + 1/4? — Ich verstehe den Nenner nicht."
+    assert summary["aiAnswerSummary"] == "Der gemeinsame Nenner ist 12."
+
+
+def test_a_conversation_request_without_a_note_is_summarised_from_the_question_alone(monkeypatch):
+    summary = _conversation_summary(monkeypatch, _escalated_conversation(), *_CONVERSATION)
+
+    assert summary["questionSummary"] == "Und 2/3 + 1/4?"
+
+
+def test_a_conversation_with_no_answer_yet_leaves_the_answer_empty(monkeypatch):
+    summary = _conversation_summary(
+        monkeypatch, _escalated_conversation(), _CONVERSATION[0], _CONVERSATION[4]
+    )
+
+    assert summary["questionSummary"] == "Was ist 1/2 + 1/3?"
+    assert summary["aiAnswerSummary"] == ""
+
+
+def test_a_conversation_summary_is_cut_at_360_characters(monkeypatch):
+    summary = _conversation_summary(
+        monkeypatch,
+        _escalated_conversation("Bitte."),
+        _message("a", "student", "x" * 500, "2026-10-31T09:00:00+00:00"),
+        _message("b", "assistant", "y" * 500, "2026-10-31T09:00:05+00:00"),
+    )
+
+    assert summary["questionSummary"] == "x" * 360
+    assert summary["aiAnswerSummary"] == "y" * 360
+
+
+def test_a_request_from_the_retired_question_lane_reads_its_own_row(monkeypatch):
+    """The conversation is not read for a row that carries its question and answer."""
+    summary = _conversation_summary(
+        monkeypatch,
+        {**_bare_question(), "ai_response": {"answer": "Teile Zähler und Nenner."}},
+        *_CONVERSATION,
+    )
+
+    assert summary["questionSummary"] == "Bitte hilf mir beim Dividieren."
+    assert summary["aiAnswerSummary"] == "Teile Zähler und Nenner."
 
 
 # ── events sent to a whole role, read in each reader's language (#108) ─────
