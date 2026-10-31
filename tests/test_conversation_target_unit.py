@@ -20,7 +20,6 @@ double; the model call, the Lambda invoke and the two reads the map is made of
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
@@ -49,10 +48,6 @@ from test_message_command_generation import (  # noqa: F401 - fixtures
 from test_message_command_generation import _no_memory_personalisation  # noqa: F401
 from test_message_command_generation import model as model  # noqa: F401 - the fixture
 from test_message_command_generation import table as table  # noqa: F401 - the fixture
-from test_phase475_question_effect_recovery import EffectRecoveryTable
-from test_phase475_question_effect_recovery import _client as _question_client
-from test_phase475_question_effect_recovery import _request as _question
-from test_question_token_finalization import MockBedrockProvider, _patch_allowance_runtime
 from test_token_allowances import AtomicAllowanceTable
 
 _READ_THE_MAP = star_map_candidates.for_student
@@ -392,36 +387,3 @@ def test_a_follow_up_on_an_earlier_answer_is_shown_no_map_and_has_no_target(
     assert response.status_code == 200, response.text
     assert "<star_map-" not in model.student_turn(1)
     assert _target(response) is None
-
-
-class _QuestionProviderNamingATarget(MockBedrockProvider):
-    """Answers the old question route with a target it was never asked for."""
-
-    def invoke_model(self, **kwargs: object) -> dict[str, object]:
-        response = super().invoke_model(**kwargs)
-        payload = json.loads(response["body"].read())
-        content = json.loads(payload["content"][0]["text"])
-        content["target_unit_id"] = "k1"
-        payload["content"][0]["text"] = json.dumps(content)
-        response["body"] = type(response["body"])(payload)
-        return response
-
-
-def test_the_question_route_is_not_asked_for_a_target_and_survives_one(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The old "submit a question" route shares the prompt but shows no map."""
-    provider = _QuestionProviderNamingATarget()
-    _patch_allowance_runtime(
-        monkeypatch,
-        question_table=EffectRecoveryTable(),
-        allowance_table=AtomicAllowanceTable(),
-        provider=provider,
-    )
-
-    response = _question_client().post("/questions", json=_question())
-
-    assert response.status_code == 201, response.text
-    assert "target_unit_id" not in response.json()["ai_response"]
-    [call] = provider.invoke_calls
-    assert "target_unit_id" not in json.loads(str(call["body"]))["system"]

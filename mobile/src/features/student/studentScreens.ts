@@ -31,14 +31,6 @@ export const STUDENT_SCREEN_CONTRACTS: StudentScreenContract[] = [
     onlineOnlyMutations: ["/practice/teacher-help", "/practice/challenges/{challengeId}/answer"]
   },
   {
-    route: "/student/questions",
-    titleKey: "askQuestion",
-    endpointContracts: ["/questions", "/questions/{questionId}/request-teacher"],
-    states: ["loading", "ready", "empty", "blocked", "error"],
-    offlineReadThrough: false,
-    onlineOnlyMutations: ["/questions", "/questions/{questionId}/request-teacher"]
-  },
-  {
     route: "/student/history",
     titleKey: "learningHistory",
     endpointContracts: ["/students/{studentId}/questions"],

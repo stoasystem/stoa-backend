@@ -211,45 +211,6 @@ def grade_label(code: str, locale: str) -> str:
     return message_catalog.text(f"grade.{code}", resolved)
 
 
-def topic_seeds_from_ai_response(
-    *,
-    subject: str,
-    response: dict[str, Any],
-    question_id: str,
-    timestamp: str,
-) -> list[dict[str, Any]]:
-    """Extract normalized topic seed records from a structured AI response."""
-    values: list[Any] = []
-    for key in ("knowledge_points", "topics", "weak_topics", "weakTopics"):
-        raw = response.get(key)
-        if isinstance(raw, list):
-            values.extend(raw)
-
-    seeds = []
-    seen: set[str] = set()
-    for raw in values:
-        label = _topic_label(raw)
-        if not label:
-            continue
-        topic_id = normalize_topic_id(label)
-        if topic_id in seen:
-            continue
-        seen.add(topic_id)
-        seeds.append(
-            {
-                "subject": normalize_subject(subject),
-                "topic_id": topic_id,
-                "label": label,
-                "source": "ai_response",
-                "confidence": 0.7,
-                "evidence_question_ids": [question_id],
-                "first_seen_at": timestamp,
-                "last_seen_at": timestamp,
-            }
-        )
-    return seeds
-
-
 def build_learning_profile(
     *,
     student_id: str,
@@ -395,16 +356,6 @@ def _question_topic_entries(question: dict[str, Any], subject_id: str) -> list[d
             }
         )
     return seeds
-
-
-def _topic_label(raw: Any) -> str | None:
-    if isinstance(raw, str):
-        return raw.strip() or None
-    if isinstance(raw, dict):
-        value = raw.get("label") or raw.get("topic") or raw.get("topic_id") or raw.get("name")
-        if isinstance(value, str):
-            return value.strip() or None
-    return None
 
 
 def normalize_topic_id(label: str) -> str:

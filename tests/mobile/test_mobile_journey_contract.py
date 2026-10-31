@@ -14,20 +14,20 @@ def read(path: str) -> str:
 def test_student_api_uses_real_backend_endpoints() -> None:
     source = read("src/features/student/studentApi.ts")
 
+    # Retired in #148: questions are asked in a learning conversation.
+    assert 'path: "/questions"' not in source
+    assert "/request-teacher" not in source
+
     for endpoint in [
         "/students/me/profile",
         "/practice/overview",
         "/practice/curriculum/catalog",
         "/practice/curriculum/progress",
         "/practice/curriculum/lessons/",
-        "/questions",
-        "/request-teacher",
         "/practice/teacher-help",
         "/notifications",
     ]:
         assert endpoint in source
-
-    assert "idempotency_key" in source
 
 
 def test_parent_api_uses_real_backend_endpoints() -> None:
@@ -65,11 +65,15 @@ def test_student_and_parent_screen_contracts_define_offline_and_online_boundarie
 
     for route in [
         "/student/practice",
-        "/student/questions",
+        "/student/history",
         "/parent/children/[childId]/report",
         "/parent/billing",
     ]:
         assert route in combined
+
+    # The question routes are retired (#148); no screen may still send to them.
+    assert '"/questions"' not in student
+    assert "/request-teacher" not in student
 
     assert "offlineReadThrough: true" in combined
     assert "offlineReadThrough: false" in combined
@@ -81,7 +85,6 @@ def test_mobile_copy_covers_english_and_chinese_journey_labels() -> None:
 
     for key in [
         "practice",
-        "askQuestion",
         "learningHistory",
         "childSummary",
         "childHistory",

@@ -20,7 +20,7 @@ from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.routers.conversations import ConversationListPage
 from stoa.db.repositories import parent_link_repo, question_repo, user_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
-from stoa.routers import adaptive, questions, students
+from stoa.routers import adaptive, students
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import parent_link_service
 
@@ -136,22 +136,20 @@ def _client(parent_id: str = PARENT) -> TestClient:
     app = FastAPI()
     app.include_router(adaptive.router, prefix="/adaptive")
     app.include_router(students.router, prefix="/students")
-    app.include_router(questions.router, prefix="/questions")
     app.dependency_overrides[get_actor] = lambda: actor
     app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
     return TestClient(app)
 
 
-# The three routes below each come from a different authorization dependency
+# The routes below each come from a different authorization dependency
 # factory, which is what A3 was actually about: the old patch covered one router.
+# The question read route was the third until #148 retired it.
 ADAPTIVE_PROGRESS = f"/adaptive/parents/me/children/{STUDENT}/progress"
 STUDENT_SUMMARY = f"/students/{STUDENT}/summary"
-QUESTION_READ = f"/questions/{QUESTION_ID}"
 
 CROSS_ROUTER_ROUTES = (
     pytest.param(ADAPTIVE_PROGRESS, id="adaptive-parent-progress"),
     pytest.param(STUDENT_SUMMARY, id="students-summary"),
-    pytest.param(QUESTION_READ, id="questions-read"),
 )
 
 
@@ -239,17 +237,6 @@ def test_archived_parent_revokes_an_active_link(
     response = _client().get(path)
 
     assert response.status_code in {403, 404}, response.text
-
-
-def test_a_link_to_one_child_does_not_reach_another_students_question(
-    table: FakeLinkTable,
-) -> None:
-    """The question route derives the student from the resource, not from the path."""
-    _assign(table)
-
-    response = _client().get(f"/questions/{STRANGER_QUESTION_ID}")
-
-    assert response.status_code == 404, response.text
 
 
 def test_half_a_link_grants_nothing_on_a_non_parents_route(table: FakeLinkTable) -> None:

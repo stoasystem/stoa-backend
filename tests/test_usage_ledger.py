@@ -1,3 +1,5 @@
+import hashlib
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -6,13 +8,12 @@ from stoa.routers import admin, parents
 from fakes.dynamodb import FakeTable
 from stoa.services import usage_ledger_service
 from actor_helpers import install_actor_overrides
-from stoa.db.repositories import question_submission_repo, usage_ledger_repo
+from stoa.db.repositories import usage_ledger_repo
 
 
 def _question_digest(caller_key: str) -> str:
-    return question_submission_repo.question_submission_command_digest(
-        "student-1", caller_key
-    )
+    """A command digest as the retired submission route derived it (#148)."""
+    return hashlib.sha256(f"student-1:{caller_key}".encode()).hexdigest()
 
 
 def _settings() -> Settings:

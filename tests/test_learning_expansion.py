@@ -4,10 +4,10 @@ from decimal import Decimal
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.config import Settings, get_settings
-from stoa.db.repositories import question_submission_repo
+from stoa.config import Settings
+from stoa.db.repositories import user_repo
 from stoa.deps import get_actor, get_current_user
-from stoa.routers import parents, questions, students
+from stoa.routers import parents, students
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import ai_service, ask_answer, learning_profile_service
 from actor_helpers import install_actor_overrides
@@ -20,20 +20,6 @@ def _settings() -> Settings:
         premium_tier_daily_question_limit=100,
         s3_images_bucket="images-bucket",
     )
-
-
-def _question_client(user: dict | None = None) -> TestClient:
-    app = FastAPI()
-    app.include_router(questions.router, prefix="/questions")
-    app.dependency_overrides[get_settings] = _settings
-    principal = user or {"sub": "student-1", "role": "student"}
-    app.dependency_overrides[get_current_user] = lambda: principal
-    role = CanonicalRole(principal["role"])
-    app.dependency_overrides[get_actor] = lambda: Actor(
-        principal["sub"], "https://identity.test", f"{principal['sub']}-subject",
-        role, AccountStatus.ACTIVE, role.value,
-    )
-    return TestClient(app)
 
 
 def _students_client(user: dict) -> TestClient:
@@ -53,145 +39,6 @@ def _parents_client(user: dict) -> TestClient:
     app.include_router(parents.router, prefix="/parents")
     install_actor_overrides(app, user)
     return TestClient(app)
-
-
-def test_submit_question_accepts_foundation_subject_and_stores_topic_seeds(monkeypatch):
-    stored = {}
-    completion_calls = []
-
-    monkeypatch.setattr(
-        questions.user_repo,
-        "get_user",
-        lambda user_id, **_kwargs: {"user_id": user_id, "subscription_tier": "free_trial", "grade": "Grade 8", "language": "en"},
-    )
-    monkeypatch.setattr(
-        questions.question_submission_repo,
-        "get_question_submission_command",
-        lambda *_args, **_kwargs: None,
-    )
-
-    def admit_question(**kwargs):
-        stored.update(kwargs["question"])
-        command = {
-            "entity_type": "question_submission_command",
-            "schema_version": "question-submission-command.v2",
-            "command_id": kwargs["idempotency_digest"],
-            "student_id": kwargs["student_id"],
-            "idempotency_digest": kwargs["idempotency_digest"],
-            "question_id": kwargs["question"]["question_id"],
-            "fingerprint": kwargs["fingerprint"],
-            "account_fence_generation": 1,
-            "status": "processing",
-            "version": 1,
-        }
-        return question_submission_repo.QuestionAdmissionResult(
-            question_submission_repo.QuestionAdmissionDisposition.ADMITTED,
-            command=command,
-            question=dict(kwargs["question"]),
-        )
-
-    monkeypatch.setattr(
-        questions.question_submission_repo,
-        "admit_question_submission",
-        admit_question,
-    )
-    def begin_effect(command, question, kind, **_kwargs):
-        return question_submission_repo.QuestionEffectResult(
-            question_submission_repo.QuestionEffectDisposition.INVOKE_PROVIDER,
-            effect={
-                "effect_kind": str(kind),
-                "command": dict(command),
-                "question": dict(question),
-            },
-        )
-
-    def record_effect(effect, result, **_kwargs):
-        return question_submission_repo.QuestionEffectResult(
-            question_submission_repo.QuestionEffectDisposition.RESULT_READY,
-            effect={**effect, "result": dict(result)},
-        )
-
-    def complete_effect(effect, **_kwargs):
-        completion_calls.append(effect)
-        result = effect["result"]
-        question = {
-            **effect["question"],
-            "status": "ai_answered",
-            "version": int(effect["question"]["version"]) + 1,
-            "ai_response": result["ai_response"],
-            "knowledge_points": result["knowledge_points"],
-            "topic_seeds": result["topic_seeds"],
-        }
-        command = {
-            **effect["command"],
-            "status": "completed",
-            "version": int(effect["command"]["version"]) + 1,
-        }
-        return question_submission_repo.QuestionEffectResult(
-            question_submission_repo.QuestionEffectDisposition.COMPLETED,
-            effect=dict(effect),
-            question=question,
-            command=command,
-        )
-
-    monkeypatch.setattr(
-        questions.question_submission_repo,
-        "begin_question_effect",
-        begin_effect,
-    )
-    monkeypatch.setattr(
-        questions.question_submission_repo,
-        "record_question_effect_result",
-        record_effect,
-    )
-    monkeypatch.setattr(
-        questions.question_submission_repo,
-        "complete_question_effect",
-        complete_effect,
-    )
-    monkeypatch.setattr(
-        questions.ask_answer,
-        "get_ai_answer",
-        lambda **kwargs: {
-            "answer": "Use force equals mass times acceleration.",
-            "steps": ["Identify known values."],
-            "hints": [],
-            "similar_exercises": [],
-            "knowledge_points": ["Newton's second law"],
-        },
-    )
-
-    response = _question_client().post(
-        "/questions",
-        json={
-            "content": "A 2 kg object accelerates at 3 m/s^2.",
-            "subject": "physics",
-            "idempotencyKey": "learning-expansion-physics-question",
-        },
-    )
-
-    assert response.status_code == 201
-    body = response.json()
-    assert stored["subject"] == "physics"
-    assert body["subject"] == "physics"
-    assert body["knowledge_points"] == ["Newton's second law"]
-    assert body["topic_seeds"][0]["topic_id"] == "newton-s-second-law"
-    assert completion_calls[0]["result"]["topic_seeds"][0]["subject"] == "physics"
-    assert completion_calls[0]["question"]["version"] == 1
-    assert completion_calls[0]["command"]["account_fence_generation"] == 1
-
-
-def test_submit_question_rejects_uncontracted_subject():
-    response = _question_client().post(
-        "/questions",
-        json={
-            "content": "Explain this sentence please.",
-            "subject": "french",
-            "idempotencyKey": "learning-expansion-unsupported-subject",
-        },
-    )
-
-    assert response.status_code == 422
 
 
 def test_ai_prompt_context_differs_for_language_subject(monkeypatch):
@@ -299,7 +146,7 @@ def test_learning_profile_aggregates_subject_activity_and_topic_seeds(monkeypatc
         lambda student_id: [{"subject_id": "physics", "topic_id": "forces", "created_at": "2026-06-08T10:00:00+00:00"}],
     )
     monkeypatch.setattr(
-        questions.user_repo,
+        user_repo,
         "get_user",
         lambda user_id, **_kwargs: {
             "user_id": user_id,

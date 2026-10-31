@@ -37,9 +37,6 @@ class _PolicyDependency(Protocol):
     def __call__(self, student_id: str) -> Awaitable[str]: ...
 
 REAL_NESTED_IDENTIFIER_ROUTES = {
-    ("GET", "/questions/{question_id}"): ("question_id",),
-    ("POST", "/questions/{question_id}/request-teacher"): ("question_id",),
-    ("POST", "/questions/{question_id}/feedback"): ("question_id",),
     ("POST", "/questions/{question_id}/reports"): ("question_id",),
     ("GET", "/students/me/profile"): ("student_id",),
     ("PATCH", "/students/me/profile"): ("student_id",),

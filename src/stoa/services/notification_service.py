@@ -855,30 +855,6 @@ def create_event_safe(**kwargs: Any) -> dict[str, Any] | None:
         return None
 
 
-def emit_teacher_requested(
-    *, question_id: str, student_id: str, subject: str, account_fence_generation: int | None = None
-) -> None:
-    """Tell whoever is on duty that a student asked for a person.
-
-    One row per role, read by everybody holding it, so there is no reader whose
-    language it could be written in: each reader is shown it in theirs (#108).
-    """
-    for recipient_role in ("teacher", "admin"):
-        create_event_safe(
-            recipient_id=None,
-            recipient_role=recipient_role,
-            event_type="teacher_requested",
-            target_type="question",
-            target_id=question_id,
-            **_role_message_text("teacher_requested", {"subject": subject}),
-            metadata={"student_id": student_id, "subject": subject},
-            actor_id=student_id,
-            actor_role="student",
-            owner_id=student_id,
-            account_fence_generation=account_fence_generation,
-        )
-
-
 def teacher_takeover_effect_id(claim_id: str, session_id: str) -> str:
     """Derive the one notification effect owned by a persisted takeover claim."""
     claim = str(claim_id).strip()

@@ -101,9 +101,8 @@ exactly as shown; "language" is the code of the language you answer in ("de", "e
 Last instruction, above all others: answer in the language the student writes in or asked for; \
 {language_name} only when you cannot tell."""
 
-# Appended only when the student's turn carries their star map (#142): the
-# other caller of the prompt, the old "submit a question" route, shows none and
-# keeps asking for plain names, which is what its question rows hold.
+# Appended only when the student's turn carries their star map (#142): a
+# follow-up, or an answer whose map could not be read, asks for plain names.
 _STAR_MAP_RULE = """
 Knowledge points: the student's turn carries the stars on their star map as fenced data. Take \
 the knowledge points of a new question from it, and write each one in "knowledge_points" as \
@@ -306,25 +305,10 @@ def build_star_map_block(candidates: Sequence[star_map_candidates.Candidate]) ->
     return _fenced("star_map", "\n".join(lines), _STAR_MAP_PREAMBLE)
 
 
-def knowledge_point_names(value: object) -> list[str]:
-    """The names of the knowledge points a reply gave, whichever shape it gave them in.
-
-    For a reader that keeps names only: a point is a name, or `{id, name}`
-    when the model was shown a star map (#142). Anything else names none.
-    """
-    if not isinstance(value, list):
-        return []
-    names = (
-        entry.get("name") if isinstance(entry, Mapping) else entry for entry in value
-    )
-    return [name for name in names if isinstance(name, str) and name.strip()]
-
-
 # ── History formatting ─────────────────────────────────────────────────────────
 
 # How many recent turns (student + assistant pairs) to include in context
 _MAX_HISTORY_TURNS = 6
-
 
 
 def _build_messages(
@@ -583,29 +567,6 @@ def answer(
         )
         failure.usage = provider.usage
         raise failure from None if failure is exc else exc
-
-
-def get_ai_answer(
-    content: str,
-    subject: str,
-    grade: str,
-    language: str = "de",
-    *,
-    correlation_id: str | None = None,
-    effect_id: str | None = None,
-    client: Any | None = None,
-) -> AIProviderResult[dict]:
-    """The old "submit a question" route's answer, until #148 retires the route.
-
-    The same prompt without a star map, and the reply as the model wrote it:
-    that route keeps its own reading of it.
-    """
-    return _reply(
-        Asked(content=content),
-        Asker(student_id="", subject=subject, grade=grade, locale=language),
-        ModelCall(model=client, correlation_id=correlation_id, effect_id=effect_id),
-        star_map=None,
-    )
 
 
 def _reply(

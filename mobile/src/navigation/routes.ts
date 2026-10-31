@@ -18,7 +18,6 @@ export const AUTH_ROUTES: MobileRouteContract[] = [
 export const STUDENT_ROUTES: MobileRouteContract[] = [
   { path: "/student", label: "Student dashboard", guard: "student", deepLink: true },
   { path: "/student/practice", label: "Practice", guard: "student", deepLink: true },
-  { path: "/student/questions", label: "Ask a question", guard: "student", deepLink: true },
   { path: "/student/history", label: "Learning history", guard: "student", deepLink: true }
 ];
 

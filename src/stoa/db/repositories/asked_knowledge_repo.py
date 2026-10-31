@@ -3,7 +3,7 @@
 Each new question an Ask answer took up leaves one record of the knowledge
 points it named, so the readers the old 「交一道题」 flow fed - weak topics,
 adaptive memory, the weekly report, the parent dashboard and a teacher's prep -
-read them too, without a question row behind them (#148 retires those).
+read them too, without a question row behind them (#148 retired that flow).
 
 A record holds the subject, the names and the unit ids of the points that are
 stars on the student's map. It never holds the question: a parent reads these

@@ -57,7 +57,7 @@ def test_mobile_route_groups_cover_required_surfaces() -> None:
     for path in [
         "/auth/sign-in",
         "/student/practice",
-        "/student/questions",
+        "/student/history",
         "/parent/children/[childId]/report",
         "/notifications/[eventId]",
         "/blocked/provider",

@@ -15,8 +15,9 @@ export const hrefForNotificationTarget = (target: NotificationRouteTarget): stri
       return target.lessonId
         ? `/student/practice?lessonId=${encodeURIComponent(target.lessonId)}`
         : "/student/practice";
+    // The old question screen went with the question routes (#148); a question
+    // is read in the student's history.
     case "student_question":
-      return `/student/questions?questionId=${encodeURIComponent(target.questionId)}`;
     case "student_history":
       return "/student/history";
     case "parent_dashboard":

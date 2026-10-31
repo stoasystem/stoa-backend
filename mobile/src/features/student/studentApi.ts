@@ -17,14 +17,6 @@ export type StudentDashboardSummary = {
   notifications: unknown;
 };
 
-export type SubmitQuestionInput = {
-  content: string;
-  subject: string;
-  idempotencyKey: string;
-  imageS3Key?: string;
-  correctedText?: string;
-};
-
 export type PracticeTeacherHelpInput = {
   lessonId?: string;
   challengeId?: string;
@@ -42,25 +34,6 @@ export const createStudentApi = (api: MobileApiClient) => ({
 
   getLesson: (lessonId: string) =>
     api<unknown>({ path: `/practice/curriculum/lessons/${encodeURIComponent(lessonId)}` }),
-
-  submitQuestion: (input: SubmitQuestionInput) =>
-    api<unknown>({
-      path: "/questions",
-      method: "POST",
-      body: {
-        content: input.content,
-        subject: input.subject,
-        idempotency_key: input.idempotencyKey,
-        image_s3_key: input.imageS3Key,
-        corrected_text: input.correctedText
-      }
-    }),
-
-  requestTeacherForQuestion: (questionId: string) =>
-    api<unknown>({
-      path: `/questions/${encodeURIComponent(questionId)}/request-teacher`,
-      method: "POST"
-    }),
 
   requestPracticeTeacherHelp: (input: PracticeTeacherHelpInput) =>
     api<unknown>({
