@@ -54,6 +54,10 @@ HAND_WRITTEN_DOUBLES: dict[str, str] = {
     ),
     "test_billing_fact_repo.py::AtomicBillingTable": "repo",
     "test_conversations.py::_PagedIndexTable": "script",
+    "test_dispatch_reconciler.py::ScanPages": (
+        "script: canned scan pages, to show the help-request lister follows the "
+        "cursor and remembers each request; it answers `scan` and nothing else"
+    ),
     "test_identity_authorization.py::FakeTable": "repo",
     "test_knowledge_base_import.py::Paged": (
         "repo: two canned pages for `get_lessons`, to show it follows the cursor "

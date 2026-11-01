@@ -28,7 +28,7 @@ from stoa.db.repositories import (
     websocket_repo,
 )
 from stoa.security.tokens import VerifiedAccessToken
-from stoa.services import attachment_service, moderation_service
+from stoa.services import attachment_service, help_requests, moderation_service
 
 
 ACCOUNT_DELETION_BRANCH_IDS = (
@@ -662,17 +662,15 @@ def _question_ocr_session_branch(
     def mutate(item: dict[str, Any]) -> None:
         deleting_user_id = str(command["user_id"])
         generation = int(command["generation"])
-        if (
-            item.get("entity_type") == "question"
-            and item.get("student_id") != deleting_user_id
-            and account_deletion_repo.is_chat_help_request_queue_row(item)
-        ):
-            # A chat request goes back to waiting, both rows together (#72).
-            account_deletion_repo.scrub_teacher_chat_help_request(
+        if item.get("entity_type") == help_requests.ENTITY_TYPE:
+            # A student's request goes back to waiting when its teacher goes
+            # (#72); the student's own deletion clears it with the conversation.
+            help_requests.scrub_teacher(
                 item,
-                teacher_user_id=deleting_user_id,
+                teacher_id=deleting_user_id,
                 generation=generation,
-                now_iso=now,
+                now=now,
+                table=account_deletion_repo.get_table(),
             )
         elif (
             item.get("entity_type") == "question"
@@ -706,7 +704,11 @@ def _question_ocr_session_branch(
         previous=previous,
         predicate=lambda item: item.get("entity_type")
         in {"question", "teacher_session", "teacher_escalation_intent"}
-        or str(item.get("PK") or "").startswith(("QUESTION#", "SESSION#")),
+        or str(item.get("PK") or "").startswith(("QUESTION#", "SESSION#"))
+        or (
+            item.get("entity_type") == help_requests.ENTITY_TYPE
+            and item.get("student_id") != command["user_id"]
+        ),
         mutate=mutate,
     )
 

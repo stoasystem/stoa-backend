@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from stoa.services import teacher_dispatch_service
+from stoa.services import help_requests
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     """Lambda handler for the scheduled dispatch sweep."""
     try:
-        outcome = teacher_dispatch_service.reconcile_dispatches()
+        outcome = help_requests.sweep()
     except Exception:  # noqa: BLE001
         # A failed sweep must be visible; the schedule will try again, but a
         # silent failure here is how the gap it closes went unnoticed.

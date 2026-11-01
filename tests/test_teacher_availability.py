@@ -205,31 +205,42 @@ def test_assistance_summary_requires_current_teacher_and_uses_authorized_questio
     assert len(stored) == 1
 
 
+def _help_record(conversation_id: str, **fields) -> dict:
+    """A help request as its own record (#189); its id is its conversation's."""
+    return {
+        "PK": f"CONV#{conversation_id}",
+        "SK": "HELP",
+        "entity_type": "help_request",
+        "conversation_id": conversation_id,
+        "escalation_request_id": conversation_id,
+        "account_fence_generation": 1,
+        "version": 1,
+        **fields,
+    }
+
+
 def test_help_request_list_and_stats_include_only_current_assignment(monkeypatch):
-    conversations = [
-        {
-            "conversation_id": "conv-mine",
-            "student_id": "student-1",
-            "escalated": True,
-            "escalation_request_id": "help-mine",
-            "escalation_status": "pending",
-            "teacher_id": "teacher-1",
-            "subject": "math",
-            "escalated_at": "2026-07-15T08:00:00+00:00",
-        },
-        {
-            "conversation_id": "conv-other",
-            "student_id": "student-2",
-            "escalated": True,
-            "escalation_request_id": "help-other",
-            "escalation_status": "pending",
-            "teacher_id": "teacher-2",
-            "subject": "physics",
-            "escalated_at": "2026-07-15T09:00:00+00:00",
-            "request_message": "private-other",
-        },
-    ]
-    monkeypatch.setattr(teachers, "_get_escalated_conversations", lambda: conversations)
+    table = FakeTable()
+    table.seed(
+        _help_record(
+            "conv-mine",
+            student_id="student-1",
+            escalation_status="pending",
+            teacher_id="teacher-1",
+            subject="math",
+            escalated_at="2026-07-15T08:00:00+00:00",
+        ),
+        _help_record(
+            "conv-other",
+            student_id="student-2",
+            escalation_status="pending",
+            teacher_id="teacher-2",
+            subject="physics",
+            escalated_at="2026-07-15T09:00:00+00:00",
+            escalation_message="private-other",
+        ),
+    )
+    monkeypatch.setattr(teachers, "get_table", lambda: table)
     monkeypatch.setattr(teachers, "_get_student_name", lambda _id: "Current Student")
     client = _client(
         teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"}
@@ -239,91 +250,87 @@ def test_help_request_list_and_stats_include_only_current_assignment(monkeypatch
     stats = client.get("/teachers/me/stats")
 
     assert listed.status_code == 200
-    assert [item["requestId"] for item in listed.json()["items"]] == ["help-mine"]
+    assert [item["requestId"] for item in listed.json()["items"]] == ["conv-mine"]
     assert "private-other" not in str(listed.json())
     assert stats.status_code == 200
     assert stats.json()["pendingRequests"] == 1
 
 
 def test_cross_teacher_help_request_update_is_hidden_before_mutation(monkeypatch):
-    conv = {
-        "PK": "CONV#conv-1",
-        "SK": "CONV",
-        "conversation_id": "conv-1",
-        "student_id": "student-1",
-        "escalated": True,
-        "escalation_request_id": "help-1",
-        "teacher_id": "teacher-1",
-        "escalation_status": "in_progress",
-    }
+    record = _help_record(
+        "conv-1",
+        student_id="student-1",
+        owner_id="student-1",
+        teacher_id="teacher-1",
+        escalation_status="in_progress",
+        escalated_at="2026-07-15T08:00:00+00:00",
+    )
     table = FakeTable()
     table.seed(
-        conv,
-        # The holder's write binds their account, and a conversation without a
-        # queue row binds the student's fence.
+        {
+            "PK": "CONV#conv-1",
+            "SK": "CONV",
+            "entity_type": "conversation",
+            "conversation_id": "conv-1",
+            "student_id": "student-1",
+        },
+        record,
+        # The holder's write binds their account and the student's fence.
         {"PK": "USER#teacher-1", "SK": "PROFILE", "user_id": "teacher-1", "role": "teacher",
          "account_status": "active", "version": 1},
         {"PK": "USER#teacher-1", "SK": "ACCOUNT_FENCE", "status": "active", "generation": 1},
         {"PK": "USER#student-1", "SK": "ACCOUNT_FENCE", "status": "active", "generation": 1},
-        # Every chat request has its queue row; the holder's write moves both.
-        {"PK": "QUESTION#help-1", "SK": "META", "question_id": "help-1",
-         "entity_type": "question", "source": "conversation_escalation",
-         "conversation_id": "conv-1", "student_id": "student-1", "status": "teacher_active",
-         "teacher_id": "teacher-1", "version": 1, "account_fence_generation": 1},
     )
-    monkeypatch.setattr(teachers, "_get_conversation", lambda _id: dict(table.rows[("CONV#conv-1", "CONV")]))
+    before = dict(table.rows[("CONV#conv-1", "HELP")])
     monkeypatch.setattr(teachers, "_get_student_name", lambda _id: "Student")
     for module in (teachers, teacher_dispatch_service, account_deletion_repo):
         monkeypatch.setattr(module, "get_table", lambda table=table: table)
 
     other = _client(
         teachers.router, "/teachers", {"sub": "teacher-2", "role": "teacher"}
-    ).patch("/teachers/me/help-requests/help-1", json={"status": "resolved"})
+    ).patch("/teachers/me/help-requests/conv-1", json={"status": "resolved"})
 
     assert other.status_code == 404
-    assert table.rows[("CONV#conv-1", "CONV")] == conv
+    assert table.rows[("CONV#conv-1", "HELP")] == before
 
     current = _client(
         teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"}
-    ).patch("/teachers/me/help-requests/help-1", json={"status": "resolved"})
+    ).patch("/teachers/me/help-requests/conv-1", json={"status": "resolved"})
 
     assert current.status_code == 200
-    assert table.rows[("CONV#conv-1", "CONV")]["escalation_status"] == "resolved"
-    assert table.rows[("QUESTION#help-1", "META")]["status"] == "resolved"
+    assert table.rows[("CONV#conv-1", "HELP")]["escalation_status"] == "resolved"
+    # One record moves; the conversation row carries none of it.
+    assert "escalation_status" not in table.rows[("CONV#conv-1", "CONV")]
 
 
 def test_help_request_authorization_outage_returns_503_before_mutation(monkeypatch):
-    updates = []
-    monkeypatch.setattr(
-        teachers,
-        "_get_conversation",
-        lambda _id: {
-            "conversation_id": "conv-1",
-            "student_id": "student-1",
-            "escalated": True,
-            "teacher_id": "teacher-1",
-        },
+    table = FakeTable()
+    table.seed(
+        _help_record(
+            "conv-1",
+            student_id="student-1",
+            teacher_id="teacher-1",
+            escalation_status="in_progress",
+        )
     )
-
-    class Table:
-        def update_item(self, **kwargs):
-            updates.append(kwargs)
+    before = dict(table.rows[("CONV#conv-1", "HELP")])
 
     class Outage:
         async def facts_for(self, *_args, **_kwargs):
             raise RuntimeError("authorization store unavailable")
 
-    monkeypatch.setattr(teachers, "get_table", lambda: Table())
+    monkeypatch.setattr(teachers, "get_table", lambda: table)
     app = FastAPI()
     app.include_router(teachers.router, prefix="/teachers")
     install_actor_overrides(app, {"sub": "teacher-1", "role": "teacher"})
     app.dependency_overrides[get_authorization_fact_repository] = Outage
     response = TestClient(app).patch(
-        "/teachers/me/help-requests/help-1", json={"status": "resolved"}
+        "/teachers/me/help-requests/conv-1", json={"status": "resolved"}
     )
 
     assert response.status_code == 503
-    assert updates == []
+    assert table.rows[("CONV#conv-1", "HELP")] == before
+    assert table.calls["transact_write_items"] == 0
 
 
 # --- A teacher can go off dispatch and come back (stoasystem/stoa-backend#67) ---

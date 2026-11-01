@@ -1,14 +1,10 @@
-"""A chat help request, from the offer to the end: stoasystem/stoa-backend#66.
+"""A help request, from the offer to the end (#66, #189).
 
-A chat escalation is two rows: the conversation the student reads and the queue
-question row the reconciler and dashboards read. Nothing used to let the teacher
-it was dispatched to take it: the conversation never got a `teacher_id`, so the
-teacher could read the request and nothing else, and each resolve route moved
-only one of the two rows.
-
-Rows here are shaped like production's (the attribute names were read from
-`stoa-main` for #51). Dispatch is the real `dispatch_conversation`; routes,
-repositories and the teacher policy are real, over the shared table double.
+A help request is one record in its conversation's partition (#189); before,
+it was the conversation's fields and a queue row in the question table, and
+these tests checked that the two moved together. Dispatch is the real
+`help_requests.dispatch`; routes, repositories and the teacher policy are real,
+over the shared table double.
 """
 
 from __future__ import annotations
@@ -24,16 +20,17 @@ import pytest
 from actor_helpers import install_actor_overrides
 from stoa.db.repositories import account_deletion_repo
 from stoa.routers import teachers
-from stoa.services import teacher_dispatch_service
+from stoa.services import help_requests
 
 TEACHER = "teacher-66"
 OTHER_TEACHER = "teacher-66-other"
 STUDENT = "student-66"
 CONV = "conv-66"
-REQUEST = "req-66"
+# A request's id is its conversation's (#189).
+REQUEST = CONV
 CREATED = "2026-09-28T12:00:00+00:00"
 CONV_KEY = (f"CONV#{CONV}", "CONV")
-QUESTION_KEY = (f"QUESTION#{REQUEST}", "META")
+HELP_KEY = (f"CONV#{CONV}", "HELP")
 
 
 def _teacher_rows(teacher_id: str) -> list[dict]:
@@ -63,11 +60,6 @@ def build_table(monkeypatch) -> FakeTable:
             "conversation_id": CONV,
             "created_at": CREATED,
             "entity_type": "conversation",
-            "escalated": True,
-            "escalated_at": CREATED,
-            "escalation_message": "Step 2 makes no sense to me.",
-            "escalation_request_id": REQUEST,
-            "escalation_status": "pending",
             "grade": "6",
             "owner_id": STUDENT,
             "student_id": STUDENT,
@@ -76,28 +68,28 @@ def build_table(monkeypatch) -> FakeTable:
             "updated_at": CREATED,
         },
         {
-            "PK": f"QUESTION#{REQUEST}",
-            "SK": "META",
-            "question_id": REQUEST,
-            "entity_type": "question",
+            "PK": f"CONV#{CONV}",
+            "SK": "HELP",
+            "entity_type": "help_request",
+            "schema_version": "help-request.v1",
             "conversation_id": CONV,
-            "source": "conversation_escalation",
+            "escalation_request_id": REQUEST,
             "student_id": STUDENT,
             "owner_id": STUDENT,
             "account_fence_generation": 1,
             "version": 1265,
-            "status": "escalated",
-            "subject": "mathematics",
-            "grade": "6",
-            "content": "Step 2 makes no sense to me.",
-            "teacher_help_requested": True,
-            "teacher_requested_at": CREATED,
-            "queue_visible_at": CREATED,
-            "dispatch_status": "unassigned",
-            "dispatch_no_candidate_reason": "not_available",
-            "dispatch_updated_at": CREATED,
+            "escalated": True,
+            "escalation_status": "pending",
+            "escalated_at": CREATED,
             "created_at": CREATED,
             "updated_at": CREATED,
+            "escalation_message": "Step 2 makes no sense to me.",
+            "subject": "mathematics",
+            "grade": "6",
+            "dispatch_status": "no_candidate",
+            "dispatch_no_candidate_reason": "not_available",
+            "dispatch_no_candidate_since": CREATED,
+            "dispatch_updated_at": CREATED,
         },
         *_teacher_rows(TEACHER),
         *_teacher_rows(OTHER_TEACHER),
@@ -142,11 +134,9 @@ def _dispatch_to(table: FakeTable, teacher_id: str) -> None:
         table.rows[(f"USER#{other}", "PROFILE")]["dispatch_availability"] = (
             "available" if other == teacher_id else "paused"
         )
-    result = teacher_dispatch_service.dispatch_conversation(
-        CONV, conversation=dict(table.rows[CONV_KEY]), table=table
-    )
-    assert result["status"] == "dispatched"
-    assert result["teacherId"] == teacher_id
+    written = help_requests.dispatch(dict(table.rows[HELP_KEY]), table=table)
+    assert written["dispatch_status"] == "dispatched"
+    assert written["dispatched_teacher_id"] == teacher_id
 
 
 def _client(teacher_id: str = TEACHER) -> TestClient:
@@ -160,12 +150,13 @@ def _conv(table: FakeTable) -> dict:
     return table.rows[CONV_KEY]
 
 
-def _question(table: FakeTable) -> dict:
-    return table.rows[QUESTION_KEY]
+def _help(table: FakeTable) -> dict:
+    """The request's record (#189)."""
+    return table.rows[HELP_KEY]
 
 
 def _nothing_waits() -> None:
-    outcome = teacher_dispatch_service.reconcile_dispatches()
+    outcome = help_requests.sweep()
     assert outcome["conversationsWaiting"] == 0
 
 
@@ -177,6 +168,8 @@ def _reply(client: TestClient, content: str = "Look at the denominators first.")
     return client.post(f"/teachers/me/help-requests/{REQUEST}/notes", json={"content": content})
 
 
+
+
 def test_the_dispatched_teacher_accepts_by_marking_it_in_progress(table):
     _dispatch_to(table, TEACHER)
 
@@ -184,33 +177,31 @@ def test_the_dispatched_teacher_accepts_by_marking_it_in_progress(table):
 
     assert response.status_code == 200
     assert response.json()["status"] == "in_progress"
-    conv, question = _conv(table), _question(table)
-    assert conv["teacher_id"] == TEACHER
-    assert conv["escalation_status"] == "in_progress"
-    assert conv["dispatch_status"] == "accepted"
-    assert conv["first_teacher_action_at"]
-    assert question["status"] == "teacher_active"
-    assert question["teacher_id"] == TEACHER
-    assert question["dispatch_status"] == "accepted"
-    assert question["version"] == 1267  # dispatch + accept, each through the CAS
+    record = _help(table)
+    assert record["teacher_id"] == TEACHER
+    assert record["escalation_status"] == "in_progress"
+    assert record["dispatch_status"] == "accepted"
+    assert record["accepted_at"]
+    # Taking a request is not its first response; the first reply is (#189).
+    assert "first_teacher_action_at" not in record
+    assert record["version"] == 1267  # dispatch + accept, each through the CAS
     _nothing_waits()
 
 
-def test_an_accepted_request_takes_replies_and_resolving_closes_both_rows(table):
+def test_an_accepted_request_takes_replies_and_resolving_ends_it(table):
     _dispatch_to(table, TEACHER)
     client = _client()
     assert _set_status(client, "in_progress").status_code == 200
 
     assert _reply(client).status_code in {200, 201}
+    assert _help(table)["first_teacher_action_at"]
     resolved = _set_status(client, "resolved", resolutionNote="Worked through it together.")
 
     assert resolved.status_code == 200
-    conv, question = _conv(table), _question(table)
-    assert conv["escalation_status"] == "resolved"
-    assert conv["escalation_resolved_at"]
-    assert conv["resolution_note"] == "Worked through it together."
-    assert question["status"] == "resolved"
-    assert question["resolved_at"]
+    record = _help(table)
+    assert record["escalation_status"] == "resolved"
+    assert record["escalation_resolved_at"]
+    assert record["resolution_note"] == "Worked through it together."
     _nothing_waits()
     stats = client.get("/teachers/me/stats").json()
     assert stats["pendingRequests"] == 0
@@ -219,17 +210,16 @@ def test_an_accepted_request_takes_replies_and_resolving_closes_both_rows(table)
 
 def test_resolving_straight_from_the_offer_accepts_and_resolves_in_one_write(table):
     _dispatch_to(table, TEACHER)
-    before = int(_question(table)["version"])
+    before = int(_help(table)["version"])
 
     response = _set_status(_client(), "resolved", resolutionNote="Answered in one go.")
 
     assert response.status_code == 200
-    conv, question = _conv(table), _question(table)
-    assert conv["teacher_id"] == TEACHER
-    assert conv["escalation_status"] == "resolved"
-    assert question["status"] == "resolved"
-    assert question["teacher_id"] == TEACHER
-    assert int(question["version"]) == before + 1
+    record = _help(table)
+    assert record["teacher_id"] == TEACHER
+    assert record["escalation_status"] == "resolved"
+    assert record["dispatch_status"] == "accepted"
+    assert int(record["version"]) == before + 1
     _nothing_waits()
 
 
@@ -239,10 +229,11 @@ def test_replying_to_an_offer_accepts_it_with_the_reply(table):
     response = _reply(_client())
 
     assert response.status_code in {200, 201}
-    conv = _conv(table)
-    assert conv["teacher_id"] == TEACHER
-    assert conv["escalation_status"] == "in_progress"
-    assert _question(table)["status"] == "teacher_active"
+    record = _help(table)
+    assert record["teacher_id"] == TEACHER
+    assert record["escalation_status"] == "in_progress"
+    # The reply is the request's first response (#189).
+    assert record["first_teacher_action_at"] == record["accepted_at"]
     notes = [row for key, row in table.rows.items() if key[0] == f"CONV#{CONV}" and key[1].startswith("NOTE#")]
     assert len(notes) == 1
     assert notes[0]["teacher_id"] == TEACHER
@@ -250,7 +241,7 @@ def test_replying_to_an_offer_accepts_it_with_the_reply(table):
 
 def test_another_teacher_cannot_take_an_offer_made_to_someone_else(table):
     _dispatch_to(table, TEACHER)
-    before = (dict(_conv(table)), dict(_question(table)))
+    before = (dict(_conv(table)), dict(_help(table)))
 
     for attempt in (
         _set_status(_client(OTHER_TEACHER), "in_progress"),
@@ -259,23 +250,22 @@ def test_another_teacher_cannot_take_an_offer_made_to_someone_else(table):
     ):
         assert attempt.status_code == 404
 
-    assert (_conv(table), _question(table)) == before
+    assert (_conv(table), _help(table)) == before
 
 
 def test_an_expired_offer_cannot_be_accepted(table):
     _dispatch_to(table, TEACHER)
-    for row in (_conv(table), _question(table)):
-        row["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
-    before = (dict(_conv(table)), dict(_question(table)))
+    _help(table)["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
+    before = (dict(_conv(table)), dict(_help(table)))
 
     response = _set_status(_client(), "in_progress")
 
     assert response.status_code in {403, 404}
-    assert (_conv(table), _question(table)) == before
+    assert (_conv(table), _help(table)) == before
 
 
 def test_an_offer_moved_on_between_the_check_and_the_write_is_refused(table, monkeypatch):
-    # Authorization saw a live offer; by the time the write lands the reconciler
+    # Authorization saw a live offer; by the time the write lands the sweep
     # has re-offered the case. The write must be bound to the offer it checked.
     _dispatch_to(table, TEACHER)
     real_transact = account_deletion_repo.transact
@@ -284,7 +274,7 @@ def test_an_offer_moved_on_between_the_check_and_the_write_is_refused(table, mon
     def transact_after_a_redispatch(operations, *, table=None):
         if not moved:
             moved.append(True)
-            table.rows[CONV_KEY]["dispatch_id"] = "a-newer-offer"
+            table.rows[HELP_KEY]["dispatch_id"] = "a-newer-offer"
         return real_transact(operations, table=table)
 
     monkeypatch.setattr(account_deletion_repo, "transact", transact_after_a_redispatch)
@@ -293,9 +283,8 @@ def test_an_offer_moved_on_between_the_check_and_the_write_is_refused(table, mon
 
     assert moved
     assert response.status_code == 409
-    assert "teacher_id" not in _conv(table)
-    assert _conv(table)["escalation_status"] == "pending"
-    assert _question(table)["status"] == "escalated"
+    assert "teacher_id" not in _help(table)
+    assert _help(table)["escalation_status"] == "pending"
 
 
 def test_a_resolved_request_is_not_reopened(table):
@@ -305,31 +294,31 @@ def test_a_resolved_request_is_not_reopened(table):
 
     assert _set_status(client, "in_progress").status_code == 409
     assert _set_status(client, "resolved").status_code == 409
-    assert _conv(table)["escalation_status"] == "resolved"
+    assert _help(table)["escalation_status"] == "resolved"
 
 
 def test_only_in_progress_and_resolved_are_accepted(table):
     _dispatch_to(table, TEACHER)
-    before = dict(_conv(table))
+    before = (dict(_conv(table)), dict(_help(table)))
 
     response = _set_status(_client(), "done")
 
     assert response.status_code == 422
-    assert _conv(table) == before
+    assert (_conv(table), _help(table)) == before
 
 
 # --- What the independent audit of the first version found ---
 
 
 def _unchanged(table: FakeTable, before: tuple[dict, dict]) -> bool:
-    return (_conv(table), _question(table)) == before
+    return (_conv(table), _help(table)) == before
 
 
-def _fail_queue_row_reads(table: FakeTable, monkeypatch) -> None:
+def _fail_request_reads(table: FakeTable, monkeypatch) -> None:
     real_get = table.get_item
 
     def get_item(**kwargs):
-        if kwargs.get("Key", {}).get("PK", "").startswith("QUESTION#"):
+        if kwargs.get("Key", {}).get("SK") == "HELP":
             raise RuntimeError("ProvisionedThroughputExceededException")
         return real_get(**kwargs)
 
@@ -337,98 +326,79 @@ def _fail_queue_row_reads(table: FakeTable, monkeypatch) -> None:
 
 
 @pytest.mark.parametrize("first_accept", [False, True], ids=["accepting", "holder"])
-def test_a_failed_queue_row_read_writes_nothing(table, monkeypatch, first_accept):
-    # A throttled read used to count as "no queue row", and the conversation
-    # alone was written: the split this ticket exists to close.
+def test_a_failed_request_read_writes_nothing(table, monkeypatch, first_accept):
+    # A throttled read used to count as "no request", and a write went ahead
+    # on what was not read. Unknown is not absent (#189): nothing is written.
     _dispatch_to(table, TEACHER)
-    client = _client()
+    client = TestClient(_client().app, raise_server_exceptions=False)
     if first_accept:
         assert _set_status(client, "in_progress").status_code == 200
-    before = (dict(_conv(table)), dict(_question(table)))
-    _fail_queue_row_reads(table, monkeypatch)
+    before = (dict(_conv(table)), dict(_help(table)))
+    rows_before = set(table.rows)
+    _fail_request_reads(table, monkeypatch)
 
-    assert _set_status(client, "resolved").status_code == 409
-    if not first_accept:
-        # Replying to the offer would accept it, so it is refused the same way.
-        assert _reply(client).status_code == 409
+    # Unavailable, to be tried again - not "no such request", and not a write.
+    assert _set_status(client, "resolved").status_code == 503
+    assert _reply(client).status_code == 503
 
     assert _unchanged(table, before)
-
-
-def test_dispatch_retries_a_failed_queue_row_read_instead_of_writing_one_row(table, monkeypatch):
-    before = (dict(_conv(table)), dict(_question(table)))
-    _fail_queue_row_reads(table, monkeypatch)
-
-    result = teacher_dispatch_service.dispatch_conversation(
-        CONV, conversation=dict(_conv(table)), table=table
-    )
-
-    assert result["status"] == "claim_conflict"
-    assert _unchanged(table, before)
+    assert set(table.rows) == rows_before
 
 
 def test_a_teacher_who_timed_out_is_not_offered_the_case_again(table):
     _dispatch_to(table, TEACHER)
-    for row in (_conv(table), _question(table)):
-        row["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
+    _help(table)["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
 
-    teacher_dispatch_service.reconcile_dispatches()
+    help_requests.sweep()
 
-    assert TEACHER in _question(table)["previous_dispatch_teacher_ids"]
-    conv = _conv(table)
-    assert not (
-        conv.get("dispatched_teacher_id") == TEACHER
-        and conv.get("dispatch_deadline_at", "") > "2026-02-01"
-    ), "the conversation lane offered the case back to the teacher who timed out"
+    record = _help(table)
+    assert TEACHER in record["previous_dispatch_teacher_ids"]
+    assert record.get("dispatched_teacher_id") != TEACHER, (
+        "the sweep offered the case back to the teacher who timed out"
+    )
     assert _set_status(_client(), "in_progress").status_code in {403, 404, 409}
-    assert "teacher_id" not in _conv(table)
+    assert "teacher_id" not in _help(table)
 
 
-def test_accepting_refuses_a_teacher_the_queue_row_says_timed_out(table):
+def test_accepting_refuses_a_teacher_the_request_says_timed_out(table):
     _dispatch_to(table, TEACHER)
-    _question(table)["previous_dispatch_teacher_ids"] = [TEACHER]
-    before = (dict(_conv(table)), dict(_question(table)))
+    _help(table)["previous_dispatch_teacher_ids"] = [TEACHER]
+    before = (dict(_conv(table)), dict(_help(table)))
 
-    assert _set_status(_client(), "in_progress").status_code == 409
+    # The policy now reads the same record, so it may refuse before the write does.
+    assert _set_status(_client(), "in_progress").status_code in {403, 409}
     assert _unchanged(table, before)
 
 
-def test_accepting_refuses_when_the_queue_row_carries_another_offer(table):
-    # The question lane re-offered the queue row between the policy check and
-    # the read; the conversation still shows the old offer.
-    _dispatch_to(table, TEACHER)
-    _question(table)["dispatch_id"] = "queue-lane-offer"
-    before = (dict(_conv(table)), dict(_question(table)))
-
-    assert _set_status(_client(), "in_progress").status_code == 409
-    assert _unchanged(table, before)
-
-
-def test_a_queue_row_changed_between_read_and_write_is_refused(table, monkeypatch):
+def test_a_request_changed_between_read_and_write_is_refused(table, monkeypatch):
+    # Any write to the request moves its version; a write decided on the
+    # version before it is refused (#189).
     _dispatch_to(table, TEACHER)
     real_transact = account_deletion_repo.transact
     bumped = []
 
-    def transact_after_a_queue_row_write(operations, *, table=None):
+    def transact_after_another_write(operations, *, table=None):
         if not bumped:
             bumped.append(True)
-            row = table.rows[QUESTION_KEY]
+            row = table.rows[HELP_KEY]
             row["version"] = row["version"] + 1
         return real_transact(operations, table=table)
 
-    monkeypatch.setattr(account_deletion_repo, "transact", transact_after_a_queue_row_write)
+    monkeypatch.setattr(account_deletion_repo, "transact", transact_after_another_write)
 
     assert _set_status(_client(), "in_progress").status_code == 409
-    assert "teacher_id" not in _conv(table)
-    assert _question(table)["status"] == "escalated"
+    assert "teacher_id" not in _help(table)
+    assert _help(table)["escalation_status"] == "pending"
 
 
-def test_an_offer_without_a_pending_conversation_is_refused(table):
+def test_an_offer_on_a_request_no_longer_pending_is_refused(table):
+    # An offer is taken only while the request waits; a request that moved on
+    # without a holder is not taken by the offer it still shows.
     _dispatch_to(table, TEACHER)
-    _conv(table)["escalation_status"] = "in_progress"
-    before = (dict(_conv(table)), dict(_question(table)))
+    _help(table)["escalation_status"] = "in_progress"
+    before = (dict(_conv(table)), dict(_help(table)))
 
-    assert _set_status(_client(), "resolved").status_code == 409
+    assert _set_status(_client(), "resolved").status_code in {403, 409}
     assert _unchanged(table, before)
 
 
@@ -437,28 +407,28 @@ def test_a_holder_whose_account_is_being_deleted_cannot_resolve(table):
     client = _client()
     assert _set_status(client, "in_progress").status_code == 200
     table.rows[(f"USER#{TEACHER}", "ACCOUNT_FENCE")]["status"] = "deleting"
-    before = (dict(_conv(table)), dict(_question(table)))
+    before = (dict(_conv(table)), dict(_help(table)))
 
     assert _set_status(client, "resolved").status_code == 409
     assert _unchanged(table, before)
 
 
-def test_a_conversation_without_a_queue_row_cannot_be_taken(table):
-    # Account deletion reaches a chat request through its queue row, so a
-    # teacher bound to a conversation without one could never be removed from
-    # it (#72 audit). Such escalations predate queue rows; none are taken.
-    _dispatch_to(table, TEACHER)
-    del table.rows[QUESTION_KEY]
+def test_a_conversation_without_a_request_cannot_be_taken(table):
+    # Nothing to take: the teacher's routes answer from the request, so a
+    # conversation that never asked has nothing a teacher can write (#189).
+    del table.rows[HELP_KEY]
     before = dict(_conv(table))
+    rows_before = set(table.rows)
 
     for attempt in (
         _set_status(_client(), "in_progress"),
         _set_status(_client(), "resolved"),
         _reply(_client()),
     ):
-        assert attempt.status_code == 409
+        assert attempt.status_code == 404
 
     assert _conv(table) == before
+    assert set(table.rows) == rows_before
 
 
 @pytest.mark.parametrize("held", [False, True], ids=["offered_to_another", "held_by_another"])
@@ -467,8 +437,8 @@ def test_a_teacher_assigned_to_the_student_cannot_write_a_request_they_do_not_ho
 ):
     # User decision on #73 (2026-09-28): a teacher the policy admits through an
     # assignment, who neither holds the request nor was offered it, may read
-    # it but not write it. The conversation-only write they used to get could
-    # strand a request offered to someone else, or reopen a resolved one.
+    # it but not write it. The write they used to get could strand a request
+    # offered to someone else, or reopen a resolved one.
     from stoa.security.authorization import AuthorizationFacts, TeacherAuthorizationFacts
     from stoa.security.route_authorization import get_authorization_fact_repository
 
@@ -500,7 +470,7 @@ def test_a_teacher_assigned_to_the_student_cannot_write_a_request_they_do_not_ho
     install_actor_overrides(app, {"sub": assigned, "role": "teacher"})
     app.dependency_overrides[get_authorization_fact_repository] = AssignmentFacts
     client = TestClient(app)
-    before = (dict(_conv(table)), dict(_question(table)))
+    before = (dict(_conv(table)), dict(_help(table)))
     rows_before = set(table.rows)
 
     for attempt in (
@@ -518,21 +488,15 @@ def test_a_teacher_assigned_to_the_student_cannot_write_a_request_they_do_not_ho
     assert client.get(f"/teachers/me/help-requests/{REQUEST}").status_code == 200
 
 
-@pytest.mark.parametrize("queue_row_live", [False, True], ids=["both_expired", "only_conversation_expired"])
-def test_an_offer_that_expires_between_the_check_and_the_write_is_refused(
-    table, monkeypatch, queue_row_live
-):
+def test_an_offer_that_expires_between_the_check_and_the_write_is_refused(table, monkeypatch):
     # The policy saw a live offer on its own clock; the write happens after the
     # deadline. Found by the second independent audit: the deadline was checked
-    # by the policy only, so the late write still took the offer. Both rows bind
-    # it; keeping the queue row's offer live leaves the conversation's condition
-    # as the only one that can refuse.
+    # by the policy only, so the late write still took the offer. The write
+    # binds it.
     _dispatch_to(table, TEACHER)
-    if queue_row_live:
-        _question(table)["dispatch_deadline_at"] = "2100-01-01T00:00:00+00:00"
-    assert _conv(table)["dispatch_deadline_at"] < "2099"
+    assert _help(table)["dispatch_deadline_at"] < "2099"
     monkeypatch.setattr(teachers, "_now", lambda: "2099-01-01T00:00:00+00:00")
-    before = (dict(_conv(table)), dict(_question(table)))
+    before = (dict(_conv(table)), dict(_help(table)))
 
     for attempt in (_set_status(_client(), "in_progress"), _reply(_client())):
         assert attempt.status_code == 409
@@ -540,42 +504,24 @@ def test_an_offer_that_expires_between_the_check_and_the_write_is_refused(
     assert _unchanged(table, before)
 
 
-def test_accepting_refuses_when_only_the_queue_rows_offer_has_expired(table):
-    # The conversation still shows a live offer, but the queue row's own
-    # deadline has passed: the queue row's condition alone must refuse.
-    _dispatch_to(table, TEACHER)
-    _question(table)["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
-    before = (dict(_conv(table)), dict(_question(table)))
-
-    assert _set_status(_client(), "in_progress").status_code == 409
-    assert _unchanged(table, before)
-
-
 # --- Deleting a teacher returns their open chat requests to waiting (#72) ---
 #
 # User decision 2026-09-28: when a teacher account is deleted, a chat help
-# request they took or were offered goes back to waiting, both rows together,
-# so the reconciler offers it to someone else. A closed one keeps its outcome
-# and loses only the teacher references. These drive the real deletion branch
-# until it reports complete.
+# request they took or were offered goes back to waiting, so the sweep offers
+# it to someone else. A closed one keeps its outcome and loses only the
+# teacher references. These drive the real deletion branch until it reports
+# complete.
 
 from dataclasses import asdict  # noqa: E402
 
 from stoa.services import account_deletion_service  # noqa: E402
 
-_TEACHER_FIELDS_ON_CONVERSATION = (
+_TEACHER_FIELDS = (
     "teacher_id",
     "dispatched_teacher_id",
     "dispatch_id",
     "dispatch_deadline_at",
     "accepted_at",
-)
-_TEACHER_FIELDS_ON_QUEUE_ROW = (
-    "teacher_id",
-    "dispatched_teacher_id",
-    "dispatch_id",
-    "dispatch_deadline_at",
-    "teacher_accepted_at",
 )
 
 
@@ -594,22 +540,15 @@ def _delete_teacher(table: FakeTable, teacher_id: str = TEACHER) -> list:
     return results
 
 
-def _assert_waiting_without(
-    table: FakeTable, teacher_id: str, *, conversation_dispatch: str = "unassigned"
-) -> None:
-    conv, question = _conv(table), _question(table)
-    assert conv["escalation_status"] == "pending"
-    assert conv["dispatch_status"] == conversation_dispatch
-    assert question["status"] == "escalated"
-    assert question["dispatch_status"] == "unassigned"
-    for field in _TEACHER_FIELDS_ON_CONVERSATION:
-        assert field not in conv, field
-    for field in _TEACHER_FIELDS_ON_QUEUE_ROW:
-        assert field not in question, field
-    assert teacher_id not in question.get("previous_dispatch_teacher_ids", [])
+def _assert_waiting_without(table: FakeTable, teacher_id: str, *, dispatch: str = "unassigned") -> None:
+    record = _help(table)
+    assert record["escalation_status"] == "pending"
+    assert record["dispatch_status"] == dispatch
+    for field in _TEACHER_FIELDS:
+        assert field not in record, field
+    assert teacher_id not in record.get("previous_dispatch_teacher_ids", [])
     # The student's own content is untouched.
-    assert conv["escalation_message"] == "Step 2 makes no sense to me."
-    assert question["content"] == "Step 2 makes no sense to me."
+    assert record["escalation_message"] == "Step 2 makes no sense to me."
 
 
 @pytest.mark.parametrize("accepted", [True, False], ids=["accepted", "offered"])
@@ -623,31 +562,29 @@ def test_deleting_the_teacher_returns_an_open_request_to_waiting(table, accepted
     assert results[-1].status == "complete", [asdict(r) for r in results]
     _assert_waiting_without(table, TEACHER)
 
-    # Nothing is stuck: the reconciler offers it to another teacher, who ends it.
+    # Nothing is stuck: the sweep offers it to another teacher, who ends it.
     table.rows[(f"USER#{OTHER_TEACHER}", "PROFILE")]["dispatch_availability"] = "available"
-    teacher_dispatch_service.reconcile_dispatches()
-    assert _conv(table)["dispatched_teacher_id"] == OTHER_TEACHER
+    help_requests.sweep()
+    assert _help(table)["dispatched_teacher_id"] == OTHER_TEACHER
     assert _set_status(_client(OTHER_TEACHER), "resolved").status_code == 200
-    assert _conv(table)["escalation_status"] == "resolved"
-    assert _question(table)["status"] == "resolved"
+    assert _help(table)["escalation_status"] == "resolved"
     _nothing_waits()
 
 
 def test_deleting_the_teacher_after_a_timeout_clears_the_lapsed_offer(table):
     _dispatch_to(table, TEACHER)
-    for row in (_conv(table), _question(table)):
-        row["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
-    teacher_dispatch_service.reconcile_dispatches()
-    assert TEACHER in _question(table)["previous_dispatch_teacher_ids"]
+    _help(table)["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
+    help_requests.sweep()
+    assert TEACHER in _help(table)["previous_dispatch_teacher_ids"]
 
-    # The sweep found nobody else and took the lapsed offer off the conversation
-    # itself (#86), so the scrub has only the queue row's history left to clear.
-    assert _conv(table)["dispatch_status"] == "no_candidate"
+    # The sweep found nobody else and took the lapsed offer off itself (#86),
+    # so the scrub has only the history of who was tried left to clear.
+    assert _help(table)["dispatch_status"] == "no_candidate"
 
     results = _delete_teacher(table)
 
     assert results[-1].status == "complete", [asdict(r) for r in results]
-    _assert_waiting_without(table, TEACHER, conversation_dispatch="no_candidate")
+    _assert_waiting_without(table, TEACHER, dispatch="no_candidate")
 
 
 def test_deleting_the_teacher_keeps_a_resolved_request_resolved(table):
@@ -657,37 +594,35 @@ def test_deleting_the_teacher_keeps_a_resolved_request_resolved(table):
     results = _delete_teacher(table)
 
     assert results[-1].status == "complete", [asdict(r) for r in results]
-    conv, question = _conv(table), _question(table)
-    assert conv["escalation_status"] == "resolved"
-    assert conv["resolution_note"] == "Done together."
-    assert question["status"] == "resolved"
+    record = _help(table)
+    assert record["escalation_status"] == "resolved"
+    assert record["resolution_note"] == "Done together."
     for field in ("teacher_id", "dispatched_teacher_id"):
-        assert field not in conv, field
-        assert field not in question, field
+        assert field not in record, field
     _nothing_waits()
 
 
-def test_a_conversation_that_moves_during_the_scrub_is_retried_not_overwritten(
-    table, monkeypatch
-):
-    # The student's side moves between the scrub's read and its write; the
-    # write is bound to what it read, so the pass is retried, then completes.
+def test_a_request_that_moves_during_the_scrub_is_retried_not_overwritten(table, monkeypatch):
+    # The request is resolved between the scrub's read and its write (a real
+    # write, so its version moves); the scrub is bound to what it read, so the
+    # pass is retried, then completes.
     _dispatch_to(table, TEACHER)
     assert _reply(_client()).status_code in {200, 201}
     real_transact = account_deletion_repo.transact
     moved = []
 
-    def transact_after_the_conversation_moves(operations, *, table=None):
-        touches_conversation = any(
-            (op.get("Update") or {}).get("Key", {}).get("PK") == f"CONV#{CONV}"
+    def transact_after_the_request_moves(operations, *, table=None):
+        touches_request = any(
+            (op.get("Update") or {}).get("Key") == {"PK": f"CONV#{CONV}", "SK": "HELP"}
             for op in operations
         )
-        if touches_conversation and not moved:
+        if touches_request and not moved:
             moved.append(True)
-            table.rows[CONV_KEY]["escalation_status"] = "resolved"
+            row = table.rows[HELP_KEY]
+            row.update(escalation_status="resolved", version=row["version"] + 1)
         return real_transact(operations, table=table)
 
-    monkeypatch.setattr(account_deletion_repo, "transact", transact_after_the_conversation_moves)
+    monkeypatch.setattr(account_deletion_repo, "transact", transact_after_the_request_moves)
 
     results = _delete_teacher(table)
 
@@ -695,10 +630,9 @@ def test_a_conversation_that_moves_during_the_scrub_is_retried_not_overwritten(
     assert results[0].status == "retryable"
     assert results[0].debt_counts.get("row_conflict") == 1
     assert results[-1].status == "complete", [asdict(r) for r in results]
-    # The later pass saw the conversation as resolved and kept that outcome.
-    assert _conv(table)["escalation_status"] == "resolved"
-    assert "teacher_id" not in _conv(table)
-    assert "teacher_id" not in _question(table)
+    # The later pass saw the request as resolved and kept that outcome.
+    assert _help(table)["escalation_status"] == "resolved"
+    assert "teacher_id" not in _help(table)
 
 
 def _race_once(monkeypatch, mutate) -> list:
@@ -721,12 +655,12 @@ def _race_once(monkeypatch, mutate) -> list:
     return fired
 
 
-def test_a_queue_row_that_moves_during_the_scrub_is_retried(table, monkeypatch):
+def test_a_request_whose_version_moves_during_the_scrub_is_retried(table, monkeypatch):
     _dispatch_to(table, TEACHER)
     assert _reply(_client()).status_code in {200, 201}
 
     def bump(t):
-        t.rows[QUESTION_KEY]["version"] = t.rows[QUESTION_KEY]["version"] + 1
+        t.rows[HELP_KEY]["version"] = t.rows[HELP_KEY]["version"] + 1
 
     fired = _race_once(monkeypatch, bump)
     results = _delete_teacher(table)
@@ -738,17 +672,21 @@ def test_a_queue_row_that_moves_during_the_scrub_is_retried(table, monkeypatch):
     _assert_waiting_without(table, TEACHER)
 
 
-def test_a_conversation_re_offered_to_another_teacher_during_the_scrub_keeps_that_offer(
+def test_a_request_re_offered_to_another_teacher_during_the_scrub_keeps_that_offer(
     table, monkeypatch
 ):
-    # Between the scrub's read and its write, the conversation is offered to
-    # another teacher. The write is bound to the teacher it read, so it is
-    # refused, and the new offer is not wiped.
+    # Between the scrub's read and its write, the request is offered to
+    # another teacher (a write, so its version moves). The scrub is bound to
+    # the version it read, so it is refused, and the new offer is not wiped.
     _dispatch_to(table, TEACHER)
 
     def reoffer(t):
-        t.rows[CONV_KEY]["dispatched_teacher_id"] = OTHER_TEACHER
-        t.rows[CONV_KEY]["dispatch_id"] = "an-offer-to-someone-else"
+        row = t.rows[HELP_KEY]
+        row.update(
+            dispatched_teacher_id=OTHER_TEACHER,
+            dispatch_id="an-offer-to-someone-else",
+            version=row["version"] + 1,
+        )
 
     fired = _race_once(monkeypatch, reoffer)
     results = _delete_teacher(table)
@@ -757,27 +695,10 @@ def test_a_conversation_re_offered_to_another_teacher_during_the_scrub_keeps_tha
     assert results[0].status == "retryable"
     assert results[0].debt_counts.get("row_conflict") == 1
     assert results[-1].status == "complete", [asdict(r) for r in results]
-    conv = _conv(table)
-    assert conv["dispatched_teacher_id"] == OTHER_TEACHER
-    assert conv["dispatch_id"] == "an-offer-to-someone-else"
-    assert TEACHER not in (conv.get("teacher_id"), _question(table).get("dispatched_teacher_id"))
-
-
-def test_a_queue_row_left_open_beside_a_resolved_conversation_is_closed(table):
-    # The residue #66 was opened for: the conversation was resolved on its own
-    # while the queue row still waits on the teacher. Deleting that teacher
-    # closes the queue row with the conversation instead of reopening it.
-    _dispatch_to(table, TEACHER)
-    _conv(table)["escalation_status"] = "resolved"
-
-    results = _delete_teacher(table)
-
-    assert results[-1].status == "complete", [asdict(r) for r in results]
-    assert _conv(table)["escalation_status"] == "resolved"
-    assert _question(table)["status"] == "resolved"
-    assert _question(table)["dispatch_status"] == "revoked"
-    assert "dispatched_teacher_id" not in _question(table)
-    _nothing_waits()
+    record = _help(table)
+    assert record["dispatched_teacher_id"] == OTHER_TEACHER
+    assert record["dispatch_id"] == "an-offer-to-someone-else"
+    assert TEACHER != record.get("teacher_id")
 
 
 def test_a_conversation_the_students_deletion_tombstoned_counts_as_gone(table):
@@ -799,7 +720,7 @@ def test_a_conversation_the_students_deletion_tombstoned_counts_as_gone(table):
 
     assert results[-1].status == "complete", [asdict(r) for r in results]
     assert table.rows[CONV_KEY] == tombstone
-    assert "dispatched_teacher_id" not in _question(table)
+    assert "dispatched_teacher_id" not in _help(table)
 
 
 # --- The student reads the teacher's reply (#66 production acceptance) ---
@@ -842,53 +763,45 @@ def test_the_student_reads_the_teachers_reply_before_and_after_resolving(table, 
     assert [m["role"] for m in after_resolve.json()["messages"]].count("teacher") == 1
 
 
-# --- #73: chat requests are dispatched by the conversation lane only ---
+# --- #73: only a request is offered, and the sweep offers it ---
 
 
-@pytest.mark.parametrize("missing", ["queue_row", "request_id"])
-def test_a_conversation_without_a_queue_row_is_not_dispatched(table, missing):
-    # Such a request cannot be taken (#72), so offering it only re-offers it
-    # forever to teachers who get 409.
-    if missing == "queue_row":
-        del table.rows[QUESTION_KEY]
-    else:
-        del table.rows[CONV_KEY]["escalation_request_id"]
+def test_a_conversation_without_a_request_is_not_offered(table):
+    # Such a conversation has nothing a teacher could take, so offering it
+    # would only re-offer it forever to teachers who get 404.
+    del table.rows[HELP_KEY]
     before = dict(_conv(table))
 
-    result = teacher_dispatch_service.dispatch_conversation(
-        CONV, conversation=dict(_conv(table)), table=table
-    )
+    outcome = help_requests.sweep()
 
-    assert result["status"] == "not_dispatchable"
+    assert outcome["conversationsWaiting"] == 0
+    assert outcome["conversationsDispatched"] == []
     assert _conv(table) == before
+    assert HELP_KEY not in table.rows
 
 
-def test_one_reconciler_run_leaves_both_rows_on_the_same_offer(table):
-    # Both lanes of the reconciler see a chat request's queue row. The question
-    # lane only records timeouts on it; the conversation lane makes every offer,
-    # both rows at once (stoasystem/stoa-backend#75). What a run leaves behind
-    # must be one offer on both rows.
+def test_the_sweep_offers_a_waiting_request_and_re_offers_it_when_the_offer_lapses(table):
+    # One sweep offers a waiting request to a free teacher; once that offer
+    # lapses, the next records the lapse and offers it to the other teacher in
+    # the same write (stoasystem/stoa-backend#75, #189), who can then end it.
     table.rows[(f"USER#{OTHER_TEACHER}", "PROFILE")]["dispatch_availability"] = "paused"
 
-    teacher_dispatch_service.reconcile_dispatches()
+    help_requests.sweep()
 
-    conv, question = _conv(table), _question(table)
-    assert conv["dispatched_teacher_id"] == question["dispatched_teacher_id"] == TEACHER
-    assert conv["dispatch_id"] == question["dispatch_id"]
-    assert conv["dispatch_deadline_at"] == question["dispatch_deadline_at"]
+    record = _help(table)
+    assert record["dispatch_status"] == "dispatched"
+    assert record["dispatched_teacher_id"] == TEACHER
+    first_offer = record["dispatch_id"]
 
-    # After the offer lapses, the next run records the timeout on the queue row
-    # and re-offers both rows to the other teacher, again as one offer.
-    for row in (conv, question):
-        row["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
+    record["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
     table.rows[(f"USER#{OTHER_TEACHER}", "PROFILE")]["dispatch_availability"] = "available"
 
-    teacher_dispatch_service.reconcile_dispatches()
+    help_requests.sweep()
 
-    conv, question = _conv(table), _question(table)
-    assert TEACHER in question["previous_dispatch_teacher_ids"]
-    assert conv["dispatched_teacher_id"] == question["dispatched_teacher_id"] == OTHER_TEACHER
-    assert conv["dispatch_id"] == question["dispatch_id"]
+    record = _help(table)
+    assert TEACHER in record["previous_dispatch_teacher_ids"]
+    assert record["dispatched_teacher_id"] == OTHER_TEACHER
+    assert record["dispatch_id"] != first_offer
     assert _set_status(_client(OTHER_TEACHER), "resolved").status_code == 200
     _nothing_waits()
 
@@ -961,11 +874,12 @@ def test_deleting_the_student_removes_the_teachers_replies_from_their_conversati
 
 
 def test_a_reply_that_would_accept_is_refused_once_the_students_deletion_has_begun(table):
-    # The accepting reply relies on the fence the queue row's CAS brings in.
+    # The accepting reply is written behind the student's fence, as every
+    # write that puts rows in the student's conversation is (#189).
     _dispatch_to(table, TEACHER)
     table.rows[(f"USER#{STUDENT}", "ACCOUNT_FENCE")]["status"] = "deletion_pending"
     rows_before = set(table.rows)
-    before = (dict(_conv(table)), dict(_question(table)))
+    before = (dict(_conv(table)), dict(_help(table)))
 
     assert _reply(_client()).status_code == 409
 
@@ -988,27 +902,21 @@ def test_a_reply_is_stamped_with_the_generation_its_fence_checks(table):
     assert _reply(client, "Second reply.").status_code in {200, 201}
 
 
-def test_opening_a_request_never_writes_to_a_deleted_conversation(table, monkeypatch):
-    # Detail GET records the first teacher action. Between its read and that
-    # write, the student's deletion may tombstone the conversation; the write
-    # must not land on the tombstone.
+def test_opening_a_request_writes_nothing(table):
+    # The detail GET used to record the teacher's first action, and so could
+    # land a write on a conversation the student's deletion had just
+    # tombstoned. The first response is now the first reply (#189), and
+    # opening the request writes nothing at all.
     _dispatch_to(table, TEACHER)
-    client = _client()
-    real_update = teachers._teacher_update
-    raced = []
+    before = (dict(_conv(table)), dict(_help(table)))
+    writes = {
+        operation: table.calls[operation]
+        for operation in ("put_item", "update_item", "delete_item", "transact_write_items")
+    }
 
-    def tombstone_then_update(target, **kwargs):
-        if "first_teacher_action_at" in str(kwargs.get("UpdateExpression")) and not raced:
-            raced.append(True)
-            table.rows[CONV_KEY] = {
-                "PK": f"CONV#{CONV}", "SK": "CONV", "owner_id": STUDENT, "student_id": STUDENT,
-                "status": "deleted", "owner_deletion_generation": 1,
-            }
-        return real_update(target, **kwargs)
+    response = _client().get(f"/teachers/me/help-requests/{REQUEST}")
 
-    monkeypatch.setattr(teachers, "_teacher_update", tombstone_then_update)
-
-    response = client.get(f"/teachers/me/help-requests/{REQUEST}")
-
-    assert raced, response.text
-    assert "first_teacher_action_at" not in table.rows[CONV_KEY]
+    assert response.status_code == 200, response.text
+    assert response.json()["firstTeacherActionAt"] is None
+    assert {operation: table.calls[operation] for operation in writes} == writes
+    assert _unchanged(table, before)

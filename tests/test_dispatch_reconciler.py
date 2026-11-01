@@ -1,15 +1,17 @@
 """Nobody should be left waiting on a teacher who is not coming.
 
 Dispatch happens inside the request that asks for a teacher. These cover what
-happens afterwards, when that request left the student waiting on nobody.
+happens afterwards, when that request left the student waiting on nobody: the
+scheduled job runs `help_requests.sweep` over every help request (#189).
 """
 
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from boto3.dynamodb.conditions import Attr
 import pytest
 
-from stoa.services import teacher_dispatch_service as dispatch
+from stoa.services import help_requests
 
 NOW = datetime(2026, 3, 2, 9, 0, tzinfo=timezone.utc)
 
@@ -18,27 +20,47 @@ def stamp(offset_minutes: int = 0) -> str:
     return (NOW + timedelta(minutes=offset_minutes)).isoformat()
 
 
-def question(**overrides: Any) -> dict[str, Any]:
+def request(conversation_id: str, **overrides: Any) -> dict[str, Any]:
     base = {
-        "question_id": "q-1",
+        "PK": f"CONV#{conversation_id}",
+        "SK": "HELP",
+        "entity_type": "help_request",
+        "conversation_id": conversation_id,
+        "escalation_request_id": conversation_id,
         "student_id": "student-1",
-        "status": "escalated",
-        "subject": "mathematics",
-        "SK": "META",
+        "escalation_status": "pending",
+        "escalated_at": stamp(-5),
         "version": 1,
     }
     base.update(overrides)
     return base
 
 
+class ScanPages:
+    """A table whose scan answers page by page, remembering what it was asked."""
+
+    def __init__(self, *pages: list[dict[str, Any]]) -> None:
+        self.pages = list(pages)
+        self.requests: list[dict[str, Any]] = []
+
+    def scan(self, **kwargs: Any) -> dict[str, Any]:
+        self.requests.append(kwargs)
+        index = len(self.requests) - 1
+        response: dict[str, Any] = {"Items": self.pages[index]}
+        if index + 1 < len(self.pages):
+            response["LastEvaluatedKey"] = {"PK": f"page-{index}", "SK": "HELP"}
+        return response
+
+
 def test_the_scheduled_job_reports_what_it_did(monkeypatch):
     from stoa.jobs import dispatch_reconciler
 
     monkeypatch.setattr(
-        dispatch_reconciler.teacher_dispatch_service, "reconcile_dispatches",
-        lambda: {"reassigned": 2, "reassignments": [], "conversationSweep": "completed",
+        dispatch_reconciler.help_requests, "sweep",
+        lambda: {"reassigned": 2, "conversationSweep": "completed",
                  "conversationsWaiting": 1,
-                 "conversationsDispatched": [{"conversationId": "c-1"}],
+                 "conversationsDispatched": [{"conversationId": "c-1", "status": "dispatched"}],
+                 "conversationsExpired": [],
                  "generatedAt": stamp()},
     )
 
@@ -59,9 +81,7 @@ def test_a_failed_sweep_is_not_swallowed(monkeypatch):
     def explode():
         raise RuntimeError("dynamo is having a day")
 
-    monkeypatch.setattr(
-        dispatch_reconciler.teacher_dispatch_service, "reconcile_dispatches", explode
-    )
+    monkeypatch.setattr(dispatch_reconciler.help_requests, "sweep", explode)
 
     with pytest.raises(RuntimeError):
         dispatch_reconciler.handler({}, None)
@@ -72,102 +92,92 @@ def test_a_chat_escalation_nobody_took_is_swept_too(monkeypatch):
     taken: list[str] = []
 
     monkeypatch.setattr(
-        dispatch, "list_escalated_conversations",
-        lambda limit=200: [
-            {"conversation_id": "c-1", "escalated": True, "escalation_status": "pending"},
-            {"conversation_id": "c-2", "escalated": True, "escalation_status": "in_progress"},
+        help_requests, "list_all",
+        lambda **_kwargs: [
+            request("c-1"),
+            request("c-2", escalation_status="in_progress", teacher_id="teacher-2"),
         ],
     )
-    def fake_dispatch_conversation(conversation_id, *, conversation, now=None):
-        taken.append(conversation_id)
-        return {"conversationId": conversation_id, "status": "dispatched"}
 
-    monkeypatch.setattr(dispatch, "dispatch_conversation", fake_dispatch_conversation)
+    def fake_dispatch(record, *, now=None, table=None):
+        taken.append(record["conversation_id"])
+        return {**record, "dispatch_status": "dispatched", "version": record["version"] + 1}
 
-    result = dispatch.reconcile_dispatches([], now=stamp())
+    monkeypatch.setattr(help_requests, "dispatch", fake_dispatch)
+
+    result = help_requests.sweep(now=stamp(), table=object())
 
     # Only the one still waiting; a teacher is already working on the other.
     assert taken == ["c-1"]
     assert result["conversationsWaiting"] == 1
+    assert result["conversationsDispatched"] == [{"conversationId": "c-1", "status": "dispatched"}]
 
 
 def test_a_chat_escalation_with_a_live_teacher_is_left_alone(monkeypatch):
     monkeypatch.setattr(
-        dispatch, "list_escalated_conversations",
-        lambda limit=200: [{
-            "conversation_id": "c-1", "escalated": True, "escalation_status": "pending",
-            "dispatch_status": "dispatched", "dispatched_teacher_id": "teacher-3",
-            "dispatch_deadline_at": stamp(9),
-        }],
+        help_requests, "list_all",
+        lambda **_kwargs: [request(
+            "c-1", dispatch_status="dispatched", dispatched_teacher_id="teacher-3",
+            dispatch_deadline_at=stamp(9),
+        )],
     )
     monkeypatch.setattr(
-        dispatch, "dispatch_conversation",
+        help_requests, "dispatch",
         lambda *a, **k: pytest.fail("a teacher already has this conversation"),
     )
 
-    result = dispatch.reconcile_dispatches([], now=stamp())
+    result = help_requests.sweep(now=stamp(), table=object())
 
     assert result["conversationsWaiting"] == 0
 
 
 def test_a_failed_chat_sweep_says_so_rather_than_reporting_nobody_waiting(monkeypatch):
     """Reporting zero for a sweep that never ran is how a broken sweep hides."""
-    def explode(limit=200):
+    def explode(**_kwargs):
         raise RuntimeError("scan is having a day")
 
-    monkeypatch.setattr(dispatch, "list_escalated_conversations", explode)
+    monkeypatch.setattr(help_requests, "list_all", explode)
 
-    result = dispatch.reconcile_dispatches([question(dispatch_status="unassigned")], now=stamp())
+    result = help_requests.sweep(now=stamp(), table=object())
 
     assert result["conversationSweep"] == "failed"
     assert result["conversationsWaiting"] == 0
 
 
 def test_a_healthy_chat_sweep_says_it_completed(monkeypatch):
-    monkeypatch.setattr(dispatch, "list_escalated_conversations", lambda limit=200: [])
+    monkeypatch.setattr(help_requests, "list_all", lambda **_kwargs: [])
 
-    result = dispatch.reconcile_dispatches([], now=stamp())
+    result = help_requests.sweep(now=stamp(), table=object())
 
     assert result["conversationSweep"] == "completed"
 
 
-def test_the_conversation_lister_asks_for_conversations_that_were_escalated(monkeypatch):
-    """It was called with the wrong arguments and the failure was swallowed."""
-    seen: dict[str, object] = {}
-
-    def fake_scan(table, **kwargs):
-        seen.update(kwargs)
-        return [{"conversation_id": "c-1"}, {"no_id": True}]
-
-    monkeypatch.setattr(dispatch, "_scan_filtered_items", fake_scan)
-    monkeypatch.setattr(dispatch, "get_table", lambda: object())
-
-    rows = dispatch.list_escalated_conversations()
-
-    assert rows == [{"conversation_id": "c-1"}, {"no_id": True}]
-    assert seen["expression_attribute_values"] == {
-        ":conversation": "conversation",
-        ":yes": True,
-    }
-    assert callable(seen["accept_item"])
-    assert seen["accept_item"]({"conversation_id": "c-1"}) == {"conversation_id": "c-1"}
-    assert seen["accept_item"]({"no_id": True}) is None
-
-
-def test_the_conversation_lister_leaves_out_requests_that_have_ended(monkeypatch):
-    # The limit counts what is accepted, so an ended request accepted here took
-    # the place of a waiting one; enough of them and the sweep never reached it.
-    seen: dict[str, object] = {}
-    monkeypatch.setattr(
-        dispatch, "_scan_filtered_items", lambda table, **kwargs: seen.update(kwargs) or []
+def test_the_lister_asks_for_help_requests_and_reads_every_page():
+    """It was once called with the wrong arguments and the failure swallowed;
+    and a filtered scan stops at a page of the table, not at the matches (#95)."""
+    table = ScanPages(
+        [request("c-1"), {"PK": "CONV#c-x", "SK": "HELP", "entity_type": "help_request"}],
+        [],
+        [request("c-2", escalation_status="resolved")],
     )
-    monkeypatch.setattr(dispatch, "get_table", lambda: object())
-    dispatch.list_escalated_conversations()
-    accept = seen["accept_item"]
-    for status in ("expired", "withdrawn", "resolved", "in_progress"):
-        assert accept({"conversation_id": "c-1", "escalation_status": status}) is None, status
-    for row in (
-        {"conversation_id": "c-1", "escalation_status": "pending"},
-        {"conversation_id": "c-1"},
-    ):
-        assert accept(row) == row
+
+    rows = help_requests.list_all(table=table)
+
+    assert [row["conversation_id"] for row in rows] == ["c-1", "c-2"]
+    assert len(table.requests) == 3
+    assert table.requests[0]["FilterExpression"] == Attr("entity_type").eq("help_request")
+    assert table.requests[1]["ExclusiveStartKey"] == {"PK": "page-0", "SK": "HELP"}
+    assert table.requests[2]["ExclusiveStartKey"] == {"PK": "page-1", "SK": "HELP"}
+
+
+def test_the_lister_of_waiting_requests_leaves_out_requests_that_have_ended():
+    # The sweep works through what is waiting; an ended request listed there
+    # would be offered again, or stand in the place of a waiting one.
+    ended = [
+        request(f"c-{status}", escalation_status=status)
+        for status in ("expired", "withdrawn", "resolved", "in_progress")
+    ]
+    waiting = request("c-waiting")
+    table = ScanPages([*ended, waiting])
+
+    assert help_requests.list_open(table=table) == [waiting]

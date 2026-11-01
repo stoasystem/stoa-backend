@@ -7,8 +7,8 @@ The reply names the uploads it carries, and only into a request the teacher is
 on: the teacher it is offered to, or the teacher who took it. The student reads
 the teacher's images with the conversation, as they read their own.
 
-Rows, dispatch, the authorization facts and the teacher policy are real, over
-the shared table double (see test_chat_help_request_lifecycle.py); S3 is the
+Rows, dispatch, the help request record (#189), the authorization facts and
+the teacher policy are real, over the shared table double (see test_chat_help_request_lifecycle.py); S3 is the
 multipart double and Rekognition `fakes.rekognition`.
 """
 
@@ -43,9 +43,8 @@ from test_chat_help_request_lifecycle import (
     REQUEST,
     STUDENT,
     TEACHER,
-    _conv,
     _dispatch_to,
-    _question,
+    _help,
     _set_status,
     _teacher_rows,
 )
@@ -226,7 +225,7 @@ def test_the_student_sees_the_image_a_teacher_replied_with(table, api, accept_fi
         len(data),
         "working.png",
     )
-    assert _conv(table)["teacher_id"] == TEACHER
+    assert _help(table)["teacher_id"] == TEACHER
     [message] = _teacher_messages(api)
     assert message["content"] == "Schau dir meine Rechnung an."
     assert message["attachments"] == [sent]
@@ -381,8 +380,8 @@ def test_a_blocked_image_does_not_make_a_reply(table, api) -> None:
     assert _written_replies(table) == []
     assert _teacher_messages(api) == []
     # Nor did the refused reply take the offer.
-    assert "teacher_id" not in _conv(table)
-    assert _question(table)["status"] == "escalated"
+    assert "teacher_id" not in _help(table)
+    assert _help(table)["escalation_status"] == "pending"
 
 
 def test_an_image_moderation_could_not_judge_does_not_make_a_reply(table, api) -> None:
@@ -452,8 +451,7 @@ def test_a_teacher_whose_offer_lapsed_is_refused(table, api) -> None:
     _dispatch_to(table, TEACHER)
     teacher = api.client()
     upload_id = api.uploaded(teacher, _png())
-    for row in (_conv(table), _question(table)):
-        row["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
+    _help(table)["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
 
     refused = _reply(teacher, upload_id)
 
@@ -497,8 +495,8 @@ def test_a_teacher_assigned_to_the_student_but_not_to_the_request_is_refused(
 @pytest.mark.parametrize(
     "moved_on",
     [
-        lambda conv: conv.update(teacher_id=OTHER_TEACHER),
-        lambda conv: conv.pop("teacher_id"),
+        lambda record: record.update(teacher_id=OTHER_TEACHER),
+        lambda record: record.pop("teacher_id"),
     ],
     ids=["held-by-another", "let-go"],
 )
@@ -515,7 +513,7 @@ def test_a_holders_reply_lands_only_while_they_still_hold_the_request(
 
     def authorized_then_moved_on(*args, **kwargs):
         prepared = prepare(*args, **kwargs)
-        moved_on(_conv(table))
+        moved_on(_help(table))
         return prepared
 
     monkeypatch.setattr(attachment_service, "prepare_reply_images", authorized_then_moved_on)

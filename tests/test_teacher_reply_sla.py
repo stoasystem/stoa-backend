@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.db.repositories import question_repo
+from fakes.dynamodb import FakeTable
 from stoa.routers import admin, teachers
 from actor_helpers import install_actor_overrides
 
@@ -13,30 +13,23 @@ def _app(router, prefix: str, user: dict) -> TestClient:
     return TestClient(app)
 
 
-class FakeTeacherTable:
-    def __init__(self):
-        self.put_items = []
-        self.update_calls = []
-
-    def put_item(self, Item):
-        self.put_items.append(Item)
-
-    def update_item(self, **kwargs):
-        self.update_calls.append(kwargs)
-
-
-def _applied_mutation(question, status, attrs):
-    updated = {
-        **question,
-        "status": status,
-        "version": int(question["version"]) + 1,
-        **attrs,
-    }
-    return question_repo.QuestionMutationResult(
-        question_repo.QuestionMutationDisposition.APPLIED,
-        str(question["question_id"]),
-        updated,
+def _help_requests_table(*records: dict) -> FakeTable:
+    """Help requests as their own records (#189), on the shared table double."""
+    table = FakeTable()
+    table.seed(
+        *(
+            {
+                "PK": f"CONV#{record['conversation_id']}",
+                "SK": "HELP",
+                "entity_type": "help_request",
+                "escalation_request_id": record["conversation_id"],
+                "version": 1,
+                **record,
+            }
+            for record in records
+        )
     )
+    return table
 
 
 class FakeAdminTable:
@@ -101,19 +94,17 @@ def test_admin_stats_exposes_aggregate_teacher_sla_without_content(monkeypatch):
 
 
 def test_teacher_note_accepts_rich_teacher_reply_payload(monkeypatch):
-    table = FakeTeacherTable()
-    monkeypatch.setattr(teachers, "get_table", lambda: table)
-    monkeypatch.setattr(
-        teachers,
-        "_get_conversation",
-        lambda request_id: {
+    table = _help_requests_table(
+        {
             "conversation_id": "conv-1",
             "student_id": "student-1",
-            "escalated": True,
+            "account_fence_generation": 4,
+            "escalation_status": "in_progress",
             "teacher_id": "teacher-1",
             "escalated_at": "2026-06-08T08:00:00+00:00",
-        },
+        }
     )
+    monkeypatch.setattr(teachers, "get_table", lambda: table)
     monkeypatch.setattr(teachers.user_repo, "get_user", lambda user_id, **_kwargs: {"name": "Teacher One"})
     # The holder's reply is one transaction behind the student's fence (#74).
     captured: list[dict] = []
@@ -130,7 +121,7 @@ def test_teacher_note_accepts_rich_teacher_reply_payload(monkeypatch):
 
     client = _app(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"})
     response = client.post(
-        "/teachers/me/help-requests/help-1/notes",
+        "/teachers/me/help-requests/conv-1/notes",
         json={
             "content": "Subtract 5 from both sides.\n3x = 15",
             "richContent": {
@@ -148,22 +139,23 @@ def test_teacher_note_accepts_rich_teacher_reply_payload(monkeypatch):
     assert body["richContent"]["blocks"][1] == {"type": "formula", "latex": "3x = 15"}
     assert captured[0]["ConditionCheck"]["Key"] == {"PK": "USER#student-1", "SK": "ACCOUNT_FENCE"}
     assert captured[0]["ConditionCheck"]["ExpressionAttributeValues"][":generation"] == 4
-    # ...and only while the request is still the replying teacher's (#145).
-    [holder] = [op["ConditionCheck"] for op in captured[1:] if "ConditionCheck" in op]
-    assert holder["Key"] == {"PK": "CONV#conv-1", "SK": "CONV"}
-    assert holder["ExpressionAttributeValues"] == {":teacher": "teacher-1"}
+    # ...and only while the request is still the replying teacher's (#145),
+    # in the same write as the request's own (#189).
+    [holder] = [op["Update"] for op in captured if "Update" in op]
+    assert holder["Key"] == {"PK": "CONV#conv-1", "SK": "HELP"}
+    assert "teacher_id = :teacher" in holder["ConditionExpression"]
+    assert holder["ExpressionAttributeValues"][":teacher"] == "teacher-1"
     note, message = (op["Put"]["Item"] for op in captured if "Put" in op)
     assert note["teacher_response_format"] == "stoa_teacher_reply_v1"
     assert message["teacher_response_rich"]["blocks"][1]["type"] == "formula"
 
 
 def test_teacher_help_requests_expose_sla_and_average_response(monkeypatch):
-    conversations = [
+    table = _help_requests_table(
         {
             "conversation_id": "conv-1",
             "student_id": "student-1",
             "teacher_id": "teacher-1",
-            "escalation_request_id": "help-1",
             "escalation_status": "pending",
             "escalated_at": "2026-06-08T08:00:00+00:00",
             "first_teacher_action_at": "2026-06-08T08:18:00+00:00",
@@ -173,14 +165,13 @@ def test_teacher_help_requests_expose_sla_and_average_response(monkeypatch):
             "conversation_id": "conv-2",
             "student_id": "student-2",
             "teacher_id": "teacher-1",
-            "escalation_request_id": "help-2",
             "escalation_status": "resolved",
             "escalated_at": "2026-06-08T08:00:00+00:00",
             "first_teacher_action_at": "2026-06-08T08:42:00+00:00",
             "subject": "Mathematics",
         },
-    ]
-    monkeypatch.setattr(teachers, "_get_escalated_conversations", lambda: conversations)
+    )
+    monkeypatch.setattr(teachers, "get_table", lambda: table)
     monkeypatch.setattr(teachers, "_get_student_name", lambda student_id: "Student")
 
     client = _app(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"})
@@ -189,8 +180,8 @@ def test_teacher_help_requests_expose_sla_and_average_response(monkeypatch):
     assert response.status_code == 200
     data = response.json()
     items_by_id = {item["requestId"]: item for item in data["items"]}
-    assert items_by_id["help-2"]["sla"]["status"] == "breached"
-    assert items_by_id["help-1"]["sla"]["requestToFirstActionMinutes"] == 18
+    assert items_by_id["conv-2"]["sla"]["status"] == "breached"
+    assert items_by_id["conv-1"]["sla"]["requestToFirstActionMinutes"] == 18
 
     response = client.get("/teachers/me/stats")
     assert response.status_code == 200

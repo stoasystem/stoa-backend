@@ -934,7 +934,10 @@ def _list_conversations_for_child(child_id: str, limit: int = 50) -> list[dict[s
         if not isinstance(raw_last_key, dict) or not raw_last_key:
             raise RuntimeError("child conversation pagination is malformed")
         last_key = dict(raw_last_key)
-    return conversations[:limit]
+    from stoa.services import help_requests
+
+    # Whether a teacher was asked is the request's, not the conversation's (#189).
+    return help_requests.with_requests(conversations[:limit], child_id, table=table)
 
 
 def _latest_report_for_child(parent_user_id: str, child_id: str) -> dict[str, Any] | None:

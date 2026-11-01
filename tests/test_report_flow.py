@@ -72,6 +72,25 @@ class FakeDataTable:
     def query(self, **kwargs):
         self.queries.append(kwargs)
         assert kwargs["IndexName"] == "GSI-StudentId"
+        if "Limit" not in kwargs:
+            # Whether a teacher was asked is the help request's own record (#189),
+            # read from the same index.
+            assert "help_request" in str(kwargs["FilterExpression"].get_expression())
+            return {
+                "Items": [
+                    {
+                        "PK": "CONV#conv-1",
+                        "SK": "HELP",
+                        "entity_type": "help_request",
+                        "conversation_id": "conv-1",
+                        "escalation_request_id": "conv-1",
+                        "student_id": "student-1",
+                        "escalation_status": "resolved",
+                        "escalated_at": "2026-06-06T07:55:00Z",
+                        "created_at": "2026-06-06T07:55:00Z",
+                    }
+                ]
+            }
         assert kwargs["Limit"] == 100
         assert kwargs["ScanIndexForward"] is False
         return {
@@ -80,7 +99,6 @@ class FakeDataTable:
                     "conversation_id": "conv-1",
                     "student_id": "student-1",
                     "entity_type": "conversation",
-                    "escalated": True,
                     "subject": "math",
                     "updated_at": "2026-06-06T08:00:00Z",
                     "last_message_preview": "Need help with fractions",
@@ -301,7 +319,8 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
     # every student carrying this parent's identifier; it now reads the
     # relationship rows instead.
     assert len(data_table.scans) == 2
-    assert len(data_table.queries) == 1
+    # One page of conversations, one read of their help requests.
+    assert len(data_table.queries) == 2
     assert [event[0] for event in events] == [
         "claim",
         "bedrock",

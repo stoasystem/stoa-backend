@@ -1,10 +1,13 @@
 """A teacher finds a help request wherever its row falls in the table (#95).
 
-The teacher's list, detail, reply and status change all find a chat help
+The teacher's list, detail, reply and status change all found a chat help
 request by a filtered scan of the whole table, and it read one page only. In
 production on 2026-10-06 the first page stopped after 1604 rows, and a request
 dispatched to the test teacher a minute earlier was on a later page: the
 teacher could not see it, take it or answer it.
+
+Since #189 the detail, reply and status change read the request's own record
+by its key; the list still scans (`help_requests.list_all`), every page of it.
 """
 
 from __future__ import annotations
@@ -12,13 +15,14 @@ from __future__ import annotations
 import pytest
 from fakes.dynamodb import FakeTable
 
+from stoa.services import help_requests
 from test_chat_help_request_lifecycle import (
     CONV,
     REQUEST,
     TEACHER,
     _client,
-    _conv,
     _dispatch_to,
+    _help,
     _reply,
     _set_status,
 )
@@ -51,7 +55,7 @@ def test_the_teacher_opens_and_answers_a_request_beyond_the_first_page(table) ->
     assert teacher.get(f"/teachers/me/help-requests/{REQUEST}").status_code == 200
     assert _reply(teacher).status_code in {200, 201}
     assert _set_status(teacher, "resolved").status_code == 200
-    assert _conv(table)["escalation_status"] == "resolved"
+    assert _help(table)["escalation_status"] == "resolved"
 
 
 def test_a_last_page_that_answers_an_empty_key_ends_the_read(table, monkeypatch) -> None:
@@ -89,14 +93,17 @@ class _ScanAnswering(FakeTable):
 
 
 @pytest.mark.parametrize(
-    "key", [{"PK": "CONV#x", "SK": "CONV"}, "not-a-key"], ids=["does_not_move", "not_a_key"]
+    "key",
+    [
+        pytest.param({"PK": "CONV#x", "SK": "CONV"}, id="does_not_move"),
+        pytest.param("not-a-key", id="not_a_key"),
+    ],
 )
-def test_a_cursor_that_does_not_move_or_is_not_a_key_is_refused(monkeypatch, key) -> None:
-    from stoa.routers import teachers
-
+def test_a_cursor_that_does_not_move_or_is_not_a_key_is_refused(key) -> None:
+    # A scan that never ends is a failed read, not an endless loop or an
+    # answer that some requests do not exist.
     stuck = _ScanAnswering(key)
-    monkeypatch.setattr(teachers, "get_table", lambda: stuck)
 
-    with pytest.raises(RuntimeError):
-        teachers._get_escalated_conversations()
+    with pytest.raises(help_requests.HelpRequestUnavailable):
+        help_requests.list_all(table=stuck)
     assert stuck.scans <= 2

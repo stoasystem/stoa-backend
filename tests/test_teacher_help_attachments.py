@@ -7,8 +7,8 @@ attachment's summary, and the teacher the request is with reads the content
 under that request: the teacher it is offered to, or the teacher who took it.
 Anyone else is refused the way the request itself refuses them.
 
-Rows, dispatch, the authorization facts and the teacher policy are real, over
-the shared table double (see test_chat_help_request_lifecycle.py); only S3 is
+Rows, dispatch, the help request record (#189), the authorization facts and
+the teacher policy are real, over the shared table double (see test_chat_help_request_lifecycle.py); only S3 is
 replaced.
 """
 
@@ -25,16 +25,15 @@ from actor_helpers import install_actor_overrides
 from stoa.deps import get_s3_client
 from stoa.routers import files, teachers
 from stoa.security.route_authorization import get_authorization_fact_repository
-from stoa.services import teacher_dispatch_service
+from stoa.services import help_requests
 from test_chat_help_request_lifecycle import (
     CONV,
     OTHER_TEACHER,
     REQUEST,
     STUDENT,
     TEACHER,
-    _conv,
     _dispatch_to,
-    _question,
+    _help,
     _set_status,
     _teacher_rows,
 )
@@ -143,11 +142,10 @@ def _content(client: TestClient, attachment_id: str = ATTACHMENT):
 
 
 def _redispatch_to_the_other_teacher(table) -> None:
-    for row in (_conv(table), _question(table)):
-        row["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
+    _help(table)["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
     table.rows[(f"USER#{OTHER_TEACHER}", "PROFILE")]["dispatch_availability"] = "available"
-    teacher_dispatch_service.reconcile_dispatches()
-    assert _conv(table)["dispatched_teacher_id"] == OTHER_TEACHER
+    help_requests.sweep()
+    assert _help(table)["dispatched_teacher_id"] == OTHER_TEACHER
 
 
 # --- The detail names each message's attachments ---
@@ -189,7 +187,7 @@ def test_the_teacher_it_is_offered_to_reads_the_image_before_accepting(sent_imag
     assert response.headers["content-type"] == "image/png"
     assert s3.calls[0]["Key"] == f"objects/{STUDENT}/{ATTACHMENT}"
     assert s3.calls[0]["VersionId"] == "version-140"
-    assert "teacher_id" not in _conv(sent_image), "reading is not taking"
+    assert "teacher_id" not in _help(sent_image), "reading is not taking"
 
 
 def test_the_teacher_who_took_it_reads_the_image_while_open_and_after_resolving(
@@ -273,8 +271,7 @@ def test_a_teacher_assigned_to_the_student_reads_the_request_but_not_its_images(
 
 def test_a_lapsed_offer_no_longer_reads_the_image(sent_image) -> None:
     _dispatch_to(sent_image, TEACHER)
-    for row in (_conv(sent_image), _question(sent_image)):
-        row["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
+    _help(sent_image)["dispatch_deadline_at"] = "2026-01-01T00:00:00+00:00"
 
     assert _content(_client(TEACHER)).status_code == 403
 

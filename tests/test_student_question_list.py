@@ -7,6 +7,10 @@ stored: the dispatched teacher's id, the teachers who let an offer lapse,
 dispatch ids, versions, fence generations and table keys. Found by the audit
 of stoasystem/stoa-backend#76; with #75 those dispatch fields are written in
 production for the first time.
+
+Since #189 a chat help request is its own record in the conversation's
+partition, carrying `student_id` and `created_at`: it is in the same index,
+with the same dispatch fields, and is not a question either.
 """
 
 from __future__ import annotations
@@ -26,7 +30,7 @@ from stoa.routers import students
 def table(monkeypatch):
     table = lifecycle.table.__wrapped__(monkeypatch)
     lifecycle._dispatch_to(table, lifecycle.TEACHER)
-    table.rows[lifecycle.QUESTION_KEY]["previous_dispatch_teacher_ids"] = ["teacher-who-timed-out"]
+    lifecycle._help(table)["previous_dispatch_teacher_ids"] = ["teacher-who-timed-out"]
     table.seed(
         {
             "PK": f"CONV#{lifecycle.CONV}",
@@ -73,8 +77,8 @@ def test_the_question_history_lists_question_rows_only(table):
 
     assert response.status_code == 200, response.text
     items = response.json()["items"]
-    # The chat help request's queue row is not a question (#77); it is shown
-    # through its conversation.
+    # The chat help request's record is not a question (#77, #189); it is
+    # shown through its conversation.
     assert [item["question_id"] for item in items] == ["q-lane"]
 
 
@@ -114,7 +118,7 @@ def test_a_parent_sees_the_same_safe_history(table):
 
 
 def test_the_summary_counts_a_resolved_chat_help_request_once_through_its_conversation(table):
-    # A chat help request's queue row is not a question (#77), so the summary
+    # A chat help request is not a question (#77, #189), so the summary
     # counts it through its conversation (user decision, 2026-09-29): once in
     # teacher_resolved, never in total_questions.
     assert lifecycle._set_status(lifecycle._client(), "resolved").status_code == 200
