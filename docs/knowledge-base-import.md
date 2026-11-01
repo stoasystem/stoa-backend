@@ -40,7 +40,10 @@ knowledge base gets stars of its own beside them.
   upstream edges between them: layer 1 needs nothing else in the star, layer 2
   needs layer 1, and so on (at most four). A small star's practice is cut by
   layer, so the star is worked through from its foundations up; a small star with
-  more than one layer shows "Stufe 1", "Stufe 2" ...
+  more than one layer shows "Stufe 1", "Stufe 2" ... A layer with fewer than three
+  exercises joins the next one (the last joins the one before), shown as
+  "Stufe 1–2", so a practice set is more than a question or two; a stage of more
+  than ten exercises is cut into parts of even size.
 - **Readiness, not age.** Every practice set states the knowledge points that come
   before it (`requiresPoints`), in its own star or another. A knowledge point is
   mastered when every core exercise of it has been answered right once. The star
