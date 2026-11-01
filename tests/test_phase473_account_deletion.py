@@ -13,12 +13,12 @@ import pytest
 from stoa.db.repositories import (
     account_deletion_repo,
     attachment_repo,
-    question_repo,
     user_repo,
 )
 from stoa.security.errors import SecurityDecisionError
 from stoa.security.identity import AccountStatus, resolve_actor
 from stoa.security.tokens import VerifiedAccessToken
+from stoa.services import help_requests
 
 
 STUDENT_ID = "student-delete-1"
@@ -276,10 +276,27 @@ def test_every_primary_writer_uses_the_same_active_fence_and_exact_generation() 
         expression_attribute_values={":grade": "9"},
         expected_generation=4,
     )
-    question_ops = question_repo.build_question_update_transaction(
-        {"question_id": "q-1", "student_id": STUDENT_ID},
-        status="resolved",
-        expected_generation=4,
+    # No question row is written any more; a help request is (#189), and a
+    # write that puts rows in the student's conversation carries their fence.
+    help_ops: list[dict[str, Any]] = []
+
+    class _CapturingTable:
+        def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+            help_ops.extend(operations)
+
+    help_requests.reply(
+        {
+            "conversation_id": "c-1",
+            "student_id": STUDENT_ID,
+            "account_fence_generation": 4,
+            "teacher_id": "teacher-1",
+            "escalation_status": "in_progress",
+            "version": 1,
+        },
+        teacher_id="teacher-1",
+        reply_operations=(),
+        now=NOW,
+        table=_CapturingTable(),
     )
     # The question attachment writer this checked went with #148; a
     # conversation write is the attachment repository's writer now.
@@ -297,7 +314,7 @@ def test_every_primary_writer_uses_the_same_active_fence_and_exact_generation() 
             return dict(operation)
         raise AssertionError("unexpected transaction operation")
 
-    for operations in (profile_ops, question_ops, attachment_checks):
+    for operations in (profile_ops, help_ops, attachment_checks):
         checks: list[dict[str, Any]] = []
         for operation in operations:
             condition_check = payload(operation).get("ConditionCheck")
@@ -310,7 +327,7 @@ def test_every_primary_writer_uses_the_same_active_fence_and_exact_generation() 
 
     updates = [
         update
-        for operation in profile_ops + question_ops
+        for operation in [*profile_ops, *help_ops]
         if isinstance((update := payload(operation).get("Update")), Mapping)
     ]
     assert all("attribute_exists(PK)" in item["ConditionExpression"] for item in updates)

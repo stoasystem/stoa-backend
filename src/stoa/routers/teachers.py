@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Literal, NamedTuple, NoReturn, Protocol, runtime_checkable
 
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Key
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
@@ -24,7 +24,6 @@ from stoa.db.dynamodb import get_table
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink, get_s3_client
 from stoa.models.attachment import AttachmentSummary, ReplyImageReference
-from stoa.models.question import QuestionStatus
 from stoa.security.attachment_errors import (
     AttachmentDecisionError,
     AttachmentErrorCode,
@@ -46,6 +45,7 @@ from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
     authorized_ai_teacher_draft_dependency,
     authorized_question_dependency,
+    help_request_as_question,
     authorized_teacher_resource_dependency,
     authorize_teacher_loaded_resource,
     get_authorization_fact_repository,
@@ -55,6 +55,7 @@ from stoa.security.route_authorization import (
 from stoa.services import (
     ai_teacher_tools_service,
     attachment_service,
+    help_requests,
     notification_service,
     teacher_assistance_service,
     teacher_dispatch_service,
@@ -115,18 +116,6 @@ def _teacher_query(table: object, **kwargs: object) -> TeacherItem:
     return _teacher_mapping(table.query(**kwargs))
 
 
-def _teacher_scan(table: object, **kwargs: object) -> TeacherItem:
-    if not isinstance(table, _ScanTable):
-        raise RuntimeError("teacher data dependency unavailable")
-    return _teacher_mapping(table.scan(**kwargs))
-
-
-def _teacher_update(table: object, **kwargs: object) -> object:
-    if not isinstance(table, _UpdateTable):
-        raise RuntimeError("teacher data dependency unavailable")
-    return table.update_item(**kwargs)
-
-
 def _teacher_put(table: object, **kwargs: object) -> object:
     if not isinstance(table, _PutTable):
         raise RuntimeError("teacher data dependency unavailable")
@@ -171,21 +160,6 @@ _HELP_REQUEST_CHANGED = {
 }
 
 
-def _takes_two_row_path(conv: Mapping[str, object], teacher_id: str) -> bool:
-    """Whether this teacher may write the help request at all.
-
-    Only the teacher holding it, or the one it is offered to, and always
-    through `advance_help_request`. A teacher the policy admits through an
-    assignment may read it but not write it (user decision, #73): the
-    conversation-only write they used to get could strand a request offered
-    to someone else or reopen a resolved one.
-    """
-    holder = str(conv.get("teacher_id") or "")
-    if holder:
-        return holder == teacher_id
-    return str(conv.get("dispatched_teacher_id") or "") == teacher_id
-
-
 # Canonical teacher portal, availability, help-request, and AI-tool routes.
 def _conv_pk(conv_id: str) -> str:
     return f"CONV#{conv_id}"
@@ -210,68 +184,13 @@ def _get_messages(conv_id: str) -> list[TeacherItem]:
     return _teacher_items(resp)
 
 
-# A ceiling on the pages one read may follow; the table is far from it.
-_ESCALATED_CONVERSATION_PAGE_LIMIT = 1000
-
-
-def _get_escalated_conversations() -> list[TeacherItem]:
-    """Every conversation escalated to a teacher, from every page of the table.
-
-    A filtered scan stops at a page of the table, not at the matches: one page
-    read the first 1604 rows in production and missed a request dispatched a
-    minute earlier, so the teacher could not see it, take it or answer it (#95).
-    """
-    table = get_table()
-    request: dict[str, object] = {
-        "FilterExpression": (
-            Attr("entity_type").eq("conversation") & Attr("escalated").eq(True)
-        ),
-    }
-    items: list[TeacherItem] = []
-    for _page in range(_ESCALATED_CONVERSATION_PAGE_LIMIT):
-        result = _teacher_scan(table, **request)
-        items.extend(_teacher_items(result))
-        cursor = result.get("LastEvaluatedKey")
-        # No key, or an empty one, is the end of the table (DynamoDB's Scan
-        # contract allows both).
-        if cursor is None or cursor == {}:
-            return items
-        if not isinstance(cursor, dict) or cursor == request.get("ExclusiveStartKey"):
-            raise RuntimeError("teacher data dependency unavailable")
-        request["ExclusiveStartKey"] = cursor
-    raise RuntimeError("teacher data dependency unavailable")
-
-
 def _resolve_help_request(request_id: str) -> TeacherItem | None:
-    """Resolve an external request ID to one canonical conversation/task owner."""
-    conv = _get_conversation(request_id)
-    if not conv or not conv.get("escalated"):
-        conv = next(
-            (
-                item
-                for item in _get_escalated_conversations()
-                if item.get("escalation_request_id") == request_id
-            ),
-            None,
-        )
-    if not conv:
-        return None
-    return _normalize_help_request(conv)
+    """The help request with this id, told the way authorization judges a task.
 
-
-def _normalize_help_request(conv: Mapping[str, object]) -> TeacherItem:
-    normalized = dict(conv)
-    if not normalized.get("status"):
-        normalized["status"] = (
-            QuestionStatus.TEACHER_ACTIVE.value
-            if normalized.get("teacher_id")
-            else QuestionStatus.ESCALATED.value
-        )
-    if not normalized.get("dispatch_status"):
-        normalized["dispatch_status"] = (
-            "accepted" if normalized.get("teacher_id") else "unassigned"
-        )
-    return normalized
+    A request's id is its conversation's (#189), so this is one strong read.
+    """
+    record = help_requests.get(request_id, table=get_table())
+    return _teacher_mapping(help_requests.question_view(record)) if record else None
 
 
 async def _current_help_requests(
@@ -281,8 +200,8 @@ async def _current_help_requests(
     audit_sink: AuthorizationAuditSink,
 ) -> list[TeacherItem]:
     current: list[TeacherItem] = []
-    for raw in _get_escalated_conversations():
-        conv = _normalize_help_request(raw)
+    for record in help_requests.list_all(table=get_table()):
+        conv = _teacher_mapping(help_requests.question_view(record))
         try:
             await authorize_teacher_loaded_resource(
                 actor=actor,
@@ -315,19 +234,6 @@ def _get_student_name(student_id: str) -> str:
     profile = user_repo.get_user(student_id)
     name = profile.get("name") if profile else None
     return name.strip() if isinstance(name, str) and name.strip() else "Student"
-
-
-def _sla_snapshot(conv: Mapping[str, object]) -> dict[str, int | str | None]:
-    requested_at = _parse_time(conv.get("escalated_at") or conv.get("created_at"))
-    first_action_at = _parse_time(conv.get("first_teacher_action_at"))
-    seconds = None
-    if requested_at and first_action_at:
-        seconds = max(0, int((first_action_at - requested_at).total_seconds()))
-    return {
-        "status": teacher_reply_service.sla_bucket(seconds),
-        "requestToFirstActionMinutes": round(seconds / 60) if seconds is not None else None,
-        "targetMinutes": 30,
-    }
 
 
 def _parse_time(value: object) -> datetime | None:
@@ -552,7 +458,7 @@ async def _authorize_ai_question_context(
     correlation_id: str,
     audit_sink: AuthorizationAuditSink,
 ) -> AuthorizedResource:
-    question = question_repo.get_question(question_id)
+    question = (question_repo.get_question(question_id) or help_request_as_question(question_id))
     if not question:
         raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND)
     return await authorize_teacher_loaded_resource(
@@ -596,7 +502,7 @@ async def _ai_question_context_dependency(
 
 
 async def _ai_question_metadata_resolver(question_id: str):
-    return question_repo.get_question(question_id)
+    return (question_repo.get_question(question_id) or help_request_as_question(question_id))
 
 
 _ai_question_context_dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
@@ -973,7 +879,7 @@ async def get_stats(
     pending = sum(1 for c in escalated if c.get("escalation_status", "pending") == "pending")
     response_times = [
         snapshot["requestToFirstActionMinutes"]
-        for snapshot in (_sla_snapshot(c) for c in escalated)
+        for snapshot in (help_requests.sla(c) for c in escalated)
         if isinstance(snapshot["requestToFirstActionMinutes"], int)
     ]
     resolved_today_count = sum(
@@ -1216,7 +1122,7 @@ async def list_help_requests(
                 default=_text(conv.get("updated_at"), default=_now()),
             ),
             firstTeacherActionAt=_optional_text(conv.get("first_teacher_action_at")),
-            sla=_sla_snapshot(conv),
+            sla=help_requests.sla(conv),
         ).model_dump())
     return {"items": items}
 
@@ -1306,26 +1212,6 @@ async def get_help_request(
         for n in _teacher_items(notes_resp)
     ]
 
-    # Mark first teacher access time
-    first_teacher_action_at = conv.get("first_teacher_action_at")
-    if not first_teacher_action_at:
-        first_teacher_action_at = _now()
-        try:
-            _teacher_update(
-                table,
-                Key={"PK": _conv_pk(conv_id), "SK": "CONV"},
-                UpdateExpression="SET first_teacher_action_at = :t",
-                # Never on a tombstone the student's deletion left in its place.
-                ConditionExpression=(
-                    "attribute_exists(PK) AND attribute_exists(escalated) "
-                    "AND attribute_not_exists(first_teacher_action_at)"
-                ),
-                ExpressionAttributeValues={":t": first_teacher_action_at},
-            )
-        except Exception:
-            pass
-        conv = {**conv, "first_teacher_action_at": first_teacher_action_at}
-
     return TeacherHelpRequestDetail(
         requestId=_text(conv.get("escalation_request_id"), default=conv_id),
         conversationId=conv_id,
@@ -1339,8 +1225,8 @@ async def get_help_request(
         requestMessage=_optional_text(conv.get("escalation_message")),
         messages=messages,
         notes=notes,
-        firstTeacherActionAt=_optional_text(first_teacher_action_at),
-        sla=_sla_snapshot(conv),
+        firstTeacherActionAt=_optional_text(conv.get("first_teacher_action_at")),
+        sla=help_requests.sla(conv),
         weakTopics=_asked_topics(conv_id),
     )
 
@@ -1410,24 +1296,24 @@ async def update_help_request(
     """Take a help request (`in_progress`) or finish it (`resolved`).
 
     The teacher it is offered to takes it with their first write, and finishing
-    it straight from the offer takes and finishes it at once. Both rows of the
-    request move in one transaction (stoasystem/stoa-backend#66).
+    it straight from the offer takes and finishes it at once (#66).
     """
     now = _now()
     conv = dict(authorized.value)
     # Taken now, by this write: nobody held it before. Finishing an offer
     # straight away takes it too, in the same write.
     takes_it = not conv.get("teacher_id")
-    if _takes_two_row_path(conv, actor.user_id):
+    if help_requests.holder_or_offered(conv, actor.user_id):
         try:
-            conv = teacher_dispatch_service.advance_help_request(
+            conv = help_requests.advance(
                 conv,
                 teacher_id=actor.user_id,
                 target=body.status,
                 now=now,
                 resolution_note=body.resolutionNote,
+                table=get_table(),
             )
-        except teacher_dispatch_service.HelpRequestConflict as exc:
+        except help_requests.HelpRequestConflict as exc:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
             ) from exc
@@ -1447,8 +1333,8 @@ async def update_help_request(
         status=body.status,
         requestMessage=_optional_text(conv.get("escalation_message")),
         createdAt=_text(conv.get("escalated_at"), default=now),
-        firstTeacherActionAt=_optional_text(conv.get("first_teacher_action_at")) or now,
-        sla=_sla_snapshot({**conv, "first_teacher_action_at": conv.get("first_teacher_action_at") or now}),
+        firstTeacherActionAt=_optional_text(conv.get("first_teacher_action_at")),
+        sla=help_requests.sla(conv),
     )
 
 
@@ -1566,62 +1452,32 @@ async def add_note(
         message_item["attachment_ids"] = attachment_ids
         note_item["attachment_ids"] = attachment_ids
 
-    if not _takes_two_row_path(conv, teacher_id):
+    if not help_requests.holder_or_offered(conv, teacher_id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_NOT_HELD)
-    if not conv.get("teacher_id"):
-        # Replying to an offer takes it: the acceptance and the reply are one
-        # write, so a reply never lands on a request someone else then takes.
-        try:
-            teacher_dispatch_service.advance_help_request(
-                conv,
-                teacher_id=teacher_id,
-                target="in_progress",
-                now=now,
-                # The queue row's CAS already carries the student's fence, and one
-                # transaction cannot check the same fence row twice.
-                extra_operations=(
-                    *(
-                        attachment_repo.build_conversation_write_transaction(
-                            item=item, owner_id=student_id, generation=generation
-                        )[1]
-                        for item in (note_item, message_item)
-                    ),
-                    *image_operations,
+    # The reply and the request move together: a reply to an offer takes it,
+    # a holder's reply lands only while the request is still theirs, and the
+    # first reply is the request's first response (#189). The rows are written
+    # behind the student's account fence, which the module adds once.
+    try:
+        conv = help_requests.reply(
+            conv,
+            teacher_id=teacher_id,
+            reply_operations=(
+                *(
+                    attachment_repo.build_conversation_write_transaction(
+                        item=item, owner_id=student_id, generation=generation
+                    )[1]
+                    for item in (note_item, message_item)
                 ),
-                table=table,
-            )
-        except teacher_dispatch_service.HelpRequestConflict as exc:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
-            ) from exc
-    else:
-        # The holder's reply: both rows behind the student's account fence, and
-        # only while the request is still theirs. The route's check was a read,
-        # and the request can move on before this write.
-        operations = attachment_repo.build_conversation_write_transaction(
-            item=note_item, owner_id=student_id, generation=generation
+                *image_operations,
+            ),
+            now=now,
+            table=table,
         )
-        operations.append(
-            {
-                "ConditionCheck": {
-                    "Key": {"PK": _conv_pk(conv_id), "SK": "CONV"},
-                    "ConditionExpression": "attribute_exists(PK) AND teacher_id = :teacher",
-                    "ExpressionAttributeValues": {":teacher": teacher_id},
-                }
-            }
-        )
-        operations.append(
-            attachment_repo.build_conversation_write_transaction(
-                item=message_item, owner_id=student_id, generation=generation
-            )[1]
-        )
-        operations.extend(image_operations)
-        try:
-            account_deletion_repo.transact(operations, table=table)
-        except account_deletion_repo.AccountDeletionConflict as exc:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
-            ) from exc
+    except help_requests.HelpRequestConflict as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
+        ) from exc
 
     # One notification for the reply, also when the reply took the request.
     notification_service.emit_teacher_help_reply(

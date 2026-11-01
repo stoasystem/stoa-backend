@@ -1,259 +1,12 @@
 from __future__ import annotations
 
 import ast
-import threading
-from collections.abc import Mapping
 from pathlib import Path
 
-from stoa.db.repositories import account_deletion_repo, question_repo
+from stoa.db.repositories import question_repo
 
 
 ROOT = Path(__file__).resolve().parents[1]
-NOW = "2026-07-22T10:00:00+00:00"
-
-
-def _question(**extra: object) -> dict[str, object]:
-    return {
-        "PK": "QUESTION#question-1",
-        "SK": "META",
-        "entity_type": "question",
-        "question_id": "question-1",
-        "student_id": "student-1",
-        "subject": "math",
-        "status": "pending",
-        "version": 1,
-        **extra,
-    }
-
-
-class QuestionCasTable:
-    def __init__(self, question: Mapping[str, object]):
-        self.question = dict(question)
-        self.teacher_profile = {
-            "PK": "USER#teacher-1",
-            "SK": "PROFILE",
-            "user_id": "teacher-1",
-            "role": "teacher",
-            "account_status": "active",
-            "version": 7,
-        }
-        self.sessions: dict[str, dict[str, object]] = {}
-        self.transactions: list[list[dict[str, object]]] = []
-        self.before_ai_commit: threading.Barrier | None = None
-        self.release_ai_commit: threading.Event | None = None
-        self._lock = threading.Lock()
-
-    def get_item(self, *, Key, ConsistentRead=False):
-        assert ConsistentRead is True
-        with self._lock:
-            if Key == {"PK": "USER#student-1", "SK": "ACCOUNT_FENCE"}:
-                return {
-                    "Item": {
-                        **Key,
-                        "entity_type": "account_fence",
-                        "status": "active",
-                        "generation": 1,
-                    }
-                }
-            if Key == {"PK": "USER#teacher-1", "SK": "ACCOUNT_FENCE"}:
-                return {
-                    "Item": {
-                        **Key,
-                        "entity_type": "account_fence",
-                        "status": "active",
-                        "generation": 3,
-                    }
-                }
-            if Key == {"PK": "USER#teacher-1", "SK": "PROFILE"}:
-                return {"Item": dict(self.teacher_profile)}
-            if Key == {"PK": "QUESTION#question-1", "SK": "META"}:
-                return {"Item": dict(self.question)}
-            session_id = str(Key.get("PK") or "").removeprefix("SESSION#")
-            session = self.sessions.get(session_id)
-            return {"Item": dict(session)} if session else {}
-
-    def transact_account_deletion(self, operations):
-        copied = [dict(operation) for operation in operations]
-        update = next(
-            operation["Update"]
-            for operation in operations
-            if "Update" in operation
-        )
-        values = update["ExpressionAttributeValues"]
-        if values.get(":next_status") == "ai_answered":
-            if self.before_ai_commit is not None:
-                self.before_ai_commit.wait(timeout=5)
-            if self.release_ai_commit is not None:
-                assert self.release_ai_commit.wait(timeout=5)
-        with self._lock:
-            self.transactions.append(copied)
-            if any("Put" in operation for operation in operations):
-                self._apply_takeover(operations)
-                return
-            self._apply_cas(update)
-
-    def _apply_cas(self, update):
-        values = update["ExpressionAttributeValues"]
-        expected_status = values[":expected_status"]
-        expected_version = values.get(":expected_version")
-        if expected_version is None:
-            if "attribute_not_exists(#version)" not in update["ConditionExpression"]:
-                raise AssertionError("legacy initialization must be explicit")
-            matches = self.question.get("version") is None
-        else:
-            matches = self.question.get("version") == expected_version
-        if (
-            self.question.get("student_id") != values[":owner"]
-            or self.question.get("status") != expected_status
-            or not matches
-        ):
-            raise account_deletion_repo.AccountDeletionConflict("question CAS lost")
-        self.question["version"] = values[":next_version"]
-        self.question["status"] = values[":next_status"]
-        for token, value in values.items():
-            if token.startswith(":field_"):
-                self.question[token.removeprefix(":field_")] = value
-
-    def _apply_takeover(self, operations):
-        update = next(
-            operation["Update"]
-            for operation in operations
-            if "Update" in operation
-        )
-        values = update["ExpressionAttributeValues"]
-        profile_condition = next(
-            operation["ConditionCheck"]
-            for operation in operations
-            if operation.get("ConditionCheck", {}).get("Key", {}).get("SK")
-            == "PROFILE"
-        )
-        profile_values = profile_condition["ExpressionAttributeValues"]
-        if (
-            self.teacher_profile.get("user_id") != profile_values[":teacher_id"]
-            or self.teacher_profile.get("role") != profile_values[":teacher_role"]
-            or self.teacher_profile.get("account_status") != profile_values[":active"]
-            or self.teacher_profile.get("version")
-            != profile_values[":teacher_profile_version"]
-            or self.question.get("status") != "escalated"
-            or self.question.get("version") != values.get(":expected_version")
-        ):
-            raise account_deletion_repo.AccountDeletionConflict("takeover CAS lost")
-        session = next(
-            operation["Put"]["Item"]
-            for operation in operations
-            if "Put" in operation
-        )
-        self.question.update(
-            status="teacher_active",
-            version=values[":next_version"],
-            teacher_id=values[":teacher"],
-            teacher_takeover_claim_id=values[":claim"],
-            session_id=values[":session"],
-            teacher_started_at=values[":claimed_at"],
-            teacher_taken_over_at=values[":claimed_at"],
-        )
-        self.sessions[str(session["session_id"])] = dict(session)
-
-
-def test_question_mutation_has_owner_state_version_and_one_increment():
-    observed = _question()
-    table = QuestionCasTable(observed)
-
-    result = question_repo.mutate_question(
-        observed,
-        status="ai_answered",
-        allowed_source_statuses=frozenset({"pending"}),
-        extra_attrs={"ai_response": {"answer": "42"}},
-        table=table,
-    )
-
-    assert result.disposition is question_repo.QuestionMutationDisposition.APPLIED
-    assert result.question == table.question
-    assert table.question["version"] == 2
-    update = table.transactions[0][1]["Update"]
-    assert "student_id=:owner" in update["ConditionExpression"]
-    assert "#status=:expected_status" in update["ConditionExpression"]
-    assert "#version=:expected_version" in update["ConditionExpression"]
-    assert update["UpdateExpression"].count("#version=:next_version") == 1
-
-
-def test_legacy_version_initialization_is_explicit_and_state_constrained():
-    observed = _question()
-    observed.pop("version")
-    table = QuestionCasTable(observed)
-
-    result = question_repo.initialize_legacy_question_version(
-        observed,
-        allowed_source_statuses=frozenset({"pending"}),
-        table=table,
-    )
-
-    assert result.disposition is question_repo.QuestionMutationDisposition.APPLIED
-    assert result.question is not None
-    assert result.question["version"] == 1
-    update = table.transactions[0][1]["Update"]
-    assert "attribute_not_exists(#version)" in update["ConditionExpression"]
-    assert "#status=:expected_status" in update["ConditionExpression"]
-    assert "student_id=:owner" in update["ConditionExpression"]
-
-
-def test_disallowed_observed_source_returns_invalid_transition_without_write():
-    observed = _question(status="resolved")
-    table = QuestionCasTable(observed)
-
-    result = question_repo.mutate_question(
-        observed,
-        status="escalated",
-        allowed_source_statuses=frozenset({"pending", "ai_answered"}),
-        table=table,
-    )
-
-    assert (
-        result.disposition
-        is question_repo.QuestionMutationDisposition.INVALID_TRANSITION
-    )
-    assert table.transactions == []
-
-
-def test_stale_same_state_metadata_writers_cannot_replay_after_later_states():
-    cases = (
-        (
-            _question(status="ai_answered", version=2),
-            _question(
-                status="teacher_active",
-                version=3,
-                teacher_id="teacher-1",
-                session_id="session-1",
-            ),
-            "ai_answered",
-            frozenset({"ai_answered", "resolved"}),
-            {"student_feedback": 5},
-        ),
-        (
-            _question(
-                status="teacher_active",
-                version=3,
-                teacher_id="teacher-1",
-                session_id="session-1",
-            ),
-            _question(status="resolved", version=4, resolved_at=NOW),
-            "teacher_active",
-            frozenset({"teacher_active"}),
-            {"teacher_response": "stale"},
-        ),
-    )
-    for observed, current, target_status, allowed, attrs in cases:
-        table = QuestionCasTable(current)
-        result = question_repo.mutate_question(
-            observed,
-            status=target_status,
-            allowed_source_statuses=allowed,
-            extra_attrs=attrs,
-            table=table,
-        )
-
-        assert result.disposition is question_repo.QuestionMutationDisposition.STALE
-        assert all(table.question.get(key) != value for key, value in attrs.items())
 
 
 def _question_repo_calls(path: str) -> list[tuple[str, str]]:
@@ -320,27 +73,25 @@ def _direct_question_updates(path: Path) -> set[str]:
 
 def test_production_question_writer_registry_is_closed_over_cas_calls():
     # The question routes that wrote here (submit, request-teacher, feedback)
-    # were retired in #148; the report route that stays writes no question.
-    registry = {
-        "src/stoa/routers/questions.py": set(),
-        # The teacher-side question routes went with the question lane (#188).
-        "src/stoa/routers/teachers.py": set(),
-        "src/stoa/services/teacher_dispatch_service.py": {
-            ("reassign_timed_out_dispatches", "mutate_question"),
-        },
+    # were retired in #148, the teacher-side ones with the question lane (#188),
+    # and the chat help request's queue row with #189: no question row is
+    # mutated any more, so the compare-and-set machinery went too.
+    for name in (
+        "mutate_question",
+        "initialize_legacy_question_version",
+        "build_question_update_transaction",
+        "update_status",
+        "update_status_conditionally",
+    ):
+        assert not hasattr(question_repo, name), name
+    callers = {
+        path.relative_to(ROOT).as_posix(): calls
+        for path in (ROOT / "src/stoa").rglob("*.py")
+        if (calls := _question_repo_calls(path.relative_to(ROOT).as_posix()))
     }
-    for path, expected in registry.items():
-        calls = _question_repo_calls(path)
-        assert not {
-            call for call in calls if call[1] in {"update_status", "update_status_conditionally"}
-        }
-        assert {call for call in calls if call[1] == "mutate_question"} == expected
+    assert callers == {}
 
     direct_registry = {
-        "src/stoa/db/repositories/question_repo.py": {
-            "build_question_update_transaction",
-            "_question_mutation_operation",
-        },
         "src/stoa/db/repositories/question_submission_repo.py": {
             "reverse_terminal_question_admission",
         },

@@ -261,11 +261,23 @@ def authorized_student_resource_dependency(
     return dependency
 
 
+def help_request_as_question(request_id: str) -> dict | None:
+    """A help request, told as the question its id names (#189).
+
+    The teacher's frontend passes a help request's id where a question id is
+    asked for (the assistance summary, AI drafts, reports); a request is no
+    longer a row in the question table, so those routes ask for it here.
+    """
+    from stoa.services import help_requests
+
+    return help_requests.question_view_for(request_id, table=question_repo.get_table())
+
+
 def authorized_question_dependency(
     *, action: AuthorizationAction, purposes: PurposeMap
 ):
     async def resolve(question_id: str):
-        item = question_repo.get_question(question_id)
+        item = question_repo.get_question(question_id) or help_request_as_question(question_id)
         if not item:
             return None
         student_id = str(item.get("student_id") or "")

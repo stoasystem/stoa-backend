@@ -59,21 +59,47 @@ def _client(router, prefix: str = "/conversations", actor=None) -> TestClient:
     return TestClient(app)
 
 
-def test_teacher_help_status_names_the_teacher_dispatch_actually_bound(monkeypatch):
-    """Dispatch records the teacher on dispatched_teacher_id, not current_teacher."""
+def _owned_conversation(monkeypatch) -> None:
     monkeypatch.setattr(
         conversations,
         "_get_conversation",
-        lambda conv_id: {
-            "conversation_id": conv_id,
-            "student_id": "student-1",
-            "escalation_request_id": "req-1",
-            "escalation_status": "pending",
-            "dispatch_status": "dispatched",
-            "dispatched_teacher_id": "teacher-1",
-            "escalated_at": "2026-08-24T08:00:00+00:00",
-            "updated_at": "2026-08-24T08:00:00+00:00",
-        },
+        lambda conv_id: {"conversation_id": conv_id, "student_id": "student-1"},
+    )
+
+
+def _with_help_request(monkeypatch, **fields):
+    """The conversation's help request (#189): its own record, `CONV#…/HELP`."""
+    from fakes.dynamodb import FakeTable
+
+    table = FakeTable()
+    if fields.pop("asked", True):
+        table.seed(
+            {
+                "PK": "CONV#conv-1",
+                "SK": "HELP",
+                "entity_type": "help_request",
+                "conversation_id": "conv-1",
+                "escalation_request_id": "conv-1",
+                "student_id": "student-1",
+                "owner_id": "student-1",
+                "account_fence_generation": 1,
+                "version": 1,
+                "escalation_status": "pending",
+                "escalated_at": "2026-08-24T08:00:00+00:00",
+                "created_at": "2026-08-24T08:00:00+00:00",
+                "updated_at": "2026-08-24T08:00:00+00:00",
+                **fields,
+            }
+        )
+    monkeypatch.setattr(conversations, "get_table", lambda: table)
+    _owned_conversation(monkeypatch)
+    return table
+
+
+def test_teacher_help_status_names_the_teacher_dispatch_actually_bound(monkeypatch):
+    """Dispatch records the teacher on dispatched_teacher_id, not current_teacher."""
+    _with_help_request(
+        monkeypatch, dispatch_status="dispatched", dispatched_teacher_id="teacher-1"
     )
     monkeypatch.setattr(
         conversations.user_repo, "get_user", lambda _id, **_kwargs: {"name": "Test Teacher"}
@@ -92,19 +118,8 @@ def test_teacher_help_status_names_the_teacher_dispatch_actually_bound(monkeypat
 def test_a_teacher_without_a_name_is_not_shown_to_the_student_by_email(monkeypatch):
     # #65: with no name on the teacher's profile the status card showed the
     # teacher's email address to the student.
-    monkeypatch.setattr(
-        conversations,
-        "_get_conversation",
-        lambda conv_id: {
-            "conversation_id": conv_id,
-            "student_id": "student-1",
-            "escalation_request_id": "req-1",
-            "escalation_status": "pending",
-            "dispatch_status": "dispatched",
-            "dispatched_teacher_id": "teacher-1",
-            "escalated_at": "2026-08-24T08:00:00+00:00",
-            "updated_at": "2026-08-24T08:00:00+00:00",
-        },
+    _with_help_request(
+        monkeypatch, dispatch_status="dispatched", dispatched_teacher_id="teacher-1"
     )
     monkeypatch.setattr(
         conversations.user_repo,
@@ -122,11 +137,7 @@ def test_a_teacher_without_a_name_is_not_shown_to_the_student_by_email(monkeypat
 
 
 def test_teacher_help_status_is_absent_before_any_escalation(monkeypatch):
-    monkeypatch.setattr(
-        conversations,
-        "_get_conversation",
-        lambda conv_id: {"conversation_id": conv_id, "student_id": "student-1"},
-    )
+    _with_help_request(monkeypatch, asked=False)
 
     response = _client(conversations.teacher_help_router, "/teacher-help").get(
         "/teacher-help/conversations/conv-1/request"
@@ -149,23 +160,15 @@ def test_conversation_teacher_help_records_support_visible_usage(monkeypatch):
         ),
     )
 
-    class FakeTable:
-        def update_item(self, **kwargs):
-            return {}
+    from stoa.services import teacher_dispatch_service
 
-        def put_item(self, Item):
-            return {}
-
-    monkeypatch.setattr(conversations, "get_table", lambda: FakeTable())
+    table = _escalation_table()
+    for module in (conversations, teacher_dispatch_service):
+        monkeypatch.setattr(module, "get_table", lambda table=table: table)
     monkeypatch.setattr(
         conversations,
         "_get_conversation",
-        lambda conv_id: {
-            "conversation_id": conv_id,
-            "student_id": "student-1",
-            "subject": "physics",
-            "grade": "Sek1",
-        },
+        lambda conv_id: dict(table.rows[(f"CONV#{conv_id}", "CONV")]),
     )
     monkeypatch.setattr(
         conversations.usage_ledger_service,
@@ -189,7 +192,7 @@ def test_conversation_teacher_help_records_support_visible_usage(monkeypatch):
 
 
 def test_repeat_teacher_help_replays_the_existing_escalation(monkeypatch):
-    """A second request answers with the escalation already on the conversation.
+    """A second request answers with the conversation's existing help request.
 
     It used to run admission again, where persist_case declined every attempt
     and the exhausted retry loop reached the student as a 503.
@@ -208,24 +211,16 @@ def test_repeat_teacher_help_replays_the_existing_escalation(monkeypatch):
         "admit_teacher_support_case",
         _record_admission,
     )
-    monkeypatch.setattr(conversations, "get_table", lambda: object())
-    monkeypatch.setattr(
-        conversations,
-        "_get_conversation",
-        lambda conv_id: {
-            "conversation_id": conv_id,
-            "student_id": "student-1",
-            "escalation_request_id": "req-1",
-            "escalation_status": "pending",
-            # Dispatch writes the teacher, the status and the deadline together;
-            # a teacher is named only while that offer is live (#86).
-            "dispatched_teacher_id": "teacher-1",
-            "dispatch_status": "dispatched",
-            "dispatch_deadline_at": "2999-01-01T00:00:00+00:00",
-            "escalated_at": "2026-08-24T08:00:00+00:00",
-            "updated_at": "2026-08-24T08:05:00+00:00",
-        },
+    table = _with_help_request(
+        monkeypatch,
+        # Dispatch writes the teacher, the status and the deadline together;
+        # a teacher is named only while that offer is live (#86).
+        dispatched_teacher_id="teacher-1",
+        dispatch_status="dispatched",
+        dispatch_deadline_at="2999-01-01T00:00:00+00:00",
+        updated_at="2026-08-24T08:05:00+00:00",
     )
+    table.seed_active_account("student-1")
     monkeypatch.setattr(
         conversations.user_repo, "get_user", lambda _id, **_kwargs: {"name": "Test Teacher"}
     )
@@ -243,34 +238,36 @@ def test_repeat_teacher_help_replays_the_existing_escalation(monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["requestId"] == "req-1"
+    # A help request's id is its conversation's (#189).
+    assert body["requestId"] == "conv-1"
     assert body["teacherName"] == "Test Teacher"
     assert body["status"] == "assigned"
     assert admissions == []
     # The repeat still owes the usage row a failed first attempt may have left
-    # unwritten, keyed by the escalation it answers with, not by this request.
+    # unwritten, keyed by the request it answers with, not by this call.
     (ledger_call,) = ledger_calls
-    assert ledger_call["request_correlation_id"] == "req-1"
+    assert ledger_call["request_correlation_id"] == "conv-1"
     assert ledger_call["created_at"] == "2026-08-24T08:00:00+00:00"
     assert ledger_call["quota_period"] == "2026-08-24"
-    assert ledger_call["idempotency_key"].endswith("req-1")
+    assert ledger_call["idempotency_key"].endswith("conv-1")
 
 
 def test_teacher_help_retryable_admission_stays_out_of_student_words(monkeypatch):
+    admissions = []
     monkeypatch.setattr(
         conversations.teacher_support_allowance_service,
         "admit_teacher_support_case",
-        lambda **_kwargs: (
-            conversations.teacher_support_allowance_service.TeacherSupportAdmissionResult(
-                conversations.teacher_support_allowance_service.TeacherSupportAdmissionDisposition.RETRYABLE
-            )
+        lambda **kwargs: admissions.append(kwargs)
+        or conversations.teacher_support_allowance_service.TeacherSupportAdmissionResult(
+            conversations.teacher_support_allowance_service.TeacherSupportAdmissionDisposition.RETRYABLE
         ),
     )
-    monkeypatch.setattr(conversations, "get_table", lambda: object())
+    table = _escalation_table()
+    monkeypatch.setattr(conversations, "get_table", lambda: table)
     monkeypatch.setattr(
         conversations,
         "_get_conversation",
-        lambda conv_id: {"conversation_id": conv_id, "student_id": "student-1"},
+        lambda conv_id: dict(table.rows[(f"CONV#{conv_id}", "CONV")]),
     )
 
     response = _client(conversations.teacher_help_router, "/teacher-help").post(
@@ -279,6 +276,9 @@ def test_teacher_help_retryable_admission_stays_out_of_student_words(monkeypatch
     )
 
     assert response.status_code == 503
+    # The refusal came from the admission, and nothing was written for it.
+    assert len(admissions) == 1
+    assert ("CONV#conv-1", "HELP") not in table.rows
     detail = response.json()["detail"]
     assert detail["code"] == "teacher_support_admission_recoverable"
     assert "admission" not in detail["message"].lower()
@@ -2055,67 +2055,79 @@ def test_the_other_conversation_fields_still_refuse_an_empty_value():
             conversations._required_conversation_text({field: ""}, field)
 
 
-def test_escalating_a_conversation_writes_the_row_the_teacher_side_reads():
+def test_escalating_a_conversation_writes_the_record_the_teacher_side_reads(monkeypatch):
     """A student asking for a teacher has to reach a teacher.
 
-    Everything on the teacher side - the queue, dispatch, the reply, the SLA
-    figures - reads question rows with `status=escalated`. Escalation wrote a
-    marker on the conversation and nothing else, so the request was accepted and
-    `GET /teachers/queue` stayed empty. Measured in production on 2026-09-24.
+    Everything on the teacher side - the list, dispatch, the reply, the SLA
+    figures - reads the conversation's help request (#189). Escalation once
+    wrote a marker on the conversation and nothing else, so the request was
+    accepted and `GET /teachers/queue` stayed empty. Measured in production on
+    2026-09-24.
     """
-    operation = conversations._escalated_question_operation(
-        request_id="req-1",
-        conversation={"subject": "mathematics", "grade": "Sek1"},
-        conversation_id="conv-1",
-        student_id="student-1",
-        generation=3,
-        message="Bitte hilf mir.",
-        now="2026-09-24T09:00:00+00:00",
-    )
+    from stoa.services import help_requests
 
-    item = operation["Put"]["Item"]
-    assert item["PK"] == "QUESTION#req-1"
-    assert item["SK"] == "META"
-    # What the queue scan filters on, and what it renders each row from.
-    assert item["status"] == "escalated"
+    table = _escalation_table()
+
+    response = _escalate(monkeypatch, table)
+
+    assert response.status_code == 200
+    item = table.rows[("CONV#conv-1", "HELP")]
+    assert item["entity_type"] == "help_request"
+    assert item["escalation_request_id"] == "conv-1"
+    assert item["escalation_status"] == "pending"
     assert item["student_id"] == "student-1"
-    assert item["subject"] == "mathematics"
-    assert item["teacher_requested_at"] == "2026-09-24T09:00:00+00:00"
-    assert item["queue_visible_at"] == "2026-09-24T09:00:00+00:00"
+    assert item["subject"] == "physics"
     assert item["conversation_id"] == "conv-1"
-    # A version the reply path can recognise; `teachers.py` treats a row without
-    # a positive one as a legacy row and sends it to be initialised.
-    assert item["version"] == 1
+    assert item["escalation_message"] == "please help"
+    # In GSI-StudentId beside the student's conversations.
+    assert item["created_at"] == item["escalated_at"]
+    # A version every later write is conditioned on.
+    assert int(item["version"]) >= 1
+    # What a reader keyed by a question id is given.
+    assert help_requests.question_view(dict(item))["status"] == "escalated"
 
 
-def test_escalating_the_same_conversation_twice_cannot_open_a_second_case():
-    """Negative control: the row is created, never overwritten."""
-    operation = conversations._escalated_question_operation(
-        request_id="req-1",
-        conversation={},
-        conversation_id="conv-1",
-        student_id="student-1",
-        generation=3,
-        message=None,
-        now="2026-09-24T09:00:00+00:00",
-    )
+def test_escalating_the_same_conversation_twice_cannot_open_a_second_case(monkeypatch):
+    """Negative control: the record is created, never overwritten."""
+    from stoa.db.repositories import account_deletion_repo
 
-    assert operation["Put"]["ConditionExpression"] == (
+    sent: list[list[dict]] = []
+    original = account_deletion_repo.transact
+
+    def recording(operations, *, table=None):
+        operations = list(operations)
+        sent.append(operations)
+        return original(operations, table=table)
+
+    monkeypatch.setattr(account_deletion_repo, "transact", recording)
+    table = _escalation_table()
+
+    assert _escalate(monkeypatch, table).status_code == 200
+
+    puts = [
+        operation["Put"]
+        for operations in sent
+        for operation in operations
+        if "Put" in operation and operation["Put"]["Item"].get("SK") == "HELP"
+    ]
+    assert len(puts) == 1
+    assert puts[0]["ConditionExpression"] == (
         "attribute_not_exists(PK) AND attribute_not_exists(SK)"
     )
 
 
-def test_the_escalated_row_is_written_in_the_same_transaction_as_the_case():
-    """It has to be atomic with the escalation, or the two can disagree.
+def test_the_help_request_is_written_in_the_same_transaction_as_the_case():
+    """It has to be atomic with the case, or the two can disagree.
 
-    A separate write would let the conversation carry an escalation the queue
-    never heard of - which is the state production was already in - or a queue
-    row for an escalation that failed.
+    A separate write would let a student be charged a case for a request no
+    teacher can see, or leave a request behind for a case that was refused.
     """
     import ast
     from pathlib import Path
 
-    source = Path(conversations.__file__).read_text(encoding="utf-8")
+    from stoa.services import help_requests
+
+    source = Path(help_requests.__file__).read_text(encoding="utf-8")
     tree = ast.parse(source)
     persist = next(
         node
@@ -2127,31 +2139,31 @@ def test_the_escalated_row_is_written_in_the_same_transaction_as_the_case():
         for node in ast.walk(persist)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "record_teacher_help_request"
+        and node.func.attr == "transact"
     ]
     assert len(calls) == 1
-    passed = next(
-        keyword for keyword in calls[0].keywords if keyword.arg == "additional_operations"
-    )
-    names = {
-        node.func.id
-        for node in ast.walk(passed.value)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    (sent,) = calls[0].args
+    assert isinstance(sent, ast.List)
+    starred = {
+        element.value.id
+        for element in sent.elts
+        if isinstance(element, ast.Starred) and isinstance(element.value, ast.Name)
     }
-    assert "_escalated_question_operation" in names
+    # The request's own rows and the allowance's, in the one list.
+    assert starred == {"rows", "allowance_operations"}
 
 
 # --- The escalation actually executed, not the operations we meant to send ----
 #
-# Everything above about the queue row asserted on a dictionary. The shared
-# double used to fall into `record_teacher_help_request`'s degraded branch,
-# which writes the conversation header and the system message and **drops every
-# other operation in the transaction** - the allowance fences, the admission
-# receipt, the counter and the queue row. Those assertions could not have failed
-# no matter what the code did, because none of it ran.
+# Tests about the queue row once asserted on a dictionary. The shared double
+# used to fall into a degraded branch that wrote the conversation header and the
+# system message and **dropped every other operation in the transaction** - the
+# allowance fences, the admission receipt, the counter and the queue row. Those
+# assertions could not have failed no matter what the code did, because none of
+# it ran.
 #
-# This one runs it: one real transaction against the shared table double, then
-# the teacher-side queue read against the same table.
+# These run it: one real transaction against the shared table double, then the
+# teacher-side read of help requests against the same table.
 
 
 def _escalation_table():
@@ -2250,26 +2262,24 @@ def _escalate(monkeypatch, table, conversation_id: str = "conv-1"):
 
 
 def test_the_escalation_lands_in_the_queue_the_teacher_actually_reads(monkeypatch):
-    from stoa.services import teacher_dispatch_service
+    from stoa.services import help_requests
 
     table = _escalation_table()
-    monkeypatch.setattr(teacher_dispatch_service, "get_table", lambda: table)
 
     response = _escalate(monkeypatch, table)
 
     assert response.status_code == 200
     request_id = response.json()["requestId"]
+    assert request_id == "conv-1"
+    # One record, no queue row beside it (#189).
+    assert not [key for key in table.rows if key[0].startswith("QUESTION#")]
+    assert "escalated" not in table.rows[("CONV#conv-1", "CONV")]
 
-    stored = table.rows.get((f"QUESTION#{request_id}", "META"))
-    assert stored is not None, "the queue row was never written"
-    assert stored["status"] == "escalated"
-    assert stored["student_id"] == "student-1"
-    assert stored["conversation_id"] == "conv-1"
-
-    # The teacher side, reading the same table through its own query.
-    page = teacher_dispatch_service.list_teacher_dispatch_questions()
-    assert [item["question_id"] for item in page] == [request_id]
-    assert page[0]["subject"] == "physics"
+    # The teacher side, reading the same table through its own read.
+    listed = [help_requests.question_view(record) for record in help_requests.list_all(table=table)]
+    assert [item["question_id"] for item in listed] == [request_id]
+    assert listed[0]["subject"] == "physics"
+    assert listed[0]["status"] == "escalated"
 
 
 def test_the_case_the_student_spent_is_on_the_table_too(monkeypatch):
@@ -2306,7 +2316,7 @@ def test_an_eighth_escalation_in_one_week_is_refused_end_to_end(monkeypatch):
     counters = [row for key, row in table.rows.items() if key[1].startswith("WEEK#")]
     assert int(counters[0]["admitted_cases"]) == 7
     # The refused one left nothing behind.
-    assert (("QUESTION#" + eighth.json().get("requestId", "-")), "META") not in table.rows
+    assert ("CONV#conv-8", "HELP") not in table.rows
 
 
 def test_asking_twice_about_one_conversation_spends_one_case(monkeypatch):
@@ -2344,63 +2354,27 @@ def _with_a_teacher_on_duty(table) -> None:
     )
 
 
-def test_dispatch_marks_both_rows_the_case_is_represented_by(monkeypatch):
-    """One escalation, two rows, one dispatch.
+def test_escalating_with_a_teacher_on_duty_offers_the_request_to_them(monkeypatch):
+    """One escalation, one record, one offer.
 
-    The conversation is what the student reads and the question row is what the
-    teacher queue reads. Writing the dispatch to only the conversation left the
-    queue row saying `unassigned` for good, which let a second teacher be sent
-    to the same case and left the SLA dashboard counting it as never dispatched.
+    The record is what the student and the teacher both read. The offer is
+    written to it under its version, so a second teacher cannot be sent to the
+    same case and the SLA dashboard does not count it as never dispatched.
     """
     table = _escalation_table()
     _with_a_teacher_on_duty(table)
 
     request_id = _escalate(monkeypatch, table).json()["requestId"]
 
-    question = table.rows[(f"QUESTION#{request_id}", "META")]
-    assert question["dispatch_status"] == "dispatched"
-    assert question["dispatched_teacher_id"] == "teacher-1"
-    # Still escalated, and the version moved: the write went through the same
-    # compare-and-set every other question write goes through.
-    assert question["status"] == "escalated"
-    assert int(question["version"]) == 2
-    assert table.rows[("CONV#conv-1", "CONV")]["dispatch_status"] == "dispatched"
-
-
-def test_an_escalation_made_before_the_queue_row_existed_is_not_dispatched(monkeypatch):
-    """Rows escalated before queue rows existed are no longer offered.
-
-    Such a request cannot be taken (#72): account deletion reaches a chat
-    request through its queue row, so a teacher bound to one without could
-    never be removed. Offering it would only re-offer it forever to teachers
-    who get 409, so dispatch leaves it alone (user decision on #73,
-    2026-09-28; none exist in production). This used to assert the opposite.
-    """
-    from stoa.services import teacher_dispatch_service
-
-    table = _escalation_table()
-    _with_a_teacher_on_duty(table)
-    request_id = _escalate(monkeypatch, table).json()["requestId"]
-
-    # Put the pair back into the shape an older escalation left behind: the
-    # conversation still pending, and no queue row at all.
-    del table.rows[(f"QUESTION#{request_id}", "META")]
-    conversation = {
-        **dict(table.rows[("CONV#conv-1", "CONV")]),
-        "dispatch_status": "unassigned",
-        "dispatched_teacher_id": "",
-        "dispatch_deadline_at": "",
-    }
-    table.rows[("CONV#conv-1", "CONV")] = _as_stored(conversation)
-
-    result = teacher_dispatch_service.dispatch_conversation(
-        "conv-1", conversation=conversation, table=table
-    )
-
-    assert result["status"] == "not_dispatchable"
-    assert result["reason"] == "no_queue_row"
-    assert (f"QUESTION#{request_id}", "META") not in table.rows
-    assert table.rows[("CONV#conv-1", "CONV")]["dispatch_status"] == "unassigned"
+    record = table.rows[(f"CONV#{request_id}", "HELP")]
+    assert record["dispatch_status"] == "dispatched"
+    assert record["dispatched_teacher_id"] == "teacher-1"
+    # Still waiting, and the version moved: the offer went through the same
+    # compare-and-set every other write of the request goes through.
+    assert record["escalation_status"] == "pending"
+    assert int(record["version"]) == 2
+    # The conversation row carries none of it.
+    assert "dispatch_status" not in table.rows[("CONV#conv-1", "CONV")]
 
 
 _STUDENT_HELP_STATES = {
@@ -2419,19 +2393,7 @@ def test_every_help_state_a_student_can_be_in_is_one_the_contract_names(
     monkeypatch, state, fields
 ):
     # #65: the status card reads this field only, so it is a closed set.
-    monkeypatch.setattr(
-        conversations,
-        "_get_conversation",
-        lambda conv_id: {
-            "conversation_id": conv_id,
-            "student_id": "student-1",
-            "escalation_request_id": "req-1",
-            "escalation_status": "pending",
-            "escalated_at": "2026-08-24T08:00:00+00:00",
-            "updated_at": "2026-08-24T08:00:00+00:00",
-            **fields,
-        },
-    )
+    _with_help_request(monkeypatch, **fields)
     monkeypatch.setattr(conversations.user_repo, "get_user", lambda _id, **_kwargs: {"name": "T"})
 
     response = _client(conversations.teacher_help_router, "/teacher-help").get(

@@ -58,6 +58,8 @@ def test_conversation_source_registry_closes_rows_writers_and_private_fields() -
         "chat_quota_operation",
         "chat_usage_event",
         "attachment_association",
+        # The conversation's help request is its own row since #189.
+        "help_request",
     } <= set(rows)
     assert {
         "create_conversation",
@@ -153,7 +155,13 @@ def test_direct_router_writes_are_forbidden_by_static_writer_gate() -> None:
     assert ".put_item(" not in source
     assert ".update_item(" not in source
     assert "create_conversation_record" in source
-    assert "record_teacher_help_request" in source
+    # The help request is written by its own module (#189), through the same
+    # fenced conversation writes, never a direct put or update.
+    assert "help_requests.ask(" in source
+    help_source = Path("src/stoa/services/help_requests.py").read_text()
+    assert ".put_item(" not in help_source
+    assert ".update_item(" not in help_source
+    assert "build_conversation_write_transaction" in help_source
 
 
 def test_private_row_discovery_is_strong_paginated_and_scrub_is_allowlisted() -> None:

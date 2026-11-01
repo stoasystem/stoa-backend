@@ -10,7 +10,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
@@ -366,6 +366,8 @@ CONVERSATION_PRIVATE_ROW_REGISTRY = frozenset(
         "attachment_association",
         # What a new Ask question asked about (#143).
         "asked_knowledge_points",
+        # The conversation's request for a teacher (#189).
+        "help_request",
     }
 )
 CONVERSATION_WRITER_REGISTRY = frozenset(
@@ -753,66 +755,6 @@ def retitle_conversation(
     except Exception:
         return False
     return True
-
-
-def record_teacher_help_request(
-    *,
-    conversation: dict[str, object],
-    message: dict[str, object],
-    owner_id: str,
-    generation: int = 1,
-    additional_operations: tuple[dict[str, Any], ...] = (),
-    table: object | None = None,
-) -> None:
-    """Persist help lifecycle and its system message atomically under one fence."""
-    target = table or get_table()
-    header = {
-        **conversation,
-        "escalated": True,
-        "escalated_at": message["created_at"],
-        "escalation_request_id": message["message_id"],
-        "escalation_status": "pending",
-        "escalation_message": message.get("escalation_message"),
-        "updated_at": message["created_at"],
-    }
-    operations = [
-        account_deletion_repo.active_fence_condition(owner_id, generation),
-        *additional_operations,
-        {
-            "Put": {
-                "Item": {
-                    **header,
-                    "owner_id": owner_id,
-                    "student_id": owner_id,
-                    "account_fence_generation": generation,
-                },
-                "ConditionExpression": (
-                    "attribute_exists(PK) AND attribute_exists(SK) AND student_id=:owner"
-                ),
-                "ExpressionAttributeValues": {":owner": owner_id},
-            }
-        },
-        build_conversation_write_transaction(
-            item=message, owner_id=owner_id, generation=generation, mode="put"
-        )[1],
-    ]
-    hook = getattr(target, "transact_conversation_write", None)
-    if callable(hook):
-        hook(operations)
-    elif not hasattr(target, "meta") and hasattr(target, "update_item"):
-        # Inherited route fakes exercise projection only; production is atomic.
-        _update_item(target,
-            Key={"PK": header["PK"], "SK": header["SK"]},
-            UpdateExpression="SET escalated=:e",
-            ExpressionAttributeValues={":e": True},
-        )
-        message_operation = operations[-1]
-        _put_item(target, Item=message_operation["Put"]["Item"])
-    else:
-        try:
-            account_deletion_repo.transact(operations, table=target)
-        except account_deletion_repo.AccountDeletionConflict as exc:
-            raise AttachmentRepositoryConflict("conditional_conflict") from exc
 
 
 def _valid_conversation_cursor(cursor: object) -> dict[str, str] | None:

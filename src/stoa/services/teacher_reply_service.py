@@ -71,22 +71,6 @@ def normalize_teacher_reply(content: str | None, rich_content: dict[str, Any] | 
     }
 
 
-def compute_takeover_sla_fields(item: dict[str, Any], now: str) -> dict[str, Any]:
-    requested_at = _parse_timestamp(item.get("teacher_requested_at") or item.get("queue_visible_at"))
-    taken_over_at = _parse_timestamp(now)
-    if not requested_at or not taken_over_at:
-        return {}
-    return {"sla_request_to_takeover_seconds": _duration_seconds(requested_at, taken_over_at)}
-
-
-def compute_resolved_sla_fields(item: dict[str, Any], now: str) -> dict[str, Any]:
-    requested_at = _parse_timestamp(item.get("teacher_requested_at") or item.get("queue_visible_at"))
-    resolved_at = _parse_timestamp(now)
-    if not requested_at or not resolved_at:
-        return {}
-    return {"sla_request_to_resolved_seconds": _duration_seconds(requested_at, resolved_at)}
-
-
 def sla_bucket(duration_seconds: int | None) -> str:
     if duration_seconds is None:
         return "unknown"
@@ -264,10 +248,6 @@ def _parse_timestamp(value: Any) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
-
-
-def _duration_seconds(start: datetime, end: datetime) -> int:
-    return max(0, int((end - start).total_seconds()))
 
 
 def _numeric_values(values: Any) -> list[int]:

@@ -9,8 +9,8 @@ called leaves STOA with it. A failed send is logged and the offer stands.
 
 Seam ③ of #133: the student's request route and the scheduled sweep go in, the
 notification store (read back through the teacher's own bell) and the SES
-client come out. Rows, dispatch and routes are the real ones over the shared
-table double, as in test_chat_help_request_lifecycle.py.
+client come out. The request record (#189), dispatch and routes are the real
+ones over the shared table double, as in test_chat_help_request_lifecycle.py.
 """
 
 from __future__ import annotations
@@ -31,9 +31,8 @@ from stoa.services import notify_service
 import test_chat_help_request_lifecycle as lifecycle
 from test_chat_help_request_lifecycle import (
     CONV,
-    CONV_KEY,
+    HELP_KEY,
     OTHER_TEACHER,
-    QUESTION_KEY,
     STUDENT,
     TEACHER,
 )
@@ -69,17 +68,8 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
     built.rows[(f"USER#{TEACHER}", "PROFILE")]["email"] = TEACHER_EMAIL
     built.rows[(f"USER#{OTHER_TEACHER}", "PROFILE")]["email"] = OTHER_TEACHER_EMAIL
     built.rows[(f"USER#{STUDENT}", "PROFILE")]["full_name"] = STUDENT_NAME
-    # Not yet asked for: the student's request below is what escalates it.
-    conversation = built.rows[CONV_KEY]
-    for field in (
-        "escalated",
-        "escalated_at",
-        "escalation_message",
-        "escalation_request_id",
-        "escalation_status",
-    ):
-        conversation.pop(field)
-    del built.rows[QUESTION_KEY]
+    # Not yet asked for: the student's request below is what asks.
+    del built.rows[HELP_KEY]
     return built
 
 
@@ -162,9 +152,7 @@ def _offers(teacher_id: str) -> list[dict[str, Any]]:
 
 def _lapse_the_offer(table: FakeTable) -> None:
     past = (datetime.now(timezone.utc) - timedelta(minutes=1)).replace(microsecond=0).isoformat()
-    request_id = table.rows[CONV_KEY]["escalation_request_id"]
-    table.rows[CONV_KEY]["dispatch_deadline_at"] = past
-    table.rows[(f"QUESTION#{request_id}", "META")]["dispatch_deadline_at"] = past
+    table.rows[HELP_KEY]["dispatch_deadline_at"] = past
 
 
 def _sweep() -> dict[str, Any]:
@@ -193,7 +181,7 @@ def test_the_first_offer_leaves_the_teacher_one_notification_and_one_email(table
     assert offers[0]["targetType"] == "question"
     assert offers[0]["targetId"] == help_request["requestId"]
     assert offers[0]["status"] == "created"
-    assert offers[0]["metadata"]["deadline_at"] == table.rows[CONV_KEY]["dispatch_deadline_at"]
+    assert offers[0]["metadata"]["deadline_at"] == table.rows[HELP_KEY]["dispatch_deadline_at"]
     assert len(ses.sent) == 1
     assert ses.to(TEACHER_EMAIL) == ses.sent
     assert _offers(OTHER_TEACHER) == []
@@ -208,7 +196,7 @@ def test_a_re_offer_leaves_the_next_teacher_one_notification_and_one_email(table
     outcome = _sweep()
 
     assert outcome["conversationsDispatched"] == 1
-    assert table.rows[CONV_KEY]["dispatched_teacher_id"] == OTHER_TEACHER
+    assert table.rows[HELP_KEY]["dispatched_teacher_id"] == OTHER_TEACHER
     assert len(_offers(OTHER_TEACHER)) == 1
     assert len(ses.to(OTHER_TEACHER_EMAIL)) == 1
     # The teacher who let it lapse heard once, for their own offer.
@@ -237,7 +225,12 @@ def test_the_email_carries_the_subject_and_a_link_but_nothing_of_the_student(tab
     [mail] = ses.sent
     text = _subject_line(mail) + _body(mail)
     assert "Mathematik" in text
-    assert f"/teacher/requests/{help_request['requestId']}" in _body(mail)
+    link = f"/teacher/requests/{help_request['requestId']}"
+    assert link in _body(mail)
+    # A request's id is its conversation's (#189), so the link is the one
+    # place that id appears; nothing else of the conversation leaves.
+    assert help_request["requestId"] == CONV
+    text = text.replace(link, "")
     for private in (QUESTION_TEXT, CONVERSATION_TITLE, STUDENT_NAME, STUDENT, CONV):
         assert private not in text
 
@@ -312,8 +305,8 @@ def test_a_failed_send_is_logged_and_the_offer_stands(table, ses, caplog) -> Non
         help_request = _ask_for_a_teacher()
 
     assert help_request["status"] == "assigned"
-    assert table.rows[CONV_KEY]["dispatched_teacher_id"] == TEACHER
-    assert table.rows[CONV_KEY]["dispatch_status"] == "dispatched"
+    assert table.rows[HELP_KEY]["dispatched_teacher_id"] == TEACHER
+    assert table.rows[HELP_KEY]["dispatch_status"] == "dispatched"
     assert len(_offers(TEACHER)) == 1
     assert any("dispatch_reminder_email_failed" in record.getMessage() for record in caplog.records)
 
@@ -328,7 +321,7 @@ def test_a_failed_send_on_a_re_offer_still_re_offers(table, ses) -> None:
     outcome = _sweep()
 
     assert outcome["conversationsDispatched"] == 1
-    assert table.rows[CONV_KEY]["dispatched_teacher_id"] == OTHER_TEACHER
+    assert table.rows[HELP_KEY]["dispatched_teacher_id"] == OTHER_TEACHER
     assert len(_offers(OTHER_TEACHER)) == 1
 
 
@@ -357,7 +350,7 @@ def test_a_subject_the_catalog_cannot_name_still_dispatches(table, ses, monkeypa
         help_request = _ask_for_a_teacher()
 
     assert help_request["status"] == "assigned"
-    assert table.rows[CONV_KEY]["dispatched_teacher_id"] == TEACHER
+    assert table.rows[HELP_KEY]["dispatched_teacher_id"] == TEACHER
     assert any("dispatch_teacher_alert_failed" in record.getMessage() for record in caplog.records)
 
     _on_duty(table, TEACHER, OTHER_TEACHER)
@@ -366,7 +359,7 @@ def test_a_subject_the_catalog_cannot_name_still_dispatches(table, ses, monkeypa
 
     assert outcome["conversationSweep"] == "completed"
     assert outcome["conversationsDispatched"] == 1
-    assert table.rows[CONV_KEY]["dispatched_teacher_id"] == OTHER_TEACHER
+    assert table.rows[HELP_KEY]["dispatched_teacher_id"] == OTHER_TEACHER
 
 
 # --- In the teacher's language ---

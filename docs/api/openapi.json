@@ -31625,7 +31625,7 @@
     },
     "/teacher-help/conversations/{conv_id}/request": {
       "get": {
-        "description": "Report where a student's escalation stands, for the waiting indicator.",
+        "description": "Report where a student's request stands, for the waiting indicator.",
         "operationId": "get_teacher_help_status_teacher_help_conversations__conv_id__request_get",
         "parameters": [
           {
@@ -31793,7 +31793,7 @@
     },
     "/teacher-help/request": {
       "post": {
-        "description": "Escalate a conversation to a human teacher.",
+        "description": "Ask a human teacher about this conversation (#189: one request per conversation).\n\nA conversation that already has a request answers with it, whatever its\nstate. Otherwise a case of the week is spent, the request written and\noffered to a teacher; `help_requests.ask` does all three.",
         "operationId": "request_teacher_help_teacher_help_request_post",
         "requestBody": {
           "content": {
@@ -32759,7 +32759,7 @@
         }
       },
       "patch": {
-        "description": "Take a help request (`in_progress`) or finish it (`resolved`).\n\nThe teacher it is offered to takes it with their first write, and finishing\nit straight from the offer takes and finishes it at once. Both rows of the\nrequest move in one transaction (stoasystem/stoa-backend#66).",
+        "description": "Take a help request (`in_progress`) or finish it (`resolved`).\n\nThe teacher it is offered to takes it with their first write, and finishing\nit straight from the offer takes and finishes it at once (#66).",
         "operationId": "update_help_request_teachers_me_help_requests__request_id__patch",
         "parameters": [
           {

@@ -636,18 +636,23 @@ class CurrentAuthorizationFactRepository:
                     )
                 )
 
+            from stoa.security.route_authorization import help_request_as_question
+
+            def task(question_id: str) -> dict | None:
+                # A help request is not a question row since #189; its id
+                # names it all the same.
+                return question_repo.get_question(question_id) or help_request_as_question(
+                    question_id
+                )
+
             question = resource_value if resource.resource_type is ResourceType.QUESTION else None
             if resource.resource_type is ResourceType.CONVERSATION and resource.question_id:
-                question = question_repo.get_question(resource.question_id)
+                question = task(resource.question_id)
             if resource.resource_type in {
                 ResourceType.TEACHER_HELP_REQUEST,
                 ResourceType.AI_TEACHER_DRAFT,
             }:
-                question = (
-                    question_repo.get_question(resource.question_id)
-                    if resource.question_id
-                    else resource_value
-                )
+                question = task(resource.question_id) if resource.question_id else resource_value
             if resource.resource_type is ResourceType.ATTACHMENT:
                 # Read under the help request it was sent in: the resolver
                 # hands that request's row, as the request's own routes do (#140).

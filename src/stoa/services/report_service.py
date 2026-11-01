@@ -741,7 +741,10 @@ def _list_conversations_for_student(student_id: str) -> list[dict[str, Any]]:
         if not isinstance(raw_last_key, Mapping):
             raise RuntimeError("student conversation pagination is malformed")
         last_key = dict(raw_last_key)
-    return conversations[:_CONVERSATION_LIMIT]
+    from stoa.services import help_requests
+
+    # Whether a teacher was asked is the request's, not the conversation's (#189).
+    return help_requests.with_requests(conversations[:_CONVERSATION_LIMIT], student_id, table=table)
 
 
 def _question_requested_teacher_help(question: dict[str, Any]) -> bool:

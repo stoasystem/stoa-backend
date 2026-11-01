@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stoa.routers import admin, teachers
-from stoa.services import teacher_dispatch_service
+from stoa.services import help_requests, teacher_dispatch_service
 from actor_helpers import install_actor_overrides
 from fakes.dynamodb import FakeTable, as_stored as _as_stored
 
@@ -24,20 +24,6 @@ QUESTION = _as_stored({
     "queue_visible_at": "2026-06-15T10:00:00+00:00",
     "version": 1,
 })
-
-
-def _applied_mutation(question, status, attrs):
-    updated = {
-        **question,
-        "status": status,
-        "version": int(question["version"]) + 1,
-        **attrs,
-    }
-    return teacher_dispatch_service.question_repo.QuestionMutationResult(
-        teacher_dispatch_service.question_repo.QuestionMutationDisposition.APPLIED,
-        str(question["question_id"]),
-        updated,
-    )
 
 
 TEACHERS = _as_stored([
@@ -167,10 +153,28 @@ def _profile_row(**overrides: object) -> dict:
     return {"PK": f"USER#{teacher['user_id']}", "SK": "PROFILE", **teacher}
 
 
-def _question_row(**overrides: object) -> dict:
-    question = dict(QUESTION)
-    question.update(overrides)
-    return {"PK": f"QUESTION#{question['question_id']}", "SK": "META", **question}
+def _help_row(conversation_id: str, **overrides: object) -> dict:
+    return {
+        "PK": f"CONV#{conversation_id}",
+        "SK": "HELP",
+        "entity_type": "help_request",
+        "conversation_id": conversation_id,
+        "escalation_request_id": conversation_id,
+        "student_id": "student-1",
+        "subject": "math",
+        "escalation_status": "pending",
+        "escalated_at": "2026-06-15T10:00:00+00:00",
+        "version": 1,
+        **overrides,
+    }
+
+
+def _help_request_walk(*rows: dict) -> tuple[list[dict], list[dict]]:
+    """Every help request on a table whose pages hold one row each, and its scans."""
+    table = FakeTable(page_item_cap=1)
+    table.seed(*rows)
+    found = help_requests.list_all(table=table)
+    return found, _scans_since(table, 0)
 
 
 def test_dispatch_scans_continue_after_sparse_filtered_page(monkeypatch):
@@ -182,18 +186,20 @@ def test_dispatch_scans_continue_after_sparse_filtered_page(monkeypatch):
     table = _dispatch_table(
         {"PK": "PRACTICE#0", "SK": "ROW"},
         _profile_row(),
-        _question_row(),
     )
     monkeypatch.setattr(teacher_dispatch_service, "get_table", lambda: table)
 
     teachers = teacher_dispatch_service.list_teacher_profiles(limit=1)
     profile_scans = _scans_since(table, 0)
-    questions = teacher_dispatch_service.list_teacher_dispatch_questions(limit=1)
-    question_scans = _scans_since(table, len(profile_scans))
+    # The conversation row sorts before its help request and is filtered out.
+    requests, request_scans = _help_request_walk(
+        {"PK": "CONV#conv-1", "SK": "CONV", "entity_type": "conversation"},
+        _help_row("conv-1"),
+    )
 
     assert [item["user_id"] for item in teachers] == ["teacher-low-load"]
-    assert [item["question_id"] for item in questions] == ["question-1"]
-    for walk in (profile_scans, question_scans):
+    assert [item["conversation_id"] for item in requests] == ["conv-1"]
+    for walk in (profile_scans, request_scans):
         assert len(walk) > 1, "a filtered-empty page has to be followed, not accepted"
         assert all("ExclusiveStartKey" in call for call in walk[1:])
 
@@ -201,53 +207,51 @@ def test_dispatch_scans_continue_after_sparse_filtered_page(monkeypatch):
 def test_dispatch_scans_continue_after_nonempty_business_rejected_page(monkeypatch):
     """A page whose rows pass the filter but fail the business rule, likewise.
 
-    The rejected rows below match `SK = :profile` and `SK = :meta` exactly, so only
-    `accept_item` can turn them down - which is the branch this test is about.
+    The rejected rows below match `SK = :profile` and `entity_type = help_request`
+    exactly, so only the business rule can turn them down - which is the branch
+    this test is about.
     """
     table = _dispatch_table(
         _profile_row(user_id="student-rejected", role="student"),
         _profile_row(),
-        _question_row(
-            question_id="question-0-rejected",
-            status="pending",
-            teacher_requested_at=None,
-            queue_visible_at=None,
-        ),
-        _question_row(question_id="question-eligible"),
     )
     monkeypatch.setattr(teacher_dispatch_service, "get_table", lambda: table)
 
     teachers = teacher_dispatch_service.list_teacher_profiles(limit=1)
     profile_scans = _scans_since(table, 0)
-    questions = teacher_dispatch_service.list_teacher_dispatch_questions(limit=1)
-    question_scans = _scans_since(table, len(profile_scans))
+    # A deletion tombstone left in a request's place is no request.
+    requests, request_scans = _help_request_walk(
+        _help_row("conv-0-rejected", status="deleted", owner_deletion_generation=2),
+        _help_row("conv-eligible"),
+    )
 
     assert [item["user_id"] for item in teachers] == ["teacher-low-load"]
-    assert [item["question_id"] for item in questions] == ["question-eligible"]
-    for walk in (profile_scans, question_scans):
+    assert [item["conversation_id"] for item in requests] == ["conv-eligible"]
+    for walk in (profile_scans, request_scans):
         assert len(walk) > 1
         assert all("ExclusiveStartKey" in call for call in walk[1:])
 
 
 def test_admin_dispatch_dashboard_is_aggregate_and_content_safe(monkeypatch):
-    questions = [
-        {
-            **QUESTION,
-            "question_id": "question-old",
-            "content": "private student content",
-            "dispatch_status": "dispatched",
-            "dispatched_teacher_id": "teacher-low-load",
-            "dispatch_deadline_at": "2026-06-15T10:10:00+00:00",
-            "dispatch_attempt_count": 2,
-        },
-        {
-            **QUESTION,
-            "question_id": "question-no-candidate",
-            "dispatch_status": "unassigned",
-            "dispatch_no_candidate_reason": "subject_mismatch",
-        },
-    ]
-    monkeypatch.setattr(admin.teacher_dispatch_service, "list_teacher_dispatch_questions", lambda: questions)
+    table = FakeTable()
+    table.seed(
+        _help_row(
+            "conv-old",
+            escalation_message="private student content",
+            dispatch_status="dispatched",
+            dispatched_teacher_id="teacher-low-load",
+            dispatch_deadline_at="2026-06-15T10:10:00+00:00",
+            dispatch_attempt_count=2,
+        ),
+        _help_row(
+            "conv-no-candidate",
+            dispatch_status="unassigned",
+            dispatch_no_candidate_reason="subject_mismatch",
+        ),
+        # A request the student took back is no longer waiting on anyone.
+        _help_row("conv-withdrawn", escalation_status="withdrawn", dispatch_status="withdrawn"),
+    )
+    monkeypatch.setattr(admin, "get_table", lambda: table)
     monkeypatch.setattr(admin.teacher_dispatch_service, "list_teacher_profiles", lambda: [TEACHERS[0]])
     monkeypatch.setattr(admin.teacher_dispatch_service, "_now", lambda: "2026-06-15T10:15:00+00:00")
 

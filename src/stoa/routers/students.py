@@ -35,6 +35,7 @@ from stoa.config import settings
 from stoa.services import (
     allowance_service,
     entitlement_service,
+    help_requests,
     learning_profile_service,
     locale_service,
     message_catalog,
@@ -248,9 +249,14 @@ def _question_history_items(student_id: str) -> list[LearningHistoryItem]:
     # language the client is rendering in right now. These entries are labels
     # this backend writes, not content, so they follow the reader (#124).
     locale = locale_service.resolve_locale(None)
-    for row in result.get("Items", []):
-        if not isinstance(row, Mapping):
-            continue
+    # Whether a teacher was asked is the request's, not the conversation's (#189).
+    raw_rows = result.get("Items", [])
+    rows = help_requests.with_requests(
+        [row for row in (raw_rows if isinstance(raw_rows, list) else []) if isinstance(row, Mapping)],
+        student_id,
+        table=question_repo.get_table(),
+    )
+    for row in rows:
         created_at = _history_text(row.get("created_at"))
         if not created_at:
             continue
@@ -605,7 +611,11 @@ async def get_summary(
     # through its conversation (user decision, 2026-09-29).
     teacher_resolved += sum(
         1
-        for conversation in conversation_routes._list_conversations(student_id).items
+        for conversation in help_requests.with_requests(
+            conversation_routes._list_conversations(student_id).items,
+            student_id,
+            table=question_repo.get_table(),
+        )
         if conversation.get("escalated") and conversation.get("escalation_status") == "resolved"
     )
 

@@ -36,6 +36,7 @@ from stoa.models.billing import BillingPlanId
 from stoa.routers import conversations
 from stoa.services import (
     curriculum_ops_service,
+    help_requests,
     teacher_support_allowance_service,
     usage_ledger_service,
 )
@@ -217,10 +218,10 @@ def _refuse_put_once(monkeypatch: pytest.MonkeyPatch, table: FakeTable) -> None:
 def test_a_repeat_conversation_help_request_after_a_failed_ledger_write_records_one_event(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The escalation lands on the conversation in the admission's transaction; the
-    ledger row is written after dispatch, fenced. A refusal there leaves the row
-    missing, and a repeat request - answered from the conversation's escalation -
-    owes it, keyed by that escalation's request and day."""
+    """The help request is written in the admission's transaction; the ledger row
+    is written after dispatch, fenced. A refusal there leaves the row missing, and
+    a repeat request - answered from the conversation's help request - owes it,
+    keyed by that request and its day."""
     table = FakeTable()
     table.seed_active_account("student-1")
     table.seed(
@@ -253,9 +254,10 @@ def test_a_repeat_conversation_help_request_after_a_failed_ledger_write_records_
     )
     dispatches: list[str] = []
     monkeypatch.setattr(
-        conversations,
-        "_dispatch_escalated_conversation",
-        lambda **kwargs: dispatches.append(str(kwargs["request_id"])) or ("pending", None),
+        help_requests,
+        "dispatch",
+        lambda record, **_kwargs: dispatches.append(str(record["escalation_request_id"]))
+        or dict(record),
     )
     monkeypatch.setattr(conversations.user_repo, "get_user", lambda *_args, **_kwargs: None)
     refusals = {"left": 1}
@@ -281,7 +283,7 @@ def test_a_repeat_conversation_help_request_after_a_failed_ledger_write_records_
 
     with pytest.raises(account_deletion_repo.AccountDeletionConflict):
         client.post("/teacher-help/request", json=body)
-    escalation_request_id = table.rows[("CONV#conv-1", "CONV")]["escalation_request_id"]
+    escalation_request_id = table.rows[("CONV#conv-1", "HELP")]["escalation_request_id"]
     assert dispatches == [escalation_request_id]
     assert _ledger_rows(table) == []
 
@@ -301,12 +303,13 @@ def test_a_repeat_conversation_help_request_after_a_failed_ledger_write_records_
 
 
 def _conversation_replay_scaffold(
-    monkeypatch: pytest.MonkeyPatch, *, marker: str | None
+    monkeypatch: pytest.MonkeyPatch, *, written: bool
 ) -> tuple[TestClient, FakeTable]:
-    """A replayed admission whose first read of the conversation raced the marker.
+    """A replayed admission whose first read of the help request raced its write.
 
-    `_get_conversation` answers without the marker, so the handler does not take the
-    repeat path; admission replays; the table row carries `marker` (or not).
+    The first read finds no request, so the handler does not take the repeat
+    path; a concurrent first attempt writes the request (or not) while admission
+    runs, and admission replays.
     """
     table = FakeTable()
     table.seed_active_account("student-1")
@@ -324,32 +327,37 @@ def _conversation_replay_scaffold(
         "created_at": NOW,
         "updated_at": NOW,
     }
-    if marker is not None:
-        row.update(
-            {
-                "escalated": True,
-                "escalation_request_id": marker,
-                "escalation_status": "pending",
-                "escalated_at": "2026-09-26T23:59:59+00:00",
-            }
-        )
     table.seed(row)
     monkeypatch.setattr(conversations, "get_table", lambda: table)
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
-    stale = {key: value for key, value in row.items() if not key.startswith("escalat")}
-    monkeypatch.setattr(conversations, "_get_conversation", lambda _conv_id: dict(stale))
+    monkeypatch.setattr(conversations, "_get_conversation", lambda _conv_id: dict(row))
     service = conversations.teacher_support_allowance_service
-    monkeypatch.setattr(
-        service,
-        "admit_teacher_support_case",
-        lambda **_kwargs: service.TeacherSupportAdmissionResult(
+
+    def replayed(**_kwargs: object) -> object:
+        if written:
+            table.seed(
+                {
+                    "PK": "CONV#conv-1",
+                    "SK": "HELP",
+                    "entity_type": "help_request",
+                    "conversation_id": "conv-1",
+                    "escalation_request_id": "conv-1",
+                    "student_id": "student-1",
+                    "owner_id": "student-1",
+                    "account_fence_generation": 1,
+                    "version": 1,
+                    "escalation_status": "pending",
+                    "escalated_at": "2026-09-26T23:59:59+00:00",
+                    "created_at": "2026-09-26T23:59:59+00:00",
+                }
+            )
+        return service.TeacherSupportAdmissionResult(
             service.TeacherSupportAdmissionDisposition.REPLAYED,
             _admission(datetime(2026, 9, 26, 23, 59, 59, tzinfo=timezone.utc), "conv-1"),
-        ),
-    )
-    monkeypatch.setattr(
-        conversations, "_dispatch_escalated_conversation", lambda **_kwargs: pytest.fail("dispatched")
-    )
+        )
+
+    monkeypatch.setattr(service, "admit_teacher_support_case", replayed)
+    monkeypatch.setattr(help_requests, "dispatch", lambda *_args, **_kwargs: pytest.fail("dispatched"))
     monkeypatch.setattr(conversations.user_repo, "get_user", lambda *_args, **_kwargs: None)
     return _conversation_client(conversations.teacher_help_router, "/teacher-help"), table
 
@@ -357,26 +365,29 @@ def _conversation_replay_scaffold(
 def test_a_replayed_conversation_admission_reads_the_marker_consistently_and_owes_the_row(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client, table = _conversation_replay_scaffold(monkeypatch, marker="req-first")
+    client, table = _conversation_replay_scaffold(monkeypatch, written=True)
 
     response = client.post(
         "/teacher-help/request", json={"conversationId": "conv-1", "message": "again"}
     )
 
     assert response.status_code == 200
-    assert response.json()["requestId"] == "req-first"
+    assert response.json()["requestId"] == "conv-1"
     (row,) = _ledger_rows(table)
-    assert row["request_correlation_id"] == "req-first"
+    assert row["request_correlation_id"] == "conv-1"
     assert row["quota_period"] == "2026-09-26"
     reads = [request for operation, request in table.requests if operation == "get_item"]
-    assert {"Key": {"PK": "CONV#conv-1", "SK": "CONV"}, "ConsistentRead": True} in reads
+    # Read again after the replay, strongly: the first read had missed it.
+    help_reads = [read for read in reads if read["Key"] == {"PK": "CONV#conv-1", "SK": "HELP"}]
+    assert len(help_reads) == 2
+    assert all(read.get("ConsistentRead") is True for read in help_reads)
 
 
 def test_a_replayed_conversation_admission_without_a_marker_asks_for_a_retry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No marker even on a consistent read: nothing to answer with, nothing to key by."""
-    client, table = _conversation_replay_scaffold(monkeypatch, marker=None)
+    """No request even on a consistent read: nothing to answer with, nothing to key by."""
+    client, table = _conversation_replay_scaffold(monkeypatch, written=False)
 
     response = client.post(
         "/teacher-help/request", json={"conversationId": "conv-1", "message": "again"}

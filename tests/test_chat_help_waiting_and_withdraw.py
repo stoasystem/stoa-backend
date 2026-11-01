@@ -2,16 +2,18 @@
 
 Dispatch used to find nobody and write nothing, so the student read `pending`
 whether a teacher had the offer or no teacher existed; and a lapsed offer kept
-its teacher on the conversation, so the student read `assigned`, with that
+its teacher on the request, so the student read `assigned`, with that
 teacher's name, long after the offer was gone. A request nobody has taken can
 now be withdrawn, giving the week's case back.
 
-The rows, the dispatch and the routes are the real ones, over the shared table
-double, as in test_chat_help_request_lifecycle.py.
+The request is one record (#189). The record, the dispatch and the routes are
+the real ones, over the shared table double, as in
+test_chat_help_request_lifecycle.py.
 """
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 
 from fastapi import FastAPI
@@ -20,19 +22,20 @@ from fakes.dynamodb import FakeTable
 import pytest
 
 from actor_helpers import install_actor_overrides
-from stoa.services import teacher_dispatch_service
+from stoa.services import help_requests
 
 import test_chat_help_request_lifecycle as lifecycle
 from test_chat_help_request_lifecycle import (
     CONV,
-    CONV_KEY,
     CREATED,
     OTHER_TEACHER,
     STUDENT,
     TEACHER,
     _conv,
     _dispatch_to,
+    _help,
 )
+
 
 @pytest.fixture
 def table(monkeypatch) -> FakeTable:
@@ -51,18 +54,28 @@ def _nobody_available(table: FakeTable) -> None:
         table.rows[(f"USER#{teacher}", "PROFILE")]["dispatch_availability"] = "paused"
 
 
+def _never_offered(table: FakeTable) -> None:
+    """Make the shared request one no dispatch has looked at yet.
+
+    The shared record already says nobody could be found, since it was asked;
+    these tests watch that record being written.
+    """
+    for field in (
+        "dispatch_status",
+        "dispatch_no_candidate_reason",
+        "dispatch_no_candidate_since",
+        "dispatch_updated_at",
+    ):
+        _help(table).pop(field, None)
+
+
 def _sweep(table: FakeTable, minutes: int) -> dict:
-    return teacher_dispatch_service.dispatch_conversation(
-        CONV, conversation=dict(table.rows[CONV_KEY]), now=_at(minutes), table=table
-    )
+    return help_requests.dispatch(dict(_help(table)), now=_at(minutes), table=table)
 
 
-def _conversation_writes(table: FakeTable) -> int:
-    return sum(
-        1
-        for operation, request in table.requests
-        if operation == "update_item" and request["Key"]["PK"] == f"CONV#{CONV}"
-    )
+def _request_writes(table: FakeTable) -> tuple[int, int]:
+    """Every write to the request moves its version; with the transactions sent."""
+    return int(_help(table)["version"]), table.calls["transact_write_items"]
 
 
 def _student() -> TestClient:
@@ -83,71 +96,81 @@ def _status(client: TestClient) -> dict:
     return response.json()
 
 
+def _on_the_dispatch_board() -> bool:
+    """Whether the admin dispatch dashboard lists the request."""
+    from stoa.routers import admin
+
+    board = asyncio.run(admin.get_teacher_dispatch_dashboard(user={"role": "admin"}))
+    return any(item.get("questionId") == lifecycle.REQUEST for item in board["dispatchAttempts"])
+
+
 # --- Recording that nobody could be offered the request ---
 
 
-def test_finding_nobody_is_recorded_on_the_conversation(table) -> None:
+def test_finding_nobody_is_recorded_on_the_request(table) -> None:
+    _never_offered(table)
     _nobody_available(table)
-    assert _sweep(table, 5)["status"] == "no_candidate"
-    conversation = _conv(table)
-    assert conversation["dispatch_status"] == "no_candidate"
-    assert conversation["dispatch_no_candidate_reason"]
-    assert conversation["dispatch_no_candidate_since"] == _at(5)
+    assert _sweep(table, 5)["dispatch_status"] == "no_candidate"
+    record = _help(table)
+    assert record["dispatch_status"] == "no_candidate"
+    assert record["dispatch_no_candidate_reason"]
+    assert record["dispatch_no_candidate_since"] == _at(5)
 
 
 def test_finding_nobody_again_writes_nothing(table) -> None:
+    _never_offered(table)
     _nobody_available(table)
     _sweep(table, 5)
-    writes = _conversation_writes(table)
+    writes = _request_writes(table)
     _sweep(table, 10)
     _sweep(table, 15)
-    assert _conversation_writes(table) == writes
-    assert _conv(table)["dispatch_no_candidate_since"] == _at(5)
+    assert _request_writes(table) == writes
+    assert _help(table)["dispatch_no_candidate_since"] == _at(5)
 
 
 def test_a_new_reason_is_recorded_but_the_wait_keeps_its_start(table) -> None:
+    _never_offered(table)
     _nobody_available(table)
     _sweep(table, 5)
-    _conv(table)["dispatch_no_candidate_reason"] = "something_else"
+    _help(table)["dispatch_no_candidate_reason"] = "something_else"
     _sweep(table, 10)
-    assert _conv(table)["dispatch_no_candidate_reason"] != "something_else"
-    assert _conv(table)["dispatch_no_candidate_since"] == _at(5)
+    assert _help(table)["dispatch_no_candidate_reason"] != "something_else"
+    assert _help(table)["dispatch_no_candidate_since"] == _at(5)
 
 
 def test_an_offer_clears_the_record_of_finding_nobody(table) -> None:
     _nobody_available(table)
     _sweep(table, 5)
     _dispatch_to(table, TEACHER)
-    conversation = _conv(table)
-    assert conversation["dispatch_status"] == "dispatched"
-    assert "dispatch_no_candidate_reason" not in conversation
-    assert "dispatch_no_candidate_since" not in conversation
+    record = _help(table)
+    assert record["dispatch_status"] == "dispatched"
+    assert "dispatch_no_candidate_reason" not in record
+    assert "dispatch_no_candidate_since" not in record
 
 
-def test_a_lapsed_offer_is_taken_off_the_conversation_when_nobody_replaces_it(table) -> None:
+def test_a_lapsed_offer_is_taken_off_the_request_when_nobody_replaces_it(table) -> None:
     _dispatch_to(table, TEACHER)
-    deadline = _conv(table)["dispatch_deadline_at"]
+    deadline = _help(table)["dispatch_deadline_at"]
     _nobody_available(table)
     later = (datetime.fromisoformat(deadline) + timedelta(minutes=1)).isoformat()
-    teacher_dispatch_service.dispatch_conversation(
-        CONV, conversation=dict(_conv(table)), now=later, table=table
-    )
-    conversation = _conv(table)
-    assert conversation["dispatch_status"] == "no_candidate"
+    help_requests.dispatch(dict(_help(table)), now=later, table=table)
+    record = _help(table)
+    assert record["dispatch_status"] == "no_candidate"
     for field in ("dispatched_teacher_id", "dispatch_id", "dispatch_deadline_at"):
-        assert field not in conversation
+        assert field not in record
+    # Its teacher is remembered in the same write (#189).
+    assert record["previous_dispatch_teacher_ids"] == [TEACHER]
 
 
 def test_a_new_offer_made_meanwhile_is_not_overwritten(table) -> None:
     # The sweep decided on a read taken before another sweep made an offer.
-    stale = dict(_conv(table))
+    _never_offered(table)
+    stale = dict(_help(table))
     _dispatch_to(table, TEACHER)
     _nobody_available(table)
-    teacher_dispatch_service.dispatch_conversation(
-        CONV, conversation=stale, now=_at(1), table=table
-    )
-    assert _conv(table)["dispatch_status"] == "dispatched"
-    assert _conv(table)["dispatched_teacher_id"] == TEACHER
+    help_requests.dispatch(stale, now=_at(1), table=table)
+    assert _help(table)["dispatch_status"] == "dispatched"
+    assert _help(table)["dispatched_teacher_id"] == TEACHER
 
 
 # --- What the student reads ---
@@ -172,13 +195,14 @@ def test_the_student_sees_the_teacher_holding_a_live_offer(table) -> None:
 def test_a_lapsed_offer_no_longer_shows_its_teacher(table) -> None:
     table.rows[(f"USER#{TEACHER}", "PROFILE")]["name"] = "Frau Keller"
     _dispatch_to(table, TEACHER)
-    _conv(table)["dispatch_deadline_at"] = _at(-1)
+    _help(table)["dispatch_deadline_at"] = _at(-1)
     body = _status(_student())
     assert body["status"] == "pending"
     assert body["teacherName"] is None
 
 
 def test_a_request_never_offered_reads_as_pending(table) -> None:
+    _never_offered(table)
     assert _status(_student())["status"] == "pending"
 
 
@@ -227,11 +251,7 @@ def _withdraw(client: TestClient):
     return client.post(f"/teacher-help/conversations/{CONV}/request/withdraw")
 
 
-def _question_row(table: FakeTable) -> dict:
-    return lifecycle._question(table)
-
-
-def test_withdrawing_ends_both_rows_and_gives_the_case_back(table) -> None:
+def test_withdrawing_ends_the_request_and_gives_the_case_back(table) -> None:
     _admit_case(table)
     assert _spent(table) == 1
     _nobody_available(table)
@@ -241,22 +261,20 @@ def test_withdrawing_ends_both_rows_and_gives_the_case_back(table) -> None:
 
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "withdrawn"
-    conversation, question = _conv(table), _question_row(table)
-    assert conversation["escalation_status"] == "withdrawn"
-    assert conversation["dispatch_status"] == "withdrawn"
-    assert question["status"] == "withdrawn"
-    assert question["dispatch_status"] == "withdrawn"
+    record = _help(table)
+    assert record["escalation_status"] == "withdrawn"
+    assert record["dispatch_status"] == "withdrawn"
+    assert record["escalation_withdrawn_at"]
     for field in ("dispatch_no_candidate_reason", "dispatch_no_candidate_since"):
-        assert field not in conversation
+        assert field not in record
     assert _spent(table) == 0
 
 
 def test_a_request_with_a_live_offer_can_be_withdrawn_and_the_offer_goes(table) -> None:
     _dispatch_to(table, TEACHER)
     assert _withdraw(_student()).status_code == 200
-    for row in (_conv(table), _question_row(table)):
-        for field in ("dispatched_teacher_id", "dispatch_id", "dispatch_deadline_at"):
-            assert field not in row, field
+    for field in ("dispatched_teacher_id", "dispatch_id", "dispatch_deadline_at"):
+        assert field not in _help(table), field
     # The teacher it was offered to can no longer take it.
     assert lifecycle._set_status(lifecycle._client(TEACHER), "in_progress").status_code in {
         403,
@@ -286,7 +304,7 @@ def test_a_request_a_teacher_has_taken_cannot_be_withdrawn(table) -> None:
 
     assert response.status_code == 409
     assert response.json()["detail"]["code"] == "teacher_help_already_accepted"
-    assert _conv(table)["escalation_status"] == "in_progress"
+    assert _help(table)["escalation_status"] == "in_progress"
     assert _spent(table) == 1
 
 
@@ -295,7 +313,7 @@ def test_a_teacher_accepting_at_the_same_moment_wins_and_nothing_is_refunded(
 ) -> None:
     _admit_case(table)
     _dispatch_to(table, TEACHER)
-    # The teacher accepts after the withdrawal read the rows, before it writes.
+    # The teacher accepts after the withdrawal read the request, before it writes.
     accept_once = {"done": False}
 
     from stoa.services import teacher_support_allowance_service as allowance
@@ -314,8 +332,8 @@ def test_a_teacher_accepting_at_the_same_moment_wins_and_nothing_is_refunded(
     response = _withdraw(_student())
 
     assert response.status_code == 409
-    assert _conv(table)["escalation_status"] == "in_progress"
-    assert _question_row(table)["status"] == "teacher_active"
+    assert _help(table)["escalation_status"] == "in_progress"
+    assert _help(table)["teacher_id"] == TEACHER
     assert _spent(table) == 1
 
 
@@ -367,17 +385,17 @@ def test_another_student_cannot_withdraw_it(table) -> None:
         f"/teacher-help/conversations/{CONV}/request/withdraw"
     )
     assert response.status_code in {403, 404}
-    assert _conv(table)["escalation_status"] == "pending"
+    assert _help(table)["escalation_status"] == "pending"
 
 
 def test_a_withdrawn_request_drops_off_the_dispatch_board(table) -> None:
+    assert _on_the_dispatch_board()
     assert _withdraw(_student()).status_code == 200
-    board = teacher_dispatch_service.list_teacher_dispatch_questions()
-    assert all(item.get("question_id") != lifecycle.REQUEST for item in board)
+    assert not _on_the_dispatch_board()
 
 
 def _before_the_write(monkeypatch, change) -> None:
-    """Run ``change`` once, after the withdrawal read the rows and before it writes."""
+    """Run ``change`` once, after the withdrawal read the request and before it writes."""
     from stoa.services import teacher_support_allowance_service as allowance
 
     original = allowance.refund_teacher_support_case
@@ -392,29 +410,16 @@ def _before_the_write(monkeypatch, change) -> None:
     monkeypatch.setattr(allowance, "refund_teacher_support_case", refund_after)
 
 
-def test_the_conversations_own_teacher_guard_refuses_a_late_teacher(table, monkeypatch) -> None:
-    # Only the conversation learns of the teacher; the queue row's version does
-    # not move, so nothing but the conversation's guard can refuse the write.
+def test_the_requests_own_teacher_guard_refuses_a_late_teacher(table, monkeypatch) -> None:
+    # The request learns of the teacher without its version moving, so
+    # nothing but its own teacher guard can refuse the write.
     _admit_case(table)
-    _before_the_write(monkeypatch, lambda: _conv(table).update(teacher_id=TEACHER))
+    _before_the_write(monkeypatch, lambda: _help(table).update(teacher_id=TEACHER))
 
     response = _withdraw(_student())
 
     assert response.status_code == 409
-    assert _conv(table)["escalation_status"] == "pending"
-    assert _question_row(table)["status"] == "escalated"
-    assert _spent(table) == 1
-
-
-def test_the_queue_rows_own_teacher_guard_refuses_a_late_teacher(table, monkeypatch) -> None:
-    # Only the queue row learns of the teacher, without its version moving.
-    _admit_case(table)
-    _before_the_write(monkeypatch, lambda: _question_row(table).update(teacher_id=TEACHER))
-
-    response = _withdraw(_student())
-
-    assert response.status_code == 409
-    assert _conv(table)["escalation_status"] == "pending"
+    assert _help(table)["escalation_status"] == "pending"
     assert _spent(table) == 1
 
 
@@ -427,21 +432,10 @@ def test_an_offer_made_by_a_sweep_meanwhile_is_withdrawn_with_the_request(
     response = _withdraw(_student())
 
     assert response.status_code == 200, response.text
-    for row in (_conv(table), _question_row(table)):
-        assert row.get("dispatch_status") == "withdrawn"
-        for field in ("dispatched_teacher_id", "dispatch_id", "dispatch_deadline_at"):
-            assert field not in row, field
-    assert _spent(table) == 0
-
-
-def test_a_conversation_escalated_before_the_status_was_written_can_be_withdrawn(
-    table,
-) -> None:
-    _admit_case(table)
-    del _conv(table)["escalation_status"]
-    response = _withdraw(_student())
-    assert response.status_code == 200, response.text
-    assert _conv(table)["escalation_status"] == "withdrawn"
+    record = _help(table)
+    assert record.get("dispatch_status") == "withdrawn"
+    for field in ("dispatched_teacher_id", "dispatch_id", "dispatch_deadline_at"):
+        assert field not in record, field
     assert _spent(table) == 0
 
 
@@ -474,12 +468,15 @@ def test_a_parent_cannot_withdraw_their_childs_request(table) -> None:
         f"/teacher-help/conversations/{CONV}/request/withdraw"
     )
     assert response.status_code in {403, 404}
-    assert _conv(table)["escalation_status"] == "pending"
+    assert _help(table)["escalation_status"] == "pending"
 
 
 def test_a_withdrawn_request_still_counts_as_help_the_student_asked_for(table) -> None:
     # Decision on #86: parent and weekly-report figures keep counting it. They
-    # read these two fields, which withdrawing leaves as they were.
+    # read `escalated` from the request laid over its conversation
+    # (`help_requests.with_requests`), which withdrawing leaves as it was.
     assert _withdraw(_student()).status_code == 200
-    assert _conv(table)["escalated"] is True
-    assert _question_row(table)["teacher_help_requested"] is True
+    assert _help(table)["escalated"] is True
+    [conversation] = help_requests.with_requests([dict(_conv(table))], STUDENT, table=table)
+    assert conversation["escalated"] is True
+    assert conversation["escalation_status"] == "withdrawn"

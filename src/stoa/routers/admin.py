@@ -68,6 +68,7 @@ from stoa.services import (
     curriculum_analytics_service,
     curriculum_migration_service,
     curriculum_ops_service,
+    help_requests,
     teacher_dispatch_service,
     subscription_service,
     teacher_reply_service,
@@ -3363,10 +3364,15 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
         and question_status in question_statuses
     ]
 
+    # A help request is not a question row since #189; it is counted, and its
+    # response times measured, from its own record.
+    help_metrics = [help_requests.sla_metrics(record) for record in help_requests.list_all(table=table)]
     ai_resolved = sum(1 for q in questions if q.get("status") == QuestionStatus.AI_ANSWERED.value)
-    teacher_resolved = sum(1 for q in questions if q.get("status") == QuestionStatus.RESOLVED.value)
+    teacher_resolved = sum(
+        1 for q in (*questions, *help_metrics) if q.get("status") == QuestionStatus.RESOLVED.value
+    )
     escalated = sum(
-        1 for q in questions
+        1 for q in (*questions, *help_metrics)
         if q.get("status") in (QuestionStatus.ESCALATED.value, QuestionStatus.TEACHER_ACTIVE.value)
     )
 
@@ -3379,7 +3385,7 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
         ai_resolved=ai_resolved,
         teacher_resolved=teacher_resolved,
         escalated=escalated,
-        teacher_sla=teacher_reply_service.aggregate_teacher_sla(questions),
+        teacher_sla=teacher_reply_service.aggregate_teacher_sla([*questions, *help_metrics]),
         counts_complete=users_complete and questions_complete,
     )
 
@@ -3387,7 +3393,13 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
 @router.get("/teacher-dispatch/dashboard")
 async def get_teacher_dispatch_dashboard(user: dict = Depends(require_role("admin"))):
     """Return aggregate teacher dispatch, load, and SLA-risk visibility."""
-    return teacher_dispatch_service.build_dispatch_dashboard()
+    return teacher_dispatch_service.build_dispatch_dashboard(
+        [
+            help_requests.question_view(record)
+            for record in help_requests.list_all(table=get_table())
+            if record.get("escalation_status") not in {help_requests.WITHDRAWN, help_requests.EXPIRED}
+        ]
+    )
 
 
 def _binding_response(item: dict[str, Any]) -> ParentStudentBindingResponse:

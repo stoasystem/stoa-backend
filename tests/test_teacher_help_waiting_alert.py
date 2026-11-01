@@ -16,13 +16,13 @@ from fakes.dynamodb import FakeTable
 import pytest
 
 from stoa.config import settings
-from stoa.services import teacher_dispatch_service
+from stoa.services import help_requests
 
 import test_chat_help_request_lifecycle as lifecycle
-from test_chat_help_request_lifecycle import CREATED, REQUEST, STUDENT, TEACHER, _dispatch_to
-from test_chat_help_waiting_and_withdraw import _nobody_available
+from test_chat_help_request_lifecycle import CREATED, REQUEST, STUDENT, TEACHER, _dispatch_to, _help
+from test_chat_help_waiting_and_withdraw import _never_offered, _nobody_available
 
-EVENT = teacher_dispatch_service.TEACHER_HELP_WAITING_EVENT
+EVENT = help_requests.TEACHER_HELP_WAITING_EVENT
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ def _lines(caplog) -> list[str]:
 
 
 def _sweep(minutes: int) -> None:
-    teacher_dispatch_service.reconcile_dispatches(now=_after(minutes))
+    help_requests.sweep(now=_after(minutes))
 
 
 def test_a_request_waiting_past_the_limit_with_nobody_to_offer_it_is_logged(
@@ -129,16 +129,17 @@ def test_a_request_the_sweep_expires_is_not_logged(table, caplog, monkeypatch) -
     _nobody_available(table)
     with caplog.at_level(logging.INFO, logger="stoa.private_telemetry"):
         _sweep(61)
-    assert lifecycle._conv(table)["escalation_status"] == "expired"
+    assert _help(table)["escalation_status"] == "expired"
     assert _lines(caplog) == []
 
 
 def test_a_request_without_its_own_stamp_is_measured_from_finding_nobody(
     table, caplog
 ) -> None:
+    _never_offered(table)
     _nobody_available(table)
     _sweep(1)  # records since when nobody could be found
-    del lifecycle._conv(table)["escalated_at"]
+    del _help(table)["escalated_at"]
     with caplog.at_level(logging.INFO, logger="stoa.private_telemetry"):
         _sweep(32)
     [line] = _lines(caplog)

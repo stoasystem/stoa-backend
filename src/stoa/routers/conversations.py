@@ -38,7 +38,6 @@ from stoa.db.repositories import (
     attachment_repo,
     knowledge_gap_repo,
     practice_repo,
-    question_repo,
     user_repo,
 )
 from stoa.security.authorization import (
@@ -57,7 +56,6 @@ from stoa.models.error import (
     NotFoundResponse,
     SecurityErrorResponse,
 )
-from stoa.models.question import QuestionStatus
 from stoa.security.attachment_errors import (
     AttachmentDecisionError,
     AttachmentErrorCode,
@@ -83,6 +81,7 @@ from stoa.services import (
     attachment_service,
     bedrock_token_count_service,
     entitlement_service,
+    help_requests,
     learning_profile_service,
     locale_service,
     message_catalog,
@@ -1191,55 +1190,8 @@ class TeacherHelpRequest(BaseModel):
     message: str | None = None
 
 
-def _dispatch_escalated_conversation(
-    *,
-    conversation_id: str,
-    conversation: dict[str, Any],
-    student_id: str,
-    request_id: str,
-    subject: object,
-    now: str,
-    table: Any,
-) -> tuple[str, str | None]:
-    """Offer a fresh escalation to a teacher; return what the student is told.
-
-    Returns ``(status, teacher name)``: `assigned` with the teacher it went to,
-    `waiting_no_teacher` when nobody could be offered it (#86), or `pending`.
-
-    Dispatch is best effort so a transient planner failure never rejects an
-    escalation that has already consumed the student's weekly allowance. An
-    unassigned escalation stays visible to the reassignment path.
-    """
-    try:
-        result = teacher_dispatch_service.dispatch_conversation(
-            conversation_id,
-            conversation={
-                **conversation,
-                "conversation_id": conversation_id,
-                "student_id": student_id,
-                "subject": subject,
-                "escalation_status": "pending",
-                # The row this was read from predates the escalation, so it does
-                # not carry the request id yet - and without it dispatch cannot
-                # find the queue row to mark, which left that row unassigned.
-                "escalation_request_id": request_id,
-            },
-            now=now,
-            table=table,
-        )
-    except Exception:
-        logger.exception("conversation teacher dispatch failed")
-        return "pending", None
-    if result.get("status") == "no_candidate":
-        return "waiting_no_teacher", None
-    teacher_id = str(result.get("teacherId") or "")
-    if result.get("status") != "dispatched" or not teacher_id:
-        return "pending", None
-    return "assigned", _teacher_name(teacher_id)
-
-
 # What a student's request for a teacher can be, as the status card reads it
-# (#65): `teacher_dispatch_service.student_help_status` derives the first three,
+# (#65): `help_requests.student_view` derives the first three,
 # the teacher's writes give in_progress and resolved, withdrawing and expiry
 # the last two.
 StudentHelpStatus = Literal[
@@ -3721,94 +3673,32 @@ async def get_teacher_help_availability(
     return {**summary, "teacherSupport": standing}
 
 
-def _escalated_question_operation(
-    *,
-    request_id: str,
-    conversation: Mapping[str, object],
-    conversation_id: str,
-    student_id: str,
-    generation: int,
-    message: str | None,
-    now: str,
-) -> dict[str, Any]:
-    """The row the teacher side reads, written with the escalation that caused it.
-
-    Everything a teacher touches - the queue, dispatch, the reply, the SLA
-    figures - reads question rows with `status=escalated`. Escalating a
-    conversation wrote a marker on the conversation and nothing else, so a
-    student could ask for a teacher, see the request accepted, and have no
-    teacher ever see it. Measured in production: the request was admitted and
-    `GET /teachers/queue` stayed empty.
-
-    The conversation row already reaches one teacher surface - `_get_escalated_conversations`
-    feeds `/teachers/me/help-requests` - but not the queue, the dispatch ranking
-    or the SLA figures, all of which read question rows. So this is a second
-    representation of one case, and the two must not drift: `dispatch_conversation`
-    writes the dispatch to both rows in one transaction.
-
-    Created only once: the condition refuses a row that already exists, which is
-    what makes a repeated escalation of the same conversation a replay rather
-    than a second case.
-    """
-    return {
-        "Put": {
-            "Item": question_repo.question_item(
-                {
-                    "question_id": request_id,
-                    "entity_type": "question",
-                    "student_id": student_id,
-                    "owner_id": student_id,
-                    "account_fence_generation": generation,
-                    "version": 1,
-                    "status": QuestionStatus.ESCALATED.value,
-                    "subject": str(conversation.get("subject") or ""),
-                    "grade": str(conversation.get("grade") or ""),
-                    "source": "conversation_escalation",
-                    "conversation_id": conversation_id,
-                    "teacher_help_requested": True,
-                    "teacher_requested_at": now,
-                    "queue_visible_at": now,
-                    "content": (message or "").strip(),
-                    "created_at": now,
-                    "updated_at": now,
-                }
-            ),
-            "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
-        }
-    }
-
-
 @teacher_help_router.post("/request", response_model=TeacherHelpResponse)
 async def request_teacher_help(
     body: TeacherHelpRequest,
     authorized: AuthorizedResource = Depends(_teacher_help_conversation_dependency),
 ):
-    """Escalate a conversation to a human teacher."""
+    """Ask a human teacher about this conversation (#189: one request per conversation).
+
+    A conversation that already has a request answers with it, whatever its
+    state. Otherwise a case of the week is spent, the request written and
+    offered to a teacher; `help_requests.ask` does all three.
+    """
     student_id = authorized.ref.student_id
-    conv = authorized.value
-    existing_request_id = conv.get("escalation_request_id")
-    request_id = (
-        existing_request_id
-        if isinstance(existing_request_id, str) and existing_request_id
-        else str(uuid.uuid4())
-    )
+    conv = {**authorized.value, "conversation_id": body.conversationId}
     now = _now()
-    observed_at = datetime.fromisoformat(now.replace("Z", "+00:00"))
     # The request is the student's own, so the language they are reading in
     # right now is the one the system message is written in (#124).
     student_locale = _student_locale(student_id)
 
-    def record_help_usage(
-        *, escalation: Mapping[str, object], request_id: str, generation: int | None = None
-    ) -> None:
-        # Written after the case is durable and dispatched, so a first attempt
-        # that fails here leaves the escalation on the conversation and the row
-        # missing. A repeat request answers with that escalation and still owes
-        # the row, keyed by the escalation's request and its day, so once the
-        # row is there every later repeat is a duplicate.
-        escalated_at = str(escalation.get("escalated_at") or now)
-        if generation is None:
-            generation = _active_conversation_generation(student_id, get_table())
+    def record_help_usage(request: Mapping[str, object]) -> None:
+        # Written after the case is durable and offered, so a first attempt
+        # that fails here leaves the request and no row. A repeat request
+        # answers with that request and still owes the row, keyed by the
+        # request and its day, so once the row is there every repeat is a
+        # duplicate.
+        request_id = str(request.get("escalation_request_id") or body.conversationId)
+        escalated_at = str(request.get("escalated_at") or now)
         usage_ledger_service.record_usage_event(
             student_id=student_id,
             action=usage_ledger_service.CONVERSATION_TEACHER_HELP_ACTION,
@@ -3820,93 +3710,38 @@ async def request_teacher_help(
             ),
             request_correlation_id=request_id,
             created_at=escalated_at,
-            account_fence_generation=generation,
+            account_fence_generation=_active_conversation_generation(student_id, get_table()),
             metadata={
                 "conversation_id": body.conversationId,
                 "request_id": request_id,
-                "subject": escalation.get("subject"),
-                "grade_level": escalation.get("grade"),
+                "subject": request.get("subject"),
+                "grade_level": request.get("grade"),
                 "status": "pending",
             },
         )
 
-    # A conversation that already carries an escalation is answered with that
-    # escalation. Sending a repeat request back through admission made
-    # ``persist_case`` decline every attempt, so the retry loop ran out and the
-    # student was shown a 503 instead of the request they already have.
-    if isinstance(existing_request_id, str) and existing_request_id:
-        record_help_usage(escalation=conv, request_id=existing_request_id)
-        return _teacher_help_response(
-            conv,
-            request_id=existing_request_id,
-            conversation_id=body.conversationId,
-            fallback_created_at=now,
-        )
-
-    table = get_table()
-
-    generation = _active_conversation_generation(student_id, table)
-
-    def persist_case(
-        allowance_operations: tuple[dict[str, Any], ...],
-    ) -> bool:
-        if isinstance(existing_request_id, str) and existing_request_id:
-            return False
-        try:
-            attachment_repo.record_teacher_help_request(
-                additional_operations=(
-                    *allowance_operations,
-                    _escalated_question_operation(
-                        request_id=request_id,
-                        conversation=conv,
-                        conversation_id=body.conversationId,
-                        student_id=student_id,
-                        generation=generation,
-                        message=body.message,
-                        now=now,
-                    ),
-                ),
-                conversation={
-                    **conv,
-                    "PK": _conv_pk(body.conversationId),
-                    "SK": "CONV",
-                },
-                message={
-                    "PK": _conv_pk(body.conversationId),
-                    "SK": _msg_sk(request_id),
-                    "entity_type": "conversation_message",
-                    "schema_version": "conversation-message.v1",
-                    "message_id": request_id,
-                    "conversation_id": body.conversationId,
-                    "student_id": student_id,
-                    "owner_id": student_id,
-                    "account_fence_generation": generation,
-                    "role": "system",
-                    "content": _teacher_help_system_message(body.message, student_locale),
-                    "system_event": "teacher_help_requested",
-                    "escalation_message": body.message,
-                    "created_at": now,
-                },
-                owner_id=student_id,
-                generation=generation,
-                table=table,
-            )
-        except attachment_repo.AttachmentRepositoryConflict:
-            return False
-        return True
-
-    admission = teacher_support_allowance_service.admit_teacher_support_case(
-        support_case_id=body.conversationId,
-        case_kind="conversation",
-        beneficiary_id=student_id,
-        observed_at=observed_at,
-        persist_case=persist_case,
-        table=table,
+    unavailable = HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "code": "teacher_support_admission_recoverable",
+            "message": "Teacher support is briefly unavailable. Please try again.",
+            "action": "retry_same_case",
+        },
     )
-    if (
-        admission.disposition
-        is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.PLAN_DENIED
-    ):
+    try:
+        outcome = help_requests.ask(
+            conversation=conv,
+            student_id=student_id,
+            message=body.message,
+            system_message=_teacher_help_system_message(body.message, student_locale),
+            now=now,
+            table=get_table(),
+        )
+    except (help_requests.HelpRequestUnavailable, account_deletion_repo.AccountDeletionConflict) as exc:
+        raise unavailable from exc
+
+    Disposition = teacher_support_allowance_service.TeacherSupportAdmissionDisposition
+    if outcome.disposition is Disposition.PLAN_DENIED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
@@ -3919,10 +3754,7 @@ async def request_teacher_help(
                 "action": "contact_administrator",
             },
         )
-    if (
-        admission.disposition
-        is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.LIMIT_EXCEEDED
-    ):
+    if outcome.disposition is Disposition.LIMIT_EXCEEDED:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail={
@@ -3931,116 +3763,36 @@ async def request_teacher_help(
                 "action": "wait_for_next_week",
             },
         )
-    if (
-        admission.disposition
-        is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.IDEMPOTENCY_CONFLICT
-    ):
+    if outcome.disposition is Disposition.IDEMPOTENCY_CONFLICT:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Teacher-support case identity conflicts with prior admission",
         )
-    if (
-        admission.disposition
-        is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.RETRYABLE
-    ):
+    if outcome.record is None:
         logger.warning(
             "teacher_help_admission_retryable student=%s conversation=%s",
             student_id,
             body.conversationId,
         )
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "code": "teacher_support_admission_recoverable",
-                "message": "Teacher support is briefly unavailable. Please try again.",
-                "action": "retry_same_case",
-            },
-        )
-    if (
-        admission.disposition
-        is teacher_support_allowance_service.TeacherSupportAdmissionDisposition.REPLAYED
-    ):
-        # The admission's transaction also marks the conversation, so a replay
-        # seen here means the read above raced it. Read the marker with a
-        # consistent read: it names the request the first attempt's row is
-        # keyed by. Without it there is nothing to answer with, or to key the
-        # row by, so the student is asked to retry rather than handed a request
-        # id nothing was written under.
-        escalated = _conversation_response_item(
-            cast(_DynamoConversationTable, table).get_item(
-                Key={"PK": _conv_pk(body.conversationId), "SK": "CONV"},
-                ConsistentRead=True,
-            )
-        )
-        recorded_request_id = (escalated or {}).get("escalation_request_id")
-        if escalated is None or not (
-            isinstance(recorded_request_id, str) and recorded_request_id
-        ):
-            logger.warning(
-                "teacher_help_replay_without_marker student=%s conversation=%s",
-                student_id,
-                body.conversationId,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={
-                    "code": "teacher_support_admission_recoverable",
-                    "message": "Teacher support is briefly unavailable. Please try again.",
-                    "action": "retry_same_case",
-                },
-            )
-        record_help_usage(
-            escalation=escalated, request_id=recorded_request_id, generation=generation
-        )
-        return _teacher_help_response(
-            escalated,
-            request_id=recorded_request_id,
-            conversation_id=body.conversationId,
-            fallback_created_at=now,
-        )
+        raise unavailable
 
-    dispatch_status, teacher_name = _dispatch_escalated_conversation(
-        conversation_id=body.conversationId,
-        conversation=conv,
-        student_id=student_id,
-        request_id=request_id,
-        subject=conv.get("subject"),
-        now=now,
-        table=table,
-    )
-
-    record_help_usage(
-        escalation={**conv, "escalated_at": now}, request_id=request_id, generation=generation
-    )
-
-    return TeacherHelpResponse(
-        requestId=request_id,
-        conversationId=body.conversationId,
-        status=dispatch_status,
-        teacherName=teacher_name,
-        createdAt=now,
-        updatedAt=now,
-    )
+    record_help_usage(outcome.record)
+    return _teacher_help_response(outcome.record, fallback_created_at=now)
 
 
 def _teacher_help_response(
-    conv: dict[str, Any],
-    *,
-    request_id: str,
-    conversation_id: str,
-    fallback_created_at: str,
+    record: Mapping[str, Any], *, fallback_created_at: str
 ) -> TeacherHelpResponse:
-    """Describe an escalation the way the waiting student should read it."""
-    escalation_status, teacher_id = teacher_dispatch_service.student_help_status(conv)
+    """Describe a request the way the waiting student should read it."""
+    help_status, teacher_id = help_requests.student_view(record)
+    conversation_id = str(record.get("conversation_id") or "")
     return TeacherHelpResponse(
-        requestId=request_id,
+        requestId=str(record.get("escalation_request_id") or conversation_id),
         conversationId=conversation_id,
-        status=escalation_status,
+        status=cast(StudentHelpStatus, help_status),
         teacherName=_teacher_name(teacher_id),
-        createdAt=str(
-            conv.get("escalated_at") or conv.get("created_at") or fallback_created_at
-        ),
-        updatedAt=str(conv.get("updated_at") or fallback_created_at),
+        createdAt=str(record.get("escalated_at") or fallback_created_at),
+        updatedAt=str(record.get("updated_at") or fallback_created_at),
     )
 
 
@@ -4082,10 +3834,10 @@ async def withdraw_teacher_help_request(
     """
     conversation_id = authorized.ref.resource_id
     try:
-        withdrawn = teacher_dispatch_service.withdraw_help_request(
-            conversation_id, student_id=authorized.ref.student_id
+        withdrawn = help_requests.withdraw(
+            conversation_id, student_id=authorized.ref.student_id, table=get_table()
         )
-    except teacher_dispatch_service.HelpRequestEndingRefused as refused:
+    except help_requests.HelpRequestEndingRefused as refused:
         code = refused.code
         raise HTTPException(
             status_code=(
@@ -4095,7 +3847,7 @@ async def withdraw_teacher_help_request(
             ),
             detail={"code": code},
         ) from refused
-    except teacher_dispatch_service.HelpRequestEndingUnavailable as unavailable:
+    except help_requests.HelpRequestEndingUnavailable as unavailable:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
@@ -4104,12 +3856,7 @@ async def withdraw_teacher_help_request(
                 "action": "retry_same_case",
             },
         ) from unavailable
-    return _teacher_help_response(
-        withdrawn,
-        request_id=str(withdrawn.get("escalation_request_id") or ""),
-        conversation_id=conversation_id,
-        fallback_created_at="",
-    )
+    return _teacher_help_response(withdrawn, fallback_created_at="")
 
 
 @teacher_help_router.get(
@@ -4134,17 +3881,17 @@ async def get_teacher_help_status(
         )
     ),
 ):
-    """Report where a student's escalation stands, for the waiting indicator."""
-    conv = authorized.value
-    request_id = conv.get("escalation_request_id")
-    if not isinstance(request_id, str) or not request_id:
+    """Report where a student's request stands, for the waiting indicator."""
+    try:
+        record = help_requests.get(authorized.ref.resource_id, table=get_table())
+    except help_requests.HelpRequestUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The request could not be read. Please try again.",
+        ) from exc
+    if record is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="This conversation was never escalated to a teacher",
         )
-    return _teacher_help_response(
-        conv,
-        request_id=request_id,
-        conversation_id=authorized.ref.resource_id,
-        fallback_created_at="",
-    )
+    return _teacher_help_response(record, fallback_created_at="")

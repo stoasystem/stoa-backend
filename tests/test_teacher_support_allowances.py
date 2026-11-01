@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 
-from fakes.dynamodb import condition_holds
+from fakes.dynamodb import FakeTable, condition_holds
 from copy import deepcopy
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -19,7 +19,11 @@ import pytest
 from stoa.db.repositories import account_deletion_repo
 from stoa.routers import conversations, teachers
 from stoa.security.authorization import AuthorizedResource, ResourceRef, ResourceType
-from stoa.services import paid_entitlement_service, teacher_support_allowance_service
+from stoa.services import (
+    help_requests,
+    paid_entitlement_service,
+    teacher_support_allowance_service,
+)
 
 
 UTC = timezone.utc
@@ -518,6 +522,7 @@ def test_projection_reports_exact_scope_week_count_and_limit(
 
 def test_routes_admit_only_at_first_case_and_later_actions_do_not_mutate_allowance() -> None:
     conversation_source = inspect.getsource(conversations.request_teacher_help)
+    ask_source = inspect.getsource(help_requests.ask)
     later_source = "\n".join(
         inspect.getsource(member)
         for member in (
@@ -525,11 +530,16 @@ def test_routes_admit_only_at_first_case_and_later_actions_do_not_mutate_allowan
             conversations.stream_message,
             teachers.update_help_request,
             teachers.add_note,
+            help_requests.dispatch,
+            help_requests.advance,
+            help_requests.reply,
         )
     )
 
-    assert "admit_teacher_support_case" in conversation_source
-    assert "persist_case=" in conversation_source
+    # The route asks; asking is where the case is admitted (#189).
+    assert "help_requests.ask(" in conversation_source
+    assert "admit_teacher_support_case" in ask_source
+    assert "persist_case=" in ask_source
     assert "admit_teacher_support_case" not in later_source
 
 
@@ -541,26 +551,19 @@ def test_the_chat_escalation_dispatches_to_a_teacher() -> None:
     lane it was once checked beside was retired in #148.)
     """
     conversation_source = inspect.getsource(conversations.request_teacher_help)
+    ask_source = inspect.getsource(help_requests.ask)
 
-    assert "_dispatch_escalated_conversation" in conversation_source
-    assert "dispatch_conversation" in inspect.getsource(
-        conversations._dispatch_escalated_conversation
+    assert "dispatch(record" in ask_source
+    assert "plan_dispatch" in inspect.getsource(help_requests.dispatch)
+    assert ask_source.index("admit_teacher_support_case") < ask_source.index("dispatch(record")
+    # A conversation that already asked answers with its request before any
+    # admission, so a repeat never spends a second case.
+    assert ask_source.index("existing = get(") < ask_source.index("admit_teacher_support_case")
+    # The usage row is written once asking has answered: for a case admitted
+    # now, or for the request a repeat answers with, admitted before.
+    assert conversation_source.index("help_requests.ask(") < conversation_source.index(
+        "record_help_usage(outcome.record)"
     )
-    assert conversation_source.index("admit_teacher_support_case") < conversation_source.index(
-        "_dispatch_escalated_conversation"
-    )
-    # The usage row is written after the case is admitted. The one call before
-    # admission is the repeat path, which answers with an escalation the admission
-    # transaction already wrote, so the row it owes is for an admitted case too.
-    assert conversation_source.index("admit_teacher_support_case") < conversation_source.rindex(
-        "record_help_usage("
-    )
-    assert conversation_source.index("record_help_usage(") < conversation_source.index(
-        "admit_teacher_support_case"
-    )
-    assert "existing_request_id" in conversation_source[
-        : conversation_source.index("record_help_usage(")
-    ]
 
 
 def test_service_reuses_allowance_week_budget_and_conditional_effect_counter() -> None:
@@ -588,7 +591,9 @@ def test_conversation_plan_denial_runs_before_case_message_and_usage_effect(
             "grade": "Sek1",
         },
     )
-    monkeypatch.setattr(conversations, "get_table", lambda: object())
+    table = FakeTable()
+    table.seed_active_account("student-1")
+    monkeypatch.setattr(conversations, "get_table", lambda: table)
     monkeypatch.setattr(
         conversations,
         "_active_conversation_generation",
@@ -602,9 +607,14 @@ def test_conversation_plan_denial_runs_before_case_message_and_usage_effect(
         ),
     )
     monkeypatch.setattr(
-        conversations.attachment_repo,
-        "record_teacher_help_request",
-        lambda **_kwargs: pytest.fail("denied durable case ran"),
+        account_deletion_repo,
+        "transact",
+        lambda *_args, **_kwargs: pytest.fail("denied durable case ran"),
+    )
+    monkeypatch.setattr(
+        help_requests,
+        "dispatch",
+        lambda *_args, **_kwargs: pytest.fail("denied case was offered"),
     )
     monkeypatch.setattr(
         conversations.usage_ledger_service,
@@ -624,3 +634,5 @@ def test_conversation_plan_denial_runs_before_case_message_and_usage_effect(
         )
 
     assert denied.value.status_code == 403
+    assert ("CONV#conversation-denied", "HELP") not in table.rows
+    assert ("CONV#conversation-denied", "MSG#conversation-denied") not in table.rows

@@ -23,7 +23,15 @@ from stoa.services import account_deletion_service as service
 
 COMMAND_ID = "cmd-e2e"
 NOW = "2026-09-28T23:59:00+00:00"
-PRIVATE = ("Probier jetzt 15 : 5.", "private student message", "private question")
+# The teacher's reply, the student's message, a question-lane question, and the
+# message the student asked a teacher with, which since #189 is on the help
+# request's own record rather than the conversation row.
+PRIVATE = (
+    "Probier jetzt 15 : 5.",
+    "private student message",
+    "private question",
+    "Step 2 makes no sense to me.",
+)
 
 
 class _ExternalClient:
