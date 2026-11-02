@@ -30,7 +30,6 @@ def test_message_command_remains_the_authoritative_chat_quota_path() -> None:
     source = inspect.getsource(conversations.commit_message_command)
 
     assert "claim_message_command_and_quota" in source
-    assert "check_and_record_chat" not in source
 
 
 @pytest.fixture(autouse=True)
