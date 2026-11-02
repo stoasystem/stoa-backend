@@ -12,7 +12,7 @@ text the student can steer it into writing, and it travels on - to the parent,
 the weekly report's prompt, the teacher, the next answer's prompt - so one that
 looks like personal data (`knowledge_gap_repo.looks_personal`) is not recorded;
 a star's name is the catalog's and always is. It is written inside the
-transaction that stores the answer (`attachment_repo.complete_message_command`),
+transaction that stores the answer (`ask_question._store.complete_message_command`),
 whose assistant-message put only succeeds once, so an answer replayed, retried
 or finished by another attempt records once, and a follow-up records nothing.
 

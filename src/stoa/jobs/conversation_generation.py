@@ -30,11 +30,12 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from stoa.db.dynamodb import stored_int
-from stoa.db.repositories import allowance_repo, attachment_repo
+from stoa.db.repositories import allowance_repo
 from stoa.routers import conversations
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.private_telemetry import emit_private_event
 from stoa.services import allowance_service, runtime_budget_service
+from stoa.services.ask_question import _store as ask_question_store
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ _SETTLE_AFTER = {
     "needs_reconciliation": timedelta(minutes=10),
     "deadline_exceeded": timedelta(minutes=20),
 }
-assert set(_SETTLE_AFTER) == set(attachment_repo.UNSETTLED_RESERVATION_FAILURES)
+assert set(_SETTLE_AFTER) == set(ask_question_store.UNSETTLED_RESERVATION_FAILURES)
 # A command whose last attempt died is left two sweep runs after it is marked,
 # as a lost answer is, before its reservation is settled (E27).
 _SETTLE_TERMINAL_AFTER = timedelta(minutes=10)
@@ -132,7 +133,7 @@ def generate_one(conversation_id: str, idempotency_key: str) -> str:
     Returns `completed`, `failed` (the command says why), `held` (another
     delivery holds its lease), `settled` (it needs nothing) or `missing`.
     """
-    command = attachment_repo.get_message_command(conversation_id, idempotency_key)
+    command = ask_question_store.get_message_command(conversation_id, idempotency_key)
     if not isinstance(command, dict):
         return "missing"
     if command.get("status") == "failed":
@@ -144,15 +145,15 @@ def generate_one(conversation_id: str, idempotency_key: str) -> str:
     owner_id = command.get("owner_id")
     if not isinstance(fingerprint, str) or not isinstance(owner_id, str):
         return "settled"
-    state = attachment_repo.classify_message_command(
+    state = ask_question_store.classify_message_command(
         command,
         owner_id=owner_id,
         fingerprint=fingerprint,
         now_epoch=int(datetime.now(UTC).timestamp()),
     )
-    if state.disposition is attachment_repo.MessageCommandDisposition.LEASE_HELD:
+    if state.disposition is ask_question_store.MessageCommandDisposition.LEASE_HELD:
         return "held"
-    if state.disposition is not attachment_repo.MessageCommandDisposition.RESUME:
+    if state.disposition is not ask_question_store.MessageCommandDisposition.RESUME:
         return "settled"
     try:
         committed = conversations.load_committed_message(command)
@@ -176,7 +177,7 @@ def run_sweep(context: Any) -> SweepSummary:
     is settled once nothing else will.
     """
     now = datetime.now(UTC)
-    commands, scanned_to_end = attachment_repo.scan_generation_sweep_commands()
+    commands, scanned_to_end = ask_question_store.scan_generation_sweep_commands()
     if not scanned_to_end:
         logger.warning("conversation_generation_sweep_page_limit")
     waiting = [command for command in commands if _waiting_too_long(command, now)]
@@ -280,7 +281,7 @@ def settle_reservation(command: dict[str, Any]) -> str:
         now = datetime.now(UTC)
         # Ended here: settled as the command this write makes it.
         ended_status, ended_at = "terminal_failed", now.isoformat()
-        if not attachment_repo.close_stale_lease(
+        if not ask_question_store.close_stale_lease(
             **identity,
             lease_owner=lease_owner,
             expires_at=expires_at,
@@ -294,7 +295,7 @@ def settle_reservation(command: dict[str, Any]) -> str:
             logger.warning("conversation_generation_settlement_unreadable")
             return "errored"
         ended_status, ended_at = str(read_status), ended
-        if ended_status == "failed" and not attachment_repo.close_failure_for_settlement(
+        if ended_status == "failed" and not ask_question_store.close_failure_for_settlement(
             **identity, failed_at=ended_at
         ):
             return "held"
@@ -322,7 +323,7 @@ def settle_reservation(command: dict[str, Any]) -> str:
                 correlation_id=str(command.get("command_id") or ""),
                 level=logging.WARNING,
             )
-    if not attachment_repo.mark_allowance_settled(
+    if not ask_question_store.mark_allowance_settled(
         **identity,
         status=ended_status,
         ended_at=ended_at,
@@ -363,7 +364,7 @@ def _stale_lease(command: dict[str, Any], now: datetime) -> bool:
 
 def _finishable(command: dict[str, Any], now: datetime) -> bool:
     """Holds its stored answer, asked within `_KEPT_ANSWER_MAX_AGE`."""
-    if attachment_repo.kept_answer_attempt(command) is None:
+    if ask_question_store.kept_answer_attempt(command) is None:
         return False
     asked = _aware_time(command.get("created_at"))
     return asked is not None and now - asked <= _KEPT_ANSWER_MAX_AGE
@@ -371,7 +372,7 @@ def _finishable(command: dict[str, Any], now: datetime) -> bool:
 
 def _ended_at(command: dict[str, Any]) -> str:
     """When an ended command reached its end, as written; empty if it has none."""
-    field = attachment_repo.SETTLEMENT_ENDED_AT.get(str(command.get("status")))
+    field = ask_question_store.SETTLEMENT_ENDED_AT.get(str(command.get("status")))
     ended = command.get(field) if field else None
     return ended if isinstance(ended, str) else ""
 

@@ -10,6 +10,7 @@ import pytest
 
 from stoa.db.repositories import attachment_repo
 from stoa.services import account_deletion_service, attachment_service
+from stoa.services.ask_question import _store as ask_question_store
 
 
 STUDENT_ID = "student-conversation-delete"
@@ -118,7 +119,7 @@ def test_command_claim_and_text_only_message_commit_share_account_fence() -> Non
         "counter_value": 1,
         "expires_at": 100,
     }
-    claim = attachment_repo.build_message_command_claim_transaction(
+    claim = ask_question_store.build_message_command_claim_transaction(
         command=command,
         owner_id=STUDENT_ID,
         quota_period="2026-07-18",
@@ -201,7 +202,7 @@ def test_private_row_discovery_is_strong_paginated_and_scrub_is_allowlisted() ->
 
 
 def test_stale_command_cancel_removes_result_fingerprint_and_lease() -> None:
-    cancel = _contract("cancel_stale_message_command")
+    cancel = ask_question_store.cancel_stale_message_command
     updates: list[dict[str, Any]] = []
 
     class _Table:

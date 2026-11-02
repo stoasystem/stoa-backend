@@ -76,6 +76,7 @@ from stoa.services.document_extraction_service import (
     extract_xlsx_text,
 )
 from stoa.services.document_parser_worker import ParserResult
+from stoa.services.ask_question import _store as ask_question_store
 
 
 SENSITIVE_CANARIES = {
@@ -2314,7 +2315,7 @@ def test_message_command_claim_groups_command_quota_operation_and_counter() -> N
         "status": "claimed",
         "created_at": "2026-07-16T00:00:00Z",
     }
-    operations = attachment_repo.build_message_command_claim_transaction(
+    operations = ask_question_store.build_message_command_claim_transaction(
         command=command,
         owner_id="student-1",
         quota_period="2026-07-16",
@@ -2422,51 +2423,51 @@ def test_ai_lease_excludes_active_owner_renews_takes_over_and_terminates() -> No
             "attempt": 0,
         }
     )
-    first = attachment_repo.claim_message_ai_lease(
+    first = ask_question_store.claim_message_ai_lease(
         conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
         lease_owner="owner-a", now_epoch=100, expires_at=220, table=table,
     )
-    assert first.disposition is attachment_repo.MessageCommandDisposition.CLAIMED
+    assert first.disposition is ask_question_store.MessageCommandDisposition.CLAIMED
     assert first.attempt == 1
-    held = attachment_repo.claim_message_ai_lease(
+    held = ask_question_store.claim_message_ai_lease(
         conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
         lease_owner="owner-b", now_epoch=150, expires_at=270, table=table,
     )
-    assert held.disposition is attachment_repo.MessageCommandDisposition.LEASE_HELD
+    assert held.disposition is ask_question_store.MessageCommandDisposition.LEASE_HELD
     assert held.attempt == 1
-    assert attachment_repo.renew_message_ai_lease(
+    assert ask_question_store.renew_message_ai_lease(
         conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
         lease_owner="owner-a", now_epoch=160, expires_at=280, table=table,
     ) is True
-    assert attachment_repo.renew_message_ai_lease(
+    assert ask_question_store.renew_message_ai_lease(
         conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
         lease_owner="stale-owner", now_epoch=170, expires_at=290, table=table,
     ) is False
-    takeover = attachment_repo.claim_message_ai_lease(
+    takeover = ask_question_store.claim_message_ai_lease(
         conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
         lease_owner="owner-b", now_epoch=281, expires_at=401, table=table,
     )
-    assert takeover.disposition is attachment_repo.MessageCommandDisposition.CLAIMED
+    assert takeover.disposition is ask_question_store.MessageCommandDisposition.CLAIMED
     assert takeover.attempt == 2
     table.command["expiresAt"] = 400
-    final_claim = attachment_repo.claim_message_ai_lease(
+    final_claim = ask_question_store.claim_message_ai_lease(
         conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
         lease_owner="owner-c", now_epoch=401, expires_at=521, table=table,
     )
-    assert final_claim.disposition is attachment_repo.MessageCommandDisposition.CLAIMED
+    assert final_claim.disposition is ask_question_store.MessageCommandDisposition.CLAIMED
     assert final_claim.attempt == 3
     table.command["expiresAt"] = 520
-    terminal = attachment_repo.claim_message_ai_lease(
+    terminal = ask_question_store.claim_message_ai_lease(
         conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
         lease_owner="owner-d", now_epoch=521, expires_at=641, table=table,
     )
-    assert terminal.disposition is attachment_repo.MessageCommandDisposition.TERMINAL
+    assert terminal.disposition is ask_question_store.MessageCommandDisposition.TERMINAL
     assert terminal.attempt == 3
-    marked = attachment_repo.mark_message_command_terminal(
+    marked = ask_question_store.mark_message_command_terminal(
         conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
         now_iso="2026-07-16T00:00:00Z", table=table,
     )
-    assert marked.disposition is attachment_repo.MessageCommandDisposition.TERMINAL
+    assert marked.disposition is ask_question_store.MessageCommandDisposition.TERMINAL
     assert table.command["status"] == "terminal_failed"
 
 

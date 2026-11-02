@@ -12,6 +12,7 @@ from stoa.config import Settings
 from stoa.db.repositories import attachment_repo
 from stoa.jobs.upload_cleanup import cleanup_expired_uploads
 from stoa.services.attachment_service import cleanup_upload_intent
+from stoa.services.ask_question import _store as ask_question_store
 
 
 NOW = datetime(2026, 7, 17, tzinfo=UTC)
@@ -491,9 +492,9 @@ def test_retention_fence_accepts_the_decimal_a_real_table_returns() -> None:
 
 
 def test_stored_lease_attempt_accepts_decimal() -> None:
-    assert attachment_repo._optional_positive_int(Decimal(3)) == 3
-    assert attachment_repo._optional_positive_int(Decimal("3.5")) is None
-    assert attachment_repo._optional_positive_int(True) is None
+    assert ask_question_store._optional_positive_int(Decimal(3)) == 3
+    assert ask_question_store._optional_positive_int(Decimal("3.5")) is None
+    assert ask_question_store._optional_positive_int(True) is None
 
 
 class _ExpressionValidatingTable:
@@ -666,7 +667,7 @@ def test_claim_conditions_compare_a_path_not_two_placeholders() -> None:
     it because they never parse the expression.
     """
     for expected_counter in (0, 7):
-        operations = attachment_repo.build_message_command_claim_transaction(
+        operations = ask_question_store.build_message_command_claim_transaction(
             command={
                 "command_id": "command-1",
                 "conversation_id": "conversation-1",

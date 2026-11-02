@@ -16,6 +16,7 @@ from stoa.routers import conversations
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.services import ai_service, attachment_service
 from stoa.services.document_extraction_service import DocumentExtractionFailure
+from stoa.services.ask_question import _store as ask_question_store
 
 
 def _attachment(attachment_id: str, *, owner_id: str = "student-1") -> dict[str, Any]:
@@ -398,7 +399,7 @@ def test_completion_condition_binds_lease_owner_generation_and_unexpired_deadlin
         captured.extend(operations)
 
     monkeypatch.setattr(attachment_repo, "transact", transact)
-    result = attachment_repo.complete_message_command(
+    result = ask_question_store.complete_message_command(
         conversation_id="conv-1",
         idempotency_key="message-key",
         owner_id="student-1",
@@ -410,7 +411,7 @@ def test_completion_condition_binds_lease_owner_generation_and_unexpired_deadlin
         completed_at="2026-07-17T00:00:00Z",
         table=object(),
     )
-    assert result.disposition is attachment_repo.MessageCommandDisposition.COMPLETED
+    assert result.disposition is ask_question_store.MessageCommandDisposition.COMPLETED
     update_operation = next(
         operation
         for operation in captured
@@ -452,7 +453,7 @@ def test_stale_worker_result_is_refused_after_deterministic_takeover(monkeypatch
         def get_item(self, **_kwargs):
             return {"Item": dict(command)}
 
-    result = attachment_repo.complete_message_command(
+    result = ask_question_store.complete_message_command(
         conversation_id="conv-1",
         idempotency_key="message-key",
         owner_id="student-1",
@@ -464,7 +465,7 @@ def test_stale_worker_result_is_refused_after_deterministic_takeover(monkeypatch
         completed_at="2026-07-17T00:00:00Z",
         table=Table(),
     )
-    assert result.disposition is attachment_repo.MessageCommandDisposition.RETRYABLE
+    assert result.disposition is ask_question_store.MessageCommandDisposition.RETRYABLE
 
 
 def test_regular_and_sse_share_one_closed_executor_boundary() -> None:

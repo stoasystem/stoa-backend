@@ -19,6 +19,7 @@ import boto3
 from moto import mock_aws
 
 from stoa.db.repositories import attachment_repo
+from stoa.services.ask_question import _store as ask_question_store
 
 OWNER = "student-1"
 PERIOD = "2026-10-10"
@@ -67,8 +68,8 @@ def _command(key: str) -> dict[str, Any]:
     }
 
 
-def _claim(table, key: str) -> attachment_repo.MessageCommandResult:
-    return attachment_repo.claim_message_command_and_quota(
+def _claim(table, key: str) -> ask_question_store.MessageCommandResult:
+    return ask_question_store.claim_message_command_and_quota(
         command=_command(key),
         owner_id=OWNER,
         quota_period=PERIOD,
@@ -90,7 +91,7 @@ def test_a_day_with_no_counter_row_claims_and_starts_it_at_one():
 
     result = _claim(table, "first")
 
-    assert result.disposition is attachment_repo.MessageCommandDisposition.CLAIMED
+    assert result.disposition is ask_question_store.MessageCommandDisposition.CLAIMED
     assert result.counter_value == 1
     assert _count(table) == 1
 
@@ -103,7 +104,7 @@ def test_a_counter_row_that_holds_zero_claims_like_a_missing_one():
 
     result = _claim(table, "after-reset")
 
-    assert result.disposition is attachment_repo.MessageCommandDisposition.CLAIMED
+    assert result.disposition is ask_question_store.MessageCommandDisposition.CLAIMED
     assert result.counter_value == 1
     assert _count(table) == 1
 
@@ -111,9 +112,9 @@ def test_a_counter_row_that_holds_zero_claims_like_a_missing_one():
 @mock_aws
 def test_the_next_message_claims_after_the_first_was_rejected_and_compensated():
     table = _table()
-    assert _claim(table, "first").disposition is attachment_repo.MessageCommandDisposition.CLAIMED
+    assert _claim(table, "first").disposition is ask_question_store.MessageCommandDisposition.CLAIMED
 
-    rejected = attachment_repo.reject_message_command_and_compensate(
+    rejected = ask_question_store.reject_message_command_and_compensate(
         conversation_id="conv-1",
         idempotency_key="first",
         owner_id=OWNER,
@@ -122,12 +123,12 @@ def test_the_next_message_claims_after_the_first_was_rejected_and_compensated():
         now_iso="2026-10-10T08:55:01+00:00",
         table=table,
     )
-    assert rejected.disposition is attachment_repo.MessageCommandDisposition.REJECTED
+    assert rejected.disposition is ask_question_store.MessageCommandDisposition.REJECTED
     assert _count(table) == 0
 
     second = _claim(table, "second")
 
-    assert second.disposition is attachment_repo.MessageCommandDisposition.CLAIMED
+    assert second.disposition is ask_question_store.MessageCommandDisposition.CLAIMED
     assert second.counter_value == 1
     assert _count(table) == 1
 
@@ -139,7 +140,7 @@ def test_a_zero_row_still_refuses_a_claim_that_raced_past_it():
     table = _table()
     table.put_item(Item={**attachment_repo.chat_quota_key(OWNER, PERIOD),
                          "count": 0, "expires_at": EXPIRES})
-    stale = attachment_repo.build_message_command_claim_transaction(
+    stale = ask_question_store.build_message_command_claim_transaction(
         command=_command("stale"),
         owner_id=OWNER,
         quota_period=PERIOD,

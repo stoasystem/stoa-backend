@@ -24,6 +24,7 @@ from stoa.routers import conversations
 from stoa.models.attachment import AttachmentStatus, AttachmentSummary
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
+from stoa.services.ask_question import _store as ask_question_store
 
 
 def test_message_command_remains_the_authoritative_chat_quota_path() -> None:
@@ -639,7 +640,7 @@ def test_stage_a_mismatch_fails_before_attachment_lookup(monkeypatch) -> None:
     )
     effects = []
     monkeypatch.setattr(
-        conversations.attachment_repo,
+        ask_question_store,
         "get_message_command",
         lambda *_args, **_kwargs: {
             "owner_id": "student-1", "fingerprint": "0" * 64, "status": "completed"
@@ -682,7 +683,7 @@ def test_new_foreign_attachment_has_zero_command_quota_or_ai_effect(monkeypatch)
         ),
     )
     monkeypatch.setattr(
-        conversations.attachment_repo,
+        ask_question_store,
         "claim_message_command_and_quota",
         lambda **_kwargs: effects.append("claim"),
     )
@@ -746,8 +747,8 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
         with lock:
             effects["claim"] += 1
             if command_state:
-                return attachment_repo.MessageCommandResult(
-                    attachment_repo.MessageCommandDisposition.RESUME,
+                return ask_question_store.MessageCommandResult(
+                    ask_question_store.MessageCommandDisposition.RESUME,
                     command=dict(command_state),
                     counter_value=int(command_state.get("counter_value", 0)),
                 )
@@ -783,13 +784,13 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
             command_state.update(status="completed", result_json=kwargs["result_json"])
         return True
 
-    monkeypatch.setattr(conversations.attachment_repo, "claim_message_command_and_quota", claim)
-    monkeypatch.setattr(conversations.attachment_repo, "get_message_command", get_command)
-    monkeypatch.setattr(conversations.attachment_repo, "claim_message_ai_lease", claim_ai)
+    monkeypatch.setattr(ask_question_store, "claim_message_command_and_quota", claim)
+    monkeypatch.setattr(ask_question_store, "get_message_command", get_command)
+    monkeypatch.setattr(ask_question_store, "claim_message_ai_lease", claim_ai)
     monkeypatch.setattr(
-        conversations.attachment_repo, "renew_message_ai_lease", lambda **_kwargs: True
+        ask_question_store, "renew_message_ai_lease", lambda **_kwargs: True
     )
-    monkeypatch.setattr(conversations.attachment_repo, "complete_message_command", complete)
+    monkeypatch.setattr(ask_question_store, "complete_message_command", complete)
     monkeypatch.setattr(conversations.attachment_service, "bind_message_attachments", bind)
     def extract_context(*_args: object, **_kwargs: object) -> object:
         effects["extract"] += 1
@@ -935,19 +936,19 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
         command_state.update(status="completed", result_json=kwargs["result_json"])
         return True
 
-    monkeypatch.setattr(conversations.attachment_repo, "claim_message_command_and_quota", claim)
-    monkeypatch.setattr(conversations.attachment_repo, "get_message_command", get_command)
+    monkeypatch.setattr(ask_question_store, "claim_message_command_and_quota", claim)
+    monkeypatch.setattr(ask_question_store, "get_message_command", get_command)
     monkeypatch.setattr(
         conversations.attachment_repo,
         "get_attachments",
         lambda *_args, **_kwargs: dict(stored_attachments),
     )
     monkeypatch.setattr(conversations.attachment_service, "bind_message_attachments", bind)
-    monkeypatch.setattr(conversations.attachment_repo, "claim_message_ai_lease", claim_ai)
+    monkeypatch.setattr(ask_question_store, "claim_message_ai_lease", claim_ai)
     monkeypatch.setattr(
-        conversations.attachment_repo, "renew_message_ai_lease", lambda **_kwargs: True
+        ask_question_store, "renew_message_ai_lease", lambda **_kwargs: True
     )
-    monkeypatch.setattr(conversations.attachment_repo, "complete_message_command", complete)
+    monkeypatch.setattr(ask_question_store, "complete_message_command", complete)
     def extract_context(*_args: object, **_kwargs: object) -> object:
         effects["extract"] += 1
         return conversations.attachment_service.AttachmentContextResult(
@@ -1159,7 +1160,7 @@ def test_conversation_exact_version_body_closes_once_on_every_extraction_exit(
 def test_message_polling_is_bounded_to_twenty_fifty_millisecond_waits(monkeypatch) -> None:
     sleeps = []
     monkeypatch.setattr(
-        conversations.attachment_repo,
+        ask_question_store,
         "get_message_command",
         lambda *_args, **_kwargs: {
             "entity_type": "message_command",
@@ -1198,7 +1199,7 @@ def _install_transport_happy_path(monkeypatch) -> None:
         lambda *_args, **_kwargs: [],
     )
     monkeypatch.setattr(
-        conversations.attachment_repo,
+        ask_question_store,
         "claim_message_command_and_quota",
         lambda **_kwargs: (True, 1),
     )
@@ -1208,7 +1209,7 @@ def _install_transport_happy_path(monkeypatch) -> None:
         lambda **_kwargs: [],
     )
     monkeypatch.setattr(
-        conversations.attachment_repo,
+        ask_question_store,
         "claim_message_ai_lease",
         lambda **_kwargs: (True, 1),
     )
@@ -1216,7 +1217,7 @@ def _install_transport_happy_path(monkeypatch) -> None:
         monkeypatch, FakeBedrock(answer={"steps": [], "answer": "safe", "hints": []})
     )
     monkeypatch.setattr(
-        conversations.attachment_repo,
+        ask_question_store,
         "complete_message_command",
         lambda **_kwargs: True,
     )
@@ -1225,7 +1226,7 @@ def _install_transport_happy_path(monkeypatch) -> None:
 def test_stage_a_transport_is_structured_retry_without_diagnostics(monkeypatch) -> None:
     body = _transport_body()
     monkeypatch.setattr(
-        conversations.attachment_repo,
+        ask_question_store,
         "get_message_command",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             RuntimeError("stage-a-provider-table-private-canary")
@@ -1268,7 +1269,7 @@ def test_regular_sse_stage_a_transport_has_identical_structured_retry(
         },
     )
     monkeypatch.setattr(
-        conversations.attachment_repo,
+        ask_question_store,
         "get_message_command",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             RuntimeError("regular-sse-stage-a-provider-private-canary")
@@ -1317,7 +1318,7 @@ def test_conversation_repository_transport_stages_are_structured_retry(
 
     if stage == "command_claim_transport":
         monkeypatch.setattr(
-            conversations.attachment_repo,
+            ask_question_store,
             "claim_message_command_and_quota",
             lambda **_kwargs: (_ for _ in ()).throw(failure),
         )
@@ -1329,40 +1330,40 @@ def test_conversation_repository_transport_stages_are_structured_retry(
         )
     elif stage == "race_reread_transport":
         monkeypatch.setattr(
-            conversations.attachment_repo,
+            ask_question_store,
             "claim_message_command_and_quota",
             lambda **_kwargs: (False, 0),
         )
         monkeypatch.setattr(
-            conversations.attachment_repo,
+            ask_question_store,
             "get_message_command",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(failure),
         )
     elif stage == "ai_lease_transport":
         monkeypatch.setattr(
-            conversations.attachment_repo,
+            ask_question_store,
             "claim_message_ai_lease",
             lambda **_kwargs: (_ for _ in ()).throw(failure),
         )
     elif stage == "ai_lease_reread_transport":
         monkeypatch.setattr(
-            conversations.attachment_repo,
+            ask_question_store,
             "claim_message_ai_lease",
             lambda **_kwargs: (False, 1),
         )
         monkeypatch.setattr(
-            conversations.attachment_repo,
+            ask_question_store,
             "get_message_command",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(failure),
         )
     elif stage == "terminal_transport":
         monkeypatch.setattr(
-            conversations.attachment_repo,
+            ask_question_store,
             "claim_message_ai_lease",
             lambda **_kwargs: (False, 3),
         )
         monkeypatch.setattr(
-            conversations.attachment_repo,
+            ask_question_store,
             "get_message_command",
             lambda *_args, **_kwargs: {
                 "entity_type": "message_command",
@@ -1375,24 +1376,24 @@ def test_conversation_repository_transport_stages_are_structured_retry(
             },
         )
         monkeypatch.setattr(
-            conversations.attachment_repo,
+            ask_question_store,
             "mark_message_command_terminal",
             lambda **_kwargs: (_ for _ in ()).throw(failure),
         )
     elif stage == "completion_transport":
         monkeypatch.setattr(
-            conversations.attachment_repo,
+            ask_question_store,
             "complete_message_command",
             lambda **_kwargs: (_ for _ in ()).throw(failure),
         )
     else:
         monkeypatch.setattr(
-            conversations.attachment_repo,
+            ask_question_store,
             "complete_message_command",
             lambda **_kwargs: False,
         )
         monkeypatch.setattr(
-            conversations.attachment_repo,
+            ask_question_store,
             "get_message_command",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(failure),
         )
@@ -1417,7 +1418,7 @@ def test_conversation_repository_transport_stages_are_structured_retry(
 
 def test_replay_poll_transport_is_structured_retry(monkeypatch) -> None:
     monkeypatch.setattr(
-        conversations.attachment_repo,
+        ask_question_store,
         "get_message_command",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             RuntimeError("replay-poll-provider-table-private-canary")
@@ -1496,7 +1497,7 @@ def test_regular_and_stream_message_use_identical_safe_attachment_summary(monkey
         lambda *_args, **_kwargs: None,
     )
     payload = {"content": "use notes", "idempotencyKey": "attachment-parity", "attachmentIds": [{"attachmentId": "attachment-1"}]}
-    monkeypatch.setattr(conversations.attachment_repo, "get_message_command", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(ask_question_store, "get_message_command", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         conversations,
         "_execute_message_command",
@@ -1586,7 +1587,7 @@ def test_conversation_dependency_cancellation_stable_error_has_zero_message_ai_e
     monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
     monkeypatch.setattr(
-        conversations.attachment_repo,
+        ask_question_store,
         "get_message_command",
         lambda *_args, **_kwargs: None,
     )
@@ -1774,7 +1775,7 @@ def test_only_whole_steps_are_published(monkeypatch):
     """A student is shown a step once it is whole, never a fragment of JSON."""
     published = []
     monkeypatch.setattr(
-        conversations.attachment_repo,
+        ask_question_store,
         "record_generation_progress",
         lambda conv_id, **kwargs: published.append(list(kwargs["steps"])) or True,
     )
@@ -1789,7 +1790,7 @@ def test_only_whole_steps_are_published(monkeypatch):
 def test_a_step_out_of_order_is_ignored(monkeypatch):
     published = []
     monkeypatch.setattr(
-        conversations.attachment_repo,
+        ask_question_store,
         "record_generation_progress",
         lambda conv_id, **kwargs: published.append(list(kwargs["steps"])) or True,
     )
@@ -1801,18 +1802,17 @@ def test_a_step_out_of_order_is_ignored(monkeypatch):
 
 
 def test_progress_is_only_readable_by_the_student_who_asked():
-    from stoa.db.repositories import attachment_repo
 
     class _Table:
         def get_item(self, **kwargs):
             del kwargs
             return {"Item": {"owner_id": "student-1", "steps": ["Schritt 1"]}}
 
-    steps, _updated_at = attachment_repo.read_generation_progress(
+    steps, _updated_at = ask_question_store.read_generation_progress(
         "conv-1", owner_id="student-1", table=_Table()
     )
     assert steps == ["Schritt 1"]
-    hidden, _ = attachment_repo.read_generation_progress(
+    hidden, _ = ask_question_store.read_generation_progress(
         "conv-1", owner_id="another-student", table=_Table()
     )
     assert hidden == []

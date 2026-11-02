@@ -31,6 +31,7 @@ from stoa.services import (
     knowledge_mastery_service,
     star_map_candidates,
 )
+from stoa.services.ask_question import _store as ask_question_store
 from test_async_generation_cutover import invokes as invokes  # noqa: F401 - the fixture
 from test_async_generation_cutover import switched_on as switched_on  # noqa: F401
 from test_conversation_token_finalization import _patch_allowance_table
@@ -580,7 +581,7 @@ def test_an_attempt_that_dies_before_storing_its_answer_counts_nothing(
     bedrock.answers = [_answer(lambda _stars: [{"id": None, "name": "Brüche im Alltag"}])]
     client = _client()
     assert _send(client, "key-1", language="de").status_code == 202
-    complete = conversations.attachment_repo.complete_message_command
+    complete = ask_question_store.complete_message_command
     calls = {"complete": 0}
 
     def die_on_first_completion(**kwargs: Any) -> Any:
@@ -590,7 +591,7 @@ def test_an_attempt_that_dies_before_storing_its_answer_counts_nothing(
         return complete(**kwargs)
 
     monkeypatch.setattr(
-        conversations.attachment_repo, "complete_message_command", die_on_first_completion
+        ask_question_store, "complete_message_command", die_on_first_completion
     )
     with pytest.raises(_Killed):
         conversation_generation.handler(invokes.events[0], None)
