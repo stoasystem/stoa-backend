@@ -3,7 +3,8 @@
 The package is being moved here from `routers/conversations.py`,
 `attachment_repo` and `jobs/conversation_generation.py` in four steps (#204).
 Step 1 (#217) moved the rows the question keeps (`_store`); step 2 (#218)
-moved the request half and the answering here, behind three entry points:
+moved the request half and the answering here; step 3 (#219) moved the
+worker's sweep (`_sweep`). The entry points:
 
 - `submit` takes a student's message from the route that authorized it and
   returns `Answered` (the answer, generated in the request) or `Accepted` (the
@@ -12,16 +13,20 @@ moved the request half and the answering here, behind three entry points:
 - `answer` is the worker's: it takes one committed command to its answer, and
   is safe to call again for the same command.
 - `progress` is where a command stands, for `GET /conversations/{id}/generation`.
+- `sweep` is the Scheduler's: it answers what the direct invocation missed and
+  settles what nothing else will, and returns a `SweepSummary`.
+- `cancel_for_account_deletion` is account deletion's: it cancels a command
+  still active when the account's private rows are scrubbed.
 
 Who answers a committed command is `dispatch`'s to decide.
 """
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timezone
 
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import Actor
-from stoa.services.ask_question import _answering, _store, dispatch
+from stoa.services.ask_question import _answering, _store, _sweep, dispatch
 from stoa.services.ask_question._transcript import (
     _conversation_grade,
     _conversation_repository_call,
@@ -45,6 +50,9 @@ Accepted = MessageAcceptedResponse
 
 AllowanceFailure = _answering._ConversationAllowanceFailure
 """Raised by `submit` when token admission refuses the answer (#206 replaces it)."""
+
+SweepSummary = _sweep.SweepSummary
+"""What one `sweep` run did, counted by outcome."""
 
 
 def submit(
@@ -207,3 +215,39 @@ def progress(
         attempt=state.attempt,
     )
     return state
+
+
+def sweep(remaining_seconds: Callable[[], float | None]) -> SweepSummary:
+    """Answer what nobody claimed and what a dead attempt left; settle what is due.
+
+    `remaining_seconds` returns how much of the invocation is left (`None`
+    when unknown). It is read again before each command, and each answer's
+    runtime budget is bound to it; each command is answered through `answer`.
+    """
+    return _sweep.sweep(remaining_seconds, answer)
+
+
+def cancel_for_account_deletion(
+    row: dict[str, object],
+    *,
+    owner_id: str,
+    deletion_generation: int,
+    now_iso: str,
+) -> bool:
+    """Cancel `row` if it is a command still active, as account deletion scans it.
+
+    Returns whether it was canceled; any other private row is the caller's.
+    A command of another owner is refused (`AttachmentRepositoryConflict`).
+    """
+    if (
+        row.get("entity_type") != "message_command"
+        or row.get("status") not in _store.CONVERSATION_ACTIVE_COMMAND_STATES
+    ):
+        return False
+    _store.cancel_stale_message_command(
+        row,
+        owner_id=owner_id,
+        deletion_generation=deletion_generation,
+        now_iso=now_iso,
+    )
+    return True

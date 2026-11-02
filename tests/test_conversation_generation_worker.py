@@ -46,7 +46,7 @@ from fakes.bedrock import Unsent
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.security.attachment_errors import AttachmentDecisionError
-from stoa.services import ai_service, ask_answer, star_map_candidates
+from stoa.services import ai_service, ask_answer, ask_question, star_map_candidates
 from stoa.services.ask_question import _answering
 from stoa.services.ask_question import _store as ask_question_store
 from fakes.ask_question import AtomicAllowanceTable
@@ -563,14 +563,15 @@ def test_one_command_that_breaks_does_not_stop_the_sweep(
             asked = datetime.fromisoformat(row["created_at"]) - timedelta(seconds=1)
             row["created_at"] = asked.isoformat()
         table.seed(row)
-    answer = conversation_generation.ask_question.answer
+    # The sweep answers through the package's `answer`, read at call time.
+    answer = ask_question.answer
 
     def answer_or_break(conversation_id: str, idempotency_key: str) -> str:
         if idempotency_key == "broken":
             raise RuntimeError("unexpected")
         return answer(conversation_id, idempotency_key)
 
-    monkeypatch.setattr(conversation_generation.ask_question, "answer", answer_or_break)
+    monkeypatch.setattr(ask_question, "answer", answer_or_break)
 
     summary = conversation_generation.handler(
         {"source": "stoa.scheduler", "job": "conversation_generation_sweep"}, None

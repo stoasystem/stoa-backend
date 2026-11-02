@@ -37,6 +37,7 @@ from stoa.jobs import conversation_generation
 from stoa.services import ai_service, allowance_service
 from stoa.services.ask_question import _answering
 from stoa.services.ask_question import _store as ask_question_store
+from stoa.services.ask_question import _sweep as ask_question_sweep
 
 RESERVED_INPUT = 120
 RESERVED_OUTPUT = 800
@@ -115,7 +116,7 @@ def model(monkeypatch: pytest.MonkeyPatch, table) -> _Model:
 def events(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, dict[str, Any]]]:
     emitted: list[tuple[str, dict[str, Any]]] = []
     monkeypatch.setattr(
-        conversation_generation,
+        ask_question_sweep,
         "emit_private_event",
         lambda category, **fields: emitted.append((category, fields)),
     )
