@@ -1453,50 +1453,6 @@ def _message_allowance_metadata_from_command(
     return _validated_message_allowance_metadata(payload.get("_allowance"))
 
 
-def _generate_title(
-    first_message: str, subject: str, *, correlation_id: str | None = None
-) -> str | None:
-    """Call Bedrock to generate a short conversation title (max 6 words)."""
-    try:
-        import json as _json
-
-        from stoa.config import get_settings
-
-        settings = get_settings()
-        invocation_class = ai_service.AIInvocationClass.PROVIDER_COST_ONLY
-        if invocation_class is not ai_service.AIInvocationClass.PROVIDER_COST_ONLY:
-            raise ai_service.AIInvocationFailure("invalid_invocation_class")
-        bedrock = boto3.client("bedrock-runtime", region_name=settings.aws_region)
-        prompt = (
-            f"Generate a concise title (max 6 words, no punctuation) for a {subject} "
-            f"teaching conversation that starts with: \"{first_message[:120]}\". "
-            "Respond with only the title, nothing else."
-        )
-        body = _json.dumps({
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 30,
-            "messages": [{"role": "user", "content": prompt}],
-        })
-        resp = bedrock.invoke_model(
-            modelId=settings.bedrock_model_id,
-            body=body,
-            contentType="application/json",
-            accept="application/json",
-        )
-        result = _json.loads(resp["body"].read())
-        title = result["content"][0]["text"].strip().strip('"').strip("'")
-        return title[:80] if title else None
-    except Exception as exc:
-        emit_private_event(
-            "title_generation_failed",
-            exception=exc,
-            input_size=len(first_message),
-            correlation_id=correlation_id,
-            level=logging.WARNING,
-        )
-        return None
-
-
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=ConversationListResponse)

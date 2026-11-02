@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from stoa.config import Settings
-from stoa.db.repositories import question_submission_repo, usage_ledger_repo, user_repo
+from stoa.db.repositories import usage_ledger_repo, user_repo
 from stoa.services import entitlement_service
 
 
@@ -354,110 +354,6 @@ def usage_privacy_flags() -> dict[str, bool]:
     }
 
 
-def get_question_usage_event(
-    *,
-    student_id: str,
-    quota_period: str,
-    idempotency_digest: str,
-) -> dict[str, Any] | None:
-    """Read an existing question usage ledger event for retry handling."""
-    digest = question_submission_repo.validate_question_submission_command_digest(
-        idempotency_digest
-    )
-    return usage_ledger_repo.get_usage_event(
-        student_id=student_id,
-        action=QUESTION_SUBMISSION_ACTION,
-        quota_period=quota_period,
-        idempotency_key=digest,
-    )
-
-
-def build_question_usage_event(
-    *,
-    student_id: str,
-    question_id: str,
-    quota_period: str,
-    idempotency_digest: str,
-    counter_key: str,
-    counter_value: int,
-    quantity: int,
-    entitlement: dict[str, Any],
-    created_at: str,
-    write_order: str = "question_admission_transaction",
-) -> dict[str, Any]:
-    """Build one privacy-safe question usage item without persisting it."""
-    digest = question_submission_repo.validate_question_submission_command_digest(
-        idempotency_digest
-    )
-    effective_plan = str(entitlement.get("effectivePlan") or "free_trial")
-    parent_id = entitlement.get("parentId")
-    return {
-        "PK": f"USAGE_LEDGER#{student_id}",
-        "SK": f"EVENT#{QUESTION_SUBMISSION_ACTION}#{quota_period}#{digest}",
-        "entity_type": "usage_ledger_event",
-        "schema_version": LEDGER_SCHEMA_VERSION,
-        "event_id": digest,
-        "actor_id": student_id,
-        "actor_role": "student",
-        "student_id": student_id,
-        "parent_id": parent_id,
-        "action": QUESTION_SUBMISSION_ACTION,
-        "status": "active",
-        "quantity": quantity,
-        "quota_period": quota_period,
-        "counter_key": counter_key,
-        "counter_value_after": counter_value,
-        "idempotency_digest": digest,
-        "request_correlation_id": question_id,
-        "question_id": question_id,
-        "effective_plan": effective_plan,
-        "entitlement_source": entitlement.get("source"),
-        "entitlement_snapshot": _entitlement_snapshot(entitlement),
-        "privacy": usage_privacy_flags(),
-        "metadata": {
-            "usage_type": QUESTION_COUNTER_USAGE_TYPE,
-            "write_order": write_order,
-        },
-        "created_at": created_at,
-        "updated_at": created_at,
-        "expires_at": counter_ttl(),
-    }
-
-
-def record_question_usage_event(
-    *,
-    student_id: str,
-    question_id: str,
-    quota_period: str,
-    idempotency_digest: str,
-    counter_key: str,
-    counter_value: int,
-    quantity: int,
-    entitlement: dict[str, Any],
-    created_at: str,
-) -> dict[str, Any]:
-    """Persist one consumed question usage event.
-
-    The atomic counter remains the enforcement primitive. The ledger write happens
-    after the counter increment and stores the entitlement snapshot used for that
-    quota decision, without raw question content or provider billing payloads.
-    """
-    event = build_question_usage_event(
-        student_id=student_id,
-        question_id=question_id,
-        quota_period=quota_period,
-        idempotency_digest=idempotency_digest,
-        counter_key=counter_key,
-        counter_value=counter_value,
-        quantity=quantity,
-        entitlement=entitlement,
-        created_at=created_at,
-        write_order="counter_then_ledger",
-    )
-    created = usage_ledger_repo.put_usage_event(event)
-    return {**event, "idempotency_status": "created" if created else "duplicate"}
-
-
 def record_usage_event(
     *,
     student_id: str,
@@ -478,9 +374,9 @@ def record_usage_event(
     """Persist one governed non-question usage event.
 
     This helper is for v5.11 action coverage beyond question submissions. It is
-    intentionally content-safe and taxonomy-gated. Question submissions keep the
-    existing specialized helper because their counter remains the enforcement
-    source and response compatibility matters.
+    intentionally content-safe and taxonomy-gated. Question submissions were
+    retired with their route (#148); their historical ledger rows are only read
+    by reconciliation now.
     """
     definition = get_usage_action_definition(action)
     private_learning_action = action in PRIVATE_LEARNING_ACTIONS
@@ -611,24 +507,6 @@ def reconcile_question_usage(
         "repaired": repaired,
         "partial": not _reconciliation_is_ok(status),
     }
-
-
-def reverse_terminal_question_admission(
-    preview: question_submission_repo.QuestionReconciliationPreview,
-    *,
-    student_id: str,
-    idempotency_key: str,
-    reversed_at: str,
-    table: object | None = None,
-) -> question_submission_repo.QuestionReconciliationPreview:
-    """Apply the exact terminal question allowance/ledger compensation."""
-    return question_submission_repo.reverse_terminal_question_admission(
-        preview,
-        student_id=student_id,
-        idempotency_key=idempotency_key,
-        reversed_at=reversed_at,
-        table=table,
-    )
 
 
 def reconcile_usage_action(

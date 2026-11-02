@@ -571,38 +571,6 @@ def test_durable_payload_is_private_and_content_free(
     assert "private-answer-canary" not in evidence_json
 
 
-def test_title_generation_is_explicit_provider_cost_only(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class TitleProvider:
-        def invoke_model(self, **_kwargs: object) -> dict[str, object]:
-            return {
-                "body": _ResponseBody(
-                    {"content": [{"text": "A Safe Title"}]}
-                )
-            }
-
-    monkeypatch.setattr(
-        conversations.boto3,
-        "client",
-        lambda *_args, **_kwargs: TitleProvider(),
-    )
-    monkeypatch.setattr(
-        conversations.allowance_service,
-        "reserve_token_allowance",
-        lambda **_kwargs: pytest.fail("title reserved student allowance"),
-    )
-    monkeypatch.setattr(
-        conversations.allowance_service,
-        "finalize_token_allowance",
-        lambda **_kwargs: pytest.fail("title finalized student allowance"),
-    )
-
-    assert conversations._generate_title("message", "math") == "A Safe Title"
-    source = inspect.getsource(conversations._generate_title)
-    assert "AIInvocationClass.PROVIDER_COST_ONLY" in source
-
-
 def test_source_binds_durable_message_effect_before_invoke_and_finalize() -> None:
     source = inspect.getsource(conversations)
     reserve_at = source.index("reserve_token_allowance")
