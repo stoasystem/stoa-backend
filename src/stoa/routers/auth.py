@@ -309,6 +309,22 @@ async def _remember_sign_in_refresh_token(
         )
 
 
+def _record_sign_in(user_id: str, profile: dict) -> None:
+    """Keep when this account last signed in, for the admin console's account list.
+
+    Only a password sign-in counts. `/auth/refresh` renews a sign-in that already
+    happened, and counting it would turn "last sign-in" into "last seen" and write
+    the profile about once an hour for everyone signed in (#107).
+
+    Best effort, like the refresh token custody above: the sign-in has already
+    succeeded, and a lost timestamp is not worth failing it over.
+    """
+    try:
+        user_repo.record_sign_in(user_id, profile, signed_in_at=_utc_now_iso())
+    except Exception as exc:  # noqa: BLE001 - never block a successful sign-in
+        logger.warning("sign-in time not recorded: %s", type(exc).__name__)
+
+
 async def _revoke_sign_in_at_provider(
     *,
     cognito,
@@ -557,6 +573,7 @@ async def login(
         verified=await _verified_sign_in(access_token, settings, key_provider),
         token_to_hold=refresh_token,
     )
+    _record_sign_in(actor.user_id, profile)
     return _auth_response_for_profile(
         access_token=access_token,
         profile=profile,
