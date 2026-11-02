@@ -115,14 +115,6 @@ def _conversation_entitlement_snapshot(
     *,
     table: object,
 ) -> Mapping[str, object]:
-    if not hasattr(table, "meta") and not hasattr(table, "transact_write_items"):
-        # Narrow inherited-test compatibility. Production DynamoDB tables always
-        # expose a transactional client and resolve the authoritative entitlement.
-        return {
-            "effectivePlan": "free_trial",
-            "source": "inherited-test-compatibility",
-            "allowanceVersion": 1,
-        }
     entitlement = entitlement_service.resolve_student_entitlement(
         student_id,
         settings=settings,
@@ -605,12 +597,6 @@ def _message_allowance_metadata_from_command(
 
 def _active_conversation_generation(owner_id: str, table: Any) -> int:
     """Resolve one exact active generation before a private conversation effect."""
-    if not hasattr(table, "get_item") or (
-        not hasattr(table, "meta") and not hasattr(table, "transact_write_items")
-    ):
-        # Narrow inherited-test compatibility; production DynamoDB tables always
-        # expose get_item and fail closed through the permanent fence.
-        return 1
     try:
         fence = account_deletion_repo.require_active_account_fence(owner_id, table=table)
     except account_deletion_repo.AccountDeletionConflict:
@@ -1015,29 +1001,6 @@ def _reopen_failed_for_retry(
                     now_iso=_now(),
                 )
             )
-
-
-def _execute_message_command(
-    *,
-    conv_id: str,
-    student_id: str,
-    subject: str,
-    grade: str,
-    body: SendMessageRequest,
-    command_context: dict,
-) -> SendMessageResponse:
-    """Run the shared regular/SSE command: commit it, then generate its answer."""
-    committed = commit_message_command(
-        conv_id=conv_id,
-        student_id=student_id,
-        subject=subject,
-        grade=grade,
-        body=body,
-        command_context=command_context,
-    )
-    if isinstance(committed, SendMessageResponse):
-        return committed
-    return generate_for_command(committed)
 
 
 @dataclass(frozen=True)
