@@ -136,7 +136,11 @@ def test_at_most_one_recommendation_per_subject_and_it_prefers_an_unfinished_one
 
     recommended = [star["unitId"] for star in result["stars"] if star["recommendation"]]
     assert recommended == ["u2"], "what is already begun comes before what is not"
-    assert result["stars"][1]["recommendation"] == {"source": "system"}
+    assert result["stars"][1]["recommendation"] == {
+        "source": "system",
+        "reason": "in_progress",
+        "relatedUnitId": None,
+    }
 
 
 def test_a_sky_with_nothing_begun_recommends_the_first_one_that_is_open() -> None:

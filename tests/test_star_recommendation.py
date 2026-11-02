@@ -1,0 +1,373 @@
+"""Which star the map recommends: the one that follows the student (#164, stoa-frontend#474).
+
+Against the pure `build_map`, as the rest of the read model's tests are. Per
+subject, at most one, only in a subject the student takes:
+
+1. a star in progress, the one with the latest evidence (ties: earlier in the
+   course), whatever its prerequisites - `in_progress`;
+2. else after the latest lighting - this subject's own, or another subject's
+   whose successor is here (ties: furthest in the course; this subject's own
+   over another's): its successor on the frontier, else the next frontier star
+   after it in the course, wrapping round - `after_lit`;
+3. else the first frontier star - `start`.
+
+The frontier is what is not lit and has every prerequisite lit.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from stoa.services import knowledge_map_service as km
+from stoa.services import knowledge_mastery_service as mastery
+
+LIT = mastery.LearningState.LIT
+READY = mastery.LearningState.READY
+IN_PROGRESS = mastery.LearningState.IN_PROGRESS
+
+
+def judged(
+    unit_id: str,
+    state: mastery.LearningState,
+    *,
+    subject_id: str = "math",
+    unlit: tuple[str, ...] = (),
+) -> mastery.UnitMastery:
+    return mastery.UnitMastery(
+        unit_id=unit_id,
+        topic_id="t-" + subject_id,
+        subject_id=subject_id,
+        state=state,
+        progress=1.0 if state is LIT else 0.0,
+        unmet_exercises=0,
+        lesson_count=1,
+        lessons_done=1 if state is LIT else 0,
+        next_lesson=None,
+        unlit_prerequisite_ids=unlit,
+    )
+
+
+def unit(unit_id: str, order: int, *, subject_id: str = "math", before: list[str] | None = None) -> dict[str, Any]:
+    return {
+        "id": unit_id,
+        "subjectId": subject_id,
+        "topicId": "t-" + subject_id,
+        "title": unit_id,
+        "order": order,
+        "prerequisiteUnitIds": before or [],
+    }
+
+
+def fact(unit_id: str, lit_at: str, source: mastery.LitSource = mastery.LitSource.OBSERVED) -> mastery.LitFact:
+    return mastery.LitFact(unit_id=unit_id, lit_at=lit_at, source=source)
+
+
+def build(
+    units: list[dict[str, Any]],
+    states: dict[str, mastery.UnitMastery],
+    *,
+    facts: list[mastery.LitFact] = (),
+    evidence: dict[str, str] | None = None,
+    enrolled: frozenset[str] = frozenset({"math", "physics"}),
+) -> dict[str, Any]:
+    subjects = sorted({item["subjectId"] for item in units})
+    return km.build_map(
+        subject_id="math",
+        catalog={
+            "subjects": [{"id": sid, "name": sid, "order": index} for index, sid in enumerate(subjects)],
+            "topics": [
+                {"id": "t-" + sid, "subjectId": sid, "title": sid, "order": 0} for sid in subjects
+            ],
+            "units": units,
+            "lessons": [],
+        },
+        unit_states=states,
+        review_due_by_unit={},
+        streak_days=0,
+        score=0,
+        enrolled_subject_ids=enrolled,
+        lit_facts={item.unit_id: item for item in facts},
+        last_evidence_by_unit=evidence or {},
+    )
+
+
+def recommended(result: dict[str, Any], subject_id: str = "math") -> list[tuple[str, dict]]:
+    subject_of = {item["topicId"]: item["subjectId"] for item in result["nebulae"]}
+    return [
+        (star["unitId"], star["recommendation"])
+        for star in result["stars"]
+        if star["recommendation"] and subject_of[star["nebulaId"]] == subject_id
+    ]
+
+
+# ── 1. what is in progress ───────────────────────────────────────────────────
+
+
+def test_the_star_in_progress_with_the_latest_evidence_is_recommended() -> None:
+    result = build(
+        [unit("a", 0), unit("b", 1), unit("c", 2)],
+        {"a": judged("a", IN_PROGRESS), "b": judged("b", IN_PROGRESS), "c": judged("c", READY)},
+        evidence={"a": "2026-11-01T10:00:00+00:00", "b": "2026-11-01T11:00:00+00:00"},
+    )
+
+    assert recommended(result) == [
+        ("b", {"source": "system", "reason": "in_progress", "relatedUnitId": None})
+    ]
+
+
+def test_in_progress_ties_go_to_the_earlier_star_in_the_course() -> None:
+    same = "2026-11-01T10:00:00+00:00"
+    result = build(
+        [unit("a", 0), unit("b", 1)],
+        {"a": judged("a", IN_PROGRESS), "b": judged("b", IN_PROGRESS)},
+        evidence={"a": same, "b": same},
+    )
+
+    assert [item for item, _ in recommended(result)] == ["a"]
+
+
+def test_a_star_in_progress_is_recommended_even_behind_an_unlit_prerequisite() -> None:
+    result = build(
+        [unit("a", 0), unit("b", 1, before=["a"])],
+        {"a": judged("a", READY), "b": judged("b", IN_PROGRESS, unlit=("a",))},
+        evidence={"b": "2026-11-01T10:00:00+00:00"},
+    )
+
+    assert recommended(result) == [
+        ("b", {"source": "system", "reason": "in_progress", "relatedUnitId": None})
+    ]
+
+
+# ── 2. after the latest lighting ─────────────────────────────────────────────
+
+
+def test_after_a_lighting_its_successor_on_the_frontier_comes_first() -> None:
+    result = build(
+        [unit("a", 0), unit("b", 1), unit("c", 2, before=["a"])],
+        {"a": judged("a", LIT), "b": judged("b", READY), "c": judged("c", READY)},
+        facts=[fact("a", "2026-11-01T10:00:00+00:00")],
+    )
+
+    assert recommended(result) == [
+        ("c", {"source": "system", "reason": "after_lit", "relatedUnitId": "a"})
+    ]
+
+
+def test_of_several_successors_the_earliest_in_the_course_is_taken() -> None:
+    result = build(
+        [unit("a", 0), unit("d", 3, before=["a"]), unit("c", 2, before=["a"])],
+        {"a": judged("a", LIT), "c": judged("c", READY), "d": judged("d", READY)},
+        facts=[fact("a", "2026-11-01T10:00:00+00:00")],
+    )
+
+    assert [item for item, _ in recommended(result)] == ["c"]
+
+
+def test_a_successor_off_the_frontier_is_passed_over_for_the_next_in_the_course() -> None:
+    # `c` follows `a` but also needs `x`, which is not lit: not on the frontier.
+    result = build(
+        [unit("a", 0), unit("x", 1), unit("b", 2), unit("c", 3, before=["a", "x"])],
+        {
+            "a": judged("a", LIT),
+            "x": judged("x", LIT),
+            "b": judged("b", READY),
+            "c": judged("c", READY, unlit=("y",)),
+        },
+        facts=[fact("a", "2026-11-01T11:00:00+00:00"), fact("x", "2026-11-01T10:00:00+00:00")],
+    )
+
+    assert recommended(result) == [
+        ("b", {"source": "system", "reason": "after_lit", "relatedUnitId": "a"})
+    ]
+
+
+def test_finishing_late_in_the_course_does_not_send_the_student_back_to_the_start() -> None:
+    """The case that opened #164: trigonometry done, integers recommended."""
+    result = build(
+        [unit("integers", 0), unit("fractions", 1), unit("trigonometry", 2), unit("vectors", 3)],
+        {
+            "integers": judged("integers", READY),
+            "fractions": judged("fractions", READY),
+            "trigonometry": judged("trigonometry", LIT),
+            "vectors": judged("vectors", READY),
+        },
+        facts=[fact("trigonometry", "2026-11-01T10:00:00+00:00")],
+    )
+
+    assert recommended(result) == [
+        ("vectors", {"source": "system", "reason": "after_lit", "relatedUnitId": "trigonometry"})
+    ]
+
+
+def test_at_the_end_of_the_course_it_wraps_round_to_the_start() -> None:
+    result = build(
+        [unit("a", 0), unit("b", 1), unit("c", 2)],
+        {"a": judged("a", READY), "b": judged("b", READY), "c": judged("c", LIT)},
+        facts=[fact("c", "2026-11-01T10:00:00+00:00")],
+    )
+
+    assert recommended(result) == [
+        ("a", {"source": "system", "reason": "after_lit", "relatedUnitId": "c"})
+    ]
+
+
+def test_the_latest_lighting_decides_whatever_its_place() -> None:
+    result = build(
+        [unit("a", 0), unit("b", 1), unit("c", 2), unit("d", 3)],
+        {"a": judged("a", LIT), "b": judged("b", READY), "c": judged("c", LIT), "d": judged("d", READY)},
+        facts=[fact("a", "2026-11-01T12:00:00+00:00"), fact("c", "2026-11-01T10:00:00+00:00")],
+    )
+
+    assert recommended(result) == [
+        ("b", {"source": "system", "reason": "after_lit", "relatedUnitId": "a"})
+    ]
+
+
+def test_lightings_at_the_same_moment_go_to_the_furthest_in_the_course() -> None:
+    same = "2026-11-01T10:00:00+00:00"
+    result = build(
+        [unit("a", 0), unit("b", 1), unit("c", 2), unit("d", 3)],
+        {"a": judged("a", LIT), "b": judged("b", READY), "c": judged("c", LIT), "d": judged("d", READY)},
+        facts=[fact("a", same), fact("c", same)],
+    )
+
+    assert recommended(result) == [
+        ("d", {"source": "system", "reason": "after_lit", "relatedUnitId": "c"})
+    ]
+
+
+def test_a_backfilled_lighting_counts_too() -> None:
+    result = build(
+        [unit("a", 0), unit("b", 1), unit("c", 2)],
+        {"a": judged("a", READY), "b": judged("b", LIT), "c": judged("c", READY)},
+        facts=[fact("b", "2026-10-01T10:00:00+00:00", mastery.LitSource.BACKFILLED)],
+    )
+
+    assert [item for item, _ in recommended(result)] == ["c"]
+
+
+# ── 2b. a lighting in another subject ────────────────────────────────────────
+
+
+def _two_subjects(math_lit_at: str, physics_lit_at: str) -> dict[str, Any]:
+    # Physics `p1` is a prerequisite of math `m3`.
+    return build(
+        [
+            unit("m1", 0),
+            unit("m2", 1),
+            unit("m3", 2, before=["p1"]),
+            unit("p1", 0, subject_id="physics"),
+        ],
+        {
+            "m1": judged("m1", LIT),
+            "m2": judged("m2", READY),
+            "m3": judged("m3", READY),
+            "p1": judged("p1", LIT, subject_id="physics"),
+        },
+        facts=[fact("m1", math_lit_at), fact("p1", physics_lit_at)],
+    )
+
+
+def test_a_later_lighting_in_another_subject_leads_to_its_successor_here() -> None:
+    result = _two_subjects("2026-11-01T10:00:00+00:00", "2026-11-01T11:00:00+00:00")
+
+    assert recommended(result) == [
+        ("m3", {"source": "system", "reason": "after_lit", "relatedUnitId": "p1"})
+    ]
+
+
+def test_at_the_same_moment_this_subjects_own_lighting_wins() -> None:
+    same = "2026-11-01T10:00:00+00:00"
+    result = _two_subjects(same, same)
+
+    assert recommended(result) == [
+        ("m2", {"source": "system", "reason": "after_lit", "relatedUnitId": "m1"})
+    ]
+
+
+def test_another_subjects_lighting_with_nothing_here_does_not_count() -> None:
+    result = build(
+        [unit("m1", 0), unit("m2", 1), unit("p1", 0, subject_id="physics")],
+        {"m1": judged("m1", READY), "m2": judged("m2", READY), "p1": judged("p1", LIT, subject_id="physics")},
+        facts=[fact("p1", "2026-11-01T11:00:00+00:00")],
+    )
+
+    assert recommended(result) == [
+        ("m1", {"source": "system", "reason": "start", "relatedUnitId": None})
+    ]
+
+
+# ── 3. where to start ────────────────────────────────────────────────────────
+
+
+def test_nothing_lit_starts_at_the_first_star_on_the_frontier() -> None:
+    result = build(
+        [unit("a", 0, before=["z"]), unit("b", 1), unit("z", 2)],
+        {"a": judged("a", READY, unlit=("z",)), "b": judged("b", READY), "z": judged("z", READY)},
+    )
+
+    assert recommended(result) == [
+        ("b", {"source": "system", "reason": "start", "relatedUnitId": None})
+    ]
+
+
+# ── what is not recommended ──────────────────────────────────────────────────
+
+
+def test_a_subject_the_student_does_not_take_has_no_recommendation() -> None:
+    result = build(
+        [unit("a", 0), unit("b", 1)],
+        {"a": judged("a", READY), "b": judged("b", READY)},
+        enrolled=frozenset(),
+    )
+
+    assert recommended(result) == []
+
+
+def test_a_fully_lit_subject_recommends_nothing() -> None:
+    result = build(
+        [unit("a", 0)],
+        {"a": judged("a", LIT)},
+        facts=[fact("a", "2026-11-01T10:00:00+00:00")],
+    )
+
+    assert recommended(result) == []
+
+
+def test_each_subject_has_at_most_one() -> None:
+    result = build(
+        [unit("m1", 0), unit("m2", 1), unit("p1", 0, subject_id="physics"), unit("p2", 1, subject_id="physics")],
+        {
+            "m1": judged("m1", READY),
+            "m2": judged("m2", READY),
+            "p1": judged("p1", READY, subject_id="physics"),
+            "p2": judged("p2", READY, subject_id="physics"),
+        },
+    )
+
+    assert [item for item, _ in recommended(result, "math")] == ["m1"]
+    assert [item for item, _ in recommended(result, "physics")] == ["p1"]
+
+
+# ── the evidence it reads ────────────────────────────────────────────────────
+
+
+def test_the_latest_evidence_is_an_answer_or_a_finished_lesson_never_a_self_report(monkeypatch) -> None:
+    from fakes.dynamodb import FakeTable
+
+    from stoa.db.repositories import practice_repo
+
+    table = FakeTable()
+    table.seed(
+        {"PK": "ATTEMPTS#s1", "SK": "ATTEMPT#1", "unit_id": "a", "created_at": "2026-11-01T09:00:00+00:00", "correct": False},
+        {"PK": "ATTEMPTS#s1", "SK": "ATTEMPT#2", "unit_id": "a", "created_at": "2026-11-01T08:00:00+00:00", "correct": True},
+        {"PK": "ATTEMPTS#s1", "SK": "ATTEMPT#3", "unit_id": "b", "created_at": "2026-11-01T12:00:00+00:00", "self_reported": True},
+        {"PK": "PROGRESS#s1", "SK": "LESSON#l1", "unit_id": "b", "status": "completed", "completed_at": "2026-11-01T10:00:00+00:00"},
+        {"PK": "PROGRESS#s1", "SK": "LESSON#l2", "unit_id": "c", "status": "in_progress", "completed_at": "2026-11-01T11:00:00+00:00"},
+    )
+    monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+
+    assert practice_repo.last_activity_by_unit("s1") == {
+        "a": "2026-11-01T09:00:00+00:00",
+        "b": "2026-11-01T10:00:00+00:00",
+    }
