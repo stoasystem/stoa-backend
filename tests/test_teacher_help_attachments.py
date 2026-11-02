@@ -68,15 +68,18 @@ def _attachment_row(attachment_id: str, owner_id: str = STUDENT) -> dict[str, An
 
 
 def _message_row(message_id: str, created_at: str, **extra: Any) -> dict[str, Any]:
+    # A student's message as every writer stores it: the teacher's detail reads
+    # the session's checked history since #226.
     return {
         "PK": f"CONV#{CONV}",
-        "SK": f"MSG#{created_at}#{message_id}",
-        "entity_type": "message",
+        "SK": f"MSG#{message_id}",
+        "entity_type": "conversation_message",
+        "schema_version": "conversation-message.v1",
         "message_id": message_id,
         "conversation_id": CONV,
         "owner_id": STUDENT,
         "student_id": STUDENT,
-        "role": "user",
+        "role": "student",
         "created_at": created_at,
         **extra,
     }
@@ -324,7 +327,7 @@ def test_an_attachment_owned_by_someone_else_is_not_read_even_if_referenced(
 ) -> None:
     foreign = "att-140-foreign"
     sent_image.seed(_attachment_row(foreign, owner_id="student-140-other"))
-    sent_image.rows[(f"CONV#{CONV}", "MSG#2026-09-28T11:58:30+00:00#msg-photo")][
+    sent_image.rows[(f"CONV#{CONV}", "MSG#msg-photo")][
         "attachment_ids"
     ] = [ATTACHMENT, foreign]
     _dispatch_to(sent_image, TEACHER)
@@ -415,7 +418,7 @@ def test_the_detail_names_more_attachments_than_one_batch_read_holds(
 
     many = [f"att-140-{index:03d}" for index in range(101)]
     sent_image.seed(*(_attachment_row(value) for value in many))
-    sent_image.rows[(f"CONV#{CONV}", "MSG#2026-09-28T11:59:00+00:00#msg-text")][
+    sent_image.rows[(f"CONV#{CONV}", "MSG#msg-text")][
         "attachment_ids"
     ] = many
     reads = _BatchReads(sent_image)

@@ -48,7 +48,8 @@ from stoa.services import (
     locale_service,
     star_map_candidates,
 )
-from stoa.services.ask_question import _answering, _store, _transcript, dispatch
+from stoa.services.ask_question import _answering, _store, dispatch
+from stoa.services.learning_session import _store as learning_session_store
 from stoa.services.ask_question.models import SendMessageRequest, message_request_fingerprint
 from stoa.services.document_extraction_service import (
     DocumentExtractionFailure,
@@ -115,7 +116,7 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
             "updated_at": "2026-09-24T08:00:00+00:00",
         }
     )
-    for module in (conversations, _answering, _transcript, attachment_repo):
+    for module in (conversations, _answering, learning_session_store, attachment_repo):
         monkeypatch.setattr(module, "get_table", lambda table=table: table)
     monkeypatch.setattr(
         conversations.account_deletion_repo, "get_table", lambda: table, raising=False

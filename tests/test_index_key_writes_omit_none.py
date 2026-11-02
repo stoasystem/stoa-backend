@@ -34,8 +34,9 @@ from stoa.config import Settings
 from stoa.db.repositories import account_deletion_repo, curriculum_ops_repo, usage_ledger_repo
 from stoa.models.billing import BillingPlanId
 from stoa.routers import conversations
+from stoa.services import learning_session
+from stoa.services.learning_session import _store as learning_session_store
 from stoa.services.ask_question import _answering
-from stoa.services.ask_question import _transcript
 from stoa.services import (
     curriculum_ops_service,
     help_requests,
@@ -244,7 +245,7 @@ def test_a_repeat_conversation_help_request_after_a_failed_ledger_write_records_
     )
     monkeypatch.setattr(conversations, "get_table", lambda: table)
     monkeypatch.setattr(_answering, "get_table", lambda: table)
-    monkeypatch.setattr(_transcript, "get_table", lambda: table)
+    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
     service = conversations.teacher_support_allowance_service
     monkeypatch.setattr(
@@ -334,9 +335,9 @@ def _conversation_replay_scaffold(
     table.seed(row)
     monkeypatch.setattr(conversations, "get_table", lambda: table)
     monkeypatch.setattr(_answering, "get_table", lambda: table)
-    monkeypatch.setattr(_transcript, "get_table", lambda: table)
+    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
-    monkeypatch.setattr(conversations, "read_conversation", lambda _conv_id: dict(row))
+    monkeypatch.setattr(learning_session, "read", lambda _conv_id: dict(row))
     service = conversations.teacher_support_allowance_service
 
     def replayed(**_kwargs: object) -> object:

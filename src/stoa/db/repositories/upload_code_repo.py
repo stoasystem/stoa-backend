@@ -81,10 +81,3 @@ def claim_code(
 def delete_code(code_id: str, *, table: Any | None = None) -> None:
     (table or get_table()).delete_item(Key=code_key(code_id))
 
-
-def get_conversation(conversation_id: str, *, table: Any | None = None) -> dict[str, Any] | None:
-    response = (table or get_table()).get_item(
-        Key={"PK": f"CONV#{conversation_id}", "SK": "CONV"}, ConsistentRead=True
-    )
-    item = response.get("Item") if isinstance(response, dict) else None
-    return item if isinstance(item, dict) else None

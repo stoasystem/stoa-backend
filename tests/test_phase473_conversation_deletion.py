@@ -13,7 +13,7 @@ from fakes.ask_question import DELETION_NOW as NOW
 from fakes.ask_question import PRIVATE_CONVERSATION as CONVERSATION_ID
 from fakes.ask_question import _private_message as _message
 from stoa.db.repositories import attachment_repo
-from stoa.services import account_deletion_service, attachment_service
+from stoa.services import account_deletion_service, attachment_service, learning_session
 
 
 def _contract(name: str) -> Any:
@@ -65,7 +65,8 @@ def test_conversation_source_registry_closes_rows_writers_and_private_fields() -
 
 
 def test_every_conversation_write_transaction_starts_with_exact_account_fence() -> None:
-    build = _contract("build_conversation_write_transaction")
+    # The session's fenced write moved to learning_session with the record (#226).
+    build = learning_session.build_conversation_write_transaction
     operations = build(
         item=_message(),
         owner_id=STUDENT_ID,
@@ -84,7 +85,8 @@ def test_direct_router_writes_are_forbidden_by_static_writer_gate() -> None:
     source = Path("src/stoa/routers/conversations.py").read_text()
     assert ".put_item(" not in source
     assert ".update_item(" not in source
-    assert "create_conversation_record" in source
+    # A conversation is opened through the session's own fenced write (#226).
+    assert "learning_session.open(" in source
     # The help request is written by its own module (#189), through the same
     # fenced conversation writes, never a direct put or update.
     assert "help_requests.ask(" in source
@@ -101,6 +103,16 @@ def test_direct_router_writes_are_forbidden_by_static_writer_gate() -> None:
         package_source = path.read_text(encoding="utf-8")
         assert ".put_item(" not in package_source, path.name
         assert ".update_item(" not in package_source, path.name
+    # So does the learning session's (#226): only `_store.py` reaches the table.
+    session = Path("src/stoa/services/learning_session")
+    session_modules = sorted(
+        path for path in session.glob("*.py") if path.name != "_store.py"
+    )
+    assert {"__init__.py", "_history.py"} <= {path.name for path in session_modules}
+    for path in session_modules:
+        session_source = path.read_text(encoding="utf-8")
+        assert ".put_item(" not in session_source, path.name
+        assert ".update_item(" not in session_source, path.name
 
 
 def test_private_row_discovery_is_strong_paginated_and_scrub_is_allowlisted() -> None:

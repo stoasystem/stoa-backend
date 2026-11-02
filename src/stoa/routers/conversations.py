@@ -10,7 +10,6 @@ Implements the frontend chat API contract:
 """
 import json
 import logging
-import uuid
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any, Literal, NamedTuple, NoReturn, cast
@@ -25,7 +24,6 @@ from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import (
     account_deletion_repo,
-    attachment_repo,
     practice_repo,
     user_repo,
 )
@@ -63,23 +61,13 @@ from stoa.services import (
     attachment_service,
     help_requests,
     learning_profile_service,
+    learning_session,
     locale_service,
     message_catalog,
     practice_context_service,
     teacher_dispatch_service,
     teacher_support_allowance_service,
     usage_ledger_service,
-)
-from stoa.services.ask_question._transcript import (
-    DynamoConversationTable,
-    active_conversation_generation,
-    conv_pk,
-    conversation_grade,
-    conversation_response_items,
-    msg_sk,
-    read_conversation,
-    read_messages,
-    required_conversation_text,
 )
 from stoa.services.ask_question.models import (
     ChatMessage,
@@ -89,11 +77,17 @@ from stoa.services.ask_question.models import (
     PracticeContextReference,
     SendMessageRequest,
     SendMessageResponse,
-    stored_quote,
+    chat_message,
     stored_structured,
     structured_payload,
-    target_unit,
     message_request_fingerprint,
+)
+from stoa.services.learning_session import (
+    DynamoConversationTable,
+    active_conversation_generation,
+    conversation_grade,
+    conversation_response_items,
+    required_conversation_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -246,11 +240,7 @@ def _checked_quote_part(conv_id: str, quote: MessageQuote | None) -> None:
     part = None if quote is None else quote.source.part
     if quote is None or part is None:
         return
-    table = cast(DynamoConversationTable, get_table())
-    item = table.get_item(
-        Key={"PK": conv_pk(conv_id), "SK": msg_sk(quote.source.id)},
-        ConsistentRead=True,
-    ).get("Item")
+    item = learning_session.stored_message(conv_id, quote.source.id)
     # Only an assistant answer is stored with sections.
     structured = stored_structured(item.get("structured")) if isinstance(item, Mapping) else None
     if (
@@ -523,9 +513,7 @@ def _adopt_question_as_title(
     current = conversation.get("title")
     if not isinstance(current, str) or current not in placeholders:
         return
-    attachment_repo.retitle_conversation(
-        conv_id, title=title, expected_title=current, now_iso=_now()
-    )
+    learning_session.retitle(conv_id, title=title, expected_title=current, now_iso=_now())
 
 
 def _naming_the_conversation(refusal: HTTPException, conv_id: str) -> HTTPException:
@@ -569,7 +557,6 @@ async def create_conversation(
     # Before anything is written: an id that names no exercise this student can
     # be shown leaves no half-opened conversation behind.
     practice_context = _resolved_practice_context(student_id, body.practiceContext)
-    conv_id = str(uuid.uuid4())
     now = _now()
     title = (
         _title_from_question(body.initialMessage)
@@ -577,26 +564,11 @@ async def create_conversation(
         else _default_conversation_title(body.subject, body.grade)
     )
 
-    table = get_table()
-    conv_item: dict[str, object] = {
-        "PK": conv_pk(conv_id),
-        "SK": "CONV",
-        "conversation_id": conv_id,
-        "student_id": student_id,
-        "entity_type": "conversation",
-        "subject": body.subject,
-        "grade": body.grade,
-        "title": title,
-        "created_at": now,
-        "updated_at": now,
-    }
-    generation = active_conversation_generation(student_id, table)
-    attachment_repo.create_conversation_record(
-        conv_item,
-        owner_id=student_id,
-        generation=generation,
-        table=table,
+    conv_item = learning_session.open(
+        student_id, subject=body.subject, grade=body.grade, title=title, now=now
     )
+    conv_id = str(conv_item["conversation_id"])
+    generation = int(cast(int, conv_item["account_fence_generation"]))
 
     messages: list[ChatMessage] = []
     if body.initialMessage:
@@ -656,36 +628,17 @@ async def get_conversation(
         authorized_conversation_dependency(
             action=AuthorizationAction.READ,
             purposes=CONVERSATION_CONTENT_READ,
-            resolver=lambda conversation_id: read_conversation(conversation_id),
+            resolver=lambda conversation_id: learning_session.read(conversation_id),
         )
     ),
 ):
     conv_id = authorized.ref.resource_id
     conv = _conversation_record(authorized.value)
 
-    raw_messages = read_messages(conv_id)
-    attachment_ids = [value for message in raw_messages for value in message.get("attachment_ids", [])]
+    history = learning_session.history(conv_id)
+    attachment_ids = [value for message in history for value in message.attachment_ids]
     attachment_summaries = attachment_service.list_attachment_summaries(attachment_ids)
-    messages = [
-        ChatMessage(
-            id=m["message_id"],
-            conversationId=conv_id,
-            role=m["role"],
-            content=m["content"],
-            createdAt=m["created_at"],
-            status="sent",
-            attachments=[
-                attachment_summaries[value]
-                for value in m.get("attachment_ids", [])
-                if value in attachment_summaries
-            ],
-            authorName=_author_name(m),
-            quote=stored_quote(m.get("quote")),
-            structured=stored_structured(m.get("structured")),
-            targetUnit=target_unit(m.get("target_unit_id")),
-        )
-        for m in raw_messages
-    ]
+    messages = [chat_message(m, attachment_summaries) for m in history]
 
     return ConversationDetail(
         id=conv_id,
@@ -715,7 +668,7 @@ async def get_generation_progress(
         authorized_conversation_dependency(
             action=AuthorizationAction.READ,
             purposes=CONVERSATION_CONTENT_READ,
-            resolver=lambda conversation_id: read_conversation(conversation_id),
+            resolver=lambda conversation_id: learning_session.read(conversation_id),
         )
     ),
     idempotency_key: str | None = Query(
@@ -751,7 +704,7 @@ async def send_message(
         authorized_conversation_dependency(
             action=AuthorizationAction.RESPOND,
             purposes=STUDENT_SELF,
-            resolver=lambda conversation_id: read_conversation(conversation_id),
+            resolver=lambda conversation_id: learning_session.read(conversation_id),
         )
     ),
     message_command: dict = Depends(_message_command_dependency),
@@ -797,7 +750,7 @@ async def stream_message(
         authorized_conversation_dependency(
             action=AuthorizationAction.RESPOND,
             purposes=STUDENT_SELF,
-            resolver=lambda conversation_id: read_conversation(conversation_id),
+            resolver=lambda conversation_id: learning_session.read(conversation_id),
         )
     ),
     message_command: dict = Depends(_message_command_dependency),
@@ -922,12 +875,12 @@ async def _teacher_help_conversation_dependency(
         audit_sink=audit_sink,
         action=AuthorizationAction.UPDATE,
         purposes=STUDENT_SELF,
-        resolver=read_conversation,
+        resolver=learning_session.read,
     )
 
 
 async def _teacher_help_conversation_metadata_resolver(conversation_id: str):
-    return read_conversation(conversation_id)
+    return learning_session.read(conversation_id)
 
 
 setattr(_teacher_help_conversation_dependency, "authorization_specs", (
@@ -1091,14 +1044,6 @@ def _teacher_help_response(
     )
 
 
-def _author_name(message: Mapping[str, Any]) -> str | None:
-    """The name a teacher message was written under; no other message has one."""
-    name = message.get("author_name")
-    if message.get("role") != "teacher" or not isinstance(name, str):
-        return None
-    return name.strip() or None
-
-
 def _teacher_name(teacher_id: object) -> str | None:
     if not isinstance(teacher_id, str) or not teacher_id:
         return None
@@ -1117,7 +1062,7 @@ async def withdraw_teacher_help_request(
         authorized_conversation_dependency(
             action=AuthorizationAction.UPDATE,
             purposes=STUDENT_SELF,
-            resolver=lambda conversation_id: read_conversation(conversation_id),
+            resolver=lambda conversation_id: learning_session.read(conversation_id),
         )
     ),
 ):
@@ -1172,7 +1117,7 @@ async def get_teacher_help_status(
         authorized_conversation_dependency(
             action=AuthorizationAction.READ,
             purposes=CONVERSATION_CONTENT_READ,
-            resolver=lambda conversation_id: read_conversation(conversation_id),
+            resolver=lambda conversation_id: learning_session.read(conversation_id),
         )
     ),
 ):

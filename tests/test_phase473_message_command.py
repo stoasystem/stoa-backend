@@ -32,6 +32,7 @@ from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from stoa.db.repositories import attachment_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import conversations
+from stoa.services import learning_session
 from stoa.services.ask_question import _answering
 from stoa.security.attachment_errors import AttachmentDecisionError
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
@@ -151,8 +152,8 @@ def test_regular_and_sse_get_item_transport_faults_share_safe_retry(
             raise TimeoutError("get-item-provider-coordinate-private-canary")
 
     monkeypatch.setattr(
-        conversations,
-        "read_conversation",
+        learning_session,
+        "read",
         lambda *_: {
             "conversation_id": "conv-1",
             "student_id": "student-1",

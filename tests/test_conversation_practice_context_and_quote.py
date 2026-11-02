@@ -27,7 +27,7 @@ from fakes.dynamodb import as_stored
 from stoa.db.repositories import practice_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import conversations
-from stoa.services.ask_question import _answering
+from stoa.services import learning_session
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import (
     ask_answer,
@@ -378,8 +378,8 @@ def test_an_archived_exercise_is_not_visible_to_the_student(monkeypatch):
 def test_an_unresolvable_practice_context_is_four_twenty_two(monkeypatch):
     _stub_curriculum(monkeypatch)
     monkeypatch.setattr(
-        conversations,
-        "read_conversation",
+        learning_session,
+        "read",
         lambda conv_id: {
             "conversation_id": conv_id,
             "student_id": STUDENT,
@@ -406,8 +406,8 @@ def test_an_unresolvable_practice_context_is_four_twenty_two(monkeypatch):
 
 def test_a_quote_over_the_cap_is_four_twenty_two_over_http(monkeypatch):
     monkeypatch.setattr(
-        conversations,
-        "read_conversation",
+        learning_session,
+        "read",
         lambda conv_id: {
             "conversation_id": conv_id,
             "student_id": STUDENT,
@@ -779,8 +779,8 @@ def test_a_message_without_the_new_fields_hands_the_model_neither(table, model):
 def test_a_quoted_message_is_read_back_with_its_quote(monkeypatch):
     quote = {"text": "1/4 + 1/4 = 1/8", "source": {"kind": "challenge", "id": "challenge-1"}}
     monkeypatch.setattr(
-        conversations,
-        "read_conversation",
+        learning_session,
+        "read",
         lambda conv_id: {
             "conversation_id": conv_id,
             "student_id": STUDENT,
@@ -791,31 +791,8 @@ def test_a_quoted_message_is_read_back_with_its_quote(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        conversations,
-        "read_messages",
-        lambda conv_id: [
-            {
-                "message_id": "m1",
-                "conversation_id": conv_id,
-                "student_id": STUDENT,
-                "role": "student",
-                "content": "warum?",
-                "created_at": "2026-10-09T00:00:00+00:00",
-                "quote": quote,
-            },
-            {
-                "message_id": "m2",
-                "conversation_id": conv_id,
-                "student_id": STUDENT,
-                "role": "assistant",
-                "content": "weil ...",
-                "created_at": "2026-10-09T00:00:01+00:00",
-            },
-        ],
-    )
-    monkeypatch.setattr(
-        _answering,
-        "read_messages",
+        learning_session,
+        "history_rows",
         lambda conv_id: [
             {
                 "message_id": "m1",
@@ -971,8 +948,8 @@ def test_an_exercise_cannot_be_declared_under_a_lesson_it_does_not_belong_to(mon
 def test_the_same_mismatch_is_four_twenty_two_over_http(monkeypatch):
     _stub_curriculum(monkeypatch, challenges=_two_lesson_rows(), catalog=_two_lesson_catalog())
     monkeypatch.setattr(
-        conversations,
-        "read_conversation",
+        learning_session,
+        "read",
         lambda conv_id: {
             "conversation_id": conv_id,
             "student_id": STUDENT,
