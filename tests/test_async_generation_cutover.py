@@ -18,52 +18,28 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 
-from stoa.jobs import conversation_generation
-from stoa.routers import conversations
-from stoa.services import ai_service
-from test_message_command_generation import (  # noqa: F401 - fixtures
+from fakes.ask_question import (
     CONV,
     QUESTION,
+    WORKER_ALIAS,
     _client,
     _command_row,
     _events,
     _generation,
     _messages,
     _send,
+    default_language,
 )
-from test_message_command_generation import default_language
-from test_message_command_generation import model as model  # noqa: F401 - the fixture
-from test_message_command_generation import table as table  # noqa: F401 - the fixture
-
-WORKER_ALIAS = "arn:aws:lambda:eu-central-2:111122223333:function:stoa-conversation-generation:production"
-
-
-class _Invokes:
-    """Stands in for the asynchronous Lambda invoke; records every event."""
-
-    def __init__(self) -> None:
-        self.events: list[dict[str, Any]] = []
-        self.failure: BaseException | None = None
-
-    def __call__(self, event: dict[str, Any]) -> None:
-        self.events.append(event)
-        if self.failure is not None:
-            raise self.failure
-
-
-@pytest.fixture
-def invokes(monkeypatch: pytest.MonkeyPatch) -> _Invokes:
-    invokes = _Invokes()
-    monkeypatch.setattr(conversations, "_invoke_generation_worker", invokes)
-    return invokes
-
-
-@pytest.fixture
-def switched_on(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        conversations.settings, "conversation_generation_function_name", WORKER_ALIAS
-    )
+from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fixture
+from fakes.ask_question import invokes as invokes  # noqa: F401 - the fixture
+from fakes.ask_question import model as model  # noqa: F401 - the fixture
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from stoa.jobs import conversation_generation
+from stoa.routers import conversations
+from stoa.services import ai_service
+from stoa.services.ask_question import _answering, dispatch
 
 
 def _deliver(event: dict[str, Any]) -> dict[str, Any]:
@@ -71,7 +47,7 @@ def _deliver(event: dict[str, Any]) -> dict[str, Any]:
 
 
 def test_the_request_returns_once_the_message_is_stored(
-    table, model, invokes, switched_on
+    table, model, invokes
 ) -> None:
     response = _send(_client(), "key-1")
 
@@ -89,7 +65,7 @@ def test_the_request_returns_once_the_message_is_stored(
 
 
 def test_the_worker_then_writes_the_answer_the_poll_reports(
-    table, model, invokes, switched_on
+    table, model, invokes
 ) -> None:
     client = _client()
     _send(client, "key-1", language="fr")
@@ -104,7 +80,7 @@ def test_the_worker_then_writes_the_answer_the_poll_reports(
 
 
 def test_a_lost_invoke_leaves_the_command_for_the_sweep(
-    table, model, invokes, switched_on
+    table, model, invokes
 ) -> None:
     invokes.failure = RuntimeError("Lambda service unavailable")
 
@@ -122,19 +98,17 @@ def test_a_lost_invoke_leaves_the_command_for_the_sweep(
     assert _command_row(table, "key-1")["status"] == "completed"
 
 
-def test_switched_off_the_answer_comes_back_on_the_request_as_before(
-    table, model, invokes
-) -> None:
+def test_switched_off_the_answer_comes_back_on_the_request_as_before(table, model) -> None:
+    """No worker named, no worker invoked: `dispatch` answers in the request."""
     response = _send(_client(), "key-1")
 
     assert response.status_code == 200
     assert _events(response)[-1][0] == "message_done"
     assert len(model.calls) == 1
-    assert invokes.events == []
 
 
 def test_the_same_key_after_the_answer_replays_it_on_the_request(
-    table, model, invokes, switched_on
+    table, model, invokes
 ) -> None:
     client = _client()
     _send(client, "key-1")
@@ -149,7 +123,7 @@ def test_the_same_key_after_the_answer_replays_it_on_the_request(
 
 
 def test_a_retry_of_a_failed_answer_reads_as_waiting_until_the_worker_answers(
-    table, model, invokes, switched_on
+    table, model, invokes
 ) -> None:
     """The chat reads the command while the retry is on its way.
 
@@ -179,7 +153,7 @@ def test_a_retry_of_a_failed_answer_reads_as_waiting_until_the_worker_answers(
 
 
 def test_a_late_copy_of_a_retry_does_not_spend_another_attempt(
-    table, model, invokes, switched_on
+    table, model, invokes
 ) -> None:
     client = _client()
     model.outcomes = [
@@ -198,7 +172,7 @@ def test_a_late_copy_of_a_retry_does_not_spend_another_attempt(
     assert _generation(client, "key-1")["attempt"] == 2
 
 
-def test_a_retry_whose_invoke_is_lost_is_swept(table, model, invokes, switched_on) -> None:
+def test_a_retry_whose_invoke_is_lost_is_swept(table, model, invokes) -> None:
     client = _client()
     model.outcomes = [ai_service.AIInvocationFailure("deadline_exceeded")]
     _send(client, "key-1")
@@ -217,13 +191,13 @@ def test_a_retry_whose_invoke_is_lost_is_swept(table, model, invokes, switched_o
 
 
 def test_a_failure_that_may_not_be_retried_is_not_reopened(
-    table, model, invokes, switched_on, monkeypatch: pytest.MonkeyPatch
+    table, model, invokes, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        conversations, "_message_allowance_metadata_from_failure", lambda *_a, **_k: {}
+        _answering, "_message_allowance_metadata_from_failure", lambda *_a, **_k: {}
     )
-    monkeypatch.setattr(conversations, "_observe_message_provider_usage", lambda **_k: True)
-    monkeypatch.setattr(conversations, "_restore_message_allowance", lambda **_k: True)
+    monkeypatch.setattr(_answering, "_observe_message_provider_usage", lambda **_k: True)
+    monkeypatch.setattr(_answering, "_restore_message_allowance", lambda **_k: True)
     client = _client()
     model.outcomes = [ai_service.AIInvocationFailure("incomplete_output")]
     _send(client, "key-1")
@@ -237,18 +211,18 @@ def test_a_failure_that_may_not_be_retried_is_not_reopened(
 
 
 def test_an_answer_longer_than_the_gateway_waits_no_longer_holds_the_request(
-    table, model, invokes, switched_on, monkeypatch: pytest.MonkeyPatch
+    table, model, invokes, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The audit's last latency contract: a 30-second answer and a 29-second gateway."""
     clock = {"now": 0.0}
 
-    answer = conversations.ask_answer.answer
+    answer = _answering.ask_answer.answer
 
     def thirty_second_answer(*args: Any, **kwargs: Any) -> Any:
         clock["now"] += 30.0
         return answer(*args, **kwargs)
 
-    monkeypatch.setattr(conversations.ask_answer, "answer", thirty_second_answer)
+    monkeypatch.setattr(_answering.ask_answer, "answer", thirty_second_answer)
 
     response = _send(_client(), "key-1")
 
@@ -259,7 +233,7 @@ def test_an_answer_longer_than_the_gateway_waits_no_longer_holds_the_request(
 
 
 def test_the_first_message_of_a_new_conversation_is_handed_over_too(
-    table, model, invokes, switched_on
+    table, model, invokes
 ) -> None:
     response = _client().post(
         "/conversations",
@@ -275,9 +249,13 @@ def test_the_first_message_of_a_new_conversation_is_handed_over_too(
     assert model.calls == []
 
 
-def test_the_invoke_is_asynchronous_and_names_the_worker_alias(
-    monkeypatch: pytest.MonkeyPatch, switched_on
+def test_a_named_worker_is_invoked_asynchronously_at_its_alias(
+    table, model, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """The switch itself: a configured worker name is what hands the answer over."""
+    monkeypatch.setattr(
+        dispatch.settings, "conversation_generation_function_name", WORKER_ALIAS
+    )
     calls: list[dict[str, Any]] = []
 
     class _Lambda:
@@ -288,14 +266,17 @@ def test_the_invoke_is_asynchronous_and_names_the_worker_alias(
     clients: list[dict[str, Any]] = []
 
     def client(service: str, **kwargs: Any) -> _Lambda:
-        clients.append(kwargs)
+        clients.append({"service": service, **kwargs})
         return _Lambda()
 
-    monkeypatch.setattr(conversations.boto3, "client", client)
+    monkeypatch.setattr(dispatch.boto3, "client", client)
 
-    conversations._invoke_generation_worker({"conversation_id": CONV, "idempotency_key": "k"})
+    response = _send(_client(), "k")
 
+    assert response.status_code == 202, response.text
+    assert model.calls == []
     [call] = calls
+    assert clients[0]["service"] == "lambda"
     assert call["FunctionName"] == WORKER_ALIAS
     # Bounded well inside the request's 29 seconds; a slow invoke leaves the
     # command to the sweep rather than the student to a gateway timeout.
@@ -308,22 +289,18 @@ def test_the_invoke_is_asynchronous_and_names_the_worker_alias(
 
 
 def test_a_new_conversation_whose_first_message_failed_names_itself_for_the_retry(
-    monkeypatch: pytest.MonkeyPatch, table, model, invokes, switched_on
+    monkeypatch: pytest.MonkeyPatch, table, model, invokes
 ) -> None:
     # #61: the conversation is stored before its first message is committed.
     # When that fails the error must say which conversation was made, so the
     # student's retry continues it instead of leaving it empty and making another.
-    real_commit = conversations.commit_message_command
-
-    def refused(**kwargs: Any) -> Any:
-        raise conversations._ConversationAllowanceFailure(
-            "allowance_finalization_recoverable",
-            "This answer is safely recoverable while token accounting finishes.",
-            "retry_same_message",
-            503,
-        )
-
-    monkeypatch.setattr(conversations, "commit_message_command", refused)
+    # Token admission refuses an entitlement whose allowance version is damaged.
+    entitlement = _answering.entitlement_service.resolve_student_entitlement
+    monkeypatch.setattr(
+        _answering.entitlement_service,
+        "resolve_student_entitlement",
+        lambda *_a, **_k: {"effectivePlan": "free_trial", "allowanceVersion": -1},
+    )
     response = _client().post(
         "/conversations",
         json={"subject": "Mathematik", "grade": "Grade 6", "initialMessage": QUESTION},
@@ -333,9 +310,12 @@ def test_a_new_conversation_whose_first_message_failed_names_itself_for_the_retr
     detail = response.json()["detail"]
     assert detail["code"] == "allowance_finalization_recoverable"
     conversation_id = detail["conversationId"]
-    assert conversations._get_conversation(conversation_id)["student_id"]
+    assert table.rows[(f"CONV#{conversation_id}", "CONV")]["student_id"]
+    assert _messages(table, "student") == []
 
-    monkeypatch.setattr(conversations, "commit_message_command", real_commit)
+    monkeypatch.setattr(
+        _answering.entitlement_service, "resolve_student_entitlement", entitlement
+    )
     retry = _client().post(
         f"/conversations/{conversation_id}/messages/stream",
         json={"content": QUESTION, "idempotencyKey": f"initial-{conversation_id}"},
@@ -345,14 +325,12 @@ def test_a_new_conversation_whose_first_message_failed_names_itself_for_the_retr
 
 
 def test_any_refusal_of_the_first_message_with_a_structured_body_names_the_conversation(
-    monkeypatch: pytest.MonkeyPatch, table, model, invokes, switched_on
+    monkeypatch: pytest.MonkeyPatch, table, model, invokes
 ) -> None:
-    from fastapi import HTTPException
-
-    def refused(**kwargs: Any) -> Any:
+    def refused(*_args: Any, **_kwargs: Any) -> Any:
         raise HTTPException(status_code=409, detail={"code": "some_conflict", "message": "No."})
 
-    monkeypatch.setattr(conversations, "commit_message_command", refused)
+    monkeypatch.setattr(conversations.ask_question, "submit", refused)
     response = _client().post(
         "/conversations",
         json={"subject": "Mathematik", "grade": "Grade 6", "initialMessage": QUESTION},
@@ -361,18 +339,17 @@ def test_any_refusal_of_the_first_message_with_a_structured_body_names_the_conve
     assert response.status_code == 409, response.text
     detail = response.json()["detail"]
     assert detail["code"] == "some_conflict"
-    assert conversations._get_conversation(detail["conversationId"])
+    assert (f"CONV#{detail['conversationId']}", "CONV") in table.rows
 
 
 def test_the_daily_message_limit_refusing_a_first_message_names_the_conversation(
-    monkeypatch: pytest.MonkeyPatch, table, model, invokes, switched_on, stub_memory_summary
+    monkeypatch: pytest.MonkeyPatch, table, model, invokes, stub_memory_summary
 ) -> None:
     # The refusal a first message really meets (review of 3bef709d): the daily
     # message limit raises an attachment decision, not an HTTP error, and the
     # request answered 500 with the conversation left behind.
     before = {row["conversation_id"] for row in table.rows.values() if row.get("SK") == "CONV"}
-    daily_limit = conversations._chat_limit_for_student
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 0)
+    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 0)
 
     response = _client().post(
         "/conversations",
@@ -389,7 +366,7 @@ def test_the_daily_message_limit_refusing_a_first_message_names_the_conversation
     made = {row["conversation_id"] for row in table.rows.values() if row.get("SK") == "CONV"} - before
     assert made == {detail["conversationId"]}
 
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", daily_limit)
+    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 50)
     retry = _client().post(
         f"/conversations/{detail['conversationId']}/messages/stream",
         json={"content": QUESTION, "idempotencyKey": f"initial-{detail['conversationId']}"},

@@ -14,270 +14,39 @@ reads the map is made of (the catalog and the student's mastery) are replaced.
 
 from __future__ import annotations
 
-import io
 import json
-import re
 from datetime import UTC, datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 import time_machine
 
+from fakes.ask_question import (
+    CONV,
+    FREE,
+    LOCALES,
+    QUESTION,
+    TITLES,
+    TOPICS,
+    _answer,
+    _catalog,
+    _client,
+    _done,
+    _follow_up,
+    _send,
+    _shown_stars,
+    _student_turn,
+)
+from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fixture
+from fakes.ask_question import bedrock as bedrock  # noqa: F401 - the fixture
+from fakes.ask_question import invokes as invokes  # noqa: F401 - the fixture
+from fakes.ask_question import star_map as star_map  # noqa: F401 - the fixture
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from fakes.dynamodb import transaction_canceled
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
-from stoa.services import (
-    curriculum_service,
-    knowledge_mastery_service,
-    star_map_candidates,
-)
+from stoa.services import curriculum_service
 from stoa.services.ask_question import _store as ask_question_store
-from test_async_generation_cutover import invokes as invokes  # noqa: F401 - the fixture
-from test_async_generation_cutover import switched_on as switched_on  # noqa: F401
-from test_conversation_token_finalization import _patch_allowance_table
-from test_message_command_generation import (  # noqa: F401 - fixtures
-    CONV,
-    QUESTION,
-    _client,
-    _events,
-    _send,
-)
-from test_message_command_generation import _no_memory_personalisation  # noqa: F401
-from test_message_command_generation import table as table  # noqa: F401 - the fixture
-from test_token_allowances import AtomicAllowanceTable
-
-_READ_THE_MAP = star_map_candidates.for_student
-
-LOCALES = ("de", "en", "fr", "it")
-
-# The catalog as `curriculum_service.list_catalog` builds it, one title per
-# language. `ohne-lektion` has no active lesson, so the map does not draw it.
-TITLES: dict[str, dict[str, str]] = {
-    "brueche-kuerzen": {
-        "de": "Brüche kürzen",
-        "en": "Simplifying fractions",
-        "fr": "Simplifier des fractions",
-        "it": "Semplificare le frazioni",
-    },
-    "teiler-vielfache": {
-        "de": "Teiler und Vielfache",
-        "en": "Divisors and multiples",
-        "fr": "Diviseurs et multiples",
-        "it": "Divisori e multipli",
-    },
-    "kraefte": {
-        "de": "Kräfte und Bewegung",
-        "en": "Forces and motion",
-        "fr": "Forces et mouvement",
-        "it": "Forze e moto",
-    },
-    "ohne-lektion": {
-        "de": "Noch ohne Lektion",
-        "en": "No lesson yet",
-        "fr": "Pas encore de leçon",
-        "it": "Ancora senza lezione",
-    },
-}
-STATES = {
-    "brueche-kuerzen": knowledge_mastery_service.LearningState.LIT,
-    "teiler-vielfache": knowledge_mastery_service.LearningState.IN_PROGRESS,
-    "kraefte": knowledge_mastery_service.LearningState.READY,
-    "ohne-lektion": knowledge_mastery_service.LearningState.READY,
-}
-SUBJECT_OF = {
-    "brueche-kuerzen": ("math", "brueche"),
-    "teiler-vielfache": ("math", "brueche"),
-    "kraefte": ("physics", "mechanik"),
-    "ohne-lektion": ("math", "brueche"),
-}
-
-TOPICS: dict[str, dict[str, str]] = {
-    "brueche": {"de": "Brüche", "en": "Fractions", "fr": "Fractions", "it": "Frazioni"},
-    "mechanik": {"de": "Mechanik", "en": "Mechanics", "fr": "Mécanique", "it": "Meccanica"},
-}
-
-# What the model writes on its own, in the language of the answer.
-FREE: dict[str, str] = {
-    "de": "Brüche im Alltag",
-    "en": "Fractions in everyday life",
-    "fr": "Les fractions au quotidien",
-    "it": "Le frazioni nella vita quotidiana",
-}
-
-
-def _catalog(*, locale: str = "de", **_kwargs: Any) -> dict[str, Any]:
-    return {
-        "subjects": [{"id": "math", "order": 1}, {"id": "physics", "order": 2}],
-        "topics": [
-            {"id": "brueche", "subjectId": "math", "title": TOPICS["brueche"][locale], "order": 1},
-            {"id": "mechanik", "subjectId": "physics", "title": TOPICS["mechanik"][locale], "order": 1},
-        ],
-        "units": [
-            {
-                "id": unit_id,
-                "subjectId": SUBJECT_OF[unit_id][0],
-                "topicId": SUBJECT_OF[unit_id][1],
-                "title": titles[locale],
-                "order": order,
-            }
-            for order, (unit_id, titles) in enumerate(TITLES.items(), start=1)
-        ],
-        "lessons": [],
-    }
-
-
-def _states(student_id: str, **_kwargs: Any) -> dict[str, knowledge_mastery_service.UnitMastery]:
-    return {
-        unit_id: knowledge_mastery_service.UnitMastery(
-            unit_id=unit_id,
-            topic_id=SUBJECT_OF[unit_id][1],
-            subject_id=SUBJECT_OF[unit_id][0],
-            state=state,
-            progress=0.0,
-            unmet_exercises=0,
-            lesson_count=0 if unit_id == "ohne-lektion" else 1,
-            lessons_done=0,
-            next_lesson=None,
-        )
-        for unit_id, state in STATES.items()
-    }
-
-
-class _Reads:
-    """How often each read the map is made of was made."""
-
-    def __init__(self) -> None:
-        self.catalog = 0
-        self.states = 0
-
-
-@pytest.fixture
-def star_map(monkeypatch: pytest.MonkeyPatch) -> _Reads:
-    """The map as its reads would return it for this student, counted."""
-    reads = _Reads()
-
-    def catalog(**kwargs: Any) -> dict[str, Any]:
-        reads.catalog += 1
-        return _catalog(**kwargs)
-
-    def states(student_id: str, **kwargs: Any) -> dict[str, knowledge_mastery_service.UnitMastery]:
-        reads.states += 1
-        return _states(student_id, **kwargs)
-
-    monkeypatch.setattr(star_map_candidates, "for_student", _READ_THE_MAP)
-    monkeypatch.setattr(star_map_candidates, "_content", {})
-    monkeypatch.setattr(curriculum_service, "list_catalog", catalog)
-    monkeypatch.setattr(knowledge_mastery_service, "indexed_lessons", lambda: {})
-    monkeypatch.setattr(knowledge_mastery_service, "unit_states", states)
-    return reads
-
-
-# ── The provider ─────────────────────────────────────────────────────────────
-
-
-def _student_turn(body: dict[str, Any]) -> str:
-    return str([turn for turn in body["messages"] if turn["role"] == "user"][-1]["content"])
-
-
-def _shown_stars(body: dict[str, Any]) -> dict[str, str]:
-    """The stars the model was shown, by name, as `ref` - read the way a model would."""
-    turn = _student_turn(body)
-    match = re.search(r"<(star_map-[0-9a-f]+)>\n(.*?)\n</\1>", turn, re.DOTALL)
-    if match is None:
-        return {}
-    stars = {}
-    for line in match.group(2).splitlines():
-        if line.startswith("#"):
-            continue  # a subject or topic heading
-        parts = [part.strip() for part in line.split("|")]
-        if len(parts) == 3:
-            stars[parts[1]] = parts[0]
-    return stars
-
-
-Answer = Callable[[dict[str, Any]], dict[str, Any]]
-
-
-class _Bedrock:
-    """The Bedrock runtime as boto3 hands it out; each answer is written from the request."""
-
-    def __init__(self) -> None:
-        self.bodies: list[dict[str, Any]] = []
-        self.answers: list[Answer] = []
-
-    def count_tokens(self, **_kwargs: object) -> dict[str, object]:
-        return {"inputTokens": 90, "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "c"}}
-
-    def _answer(self, body: str) -> str:
-        request = json.loads(body)
-        self.bodies.append(request)
-        return json.dumps(self.answers.pop(0)(request), ensure_ascii=False)
-
-    def invoke_model(self, *, modelId: str, body: str):  # noqa: N803 - boto3 casing
-        payload = {
-            "id": "msg_test_1",
-            "model": modelId,
-            "stop_reason": "end_turn",
-            "content": [{"text": self._answer(body)}],
-            "usage": {"input_tokens": 10, "output_tokens": 5},
-        }
-        return {"ResponseMetadata": {"RequestId": "r"}, "body": io.BytesIO(json.dumps(payload).encode())}
-
-    def invoke_model_with_response_stream(self, *, modelId: str, body: str):  # noqa: N803
-        text = self._answer(body)
-        events = [
-            {"type": "message_start", "message": {
-                "id": "msg_test_1", "model": modelId, "usage": {"input_tokens": 70},
-            }},
-            {"type": "content_block_delta", "delta": {"text": text}},
-            {"type": "message_delta", "delta": {"stop_reason": "end_turn"},
-             "usage": {"output_tokens": 25}},
-        ]
-        return {
-            "ResponseMetadata": {"RequestId": "r"},
-            "body": [{"chunk": {"bytes": json.dumps(event).encode()}} for event in events],
-        }
-
-
-@pytest.fixture
-def bedrock(table, monkeypatch: pytest.MonkeyPatch) -> _Bedrock:
-    provider = _Bedrock()
-    _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    monkeypatch.setattr(conversations.ai_service.boto3, "client", lambda *_a, **_k: provider)
-    return provider
-
-
-def _answer(points: Callable[[dict[str, str]], list[Any]]) -> Answer:
-    """A new question's answer, naming `points(stars shown)` as its knowledge points."""
-
-    def write(request: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "steps": ["Zähler und Nenner durch den ggT teilen", "Das Ergebnis prüfen"],
-            "answer": "So kürzt man einen Bruch.",
-            "hints": ["Was ist der ggT von 6 und 8?"],
-            "similar_exercises": ["Kürze 9/12."],
-            "knowledge_points": points(_shown_stars(request)),
-            "suggest_teacher": False,
-        }
-
-    return write
-
-
-def _follow_up(request: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "steps": [],
-        "answer": "Der ggT ist die grösste Zahl, die beide teilt.",
-        "hints": [],
-        "similar_exercises": [],
-        "knowledge_points": [],
-        "suggest_teacher": False,
-    }
-
-
-def _done(response) -> dict[str, Any]:
-    assert response.status_code == 200, response.text
-    [done] = [data for name, data in _events(response) if name == "message_done"]
-    return done
 
 
 def _read_back(client) -> list[dict[str, Any]]:
@@ -545,7 +314,7 @@ def test_the_same_question_sent_again_is_recorded_once(table, bedrock, star_map)
 
 
 def test_the_worker_s_answer_after_a_202_is_checked_and_recorded_once(
-    table, bedrock, star_map, invokes, switched_on
+    table, bedrock, star_map, invokes
 ) -> None:
     bedrock.answers = [
         _answer(
@@ -575,7 +344,7 @@ class _Killed(BaseException):
 
 
 def test_an_attempt_that_dies_before_storing_its_answer_counts_nothing(
-    table, bedrock, star_map, invokes, switched_on, monkeypatch: pytest.MonkeyPatch
+    table, bedrock, star_map, invokes, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The answer counts when it is stored, by the attempt that stores it."""
     bedrock.answers = [_answer(lambda _stars: [{"id": None, "name": "Brüche im Alltag"}])]

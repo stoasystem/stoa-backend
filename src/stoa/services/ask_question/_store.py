@@ -532,7 +532,7 @@ def kept_answer_attempt(command: Mapping[str, object]) -> int | None:
     """The attempt that called the model and stored its answer on the command.
 
     None unless the stored answer is the called attempt's own, which is what
-    recovery finishes from (`conversations._stored_provider_result`). Storing
+    recovery finishes from (`_answering._stored_provider_result`). Storing
     it needs no model call, so it is finished even when that attempt was the
     last (E28).
     """

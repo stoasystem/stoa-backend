@@ -51,6 +51,7 @@ from stoa.deps import (
     get_settings,
 )
 from stoa.routers import conversations, upload_codes
+from stoa.services.ask_question import _answering, _transcript
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import attachment_service, rate_limit, upload_code_service
@@ -131,6 +132,8 @@ class _Api:
     ) -> None:
         for module in (
             conversations,
+            _answering,
+            _transcript,
             attachment_repo,
             upload_code_repo,
             rate_limit,
@@ -145,12 +148,12 @@ class _Api:
         self.s3 = MultipartS3(BUCKET)
         self.moderation = moderation or FakeRekognition()
         self.settings = settings or Settings(s3_images_bucket=BUCKET)
-        monkeypatch.setattr(conversations.boto3, "client", lambda *_a, **_k: self.s3)
+        monkeypatch.setattr(_answering.boto3, "client", lambda *_a, **_k: self.s3)
         self.model = answer_without_allowance(monkeypatch, FakeBedrock(answer=ANSWER))
-        monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 50)
-        monkeypatch.setattr(conversations, "_attachment_plan_for_student", lambda *_: "free_trial")
+        monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 50)
+        monkeypatch.setattr(_answering, "_attachment_plan_for_student", lambda *_: "free_trial")
         monkeypatch.setattr(
-            conversations.entitlement_service,
+            _answering.entitlement_service,
             "resolve_student_entitlement",
             lambda *_a, **_k: {"effectivePlan": "free_trial", "allowanceVersion": 1},
         )

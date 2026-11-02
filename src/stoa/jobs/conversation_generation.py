@@ -14,7 +14,7 @@ never sent again (E24), a command whose last attempt died, and one whose lease
 ran out with nobody taking it up in the window (E27). It is restored with the
 cost recorded at the reservation's ceiling.
 
-Either way the work is `conversations.generate_for_command`, which claims the
+Either way the work is `ask_question.answer`, which claims the
 command's lease conditionally, so a duplicate delivery finds the lease held or
 the answer stored and leaves. How an attempt that ran out is recovered - again,
 finished from the answer it kept, or `needs_reconciliation` - is decided there
@@ -31,10 +31,8 @@ from typing import Any
 
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import allowance_repo
-from stoa.routers import conversations
-from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.private_telemetry import emit_private_event
-from stoa.services import allowance_service, runtime_budget_service
+from stoa.services import allowance_service, ask_question, runtime_budget_service
 from stoa.services.ask_question import _store as ask_question_store
 
 logger = logging.getLogger(__name__)
@@ -131,42 +129,10 @@ def generate_one(conversation_id: str, idempotency_key: str) -> str:
     """Take one command to its answer if it still needs one.
 
     Returns `completed`, `failed` (the command says why), `held` (another
-    delivery holds its lease), `settled` (it needs nothing) or `missing`.
+    delivery holds its lease), `settled` (it needs nothing) or `missing`; the
+    question module decides which (`ask_question.answer`).
     """
-    command = ask_question_store.get_message_command(conversation_id, idempotency_key)
-    if not isinstance(command, dict):
-        return "missing"
-    if command.get("status") == "failed":
-        # Whether it may be tried again is the student's to act on, with the
-        # same key (the request reopens it); a late or repeated delivery must
-        # not spend their attempts.
-        return "settled"
-    fingerprint = command.get("fingerprint")
-    owner_id = command.get("owner_id")
-    if not isinstance(fingerprint, str) or not isinstance(owner_id, str):
-        return "settled"
-    state = ask_question_store.classify_message_command(
-        command,
-        owner_id=owner_id,
-        fingerprint=fingerprint,
-        now_epoch=int(datetime.now(UTC).timestamp()),
-    )
-    if state.disposition is ask_question_store.MessageCommandDisposition.LEASE_HELD:
-        return "held"
-    if state.disposition is not ask_question_store.MessageCommandDisposition.RESUME:
-        return "settled"
-    try:
-        committed = conversations.load_committed_message(command)
-        conversations.generate_for_command(committed)
-    except AttachmentDecisionError as error:
-        if error.code is AttachmentErrorCode.MESSAGE_IN_PROGRESS:
-            return "held"
-        logger.warning("conversation_generation_failed code=%s", error.code.value)
-        return "failed"
-    except conversations._ConversationAllowanceFailure as failure:
-        logger.warning("conversation_generation_failed code=%s", failure.code)
-        return "failed"
-    return "completed"
+    return ask_question.answer(conversation_id, idempotency_key)
 
 
 def run_sweep(context: Any) -> SweepSummary:

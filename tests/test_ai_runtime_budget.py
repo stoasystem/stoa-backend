@@ -8,6 +8,10 @@ already used the time up. This is the interim fix; answers that need more than
 the Lambda's lifetime are E11's.
 """
 
+# #206 改写: the allowance-client tests here build
+# `_answering._ConversationAllowanceBedrockClient` and read the deadline
+# constants directly; they are rewritten when "AI 消息准入" (#206) lands.
+
 from __future__ import annotations
 
 import asyncio
@@ -16,10 +20,17 @@ from typing import Any
 
 import pytest
 
-from stoa.routers import conversations
+from fakes.ask_question import (
+    NOW,
+    _COMPLETE,
+    _command,
+    _patch_allowance_table,
+    _run_message_command,
+)
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from stoa.services import ai_service, runtime_budget_service
-from test_conversation_token_finalization import NOW, _command, _patch_allowance_table
-from test_token_allowances import AtomicAllowanceTable
+from stoa.services.ask_question import _answering
+from fakes.ask_question import AtomicAllowanceTable
 
 
 ANSWER = {"steps": ["Count the four equal parts."], "answer": "One half.", "hints": []}
@@ -154,7 +165,7 @@ def test_the_allowance_wrapper_uses_the_same_transport_limits(
     built = _factory(monkeypatch, provider)
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
     client = (
-        conversations._ConversationAllowanceBedrockClient(_command())
+        _answering._ConversationAllowanceBedrockClient(_command())
         if through_allowance
         else None
     )
@@ -181,7 +192,7 @@ def test_no_generation_starts_once_admission_has_used_up_the_time(
     table = AtomicAllowanceTable()
     _patch_allowance_table(monkeypatch, table)
     command = _command()
-    client = conversations._ConversationAllowanceBedrockClient(command)
+    client = _answering._ConversationAllowanceBedrockClient(command)
 
     with pytest.raises(ai_service.AIInvocationFailure) as failure:
         _answer(client, clock, deadline=20.0)
@@ -195,7 +206,7 @@ def test_no_generation_starts_once_admission_has_used_up_the_time(
     clock.now = 0.0
     retry_provider = _Provider(clock)
     _factory(monkeypatch, retry_provider)
-    retry = conversations._ConversationAllowanceBedrockClient(command)
+    retry = _answering._ConversationAllowanceBedrockClient(command)
     assert _answer(retry, clock, deadline=20.0).content == ANSWER
     assert len(retry_provider.invocations) == 1
     effects = [i for i in table.items.values() if i.get("entity_type") == "allowance_effect"]
@@ -222,33 +233,31 @@ def test_an_answer_that_takes_ten_seconds_still_succeeds(
     provider = _Provider(clock, count_at=1.0, answer_at=10.0)
     _factory(monkeypatch, provider)
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    client = conversations._ConversationAllowanceBedrockClient(_command())
+    client = _answering._ConversationAllowanceBedrockClient(_command())
 
     assert _answer(client, clock, deadline=20.0).content == ANSWER
     assert provider.invocations == [1.0]
 
 
 def test_the_message_route_gives_the_answer_the_requests_deadline(
-    monkeypatch: pytest.MonkeyPatch,
+    table, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     seen: list[float | None] = []
-    real = conversations.ask_answer.answer
+    real = _answering.ask_answer.answer
 
     def spy(asked: Any, asker: Any, call: Any, **kwargs: Any) -> Any:
         seen.append(call.deadline_monotonic)
         return real(asked, asker, call, **kwargs)
 
-    monkeypatch.setattr(conversations.ask_answer, "answer", spy)
+    monkeypatch.setattr(_answering.ask_answer, "answer", spy)
     monkeypatch.setattr(
-        conversations.runtime_budget_service,
+        _answering.runtime_budget_service,
         "ai_deadline",
         lambda **kwargs: 12_345.0 if kwargs == {
-            "fixed_seconds": conversations._AI_INVOCATION_DEADLINE_SECONDS,
-            "reserve_seconds": conversations._AI_PERSIST_RESERVE_SECONDS,
+            "fixed_seconds": _answering._AI_INVOCATION_DEADLINE_SECONDS,
+            "reserve_seconds": _answering._AI_PERSIST_RESERVE_SECONDS,
         } else pytest.fail(f"unexpected budget arguments {kwargs}"),
     )
-    from test_truncated_ai_output import _COMPLETE, _run_message_command
-
     _run_message_command(monkeypatch, text=_COMPLETE, stop_reason="end_turn")
 
     assert seen == [12_345.0]

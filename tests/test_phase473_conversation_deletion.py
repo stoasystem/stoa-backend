@@ -163,6 +163,13 @@ def test_direct_router_writes_are_forbidden_by_static_writer_gate() -> None:
     assert ".put_item(" not in help_source
     assert ".update_item(" not in help_source
     assert "build_conversation_write_transaction" in help_source
+    # The question package writes through its repository, `_store.py`, alone
+    # (#204); the modules in front of it never put or update a row themselves.
+    package = Path("src/stoa/services/ask_question")
+    for name in ("__init__.py", "_answering.py", "dispatch.py", "_transcript.py"):
+        package_source = (package / name).read_text(encoding="utf-8")
+        assert ".put_item(" not in package_source, name
+        assert ".update_item(" not in package_source, name
 
 
 def test_private_row_discovery_is_strong_paginated_and_scrub_is_allowlisted() -> None:

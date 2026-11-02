@@ -1,54 +1,54 @@
-import json
-import asyncio
 import hashlib
-import inspect
 import subprocess
 import sys
 import threading
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 import pytest
 from datetime import datetime, timezone
 
 from audit_helpers import MemoryAuthorizationAuditSink
-from fakes.bedrock import FakeBedrock, answer_without_allowance
 from fakes.dynamodb import as_stored as _as_stored
 from stoa.db.repositories import attachment_repo, question_repo, user_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.config import Settings
 from stoa.services import locale_service, message_catalog
 from stoa.routers import conversations
+from stoa.services.ask_question import _answering
+from stoa.services.ask_question import _transcript
 from stoa.models.attachment import AttachmentStatus, AttachmentSummary
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
-from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
+from stoa.security.identity import CanonicalRole, CapabilityGrant
+from stoa.services import ask_question
 from stoa.services.ask_question import _store as ask_question_store
-
-
-def test_message_command_remains_the_authoritative_chat_quota_path() -> None:
-    source = inspect.getsource(conversations.commit_message_command)
-
-    assert "claim_message_command_and_quota" in source
+from stoa.services.ask_question import dispatch
+from stoa.services import attachment_service
+from uuid import UUID, uuid5
+from fakes.ask_question import (
+    CONV,
+    QUESTION,
+    _actor,
+    _command_row,
+    _commit,
+    _messages,
+    _parse_in_process,
+    _submit,
+    _upload,
+)
+from fakes.ask_question import _client as _question_client
+from fakes.ask_question import _events as _sse_events
+from fakes.ask_question import bucket as bucket  # noqa: F401 - the fixture
+from fakes.ask_question import model as model  # noqa: F401 - the fixture
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
 
 
 @pytest.fixture(autouse=True)
 def _no_memory_personalisation(stub_memory_summary) -> None:
     """Message-command tests mock every other I/O dependency; do the same for
     the adaptive-memory lookup the AI prompt enrichment performs."""
-
-
-def _actor(role=CanonicalRole.STUDENT, user_id="student-1", grants=()):
-    return Actor(
-        user_id,
-        "https://identity.test",
-        f"{user_id}-subject",
-        role,
-        AccountStatus.ACTIVE,
-        role.value,
-        tuple(grants),
-    )
 
 
 def _client(router, prefix: str = "/conversations", actor=None) -> TestClient:
@@ -92,6 +92,8 @@ def _with_help_request(monkeypatch, **fields):
             }
         )
     monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
     _owned_conversation(monkeypatch)
     return table
 
@@ -264,6 +266,8 @@ def test_teacher_help_retryable_admission_stays_out_of_student_words(monkeypatch
     )
     table = _escalation_table()
     monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
     monkeypatch.setattr(
         conversations,
         "_get_conversation",
@@ -284,34 +288,33 @@ def test_teacher_help_retryable_admission_stays_out_of_student_words(monkeypatch
     assert "admission" not in detail["message"].lower()
 
 
-def test_conversation_list_and_create_derive_owner_from_actor(monkeypatch):
+def test_conversation_list_and_create_derive_owner_from_actor(table, monkeypatch):
     listed = []
-    stored = []
 
-    class Table:
-        def put_item(self, Item):
-            stored.append(Item)
+    def stored() -> list[dict[str, Any]]:
+        return [row for row in table.rows.values() if row.get("SK") == "CONV"]
 
+    already = len(stored())
     monkeypatch.setattr(
         conversations,
         "_list_conversations",
         lambda student_id: listed.append(student_id)
         or conversations.ConversationListPage([], False),
     )
-    monkeypatch.setattr(conversations, "get_table", lambda: Table())
     client = _client(conversations.router)
     assert client.get("/conversations").status_code == 200
     created = client.post("/conversations", json={"subject": "math", "grade": "Sek1"})
     assert created.status_code == 201
     assert listed == ["student-1"]
-    assert stored[0]["student_id"] == "student-1"
+    [new] = [row for row in stored() if row["conversation_id"] == created.json()["id"]]
+    assert new["student_id"] == "student-1"
 
     substituted = client.post(
         "/conversations",
         json={"subject": "math", "grade": "Sek1", "studentId": "student-2"},
     )
     assert substituted.status_code == 422
-    assert len(stored) == 1
+    assert len(stored()) == already + 1
 
 
 def test_conversation_owner_and_exact_admin_capability_positive_controls(monkeypatch):
@@ -326,6 +329,7 @@ def test_conversation_owner_and_exact_admin_capability_positive_controls(monkeyp
     }
     monkeypatch.setattr(conversations, "_get_conversation", lambda *_: conv)
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
     owner = _client(conversations.router).get("/conversations/conv-1")
     grant = CapabilityGrant("student_content_review", "student:student-1", 1)
     admin = _client(
@@ -388,6 +392,7 @@ def test_current_linked_teacher_can_read_but_stale_teacher_is_hidden(monkeypatch
     }
     monkeypatch.setattr(conversations, "_get_conversation", lambda *_: conv)
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
     monkeypatch.setattr(question_repo, "get_question", lambda *_: question)
     monkeypatch.setattr(question_repo, "get_teacher_session", lambda *_: None)
     monkeypatch.setattr(question_repo, "get_teacher_assignment", lambda *_: None)
@@ -403,46 +408,40 @@ def test_current_linked_teacher_can_read_but_stale_teacher_is_hidden(monkeypatch
     assert stale.json()["detail"]["code"] == "resource_not_found"
 
 
-def test_other_actor_and_random_conversation_are_hidden_before_stream_bytes(monkeypatch):
-    calls = []
-    real = {"conversation_id": "conv-real", "student_id": "student-1"}
-    monkeypatch.setattr(
-        conversations,
-        "_get_conversation",
-        lambda conv_id: real if conv_id == "conv-real" else None,
-    )
-    monkeypatch.setattr(
-        conversations,
-        "_execute_message_command",
-        lambda **_kwargs: calls.append("message") or None,
-    )
-    client = _client(conversations.router, actor=_actor(user_id="student-2"))
+def test_other_actor_and_random_conversation_are_hidden_before_stream_bytes(
+    table, model
+) -> None:
+    client = _question_client(actor=_actor(user_id="student-2"))
     payload = {"content": "swap", "idempotencyKey": "hidden-check"}
-    hidden = client.post("/conversations/conv-real/messages/stream", json=payload)
+    before = dict(table.rows)
+
+    hidden = client.post(f"/conversations/{CONV}/messages/stream", json=payload)
     missing = client.post("/conversations/conv-random/messages/stream", json=payload)
+
     assert hidden.status_code == missing.status_code == 404
     assert hidden.json()["detail"]["code"] == missing.json()["detail"]["code"]
-    assert calls == []
+    assert table.rows == before
+    assert model.calls == []
 
 
-def test_conversation_store_outage_returns_503_before_message_mutation(monkeypatch):
-    calls = []
-    monkeypatch.setattr(
-        conversations,
-        "_get_conversation",
-        lambda *_: (_ for _ in ()).throw(TimeoutError("store canary")),
+def test_conversation_store_outage_returns_503_before_message_mutation(
+    table, model, monkeypatch
+) -> None:
+    def outage(**_kwargs: Any) -> Any:
+        raise TimeoutError("store canary")
+
+    monkeypatch.setattr(table, "get_item", outage)
+    before = dict(table.rows)
+
+    response = _question_client().post(
+        f"/conversations/{CONV}/messages",
+        json={"content": "hello", "idempotencyKey": "store-outage"},
     )
-    monkeypatch.setattr(
-        conversations,
-        "_execute_message_command",
-        lambda **_kwargs: calls.append("message") or None,
-    )
-    response = _client(conversations.router).post(
-        "/conversations/conv-1/messages", json={"content": "hello", "idempotencyKey": "store-outage"}
-    )
+
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "authorization_temporarily_unavailable"
-    assert calls == []
+    assert table.rows == before
+    assert model.calls == []
 
 
 def _attachment_summary() -> AttachmentSummary:
@@ -514,374 +513,81 @@ def test_message_fingerprint_is_versioned_typed_ordered_and_exact() -> None:
     assert reproduced == baseline
 
 
-def _completed_command(body: conversations.SendMessageRequest) -> dict:
-    command_id = str(
-        conversations.uuid5(
-            conversations.NAMESPACE_URL,
-            f"stoa.conversation.send.v1:conv-1:{body.idempotencyKey}",
-        )
-    )
-    student_id = str(conversations.uuid5(conversations.UUID(command_id), "student-message"))
-    assistant_id = str(
-        conversations.uuid5(conversations.UUID(command_id), "assistant-message")
-    )
-    response = conversations.SendMessageResponse(
-        studentMessage=conversations.ChatMessage(
-            id=student_id, conversationId="conv-1", role="student",
-            content=body.content, createdAt="2026-07-16T00:00:00Z",
-        ),
-        assistantMessage=conversations.ChatMessage(
-            id=assistant_id, conversationId="conv-1", role="assistant",
-            content="original answer", createdAt="2026-07-16T00:00:01Z",
-        ),
-    )
-    requested = [
-        {
-            "kind": "upload" if reference.upload_id else "attachment",
-            "id": str(reference.upload_id or reference.attachment_id),
-            "attachment_id": (
-                str(conversations.uuid5(conversations.UUID(command_id), f"attachment:{index}"))
-                if reference.upload_id
-                else str(reference.attachment_id)
-            ),
-        }
-        for index, reference in enumerate(body.attachmentIds or [])
-    ]
-    return _as_stored({
-        "entity_type": "message_command",
-        "schema_version": "message-command.v2",
-        "command_id": command_id,
-        "conversation_id": "conv-1",
-        "owner_id": "student-1",
-        "idempotency_key": body.idempotencyKey,
-        "fingerprint": conversations.message_request_fingerprint(body),
-        "status": "completed",
-        "student_message_id": student_id,
-        "assistant_message_id": assistant_id,
-        "attachment_count": len(requested),
-        "requested_attachments": requested,
-        "deterministic_attachment_ids": [
-            item["attachment_id"]
-            for item in requested
-            if item["kind"] == "upload"
-        ],
-        "history_message_ids": [],
-        "history_fingerprint": conversations._history_snapshot_fingerprint([]),
-        "history_anchor_message_id": student_id,
-        "history_anchor_created_at": "2026-07-16T00:00:00Z",
-        "created_at": "2026-07-16T00:00:00Z",
-        "result_json": response.model_dump_json(),
-    })
+def _counted(monkeypatch, module: Any, name: str, counts: dict[str, int], key: str) -> None:
+    """Count each call of `module.name`, which still runs."""
+    real = getattr(module, name)
+
+    def counted(*args: Any, **kwargs: Any) -> Any:
+        counts[key] = counts.get(key, 0) + 1
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(module, name, counted)
 
 
 def test_stage_a_completed_replay_bypasses_consumed_upload_resolution(
-    monkeypatch, caplog
+    table, model, bucket, monkeypatch, caplog
 ) -> None:
-    body = conversations.SendMessageRequest.model_validate(
-        {
-            "content": "exact bytes",
-            "idempotencyKey": "replay-key",
-            "attachmentIds": [{"uploadId": "now-consumed"}],
-        }
-    )
-    command = _completed_command(body)
-    effects = []
-    monkeypatch.setattr(conversations, "get_table", lambda: object())
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "prepare_message_attachments",
-        lambda *_args, **_kwargs: effects.append("prepare"),
-    )
-    result = conversations._execute_message_command(
-        conv_id="conv-1", student_id="student-1", subject="math", grade="Sek1",
-        body=body,
-        command_context={
-            "actor": _actor(),
-            "fingerprint": conversations.message_request_fingerprint(body),
-            "existing": command,
-        },
-    )
-    assert result.studentMessage.id == command["student_message_id"]
-    assert result.assistantMessage.id == command["assistant_message_id"]
-    assert effects == []
-    assert "exact bytes" not in caplog.text
-    assert "original answer" not in caplog.text
-
-
-def test_stage_a_mismatch_fails_before_attachment_lookup(monkeypatch) -> None:
-    body = conversations.SendMessageRequest.model_validate(
-        {"content": "changed", "idempotencyKey": "same-key"}
-    )
-    effects = []
-    monkeypatch.setattr(
-        ask_question_store,
-        "get_message_command",
-        lambda *_args, **_kwargs: {
-            "owner_id": "student-1", "fingerprint": "0" * 64, "status": "completed"
-        },
-    )
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "prepare_message_attachments",
-        lambda *_args, **_kwargs: effects.append("prepare"),
-    )
-    with pytest.raises(HTTPException) as captured:
-        asyncio.run(
-            conversations._message_command_dependency(
-                "conv-1", body, _actor(), "correlation-1"
-            )
-        )
-    detail = captured.value.detail
-    assert isinstance(detail, dict)
-    assert detail["code"] == "message_idempotency_conflict"
-    assert effects == []
-
-
-def test_new_foreign_attachment_has_zero_command_quota_or_ai_effect(monkeypatch) -> None:
-    body = conversations.SendMessageRequest.model_validate(
-        {
-            "content": "private",
-            "idempotencyKey": "foreign-new",
-            "attachmentIds": [{"attachmentId": "foreign"}],
-        }
-    )
-    effects = []
-    monkeypatch.setattr(conversations, "get_table", lambda: object())
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
-    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "prepare_message_attachments",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
-        ),
-    )
-    monkeypatch.setattr(
-        ask_question_store,
-        "claim_message_command_and_quota",
-        lambda **_kwargs: effects.append("claim"),
-    )
-    monkeypatch.setattr(
-        conversations.ask_answer, "answer", lambda *_args, **_kwargs: effects.append("ai")
-    )
-    with pytest.raises(AttachmentDecisionError) as captured:
-        conversations._execute_message_command(
-            conv_id="conv-1", student_id="student-1", subject="math", grade="Sek1",
-            body=body,
-            command_context={
-                "actor": _actor(),
-                "fingerprint": conversations.message_request_fingerprint(body),
-                "existing": None,
-            },
-        )
-    assert captured.value.code is AttachmentErrorCode.UPLOAD_NOT_FOUND
-    assert effects == []
-
-
-def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
-    monkeypatch,
-) -> None:
-    body = conversations.SendMessageRequest.model_validate(
-        {
-            "content": "concurrent exact content",
-            "idempotencyKey": "concurrent-key",
-            "attachmentIds": [{"uploadId": "fresh-upload-1"}],
-        }
-    )
-    fingerprint = conversations.message_request_fingerprint(body)
-    command_state: dict[str, Any] = {}
-    effects = {"claim": 0, "bind": 0, "extract": 0, "ai": 0, "complete": 0}
-    lock = threading.Lock()
-    claim_barrier = threading.Barrier(2)
-    summary = _attachment_summary()
-    deterministic_attachment_ids = []
-
-    monkeypatch.setattr(conversations, "get_table", lambda: object())
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
-    monkeypatch.setattr(
-        conversations, "_attachment_plan_for_student", lambda *_: "free_trial"
-    )
-    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
-    monkeypatch.setattr(conversations.time, "sleep", lambda *_: threading.Event().wait(0.01))
-    monkeypatch.setattr(conversations.boto3, "client", lambda *_args, **_kwargs: object())
-    monkeypatch.setattr(conversations.user_repo, "get_user", lambda _id, **_kwargs: {})
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "prepare_message_attachments",
-        lambda *_args, **_kwargs: [("upload", {"upload_id": "fresh-upload-1"})],
-    )
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "ensure_message_attachment_capacity",
-        lambda *_args, **_kwargs: None,
-    )
-
-    def claim(**kwargs):
-        claim_barrier.wait()
-        with lock:
-            effects["claim"] += 1
-            if command_state:
-                return ask_question_store.MessageCommandResult(
-                    ask_question_store.MessageCommandDisposition.RESUME,
-                    command=dict(command_state),
-                    counter_value=int(command_state.get("counter_value", 0)),
-                )
-            command_state.update(kwargs["command"])
-            command_state["counter_value"] = 1
-            return True, 1
-
-    def bind(**kwargs):
-        with lock:
-            effects["bind"] += 1
-            deterministic_attachment_ids.append(
-                tuple(kwargs["deterministic_attachment_ids"])
-            )
-            command_state["status"] = "message_committed"
-        return [summary]
-
-    def get_command(*_args, **_kwargs):
-        with lock:
-            return dict(command_state) if command_state else None
-
-    def claim_ai(**kwargs):
-        with lock:
-            if command_state.get("status") != "message_committed":
-                return False, int(command_state.get("attempt", 0))
-            command_state.update(
-                status="ai_running", leaseOwner=kwargs["lease_owner"], attempt=1
-            )
-            return True, 1
-
-    def complete(**kwargs):
-        with lock:
-            effects["complete"] += 1
-            command_state.update(status="completed", result_json=kwargs["result_json"])
-        return True
-
-    monkeypatch.setattr(ask_question_store, "claim_message_command_and_quota", claim)
-    monkeypatch.setattr(ask_question_store, "get_message_command", get_command)
-    monkeypatch.setattr(ask_question_store, "claim_message_ai_lease", claim_ai)
-    monkeypatch.setattr(
-        ask_question_store, "renew_message_ai_lease", lambda **_kwargs: True
-    )
-    monkeypatch.setattr(ask_question_store, "complete_message_command", complete)
-    monkeypatch.setattr(conversations.attachment_service, "bind_message_attachments", bind)
-    def extract_context(*_args: object, **_kwargs: object) -> object:
-        effects["extract"] += 1
-        return conversations.attachment_service.AttachmentContextResult(
-            conversations.attachment_service.AttachmentContextDisposition.READY
-        )
-
-    model = answer_without_allowance(
-        monkeypatch, FakeBedrock(answer={"steps": ["one"], "answer": "safe", "hints": []})
-    )
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "extract_message_attachment_context",
-        extract_context,
-    )
-    results = []
-    failures = []
-
-    def run():
-        try:
-            results.append(
-                conversations._execute_message_command(
-                    conv_id="conv-1",
-                    student_id="student-1",
-                    subject="math",
-                    grade="Sek1",
-                    body=body,
-                    command_context={"actor": _actor(), "fingerprint": fingerprint, "existing": None},
-                )
-            )
-        except Exception as exc:  # pragma: no cover - assertion reports details
-            failures.append(exc)
-
-    threads = [threading.Thread(target=run) for _ in range(2)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-    assert failures == []
-    assert len(results) == 2
-    assert results[0].model_dump() == results[1].model_dump()
-    effects["ai"] = len(model.requests)
-    assert effects == {
-        "claim": 2, "bind": 1, "extract": 1, "ai": 1, "complete": 1
+    _parse_in_process(monkeypatch)
+    _upload(table, bucket, "now-consumed", b"private notes", filename="notes.txt", media_type="text/plain")
+    effects: dict[str, int] = {}
+    _counted(monkeypatch, attachment_service, "prepare_message_attachments", effects, "prepare")
+    payload = {
+        "content": "exact bytes",
+        "idempotencyKey": "replay-key",
+        "attachmentIds": [{"uploadId": "now-consumed"}],
     }
-    expected_attachment_id = str(
-        conversations.uuid5(
-            conversations.UUID(command_state["command_id"]), "attachment:0"
-        )
-    )
-    assert deterministic_attachment_ids == [(expected_attachment_id,)]
+    client = _question_client()
+    first = client.post(f"/conversations/{CONV}/messages", json=payload)
+    assert first.status_code == 200, first.text
+    caplog.clear()
+
+    replay = client.post(f"/conversations/{CONV}/messages", json=payload)
+
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["studentMessage"]["id"] == first.json()["studentMessage"]["id"]
+    assert replay.json()["assistantMessage"]["id"] == first.json()["assistantMessage"]["id"]
+    # The upload the first send consumed is not looked up again.
+    assert effects == {"prepare": 1}
+    assert len(model.calls) == 1
+    assert "exact bytes" not in caplog.text
+    assert "So kürzt man." not in caplog.text
 
 
-def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
-    monkeypatch,
-) -> None:
-    body = conversations.SendMessageRequest.model_validate(
-        {
-            "content": "exact committed content",
-            "idempotencyKey": "committed-lost-response",
-            "attachmentIds": [{"uploadId": "fresh-upload-1"}],
-        }
+def test_stage_a_mismatch_fails_before_attachment_lookup(table, model, monkeypatch) -> None:
+    client = _question_client()
+    sent = client.post(
+        f"/conversations/{CONV}/messages",
+        json={"content": "original", "idempotencyKey": "same-key"},
     )
-    fingerprint = conversations.message_request_fingerprint(body)
-    command_state: dict = {}
-    stored_student: dict = {}
-    stored_attachments: dict[str, dict] = {}
-    effects = {"claim": 0, "bind": 0, "extract": 0, "ai": 0, "complete": 0}
-
-    class Table:
-        def get_item(self, **_kwargs):
-            return {"Item": dict(stored_student)} if stored_student else {}
-
-    table = Table()
-    monkeypatch.setattr(conversations, "get_table", lambda: table)
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    assert sent.status_code == 200, sent.text
+    effects = []
     monkeypatch.setattr(
-        conversations, "_attachment_plan_for_student", lambda *_: "free_trial"
-    )
-    monkeypatch.setattr(
-        conversations,
-        "_get_messages",
-        lambda *_: [dict(stored_student)] if stored_student else [],
-    )
-    monkeypatch.setattr(
-        conversations,
-        "_load_anchored_message_history",
-        lambda **_kwargs: [],
-    )
-    monkeypatch.setattr(conversations.time, "sleep", lambda *_: None)
-    monkeypatch.setattr(conversations.boto3, "client", lambda *_args, **_kwargs: object())
-    monkeypatch.setattr(
-        conversations.attachment_service,
+        attachment_service,
         "prepare_message_attachments",
-        lambda *_args, **_kwargs: [("upload", {"upload_id": "fresh-upload-1"})],
-    )
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "ensure_message_attachment_capacity",
-        lambda *_args, **_kwargs: None,
+        lambda *_args, **_kwargs: effects.append("prepare"),
     )
 
-    def claim(**kwargs):
-        effects["claim"] += 1
-        command_state.update(kwargs["command"], counter_value=1)
-        return True, 1
+    changed = client.post(
+        f"/conversations/{CONV}/messages",
+        json={
+            "content": "changed",
+            "idempotencyKey": "same-key",
+            "attachmentIds": [{"uploadId": "upload-1"}],
+        },
+    )
 
-    def bind(**kwargs):
-        effects["bind"] += 1
-        attachment_id = kwargs["deterministic_attachment_ids"][0]
-        stored_student.update(kwargs["message"], attachment_ids=[attachment_id])
-        stored_attachments[attachment_id] = {
-            **attachment_repo.attachment_key(attachment_id),
-            "attachment_id": attachment_id,
-            "owner_id": "student-1",
-            "student_id": "student-1",
+    assert changed.status_code == 409, changed.text
+    assert changed.json()["detail"]["code"] == "message_idempotency_conflict"
+    assert effects == []
+
+
+def test_new_foreign_attachment_has_zero_command_quota_or_ai_effect(table, model) -> None:
+    table.seed(
+        {
+            **attachment_repo.attachment_key("foreign"),
+            "attachment_id": "foreign",
+            "owner_id": "student-2",
+            "student_id": "student-2",
             "entity_type": "attachment",
             "schema_version": "attachment.v1",
             "original_filename": "notes.txt",
@@ -894,78 +600,115 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
             "immutable_etag": "private-etag-canary",
             "content_sha256": hashlib.sha256(b"private text").hexdigest(),
         }
-        command_state["status"] = "message_committed"
-        raise RuntimeError("committed-response-lost-provider-private-canary")
-
-    def get_command(*_args, **_kwargs):
-        return dict(command_state) if command_state else None
-
-    def claim_ai(**kwargs):
-        command_state.update(
-            status="ai_running", leaseOwner=kwargs["lease_owner"], attempt=1
-        )
-        return True, 1
-
-    def complete(**kwargs):
-        effects["complete"] += 1
-        command_state.update(status="completed", result_json=kwargs["result_json"])
-        return True
-
-    monkeypatch.setattr(ask_question_store, "claim_message_command_and_quota", claim)
-    monkeypatch.setattr(ask_question_store, "get_message_command", get_command)
-    monkeypatch.setattr(
-        conversations.attachment_repo,
-        "get_attachments",
-        lambda *_args, **_kwargs: dict(stored_attachments),
     )
-    monkeypatch.setattr(conversations.attachment_service, "bind_message_attachments", bind)
-    monkeypatch.setattr(ask_question_store, "claim_message_ai_lease", claim_ai)
-    monkeypatch.setattr(
-        ask_question_store, "renew_message_ai_lease", lambda **_kwargs: True
-    )
-    monkeypatch.setattr(ask_question_store, "complete_message_command", complete)
-    def extract_context(*_args: object, **_kwargs: object) -> object:
-        effects["extract"] += 1
-        return conversations.attachment_service.AttachmentContextResult(
-            conversations.attachment_service.AttachmentContextDisposition.READY,
-            context="private text",
-        )
+    before = dict(table.rows)
 
-    model = answer_without_allowance(
-        monkeypatch,
-        FakeBedrock(answer={"steps": [], "answer": "original safe answer", "hints": []}),
-    )
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "extract_message_attachment_context",
-        extract_context,
-    )
-
-    first = conversations._execute_message_command(
-        conv_id="conv-1",
-        student_id="student-1",
-        subject="math",
-        grade="Sek1",
-        body=body,
-        command_context={"actor": _actor(), "fingerprint": fingerprint, "existing": None},
-    )
-    replay = conversations._execute_message_command(
-        conv_id="conv-1",
-        student_id="student-1",
-        subject="math",
-        grade="Sek1",
-        body=body,
-        command_context={
-            "actor": _actor(),
-            "fingerprint": fingerprint,
-            "existing": dict(command_state),
+    response = _question_client().post(
+        f"/conversations/{CONV}/messages",
+        json={
+            "content": "private",
+            "idempotencyKey": "foreign-new",
+            "attachmentIds": [{"attachmentId": "foreign"}],
         },
     )
 
+    assert response.json()["detail"]["code"] == "upload_not_found"
+    assert "canary" not in response.text
+    assert table.rows == before
+    assert model.calls == []
+
+
+def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
+    table, model, bucket, monkeypatch
+) -> None:
+    _parse_in_process(monkeypatch)
+    monkeypatch.setattr(dispatch, "override", dispatch.in_process)
+    _upload(
+        table, bucket, "fresh-upload-1", b"concurrent notes", filename="notes.txt", media_type="text/plain"
+    )
+    claim_barrier = threading.Barrier(2, timeout=5)
+    claim = ask_question_store.claim_message_command_and_quota
+
+    def claim_together(**kwargs: Any) -> Any:
+        claim_barrier.wait()
+        return claim(**kwargs)
+
+    monkeypatch.setattr(ask_question_store, "claim_message_command_and_quota", claim_together)
+    effects: dict[str, int] = {}
+    _counted(monkeypatch, attachment_service, "bind_message_attachments", effects, "bind")
+    _counted(
+        monkeypatch, attachment_service, "extract_message_attachment_context", effects, "extract"
+    )
+    results = []
+    failures = []
+
+    def run() -> None:
+        try:
+            results.append(
+                _submit(
+                    "concurrent-key",
+                    content="concurrent exact content",
+                    attachmentIds=[{"uploadId": "fresh-upload-1"}],
+                )
+            )
+        except Exception as exc:  # pragma: no cover - assertion reports details
+            failures.append(exc)
+
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert failures == []
+    assert len(results) == 2
+    assert results[0].model_dump() == results[1].model_dump()
+    assert effects == {"bind": 1, "extract": 1}
+    assert len(model.calls) == 1
+    assert len(_messages(table, "student")) == len(_messages(table, "assistant")) == 1
+    [quota] = [row for key, row in table.rows.items() if key[1].startswith("CHAT#")]
+    assert quota["count"] == 1
+    command_id = _command_row(table, "concurrent-key")["command_id"]
+    expected_attachment_id = str(uuid5(UUID(command_id), "attachment:0"))
+    assert tuple(attachment_repo.attachment_key(expected_attachment_id).values()) in table.rows
+
+
+def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
+    table, model, bucket, monkeypatch
+) -> None:
+    _parse_in_process(monkeypatch)
+    monkeypatch.setattr(dispatch, "override", dispatch.in_process)
+    _upload(table, bucket, "fresh-upload-1", b"private text", filename="notes.txt", media_type="text/plain")
+    effects: dict[str, int] = {}
+    bind = attachment_service.bind_message_attachments
+
+    def bind_then_lose_the_response(**kwargs: Any) -> Any:
+        effects["bind"] = effects.get("bind", 0) + 1
+        bound = bind(**kwargs)
+        if effects["bind"] == 1:
+            raise RuntimeError("committed-response-lost-provider-private-canary")
+        return bound
+
+    monkeypatch.setattr(attachment_service, "bind_message_attachments", bind_then_lose_the_response)
+    _counted(
+        monkeypatch, attachment_service, "extract_message_attachment_context", effects, "extract"
+    )
+    send = {
+        "content": "exact committed content",
+        "attachmentIds": [{"uploadId": "fresh-upload-1"}],
+    }
+
+    first = _submit("committed-lost-response", **send)
+    replay = _submit("committed-lost-response", **send)
+
     assert first.model_dump() == replay.model_dump()
-    effects["ai"] = len(model.requests)
-    assert effects == {"claim": 1, "bind": 1, "extract": 1, "ai": 1, "complete": 1}
-    assert len(stored_attachments) == 1
+    assert effects == {"bind": 1, "extract": 1}
+    assert len(model.calls) == 1
+    assert len(_messages(table, "student")) == len(_messages(table, "assistant")) == 1
+    [quota] = [row for key, row in table.rows.items() if key[1].startswith("CHAT#")]
+    assert quota["count"] == 1
+    attachments = [row for row in table.rows.values() if row.get("entity_type") == "attachment"]
+    assert len(attachments) == 1
     assert "private-canary" not in first.model_dump_json()
 
 
@@ -1132,132 +875,69 @@ def test_conversation_exact_version_body_closes_once_on_every_extraction_exit(
     assert "provider-canary" not in str(result)
 
 
-def test_message_polling_is_bounded_to_twenty_fifty_millisecond_waits(monkeypatch) -> None:
+def _held_by_another_delivery(table, key: str) -> None:
+    """The command is answered elsewhere right now: its lease is live."""
+    row = dict(_command_row(table, key))
+    row.update(
+        status="ai_running",
+        attempt=1,
+        leaseOwner="another-delivery",
+        expiresAt=int(datetime.now(timezone.utc).timestamp()) + 300,
+    )
+    table.seed(row)
+
+
+def test_message_polling_is_bounded_to_twenty_fifty_millisecond_waits(
+    table, model, monkeypatch
+) -> None:
+    _commit("bounded-key")
+    _held_by_another_delivery(table, "bounded-key")
     sleeps = []
-    monkeypatch.setattr(
-        ask_question_store,
-        "get_message_command",
-        lambda *_args, **_kwargs: {
-            "entity_type": "message_command",
-            "schema_version": "message-command.v2",
-            "status": "ai_running",
-            "owner_id": "student-1",
-            "fingerprint": "f" * 64,
-        },
+    monkeypatch.setattr(_answering.time, "sleep", lambda value: sleeps.append(value))
+
+    response = _question_client().post(
+        f"/conversations/{CONV}/messages",
+        json={"content": QUESTION, "idempotencyKey": "bounded-key"},
     )
-    monkeypatch.setattr(conversations.time, "sleep", lambda value: sleeps.append(value))
-    with pytest.raises(AttachmentDecisionError) as captured:
-        conversations._wait_for_message_command(
-            "conv-1",
-            "bounded-key",
-            "f" * 64,
-            table=object(),
-            owner_id="student-1",
-        )
-    assert captured.value.code is AttachmentErrorCode.MESSAGE_IN_PROGRESS
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["code"] == "message_in_progress"
     assert sleeps == [0.05] * 20
+    assert model.calls == []
 
 
-def _transport_body() -> conversations.SendMessageRequest:
-    return conversations.SendMessageRequest.model_validate(
-        {"content": "transport-private-canary", "idempotencyKey": "transport-key"}
-    )
+def _fails_from_call(monkeypatch, module: Any, name: str, call: int, failure: Exception) -> None:
+    """`module.name` runs as it does until its `call`-th call, which raises `failure`."""
+    real = getattr(module, name)
+    calls = {"count": 0}
 
+    def failing(*args: Any, **kwargs: Any) -> Any:
+        calls["count"] += 1
+        if calls["count"] >= call:
+            raise failure
+        return real(*args, **kwargs)
 
-def _install_transport_happy_path(monkeypatch) -> None:
-    monkeypatch.setattr(conversations, "get_table", lambda: object())
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
-    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "prepare_message_attachments",
-        lambda *_args, **_kwargs: [],
-    )
-    monkeypatch.setattr(
-        ask_question_store,
-        "claim_message_command_and_quota",
-        lambda **_kwargs: (True, 1),
-    )
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "bind_message_attachments",
-        lambda **_kwargs: [],
-    )
-    monkeypatch.setattr(
-        ask_question_store,
-        "claim_message_ai_lease",
-        lambda **_kwargs: (True, 1),
-    )
-    answer_without_allowance(
-        monkeypatch, FakeBedrock(answer={"steps": [], "answer": "safe", "hints": []})
-    )
-    monkeypatch.setattr(
-        ask_question_store,
-        "complete_message_command",
-        lambda **_kwargs: True,
-    )
-
-
-def test_stage_a_transport_is_structured_retry_without_diagnostics(monkeypatch) -> None:
-    body = _transport_body()
-    monkeypatch.setattr(
-        ask_question_store,
-        "get_message_command",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            RuntimeError("stage-a-provider-table-private-canary")
-        ),
-    )
-
-    with pytest.raises(HTTPException) as captured:
-        asyncio.run(
-            conversations._message_command_dependency(
-                "conv-1", body, _actor(), "server-correlation"
-            )
-        )
-
-    assert captured.value.status_code == 503
-    assert captured.value.detail == {
-        "code": "upload_service_unavailable",
-        "message": "Uploads are temporarily unavailable. Try again later.",
-        "correlationId": "server-correlation",
-    }
-    assert captured.value.headers == {
-        "X-Correlation-ID": "server-correlation",
-        "Retry-After": "30",
-    }
-    assert "private-canary" not in str(captured.value.detail)
+    monkeypatch.setattr(module, name, failing)
 
 
 def test_regular_sse_stage_a_transport_has_identical_structured_retry(
-    monkeypatch,
+    table, model, monkeypatch
 ) -> None:
-    monkeypatch.setattr(
-        conversations,
-        "_get_conversation",
-        lambda *_: {
-            "conversation_id": "conv-1",
-            "student_id": "student-1",
-            "subject": "math",
-            "grade": "Sek1",
-            "title": "Mathematics – Sek1",
-            "updated_at": "2026-07-16T00:00:00Z",
-        },
-    )
-    monkeypatch.setattr(
+    _fails_from_call(
+        monkeypatch,
         ask_question_store,
         "get_message_command",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            RuntimeError("regular-sse-stage-a-provider-private-canary")
-        ),
+        1,
+        RuntimeError("regular-sse-stage-a-provider-private-canary"),
     )
     payload = {
         "content": "request-private-canary",
         "idempotencyKey": "regular-sse-transport",
     }
-    client = _client(conversations.router)
+    client = _question_client()
 
-    regular = client.post("/conversations/conv-1/messages", json=payload)
-    streamed = client.post("/conversations/conv-1/messages/stream", json=payload)
+    regular = client.post(f"/conversations/{CONV}/messages", json=payload)
+    streamed = client.post(f"/conversations/{CONV}/messages/stream", json=payload)
 
     for response in (regular, streamed):
         assert response.status_code == 503
@@ -1269,6 +949,7 @@ def test_regular_sse_stage_a_transport_has_identical_structured_retry(
         ]
         assert "private-canary" not in response.text
     assert regular.json()["detail"]["message"] == streamed.json()["detail"]["message"]
+    assert _messages(table, "student") == []
 
 
 @pytest.mark.parametrize(
@@ -1285,221 +966,132 @@ def test_regular_sse_stage_a_transport_has_identical_structured_retry(
     ],
 )
 def test_conversation_repository_transport_stages_are_structured_retry(
-    monkeypatch, stage: str
+    table, model, monkeypatch, stage: str
 ) -> None:
-    body = _transport_body()
-    _install_transport_happy_path(monkeypatch)
+    monkeypatch.setattr(dispatch, "override", dispatch.in_process)
     failure = RuntimeError(f"{stage}-provider-table-private-canary")
 
-    if stage == "command_claim_transport":
-        monkeypatch.setattr(
-            ask_question_store,
-            "claim_message_command_and_quota",
-            lambda **_kwargs: (_ for _ in ()).throw(failure),
-        )
-    elif stage == "attachment_transaction_transport":
-        monkeypatch.setattr(
-            conversations.attachment_service,
-            "bind_message_attachments",
-            lambda **_kwargs: (_ for _ in ()).throw(failure),
-        )
-    elif stage == "race_reread_transport":
-        monkeypatch.setattr(
-            ask_question_store,
-            "claim_message_command_and_quota",
-            lambda **_kwargs: (False, 0),
-        )
-        monkeypatch.setattr(
-            ask_question_store,
-            "get_message_command",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(failure),
-        )
-    elif stage == "ai_lease_transport":
-        monkeypatch.setattr(
-            ask_question_store,
-            "claim_message_ai_lease",
-            lambda **_kwargs: (_ for _ in ()).throw(failure),
-        )
-    elif stage == "ai_lease_reread_transport":
-        monkeypatch.setattr(
-            ask_question_store,
-            "claim_message_ai_lease",
-            lambda **_kwargs: (False, 1),
-        )
-        monkeypatch.setattr(
-            ask_question_store,
-            "get_message_command",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(failure),
-        )
-    elif stage == "terminal_transport":
-        monkeypatch.setattr(
-            ask_question_store,
-            "claim_message_ai_lease",
-            lambda **_kwargs: (False, 3),
-        )
-        monkeypatch.setattr(
-            ask_question_store,
-            "get_message_command",
-            lambda *_args, **_kwargs: {
-                "entity_type": "message_command",
-                "schema_version": "message-command.v2",
-                "status": "ai_running",
-                "owner_id": "student-1",
-                "expiresAt": 0,
-                "attempt": 3,
-                "fingerprint": conversations.message_request_fingerprint(body),
-            },
-        )
-        monkeypatch.setattr(
-            ask_question_store,
-            "mark_message_command_terminal",
-            lambda **_kwargs: (_ for _ in ()).throw(failure),
-        )
-    elif stage == "completion_transport":
-        monkeypatch.setattr(
-            ask_question_store,
-            "complete_message_command",
-            lambda **_kwargs: (_ for _ in ()).throw(failure),
-        )
-    else:
-        monkeypatch.setattr(
-            ask_question_store,
-            "complete_message_command",
-            lambda **_kwargs: False,
-        )
-        monkeypatch.setattr(
-            ask_question_store,
-            "get_message_command",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(failure),
+    def fail(*_args: Any, **_kwargs: Any) -> Any:
+        raise failure
+
+    def held(**_kwargs: Any) -> Any:
+        return ask_question_store.MessageCommandResult(
+            ask_question_store.MessageCommandDisposition.LEASE_HELD, attempt=1
         )
 
-    with pytest.raises(AttachmentDecisionError) as captured:
-        conversations._execute_message_command(
-            conv_id="conv-1",
-            student_id="student-1",
-            subject="math",
-            grade="Sek1",
-            body=body,
-            command_context={
-                "actor": _actor(),
-                "fingerprint": conversations.message_request_fingerprint(body),
-                "existing": None,
-            },
+    if stage == "command_claim_transport":
+        monkeypatch.setattr(ask_question_store, "claim_message_command_and_quota", fail)
+    elif stage == "attachment_transaction_transport":
+        monkeypatch.setattr(attachment_service, "bind_message_attachments", fail)
+    elif stage == "race_reread_transport":
+        # Another request holds the claim; reading what it stored fails. The
+        # first read is the request's own, before anything was claimed.
+        monkeypatch.setattr(ask_question_store, "claim_message_command_and_quota", held)
+        _fails_from_call(monkeypatch, ask_question_store, "get_message_command", 2, failure)
+    elif stage == "ai_lease_transport":
+        monkeypatch.setattr(ask_question_store, "claim_message_ai_lease", fail)
+    elif stage == "ai_lease_reread_transport":
+        monkeypatch.setattr(ask_question_store, "claim_message_ai_lease", held)
+        # Read first by the request, then by the command claim; the third is the wait's.
+        _fails_from_call(monkeypatch, ask_question_store, "get_message_command", 3, failure)
+    elif stage == "terminal_transport":
+        # The lease is refused at the last attempt, and ending the command fails.
+        monkeypatch.setattr(
+            ask_question_store,
+            "claim_message_ai_lease",
+            lambda **_kwargs: ask_question_store.MessageCommandResult(
+                ask_question_store.MessageCommandDisposition.LEASE_HELD, attempt=3
+            ),
         )
+        monkeypatch.setattr(ask_question_store, "mark_message_command_terminal", fail)
+    elif stage == "completion_transport":
+        monkeypatch.setattr(ask_question_store, "complete_message_command", fail)
+    else:
+        # The completing transaction's response is lost, and reading back
+        # whether it landed fails too.
+        transact = attachment_repo.transact
+
+        def lose_the_completion(operations: Any, *, table: Any = None) -> Any:
+            if any(
+                getattr(operation, "kind", None)
+                is attachment_repo.TransactionOperationKind.ASSISTANT_MESSAGE_PUT
+                for operation in operations
+            ):
+                raise attachment_repo.AttachmentTransactionError(
+                    attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
+                )
+            return transact(operations, table=table)
+
+        monkeypatch.setattr(attachment_repo, "transact", lose_the_completion)
+        # After the request's, the claim's and the lease's reads: the read-back.
+        _fails_from_call(monkeypatch, ask_question_store, "get_message_command", 4, failure)
+
+    with pytest.raises(AttachmentDecisionError) as captured:
+        _submit("transport-key", content="transport-private-canary")
 
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
     assert "private-canary" not in str(captured.value)
 
 
-def test_replay_poll_transport_is_structured_retry(monkeypatch) -> None:
-    monkeypatch.setattr(
+def test_replay_poll_transport_is_structured_retry(table, model, monkeypatch) -> None:
+    _commit("transport-key")
+    _held_by_another_delivery(table, "transport-key")
+    monkeypatch.setattr(_answering.time, "sleep", lambda *_: None)
+    # The request's own read finds the lease held; the poll after it fails.
+    _fails_from_call(
+        monkeypatch,
         ask_question_store,
         "get_message_command",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            RuntimeError("replay-poll-provider-table-private-canary")
-        ),
+        2,
+        RuntimeError("replay-poll-provider-table-private-canary"),
     )
 
     with pytest.raises(AttachmentDecisionError) as captured:
-        conversations._wait_for_message_command(
-            "conv-1", "transport-key", "f" * 64, table=object()
-        )
+        _submit("transport-key")
 
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
     assert "private-canary" not in str(captured.value)
 
 
-def test_resume_stored_message_transport_is_structured_retry(monkeypatch) -> None:
-    body = _transport_body()
-    _install_transport_happy_path(monkeypatch)
-    monkeypatch.setattr(
-        conversations,
-        "_get_messages",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            RuntimeError("stored-message-provider-table-private-canary")
-        ),
-    )
+def test_resume_stored_message_transport_is_structured_retry(table, model, monkeypatch) -> None:
+    _commit("transport-key", content="transport-private-canary")
+
+    def outage(**_kwargs: Any) -> Any:
+        raise RuntimeError("stored-message-provider-table-private-canary")
+
+    # Resuming reads the history the command was anchored to, and that read fails.
+    monkeypatch.setattr(table, "query", outage)
 
     with pytest.raises(AttachmentDecisionError) as captured:
-        conversations._execute_message_command(
-            conv_id="conv-1",
-            student_id="student-1",
-            subject="math",
-            grade="Sek1",
-            body=body,
-            command_context={
-                "actor": _actor(),
-                "fingerprint": conversations.message_request_fingerprint(body),
-                "existing": {
-                    "status": "message_committed",
-                    "owner_id": "student-1",
-                    "fingerprint": conversations.message_request_fingerprint(body),
-                    "created_at": "2026-07-16T00:00:00Z",
-                },
-            },
-        )
+        _submit("transport-key", content="transport-private-canary")
 
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
     assert "private-canary" not in str(captured.value)
+    assert model.calls == []
 
 
-def test_regular_and_stream_message_use_identical_safe_attachment_summary(monkeypatch) -> None:
-    summary = _attachment_summary()
-    conv = {
-        "conversation_id": "conv-1",
-        "student_id": "student-1",
-        "subject": "math",
-        "grade": "Sek1",
+def test_regular_and_stream_message_use_identical_safe_attachment_summary(
+    table, model, bucket, monkeypatch
+) -> None:
+    _parse_in_process(monkeypatch)
+    _upload(table, bucket, "upload-notes", b"my notes", filename="notes.txt", media_type="text/plain")
+    payload = {
+        "content": "use notes",
+        "idempotencyKey": "attachment-parity",
+        "attachmentIds": [{"uploadId": "upload-notes"}],
     }
-    calls: list[tuple[object, str]] = []
-    monkeypatch.setattr(conversations, "_get_conversation", lambda *_: conv)
-    def prepare_message_attachments(references: object, actor: Actor) -> list[object]:
-        calls.append((references, actor.user_id))
-        return []
+    client = _question_client()
 
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "prepare_message_attachments",
-        prepare_message_attachments,
-    )
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
-    monkeypatch.setattr(
-        conversations, "_attachment_plan_for_student", lambda *_: "free_trial"
-    )
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "ensure_message_attachment_capacity",
-        lambda *_args, **_kwargs: None,
-    )
-    payload = {"content": "use notes", "idempotencyKey": "attachment-parity", "attachmentIds": [{"attachmentId": "attachment-1"}]}
-    monkeypatch.setattr(ask_question_store, "get_message_command", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        conversations,
-        "_execute_message_command",
-        lambda **kwargs: conversations.SendMessageResponse(
-            studentMessage=conversations.ChatMessage(
-                id="student-message", conversationId=kwargs["conv_id"], role="student",
-                content=kwargs["body"].content, createdAt="2026-07-16T00:00:00Z",
-                attachments=[summary],
-            ),
-            assistantMessage=conversations.ChatMessage(
-                id="assistant-message", conversationId=kwargs["conv_id"], role="assistant",
-                content="reply", createdAt="2026-07-16T00:00:01Z",
-            ),
-        ),
-    )
-    regular = _client(conversations.router).post("/conversations/conv-1/messages", json=payload)
-    streamed = _client(conversations.router).post(
-        "/conversations/conv-1/messages/stream", json=payload
-    )
-    safe = regular.json()["studentMessage"]["attachments"][0]
-    assert safe == summary.model_dump(mode="json", by_alias=True)
-    assert "event: student_message" in streamed.text
-    assert f'"attachments": [{json.dumps(safe, separators=(",", ":"))}]' not in streamed.text
-    for key, value in safe.items():
-        assert json.dumps(value) in streamed.text
-    assert "object_key" not in regular.text + streamed.text
-    assert len(calls) == 0
+    regular = client.post(f"/conversations/{CONV}/messages", json=payload)
+    streamed = client.post(f"/conversations/{CONV}/messages/stream", json=payload)
+
+    assert regular.status_code == streamed.status_code == 200, regular.text
+    [safe] = regular.json()["studentMessage"]["attachments"]
+    assert safe["filename"] == "notes.txt"
+    [student] = [data for name, data in _sse_events(streamed) if name == "student_message"]
+    assert student["attachments"] == [safe]
+    for private in ("object_key", "immutable", "etag", "sha256", "objects/private"):
+        assert private not in regular.text + streamed.text
 
 
 def test_conversation_history_batch_projects_only_safe_attachment_summaries(monkeypatch) -> None:
@@ -1532,6 +1124,21 @@ def test_conversation_history_batch_projects_only_safe_attachment_summaries(monk
         ],
     )
     monkeypatch.setattr(
+        _answering,
+        "_get_messages",
+        lambda *_: [
+            {
+                "message_id": "message-1",
+                "role": "student",
+                "content": "my document",
+                "created_at": "2026-07-16T00:00:00Z",
+                "attachment_ids": ["attachment-1"],
+                "object_key": "uploads/private/provider-canary.pdf",
+                "extracted_text": "raw extracted canary",
+            }
+        ],
+    )
+    monkeypatch.setattr(
         conversations.attachment_service,
         "list_attachment_summaries",
         lambda ids: {"attachment-1": summary} if ids == ["attachment-1"] else {},
@@ -1546,58 +1153,30 @@ def test_conversation_history_batch_projects_only_safe_attachment_summaries(monk
 
 
 def test_conversation_dependency_cancellation_stable_error_has_zero_message_ai_effect(
-    monkeypatch,
+    table, model, monkeypatch
 ) -> None:
-    effects = []
-    monkeypatch.setattr(
-        conversations,
-        "_get_conversation",
-        lambda conv_id: {
-            "conversation_id": conv_id,
-            "student_id": "student-1",
-            "subject": "math",
-            "grade": "Sek1",
-        },
+    def cancelled(**_kwargs: Any) -> Any:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+
+    monkeypatch.setattr(ask_question_store, "claim_message_command_and_quota", cancelled)
+    effects: dict[str, int] = {}
+    _counted(
+        monkeypatch, attachment_service, "extract_message_attachment_context", effects, "extract"
     )
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
-    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
-    monkeypatch.setattr(
-        ask_question_store,
-        "get_message_command",
-        lambda *_args, **_kwargs: None,
-    )
-    monkeypatch.setattr(
-        conversations,
-        "_execute_message_command",
-        lambda **_kwargs: (_ for _ in ()).throw(
-            AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-        ),
-    )
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "bind_message_attachments",
-        lambda **kwargs: (_ for _ in ()).throw(
-            AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-        ),
-    )
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "extract_message_attachment_context",
-        lambda *args, **kwargs: effects.append("extract"),
-    )
-    monkeypatch.setattr(
-        conversations.ask_answer, "answer", lambda *_args, **_kwargs: effects.append("ai")
-    )
-    response = _client(conversations.router).post(
-        "/conversations/conv-1/messages",
+
+    response = _question_client().post(
+        f"/conversations/{CONV}/messages",
         json={"content": "private-message-canary", "idempotencyKey": "dependency-cancel"},
     )
+
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "upload_service_unavailable"
     assert response.json()["detail"]["message"] == (
         "Uploads are temporarily unavailable. Try again later."
     )
-    assert effects == []
+    assert effects == {}
+    assert model.calls == []
+    assert _messages(table, "student") == []
     assert "private-message-canary" not in response.text
 
 
@@ -1746,34 +1325,51 @@ def test_an_untitled_conversation_can_still_be_read_back():
     assert conversations._conversation_title({"title": "Meine Frage"}) == "Meine Frage"
 
 
-def test_only_whole_steps_are_published(monkeypatch):
-    """A student is shown a step once it is whole, never a fragment of JSON."""
-    published = []
-    monkeypatch.setattr(
-        ask_question_store,
-        "record_generation_progress",
-        lambda conv_id, **kwargs: published.append(list(kwargs["steps"])) or True,
-    )
+def _published_steps(monkeypatch) -> list[list[str]]:
+    """Every step list written to the progress record, in order; each is still written."""
+    published: list[list[str]] = []
+    record = ask_question_store.record_generation_progress
 
-    publish = conversations._publish_generation_step("conv-1", "student-1")
-    publish(0, "Schritt 1")
-    publish(1, "Schritt 2")
+    def recorded(conv_id: str, **kwargs: Any) -> Any:
+        published.append(list(kwargs["steps"]))
+        return record(conv_id, **kwargs)
+
+    monkeypatch.setattr(ask_question_store, "record_generation_progress", recorded)
+    return published
+
+
+def test_only_whole_steps_are_published(table, model, monkeypatch):
+    """A student is shown a step once it is whole, never a fragment of JSON."""
+    model.answer = {"steps": ["Schritt 1", "Schritt 2"], "answer": "x = 4", "hints": []}
+    published = _published_steps(monkeypatch)
+    monkeypatch.setattr(dispatch, "override", dispatch.in_process)
+
+    _submit("steps-key")
 
     assert published == [["Schritt 1"], ["Schritt 1", "Schritt 2"]]
+    progress = ask_question.progress(CONV, "steps-key", "student-1")
+    assert progress.steps == ["Schritt 1", "Schritt 2"]
 
 
-def test_a_step_out_of_order_is_ignored(monkeypatch):
-    published = []
-    monkeypatch.setattr(
-        ask_question_store,
-        "record_generation_progress",
-        lambda conv_id, **kwargs: published.append(list(kwargs["steps"])) or True,
-    )
+def test_a_step_out_of_order_is_ignored(table, model, monkeypatch):
+    published = _published_steps(monkeypatch)
+    answer = _answering.ask_answer.answer
 
-    publish = conversations._publish_generation_step("conv-1", "student-1")
-    publish(3, "out of order")
+    def out_of_order_first(asked: Any, asker: Any, call: Any, **kwargs: Any) -> Any:
+        call.on_step(3, "out of order")
+        return answer(asked, asker, call, **kwargs)
 
-    assert published == []
+    monkeypatch.setattr(_answering.ask_answer, "answer", out_of_order_first)
+    monkeypatch.setattr(dispatch, "override", dispatch.in_process)
+
+    _submit("steps-key")
+
+    assert ["out of order"] not in published
+    assert all("out of order" not in steps for steps in published)
+    assert ask_question.progress(CONV, "steps-key", "student-1").steps == [
+        "Zähler und Nenner teilen",
+        "Durch den ggT",
+    ]
 
 
 def test_progress_is_only_readable_by_the_student_who_asked():
@@ -1831,18 +1427,28 @@ def test_streaming_reports_steps_and_still_returns_the_whole_answer(monkeypatch)
     assert result.structured.answer == "x = 4"
 
 
-
-def test_every_message_route_adopts_the_question_as_title():
+def test_every_message_route_adopts_the_question_as_title(table, model):
     """Both routes retitle, not just the one that happened to have the call.
 
     The adoption itself was covered, while the streaming route — the only one
     the client calls — never invoked it, so every conversation the client
     opened stayed listed under its subject-and-grade placeholder.
     """
-    import inspect
+    client = _question_client()
+    for route, question in (
+        ("messages", "Wie loese ich 2x + 3 = 11?"),
+        ("messages/stream", "Was ist eine Primzahl?"),
+    ):
+        conversation = table.rows[(f"CONV#{CONV}", "CONV")]
+        table.seed({**conversation, "title": ""})
 
-    for route in (conversations.send_message, conversations.stream_message):
-        assert "_adopt_question_as_title" in inspect.getsource(route), route.__name__
+        response = client.post(
+            f"/conversations/{CONV}/{route}",
+            json={"content": question, "idempotencyKey": f"title-{len(route)}"},
+        )
+
+        assert response.status_code == 200, response.text
+        assert table.rows[(f"CONV#{CONV}", "CONV")]["title"] == question, route
 
 
 def _index_filter_holds(condition, row) -> bool:
@@ -1935,6 +1541,8 @@ def test_conversation_list_reaches_matching_row_after_filtered_gsi_page(monkeypa
     """Pages spent on messages must not be reported as an empty history."""
     table = _PagedIndexTable(_student_index_rows(messages=120, conversations_count=5))
     monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
 
     response = _client(conversations.router).get("/conversations")
 
@@ -1955,6 +1563,8 @@ def test_conversation_list_reaches_matching_row_after_filtered_gsi_page(monkeypa
 def test_conversation_list_reads_one_page_at_normal_volume_without_repeats(monkeypatch):
     table = _PagedIndexTable(_student_index_rows(messages=20, conversations_count=5))
     monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
 
     response = _client(conversations.router).get("/conversations")
 
@@ -1970,6 +1580,8 @@ def test_conversation_list_reports_an_exhausted_page_budget_as_truncated(monkeyp
     """A heavy history is bounded, and the caller is told it was cut short."""
     table = _PagedIndexTable(_student_index_rows(messages=400, conversations_count=2))
     monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
 
     page = conversations._list_conversations("student-1", page_budget=2)
 
@@ -1981,6 +1593,8 @@ def test_conversation_list_reports_an_exhausted_page_budget_as_truncated(monkeyp
 def test_conversation_list_stops_at_the_result_limit_and_says_so(monkeypatch):
     table = _PagedIndexTable(_student_index_rows(messages=0, conversations_count=250))
     monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
 
     page = conversations._list_conversations("student-1")
 
@@ -2006,17 +1620,17 @@ def test_a_conversation_opened_without_a_year_group_can_be_read_back():
         "updated_at": "2026-09-23T00:00:00+00:00",
     }
 
-    assert conversations._conversation_grade(conv) == ""
+    assert _transcript._conversation_grade(conv) == ""
 
 
 def test_a_missing_year_group_reads_the_same_as_an_empty_one():
-    assert conversations._conversation_grade({"subject": "math"}) == ""
+    assert _transcript._conversation_grade({"subject": "math"}) == ""
 
 
 def test_a_year_group_of_the_wrong_type_is_still_refused():
     """Negative control: "nobody said" is not "the row is damaged"."""
     with pytest.raises(conversations.AttachmentDecisionError):
-        conversations._conversation_grade({"grade": 9})
+        _transcript._conversation_grade({"grade": 9})
 
 
 def test_the_other_conversation_fields_still_refuse_an_empty_value():
@@ -2027,7 +1641,7 @@ def test_the_other_conversation_fields_still_refuse_an_empty_value():
     """
     for field in ("title", "subject", "updated_at"):
         with pytest.raises(conversations.AttachmentDecisionError):
-            conversations._required_conversation_text({field: ""}, field)
+            _transcript._required_conversation_text({field: ""}, field)
 
 
 def test_escalating_a_conversation_writes_the_record_the_teacher_side_reads(monkeypatch):

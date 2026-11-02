@@ -134,14 +134,14 @@ def answer_without_allowance(monkeypatch: Any, model: FakeBedrock) -> FakeBedroc
     hands the request straight to `model`, and the answer carries no allowance
     to settle.
     """
-    from stoa.routers import conversations
+    from stoa.services.ask_question import _answering
 
-    class _Unmetered(conversations._ConversationAllowanceBedrockClient):
+    class _Unmetered(_answering._ConversationAllowanceBedrockClient):
         def invoke_model(self, **kwargs: Any) -> Any:
             return getattr(model, self._invocation_method)(**kwargs)
 
-    monkeypatch.setattr(conversations, "_ConversationAllowanceBedrockClient", _Unmetered)
+    monkeypatch.setattr(_answering, "_ConversationAllowanceBedrockClient", _Unmetered)
     monkeypatch.setattr(
-        conversations, "_message_allowance_metadata_from_provider", lambda *_a, **_k: None
+        _answering, "_message_allowance_metadata_from_provider", lambda *_a, **_k: None
     )
     return model

@@ -1,8 +1,9 @@
 """Integration tests for AI memory personalisation.
 
-These drive the real `conversations._execute_message_command` code path and
-read the system prompt the Bedrock double is sent, so they fail if the
-memory-context wiring breaks — unlike a test that re-implements the logic.
+These submit a real question through `ask_question.submit`, answered in the
+request against the shared table double, and read the system prompt the
+Bedrock double is sent, so they fail if the memory-context wiring breaks —
+unlike a test that re-implements the logic.
 
 Covers the regression where the extraction read snake_case keys that
 `adaptive_learning_service._memory_response` never emits, which silently
@@ -14,76 +15,19 @@ from typing import Any
 
 import pytest
 
-from fakes.bedrock import FakeBedrock, answer_without_allowance
-from stoa.routers import conversations
-from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.services import adaptive_learning_service
-from stoa.services.ask_question import _store as ask_question_store
+from fakes.ask_question import _submit
+from fakes.ask_question import model as model  # noqa: F401 - the fixture
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from stoa.services import adaptive_learning_service, star_map_candidates
+from stoa.services.ask_question import dispatch
 
 
-def _actor(role=CanonicalRole.STUDENT, user_id="student-1"):
-    return Actor(
-        user_id,
-        "https://identity.test",
-        f"{user_id}-subject",
-        role,
-        AccountStatus.ACTIVE,
-        role.value,
-        (),
-    )
-
-
-def _run_message_command(monkeypatch, *, memory_summary: Any) -> dict[str, Any]:
-    """Execute one full message command, returning the kwargs the AI received.
+def _run_message_command(model, monkeypatch, *, memory_summary: Any) -> dict[str, Any]:
+    """Submit one question, returning what the model was sent.
 
     `memory_summary` is returned by the patched adaptive-learning service; pass
     an Exception instance to make the lookup raise.
     """
-    body = conversations.SendMessageRequest.model_validate(
-        {"content": "how do I add fractions?", "idempotencyKey": "memory-test-key"}
-    )
-    command_state: dict[str, Any] = {}
-
-    monkeypatch.setattr(conversations, "get_table", lambda: object())
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
-    monkeypatch.setattr(conversations, "_attachment_plan_for_student", lambda *_: "free_trial")
-    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
-    monkeypatch.setattr(conversations.boto3, "client", lambda *_a, **_k: object())
-    monkeypatch.setattr(
-        conversations.attachment_service, "prepare_message_attachments", lambda *_a, **_k: []
-    )
-    monkeypatch.setattr(
-        conversations.attachment_service, "ensure_message_attachment_capacity", lambda *_a, **_k: None
-    )
-    monkeypatch.setattr(
-        conversations.attachment_service, "bind_message_attachments", lambda **_k: []
-    )
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "extract_message_attachment_context",
-        lambda *_a, **_k: conversations.attachment_service.AttachmentContextResult(
-            conversations.attachment_service.AttachmentContextDisposition.READY
-        ),
-    )
-
-    def claim(**kwargs):
-        command_state.update(kwargs["command"])
-        command_state["counter_value"] = 1
-        return True, 1
-
-    def claim_ai(**kwargs):
-        command_state.update(status="ai_running", leaseOwner=kwargs["lease_owner"], attempt=1)
-        return True, 1
-
-    def complete(**kwargs):
-        command_state.update(status="completed", result_json=kwargs["result_json"])
-        return True
-
-    monkeypatch.setattr(ask_question_store, "claim_message_command_and_quota", claim)
-    monkeypatch.setattr(ask_question_store, "get_message_command", lambda *_a, **_k: dict(command_state) or None)
-    monkeypatch.setattr(ask_question_store, "claim_message_ai_lease", claim_ai)
-    monkeypatch.setattr(ask_question_store, "renew_message_ai_lease", lambda **_k: True)
-    monkeypatch.setattr(ask_question_store, "complete_message_command", complete)
 
     def fake_memory_summary(**_kwargs):
         if isinstance(memory_summary, Exception):
@@ -91,23 +35,11 @@ def _run_message_command(monkeypatch, *, memory_summary: Any) -> dict[str, Any]:
         return memory_summary
 
     monkeypatch.setattr(adaptive_learning_service, "get_memory_summary", fake_memory_summary)
+    monkeypatch.setattr(star_map_candidates, "for_student", lambda *_a, **_k: None)
+    monkeypatch.setattr(dispatch, "override", dispatch.in_process)
 
-    model = answer_without_allowance(
-        monkeypatch, FakeBedrock(answer={"steps": ["one"], "answer": "safe", "hints": []})
-    )
+    _submit("memory-test-key", content="how do I add fractions?")
 
-    conversations._execute_message_command(
-        conv_id="conv-1",
-        student_id="student-1",
-        subject="math",
-        grade="Sek1",
-        body=body,
-        command_context={
-            "actor": _actor(),
-            "fingerprint": conversations.message_request_fingerprint(body),
-            "existing": None,
-        },
-    )
     assert model.requests, "the model was never asked"
     return {"content": model.student_turn(), "memory_context": _memory_context(model.system())}
 
@@ -133,8 +65,9 @@ def _summary(weak_topics: list[dict[str, Any]]) -> dict[str, Any]:
 
 # ── The regression this suite exists for ─────────────────────────────────────
 
-def test_weak_topics_reach_the_ai_prompt(monkeypatch):
+def test_weak_topics_reach_the_ai_prompt(table, model, monkeypatch):
     captured = _run_message_command(
+        model,
         monkeypatch,
         memory_summary=_summary([
             {"subject": "math", "topicId": "fractions", "label": "Fractions", "count": 5},
@@ -147,9 +80,10 @@ def test_weak_topics_reach_the_ai_prompt(monkeypatch):
     assert "Decimals" in context
 
 
-def test_snake_case_summary_yields_no_context(monkeypatch):
+def test_snake_case_summary_yields_no_context(table, model, monkeypatch):
     """Documents the exact shape that caused the silent regression."""
     captured = _run_message_command(
+        model,
         monkeypatch,
         memory_summary={
             "snapshots": [{"weak_knowledge_points": [{"label": "Fractions"}]}],
@@ -161,14 +95,15 @@ def test_snake_case_summary_yields_no_context(monkeypatch):
 
 # ── Graceful degradation ─────────────────────────────────────────────────────
 
-def test_no_weak_topics_sends_no_context(monkeypatch):
-    captured = _run_message_command(monkeypatch, memory_summary=_summary([]))
+def test_no_weak_topics_sends_no_context(table, model, monkeypatch):
+    captured = _run_message_command(model, monkeypatch, memory_summary=_summary([]))
     assert captured["memory_context"] is None
 
 
-def test_memory_lookup_failure_does_not_block_the_answer(monkeypatch):
+def test_memory_lookup_failure_does_not_block_the_answer(table, model, monkeypatch):
     """A broken memory service must degrade to an un-personalised answer."""
     captured = _run_message_command(
+        model,
         monkeypatch, memory_summary=RuntimeError("dynamo unavailable")
     )
     assert captured["memory_context"] is None
@@ -177,25 +112,27 @@ def test_memory_lookup_failure_does_not_block_the_answer(monkeypatch):
 
 # ── Extraction details ───────────────────────────────────────────────────────
 
-def test_topic_id_used_when_label_is_missing(monkeypatch):
+def test_topic_id_used_when_label_is_missing(table, model, monkeypatch):
     captured = _run_message_command(
+        model,
         monkeypatch,
         memory_summary=_summary([{"subject": "math", "topicId": "long_division", "count": 3}]),
     )
     assert "long_division" in captured["memory_context"]
 
 
-def test_context_is_capped_and_deduplicated(monkeypatch):
+def test_context_is_capped_and_deduplicated(table, model, monkeypatch):
     topics = [{"subject": "math", "topicId": f"t{i}", "label": f"Topic{i}", "count": 1} for i in range(20)]
     topics.append({"subject": "math", "topicId": "t0", "label": "Topic0", "count": 1})
-    captured = _run_message_command(monkeypatch, memory_summary=_summary(topics))
+    captured = _run_message_command(model, monkeypatch, memory_summary=_summary(topics))
     context = captured["memory_context"]
     assert context.count(",") == 7, "Expected exactly 8 topics (7 separators)"
     assert context.count("Topic0") == 1
 
 
-def test_malformed_topic_entries_are_skipped(monkeypatch):
+def test_malformed_topic_entries_are_skipped(table, model, monkeypatch):
     captured = _run_message_command(
+        model,
         monkeypatch,
         memory_summary=_summary(["not-a-dict", None, {"label": "Fractions"}, {"label": "  "}]),
     )

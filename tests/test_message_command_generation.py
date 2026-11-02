@@ -14,149 +14,26 @@ double. Only the model call and the entitlement lookup are replaced.
 
 from __future__ import annotations
 
-import json
-import re
-from typing import Any
-
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
-from audit_helpers import MemoryAuthorizationAuditSink
-from fakes.bedrock import FakeBedrock
-from fakes.dynamodb import FakeTable
+from fakes.ask_question import (
+    ANSWER,
+    CONV,
+    _client,
+    _command_row,
+    _commit,
+    _events,
+    _generation,
+    _messages,
+    _send,
+    default_language,
+)
+from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fixture
+from fakes.ask_question import model as model  # noqa: F401 - the fixture
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from stoa.db.repositories import attachment_repo
-from stoa.deps import get_actor, get_authorization_audit_sink
-from stoa.routers import conversations
-from stoa.services import ai_service, locale_service
-from test_conversations import _actor
-
-CONV = "conv-1"
-STUDENT = "student-1"
-QUESTION = "Wie kürze ich Brüche?"
-ANSWER = {
-    "steps": ["Zähler und Nenner teilen", "Durch den ggT"],
-    "answer": "So kürzt man.",
-    "hints": [],
-}
-
-
-@pytest.fixture(autouse=True)
-def _no_memory_personalisation(stub_memory_summary) -> None:
-    """The prompt enrichment reads three tables; keep it out."""
-
-
-class _Table(FakeTable):
-    """The shared double, reached the way `attachment_repo.transact` calls it."""
-
-    def transact_write_items(self, operations=None, *, TransactItems=None) -> None:
-        super().transact_write_items(TransactItems if TransactItems is not None else operations)
-
-
-@pytest.fixture
-def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
-    table = _Table()
-    table.seed_active_account(STUDENT)
-    table.seed(
-        {
-            "PK": f"CONV#{CONV}",
-            "SK": "CONV",
-            "entity_type": "conversation",
-            "conversation_id": CONV,
-            "student_id": STUDENT,
-            "owner_id": STUDENT,
-            "account_fence_generation": 1,
-            "subject": "Mathematik",
-            "grade": "Grade 6",
-            "title": "Mathematik · Grade 6",
-            "updated_at": "2026-09-24T08:00:00+00:00",
-        }
-    )
-    for module in (conversations, attachment_repo):
-        monkeypatch.setattr(module, "get_table", lambda table=table: table)
-    monkeypatch.setattr(
-        conversations.account_deletion_repo, "get_table", lambda: table, raising=False
-    )
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 50)
-    monkeypatch.setattr(
-        conversations.entitlement_service,
-        "resolve_student_entitlement",
-        lambda *_a, **_k: {"effectivePlan": "free_trial", "allowanceVersion": 1},
-    )
-    monkeypatch.setattr(conversations.user_repo, "get_user", lambda *_a, **_k: {})
-    return table
-
-
-@pytest.fixture
-def model(monkeypatch: pytest.MonkeyPatch) -> FakeBedrock:
-    """The Bedrock runtime the answer is asked of, behind the real allowance client."""
-    from test_conversation_token_finalization import _patch_allowance_table
-    from test_token_allowances import AtomicAllowanceTable
-
-    model = FakeBedrock(answer=ANSWER)
-    _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    monkeypatch.setattr(conversations.ai_service.boto3, "client", lambda *_a, **_k: model)
-    return model
-
-
-def default_language(model: FakeBedrock, index: int = -1) -> str:
-    """The language the model was told to fall back on, as its code."""
-    match = re.search(r"DEFAULT LANGUAGE: \w+ \((\w+)\)", model.system(index))
-    assert match is not None
-    return match.group(1)
-
-
-def _client() -> TestClient:
-    app = FastAPI()
-
-    @app.middleware("http")
-    async def bind_locale(request, call_next):
-        locale_service.set_request_locale(
-            locale_service.locale_from_accept_language(
-                request.headers.get("accept-language")
-            )
-        )
-        return await call_next(request)
-
-    app.include_router(conversations.router, prefix="/conversations")
-    app.dependency_overrides[get_actor] = lambda: _actor()
-    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
-    return TestClient(app, raise_server_exceptions=False)
-
-
-def _send(client: TestClient, key: str, *, language: str = "fr", content: str = QUESTION):
-    return client.post(
-        f"/conversations/{CONV}/messages/stream",
-        json={"content": content, "idempotencyKey": key},
-        headers={"Accept-Language": language},
-    )
-
-
-def _events(response) -> list[tuple[str, dict[str, Any]]]:
-    events = []
-    for block in response.text.strip().split("\n\n"):
-        lines = dict(line.split(": ", 1) for line in block.splitlines())
-        events.append((lines["event"], json.loads(lines["data"])))
-    return events
-
-
-def _generation(client: TestClient, key: str | None) -> dict[str, Any]:
-    suffix = f"?idempotencyKey={key}" if key is not None else ""
-    response = client.get(f"/conversations/{CONV}/generation{suffix}")
-    assert response.status_code == 200, response.text
-    return response.json()
-
-
-def _command_row(table: FakeTable, key: str) -> dict[str, Any]:
-    return table.rows[tuple(attachment_repo.message_command_key(CONV, key).values())]
-
-
-def _messages(table: FakeTable, role: str) -> list[dict[str, Any]]:
-    return [
-        row
-        for (pk, sk), row in table.rows.items()
-        if pk == f"CONV#{CONV}" and sk.startswith("MSG#") and row.get("role") == role
-    ]
+from stoa.services import ai_service, ask_question, locale_service
+from stoa.services.ask_question import _answering
 
 
 def test_a_committed_and_generated_answer_still_streams_as_before(table, model) -> None:
@@ -222,36 +99,18 @@ def test_a_reply_without_a_language_is_labelled_in_the_display_language(table, m
     assert assistant["content"].endswith("**Hint:** Find the gcd.")
 
 
-def _commit(key: str) -> Any:
-    body = conversations.SendMessageRequest.model_validate(
-        {"content": QUESTION, "idempotencyKey": key}
-    )
-    return conversations.commit_message_command(
-        conv_id=CONV,
-        student_id=STUDENT,
-        subject="Mathematik",
-        grade="Grade 6",
-        body=body,
-        command_context={
-            "actor": _actor(),
-            "fingerprint": conversations.message_request_fingerprint(body),
-            "existing": None,
-        },
-    )
-
-
 def test_generating_takes_the_language_from_the_command_not_the_request(
     table, model
 ) -> None:
     locale_service.set_request_locale("fr")
-    committed = _commit("key-1")
+    _commit("key-1")
     assert _command_row(table, "key-1")["status"] == "message_committed"
 
     # Whatever request is around when the answer is generated no longer counts.
     locale_service.set_request_locale("en")
-    result = conversations.generate_for_command(committed)
+    outcome = ask_question.answer(CONV, "key-1")
 
-    assert isinstance(result, conversations.SendMessageResponse)
+    assert outcome == "completed"
     assert default_language(model) == "fr"
     assert _command_row(table, "key-1")["status"] == "completed"
 
@@ -310,9 +169,14 @@ def test_an_answer_refused_over_its_usage_evidence_is_not_generated_again(
     """The model answered; only the accounting of it failed. Not a retry."""
 
     def refuse(*_a, **_k):
-        raise conversations._allowance_recoverable_failure()
+        raise ask_question.AllowanceFailure(
+            "allowance_finalization_recoverable",
+            "This answer is safely recoverable while token accounting finishes.",
+            "retry_same_message",
+            503,
+        )
 
-    monkeypatch.setattr(conversations, "_message_allowance_metadata_from_provider", refuse)
+    monkeypatch.setattr(_answering, "_message_allowance_metadata_from_provider", refuse)
     client = _client()
 
     assert _send(client, "key-1").status_code == 503
@@ -328,10 +192,10 @@ def test_a_failure_the_provider_charged_for_is_not_generated_again(
 ) -> None:
     """A paid answer that could not be used is a known result, not a retry."""
     monkeypatch.setattr(
-        conversations, "_message_allowance_metadata_from_failure", lambda *_a, **_k: {}
+        _answering, "_message_allowance_metadata_from_failure", lambda *_a, **_k: {}
     )
-    monkeypatch.setattr(conversations, "_observe_message_provider_usage", lambda **_k: True)
-    monkeypatch.setattr(conversations, "_restore_message_allowance", lambda **_k: True)
+    monkeypatch.setattr(_answering, "_observe_message_provider_usage", lambda **_k: True)
+    monkeypatch.setattr(_answering, "_restore_message_allowance", lambda **_k: True)
     client = _client()
     model.outcomes = [ai_service.AIInvocationFailure("incomplete_output")]
     assert _send(client, "key-1").status_code == 503

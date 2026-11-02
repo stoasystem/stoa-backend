@@ -21,28 +21,35 @@ from typing import Any
 
 import pytest
 
+from fakes.ask_question import (
+    ANSWER,
+    CONV,
+    NOW,
+    _COMPLETE,
+    _client,
+    _command,
+    _command_row,
+    _commit,
+    _deliver,
+    _expire_lease,
+    _generation,
+    _Killed,
+    _messages,
+    _patch_allowance_table,
+    _Provider,
+    _running,
+    default_language,
+)
+from fakes.ask_question import model as model  # noqa: F401 - the fixture
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from fakes.bedrock import Unsent
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.security.attachment_errors import AttachmentDecisionError
 from stoa.services import ai_service, ask_answer, star_map_candidates
+from stoa.services.ask_question import _answering
 from stoa.services.ask_question import _store as ask_question_store
-from test_message_command_generation import (  # noqa: F401 - fixtures
-    ANSWER,
-    CONV,
-    _client,
-    _command_row,
-    _commit,
-    _generation,
-    _messages,
-)
-from test_message_command_generation import default_language
-from test_message_command_generation import model as model  # noqa: F401 - the fixture
-from test_message_command_generation import table as table  # noqa: F401 - the fixture
-
-
-class _Killed(BaseException):
-    """The Lambda stopped here: nothing after this line ran."""
+from fakes.ask_question import AtomicAllowanceTable
 
 
 def _called(then: Any = None) -> Any:
@@ -50,23 +57,11 @@ def _called(then: Any = None) -> Any:
     return ANSWER if then is None else then
 
 
-def _deliver(key: str) -> dict[str, Any]:
-    return conversation_generation.handler(
-        {"conversation_id": CONV, "idempotency_key": key}, None
-    )
-
-
-def _expire_lease(table, key: str) -> None:
-    row = dict(_command_row(table, key))
-    assert row["status"] == "ai_running"
-    row["expiresAt"] = 1
-    table.seed(row)
-
-
 def _minutes_ago(minutes: float) -> str:
     return (datetime.now(UTC) - timedelta(minutes=minutes)).isoformat()
 
 
+# #206 改写: recomputes the allowance identity with the package-private helper.
 def _asked_at(table, row: dict[str, Any], when: str) -> None:
     """Move when the question was asked, with its message and allowance identity."""
     row["created_at"] = row["history_anchor_created_at"] = when
@@ -77,7 +72,7 @@ def _asked_at(table, row: dict[str, Any], when: str) -> None:
     ]
     table.seed({**student, "created_at": when})
     row.update(
-        conversations._conversation_allowance_command_fields(
+        _answering._conversation_allowance_command_fields(
             row,
             {
                 "effectivePlan": row["allowance_plan_id"],
@@ -352,8 +347,16 @@ def test_an_event_that_names_no_command_is_refused_without_a_retry(table, model)
     assert outcome == {"outcome": "invalid_event"}
 
 
-def test_the_lease_outlasts_the_sweep_period() -> None:
-    assert conversations._AI_LEASE_SECONDS >= 300
+def test_the_lease_outlasts_the_sweep_period(table, model) -> None:
+    """A lease that ran out between two sweeps would be taken while its attempt still runs."""
+    _commit("key-1")
+    model.outcomes = [Unsent(_Killed())]
+    with pytest.raises(_Killed):
+        _deliver("key-1")
+
+    row = _command_row(table, "key-1")
+    assert row["status"] == "ai_running"
+    assert int(row["expiresAt"]) - int(row["claimedAt"]) >= 300
 
 
 def test_the_worker_handler_ships_in_the_lambda_package() -> None:
@@ -365,20 +368,15 @@ def test_the_worker_handler_ships_in_the_lambda_package() -> None:
     )
 
 
+# #206 改写: the two tests below build the allowance client directly.
 def _allowance_client(monkeypatch: pytest.MonkeyPatch):
-    from test_conversation_token_finalization import _command, _patch_allowance_table
-    from test_token_allowances import AtomicAllowanceTable
-    from test_truncated_ai_output import _COMPLETE, _Provider
-
     provider = _Provider(text=_COMPLETE, stop_reason="end_turn")
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
     monkeypatch.setattr(ai_service.boto3, "client", lambda *_a, **_k: provider)
-    return conversations._ConversationAllowanceBedrockClient(_command()), provider
+    return _answering._ConversationAllowanceBedrockClient(_command()), provider
 
 
 def _ask(client) -> Any:
-    from test_conversation_token_finalization import NOW
-
     return ai_service.invoke_answer(
         "Answer the question.",
         [{"role": "user", "content": "Wie kürze ich Brüche?"}],
@@ -467,15 +465,14 @@ def test_a_call_whose_failure_was_recorded_does_not_block_a_later_attempt(
     table, model
 ) -> None:
     """A recorded failure is a known outcome; only an unrecorded call is unknown."""
-    committed = _commit("key-1")
+    _commit("key-1")
     model.outcomes = [_called(RuntimeError("provider refused")), Unsent(_Killed())]
-    with pytest.raises(conversations.AttachmentDecisionError):
-        conversations.generate_for_command(committed)
+    assert _deliver("key-1") == {"outcome": "failed"}
     assert "provider_invoked_attempt" not in _command_row(table, "key-1")
+    # The student sends it again; that attempt dies before the model is asked.
+    _commit("key-1")
     with pytest.raises(_Killed):
-        conversations.generate_for_command(
-            conversations.load_committed_message(dict(_command_row(table, "key-1")))
-        )
+        _deliver("key-1")
     _expire_lease(table, "key-1")
 
     assert _deliver("key-1") == {"outcome": "completed"}
@@ -566,14 +563,14 @@ def test_one_command_that_breaks_does_not_stop_the_sweep(
             asked = datetime.fromisoformat(row["created_at"]) - timedelta(seconds=1)
             row["created_at"] = asked.isoformat()
         table.seed(row)
-    load = conversations.load_committed_message
+    answer = conversation_generation.ask_question.answer
 
-    def load_or_break(command: dict) -> Any:
-        if command["idempotency_key"] == "broken":
+    def answer_or_break(conversation_id: str, idempotency_key: str) -> str:
+        if idempotency_key == "broken":
             raise RuntimeError("unexpected")
-        return load(command)
+        return answer(conversation_id, idempotency_key)
 
-    monkeypatch.setattr(conversations, "load_committed_message", load_or_break)
+    monkeypatch.setattr(conversation_generation.ask_question, "answer", answer_or_break)
 
     summary = conversation_generation.handler(
         {"source": "stoa.scheduler", "job": "conversation_generation_sweep"}, None
@@ -654,28 +651,13 @@ def test_the_sweep_ages_a_reopened_command_by_when_it_was_sent_again(table, mode
     assert _command_row(table, "resent")["status"] == "completed"
 
 
-def _running(table, key: str, *, attempt: int, claimed_minutes_ago: float) -> None:
-    """An attempt that died: claimed then, its five-minute lease run out since."""
-    now = datetime.now(UTC)
-    row = dict(_command_row(table, key))
-    claimed = now - timedelta(minutes=claimed_minutes_ago)
-    row.update(
-        status="ai_running",
-        attempt=attempt,
-        leaseOwner="died",
-        claimedAt=int(claimed.timestamp()),
-        expiresAt=int((claimed + timedelta(minutes=5)).timestamp()),
-    )
-    table.seed(row)
-
-
 def test_a_command_whose_last_attempt_died_is_counted_once_as_exhausted(
     table, model, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """E26: how often a third attempt dies is readable before it is settled."""
     events: list[str] = []
     monkeypatch.setattr(
-        conversations, "emit_private_event", lambda category, **_: events.append(category)
+        _answering, "emit_private_event", lambda category, **_: events.append(category)
     )
     _commit("last")
     _running(table, "last", attempt=3, claimed_minutes_ago=6)
@@ -686,9 +668,7 @@ def test_a_command_whose_last_attempt_died_is_counted_once_as_exhausted(
     _deliver("last")
     # The student sending it again reaches the same end, already reached.
     with pytest.raises(AttachmentDecisionError):
-        conversations.generate_for_command(
-            conversations.load_committed_message(dict(_command_row(table, "last")))
-        )
+        _commit("last")
 
     assert summary["failed"] == 1
     assert _command_row(table, "last")["status"] == "terminal_failed"
@@ -751,7 +731,7 @@ def test_a_last_attempt_that_kept_its_answer_is_finished_not_ended(
     """E28: the answer was paid for and stored; storing it needs no model call."""
     events: list[str] = []
     monkeypatch.setattr(
-        conversations, "emit_private_event", lambda category, **_: events.append(category)
+        _answering, "emit_private_event", lambda category, **_: events.append(category)
     )
     _last_attempt_kept_its_answer(table, model, monkeypatch, "last")
     _expire_lease(table, "last")

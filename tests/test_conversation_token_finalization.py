@@ -1,35 +1,25 @@
 """Conversation token finalization at the durable message replay boundary."""
 
+# #206 改写: these test the token allowance and its settlement through the
+# package-private names in `ask_question._answering`, and are rewritten when
+# "AI 消息准入" (#206) replaces that block.
+
 from __future__ import annotations
 
 import copy
-import inspect
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 
 import pytest
 
+from fakes.ask_question import NOW, _command, _patch_allowance_table, _ResponseBody
 from stoa.db.repositories import allowance_repo
 from stoa.routers import conversations
-from stoa.services import ai_service, allowance_service
+from stoa.services import ai_service
+from stoa.services.ask_question import _answering
 from stoa.services.ask_question import _store as ask_question_store
-from test_token_allowances import AtomicAllowanceTable
-
-
-NOW = datetime(2026, 3, 25, 12, 0, tzinfo=timezone.utc)
-
-
-class _ResponseBody:
-    def __init__(self, payload: dict[str, object]) -> None:
-        self._payload = payload
-        self.closed = False
-
-    def read(self) -> bytes:
-        return json.dumps(self._payload).encode()
-
-    def close(self) -> None:
-        self.closed = True
+from fakes.ask_question import AtomicAllowanceTable
 
 
 class MockBedrockProvider:
@@ -91,62 +81,6 @@ class MockBedrockProvider:
         }
 
 
-def _command() -> dict[str, object]:
-    """One message command in the shape the table hands it back."""
-    command: dict[str, object] = {
-        "command_id": "message-command-1",
-        "conversation_id": "conversation-1",
-        "student_id": "student-1",
-        "owner_id": "student-1",
-        "assistant_message_id": "assistant-message-1",
-        "account_fence_generation": Decimal(1),
-        "created_at": NOW.isoformat(),
-    }
-    command.update(
-        conversations._conversation_allowance_command_fields(
-            command,
-            {
-                "effectivePlan": "free_trial",
-                "source": "free_trial_activation",
-                "grantId": "free-trial-grant-1",
-                "allowanceVersion": Decimal(7),
-            },
-        )
-    )
-    command["allowance_version"] = Decimal(str(command["allowance_version"]))
-    return command
-
-
-def _patch_allowance_table(
-    monkeypatch: pytest.MonkeyPatch,
-    table: AtomicAllowanceTable,
-) -> None:
-    reserve = allowance_service.reserve_token_allowance
-    observe = allowance_service.record_provider_usage
-    finalize = allowance_service.finalize_token_allowance
-    restore = allowance_service.restore_user_allowance
-    monkeypatch.setattr(
-        conversations.allowance_service,
-        "reserve_token_allowance",
-        lambda **kwargs: reserve(**kwargs, table=table),
-    )
-    monkeypatch.setattr(
-        conversations.allowance_service,
-        "record_provider_usage",
-        lambda **kwargs: observe(**kwargs, table=table),
-    )
-    monkeypatch.setattr(
-        conversations.allowance_service,
-        "finalize_token_allowance",
-        lambda **kwargs: finalize(**kwargs, table=table),
-    )
-    monkeypatch.setattr(
-        conversations.allowance_service,
-        "restore_user_allowance",
-        lambda **kwargs: restore(**kwargs, table=table),
-    )
-
-
 def _provider_result(
     monkeypatch: pytest.MonkeyPatch,
     *,
@@ -158,12 +92,12 @@ def _provider_result(
 ]:
     _patch_allowance_table(monkeypatch, table)
     monkeypatch.setattr(
-        conversations.ai_service.boto3,
+        _answering.ai_service.boto3,
         "client",
         lambda *_args, **_kwargs: provider,
     )
     command = _command()
-    client = conversations._ConversationAllowanceBedrockClient(command)
+    client = _answering._ConversationAllowanceBedrockClient(command)
     result = ai_service.invoke_answer(
         "Answer the question.",
         [{"role": "user", "content": "private-message-canary"}],
@@ -180,7 +114,7 @@ def _metadata(
     result: ai_service.AIProviderResult[dict[str, object]],
     command: dict[str, object],
 ) -> dict[str, object]:
-    return conversations._message_allowance_metadata_from_provider(
+    return _answering._message_allowance_metadata_from_provider(
         result,
         allowance_effect_id=str(command["allowance_effect_id"]),
     )
@@ -191,13 +125,13 @@ def test_count_failure_never_reserves_or_invokes(monkeypatch: pytest.MonkeyPatch
     provider = MockBedrockProvider(input_tokens="not-an-exact-count")
     _patch_allowance_table(monkeypatch, table)
     monkeypatch.setattr(
-        conversations.ai_service.boto3,
+        _answering.ai_service.boto3,
         "client",
         lambda *_args, **_kwargs: provider,
     )
-    client = conversations._ConversationAllowanceBedrockClient(_command())
+    client = _answering._ConversationAllowanceBedrockClient(_command())
 
-    with pytest.raises(conversations._ConversationAllowanceFailure) as captured:
+    with pytest.raises(_answering._ConversationAllowanceFailure) as captured:
         ai_service.invoke_answer(
             "Answer the question.",
             [{"role": "user", "content": "message"}],
@@ -220,20 +154,20 @@ def test_allowance_denial_never_invokes_provider(monkeypatch: pytest.MonkeyPatch
     provider = MockBedrockProvider()
     _patch_allowance_table(monkeypatch, table)
     monkeypatch.setattr(
-        conversations.ai_service.boto3,
+        _answering.ai_service.boto3,
         "client",
         lambda *_args, **_kwargs: provider,
     )
     monkeypatch.setattr(
-        conversations.allowance_service,
+        _answering.allowance_service,
         "reserve_token_allowance",
         lambda **_kwargs: allowance_repo.ReservationResult(
             allowance_repo.ReservationDisposition.LIMIT_EXCEEDED
         ),
     )
-    client = conversations._ConversationAllowanceBedrockClient(_command())
+    client = _answering._ConversationAllowanceBedrockClient(_command())
 
-    with pytest.raises(conversations._ConversationAllowanceFailure) as captured:
+    with pytest.raises(_answering._ConversationAllowanceFailure) as captured:
         ai_service.invoke_answer(
             "Answer the question.",
             [{"role": "user", "content": "message"}],
@@ -254,11 +188,11 @@ def test_provider_timeout_after_reserve_remains_reserved(
     provider = MockBedrockProvider(invoke_error=TimeoutError("timeout-canary"))
     _patch_allowance_table(monkeypatch, table)
     monkeypatch.setattr(
-        conversations.ai_service.boto3,
+        _answering.ai_service.boto3,
         "client",
         lambda *_args, **_kwargs: provider,
     )
-    client = conversations._ConversationAllowanceBedrockClient(_command())
+    client = _answering._ConversationAllowanceBedrockClient(_command())
 
     with pytest.raises(TimeoutError):
         ai_service.invoke_answer(
@@ -290,7 +224,7 @@ def test_store_ambiguity_keeps_observed_reservation_without_finalizing(
     )
     metadata = _metadata(result, command)
 
-    assert conversations._observe_message_provider_usage(
+    assert _answering._observe_message_provider_usage(
         beneficiary_id="student-1",
         metadata=metadata,
     )
@@ -329,8 +263,8 @@ def test_stored_token_counts_are_observed_as_the_table_returns_them(
         "provider_output_tokens": Decimal(int(metadata["provider_output_tokens"])),
     }
 
-    assert conversations._validated_message_allowance_metadata(stored) is not None
-    assert conversations._observe_message_provider_usage(
+    assert _answering._validated_message_allowance_metadata(stored) is not None
+    assert _answering._observe_message_provider_usage(
         beneficiary_id="student-1",
         metadata=stored,
     )
@@ -339,7 +273,7 @@ def test_stored_token_counts_are_observed_as_the_table_returns_them(
     # Negative control: reading the stored shape is not reading anything.
     for malformed in (Decimal("70.5"), True, "70", None):
         assert (
-            conversations._validated_message_allowance_metadata(
+            _answering._validated_message_allowance_metadata(
                 {**stored, "provider_input_tokens": malformed}
             )
             is None
@@ -357,7 +291,7 @@ def test_regular_sse_and_hint_replay_finalize_one_exact_debit(
         provider=provider,
     )
     metadata = _metadata(result, command)
-    assert conversations._observe_message_provider_usage(
+    assert _answering._observe_message_provider_usage(
         beneficiary_id="student-1",
         metadata=metadata,
     )
@@ -384,13 +318,13 @@ def test_regular_sse_and_hint_replay_finalize_one_exact_debit(
         **command,
         "status": "completed",
         "student_message_id": "student-message-1",
-        "result_json": conversations._message_result_json(response, metadata),
+        "result_json": _answering._message_result_json(response, metadata),
     }
 
-    regular = conversations._result_response(
+    regular = _answering._result_response(
         allowance_repo_message_result(durable)
     )
-    sse = conversations._result_response(
+    sse = _answering._result_response(
         allowance_repo_message_result(durable)
     )
 
@@ -415,7 +349,7 @@ def test_finalize_timeout_repairs_from_the_same_durable_result(
         provider=MockBedrockProvider(),
     )
     metadata = _metadata(result, command)
-    assert conversations._observe_message_provider_usage(
+    assert _answering._observe_message_provider_usage(
         beneficiary_id="student-1",
         metadata=metadata,
     )
@@ -439,9 +373,9 @@ def test_finalize_timeout_repairs_from_the_same_durable_result(
         **command,
         "status": "completed",
         "student_message_id": "student-message-1",
-        "result_json": conversations._message_result_json(response, metadata),
+        "result_json": _answering._message_result_json(response, metadata),
     }
-    real_finalize = conversations.allowance_service.finalize_token_allowance
+    real_finalize = _answering.allowance_service.finalize_token_allowance
     calls = 0
 
     def retry_once(
@@ -473,14 +407,14 @@ def test_finalize_timeout_repairs_from_the_same_durable_result(
         )
 
     monkeypatch.setattr(
-        conversations.allowance_service,
+        _answering.allowance_service,
         "finalize_token_allowance",
         retry_once,
     )
 
-    with pytest.raises(conversations._ConversationAllowanceFailure):
-        conversations._result_response(allowance_repo_message_result(durable))
-    replay = conversations._result_response(allowance_repo_message_result(durable))
+    with pytest.raises(_answering._ConversationAllowanceFailure):
+        _answering._result_response(allowance_repo_message_result(durable))
+    replay = _answering._result_response(allowance_repo_message_result(durable))
 
     assert replay == response
     assert table.counter()["finalized_input_tokens"] == 70
@@ -508,12 +442,12 @@ def test_terminal_validation_restores_user_and_retains_provider_cost(
         provider=provider,
     )
     metadata = _metadata(result, command)
-    assert conversations._observe_message_provider_usage(
+    assert _answering._observe_message_provider_usage(
         beneficiary_id="student-1",
         metadata=metadata,
     )
 
-    assert conversations._restore_message_allowance(
+    assert _answering._restore_message_allowance(
         beneficiary_id="student-1",
         metadata=metadata,
     )
@@ -553,8 +487,8 @@ def test_durable_payload_is_private_and_content_free(
             createdAt=NOW.isoformat(),
         ),
     )
-    durable_json = conversations._message_result_json(response, metadata)
-    public = conversations._completed_command_response(
+    durable_json = _answering._message_result_json(response, metadata)
+    public = _answering._completed_command_response(
         {
             **command,
             "status": "completed",
@@ -569,16 +503,3 @@ def test_durable_payload_is_private_and_content_free(
     evidence_json = json.dumps(table.evidence(), default=str)
     assert "private-message-canary" not in evidence_json
     assert "private-answer-canary" not in evidence_json
-
-
-def test_source_binds_durable_message_effect_before_invoke_and_finalize() -> None:
-    source = inspect.getsource(conversations)
-    reserve_at = source.index("reserve_token_allowance")
-    invoke_at = source.index("invoke_model", reserve_at)
-    assert reserve_at < invoke_at
-    assert "allowance_effect_id" in source
-    assert "record_provider_usage" in source
-    assert "finalize_token_allowance" in source
-    assert "restore_user_allowance" in source
-    assert "_submit_message_command" in inspect.getsource(conversations.send_message)
-    assert "_submit_message_command" in inspect.getsource(conversations.stream_message)
