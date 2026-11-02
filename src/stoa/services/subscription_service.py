@@ -22,7 +22,7 @@ from botocore.exceptions import ClientError
 from fastapi import HTTPException
 
 from stoa.config import Settings
-from stoa.db.dynamodb import get_table, omit_none_attributes, stored_int
+from stoa.db.dynamodb import get_table, omit_none_attributes, scan_every_page, stored_int
 from stoa.db.repositories import (
     account_deletion_repo,
     billing_fact_repo,
@@ -3820,7 +3820,11 @@ def _webhook_readiness(settings: Settings) -> dict[str, Any]:
 
 
 def _last_observed_provider_event() -> dict[str, Any]:
-    response = _subscription_scan(
+    # Billing events live under each parent's partition, so nothing orders them
+    # across parents: the latest one is only known after every page is read. One
+    # page answered with the newest event of the table's first megabyte (#101).
+    response = scan_every_page(
+        _subscription_scan,
         get_table(),
         FilterExpression="entity_type = :entity",
         ExpressionAttributeValues={":entity": BILLING_EVENT_ENTITY},
