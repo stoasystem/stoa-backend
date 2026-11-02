@@ -105,7 +105,6 @@ HAND_WRITTEN_DOUBLES: dict[str, str] = {
     "test_privileged_identity_reconciliation.py::CapabilityTable": "repo",
     "test_subscription_operations.py::FakeTable": "repo",
     "test_token_allowances.py::AtomicAllowanceTable": "repo",
-    "test_parent_children.py::FakeTable": "script",
     "test_parent_children.py::FakeQueryTable": "script",
     "test_parent_children.py::FakeScanTable": "script",
     "test_provision_production_admin.py::FakeTable": "pending",
