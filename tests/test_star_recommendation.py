@@ -371,3 +371,15 @@ def test_the_latest_evidence_is_an_answer_or_a_finished_lesson_never_a_self_repo
         "a": "2026-11-01T09:00:00+00:00",
         "b": "2026-11-01T10:00:00+00:00",
     }
+
+
+def test_a_subject_taken_under_its_other_name_is_taken() -> None:
+    """Progress rows say `mathematics`, the galaxy says `math`: the same subject."""
+    result = build(
+        [unit("a", 0), unit("b", 1)],
+        {"a": judged("a", IN_PROGRESS), "b": judged("b", READY)},
+        enrolled=frozenset({"mathematics"}),
+    )
+
+    assert [galaxy["enrolled"] for galaxy in result["galaxies"]] == [True]
+    assert [item for item, _ in recommended(result)] == ["a"]

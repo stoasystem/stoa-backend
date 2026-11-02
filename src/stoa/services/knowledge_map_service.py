@@ -315,7 +315,8 @@ def build_map(
                 "name": str(subject.get("name") or ""),
                 "lit": sum(1 for star in mine if star["state"] == "lit"),
                 "total": len(mine),
-                "enrolled": sid in enrolled_subject_ids,
+                "enrolled": practice_repo.normal_subject_id(sid)
+                in {practice_repo.normal_subject_id(item) for item in enrolled_subject_ids},
             }
         )
 
@@ -519,8 +520,11 @@ def knowledge_map(
         else (str(subjects[0].get("id") or "") if subjects else "")
     )
 
+    # Progress rows copy their lesson's subject, `mathematics`; the galaxies
+    # carry the catalog's `math`. Compared raw, a student taking maths was told
+    # they do not take it - drawn dimmed, and since #164 given no recommendation.
     enrolled = frozenset(
-        str(item.get("subject_id") or "")
+        practice_repo.normal_subject_id(item.get("subject_id"))
         for item in practice_repo.get_progress(student_id, None)
         if item.get("subject_id")
     )
