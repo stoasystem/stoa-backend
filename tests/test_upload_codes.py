@@ -27,6 +27,7 @@ import logging
 import random
 import time
 from typing import Any
+from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
@@ -166,6 +167,8 @@ class _Api:
         app = FastAPI()
         app.include_router(conversations.router, prefix="/conversations")
         app.include_router(upload_codes.conversation_router, prefix="/conversations")
+        app.include_router(upload_codes.files_router, prefix="/files")
+        app.include_router(upload_codes.student_router, prefix="/upload-codes")
         app.include_router(upload_codes.router, prefix="/upload-codes")
 
         def actor(request: Request) -> Actor:
@@ -275,6 +278,22 @@ class _Api:
     def preview(self, code_id: str, student: str = STUDENT):
         return self.client.get(
             f"/conversations/{CONV}/upload-codes/{code_id}/content",
+            headers={"Authorization": f"Bearer {student}"},
+        )
+
+    # -- a code made for no conversation (#191) --------------------------------------
+
+    def issue_unbound(self, student: str = STUDENT):
+        return self.client.post("/upload-codes", headers={"Authorization": f"Bearer {student}"})
+
+    def unbound_status(self, upload_id: str, student: str = STUDENT):
+        return self.client.get(
+            f"/files/{upload_id}/phone-code", headers={"Authorization": f"Bearer {student}"}
+        )
+
+    def unbound_preview(self, upload_id: str, student: str = STUDENT):
+        return self.client.get(
+            f"/files/{upload_id}/phone-code/content",
             headers={"Authorization": f"Bearer {student}"},
         )
 
@@ -868,3 +887,103 @@ def test_a_student_cannot_mint_codes_without_limit(monkeypatch, table) -> None:
 
     assert [api.issue().status_code for _ in range(3)] == [200, 200, 429]
     assert len(api.rows("upload_code")) == 2
+
+
+# -- a code made for no conversation (#191) ---------------------------------------
+
+
+def test_a_code_made_for_no_conversation_puts_a_photo_into_the_question_it_goes_with(
+    monkeypatch, table
+) -> None:
+    """A student photographs the exercise before there is a conversation to ask in."""
+    api = _Api(monkeypatch, table)
+    data = _png()
+    issued = api.issue_unbound()
+    assert issued.status_code == 200, issued.text
+    body = issued.json()
+    # The upload the phone will open, reserved now: the code's own UUID, with dashes.
+    assert body["uploadId"] == str(UUID(hex=body["codeId"]))
+    assert datetime.fromisoformat(body["expiresAt"]) == START + timedelta(minutes=10)
+    assert api.unbound_status(body["uploadId"]).json()["status"] == "waiting"
+    assert api.unbound_preview(body["uploadId"]).status_code == 404
+
+    _token, completed = api.phone_upload(body["code"], data)
+
+    assert completed.status_code == 200, completed.text
+    ready = api.unbound_status(body["uploadId"]).json()
+    assert (ready["status"], ready["uploadId"]) == ("ready", body["uploadId"])
+    preview = api.unbound_preview(body["uploadId"])
+    assert (preview.status_code, preview.content) == (200, data)
+    # Bound to no conversation, like a file the computer chose: it goes with the question.
+    [intent] = api.rows("upload_intent")
+    assert "bound_conversation_id" not in intent and "conversation_id" not in intent
+    sent = api.send(body["uploadId"], conversation_id=OTHER_CONV)
+    assert sent.status_code in {200, 202}, sent.text
+    [attachment] = api.rows("attachment")
+    assert (attachment["owner_id"], attachment["source_upload_id"]) == (STUDENT, body["uploadId"])
+
+
+def test_only_its_student_follows_a_code_made_for_no_conversation(monkeypatch, table) -> None:
+    api = _Api(monkeypatch, table)
+    body = api.issue_unbound().json()
+    _token, completed = api.phone_upload(body["code"])
+    assert completed.status_code == 200
+    assert api.unbound_status(body["uploadId"], student=OTHER_STUDENT).status_code == 404
+    assert api.unbound_preview(body["uploadId"], student=OTHER_STUDENT).status_code == 404
+    # Nor can another student send the photo with a question of theirs.
+    sent = api.client.post(
+        f"/conversations/{FOREIGN_CONV}/messages",
+        json={"content": "Hilfe", "idempotencyKey": "k", "attachmentIds": [{"uploadId": body["uploadId"]}]},
+        headers={"Authorization": f"Bearer {OTHER_STUDENT}", "Accept-Language": "de"},
+    )
+    assert sent.status_code not in {200, 202}
+
+
+def test_each_kind_of_code_is_read_only_its_own_way(monkeypatch, table) -> None:
+    """A conversation's code by its conversation, one made for none by its upload."""
+    api = _Api(monkeypatch, table)
+    unbound = api.issue_unbound().json()
+    bound = api.code()
+    assert "uploadId" not in bound or bound["uploadId"] is None
+    assert api.status(unbound["codeId"]).status_code == 404
+    assert api.unbound_status(str(UUID(hex=bound["codeId"]))).status_code == 404
+    # The upload id written any other way finds nothing either.
+    assert api.unbound_status(unbound["codeId"]).status_code == 404
+    assert api.unbound_status(unbound["uploadId"].upper()).status_code == 404
+    assert api.unbound_status("not-an-id").status_code == 404
+
+
+def test_a_conversations_code_still_opens_a_fresh_upload_bound_to_it(monkeypatch, table) -> None:
+    api = _Api(monkeypatch, table)
+    issued = api.code()
+    _token, completed = api.phone_upload(issued["code"])
+    assert completed.status_code == 200
+    [intent] = api.rows("upload_intent")
+    assert intent["upload_id"] != str(UUID(hex=issued["codeId"]))
+    assert intent["bound_conversation_id"] == CONV
+
+
+def test_only_a_student_makes_a_code_for_no_conversation(monkeypatch, table) -> None:
+    # An active account, so only the role can turn it away.
+    table.seed_active_account("teacher-1")
+    api = _Api(monkeypatch, table)
+    teacher = Actor(
+        "teacher-1", "https://identity.test", "teacher-1-subject",
+        CanonicalRole.TEACHER, AccountStatus.ACTIVE, "teacher",
+    )
+    with pytest.raises(upload_code_service.AttachmentDecisionError):
+        upload_code_service.issue_code(None, teacher, settings=api.settings)
+    assert api.rows("upload_code") == []
+
+
+def test_a_code_made_for_no_conversation_is_as_short_lived_and_single_use(monkeypatch, table) -> None:
+    api = _Api(monkeypatch, table)
+    body = api.issue_unbound().json()
+    api.clock.now = START + timedelta(minutes=10)
+    assert _refusal(api.redeem(body["code"])) == INVALID
+    assert api.unbound_status(body["uploadId"]).json()["status"] == "expired"
+
+    api.clock.now = START
+    fresh = api.issue_unbound().json()
+    assert api.redeem(fresh["code"]).status_code == 200
+    assert _refusal(api.redeem(fresh["code"])) == INVALID

@@ -1,7 +1,10 @@
 """Phone upload codes (#146): minted on the computer, presented by the phone.
 
 `conversation_router` is the signed-in student's side, under the conversation the
-code is for. `router` is the phone's side and takes no session: the code, then the
+code is for. `student_router` makes a code for no conversation yet (#191), for a
+question not asked yet, and `files_router` follows it by the upload it reserved,
+under that upload's own authorization. `router` is the phone's side and takes no
+session: the code, then the
 upload token it is exchanged for, are the credential, and both travel in the body.
 Its paths sit under their own prefix rather than `/files`, whose
 `/{upload_id}/...` routes would otherwise answer them.
@@ -35,7 +38,13 @@ from stoa.security.attachment_errors import (
     AttachmentErrorCode,
     log_attachment_failure,
 )
-from stoa.security.authorization import AuthorizationAction, AuthorizedResource
+from stoa.security.authorization import (
+    AuthorizationAction,
+    AuthorizationPurpose,
+    AuthorizationSpec,
+    AuthorizedResource,
+    ResourceType,
+)
 from stoa.security.identity import Actor
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
@@ -47,6 +56,8 @@ from stoa.services import rate_limit, upload_code_service
 
 
 conversation_router = APIRouter()
+student_router = APIRouter()
+files_router = APIRouter()
 router = APIRouter()
 
 
@@ -153,6 +164,86 @@ async def preview_upload_code_photo(
     try:
         prepared = upload_code_service.preview_upload(
             authorized.ref.resource_id, code_id, actor, s3=s3, settings=settings
+        )
+    except AttachmentDecisionError as error:
+        _raise_safe(error, correlation_id, settings)
+    return StreamingResponse(
+        prepared.iter_bytes(),
+        media_type=prepared.media_type,
+        headers={
+            **prepared.public_headers(),
+            "X-Correlation-ID": correlation_id,
+        },
+    )
+
+
+@student_router.post("", response_model=UploadCodeResponse)
+@explicit_route_classification(
+    "authenticated-global",
+    "a student's own phone upload code for a question not asked yet (#191)",
+)
+async def issue_unbound_upload_code(
+    actor: Actor = Depends(get_actor),
+    settings: Settings = Depends(get_settings),
+    correlation_id: str = Depends(get_request_correlation_id),
+):
+    """A one-time code a phone can put one image in with, before there is a conversation.
+
+    The upload it will open is reserved here (`uploadId`); the photo goes with
+    whichever question the student sends it with, like a file chosen on the computer.
+    """
+    try:
+        return upload_code_service.issue_code(None, actor, settings=settings)
+    except AttachmentDecisionError as error:
+        _raise_safe(error, correlation_id, settings)
+
+
+async def _reserved_upload_resolver(upload_id: str):
+    return {"student_id": upload_id}
+
+
+async def _reserved_upload_actor(actor: Actor = Depends(get_actor)) -> Actor:
+    return actor
+
+
+# The upload is the student's own: `upload_code_service` reads the code it was
+# reserved for and refuses one that is not theirs, as `/files` does for uploads.
+_reserved_upload_actor.authorization_specs = (  # type: ignore[attr-defined]
+    AuthorizationSpec(
+        ResourceType.UPLOAD,
+        AuthorizationAction.READ,
+        AuthorizationPurpose.SELF_SERVICE,
+        _reserved_upload_resolver,
+    ),
+)
+
+
+@files_router.get("/{upload_id}/phone-code", response_model=UploadCodeStatusResponse)
+async def read_unbound_upload_code(
+    upload_id: str,
+    actor: Actor = Depends(_reserved_upload_actor),
+    settings: Settings = Depends(get_settings),
+    correlation_id: str = Depends(get_request_correlation_id),
+):
+    """Where the phone has got with a code made for no conversation, by its upload."""
+    try:
+        return upload_code_service.unbound_code_status(upload_id, actor)
+    except AttachmentDecisionError as error:
+        _raise_safe(error, correlation_id, settings)
+
+
+@files_router.get("/{upload_id}/phone-code/content")
+async def preview_unbound_upload_code_photo(
+    upload_id: str,
+    actor: Actor = Depends(_reserved_upload_actor),
+    s3=Depends(get_s3_client),
+    settings: Settings = Depends(get_settings),
+    correlation_id: str = Depends(get_request_correlation_id),
+):
+    """The photo the phone put in, once it has passed, for the student to confirm."""
+    try:
+        prepared = upload_code_service.preview_unbound_upload(
+            upload_id, actor, s3=s3, settings=settings
         )
     except AttachmentDecisionError as error:
         _raise_safe(error, correlation_id, settings)

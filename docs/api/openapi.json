@@ -13823,6 +13823,19 @@
             "format": "date-time",
             "title": "Expiresat",
             "type": "string"
+          },
+          "uploadId": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploadid"
           }
         },
         "required": [
@@ -25946,6 +25959,148 @@
         }
       }
     },
+    "/files/{upload_id}/phone-code": {
+      "get": {
+        "description": "Where the phone has got with a code made for no conversation, by its upload.",
+        "operationId": "read_unbound_upload_code_files__upload_id__phone_code_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "upload_id",
+            "required": true,
+            "schema": {
+              "title": "Upload Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadCodeStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Unbound Upload Code",
+        "tags": [
+          "upload-codes"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "upload"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": [
+            "upload_id"
+          ]
+        }
+      }
+    },
+    "/files/{upload_id}/phone-code/content": {
+      "get": {
+        "description": "The photo the phone put in, once it has passed, for the student to confirm.",
+        "operationId": "preview_unbound_upload_code_photo_files__upload_id__phone_code_content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "upload_id",
+            "required": true,
+            "schema": {
+              "title": "Upload Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Unbound Upload Code Photo",
+        "tags": [
+          "upload-codes"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [
+            {
+              "action": "read",
+              "capability": null,
+              "purpose": "self_service",
+              "resource_type": "upload"
+            }
+          ],
+          "classification": "authorized",
+          "identifiers": [
+            "upload_id"
+          ]
+        }
+      }
+    },
     "/health": {
       "get": {
         "operationId": "health_check_health_get",
@@ -33277,6 +33432,48 @@
           "identifiers": [
             "question_id"
           ]
+        }
+      }
+    },
+    "/upload-codes": {
+      "post": {
+        "description": "A one-time code a phone can put one image in with, before there is a conversation.\n\nThe upload it will open is reserved here (`uploadId`); the photo goes with\nwhichever question the student sends it with, like a file chosen on the computer.",
+        "operationId": "issue_unbound_upload_code_upload_codes_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadCodeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthenticatedResponse"
+                }
+              }
+            },
+            "description": "No usable bearer token"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Issue Unbound Upload Code",
+        "tags": [
+          "upload-codes"
+        ],
+        "x-stoa-authorization": {
+          "authorization": [],
+          "classification": "authenticated-global",
+          "identifiers": []
         }
       }
     },

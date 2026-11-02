@@ -31,6 +31,9 @@ class UploadCodeResponse(_AttachmentModel):
     code_id: OpaqueId = Field(alias="codeId")
     code: str = Field(min_length=1)
     expires_at: datetime = Field(alias="expiresAt")
+    # A code made for no conversation (#191): the upload the phone will open,
+    # which the computer follows under `/files/{upload_id}/phone-code`.
+    upload_id: OpaqueId | None = Field(default=None, alias="uploadId")
 
 
 class UploadCodeStatusResponse(_AttachmentModel):
