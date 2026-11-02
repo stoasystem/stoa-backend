@@ -13,12 +13,18 @@ from decimal import Decimal
 
 import pytest
 
-from fakes.ask_question import NOW, _command, _patch_allowance_table, _ResponseBody
+from fakes.ask_question import (
+    NOW,
+    CommandResult,
+    Disposition,
+    _command,
+    _patch_allowance_table,
+    _ResponseBody,
+)
 from stoa.db.repositories import allowance_repo
 from stoa.routers import conversations
 from stoa.services import ai_service
 from stoa.services.ask_question import _answering
-from stoa.services.ask_question import _store as ask_question_store
 from fakes.ask_question import AtomicAllowanceTable
 
 
@@ -425,8 +431,8 @@ def allowance_repo_message_result(
     command: dict[str, object],
 ):
 
-    return ask_question_store.MessageCommandResult(
-        ask_question_store.MessageCommandDisposition.COMPLETED,
+    return CommandResult(
+        Disposition.COMPLETED,
         command=command,
     )
 

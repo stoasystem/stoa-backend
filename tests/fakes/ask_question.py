@@ -347,6 +347,140 @@ def _running(table, key: str, *, attempt: int, claimed_minutes_ago: float) -> No
     table.seed(row)
 
 
+def _called(then: Any = None) -> Any:
+    """The model was asked (the allowance client recorded the call) and then did `then`."""
+    return ANSWER if then is None else then
+
+
+def _minutes_ago(minutes: float) -> str:
+    return (datetime.now(UTC) - timedelta(minutes=minutes)).isoformat()
+
+
+def _last_attempt_kept_its_answer(
+    table, model, monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
+    """The answer was stored, then the Lambda died; that attempt was the last."""
+    _commit(key)
+    model.outcomes = [_called()]
+    renew = _store.renew_message_ai_lease
+
+    def die(**_: Any) -> bool:
+        raise _Killed()
+
+    monkeypatch.setattr(_store, "renew_message_ai_lease", die)
+    with pytest.raises(_Killed):
+        _deliver(key)
+    monkeypatch.setattr(_store, "renew_message_ai_lease", renew)
+    row = dict(_command_row(table, key))
+    assert row["provider_result_json"]
+    row.update(attempt=3, provider_invoked_attempt=3, provider_result_attempt=3)
+    table.seed(row)
+
+
+# ── The question's own rows, reached by the tests outside its store's (#220) ──
+#
+# Only `tests/test_ask_question_store.py` imports `ask_question._store`. Every
+# other test that injects a fault into it, wraps one of its functions or builds
+# one of its results goes through these.
+
+CommandResult = _store.MessageCommandResult
+Disposition = _store.MessageCommandDisposition
+
+
+def store_call(name: str) -> Callable[..., Any]:
+    """The store's function `name` as it is now, for a test that wraps it."""
+    return getattr(_store, name)
+
+
+def patch_store(monkeypatch: pytest.MonkeyPatch, name: str, replacement: Any) -> None:
+    """The store's function `name` is `replacement` for the rest of the test."""
+    store_call(name)  # a name the store does not have is a typo, not a patch
+    monkeypatch.setattr(_store, name, replacement)
+
+
+def fail_store(
+    monkeypatch: pytest.MonkeyPatch, name: str, failure: BaseException, *, from_call: int = 1
+) -> None:
+    """The store's function `name` runs as it does until its `from_call`-th call,
+    which raises `failure`, as does every call after it."""
+    real = store_call(name)
+    calls = {"count": 0}
+
+    def failing(*args: Any, **kwargs: Any) -> Any:
+        calls["count"] += 1
+        if calls["count"] >= from_call:
+            raise failure
+        return real(*args, **kwargs)
+
+    patch_store(monkeypatch, name, failing)
+
+
+# ── Rows the store's tests share with the tests they were moved from (#220) ──
+
+
+def _message_command(**overrides: Any) -> dict[str, Any]:
+    """A message command as the table stores it, claimed and not yet committed."""
+    value: dict[str, Any] = {
+        "entity_type": "message_command",
+        "schema_version": "message-command.v2",
+        "command_id": "command-1",
+        "conversation_id": "conv-1",
+        "owner_id": "student-1",
+        "idempotency_key": "message-key",
+        "fingerprint": "f" * 64,
+        "status": "claimed",
+        "student_message_id": "student-message-1",
+        "assistant_message_id": "assistant-message-1",
+        "deterministic_attachment_ids": ["attachment-1"],
+        "requested_attachments": [
+            {"kind": "upload", "id": "upload-1", "attachment_id": "attachment-1"}
+        ],
+        "quota_period": "2026-07-17",
+        "usage_action": "chat_message",
+        "usage_resource_id": "student-message-1",
+        "usage_idempotency_key": "chat_message:student-message-1",
+        "usage_event_id": (
+            "student-1:chat_message:2026-07-17:chat_message:student-message-1"
+        ),
+        "history_anchor_message_id": "student-message-1",
+        "history_anchor_created_at": "2026-07-17T23:59:59+00:00",
+        "attempt": 0,
+        "created_at": "2026-07-17T23:59:59+00:00",
+        "expires_at": 1784505599,
+    }
+    value.update(overrides)
+    return value
+
+
+# The account and conversation of the conversation deletion tests.
+DELETED_STUDENT = "student-conversation-delete"
+PRIVATE_CONVERSATION = "conversation-private"
+DELETION_NOW = "2026-07-18T01:00:00+00:00"
+
+
+def _private_message(sk: str = "MSG#student", **overrides: Any) -> dict[str, Any]:
+    """A private row of `PRIVATE_CONVERSATION`, by default its student's message."""
+    item = {
+        "PK": f"CONV#{PRIVATE_CONVERSATION}",
+        "SK": sk,
+        "entity_type": "conversation_message",
+        "schema_version": "conversation-message.v1",
+        "message_id": sk.split("#", 1)[-1],
+        "conversation_id": PRIVATE_CONVERSATION,
+        "student_id": DELETED_STUDENT,
+        "owner_id": DELETED_STUDENT,
+        "account_fence_generation": 7,
+        "role": "student",
+        "content": "private message canary",
+        "attachment_ids": ["attachment-private"],
+        "subject": "private subject",
+        "grade": "private grade",
+        "created_at": DELETION_NOW,
+    }
+    item.update(overrides)
+    return item
+
+
 # ── A provider answering with fixed text, for the allowance tests (#206 改写) ──
 
 

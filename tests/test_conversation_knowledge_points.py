@@ -38,6 +38,7 @@ from fakes.ask_question import (
     _shown_stars,
     _student_turn,
 )
+from fakes.ask_question import patch_store, store_call
 from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fixture
 from fakes.ask_question import bedrock as bedrock  # noqa: F401 - the fixture
 from fakes.ask_question import invokes as invokes  # noqa: F401 - the fixture
@@ -46,7 +47,6 @@ from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from fakes.dynamodb import transaction_canceled
 from stoa.jobs import conversation_generation
 from stoa.services import curriculum_service
-from stoa.services.ask_question import _store as ask_question_store
 
 
 def _read_back(client) -> list[dict[str, Any]]:
@@ -350,7 +350,7 @@ def test_an_attempt_that_dies_before_storing_its_answer_counts_nothing(
     bedrock.answers = [_answer(lambda _stars: [{"id": None, "name": "Brüche im Alltag"}])]
     client = _client()
     assert _send(client, "key-1", language="de").status_code == 202
-    complete = ask_question_store.complete_message_command
+    complete = store_call("complete_message_command")
     calls = {"complete": 0}
 
     def die_on_first_completion(**kwargs: Any) -> Any:
@@ -359,8 +359,8 @@ def test_an_attempt_that_dies_before_storing_its_answer_counts_nothing(
             raise _Killed()
         return complete(**kwargs)
 
-    monkeypatch.setattr(
-        ask_question_store, "complete_message_command", die_on_first_completion
+    patch_store(
+        monkeypatch, "complete_message_command", die_on_first_completion
     )
     with pytest.raises(_Killed):
         conversation_generation.handler(invokes.events[0], None)

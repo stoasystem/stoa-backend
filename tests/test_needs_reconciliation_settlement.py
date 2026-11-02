@@ -30,13 +30,13 @@ from fakes.ask_question import (
     _Killed,
     _running,
 )
+from fakes.ask_question import patch_store, store_call
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from fakes.bedrock import FakeBedrock
 from stoa.db.repositories import allowance_repo
 from stoa.jobs import conversation_generation
 from stoa.services import ai_service, allowance_service
 from stoa.services.ask_question import _answering
-from stoa.services.ask_question import _store as ask_question_store
 from stoa.services.ask_question import _sweep as ask_question_sweep
 
 RESERVED_INPUT = 120
@@ -472,7 +472,7 @@ def test_a_lease_taken_up_after_the_sweep_read_it_is_left_alone(
     """
     _died_after_the_call(table, model, "stale")
     _running(table, "stale", attempt=1, claimed_minutes_ago=40)
-    close = ask_question_store.close_stale_lease
+    close = store_call("close_stale_lease")
 
     def retried_first(**kwargs: Any) -> bool:
         row = dict(_command_row(table, "stale"))
@@ -481,7 +481,7 @@ def test_a_lease_taken_up_after_the_sweep_read_it_is_left_alone(
         table.seed(row)
         return close(**kwargs)
 
-    monkeypatch.setattr(ask_question_store, "close_stale_lease", retried_first)
+    patch_store(monkeypatch, "close_stale_lease", retried_first)
 
     summary = _sweep()
 
