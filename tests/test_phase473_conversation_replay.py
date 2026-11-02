@@ -8,14 +8,18 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
+
+from fakes.ask_question import CONV, _command_row, _commit, _parse_in_process, _submit, _upload
+from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fixture
+from fakes.ask_question import bucket as bucket  # noqa: F401 - the fixture
+from fakes.ask_question import model as model  # noqa: F401 - the fixture
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from fakes.dynamodb import as_stored as _as_stored
 
 from stoa.config import Settings
 from stoa.db.repositories import attachment_repo
-from stoa.services.ask_question import _answering
-from stoa.services.ask_question import _transcript
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
-from stoa.services import ai_service, attachment_service
+from stoa.services import ai_service, ask_question, attachment_service
 from stoa.services.document_extraction_service import DocumentExtractionFailure
 from stoa.services.ask_question import _store as ask_question_store
 
@@ -124,6 +128,18 @@ def test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape(
         )
 
 
+def _committed_with_an_attachment(table, bucket, monkeypatch) -> tuple[str, str]:
+    """A message committed with one upload, its answer still to come.
+
+    Returns the table key of the attachment it was bound as.
+    """
+    _parse_in_process(monkeypatch)
+    _upload(table, bucket, "upload-1", b"private notes", filename="notes.txt", media_type="text/plain")
+    _commit("replay-key", attachmentIds=[{"uploadId": "upload-1"}])
+    [attachment_id] = _command_row(table, "replay-key")["deterministic_attachment_ids"]
+    return tuple(attachment_repo.attachment_key(attachment_id).values())
+
+
 @pytest.mark.parametrize(
     "field,bad_value",
     [
@@ -147,115 +163,120 @@ def test_batch_get_rejects_every_partial_duplicate_extra_or_malformed_shape(
     ],
 )
 def test_replay_attachment_row_requires_exact_owner_active_schema_and_immutable_tuple(
-    field: str, bad_value: Any
+    table, model, bucket, monkeypatch, field: str, bad_value: Any
 ) -> None:
-    row = {**_attachment("attachment-1"), field: bad_value}
+    key = _committed_with_an_attachment(table, bucket, monkeypatch)
+    table.rows[key][field] = bad_value
+
+    # The student sends it again: the stored message is read back with its attachment.
     with pytest.raises(AttachmentDecisionError) as captured:
-        _transcript._validate_replay_attachment(
-            row, attachment_id="attachment-1", owner_id="student-1"
-        )
+        _submit("replay-key", attachmentIds=[{"uploadId": "upload-1"}])
+
     assert captured.value.code is AttachmentErrorCode.UPLOAD_NOT_FOUND
     assert "private-canary" not in str(captured.value)
+    assert model.calls == []
 
 
-def test_replay_attachment_row_is_accepted_in_the_shape_the_table_returns() -> None:
+def test_replay_attachment_row_is_accepted_in_the_shape_the_table_returns(
+    table, model, bucket, monkeypatch
+) -> None:
     """The positive control the rejection cases rest on.
 
     Every number in the row comes back from the table as `Decimal`, so a guard
     written against `int` refuses the row it exists to accept.
     """
-    row = _attachment("attachment-1")
-    assert isinstance(row["content_length"], Decimal)
-    assert _transcript._validate_replay_attachment(
-        row, attachment_id="attachment-1", owner_id="student-1"
-    ) is row
+    key = _committed_with_an_attachment(table, bucket, monkeypatch)
+    assert isinstance(table.rows[key]["content_length"], Decimal)
+
+    answered = _submit("replay-key", attachmentIds=[{"uploadId": "upload-1"}])
+
+    [attachment] = answered.studentMessage.attachments
+    assert attachment.filename == "notes.txt"
+    assert len(model.calls) == 1
 
 
 def _message(message_id: str, created_at: str, content: str) -> dict[str, Any]:
     return {
-        "PK": "CONV#conv-1",
+        "PK": f"CONV#{CONV}",
         "SK": f"MSG#{message_id}",
         "entity_type": "conversation_message",
         "schema_version": "conversation-message.v1",
         "message_id": message_id,
-        "conversation_id": "conv-1",
+        "conversation_id": CONV,
         "student_id": "student-1",
+        "owner_id": "student-1",
+        "account_fence_generation": 1,
         "role": "student" if message_id.startswith("student") else "assistant",
         "content": content,
         "created_at": created_at,
     }
 
 
-class _HistoryTable:
-    def __init__(self, pages: list[dict[str, Any]]) -> None:
-        self.pages = list(pages)
-        self.requests: list[dict[str, Any]] = []
-
-    def query(self, **kwargs):
-        self.requests.append(kwargs)
-        return self.pages.pop(0)
-
-
-def test_history_snapshot_is_consistent_paginated_ordered_and_ignores_later_rows() -> None:
-    original = [
+def _committed_after_two_messages(table) -> None:
+    """A conversation with one exchange in it, and a question committed after it."""
+    table.seed(
         _message("student-old", "2026-07-17T00:00:00Z", "original question"),
         _message("assistant-old", "2026-07-17T00:00:01Z", "original reply"),
-    ]
-    captured = _answering._history_snapshot_fingerprint(original)
-    later = _message("student-later", "2026-07-17T00:00:09Z", "later private canary")
-    table = _HistoryTable(
-        [
-            {"Items": [original[0]], "LastEvaluatedKey": {"PK": "p", "SK": "s"}},
-            {"Items": [later, original[1]]},
-        ]
     )
-
-    snapshot = _answering._load_anchored_message_history(
-        conversation_id="conv-1",
-        owner_id="student-1",
-        expected_message_ids=["student-old", "assistant-old"],
-        expected_fingerprint=captured,
-        table=table,
-    )
-
-    assert [row["message_id"] for row in snapshot] == [
+    _commit("history-key")
+    assert _command_row(table, "history-key")["history_message_ids"] == [
         "student-old",
         "assistant-old",
     ]
-    assert all(request["ConsistentRead"] is True for request in table.requests)
-    assert table.requests[1]["ExclusiveStartKey"] == {"PK": "p", "SK": "s"}
-    assert "later private canary" not in json.dumps(snapshot)
+
+
+def test_history_snapshot_is_consistent_paginated_ordered_and_ignores_later_rows(
+    table, model
+) -> None:
+    _committed_after_two_messages(table)
+    table.seed(_message("student-later", "2099-07-17T00:00:09Z", "later private canary"))
+    table.page_item_cap = 1
+    table.requests.clear()
+
+    assert ask_question.answer(CONV, "history-key") == "completed"
+
+    # Read page by page, each page strongly consistent.
+    history = [
+        request
+        for operation, request in table.requests
+        if operation == "query" and request.get("ConsistentRead") is True
+    ]
+    assert len(history) >= 3
+    assert any("ExclusiveStartKey" in request for request in history)
+    sent = json.dumps(model.requests[-1]["messages"], ensure_ascii=False)
+    assert sent.index("original question") < sent.index("original reply")
+    assert "later private canary" not in sent
 
 
 @pytest.mark.parametrize("mode", ["missing", "duplicate", "changed", "malformed-page"])
 def test_history_snapshot_rejects_missing_duplicate_changed_and_malformed_rows(
-    mode: str,
+    table, model, monkeypatch, mode: str
 ) -> None:
-    original = [
-        _message("student-old", "2026-07-17T00:00:00Z", "original question"),
-        _message("assistant-old", "2026-07-17T00:00:01Z", "original reply"),
-    ]
-    fingerprint = _answering._history_snapshot_fingerprint(original)
-    rows: Any = list(original)
+    _committed_after_two_messages(table)
     if mode == "missing":
-        rows = rows[:1]
+        del table.rows[(f"CONV#{CONV}", "MSG#assistant-old")]
     elif mode == "duplicate":
-        rows.append(dict(rows[0]))
-    elif mode == "changed":
-        rows[1] = {**rows[1], "content": "changed after command"}
-    else:
-        rows = {}
-    table = _HistoryTable([{"Items": rows}])
-
-    with pytest.raises(AttachmentDecisionError) as captured:
-        _answering._load_anchored_message_history(
-            conversation_id="conv-1",
-            owner_id="student-1",
-            expected_message_ids=["student-old", "assistant-old"],
-            expected_fingerprint=fingerprint,
-            table=table,
+        table.seed(
+            {**_message("student-old", "2026-07-17T00:00:00Z", "original question"),
+             "SK": "MSG#student-old-again"}
         )
+    elif mode == "changed":
+        table.rows[(f"CONV#{CONV}", "MSG#assistant-old")]["content"] = "changed after command"
+    else:
+        query = table.query
+
+        def malformed(**kwargs: Any) -> Any:
+            page = query(**kwargs)
+            return {**page, "Items": {}}
+
+        monkeypatch.setattr(table, "query", malformed)
+
+    # The student sends it again; the history it was asked after is read back.
+    with pytest.raises(AttachmentDecisionError) as captured:
+        _submit("history-key")
+
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+    assert model.calls == []
 
 
 def _provider_body(data: bytes, *, read_error: bool = False, close_error: bool = False):

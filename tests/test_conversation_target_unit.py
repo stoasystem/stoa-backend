@@ -24,31 +24,28 @@ from typing import Any
 
 import pytest
 
-from stoa.jobs import conversation_generation
-from stoa.services.ask_question import _answering
-from stoa.services import curriculum_service, knowledge_mastery_service, star_map_candidates
-from test_async_generation_cutover import invokes as invokes  # noqa: F401 - the fixture
-from test_async_generation_cutover import switched_on as switched_on  # noqa: F401
-from test_conversation_structured_answers import (
+from fakes.ask_question import (
     ANSWERS,
-    _assistant,
-    _CapturingBedrockClient,
-    _done,
-    _read_back,
-    _student_turn,
-)
-from test_conversation_token_finalization import _patch_allowance_table
-from test_message_command_generation import (  # noqa: F401 - fixtures
     CONV,
     STUDENT,
+    _assistant,
+    _CapturingBedrockClient,
     _client,
+    _done,
     _messages,
+    _patch_allowance_table,
+    _read_back,
     _send,
+    _student_turn,
 )
-from test_message_command_generation import _no_memory_personalisation  # noqa: F401
-from test_message_command_generation import model as model  # noqa: F401 - the fixture
-from test_message_command_generation import table as table  # noqa: F401 - the fixture
-from test_token_allowances import AtomicAllowanceTable
+from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fixture
+from fakes.ask_question import invokes as invokes  # noqa: F401 - the fixture
+from fakes.ask_question import model as model  # noqa: F401 - the fixture
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from stoa.jobs import conversation_generation
+from stoa.services import curriculum_service, knowledge_mastery_service, star_map_candidates
+from stoa.services.ask_question import _answering
+from fakes.ask_question import AtomicAllowanceTable
 
 _READ_THE_MAP = star_map_candidates.for_student
 _State = knowledge_mastery_service.LearningState
@@ -284,7 +281,7 @@ def test_the_plain_send_route_returns_the_target(table, model) -> None:
 
 
 def test_the_worker_s_answer_after_a_202_carries_the_target(
-    table, model, invokes, switched_on, sky
+    table, model, invokes, sky
 ) -> None:
     model.outcomes = [_answer(_ref("funktionen-ableitung"))]
     client = _client()

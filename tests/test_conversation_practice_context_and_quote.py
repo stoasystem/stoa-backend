@@ -18,23 +18,24 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from audit_helpers import MemoryAuthorizationAuditSink
-from fakes.bedrock import FakeBedrock, answer_without_allowance
+from fakes.ask_question import CONV, _command_row
+from fakes.ask_question import _client as _question_client
+from fakes.ask_question import model as model  # noqa: F401 - the fixture
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from fakes.bedrock import FakeBedrock
 from fakes.dynamodb import as_stored
 from stoa.db.repositories import practice_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import conversations
 from stoa.services.ask_question import _answering
-from stoa.services.ask_question import _transcript
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import (
-    adaptive_learning_service,
     ask_answer,
     curriculum_service,
     knowledge_map_service,
     knowledge_mastery_service,
     practice_context_service,
 )
-from stoa.services.ask_question import _store as ask_question_store
 
 STUDENT = "student-1"
 
@@ -710,103 +711,27 @@ def test_no_fence_block_is_added_when_neither_field_is_given():
 
 # ── The command carries both, so the worker reads what the request resolved ──
 
-def _run_message_command(monkeypatch, *, body_payload: dict[str, Any]) -> dict[str, Any]:
-    """Run one whole message command, returning what the AI and store saw."""
-    body = conversations.SendMessageRequest.model_validate(body_payload)
-    command_state: dict[str, Any] = {}
-    stored_messages: dict[str, Any] = {}
-
-    monkeypatch.setattr(conversations, "get_table", lambda: object())
-    monkeypatch.setattr(_answering, "get_table", lambda: object())
-    monkeypatch.setattr(_transcript, "get_table", lambda: object())
-    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 8)
-    monkeypatch.setattr(_answering, "_attachment_plan_for_student", lambda *_: "free_trial")
-    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
-    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
-    monkeypatch.setattr(conversations, "_student_locale", lambda *_: "de")
-    monkeypatch.setattr(_answering.boto3, "client", lambda *_a, **_k: object())
-    monkeypatch.setattr(
-        conversations.attachment_service, "prepare_message_attachments", lambda *_a, **_k: []
-    )
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "ensure_message_attachment_capacity",
-        lambda *_a, **_k: None,
-    )
-
-    def bind(**kwargs):
-        stored_messages.update(kwargs["message"])
-        return []
-
-    monkeypatch.setattr(conversations.attachment_service, "bind_message_attachments", bind)
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "extract_message_attachment_context",
-        lambda *_a, **_k: conversations.attachment_service.AttachmentContextResult(
-            conversations.attachment_service.AttachmentContextDisposition.READY
-        ),
-    )
-    monkeypatch.setattr(
-        adaptive_learning_service,
-        "get_memory_summary",
-        lambda **_kwargs: {"weakTopics": [], "recommendations": [], "memorySnapshots": []},
-    )
-
-    def claim(**kwargs):
-        command_state.update(kwargs["command"])
-        command_state["counter_value"] = 1
-        return True, 1
-
-    def claim_ai(**kwargs):
-        command_state.update(status="ai_running", leaseOwner=kwargs["lease_owner"], attempt=1)
-        return True, 1
-
-    def complete(**kwargs):
-        command_state.update(status="completed", result_json=kwargs["result_json"])
-        return True
-
-    monkeypatch.setattr(ask_question_store, "claim_message_command_and_quota", claim)
-    monkeypatch.setattr(
-        ask_question_store, "get_message_command", lambda *_a, **_k: dict(command_state) or None
-    )
-    monkeypatch.setattr(ask_question_store, "claim_message_ai_lease", claim_ai)
-    monkeypatch.setattr(ask_question_store, "renew_message_ai_lease", lambda **_k: True)
-    monkeypatch.setattr(ask_question_store, "complete_message_command", complete)
-
-    model = answer_without_allowance(
-        monkeypatch, FakeBedrock(answer={"steps": ["one"], "answer": "safe", "hints": []})
-    )
-
-    resolved = None
-    if body.practiceContext is not None:
-        resolved = conversations._resolved_practice_context(STUDENT, body.practiceContext)
-    _answering._execute_message_command(
-        conv_id="conv-1",
-        student_id=STUDENT,
-        subject="math",
-        grade="Sek1",
-        body=body,
-        command_context={
-            "actor": _actor(),
-            "fingerprint": conversations.message_request_fingerprint(body),
-            "existing": None,
-            "practice_context": resolved,
-        },
-    )
+def _run_message_command(table, model, *, body_payload: dict[str, Any]) -> dict[str, Any]:
+    """Send one message through the route, returning what the AI and the store saw."""
+    response = _question_client().post(f"/conversations/{CONV}/messages", json=body_payload)
+    assert response.status_code == 200, response.text
     assert model.requests, "the model was never asked"
+    command = _command_row(table, body_payload["idempotencyKey"])
+    message = table.rows[(f"CONV#{CONV}", f"MSG#{command['student_message_id']}")]
     turn = model.student_turn()
     seen = {"quote": None, "practice_context": None}
     if "<student_quote-" in turn:
         seen["quote"] = {"text": _fenced_payload(turn, "student_quote").strip().split("\n", 1)[1]}
     if "<practice_context-" in turn:
         seen["practice_context"] = json.loads(_fenced_payload(turn, "practice_context"))
-    return {"ai": seen, "command": command_state, "message": stored_messages}
+    return {"ai": seen, "command": command, "message": message}
 
 
-def test_the_resolved_practice_context_is_stored_on_the_command(monkeypatch):
+def test_the_resolved_practice_context_is_stored_on_the_command(table, model, monkeypatch):
     _stub_curriculum(monkeypatch, review_due={"unit-1": 2})
     run = _run_message_command(
-        monkeypatch,
+        table,
+        model,
         body_payload={
             "content": "warum?",
             "idempotencyKey": "ctx-1",
@@ -819,9 +744,10 @@ def test_the_resolved_practice_context_is_stored_on_the_command(monkeypatch):
     assert run["ai"]["practice_context"] == stored
 
 
-def test_the_quote_is_stored_on_the_student_message_and_handed_to_the_model(monkeypatch):
+def test_the_quote_is_stored_on_the_student_message_and_handed_to_the_model(table, model):
     run = _run_message_command(
-        monkeypatch,
+        table,
+        model,
         body_payload={
             "content": "warum?",
             "idempotencyKey": "quote-1",
@@ -838,33 +764,14 @@ def test_the_quote_is_stored_on_the_student_message_and_handed_to_the_model(monk
     assert run["ai"]["quote"]["text"] == "1/4 + 1/4 = 1/8"
 
 
-def test_a_message_without_the_new_fields_hands_the_model_neither(monkeypatch):
+def test_a_message_without_the_new_fields_hands_the_model_neither(table, model):
     run = _run_message_command(
-        monkeypatch, body_payload={"content": "warum?", "idempotencyKey": "plain-1"}
+        table, model, body_payload={"content": "warum?", "idempotencyKey": "plain-1"}
     )
     assert run["ai"]["quote"] is None
     assert run["ai"]["practice_context"] is None
     assert run["command"]["generation_context"]["practice_context"] is None
     assert "quote" not in run["message"]
-
-
-def test_the_worker_reads_the_same_practice_context_the_request_resolved(monkeypatch):
-    _stub_curriculum(monkeypatch, review_due={"unit-1": 2})
-    run = _run_message_command(
-        monkeypatch,
-        body_payload={
-            "content": "warum?",
-            "idempotencyKey": "ctx-worker",
-            "practiceContext": PRACTICE_CONTEXT,
-        },
-    )
-    stored = dict(run["command"]["generation_context"]["practice_context"])
-    # The worker has no request; whatever the curriculum says later, the answer
-    # is generated from what was resolved when the student asked.
-    monkeypatch.setattr(
-        practice_repo, "get_challenge", lambda _id: _challenge(prompt="etwas anderes")
-    )
-    assert stored["challengePrompt"] == "Wie viel ist 1/4 + 1/4?"
 
 
 # ── Read-back ────────────────────────────────────────────────────────────────

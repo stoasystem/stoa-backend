@@ -8,6 +8,10 @@ already used the time up. This is the interim fix; answers that need more than
 the Lambda's lifetime are E11's.
 """
 
+# #206 改写: the allowance-client tests here build
+# `_answering._ConversationAllowanceBedrockClient` and read the deadline
+# constants directly; they are rewritten when "AI 消息准入" (#206) lands.
+
 from __future__ import annotations
 
 import asyncio
@@ -16,10 +20,17 @@ from typing import Any
 
 import pytest
 
-from stoa.services.ask_question import _answering
+from fakes.ask_question import (
+    NOW,
+    _COMPLETE,
+    _command,
+    _patch_allowance_table,
+    _run_message_command,
+)
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from stoa.services import ai_service, runtime_budget_service
-from test_conversation_token_finalization import NOW, _command, _patch_allowance_table
-from test_token_allowances import AtomicAllowanceTable
+from stoa.services.ask_question import _answering
+from fakes.ask_question import AtomicAllowanceTable
 
 
 ANSWER = {"steps": ["Count the four equal parts."], "answer": "One half.", "hints": []}
@@ -229,7 +240,7 @@ def test_an_answer_that_takes_ten_seconds_still_succeeds(
 
 
 def test_the_message_route_gives_the_answer_the_requests_deadline(
-    monkeypatch: pytest.MonkeyPatch,
+    table, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     seen: list[float | None] = []
     real = _answering.ask_answer.answer
@@ -247,8 +258,6 @@ def test_the_message_route_gives_the_answer_the_requests_deadline(
             "reserve_seconds": _answering._AI_PERSIST_RESERVE_SECONDS,
         } else pytest.fail(f"unexpected budget arguments {kwargs}"),
     )
-    from test_truncated_ai_output import _COMPLETE, _run_message_command
-
     _run_message_command(monkeypatch, text=_COMPLETE, stop_reason="end_turn")
 
     assert seen == [12_345.0]

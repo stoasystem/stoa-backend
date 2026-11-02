@@ -79,7 +79,6 @@ HAND_WRITTEN_DOUBLES: dict[str, str] = {
     "test_phase473_account_deletion.py::_Commands": "script",
     "test_phase473_account_deletion.py::_ParentProfile": "script",
     "test_phase473_conversation_deletion.py::_Table": "script",
-    "test_phase473_conversation_replay.py::_HistoryTable": "script",
     "test_phase473_derived_content_purge.py::_Table": "script",
     "test_phase473_derived_content_purge.py::_Malformed": "script",
     "test_phase473_derived_content_purge.py::_Repeating": "script",

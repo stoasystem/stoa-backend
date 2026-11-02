@@ -12,7 +12,6 @@ model was actually shown is what is asserted.
 from __future__ import annotations
 
 import base64
-import hashlib
 import io
 import json
 from typing import Any
@@ -20,29 +19,24 @@ from typing import Any
 import pytest
 from PIL import Image
 
-from fakes.bedrock import FakeBedrock
-from fakes.dynamodb import FakeTable
-from stoa.db.repositories import attachment_repo
-from stoa.jobs import conversation_generation
-from stoa.routers import conversations
-from stoa.services.ask_question import _answering
-from stoa.services import attachment_service
-from stoa.services.document_extraction_service import (
-    DocumentExtractionFailure,
-    extract_attachment_text,
-)
-from stoa.services.document_parser_worker import ParserResult
-from test_conversation_token_finalization import _patch_allowance_table
-from test_conversations import _actor
-from test_message_command_generation import (  # noqa: F401 - fixtures
+from fakes.ask_question import (
     CONV,
-    STUDENT,
     _client,
     _command_row,
     _messages,
+    _patch_allowance_table,
+    _upload,
 )
-from test_message_command_generation import table as table  # noqa: F401 - the fixture
-from test_token_allowances import AtomicAllowanceTable
+from fakes.ask_question import _commit as _commit_message
+from fakes.ask_question import _parser_in_process  # noqa: F401 - the fixture
+from fakes.ask_question import bucket as bucket  # noqa: F401 - the fixture
+from fakes.ask_question import model as model  # noqa: F401 - the fixture
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from fakes.bedrock import FakeBedrock
+from stoa.jobs import conversation_generation
+from stoa.services import attachment_service
+from stoa.services.ask_question import _answering
+from fakes.ask_question import AtomicAllowanceTable
 
 MODEL_ANSWER = {
     "steps": ["Lies die Aufgabe auf dem Bild"],
@@ -60,105 +54,14 @@ def _image(fmt: str, size: tuple[int, int] = (32, 24)) -> bytes:
     return buffer.getvalue()
 
 
-class _Body:
-    def __init__(self, data: bytes) -> None:
-        self._stream = io.BytesIO(data)
-
-    def read(self, size: int = -1) -> bytes:
-        return self._stream.read(size)
-
-    def close(self) -> None:
-        self._stream.close()
-
-
-class _Bucket:
-    """The private bucket, holding each upload's exact immutable version."""
-
-    def __init__(self) -> None:
-        self.objects: dict[tuple[str, str], bytes] = {}
-
-    def put(self, key: str, version: str, data: bytes) -> None:
-        self.objects[(key, version)] = data
-
-    def get_object(self, *, Bucket: str, Key: str, VersionId: str):  # noqa: N803 - boto3 casing
-        data = self.objects[(Key, VersionId)]
-        return {
-            "Body": _Body(data),
-            "ETag": f"etag-{Key}",
-            "ContentLength": len(data),
-        }
-
-
-@pytest.fixture
-def bucket(monkeypatch: pytest.MonkeyPatch) -> _Bucket:
-    bucket = _Bucket()
-    monkeypatch.setattr(_answering.boto3, "client", lambda *_a, **_k: bucket)
-    return bucket
-
-
-@pytest.fixture
-def model(monkeypatch: pytest.MonkeyPatch, bucket: _Bucket) -> FakeBedrock:
-    """The Bedrock double behind the real allowance client; S3 is the bucket."""
-    model = FakeBedrock(answer=MODEL_ANSWER)
-    clients = {"s3": bucket, "bedrock-runtime": model}
-    monkeypatch.setattr(_answering.boto3, "client", lambda name, *_a, **_k: clients[name])
-    _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    return model
-
-
 @pytest.fixture(autouse=True)
 def _plan(monkeypatch: pytest.MonkeyPatch, stub_memory_summary) -> None:
     monkeypatch.setattr(_answering, "_attachment_plan_for_student", lambda *_: "free_trial")
 
 
 @pytest.fixture(autouse=True)
-def _parser_in_process(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The extraction the parser process runs, without the process.
-
-    The process sets rlimits, which only exist on POSIX; on Windows it always
-    answers `service_unavailable`. What it extracts is the same either way.
-    """
-
-    def parse(data: Any, media_type: str, **_kwargs: Any) -> ParserResult:
-        data.seek(0)
-        try:
-            return ParserResult(text=extract_attachment_text(data.read(), media_type))
-        except DocumentExtractionFailure as error:
-            return ParserResult(category=error.category)
-
-    monkeypatch.setattr(attachment_service, "parse_document_isolated", parse)
-
-
-def _upload(
-    table: FakeTable,
-    bucket: _Bucket,
-    upload_id: str,
-    data: bytes,
-    *,
-    filename: str,
-    media_type: str,
-    declared_length: int | None = None,
-) -> None:
-    key = f"objects/private/{upload_id}"
-    bucket.put(key, "immutable-version", data)
-    table.seed(
-        {
-            **attachment_repo.upload_key(upload_id),
-            "upload_id": upload_id,
-            "owner_id": STUDENT,
-            "immutable_object_key": key,
-            "immutable_version_id": "immutable-version",
-            "immutable_etag": f"etag-{key}",
-            "content_sha256": hashlib.sha256(data).hexdigest(),
-            "original_filename": filename,
-            "detected_type": media_type,
-            "content_length": len(data) if declared_length is None else declared_length,
-            "status": "validated",
-            "expected_kind": "conversation_attachment",
-            "version": 3,
-            "expires_at": 4_000_000_000,
-        }
-    )
+def _answers(model: FakeBedrock) -> None:
+    model.answer = MODEL_ANSWER
 
 
 def _send(*upload_ids: str, key: str = "key-1"):
@@ -354,24 +257,10 @@ def test_bytes_that_are_not_the_image_they_claim_fail_as_invalid(table, bucket, 
 
 def _commit(*upload_ids: str, key: str) -> None:
     """Commit a message the way the request does, leaving the answer to the worker."""
-    body = conversations.SendMessageRequest.model_validate(
-        {
-            "content": "Kannst du mir bei dieser Aufgabe helfen?",
-            "idempotencyKey": key,
-            "attachmentIds": [{"uploadId": upload_id} for upload_id in upload_ids],
-        }
-    )
-    _answering.commit_message_command(
-        conv_id=CONV,
-        student_id=STUDENT,
-        subject="Mathematik",
-        grade="Grade 6",
-        body=body,
-        command_context={
-            "actor": _actor(),
-            "fingerprint": conversations.message_request_fingerprint(body),
-            "existing": None,
-        },
+    _commit_message(
+        key,
+        content="Kannst du mir bei dieser Aufgabe helfen?",
+        attachmentIds=[{"uploadId": upload_id} for upload_id in upload_ids],
     )
 
 

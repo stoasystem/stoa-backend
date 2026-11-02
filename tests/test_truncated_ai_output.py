@@ -7,28 +7,33 @@ that the failure still carries the provider's usage evidence so the student's
 reserved allowance can be released.
 """
 
+# #206 改写: the tests that call `_answering._ConversationAllowanceBedrockClient`,
+# `_message_allowance_metadata_from_failure`, `_observe_message_provider_usage`
+# and `_restore_message_allowance` test the allowance internals directly, and
+# are rewritten when "AI 消息准入" (#206) replaces that block.
+
 from __future__ import annotations
 
-import copy
 import json
 from typing import Any
 
 import pytest
 
-from stoa.routers import conversations
-from stoa.services.ask_question import _answering
-from stoa.services.ask_question import _transcript
-from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
-from stoa.services import ai_service
-from stoa.services.ask_question import _store as ask_question_store
-from test_conversation_token_finalization import (
+from fakes.ask_question import (
     NOW,
+    _COMPLETE,
     _command,
+    _command_row,
+    _messages,
     _patch_allowance_table,
-    _ResponseBody,
+    _Provider,
+    _run_message_command,
 )
-from test_conversations import _actor
-from test_token_allowances import AtomicAllowanceTable
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
+from stoa.services import ai_service, ask_question
+from stoa.services.ask_question import _answering
+from fakes.ask_question import AtomicAllowanceTable
 
 
 @pytest.fixture(autouse=True)
@@ -36,75 +41,8 @@ def _no_memory_personalisation(stub_memory_summary) -> None:
     """The message route enriches the prompt from table reads; keep them out."""
 
 
-_COMPLETE = json.dumps(
-    {
-        "steps": ["Schritt eins", "Schritt zwei"],
-        "answer": "Die vollständige Antwort",
-        "hints": ["Ein Hinweis"],
-        "similar_exercises": [],
-        "knowledge_points": ["Brüche"],
-        "suggest_teacher": False,
-    },
-    ensure_ascii=False,
-)
-_TRUNCATED = '{"steps":["Schritt eins","Schritt zwei"],"answer":"Die vollständige Ant'
+_TRUNCATED = '{"steps":["Schritt eins","Schritt zwei"],"answer":"Die vollstÃ¤ndige Ant'
 _TRUNCATED_FENCED = "```json\n" + _TRUNCATED
-
-
-class _Provider:
-    """CountTokens plus both InvokeModel shapes, replying with fixed text."""
-
-    def __init__(self, *, text: str, stop_reason: str) -> None:
-        self.text = text
-        self.stop_reason = stop_reason
-        self.invoke_calls: list[dict[str, object]] = []
-
-    def count_tokens(self, **_kwargs: object) -> dict[str, object]:
-        return {
-            "inputTokens": 90,
-            "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "count-request-1"},
-        }
-
-    def invoke_model(self, **kwargs: object) -> dict[str, object]:
-        self.invoke_calls.append(copy.deepcopy(kwargs))
-        return {
-            "body": _ResponseBody(
-                {
-                    "id": "provider-message-1",
-                    "model": "anthropic.claude-sonnet-4-6",
-                    "stop_reason": self.stop_reason,
-                    "usage": {"input_tokens": 70, "output_tokens": 2048},
-                    "content": [{"text": self.text}],
-                }
-            ),
-            "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "invoke-request-1"},
-        }
-
-    def invoke_model_with_response_stream(self, **kwargs: object) -> dict[str, object]:
-        self.invoke_calls.append(copy.deepcopy(kwargs))
-        events: list[dict[str, Any]] = [
-            {
-                "type": "message_start",
-                "message": {
-                    "id": "provider-message-1",
-                    "model": "anthropic.claude-sonnet-4-6",
-                    "usage": {"input_tokens": 70},
-                },
-            },
-            *(
-                {"type": "content_block_delta", "delta": {"text": self.text[i : i + 16]}}
-                for i in range(0, len(self.text), 16)
-            ),
-            {
-                "type": "message_delta",
-                "delta": {"stop_reason": self.stop_reason},
-                "usage": {"output_tokens": 2048},
-            },
-        ]
-        return {
-            "body": [{"chunk": {"bytes": json.dumps(event).encode()}} for event in events],
-            "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "invoke-request-1"},
-        }
 
 
 def _invoke(
@@ -275,102 +213,33 @@ def test_a_failure_without_evidence_gives_no_metadata() -> None:
     )
 
 
-def _run_message_command(
-    monkeypatch: pytest.MonkeyPatch, *, text: str, stop_reason: str
-) -> tuple[AtomicAllowanceTable, dict[str, Any], Any]:
-    """Drive the streaming message route with the real AI service and allowance."""
-    table = AtomicAllowanceTable()
-    provider = _Provider(text=text, stop_reason=stop_reason)
-    _patch_allowance_table(monkeypatch, table)
-    monkeypatch.setattr(ai_service.boto3, "client", lambda *_a, **_k: provider)
-    body = conversations.SendMessageRequest.model_validate(
-        {"content": "Wie kürze ich Brüche?", "idempotencyKey": "truncation-key"}
-    )
-    state: dict[str, Any] = {"completed": []}
-
-    def claim(**kwargs: Any) -> tuple[bool, int]:
-        state["command"] = dict(kwargs["command"])
-        return True, 1
-
-    def complete(**kwargs: Any) -> bool:
-        state["completed"].append(kwargs)
-        return True
-
-    monkeypatch.setattr(conversations, "get_table", lambda: object())
-    monkeypatch.setattr(_answering, "get_table", lambda: object())
-    monkeypatch.setattr(_transcript, "get_table", lambda: object())
-    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 8)
-    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
-    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
-    monkeypatch.setattr(conversations, "_student_locale", lambda *_: "de")
-    monkeypatch.setattr(
-        _answering, "_publish_generation_step", lambda *_a, **_k: lambda _i, _s: None
-    )
-    monkeypatch.setattr(
-        conversations.attachment_service,
-        "prepare_message_attachments",
-        lambda *_a, **_k: [],
-    )
-    monkeypatch.setattr(
-        conversations.attachment_service, "bind_message_attachments", lambda **_k: []
-    )
-    monkeypatch.setattr(
-        ask_question_store, "claim_message_command_and_quota", claim
-    )
-    monkeypatch.setattr(
-        ask_question_store, "claim_message_ai_lease", lambda **_k: (True, 1)
-    )
-    monkeypatch.setattr(
-        ask_question_store, "renew_message_ai_lease", lambda **_k: True
-    )
-    monkeypatch.setattr(
-        ask_question_store, "record_provider_invocation", lambda **_k: True
-    )
-    monkeypatch.setattr(ask_question_store, "complete_message_command", complete)
-    try:
-        outcome: Any = _answering._execute_message_command(
-            conv_id="conv-1",
-            student_id="student-1",
-            subject="math",
-            grade="Grade 6",
-            body=body,
-            command_context={
-                "actor": _actor(),
-                "fingerprint": conversations.message_request_fingerprint(body),
-                "existing": None,
-            },
-        )
-    except Exception as exc:
-        outcome = exc
-    return table, state, outcome
-
-
 def test_a_truncated_streamed_answer_is_not_sent_and_its_reservation_is_released(
-    monkeypatch: pytest.MonkeyPatch,
+    table, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    table, state, outcome = _run_message_command(
+    allowance, outcome = _run_message_command(
         monkeypatch, text=_TRUNCATED, stop_reason="max_tokens"
     )
 
     assert isinstance(outcome, AttachmentDecisionError)
     assert outcome.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-    assert state["completed"] == []
-    counter = table.counter()
+    assert _command_row(table, "truncation-key")["status"] == "failed"
+    assert _messages(table, "assistant") == []
+    counter = allowance.counter()
     assert counter["reserved_input_tokens"] == 0
     assert counter["reserved_output_tokens"] == 0
     assert counter["finalized_input_tokens"] == 0
     assert counter["provider_cost_output_tokens"] == 2048
-    assert len(table.evidence()) == 1
+    assert len(allowance.evidence()) == 1
 
 
 def test_a_complete_streamed_answer_is_still_sent(
-    monkeypatch: pytest.MonkeyPatch,
+    table, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    table, state, outcome = _run_message_command(
+    _allowance, outcome = _run_message_command(
         monkeypatch, text=_COMPLETE, stop_reason="end_turn"
     )
 
-    assert isinstance(outcome, conversations.SendMessageResponse), outcome
+    assert isinstance(outcome, ask_question.Answered), outcome
     assert outcome.assistantMessage.status == "sent"
     assert "Die vollständige Antwort" in outcome.assistantMessage.content
-    assert len(state["completed"]) == 1
+    assert _command_row(table, "truncation-key")["status"] == "completed"

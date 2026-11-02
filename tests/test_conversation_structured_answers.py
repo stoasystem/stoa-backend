@@ -16,82 +16,36 @@ double; only the model call and the Lambda invoke are replaced.
 
 from __future__ import annotations
 
-import io
-import json
 from typing import Any
 
 import pytest
 
-from fakes.bedrock import FakeBedrock
-from stoa.jobs import conversation_generation
-from stoa.routers import conversations
-from stoa.services.ask_question import _answering
-from stoa.services import ask_answer
-from test_async_generation_cutover import invokes as invokes  # noqa: F401 - the fixture
-from test_conversation_token_finalization import _patch_allowance_table
-from test_async_generation_cutover import switched_on as switched_on  # noqa: F401
-from test_message_command_generation import (  # noqa: F401 - fixtures
+from fakes.ask_question import (
+    ANSWERS,
     CONV,
     QUESTION,
     STUDENT,
+    _assistant,
+    _CapturingBedrockClient,
     _client,
+    _done,
     _events,
     _messages,
+    _patch_allowance_table,
+    _read_back,
     _send,
+    _student_turn,
 )
-from test_message_command_generation import _no_memory_personalisation  # noqa: F401
-from test_message_command_generation import model as model  # noqa: F401 - the fixture
-from test_message_command_generation import table as table  # noqa: F401 - the fixture
-from test_token_allowances import AtomicAllowanceTable
-
-# One answer per language the platform speaks, as the model writes it, with
-# the hint label the joined text puts in front of the first hint.
-ANSWERS: dict[str, tuple[dict[str, Any], str]] = {
-    "de": (
-        {
-            "steps": ["Zähler und Nenner durch den ggT teilen", "Das Ergebnis prüfen"],
-            "answer": "So kürzt man einen Bruch.",
-            "hints": ["Was ist der ggT von 6 und 8?", "Beide Zahlen sind gerade."],
-            "similar_exercises": ["Kürze 9/12."],
-            "knowledge_points": ["Brüche kürzen", "Grösster gemeinsamer Teiler"],
-            "suggest_teacher": True,
-        },
-        "Hinweis",
-    ),
-    "en": (
-        {
-            "steps": ["Divide top and bottom by the GCD", "Check the result"],
-            "answer": "That is how you simplify a fraction.",
-            "hints": ["What is the GCD of 6 and 8?", "Both numbers are even."],
-            "similar_exercises": ["Simplify 9/12."],
-            "knowledge_points": ["Simplifying fractions", "Greatest common divisor"],
-            "suggest_teacher": True,
-        },
-        "Hint",
-    ),
-    "fr": (
-        {
-            "steps": ["Diviser le numérateur et le dénominateur par le PGCD", "Vérifier"],
-            "answer": "Voilà comment on simplifie une fraction.",
-            "hints": ["Quel est le PGCD de 6 et 8 ?", "Les deux nombres sont pairs."],
-            "similar_exercises": ["Simplifie 9/12."],
-            "knowledge_points": ["Simplifier des fractions", "Plus grand commun diviseur"],
-            "suggest_teacher": True,
-        },
-        "Indice",
-    ),
-    "it": (
-        {
-            "steps": ["Dividere numeratore e denominatore per il MCD", "Controllare"],
-            "answer": "Così si semplifica una frazione.",
-            "hints": ["Qual è il MCD di 6 e 8?", "Entrambi i numeri sono pari."],
-            "similar_exercises": ["Semplifica 9/12."],
-            "knowledge_points": ["Semplificare le frazioni", "Massimo comun divisore"],
-            "suggest_teacher": True,
-        },
-        "Indizio",
-    ),
-}
+from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fixture
+from fakes.ask_question import invokes as invokes  # noqa: F401 - the fixture
+from fakes.ask_question import model as model  # noqa: F401 - the fixture
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from fakes.bedrock import FakeBedrock
+from stoa.jobs import conversation_generation
+from stoa.routers import conversations
+from stoa.services import ask_answer
+from stoa.services.ask_question import _answering
+from fakes.ask_question import AtomicAllowanceTable
 
 LOCALES = sorted(ANSWERS)
 
@@ -109,22 +63,6 @@ def _expected(answer: dict[str, Any]) -> dict[str, Any]:
         ],
         "suggestTeacher": answer["suggest_teacher"],
     }
-
-
-def _done(response) -> dict[str, Any]:
-    [done] = [data for name, data in _events(response) if name == "message_done"]
-    return done
-
-
-def _read_back(client) -> list[dict[str, Any]]:
-    response = client.get(f"/conversations/{CONV}")
-    assert response.status_code == 200, response.text
-    return response.json()["messages"]
-
-
-def _assistant(messages: list[dict[str, Any]]) -> dict[str, Any]:
-    [assistant] = [message for message in messages if message["role"] == "assistant"]
-    return assistant
 
 
 # ── Every path hands on the same sections, in every language ─────────────────
@@ -177,7 +115,7 @@ def test_the_plain_send_route_returns_the_sections(table, model, locale) -> None
 
 @pytest.mark.parametrize("locale", LOCALES)
 def test_the_worker_s_answer_after_a_202_carries_the_same_sections(
-    table, model, invokes, switched_on, locale
+    table, model, invokes, locale
 ) -> None:
     answer, _label = ANSWERS[locale]
     model.outcomes = [answer]
@@ -490,56 +428,6 @@ def test_the_fingerprint_tells_two_parts_apart() -> None:
 # ── What the model is told ───────────────────────────────────────────────────
 
 
-class _CapturingBedrockClient:
-    """The Bedrock runtime as boto3 hands it out: counts, answers, streams.
-
-    Records the body it was sent and answers with `answer` as the model's
-    JSON. Nothing else of the provider is stood in for.
-    """
-
-    def __init__(self, answer: dict[str, Any] | None = None) -> None:
-        self.request_body: dict | None = None
-        self.answer = answer or ANSWERS["de"][0]
-
-    def count_tokens(self, **_kwargs: object) -> dict[str, object]:
-        return {
-            "inputTokens": 90,
-            "ResponseMetadata": {"HTTPStatusCode": 200, "RequestId": "count-1"},
-        }
-
-    def invoke_model(self, *, modelId: str, body: str):  # noqa: N803 - boto3 casing
-        self.request_body = json.loads(body)
-        payload = {
-            "id": "msg_test_1",
-            "model": modelId,
-            "stop_reason": "end_turn",
-            "content": [{"text": json.dumps(self.answer)}],
-            "usage": {"input_tokens": 10, "output_tokens": 5},
-        }
-        return {
-            "ResponseMetadata": {"RequestId": "req-test-1"},
-            "body": io.BytesIO(json.dumps(payload).encode()),
-        }
-
-    def invoke_model_with_response_stream(self, *, modelId: str, body: str):  # noqa: N803
-        self.request_body = json.loads(body)
-        text = json.dumps(self.answer, ensure_ascii=False)
-        events = [
-            {"type": "message_start", "message": {
-                "id": "msg_test_1", "model": modelId, "usage": {"input_tokens": 70},
-            }},
-            # Cut in two, so the steps are found in a partly received answer.
-            {"type": "content_block_delta", "delta": {"text": text[: len(text) // 2]}},
-            {"type": "content_block_delta", "delta": {"text": text[len(text) // 2 :]}},
-            {"type": "message_delta", "delta": {"stop_reason": "end_turn"},
-             "usage": {"output_tokens": 25}},
-        ]
-        return {
-            "ResponseMetadata": {"RequestId": "req-test-1"},
-            "body": [{"chunk": {"bytes": json.dumps(event).encode()}} for event in events],
-        }
-
-
 def _sent(quote: dict[str, Any]) -> dict[str, Any]:
     model = FakeBedrock(answer=ANSWERS["de"][0])
     ask_answer.answer(
@@ -549,10 +437,6 @@ def _sent(quote: dict[str, Any]) -> dict[str, Any]:
         read_star_map=lambda *_a, **_k: None,
     )
     return model.requests[-1]
-
-
-def _student_turn(body: dict[str, Any]) -> str:
-    return str([turn for turn in body["messages"] if turn["role"] == "user"][-1]["content"])
 
 
 @pytest.mark.parametrize(

@@ -51,29 +51,25 @@ from stoa.services import (
     parent_link_service,
     report_service,
 )
-from test_async_generation_cutover import invokes as invokes  # noqa: F401 - the fixture
-from test_async_generation_cutover import switched_on as switched_on  # noqa: F401
-from test_conversation_knowledge_points import (
+from fakes.ask_question import (
+    CONV,
     FREE,
     LOCALES,
+    STUDENT,
     TITLES,
     _answer,
     _catalog,
+    _client,
     _done,
     _follow_up,
+    _send,
     _student_turn,
 )
-from test_conversation_knowledge_points import bedrock as bedrock  # noqa: F401 - the fixture
-from test_conversation_knowledge_points import star_map as star_map  # noqa: F401
-from test_message_command_generation import (  # noqa: F401 - fixtures
-    CONV,
-    QUESTION,
-    STUDENT,
-    _client,
-    _no_memory_personalisation,
-    _send,
-)
-from test_message_command_generation import table as table  # noqa: F401 - the fixture
+from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fixture
+from fakes.ask_question import bedrock as bedrock  # noqa: F401 - the fixture
+from fakes.ask_question import invokes as invokes  # noqa: F401 - the fixture
+from fakes.ask_question import star_map as star_map  # noqa: F401 - the fixture
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
 
 # Read before the autouse stub replaces it for the Ask itself.
 _REAL_MEMORY_SUMMARY = adaptive_learning_service.get_memory_summary
@@ -395,11 +391,11 @@ def test_the_record_holds_names_and_never_the_question(world, bedrock, star_map)
     assert record["knowledge_points"] == [TITLES["kraefte"]["en"], FREE["en"]]
     assert record["unit_ids"] == ["kraefte"]
     assert "Geheimnis" not in str(record)
-    assert conversations._conv_pk(CONV) == record["PK"]
+    assert record["PK"] == f"CONV#{CONV}"
 
 
 def test_the_worker_s_answer_after_a_202_is_recorded_once(
-    world, bedrock, star_map, invokes, switched_on
+    world, bedrock, star_map, invokes
 ) -> None:
     bedrock.answers = [_points("de")]
 

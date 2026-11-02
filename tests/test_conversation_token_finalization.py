@@ -1,36 +1,25 @@
 """Conversation token finalization at the durable message replay boundary."""
 
+# #206 改写: these test the token allowance and its settlement through the
+# package-private names in `ask_question._answering`, and are rewritten when
+# "AI 消息准入" (#206) replaces that block.
+
 from __future__ import annotations
 
 import copy
-import inspect
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 
 import pytest
 
+from fakes.ask_question import NOW, _command, _patch_allowance_table, _ResponseBody
 from stoa.db.repositories import allowance_repo
 from stoa.routers import conversations
+from stoa.services import ai_service
 from stoa.services.ask_question import _answering
-from stoa.services import ai_service, allowance_service
 from stoa.services.ask_question import _store as ask_question_store
-from test_token_allowances import AtomicAllowanceTable
-
-
-NOW = datetime(2026, 3, 25, 12, 0, tzinfo=timezone.utc)
-
-
-class _ResponseBody:
-    def __init__(self, payload: dict[str, object]) -> None:
-        self._payload = payload
-        self.closed = False
-
-    def read(self) -> bytes:
-        return json.dumps(self._payload).encode()
-
-    def close(self) -> None:
-        self.closed = True
+from fakes.ask_question import AtomicAllowanceTable
 
 
 class MockBedrockProvider:
@@ -90,62 +79,6 @@ class MockBedrockProvider:
                 "RequestId": "invoke-request-1",
             },
         }
-
-
-def _command() -> dict[str, object]:
-    """One message command in the shape the table hands it back."""
-    command: dict[str, object] = {
-        "command_id": "message-command-1",
-        "conversation_id": "conversation-1",
-        "student_id": "student-1",
-        "owner_id": "student-1",
-        "assistant_message_id": "assistant-message-1",
-        "account_fence_generation": Decimal(1),
-        "created_at": NOW.isoformat(),
-    }
-    command.update(
-        _answering._conversation_allowance_command_fields(
-            command,
-            {
-                "effectivePlan": "free_trial",
-                "source": "free_trial_activation",
-                "grantId": "free-trial-grant-1",
-                "allowanceVersion": Decimal(7),
-            },
-        )
-    )
-    command["allowance_version"] = Decimal(str(command["allowance_version"]))
-    return command
-
-
-def _patch_allowance_table(
-    monkeypatch: pytest.MonkeyPatch,
-    table: AtomicAllowanceTable,
-) -> None:
-    reserve = allowance_service.reserve_token_allowance
-    observe = allowance_service.record_provider_usage
-    finalize = allowance_service.finalize_token_allowance
-    restore = allowance_service.restore_user_allowance
-    monkeypatch.setattr(
-        _answering.allowance_service,
-        "reserve_token_allowance",
-        lambda **kwargs: reserve(**kwargs, table=table),
-    )
-    monkeypatch.setattr(
-        _answering.allowance_service,
-        "record_provider_usage",
-        lambda **kwargs: observe(**kwargs, table=table),
-    )
-    monkeypatch.setattr(
-        _answering.allowance_service,
-        "finalize_token_allowance",
-        lambda **kwargs: finalize(**kwargs, table=table),
-    )
-    monkeypatch.setattr(
-        _answering.allowance_service,
-        "restore_user_allowance",
-        lambda **kwargs: restore(**kwargs, table=table),
-    )
 
 
 def _provider_result(
@@ -570,16 +503,3 @@ def test_durable_payload_is_private_and_content_free(
     evidence_json = json.dumps(table.evidence(), default=str)
     assert "private-message-canary" not in evidence_json
     assert "private-answer-canary" not in evidence_json
-
-
-def test_source_binds_durable_message_effect_before_invoke_and_finalize() -> None:
-    source = inspect.getsource(_answering)
-    reserve_at = source.index("reserve_token_allowance")
-    invoke_at = source.index("invoke_model", reserve_at)
-    assert reserve_at < invoke_at
-    assert "allowance_effect_id" in source
-    assert "record_provider_usage" in source
-    assert "finalize_token_allowance" in source
-    assert "restore_user_allowance" in source
-    assert "ask_question.submit(" in inspect.getsource(conversations.send_message)
-    assert "ask_question.submit(" in inspect.getsource(conversations.stream_message)

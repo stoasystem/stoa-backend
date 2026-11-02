@@ -18,22 +18,25 @@ from typing import Any
 
 import pytest
 
-from fakes.bedrock import FakeBedrock
-from stoa.db.repositories import allowance_repo
-from stoa.jobs import conversation_generation
-from stoa.services.ask_question import _answering
-from stoa.services import ai_service, allowance_service
-from stoa.services.ask_question import _store as ask_question_store
-from test_conversation_generation_worker import _deliver, _expire_lease, _Killed, _running
-from test_message_command_generation import (  # noqa: F401 - fixtures
+from fakes.ask_question import (
     ANSWER,
     STUDENT,
     _client,
     _command_row,
     _commit,
+    _deliver,
+    _expire_lease,
     _generation,
+    _Killed,
+    _running,
 )
-from test_message_command_generation import table as table  # noqa: F401 - the fixture
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from fakes.bedrock import FakeBedrock
+from stoa.db.repositories import allowance_repo
+from stoa.jobs import conversation_generation
+from stoa.services import ai_service, allowance_service
+from stoa.services.ask_question import _answering
+from stoa.services.ask_question import _store as ask_question_store
 
 RESERVED_INPUT = 120
 RESERVED_OUTPUT = 800
@@ -93,6 +96,8 @@ class _Model:
         return getattr(self.runtime, method)(**kwargs)
 
 
+# #206 改写: scripts the package-private allowance client, so its settlement
+# outcomes can be set one step at a time.
 @pytest.fixture
 def model(monkeypatch: pytest.MonkeyPatch, table) -> _Model:
     model = _Model()
