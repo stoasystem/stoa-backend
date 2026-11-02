@@ -18,7 +18,7 @@ should not:
   table's TTL attribute, so a name nobody repeats goes away on its own.
 
 The counts are written inside the transaction that stores the answer
-(`attachment_repo.complete_message_command`), whose assistant-message put only
+(`ask_question._store.complete_message_command`), whose assistant-message put only
 succeeds once: an answer replayed, retried or finished by another attempt
 counts once, and only an answer that was stored counts at all.
 """

@@ -15,10 +15,10 @@ from typing import Any
 import pytest
 
 from fakes.bedrock import FakeBedrock, answer_without_allowance
-from stoa.db.repositories import attachment_repo
 from stoa.routers import conversations
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import adaptive_learning_service
+from stoa.services.ask_question import _store as ask_question_store
 
 
 def _actor(role=CanonicalRole.STUDENT, user_id="student-1"):
@@ -79,11 +79,11 @@ def _run_message_command(monkeypatch, *, memory_summary: Any) -> dict[str, Any]:
         command_state.update(status="completed", result_json=kwargs["result_json"])
         return True
 
-    monkeypatch.setattr(attachment_repo, "claim_message_command_and_quota", claim)
-    monkeypatch.setattr(attachment_repo, "get_message_command", lambda *_a, **_k: dict(command_state) or None)
-    monkeypatch.setattr(attachment_repo, "claim_message_ai_lease", claim_ai)
-    monkeypatch.setattr(attachment_repo, "renew_message_ai_lease", lambda **_k: True)
-    monkeypatch.setattr(attachment_repo, "complete_message_command", complete)
+    monkeypatch.setattr(ask_question_store, "claim_message_command_and_quota", claim)
+    monkeypatch.setattr(ask_question_store, "get_message_command", lambda *_a, **_k: dict(command_state) or None)
+    monkeypatch.setattr(ask_question_store, "claim_message_ai_lease", claim_ai)
+    monkeypatch.setattr(ask_question_store, "renew_message_ai_lease", lambda **_k: True)
+    monkeypatch.setattr(ask_question_store, "complete_message_command", complete)
 
     def fake_memory_summary(**_kwargs):
         if isinstance(memory_summary, Exception):

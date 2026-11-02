@@ -20,6 +20,7 @@ from stoa.db.repositories import attachment_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import conversations
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
+from stoa.services.ask_question import _store as ask_question_store
 
 
 def _actor() -> Actor:
@@ -179,7 +180,7 @@ def test_batch_get_exhaustion_is_a_redacted_dependency_failure() -> None:
 def test_repository_claim_persists_one_complete_command_usage_identity() -> None:
     table = _ClaimTable(counter=2)
 
-    result = attachment_repo.claim_message_command_and_quota(
+    result = ask_question_store.claim_message_command_and_quota(
         command=_command(),
         owner_id="student-1",
         quota_period="2026-07-17",
@@ -188,7 +189,7 @@ def test_repository_claim_persists_one_complete_command_usage_identity() -> None
         table=table,
     )
 
-    assert result.disposition is attachment_repo.MessageCommandDisposition.CLAIMED
+    assert result.disposition is ask_question_store.MessageCommandDisposition.CLAIMED
     assert result.counter_value == 3
     command_put = next(
         operation["Put"]["Item"]
@@ -214,7 +215,7 @@ def test_claim_cas_contention_rereads_same_fingerprint_instead_of_false_429() ->
     )
     table = _ClaimTable(counter=3, transact_error=error, reread_command=existing)
 
-    result = attachment_repo.claim_message_command_and_quota(
+    result = ask_question_store.claim_message_command_and_quota(
         command=_command(),
         owner_id="student-1",
         quota_period="2026-07-17",
@@ -223,7 +224,7 @@ def test_claim_cas_contention_rereads_same_fingerprint_instead_of_false_429() ->
         table=table,
     )
 
-    assert result.disposition is attachment_repo.MessageCommandDisposition.RESUME
+    assert result.disposition is ask_question_store.MessageCommandDisposition.RESUME
     assert result.counter_value == 4
     assert result.command == existing
     assert table.command_reads >= 1
@@ -231,7 +232,7 @@ def test_claim_cas_contention_rereads_same_fingerprint_instead_of_false_429() ->
 
 def test_claim_true_limit_requires_durable_counter_evidence() -> None:
     table = _ClaimTable(counter=8)
-    result = attachment_repo.claim_message_command_and_quota(
+    result = ask_question_store.claim_message_command_and_quota(
         command=_command(),
         owner_id="student-1",
         quota_period="2026-07-17",
@@ -239,7 +240,7 @@ def test_claim_true_limit_requires_durable_counter_evidence() -> None:
         expires_at=1784505599,
         table=table,
     )
-    assert result.disposition is attachment_repo.MessageCommandDisposition.QUOTA_EXCEEDED
+    assert result.disposition is ask_question_store.MessageCommandDisposition.QUOTA_EXCEEDED
     assert result.counter_value == 8
     assert table.transactions == []
 
@@ -311,7 +312,7 @@ def test_completion_transport_is_typed_and_commit_then_raise_reconciles(
         command=_command(status="ai_running", leaseOwner="lease-1", attempt=1),
         commit_then_raise=commit_then_raise,
     )
-    result = attachment_repo.complete_message_command(
+    result = ask_question_store.complete_message_command(
         conversation_id="conv-1",
         idempotency_key="message-key",
         owner_id="student-1",
@@ -322,9 +323,9 @@ def test_completion_transport_is_typed_and_commit_then_raise_reconciles(
         table=table,
     )
     expected = (
-        attachment_repo.MessageCommandDisposition.COMPLETED
+        ask_question_store.MessageCommandDisposition.COMPLETED
         if commit_then_raise
-        else attachment_repo.MessageCommandDisposition.RETRYABLE
+        else ask_question_store.MessageCommandDisposition.RETRYABLE
     )
     assert result.disposition is expected
     assert "private-canary" not in str(result)
@@ -350,7 +351,7 @@ class _RejectTable:
 )
 def test_deterministic_prebind_rejection_is_terminal_and_compensates_once(code: str) -> None:
     table = _RejectTable()
-    result = attachment_repo.reject_message_command_and_compensate(
+    result = ask_question_store.reject_message_command_and_compensate(
         conversation_id="conv-1",
         idempotency_key="message-key",
         owner_id="student-1",
@@ -359,7 +360,7 @@ def test_deterministic_prebind_rejection_is_terminal_and_compensates_once(code: 
         now_iso="2026-07-18T00:00:01+00:00",
         table=table,
     )
-    assert result.disposition is attachment_repo.MessageCommandDisposition.REJECTED
+    assert result.disposition is ask_question_store.MessageCommandDisposition.REJECTED
     assert result.error_code == code
     kinds = [operation.kind for operation in result.operations]
     assert kinds == [
@@ -388,7 +389,7 @@ def test_command_state_classifier_is_closed(status_value: str, expected: str) ->
         command["result_json"] = "{}"
     if status_value == "rejected":
         command["error_code"] = "upload_not_found"
-    result = attachment_repo.classify_message_command(
+    result = ask_question_store.classify_message_command(
         command,
         owner_id="student-1",
         fingerprint="f" * 64,
@@ -413,7 +414,7 @@ def test_a_failed_command_resumes_only_when_unpaid_with_attempts_left(
     command = _command(status="failed", attempt=attempt, failure_category="deadline_exceeded")
     if retryable is not None:
         command["failure_retryable"] = retryable
-    result = attachment_repo.classify_message_command(
+    result = ask_question_store.classify_message_command(
         command,
         owner_id="student-1",
         fingerprint="f" * 64,
@@ -423,34 +424,34 @@ def test_a_failed_command_resumes_only_when_unpaid_with_attempts_left(
 
 
 def test_command_state_classifier_distinguishes_missing_and_conflict() -> None:
-    missing = attachment_repo.classify_message_command(
+    missing = ask_question_store.classify_message_command(
         None,
         owner_id="student-1",
         fingerprint="f" * 64,
         now_epoch=1784307600,
     )
-    conflict = attachment_repo.classify_message_command(
+    conflict = ask_question_store.classify_message_command(
         _command(fingerprint="0" * 64),
         owner_id="student-1",
         fingerprint="f" * 64,
         now_epoch=1784307600,
     )
-    assert missing.disposition is attachment_repo.MessageCommandDisposition.MISSING
-    assert conflict.disposition is attachment_repo.MessageCommandDisposition.IDEMPOTENCY_CONFLICT
+    assert missing.disposition is ask_question_store.MessageCommandDisposition.MISSING
+    assert conflict.disposition is ask_question_store.MessageCommandDisposition.IDEMPOTENCY_CONFLICT
 
 
 def test_command_state_classifier_rejects_unversioned_rows() -> None:
     command = _command(status="claimed")
     command.pop("schema_version")
 
-    result = attachment_repo.classify_message_command(
+    result = ask_question_store.classify_message_command(
         command,
         owner_id="student-1",
         fingerprint="f" * 64,
         now_epoch=1784307600,
     )
 
-    assert result.disposition is attachment_repo.MessageCommandDisposition.RETRYABLE
+    assert result.disposition is ask_question_store.MessageCommandDisposition.RETRYABLE
 
 
 def _route_client() -> TestClient:
@@ -546,7 +547,7 @@ def test_regular_and_sse_get_item_transport_faults_share_safe_retry(
 
 def test_cross_midnight_replay_uses_original_quota_and_usage_identity() -> None:
     before_midnight = _command(counter_value=5)
-    classified = attachment_repo.classify_message_command(
+    classified = ask_question_store.classify_message_command(
         before_midnight,
         owner_id="student-1",
         fingerprint="f" * 64,
@@ -584,7 +585,7 @@ def test_repository_get_item_fault_is_redacted_dependency_result() -> None:
             raise RuntimeError("batch-provider-private-canary")
 
     with pytest.raises(attachment_repo.AttachmentRepositoryConflict) as captured:
-        attachment_repo.read_message_command_result(
+        ask_question_store.read_message_command_result(
             "conv-1",
             "message-key",
             owner_id="student-1",

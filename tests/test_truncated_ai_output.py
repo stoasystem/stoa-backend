@@ -18,6 +18,7 @@ import pytest
 from stoa.routers import conversations
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.services import ai_service
+from stoa.services.ask_question import _store as ask_question_store
 from test_conversation_token_finalization import (
     NOW,
     _command,
@@ -309,18 +310,18 @@ def _run_message_command(
         conversations.attachment_service, "bind_message_attachments", lambda **_k: []
     )
     monkeypatch.setattr(
-        conversations.attachment_repo, "claim_message_command_and_quota", claim
+        ask_question_store, "claim_message_command_and_quota", claim
     )
     monkeypatch.setattr(
-        conversations.attachment_repo, "claim_message_ai_lease", lambda **_k: (True, 1)
+        ask_question_store, "claim_message_ai_lease", lambda **_k: (True, 1)
     )
     monkeypatch.setattr(
-        conversations.attachment_repo, "renew_message_ai_lease", lambda **_k: True
+        ask_question_store, "renew_message_ai_lease", lambda **_k: True
     )
     monkeypatch.setattr(
-        conversations.attachment_repo, "record_provider_invocation", lambda **_k: True
+        ask_question_store, "record_provider_invocation", lambda **_k: True
     )
-    monkeypatch.setattr(conversations.attachment_repo, "complete_message_command", complete)
+    monkeypatch.setattr(ask_question_store, "complete_message_command", complete)
     try:
         outcome: Any = conversations._execute_message_command(
             conv_id="conv-1",

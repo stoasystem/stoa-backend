@@ -20,7 +20,7 @@ from pydantic import ValidationError
 from audit_helpers import MemoryAuthorizationAuditSink
 from fakes.bedrock import FakeBedrock, answer_without_allowance
 from fakes.dynamodb import as_stored
-from stoa.db.repositories import attachment_repo, practice_repo
+from stoa.db.repositories import practice_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import conversations
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
@@ -32,6 +32,7 @@ from stoa.services import (
     knowledge_mastery_service,
     practice_context_service,
 )
+from stoa.services.ask_question import _store as ask_question_store
 
 STUDENT = "student-1"
 
@@ -759,13 +760,13 @@ def _run_message_command(monkeypatch, *, body_payload: dict[str, Any]) -> dict[s
         command_state.update(status="completed", result_json=kwargs["result_json"])
         return True
 
-    monkeypatch.setattr(attachment_repo, "claim_message_command_and_quota", claim)
+    monkeypatch.setattr(ask_question_store, "claim_message_command_and_quota", claim)
     monkeypatch.setattr(
-        attachment_repo, "get_message_command", lambda *_a, **_k: dict(command_state) or None
+        ask_question_store, "get_message_command", lambda *_a, **_k: dict(command_state) or None
     )
-    monkeypatch.setattr(attachment_repo, "claim_message_ai_lease", claim_ai)
-    monkeypatch.setattr(attachment_repo, "renew_message_ai_lease", lambda **_k: True)
-    monkeypatch.setattr(attachment_repo, "complete_message_command", complete)
+    monkeypatch.setattr(ask_question_store, "claim_message_ai_lease", claim_ai)
+    monkeypatch.setattr(ask_question_store, "renew_message_ai_lease", lambda **_k: True)
+    monkeypatch.setattr(ask_question_store, "complete_message_command", complete)
 
     model = answer_without_allowance(
         monkeypatch, FakeBedrock(answer={"steps": ["one"], "answer": "safe", "hints": []})

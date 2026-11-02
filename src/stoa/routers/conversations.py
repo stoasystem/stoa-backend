@@ -92,6 +92,7 @@ from stoa.services import (
     usage_ledger_service,
 )
 from stoa.services.ask_answer import StructuredAnswer
+from stoa.services.ask_question import _store as ask_question_store
 
 logger = logging.getLogger(__name__)
 
@@ -981,7 +982,7 @@ async def _message_command_dependency(
     fingerprint = message_request_fingerprint(body)
     try:
         state = _conversation_repository_call(
-            lambda: attachment_repo.read_message_command_result(
+            lambda: ask_question_store.read_message_command_result(
                 conv_id,
                 body.idempotencyKey,
                 owner_id=actor.user_id,
@@ -991,7 +992,7 @@ async def _message_command_dependency(
         )
     except AttachmentDecisionError as error:
         _raise_attachment(error, correlation_id)
-    if state.disposition is attachment_repo.MessageCommandDisposition.IDEMPOTENCY_CONFLICT:
+    if state.disposition is ask_question_store.MessageCommandDisposition.IDEMPOTENCY_CONFLICT:
         _raise_attachment(
             AttachmentDecisionError(AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT),
             correlation_id,
@@ -1501,7 +1502,7 @@ def _publish_generation_step(
         if index != len(delivered):
             return
         delivered.append(step)
-        attachment_repo.record_generation_progress(
+        ask_question_store.record_generation_progress(
             conv_id,
             owner_id=student_id,
             steps=list(delivered),
@@ -1821,7 +1822,7 @@ def _command_generation_state(
     elif stored_status == "failed":
         state.status = "failed"
         state.failureCategory = str(command.get("failure_category") or "unknown")
-        state.retryable = attachment_repo.failed_command_can_retry(command)
+        state.retryable = ask_question_store.failed_command_can_retry(command)
     elif stored_status in {"terminal_failed", "rejected", "expired"}:
         state.status = "failed"
         state.failureCategory = {
@@ -1873,7 +1874,7 @@ async def get_generation_progress(
     conv_id = authorized.ref.resource_id
     owner_id = authorized.ref.student_id
     if idempotency_key is None:
-        steps, updated_at = attachment_repo.read_generation_progress(
+        steps, updated_at = ask_question_store.read_generation_progress(
             conv_id, owner_id=owner_id
         )
         return GenerationProgressResponse(
@@ -1881,7 +1882,7 @@ async def get_generation_progress(
         )
     try:
         command = _conversation_repository_call(
-            lambda: attachment_repo.get_message_command(conv_id, idempotency_key)
+            lambda: ask_question_store.get_message_command(conv_id, idempotency_key)
         )
         state = (
             _command_generation_state(conv_id, command)
@@ -1892,7 +1893,7 @@ async def get_generation_progress(
             raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_COMMAND_NOT_FOUND)
     except AttachmentDecisionError as error:
         _raise_attachment(error, correlation_id)
-    state.steps, state.updatedAt = attachment_repo.read_generation_progress(
+    state.steps, state.updatedAt = ask_question_store.read_generation_progress(
         conv_id,
         owner_id=owner_id,
         command_id=state.commandId,
@@ -2137,10 +2138,10 @@ def _completed_command_response(command: dict) -> SendMessageResponse | None:
 
 
 def _command_error_code(
-    result: attachment_repo.MessageCommandResult,
+    result: ask_question_store.MessageCommandResult,
 ) -> AttachmentErrorCode:
     disposition = result.disposition
-    if disposition is attachment_repo.MessageCommandDisposition.REJECTED:
+    if disposition is ask_question_store.MessageCommandDisposition.REJECTED:
         try:
             code = AttachmentErrorCode(str(result.error_code))
         except ValueError:
@@ -2153,31 +2154,31 @@ def _command_error_code(
             return AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
         return code
     return {
-        attachment_repo.MessageCommandDisposition.QUOTA_EXCEEDED: (
+        ask_question_store.MessageCommandDisposition.QUOTA_EXCEEDED: (
             AttachmentErrorCode.MESSAGE_DAILY_LIMIT
         ),
-        attachment_repo.MessageCommandDisposition.IDEMPOTENCY_CONFLICT: (
+        ask_question_store.MessageCommandDisposition.IDEMPOTENCY_CONFLICT: (
             AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT
         ),
-        attachment_repo.MessageCommandDisposition.RETRYABLE: (
+        ask_question_store.MessageCommandDisposition.RETRYABLE: (
             AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
         ),
-        attachment_repo.MessageCommandDisposition.TERMINAL: (
+        ask_question_store.MessageCommandDisposition.TERMINAL: (
             AttachmentErrorCode.MESSAGE_FAILED
         ),
-        attachment_repo.MessageCommandDisposition.EXPIRED: (
+        ask_question_store.MessageCommandDisposition.EXPIRED: (
             AttachmentErrorCode.MESSAGE_COMMAND_EXPIRED
         ),
-        attachment_repo.MessageCommandDisposition.MISSING: (
+        ask_question_store.MessageCommandDisposition.MISSING: (
             AttachmentErrorCode.MESSAGE_COMMAND_NOT_FOUND
         ),
     }.get(disposition, AttachmentErrorCode.MESSAGE_IN_PROGRESS)
 
 
 def _result_response(
-    result: attachment_repo.MessageCommandResult,
+    result: ask_question_store.MessageCommandResult,
 ) -> SendMessageResponse | None:
-    if result.disposition is not attachment_repo.MessageCommandDisposition.COMPLETED:
+    if result.disposition is not ask_question_store.MessageCommandDisposition.COMPLETED:
         return None
     command = result.command or {}
     response = _completed_command_response(command)
@@ -2207,16 +2208,16 @@ def _result_response(
 def _coerce_command_result(
     value,
     *,
-    false_disposition: attachment_repo.MessageCommandDisposition,
-) -> attachment_repo.MessageCommandResult:
+    false_disposition: ask_question_store.MessageCommandDisposition,
+) -> ask_question_store.MessageCommandResult:
     """Accept inherited test doubles while production repositories stay typed."""
-    if isinstance(value, attachment_repo.MessageCommandResult):
+    if isinstance(value, ask_question_store.MessageCommandResult):
         return value
     if isinstance(value, tuple) and len(value) == 2:
         success, counter = value
-        return attachment_repo.MessageCommandResult(
+        return ask_question_store.MessageCommandResult(
             (
-                attachment_repo.MessageCommandDisposition.CLAIMED
+                ask_question_store.MessageCommandDisposition.CLAIMED
                 if success
                 else false_disposition
             ),
@@ -2224,15 +2225,15 @@ def _coerce_command_result(
             attempt=int(counter),
         )
     if isinstance(value, bool):
-        return attachment_repo.MessageCommandResult(
+        return ask_question_store.MessageCommandResult(
             (
-                attachment_repo.MessageCommandDisposition.COMPLETED
+                ask_question_store.MessageCommandDisposition.COMPLETED
                 if value
                 else false_disposition
             )
         )
-    return attachment_repo.MessageCommandResult(
-        attachment_repo.MessageCommandDisposition.RETRYABLE
+    return ask_question_store.MessageCommandResult(
+        ask_question_store.MessageCommandDisposition.RETRYABLE
     )
 
 
@@ -2244,16 +2245,16 @@ def _wait_for_message_command(
     table,
     owner_id: str | None = None,
 ) -> SendMessageResponse:
-    last = attachment_repo.MessageCommandResult(
-        attachment_repo.MessageCommandDisposition.MISSING
+    last = ask_question_store.MessageCommandResult(
+        ask_question_store.MessageCommandDisposition.MISSING
     )
     for _ in range(_MESSAGE_POLL_ATTEMPTS):
         command = _conversation_repository_call(
-            lambda: attachment_repo.get_message_command(
+            lambda: ask_question_store.get_message_command(
                 conversation_id, idempotency_key, table=table
             )
         )
-        last = attachment_repo.classify_message_command(
+        last = ask_question_store.classify_message_command(
             command,
             owner_id=owner_id or str((command or {}).get("owner_id") or ""),
             fingerprint=fingerprint,
@@ -2262,9 +2263,9 @@ def _wait_for_message_command(
         if response := _result_response(last):
             return response
         if last.disposition not in {
-            attachment_repo.MessageCommandDisposition.CLAIMED,
-            attachment_repo.MessageCommandDisposition.RESUME,
-            attachment_repo.MessageCommandDisposition.LEASE_HELD,
+            ask_question_store.MessageCommandDisposition.CLAIMED,
+            ask_question_store.MessageCommandDisposition.RESUME,
+            ask_question_store.MessageCommandDisposition.LEASE_HELD,
         }:
             raise AttachmentDecisionError(_command_error_code(last))
         time.sleep(_MESSAGE_POLL_SECONDS)
@@ -2502,7 +2503,7 @@ def _submit_message_command(
         attempt = stored_int(command.get("attempt"))
         if attempt is not None:
             _conversation_repository_call(
-                lambda: attachment_repo.reopen_failed_message_command(
+                lambda: ask_question_store.reopen_failed_message_command(
                     conversation_id=conv_id,
                     idempotency_key=body.idempotencyKey,
                     owner_id=student_id,
@@ -2664,7 +2665,7 @@ def load_committed_message(command: dict) -> CommittedMessage:
             student_id, _conversation_repository_call(lambda: _get_conversation(conv_id))
         )
         command["generation_context"] = _conversation_repository_call(
-            lambda: attachment_repo.record_message_generation_context(
+            lambda: ask_question_store.record_message_generation_context(
                 conversation_id=conv_id,
                 idempotency_key=str(command["idempotency_key"]),
                 owner_id=student_id,
@@ -2721,7 +2722,7 @@ def _record_generation_failure(
     does, which is how every failure ended before.
     """
     try:
-        attachment_repo.fail_message_command(
+        ask_question_store.fail_message_command(
             conversation_id=str(command["conversation_id"]),
             idempotency_key=str(command["idempotency_key"]),
             owner_id=str(command["owner_id"]),
@@ -2764,8 +2765,8 @@ def commit_message_command(
     )
     now_epoch = int(datetime.now(timezone.utc).timestamp())
     state = command_context.get("state")
-    if not isinstance(state, attachment_repo.MessageCommandResult):
-        state = attachment_repo.classify_message_command(
+    if not isinstance(state, ask_question_store.MessageCommandResult):
+        state = ask_question_store.classify_message_command(
             existing,
             owner_id=student_id,
             fingerprint=fingerprint,
@@ -2781,7 +2782,7 @@ def commit_message_command(
         )
     if response := _result_response(state):
         return response
-    if state.disposition is attachment_repo.MessageCommandDisposition.LEASE_HELD:
+    if state.disposition is ask_question_store.MessageCommandDisposition.LEASE_HELD:
         return _wait_for_message_command(
             conv_id,
             body.idempotencyKey,
@@ -2790,13 +2791,13 @@ def commit_message_command(
             owner_id=student_id,
         )
     if existing and state.disposition in {
-        attachment_repo.MessageCommandDisposition.REJECTED,
-        attachment_repo.MessageCommandDisposition.QUOTA_EXCEEDED,
-        attachment_repo.MessageCommandDisposition.IDEMPOTENCY_CONFLICT,
-        attachment_repo.MessageCommandDisposition.RETRYABLE,
-        attachment_repo.MessageCommandDisposition.TERMINAL,
-        attachment_repo.MessageCommandDisposition.EXPIRED,
-        attachment_repo.MessageCommandDisposition.MISSING,
+        ask_question_store.MessageCommandDisposition.REJECTED,
+        ask_question_store.MessageCommandDisposition.QUOTA_EXCEEDED,
+        ask_question_store.MessageCommandDisposition.IDEMPOTENCY_CONFLICT,
+        ask_question_store.MessageCommandDisposition.RETRYABLE,
+        ask_question_store.MessageCommandDisposition.TERMINAL,
+        ask_question_store.MessageCommandDisposition.EXPIRED,
+        ask_question_store.MessageCommandDisposition.MISSING,
     }:
         raise AttachmentDecisionError(_command_error_code(state))
 
@@ -2949,7 +2950,7 @@ def commit_message_command(
             )
             claim_result = _coerce_command_result(
                 _conversation_repository_call(
-                lambda: attachment_repo.claim_message_command_and_quota(
+                lambda: ask_question_store.claim_message_command_and_quota(
                     command=command,
                     owner_id=student_id,
                     quota_period=quota_period,
@@ -2959,14 +2960,14 @@ def commit_message_command(
                         table=table,
                 )
                 ),
-                false_disposition=attachment_repo.MessageCommandDisposition.RETRYABLE,
+                false_disposition=ask_question_store.MessageCommandDisposition.RETRYABLE,
             )
-            if claim_result.disposition is not attachment_repo.MessageCommandDisposition.CLAIMED:
+            if claim_result.disposition is not ask_question_store.MessageCommandDisposition.CLAIMED:
                 if response := _result_response(claim_result):
                     return response
                 if claim_result.disposition in {
-                    attachment_repo.MessageCommandDisposition.RESUME,
-                    attachment_repo.MessageCommandDisposition.LEASE_HELD,
+                    ask_question_store.MessageCommandDisposition.RESUME,
+                    ask_question_store.MessageCommandDisposition.LEASE_HELD,
                 }:
                     return _wait_for_message_command(
                         conv_id,
@@ -3032,7 +3033,7 @@ def commit_message_command(
             }
             if deterministic:
                 rejection = _conversation_repository_call(
-                    lambda: attachment_repo.reject_message_command_and_compensate(
+                    lambda: ask_question_store.reject_message_command_and_compensate(
                         conversation_id=conv_id,
                         idempotency_key=body.idempotencyKey,
                         owner_id=student_id,
@@ -3042,19 +3043,19 @@ def commit_message_command(
                         table=table,
                     )
                 )
-                if rejection.disposition is attachment_repo.MessageCommandDisposition.REJECTED:
+                if rejection.disposition is ask_question_store.MessageCommandDisposition.REJECTED:
                     raise bind_error
                 if response := _result_response(rejection):
                     return response
                 if rejection.disposition not in {
-                    attachment_repo.MessageCommandDisposition.RESUME,
-                    attachment_repo.MessageCommandDisposition.LEASE_HELD,
+                    ask_question_store.MessageCommandDisposition.RESUME,
+                    ask_question_store.MessageCommandDisposition.LEASE_HELD,
                 }:
                     raise AttachmentDecisionError(_command_error_code(rejection))
                 raced = rejection.command
             else:
                 reread = _conversation_repository_call(
-                    lambda: attachment_repo.read_message_command_result(
+                    lambda: ask_question_store.read_message_command_result(
                         conv_id,
                         body.idempotencyKey,
                         owner_id=student_id,
@@ -3066,8 +3067,8 @@ def commit_message_command(
                 if response := _result_response(reread):
                     return response
                 if reread.disposition not in {
-                    attachment_repo.MessageCommandDisposition.RESUME,
-                    attachment_repo.MessageCommandDisposition.LEASE_HELD,
+                    ask_question_store.MessageCommandDisposition.RESUME,
+                    ask_question_store.MessageCommandDisposition.LEASE_HELD,
                 }:
                     raise AttachmentDecisionError(
                         AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
@@ -3114,7 +3115,7 @@ def commit_message_command(
             student_id, actor, subject, grade, practice_context
         )
         command["generation_context"] = _conversation_repository_call(
-            lambda: attachment_repo.record_message_generation_context(
+            lambda: ask_question_store.record_message_generation_context(
                 conversation_id=conv_id,
                 idempotency_key=body.idempotencyKey,
                 owner_id=student_id,
@@ -3180,7 +3181,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     now_epoch = int(datetime.now(timezone.utc).timestamp())
     lease_result = _coerce_command_result(
         _conversation_repository_call(
-            lambda: attachment_repo.claim_message_ai_lease(
+            lambda: ask_question_store.claim_message_ai_lease(
                 conversation_id=conv_id,
                 idempotency_key=idempotency_key,
                 owner_id=student_id,
@@ -3191,14 +3192,14 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 table=table,
             )
         ),
-        false_disposition=attachment_repo.MessageCommandDisposition.LEASE_HELD,
+        false_disposition=ask_question_store.MessageCommandDisposition.LEASE_HELD,
     )
-    if lease_result.disposition is not attachment_repo.MessageCommandDisposition.CLAIMED:
+    if lease_result.disposition is not ask_question_store.MessageCommandDisposition.CLAIMED:
         if response := _result_response(lease_result):
             return response
         if lease_result.attempt is not None and lease_result.attempt >= 3:
             current = _conversation_repository_call(
-                lambda: attachment_repo.read_message_command_result(
+                lambda: ask_question_store.read_message_command_result(
                     conv_id,
                     idempotency_key,
                     owner_id=student_id,
@@ -3208,11 +3209,11 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 )
             )
             if current.disposition in {
-                attachment_repo.MessageCommandDisposition.TERMINAL,
-                attachment_repo.MessageCommandDisposition.RESUME,
+                ask_question_store.MessageCommandDisposition.TERMINAL,
+                ask_question_store.MessageCommandDisposition.RESUME,
             }:
                 terminal = _conversation_repository_call(
-                    lambda: attachment_repo.mark_message_command_terminal(
+                    lambda: ask_question_store.mark_message_command_terminal(
                         conversation_id=conv_id,
                         idempotency_key=idempotency_key,
                         owner_id=student_id,
@@ -3222,7 +3223,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 )
                 terminal = _coerce_command_result(
                     terminal,
-                    false_disposition=attachment_repo.MessageCommandDisposition.RETRYABLE,
+                    false_disposition=ask_question_store.MessageCommandDisposition.RETRYABLE,
                 )
                 if terminal.previous_status == "ai_running":
                     # Its last attempt died; whatever it reserved is still held
@@ -3235,8 +3236,8 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 raise AttachmentDecisionError(_command_error_code(terminal))
             lease_result = current
         if lease_result.disposition in {
-            attachment_repo.MessageCommandDisposition.LEASE_HELD,
-            attachment_repo.MessageCommandDisposition.RESUME,
+            ask_question_store.MessageCommandDisposition.LEASE_HELD,
+            ask_question_store.MessageCommandDisposition.RESUME,
         }:
             return _wait_for_message_command(
                 conv_id,
@@ -3322,7 +3323,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         _active_conversation_generation(student_id, table)
         allowance_client = _ConversationAllowanceBedrockClient(command)
         allowance_client.on_invocation = lambda: _conversation_repository_call(
-            lambda: attachment_repo.record_provider_invocation(
+            lambda: ask_question_store.record_provider_invocation(
                 conversation_id=conv_id,
                 idempotency_key=idempotency_key,
                 owner_id=student_id,
@@ -3415,7 +3416,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         # Kept until the answer is stored for good, so an attempt that dies on
         # the way is finished by the next one without a second model call.
         try:
-            attachment_repo.record_provider_result(
+            ask_question_store.record_provider_result(
                 conversation_id=conv_id,
                 idempotency_key=idempotency_key,
                 owner_id=student_id,
@@ -3440,7 +3441,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     _active_conversation_generation(student_id, table)
     completed_epoch = int(datetime.now(timezone.utc).timestamp())
     renewed = _conversation_repository_call(
-        lambda: attachment_repo.renew_message_ai_lease(
+        lambda: ask_question_store.renew_message_ai_lease(
             conversation_id=conv_id,
             idempotency_key=idempotency_key,
             owner_id=student_id,
@@ -3518,7 +3519,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     )
     completion = _coerce_command_result(
         _conversation_repository_call(
-            lambda: attachment_repo.complete_message_command(
+            lambda: ask_question_store.complete_message_command(
                 conversation_id=conv_id,
                 idempotency_key=idempotency_key,
                 owner_id=student_id,
@@ -3534,9 +3535,9 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 table=table,
             )
         ),
-        false_disposition=attachment_repo.MessageCommandDisposition.RETRYABLE,
+        false_disposition=ask_question_store.MessageCommandDisposition.RETRYABLE,
     )
-    if completion.disposition is attachment_repo.MessageCommandDisposition.COMPLETED:
+    if completion.disposition is ask_question_store.MessageCommandDisposition.COMPLETED:
         if completion.command is not None:
             stored = _result_response(completion)
             assert stored is not None

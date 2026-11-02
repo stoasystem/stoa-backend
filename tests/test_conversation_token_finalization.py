@@ -13,6 +13,7 @@ import pytest
 from stoa.db.repositories import allowance_repo
 from stoa.routers import conversations
 from stoa.services import ai_service, allowance_service
+from stoa.services.ask_question import _store as ask_question_store
 from test_token_allowances import AtomicAllowanceTable
 
 
@@ -489,10 +490,9 @@ def test_finalize_timeout_repairs_from_the_same_durable_result(
 def allowance_repo_message_result(
     command: dict[str, object],
 ):
-    from stoa.db.repositories import attachment_repo
 
-    return attachment_repo.MessageCommandResult(
-        attachment_repo.MessageCommandDisposition.COMPLETED,
+    return ask_question_store.MessageCommandResult(
+        ask_question_store.MessageCommandDisposition.COMPLETED,
         command=command,
     )
 

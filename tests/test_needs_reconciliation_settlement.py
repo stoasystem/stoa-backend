@@ -19,10 +19,11 @@ from typing import Any
 import pytest
 
 from fakes.bedrock import FakeBedrock
-from stoa.db.repositories import allowance_repo, attachment_repo
+from stoa.db.repositories import allowance_repo
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.services import ai_service, allowance_service
+from stoa.services.ask_question import _store as ask_question_store
 from test_conversation_generation_worker import _deliver, _expire_lease, _Killed, _running
 from test_message_command_generation import (  # noqa: F401 - fixtures
     ANSWER,
@@ -465,7 +466,7 @@ def test_a_lease_taken_up_after_the_sweep_read_it_is_left_alone(
     """
     _died_after_the_call(table, model, "stale")
     _running(table, "stale", attempt=1, claimed_minutes_ago=40)
-    close = attachment_repo.close_stale_lease
+    close = ask_question_store.close_stale_lease
 
     def retried_first(**kwargs: Any) -> bool:
         row = dict(_command_row(table, "stale"))
@@ -474,7 +475,7 @@ def test_a_lease_taken_up_after_the_sweep_read_it_is_left_alone(
         table.seed(row)
         return close(**kwargs)
 
-    monkeypatch.setattr(attachment_repo, "close_stale_lease", retried_first)
+    monkeypatch.setattr(ask_question_store, "close_stale_lease", retried_first)
 
     summary = _sweep()
 
