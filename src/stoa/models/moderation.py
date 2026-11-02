@@ -49,6 +49,9 @@ class ModerationReportRequest(BaseModel):
     reason: ModerationReason
     severity: ModerationSeverity = ModerationSeverity.MEDIUM
     note: str | None = Field(default=None, max_length=1000)
+    # A help request's answers are messages in its conversation (#185): the
+    # one reported. Without it, the latest AI answer or teacher reply is.
+    message_id: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class ModerationCaseUpdateRequest(BaseModel):

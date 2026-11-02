@@ -251,3 +251,38 @@ def test_nobody_can_report_an_image_case_themselves(monkeypatch):
     )
 
     assert response.status_code == 400
+
+
+def test_the_teacher_who_answered_a_question_reports_its_reply_from_the_row(monkeypatch):
+    monkeypatch.setattr(
+        moderation_service.question_repo,
+        "get_question",
+        lambda question_id: _question(status="resolved", teacher_id="teacher-1"),
+    )
+    monkeypatch.setattr(moderation_service.moderation_repo, "put_case", lambda item, event: None)
+
+    app = FastAPI()
+    app.include_router(questions.router, prefix="/questions")
+    install_actor_overrides(app, {"sub": "teacher-1", "role": "teacher"})
+
+    response = TestClient(app).post(
+        "/questions/question-1/reports",
+        json={"surface": "teacher_reply", "reason": "incorrect_answer", "severity": "medium"},
+    )
+
+    assert response.status_code == 201, response.text
+    context = response.json()["question_context"]
+    assert context["teacher_response_preview"] == "Divide by 2."
+    assert context["ai_answer_preview"] == "x = 5"
+    assert "reported_message_id" not in context
+
+
+def test_a_question_report_names_no_message(monkeypatch):
+    monkeypatch.setattr(moderation_service.question_repo, "get_question", lambda question_id: _question())
+
+    response = _questions_app({"sub": "student-1", "role": "student"}).post(
+        "/questions/question-1/reports",
+        json={"surface": "ai_answer", "reason": "unsafe_content", "message_id": "msg-1"},
+    )
+
+    assert response.status_code == 400
