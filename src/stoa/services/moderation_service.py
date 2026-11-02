@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import hashlib
 from io import BytesIO
+import json
 import logging
 from typing import Any
 from uuid import uuid4
@@ -414,9 +415,18 @@ def _delete_image_version(
             raise
 
 
+@dataclass(frozen=True, slots=True)
+class ModerationCasePage:
+    items: list[dict[str, Any]]
+    # Every case the filters admit, on this page and all the others.
+    total: int
+    next_cursor: str | None = None
+
+
 def list_cases(
     *,
     limit: int = 50,
+    cursor: str | None = None,
     status: str | None = None,
     severity: str | None = None,
     reason: str | None = None,
@@ -424,18 +434,59 @@ def list_cases(
     assignee: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
-) -> list[dict[str, Any]]:
-    items = moderation_repo.list_cases(limit=max(limit, 100))
-    filtered = [
-        item for item in items
-        if _matches(item, "status", status)
-        and _matches(item, "severity", severity)
-        and _matches(item, "reason", reason)
-        and _matches(item, "reporter_role", reporter_role)
-        and _matches(item, "assigned_admin_id", assignee)
-        and _within_dates(item, date_from, date_to)
-    ]
-    return sorted(filtered, key=lambda item: item.get("created_at", ""), reverse=True)[:limit]
+) -> ModerationCasePage:
+    """One page of the queue, newest first (#110).
+
+    The repository reads every page of the table, past whatever rows that are
+    not cases fill it, so the order and the total are the whole queue's. The
+    cursor is the position of the last case handed out, not an offset: a case
+    reported while the admin pages does not push one already seen onto the next
+    page.
+    """
+    after = _case_cursor_position(cursor) if cursor else None
+    matching = sorted(
+        (
+            item for item in moderation_repo.list_cases(limit=None)
+            if _matches(item, "status", status)
+            and _matches(item, "severity", severity)
+            and _matches(item, "reason", reason)
+            and _matches(item, "reporter_role", reporter_role)
+            and _matches(item, "assigned_admin_id", assignee)
+            and _within_dates(item, date_from, date_to)
+        ),
+        key=_case_position,
+        reverse=True,
+    )
+    remaining = [item for item in matching if after is None or _case_position(item) < after]
+    page = remaining[:limit]
+    next_cursor = (
+        _case_cursor(_case_position(page[-1])) if len(remaining) > limit else None
+    )
+    return ModerationCasePage(items=page, total=len(matching), next_cursor=next_cursor)
+
+
+def _case_position(item: Mapping[str, Any]) -> tuple[str, str]:
+    # The case id breaks ties between cases reported in the same instant.
+    return (str(item.get("created_at") or ""), str(item.get("case_id") or ""))
+
+
+def _case_cursor(position: tuple[str, str]) -> str:
+    raw = json.dumps(list(position), separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii")
+
+
+def _case_cursor_position(cursor: str) -> tuple[str, str]:
+    try:
+        decoded = json.loads(base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8"))
+    except (ValueError, UnicodeError) as exc:
+        raise HTTPException(status_code=422, detail={"code": "cursor_invalid"}) from exc
+    if (
+        not isinstance(decoded, list)
+        or len(decoded) != 2
+        or not all(isinstance(part, str) for part in decoded)
+    ):
+        raise HTTPException(status_code=422, detail={"code": "cursor_invalid"})
+    return (decoded[0], decoded[1])
 
 
 def get_case(case_id: str, *, include_events: bool = True) -> dict[str, Any]:

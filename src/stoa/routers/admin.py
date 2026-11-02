@@ -1223,6 +1223,7 @@ class CurriculumAnalyticsDashboardResponse(BaseModel):
 @router.get("/moderation/cases", response_model=ModerationCaseListResponse)
 async def list_moderation_cases(
     limit: int = Query(default=50, ge=1, le=100),
+    cursor: Optional[str] = Query(default=None, max_length=2000),
     status: ModerationStatus | None = Query(default=None),
     severity: ModerationSeverity | None = Query(default=None),
     reason: ModerationReason | None = Query(default=None),
@@ -1232,9 +1233,10 @@ async def list_moderation_cases(
     date_to: Optional[str] = Query(default=None),
     user: dict = Depends(require_role("admin")),
 ):
-    """List moderation cases for internal operations."""
-    items = moderation_service.list_cases(
+    """One page of moderation cases, newest first, for internal operations."""
+    page = moderation_service.list_cases(
         limit=limit,
+        cursor=cursor,
         status=status.value if status else None,
         severity=severity.value if severity else None,
         reason=reason.value if reason else None,
@@ -1243,8 +1245,11 @@ async def list_moderation_cases(
         date_from=date_from,
         date_to=date_to,
     )
-    responses = [ModerationCaseResponse.model_validate(item) for item in items]
-    return ModerationCaseListResponse(items=responses, count=len(responses))
+    return ModerationCaseListResponse(
+        items=[ModerationCaseResponse.model_validate(item) for item in page.items],
+        count=page.total,
+        nextCursor=page.next_cursor,
+    )
 
 
 @router.get("/moderation/cases/{case_id}", response_model=ModerationCaseResponse)

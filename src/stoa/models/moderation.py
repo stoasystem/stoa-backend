@@ -114,5 +114,11 @@ class ModerationCaseResponse(BaseModel):
 
 class ModerationCaseListResponse(BaseModel):
     items: list[ModerationCaseResponse]
-    count: int
+    count: int = Field(
+        description="Every case the filters admit, across all pages, not the length of this one."
+    )
     access_pattern: str = "bounded_scan"
+    nextCursor: str | None = Field(
+        default=None,
+        description="Pass as `cursor` for the next page; null on the last page.",
+    )
