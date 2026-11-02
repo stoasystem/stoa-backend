@@ -19,12 +19,12 @@ from jose import jwt
 import pytest
 
 from security.conftest import FakeAsyncJwksTransport
-from test_account_admin_endpoints import (  # noqa: F401 - `table` is a fixture
+from test_account_admin_endpoints import (
     AccountAdminTable,
     _admin_user,
     _app,
     _seed_profile,
-    table,
+    table as table,  # a fixture: the tests below take it by name
 )
 
 from stoa.config import Settings, get_settings
