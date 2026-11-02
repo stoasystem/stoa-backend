@@ -91,14 +91,11 @@ def test_production_question_writer_registry_is_closed_over_cas_calls():
     }
     assert callers == {}
 
-    direct_registry = {
-        "src/stoa/db/repositories/question_submission_repo.py": {
-            "reverse_terminal_question_admission",
-        },
-    }
+    # The last direct writer, the submit path's terminal-admission reversal,
+    # went with the rest of that path (#216).
     discovered: dict[str, set[str]] = {}
     for path in (ROOT / "src/stoa").rglob("*.py"):
         functions = _direct_question_updates(path)
         if functions:
             discovered[path.relative_to(ROOT).as_posix()] = functions
-    assert discovered == direct_registry
+    assert discovered == {}

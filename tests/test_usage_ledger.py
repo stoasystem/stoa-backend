@@ -11,9 +11,34 @@ from actor_helpers import install_actor_overrides
 from stoa.db.repositories import usage_ledger_repo
 
 
-def _question_digest(caller_key: str) -> str:
-    """A command digest as the retired submission route derived it (#148)."""
-    return hashlib.sha256(f"student-1:{caller_key}".encode()).hexdigest()
+def _seed_question_event(
+    table: FakeTable,
+    *,
+    caller_key: str,
+    question_id: str,
+    quota_period: str,
+    created_at: str,
+) -> None:
+    """Seed a ledger row as the retired submission route wrote it (#148).
+
+    Nothing writes these any more; reconciliation still reads the ones left.
+    """
+    digest = hashlib.sha256(f"student-1:{caller_key}".encode()).hexdigest()
+    table.seed({
+        "PK": "USAGE_LEDGER#student-1",
+        "SK": f"EVENT#question_submission#{quota_period}#{digest}",
+        "entity_type": "usage_ledger_event",
+        "event_id": digest,
+        "student_id": "student-1",
+        "action": "question_submission",
+        "status": "active",
+        "quantity": 1,
+        "quota_period": quota_period,
+        "counter_key": f"USAGE#student-1/QUESTION#{quota_period}",
+        "idempotency_digest": digest,
+        "question_id": question_id,
+        "created_at": created_at,
+    })
 
 
 def _settings() -> Settings:
@@ -22,57 +47,6 @@ def _settings() -> Settings:
         standard_tier_daily_question_limit=30,
         premium_tier_daily_question_limit=100,
     )
-
-
-def test_question_usage_event_is_privacy_safe_and_idempotent(monkeypatch):
-    table = FakeTable()
-    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
-
-    entitlement = {
-        "effectivePlan": "family",
-        "source": "provider_billing",
-        "parentId": "parent-1",
-        "limits": {"dailyAiQuestionLimit": 100},
-        "billingState": "active",
-        "period": {"start": "2026-07-01", "end": "2026-08-01"},
-    }
-
-    created = usage_ledger_service.record_question_usage_event(
-        student_id="student-1",
-        question_id="question-1",
-        quota_period="2026-07-03",
-        idempotency_digest=_question_digest("request-1"),
-        counter_key="USAGE#student-1/QUESTION#2026-07-03",
-        counter_value=1,
-        quantity=1,
-        entitlement=entitlement,
-        created_at="2026-07-03T12:00:00+00:00",
-    )
-    duplicate = usage_ledger_service.record_question_usage_event(
-        student_id="student-1",
-        question_id="question-1",
-        quota_period="2026-07-03",
-        idempotency_digest=_question_digest("request-1"),
-        counter_key="USAGE#student-1/QUESTION#2026-07-03",
-        counter_value=1,
-        quantity=1,
-        entitlement=entitlement,
-        created_at="2026-07-03T12:00:00+00:00",
-    )
-
-    assert created["idempotency_status"] == "created"
-    assert duplicate["idempotency_status"] == "duplicate"
-    assert created["privacy"] == {
-        "raw_content_stored": False,
-        "raw_learning_content_stored": False,
-        "private_artifact_keys_stored": False,
-        "provider_payloads_stored": False,
-        "auth_tokens_stored": False,
-        "verification_codes_stored": False,
-    }
-    assert "content" not in created
-    assert "image_s3_key" not in created
-    assert created["entitlement_snapshot"]["effectivePlan"] == "family"
 
 
 def test_usage_action_taxonomy_covers_v5_11_actions_and_preserves_question_contract():
@@ -189,15 +163,11 @@ def test_reconciliation_reports_and_repairs_counter_mismatch(monkeypatch):
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
 
     for index in range(2):
-        usage_ledger_service.record_question_usage_event(
-            student_id="student-1",
+        _seed_question_event(
+            table,
+            caller_key=f"request-{index}",
             question_id=f"question-{index}",
             quota_period="2026-07-03",
-            idempotency_digest=_question_digest(f"request-{index}"),
-            counter_key="USAGE#student-1/QUESTION#2026-07-03",
-            counter_value=index + 1,
-            quantity=1,
-            entitlement={"effectivePlan": "free_trial", "limits": {"dailyAiQuestionLimit": 2}},
             created_at="2026-07-03T12:00:00+00:00",
         )
 
@@ -270,15 +240,11 @@ def test_reconciliation_explains_over_limit_counter(monkeypatch):
         "count": 3,
     })
     for index in range(3):
-        usage_ledger_service.record_question_usage_event(
-            student_id="student-1",
+        _seed_question_event(
+            table,
+            caller_key=f"request-{index}",
             question_id=f"question-{index}",
             quota_period="2026-07-05",
-            idempotency_digest=_question_digest(f"request-{index}"),
-            counter_key="USAGE#student-1/QUESTION#2026-07-05",
-            counter_value=index + 1,
-            quantity=1,
-            entitlement={"effectivePlan": "free_trial", "limits": {"dailyAiQuestionLimit": 2}, "parentId": "parent-1"},
             created_at="2026-07-05T10:00:00+00:00",
         )
 
@@ -379,15 +345,11 @@ def test_student_usage_summary_includes_multi_action_groups(monkeypatch):
         "SK": "CHAT#2026-07-04",
         "count": 1,
     })
-    usage_ledger_service.record_question_usage_event(
-        student_id="student-1",
+    _seed_question_event(
+        table,
+        caller_key="question-1",
         question_id="question-1",
         quota_period="2026-07-04",
-        idempotency_digest=_question_digest("question-1"),
-        counter_key="USAGE#student-1/QUESTION#2026-07-04",
-        counter_value=1,
-        quantity=1,
-        entitlement={"effectivePlan": "family", "limits": {"dailyAiQuestionLimit": 100}, "parentId": "parent-1"},
         created_at="2026-07-04T10:00:00+00:00",
     )
     usage_ledger_service.record_usage_event(
