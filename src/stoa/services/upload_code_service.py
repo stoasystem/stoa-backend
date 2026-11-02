@@ -1,7 +1,8 @@
 """One image from a phone that is not signed in, into one conversation (#146).
 
-The computer mints a code for a learning conversation; the phone that scans it
-presents the code instead of a session. The code is `<codeId>.<secret>`: the id
+The computer mints a code for a learning conversation, or for no conversation yet
+(#191): a student about to ask a new question photographs it first. The phone
+that scans it presents the code instead of a session. The code is `<codeId>.<secret>`: the id
 finds the row, and the secret (32 random bytes) is checked against the SHA-256 the
 row holds, in constant time. Redeeming spends the code with a conditional write and
 hands the phone an upload token of the same shape, good for that one upload and
@@ -17,6 +18,13 @@ every call would let one script behind a school's NAT lock out every phone there
 What the phone uploads is an ordinary upload owned by the student, bound to the
 conversation the code was made in, and completed through the same path as any
 other, moderation included (#138).
+
+A code made for no conversation binds its upload to none, like a file the
+computer chooses itself: it goes with whichever question the student sends it
+with. Its upload id is reserved when the code is made -- the same UUID as the
+code id, written with dashes -- and handed to the computer, which follows the
+code through `/files/{upload_id}/phone-code` under the upload's own
+authorization rather than through a conversation it does not have.
 """
 
 from __future__ import annotations
@@ -27,7 +35,7 @@ import hmac
 import re
 import secrets
 from typing import Any, Callable, Never, TypeVar
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from stoa.config import IMAGE_MAX_BYTES, Settings
 from stoa.db.repositories import (
@@ -197,8 +205,28 @@ def _require_image(request: UploadCodeRedeemRequest) -> None:
 # -- the computer ---------------------------------------------------------------
 
 
-def issue_code(conversation_id: str, actor: Actor, *, settings: Settings) -> dict[str, Any]:
-    """A code for this conversation of this student; the secret is returned only here."""
+def reserved_upload_id(code_id: str) -> str:
+    """The upload a code made for no conversation will open: its own UUID, with dashes."""
+    return str(UUID(hex=code_id))
+
+
+def code_id_of_upload(upload_id: str) -> str | None:
+    """The code whose upload this is, written the one way `reserved_upload_id` writes it."""
+    try:
+        parsed = UUID(upload_id)
+    except (ValueError, TypeError):
+        return None
+    return parsed.hex if str(parsed) == upload_id else None
+
+
+def issue_code(
+    conversation_id: str | None, actor: Actor, *, settings: Settings
+) -> dict[str, Any]:
+    """A code for this conversation of this student, or for none; the secret is returned only here."""
+    # With a conversation the route has checked it is the student's own; without
+    # one only the role is left to check, as an upload intent checks it.
+    if conversation_id is None and actor.role is not CanonicalRole.STUDENT:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     _admit(
         "UPLOAD_CODE_ISSUE",
         hashlib.sha256(actor.user_id.encode("utf-8")).hexdigest(),
@@ -223,7 +251,7 @@ def issue_code(conversation_id: str, actor: Actor, *, settings: Settings) -> dic
                 # where a burst of codes crowds the parent's conversation pages
                 # until TTL. Deletion's sweep finds the row by `owner_id`.
                 "owner_id": actor.user_id,
-                "conversation_id": conversation_id,
+                **({"conversation_id": conversation_id} if conversation_id is not None else {}),
                 "secret_sha256": _digest(secret),
                 "status": "issued",
                 "account_fence_generation": int(fence["generation"]),
@@ -247,14 +275,18 @@ def issue_code(conversation_id: str, actor: Actor, *, settings: Settings) -> dic
         if isinstance(error, account_deletion_repo.AccountDeletionConflict):
             raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from None
         raise _unavailable() from None
-    return {
+    issued: dict[str, Any] = {
         "codeId": code_id,
         "code": f"{code_id}.{secret}",
         "expiresAt": datetime.fromtimestamp(expires_at, UTC),
     }
+    if conversation_id is None:
+        issued["uploadId"] = reserved_upload_id(code_id)
+    return issued
 
 
-def _owned_code_row(conversation_id: str, code_id: str, actor: Actor) -> dict[str, Any]:
+def _owned_code_row(conversation_id: str | None, code_id: str, actor: Actor) -> dict[str, Any]:
+    """The student's own code, made for this conversation; `None` reads one made for none."""
     if not _CODE_ID.fullmatch(code_id):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     try:
@@ -270,7 +302,14 @@ def _owned_code_row(conversation_id: str, code_id: str, actor: Actor) -> dict[st
     return row
 
 
-def code_status(conversation_id: str, code_id: str, actor: Actor) -> dict[str, Any]:
+def _code_of_upload(upload_id: str) -> str:
+    code_id = code_id_of_upload(upload_id)
+    if code_id is None:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
+    return code_id
+
+
+def code_status(conversation_id: str | None, code_id: str, actor: Actor) -> dict[str, Any]:
     row = _owned_code_row(conversation_id, code_id, actor)
     now_epoch = int(_now().timestamp())
     status, upload_id = "waiting", None
@@ -304,8 +343,20 @@ def code_status(conversation_id: str, code_id: str, actor: Actor) -> dict[str, A
     }
 
 
+def unbound_code_status(upload_id: str, actor: Actor) -> dict[str, Any]:
+    """Where the phone has got with a code made for no conversation, by its reserved upload."""
+    return code_status(None, _code_of_upload(upload_id), actor)
+
+
+def preview_unbound_upload(
+    upload_id: str, actor: Actor, *, s3: Any, settings: Settings
+) -> attachment_service.PreparedSavedAttachmentDownload:
+    """The photo a phone put in for a code made for no conversation."""
+    return preview_upload(None, _code_of_upload(upload_id), actor, s3=s3, settings=settings)
+
+
 def preview_upload(
-    conversation_id: str, code_id: str, actor: Actor, *, s3: Any, settings: Settings
+    conversation_id: str | None, code_id: str, actor: Actor, *, s3: Any, settings: Settings
 ) -> attachment_service.PreparedSavedAttachmentDownload:
     """The photo a phone put in, for the student to look at before sending it.
 
@@ -346,7 +397,10 @@ def redeem_code(
     row = _counting_refusals(
         source_digest, settings, lambda: _issued_row(request.code.get_secret_value(), now_epoch)
     )
-    upload_id = str(uuid4())
+    bound_to = row.get("conversation_id")
+    # A code made for no conversation opens the upload it reserved, which the
+    # computer is already following; one made for a conversation, a fresh one.
+    upload_id = str(uuid4()) if bound_to is not None else reserved_upload_id(str(row["code_id"]))
     token_secret = secrets.token_urlsafe(32)
     token_expires_at = now_epoch + UPLOAD_TOKEN_TTL_SECONDS
     try:
@@ -375,7 +429,7 @@ def redeem_code(
             settings=settings,
             now=now,
             upload_id=upload_id,
-            conversation_id=str(row["conversation_id"]),
+            conversation_id=str(bound_to) if bound_to is not None else None,
         )
     except AttachmentDecisionError:
         raise
@@ -396,6 +450,8 @@ def _issued_row(code: str, now_epoch: int) -> dict[str, Any]:
     if row is None or row.get("status") != "issued" or now_epoch >= int(row["expires_at"]):
         raise _invalid()
     _require_live_account(row)
+    if row.get("conversation_id") is None:
+        return row
     try:
         conversation = upload_code_repo.get_conversation(str(row["conversation_id"]))
     except Exception:
