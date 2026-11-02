@@ -5710,6 +5710,7 @@
             "type": "string"
           },
           "count": {
+            "description": "Every case the filters admit, across all pages, not the length of this one.",
             "title": "Count",
             "type": "integer"
           },
@@ -5719,6 +5720,18 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `cursor` for the next page; null on the last page.",
+            "title": "Nextcursor"
           }
         },
         "required": [
@@ -18110,7 +18123,7 @@
     },
     "/admin/moderation/cases": {
       "get": {
-        "description": "List moderation cases for internal operations.",
+        "description": "One page of moderation cases, newest first, for internal operations.",
         "operationId": "list_moderation_cases_admin_moderation_cases_get",
         "parameters": [
           {
@@ -18123,6 +18136,23 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
             }
           },
           {
