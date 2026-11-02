@@ -336,7 +336,7 @@ def _conversation_replay_scaffold(
     monkeypatch.setattr(_answering, "get_table", lambda: table)
     monkeypatch.setattr(_transcript, "get_table", lambda: table)
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
-    monkeypatch.setattr(conversations, "_get_conversation", lambda _conv_id: dict(row))
+    monkeypatch.setattr(conversations, "read_conversation", lambda _conv_id: dict(row))
     service = conversations.teacher_support_allowance_service
 
     def replayed(**_kwargs: object) -> object:

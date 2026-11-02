@@ -29,9 +29,9 @@ from stoa.security.attachment_errors import AttachmentDecisionError
 from stoa.security.identity import Actor
 from stoa.services.ask_question import _answering, _store, _sweep, dispatch
 from stoa.services.ask_question._transcript import (
-    _conversation_grade,
+    conversation_grade,
     _conversation_repository_call,
-    _required_conversation_text,
+    required_conversation_text,
 )
 from stoa.services.ask_question.errors import AskQuestionErrorCode
 from stoa.services.ask_question.models import (
@@ -84,8 +84,8 @@ def submit(
     """
     # A record the conversation cannot be read back from is refused before
     # anything is read or written, as reading it would be.
-    subject = _required_conversation_text(conversation, "subject")
-    grade = _conversation_grade(conversation)
+    subject = required_conversation_text(conversation, "subject")
+    grade = conversation_grade(conversation)
     command_context: dict[str, object] = {
         "actor": actor,
         "fingerprint": fingerprint,

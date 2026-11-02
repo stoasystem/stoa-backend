@@ -62,7 +62,7 @@ def _client(router, prefix: str = "/conversations", actor=None) -> TestClient:
 def _owned_conversation(monkeypatch) -> None:
     monkeypatch.setattr(
         conversations,
-        "_get_conversation",
+        "read_conversation",
         lambda conv_id: {"conversation_id": conv_id, "student_id": "student-1"},
     )
 
@@ -169,7 +169,7 @@ def test_conversation_teacher_help_records_support_visible_usage(monkeypatch):
         monkeypatch.setattr(module, "get_table", lambda table=table: table)
     monkeypatch.setattr(
         conversations,
-        "_get_conversation",
+        "read_conversation",
         lambda conv_id: dict(table.rows[(f"CONV#{conv_id}", "CONV")]),
     )
     monkeypatch.setattr(
@@ -270,7 +270,7 @@ def test_teacher_help_retryable_admission_stays_out_of_student_words(monkeypatch
     monkeypatch.setattr(_transcript, "get_table", lambda: table)
     monkeypatch.setattr(
         conversations,
-        "_get_conversation",
+        "read_conversation",
         lambda conv_id: dict(table.rows[(f"CONV#{conv_id}", "CONV")]),
     )
 
@@ -327,9 +327,9 @@ def test_conversation_owner_and_exact_admin_capability_positive_controls(monkeyp
         "created_at": "2026-07-15T00:00:00Z",
         "updated_at": "2026-07-15T00:00:00Z",
     }
-    monkeypatch.setattr(conversations, "_get_conversation", lambda *_: conv)
-    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
-    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(conversations, "read_conversation", lambda *_: conv)
+    monkeypatch.setattr(conversations, "read_messages", lambda *_: [])
+    monkeypatch.setattr(_answering, "read_messages", lambda *_: [])
     owner = _client(conversations.router).get("/conversations/conv-1")
     grant = CapabilityGrant("student_content_review", "student:student-1", 1)
     admin = _client(
@@ -347,7 +347,7 @@ def test_conversation_owner_and_exact_admin_capability_positive_controls(monkeyp
 
 def test_unrelated_parent_conversation_is_hidden(monkeypatch):
     conv = {"conversation_id": "conv-1", "student_id": "student-1"}
-    monkeypatch.setattr(conversations, "_get_conversation", lambda *_: conv)
+    monkeypatch.setattr(conversations, "read_conversation", lambda *_: conv)
     monkeypatch.setattr(user_repo, "get_parent_student_binding", lambda *_: None)
     monkeypatch.setattr(user_repo, "get_student_parent_binding", lambda *_: None)
     monkeypatch.setattr(
@@ -390,9 +390,9 @@ def test_current_linked_teacher_can_read_but_stale_teacher_is_hidden(monkeypatch
         "teacher-1": {"user_id": "teacher-1", "role": "teacher", "account_status": "active"},
         "teacher-2": {"user_id": "teacher-2", "role": "teacher", "account_status": "active"},
     }
-    monkeypatch.setattr(conversations, "_get_conversation", lambda *_: conv)
-    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
-    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(conversations, "read_conversation", lambda *_: conv)
+    monkeypatch.setattr(conversations, "read_messages", lambda *_: [])
+    monkeypatch.setattr(_answering, "read_messages", lambda *_: [])
     monkeypatch.setattr(question_repo, "get_question", lambda *_: question)
     monkeypatch.setattr(question_repo, "get_teacher_session", lambda *_: None)
     monkeypatch.setattr(question_repo, "get_teacher_assignment", lambda *_: None)
@@ -1098,7 +1098,7 @@ def test_conversation_history_batch_projects_only_safe_attachment_summaries(monk
     summary = _attachment_summary()
     monkeypatch.setattr(
         conversations,
-        "_get_conversation",
+        "read_conversation",
         lambda *_: {
             "conversation_id": "conv-1",
             "student_id": "student-1",
@@ -1110,7 +1110,7 @@ def test_conversation_history_batch_projects_only_safe_attachment_summaries(monk
     )
     monkeypatch.setattr(
         conversations,
-        "_get_messages",
+        "read_messages",
         lambda *_: [
             {
                 "message_id": "message-1",
@@ -1125,7 +1125,7 @@ def test_conversation_history_batch_projects_only_safe_attachment_summaries(monk
     )
     monkeypatch.setattr(
         _answering,
-        "_get_messages",
+        "read_messages",
         lambda *_: [
             {
                 "message_id": "message-1",
@@ -1314,7 +1314,7 @@ def test_a_name_the_student_chose_is_never_taken_by_a_question(monkeypatch):
 
 
 def test_an_untitled_conversation_can_still_be_read_back():
-    """The `_conversation_grade` defect, not repeated for the title.
+    """The `conversation_grade` defect, not repeated for the title.
 
     Creation accepted a blank grade and every later read refused it, so the
     conversation existed in a state it could not be read out of. An empty
@@ -1620,17 +1620,17 @@ def test_a_conversation_opened_without_a_year_group_can_be_read_back():
         "updated_at": "2026-09-23T00:00:00+00:00",
     }
 
-    assert _transcript._conversation_grade(conv) == ""
+    assert _transcript.conversation_grade(conv) == ""
 
 
 def test_a_missing_year_group_reads_the_same_as_an_empty_one():
-    assert _transcript._conversation_grade({"subject": "math"}) == ""
+    assert _transcript.conversation_grade({"subject": "math"}) == ""
 
 
 def test_a_year_group_of_the_wrong_type_is_still_refused():
     """Negative control: "nobody said" is not "the row is damaged"."""
     with pytest.raises(conversations.AttachmentDecisionError):
-        _transcript._conversation_grade({"grade": 9})
+        _transcript.conversation_grade({"grade": 9})
 
 
 def test_the_other_conversation_fields_still_refuse_an_empty_value():
@@ -1641,7 +1641,7 @@ def test_the_other_conversation_fields_still_refuse_an_empty_value():
     """
     for field in ("title", "subject", "updated_at"):
         with pytest.raises(conversations.AttachmentDecisionError):
-            _transcript._required_conversation_text({field: ""}, field)
+            _transcript.required_conversation_text({field: ""}, field)
 
 
 def test_escalating_a_conversation_writes_the_record_the_teacher_side_reads(monkeypatch):
@@ -1836,7 +1836,7 @@ def _escalate(monkeypatch, table, conversation_id: str = "conv-1"):
     )
     monkeypatch.setattr(
         conversations,
-        "_get_conversation",
+        "read_conversation",
         lambda conv_id: dict(table.rows[(f"CONV#{conv_id}", "CONV")]),
     )
     monkeypatch.setattr(

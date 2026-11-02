@@ -522,7 +522,7 @@ def test_regular_and_sse_get_item_transport_faults_share_safe_retry(
 
     monkeypatch.setattr(
         conversations,
-        "_get_conversation",
+        "read_conversation",
         lambda *_: {
             "conversation_id": "conv-1",
             "student_id": "student-1",

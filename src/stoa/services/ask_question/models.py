@@ -93,7 +93,7 @@ class SendMessageRequest(BaseModel):
         return self
 
 
-def _stored_quote(value: object) -> MessageQuote | None:
+def stored_quote(value: object) -> MessageQuote | None:
     """A quote as it was stored beside a message, or nothing if it is not one."""
     if not isinstance(value, Mapping):
         return None
@@ -152,7 +152,7 @@ def message_request_fingerprint(body: SendMessageRequest) -> str:
     return hashlib.sha256(bytes(framed)).hexdigest()
 
 
-def _stored_structured(value: object) -> StructuredAnswer | None:
+def stored_structured(value: object) -> StructuredAnswer | None:
     """The sections stored beside an answer, or nothing for one written before them."""
     if not isinstance(value, Mapping):
         return None
@@ -162,7 +162,7 @@ def _stored_structured(value: object) -> StructuredAnswer | None:
         return None
 
 
-def _structured_payload(structured: StructuredAnswer | None) -> dict[str, object] | None:
+def structured_payload(structured: StructuredAnswer | None) -> dict[str, object] | None:
     return None if structured is None else structured.model_dump(mode="json")
 
 
@@ -172,7 +172,7 @@ class TargetUnit(BaseModel):
     unitId: str
 
 
-def _target_unit(unit_id: object) -> TargetUnit | None:
+def target_unit(unit_id: object) -> TargetUnit | None:
     return TargetUnit(unitId=unit_id) if isinstance(unit_id, str) and unit_id else None
 
 

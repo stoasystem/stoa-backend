@@ -21,7 +21,6 @@ from fastapi import status
 from stoa.config import settings
 from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import (
-    account_deletion_repo,
     allowance_repo,
     asked_knowledge_repo,
     knowledge_gap_repo,
@@ -46,16 +45,17 @@ from stoa.services import (
 from stoa.services.adaptive_learning_service import actor_projection
 from stoa.services.ask_question import _store as ask_question_store
 from stoa.services.ask_question._transcript import (
-    _DynamoConversationTable,
-    _conv_pk,
-    _conversation_grade,
+    DynamoConversationTable,
     _conversation_repository_call,
-    _get_conversation,
-    _get_messages,
     _history_snapshot_fingerprint,
     _load_anchored_message_history,
-    _msg_sk,
     _stored_student_message,
+    active_conversation_generation,
+    conv_pk,
+    conversation_grade,
+    msg_sk,
+    read_conversation,
+    read_messages,
 )
 from stoa.services.ask_question.errors import AskQuestionErrorCode, parse_error_code
 from stoa.services.ask_question.models import (
@@ -65,8 +65,8 @@ from stoa.services.ask_question.models import (
     SendMessageRequest,
     SendMessageResponse,
     _quote_payload,
-    _structured_payload,
-    _target_unit,
+    structured_payload,
+    target_unit,
 )
 
 logger = logging.getLogger(__name__)
@@ -597,15 +597,6 @@ def _message_allowance_metadata_from_command(
 # ── end of the AI message allowance block (#206) ──────────────────────────────
 
 
-def _active_conversation_generation(owner_id: str, table: Any) -> int:
-    """Resolve one exact active generation before a private conversation effect."""
-    try:
-        fence = account_deletion_repo.require_active_account_fence(owner_id, table=table)
-    except account_deletion_repo.AccountDeletionConflict:
-        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from None
-    return int(fence["generation"])
-
-
 GENERATION_PROGRESS_TTL_SECONDS = 3600
 
 
@@ -843,33 +834,10 @@ def _result_response(
     return response
 
 
-def _coerce_command_result(
-    value,
-    *,
-    false_disposition: ask_question_store.MessageCommandDisposition,
-) -> ask_question_store.MessageCommandResult:
-    """Accept inherited test doubles while production repositories stay typed."""
+def _coerce_command_result(value: object) -> ask_question_store.MessageCommandResult:
+    """A command transition's result; anything that is not one is retryable."""
     if isinstance(value, ask_question_store.MessageCommandResult):
         return value
-    if isinstance(value, tuple) and len(value) == 2:
-        success, counter = value
-        return ask_question_store.MessageCommandResult(
-            (
-                ask_question_store.MessageCommandDisposition.CLAIMED
-                if success
-                else false_disposition
-            ),
-            counter_value=int(counter),
-            attempt=int(counter),
-        )
-    if isinstance(value, bool):
-        return ask_question_store.MessageCommandResult(
-            (
-                ask_question_store.MessageCommandDisposition.COMPLETED
-                if value
-                else false_disposition
-            )
-        )
     return ask_question_store.MessageCommandResult(
         ask_question_store.MessageCommandDisposition.RETRYABLE
     )
@@ -1065,7 +1033,7 @@ def _generation_context_without_request(
         "schema_version": "generation-context.v1",
         "locale": locale_service.effective_locale(profile),
         "subject": _SUBJECT_ALIASES.get(str(conversation.get("subject") or ""), "math"),
-        "grade": _conversation_grade(conversation),
+        "grade": conversation_grade(conversation),
         "memory_context": None,
         "practice_context": None,
     }
@@ -1078,7 +1046,7 @@ def load_committed_message(command: dict) -> CommittedMessage:
     command's identity, its history snapshot, the stored student message and
     its attachments. A command without its generation context is given one.
     """
-    table = cast(_DynamoConversationTable, get_table())
+    table = cast(DynamoConversationTable, get_table())
     conv_id = str(command.get("conversation_id") or "")
     student_id = str(command.get("owner_id") or "")
     command = _validate_replay_command(
@@ -1110,7 +1078,7 @@ def load_committed_message(command: dict) -> CommittedMessage:
     )
     if not isinstance(command.get("generation_context"), Mapping):
         context = _generation_context_without_request(
-            student_id, _conversation_repository_call(lambda: _get_conversation(conv_id))
+            student_id, _conversation_repository_call(lambda: read_conversation(conv_id))
         )
         command["generation_context"] = _conversation_repository_call(
             lambda: ask_question_store.record_message_generation_context(
@@ -1204,12 +1172,12 @@ def commit_message_command(
     """
     actor: Actor = command_context["actor"]
     fingerprint = str(command_context["fingerprint"])
-    table = cast(_DynamoConversationTable, get_table())
+    table = cast(DynamoConversationTable, get_table())
     existing = command_context.get("existing")
     account_fence_generation = int(
         command_context.get("account_fence_generation")
         or (existing or {}).get("account_fence_generation")
-        or _active_conversation_generation(student_id, table)
+        or active_conversation_generation(student_id, table)
     )
     now_epoch = int(datetime.now(timezone.utc).timestamp())
     state = command_context.get("state")
@@ -1344,7 +1312,7 @@ def commit_message_command(
             )
         )
     else:
-        prior_messages = _conversation_repository_call(lambda: _get_messages(conv_id))
+        prior_messages = _conversation_repository_call(lambda: read_messages(conv_id))
         command["history_message_ids"] = [
             item["message_id"] for item in prior_messages
         ]
@@ -1408,7 +1376,6 @@ def commit_message_command(
                         table=table,
                 )
                 ),
-                false_disposition=ask_question_store.MessageCommandDisposition.RETRYABLE,
             )
             if claim_result.disposition is not ask_question_store.MessageCommandDisposition.CLAIMED:
                 if response := _result_response(claim_result):
@@ -1430,8 +1397,8 @@ def commit_message_command(
                 "counter_value": int(claim_result.counter_value or 0),
             }
         student_item = {
-            "PK": _conv_pk(conv_id),
-            "SK": _msg_sk(student_msg_id),
+            "PK": conv_pk(conv_id),
+            "SK": msg_sk(student_msg_id),
             "entity_type": "conversation_message",
             "schema_version": "conversation-message.v1",
             "message_id": student_msg_id,
@@ -1605,7 +1572,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     prepared = committed.prepared
     attachments = committed.attachments
     prior_messages = committed.prior_messages
-    table = cast(_DynamoConversationTable, get_table())
+    table = cast(DynamoConversationTable, get_table())
     context = command.get("generation_context")
     if (
         not isinstance(context, Mapping)
@@ -1642,7 +1609,6 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 table=table,
             )
         ),
-        false_disposition=ask_question_store.MessageCommandDisposition.LEASE_HELD,
     )
     if lease_result.disposition is not ask_question_store.MessageCommandDisposition.CLAIMED:
         if response := _result_response(lease_result):
@@ -1673,7 +1639,6 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 )
                 terminal = _coerce_command_result(
                     terminal,
-                    false_disposition=ask_question_store.MessageCommandDisposition.RETRYABLE,
                 )
                 if terminal.previous_status == "ai_running":
                     # Its last attempt died; whatever it reserved is still held
@@ -1733,7 +1698,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     if recovered is not None:
         answer, allowance_metadata = recovered
     else:
-        _active_conversation_generation(student_id, table)
+        active_conversation_generation(student_id, table)
         attachment_context = ""
         attachment_images: tuple[ai_service.PromptImage, ...] = ()
         if prepared:
@@ -1770,7 +1735,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             fixed_seconds=_AI_INVOCATION_DEADLINE_SECONDS,
             reserve_seconds=_AI_PERSIST_RESERVE_SECONDS,
         )
-        _active_conversation_generation(student_id, table)
+        active_conversation_generation(student_id, table)
         allowance_client = _ConversationAllowanceBedrockClient(command)
         allowance_client.on_invocation = lambda: _conversation_repository_call(
             lambda: ask_question_store.record_provider_invocation(
@@ -1888,7 +1853,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     ):
         raise _allowance_recoverable_failure()
 
-    _active_conversation_generation(student_id, table)
+    active_conversation_generation(student_id, table)
     completed_epoch = int(datetime.now(timezone.utc).timestamp())
     renewed = _conversation_repository_call(
         lambda: ask_question_store.renew_message_ai_lease(
@@ -1931,14 +1896,14 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         createdAt=assistant_created_at,
         status="sent",
         structured=answer.structured,
-        targetUnit=_target_unit(answer.target_unit_id),
+        targetUnit=target_unit(answer.target_unit_id),
     )
     result = SendMessageResponse(
         studentMessage=student_message, assistantMessage=assistant_message
     )
     assistant_item = {
-        "PK": _conv_pk(conv_id),
-        "SK": _msg_sk(assistant_msg_id),
+        "PK": conv_pk(conv_id),
+        "SK": msg_sk(assistant_msg_id),
         "entity_type": "conversation_message",
         "schema_version": "conversation-message.v1",
         "message_id": assistant_msg_id,
@@ -1949,7 +1914,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         "role": "assistant",
         "content": answer.content,
         "created_at": assistant_created_at,
-        "structured": _structured_payload(answer.structured),
+        "structured": structured_payload(answer.structured),
         **({"target_unit_id": answer.target_unit_id} if answer.target_unit_id else {}),
         **(allowance_metadata or {}),
     }
@@ -1985,7 +1950,6 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 table=table,
             )
         ),
-        false_disposition=ask_question_store.MessageCommandDisposition.RETRYABLE,
     )
     if completion.disposition is ask_question_store.MessageCommandDisposition.COMPLETED:
         if completion.command is not None:

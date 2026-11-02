@@ -63,25 +63,23 @@ from stoa.services import (
     attachment_service,
     help_requests,
     learning_profile_service,
+    locale_service,
     message_catalog,
     practice_context_service,
     teacher_dispatch_service,
     teacher_support_allowance_service,
     usage_ledger_service,
 )
-from stoa.services.ask_question._answering import (
-    _active_conversation_generation,
-    _student_locale,
-)
 from stoa.services.ask_question._transcript import (
-    _DynamoConversationTable,
-    _conv_pk,
-    _conversation_grade,
-    _conversation_response_items,
-    _get_conversation,
-    _get_messages,
-    _msg_sk,
-    _required_conversation_text,
+    DynamoConversationTable,
+    active_conversation_generation,
+    conv_pk,
+    conversation_grade,
+    conversation_response_items,
+    msg_sk,
+    read_conversation,
+    read_messages,
+    required_conversation_text,
 )
 from stoa.services.ask_question.models import (
     ChatMessage,
@@ -91,10 +89,10 @@ from stoa.services.ask_question.models import (
     PracticeContextReference,
     SendMessageRequest,
     SendMessageResponse,
-    _stored_quote,
-    _stored_structured,
-    _structured_payload,
-    _target_unit,
+    stored_quote,
+    stored_structured,
+    structured_payload,
+    target_unit,
     message_request_fingerprint,
 )
 
@@ -108,7 +106,7 @@ def _conversation_title(record: Mapping[str, object]) -> str:
 
     A conversation opened without a first message is stored untitled and the
     client names it in the language it is drawn in (#124). Refusing an empty
-    title here would be the `_conversation_grade` defect again: accepted at the
+    title here would be the `conversation_grade` defect again: accepted at the
     door and unreadable ever after. A value of the wrong type is still refused.
     """
     value = record.get("title")
@@ -175,7 +173,7 @@ def _list_conversations(
     means a truncated answer is the most recent conversations, and the caller is
     told it was truncated.
     """
-    table = cast(_DynamoConversationTable, get_table())
+    table = cast(DynamoConversationTable, get_table())
     items: list[dict] = []
     cursor: object = None
     for _page in range(page_budget):
@@ -188,7 +186,7 @@ def _list_conversations(
         if cursor is not None:
             request["ExclusiveStartKey"] = cursor
         resp = table.query(**request)
-        items.extend(_conversation_response_items(resp))
+        items.extend(conversation_response_items(resp))
         cursor = resp.get("LastEvaluatedKey")
         if cursor is None:
             return ConversationListPage(items[:limit], len(items) > limit)
@@ -227,7 +225,7 @@ def _resolved_practice_context(
             challenge_id=requested.challengeId,
             lesson_id=requested.lessonId,
             unit_id=requested.unitId,
-            locale=_student_locale(student_id),
+            locale=locale_service.reader_locale(student_id),
         )
     except practice_context_service.PracticeContextUnresolved:
         raise HTTPException(
@@ -248,13 +246,13 @@ def _checked_quote_part(conv_id: str, quote: MessageQuote | None) -> None:
     part = None if quote is None else quote.source.part
     if quote is None or part is None:
         return
-    table = cast(_DynamoConversationTable, get_table())
+    table = cast(DynamoConversationTable, get_table())
     item = table.get_item(
-        Key={"PK": _conv_pk(conv_id), "SK": _msg_sk(quote.source.id)},
+        Key={"PK": conv_pk(conv_id), "SK": msg_sk(quote.source.id)},
         ConsistentRead=True,
     ).get("Item")
     # Only an assistant answer is stored with sections.
-    structured = _stored_structured(item.get("structured")) if isinstance(item, Mapping) else None
+    structured = stored_structured(item.get("structured")) if isinstance(item, Mapping) else None
     if (
         structured is None
         or structured.kind != "answer"
@@ -581,7 +579,7 @@ async def create_conversation(
 
     table = get_table()
     conv_item: dict[str, object] = {
-        "PK": _conv_pk(conv_id),
+        "PK": conv_pk(conv_id),
         "SK": "CONV",
         "conversation_id": conv_id,
         "student_id": student_id,
@@ -592,7 +590,7 @@ async def create_conversation(
         "created_at": now,
         "updated_at": now,
     }
-    generation = _active_conversation_generation(student_id, table)
+    generation = active_conversation_generation(student_id, table)
     attachment_repo.create_conversation_record(
         conv_item,
         owner_id=student_id,
@@ -658,14 +656,14 @@ async def get_conversation(
         authorized_conversation_dependency(
             action=AuthorizationAction.READ,
             purposes=CONVERSATION_CONTENT_READ,
-            resolver=lambda conversation_id: _get_conversation(conversation_id),
+            resolver=lambda conversation_id: read_conversation(conversation_id),
         )
     ),
 ):
     conv_id = authorized.ref.resource_id
     conv = _conversation_record(authorized.value)
 
-    raw_messages = _get_messages(conv_id)
+    raw_messages = read_messages(conv_id)
     attachment_ids = [value for message in raw_messages for value in message.get("attachment_ids", [])]
     attachment_summaries = attachment_service.list_attachment_summaries(attachment_ids)
     messages = [
@@ -682,9 +680,9 @@ async def get_conversation(
                 if value in attachment_summaries
             ],
             authorName=_author_name(m),
-            quote=_stored_quote(m.get("quote")),
-            structured=_stored_structured(m.get("structured")),
-            targetUnit=_target_unit(m.get("target_unit_id")),
+            quote=stored_quote(m.get("quote")),
+            structured=stored_structured(m.get("structured")),
+            targetUnit=target_unit(m.get("target_unit_id")),
         )
         for m in raw_messages
     ]
@@ -692,9 +690,9 @@ async def get_conversation(
     return ConversationDetail(
         id=conv_id,
         title=_conversation_title(conv),
-        subject=_required_conversation_text(conv, "subject"),
-        grade=_conversation_grade(conv),
-        updatedAt=_required_conversation_text(conv, "updated_at"),
+        subject=required_conversation_text(conv, "subject"),
+        grade=conversation_grade(conv),
+        updatedAt=required_conversation_text(conv, "updated_at"),
         messages=messages,
     )
 
@@ -717,7 +715,7 @@ async def get_generation_progress(
         authorized_conversation_dependency(
             action=AuthorizationAction.READ,
             purposes=CONVERSATION_CONTENT_READ,
-            resolver=lambda conversation_id: _get_conversation(conversation_id),
+            resolver=lambda conversation_id: read_conversation(conversation_id),
         )
     ),
     idempotency_key: str | None = Query(
@@ -753,7 +751,7 @@ async def send_message(
         authorized_conversation_dependency(
             action=AuthorizationAction.RESPOND,
             purposes=STUDENT_SELF,
-            resolver=lambda conversation_id: _get_conversation(conversation_id),
+            resolver=lambda conversation_id: read_conversation(conversation_id),
         )
     ),
     message_command: dict = Depends(_message_command_dependency),
@@ -799,7 +797,7 @@ async def stream_message(
         authorized_conversation_dependency(
             action=AuthorizationAction.RESPOND,
             purposes=STUDENT_SELF,
-            resolver=lambda conversation_id: _get_conversation(conversation_id),
+            resolver=lambda conversation_id: read_conversation(conversation_id),
         )
     ),
     message_command: dict = Depends(_message_command_dependency),
@@ -873,7 +871,7 @@ async def stream_message(
         yield _sse("message_done", {
             "messageId": assistant_msg.id,
             "status": "completed",
-            "structured": _structured_payload(assistant_msg.structured),
+            "structured": structured_payload(assistant_msg.structured),
             "targetUnit": (
                 None
                 if assistant_msg.targetUnit is None
@@ -924,12 +922,12 @@ async def _teacher_help_conversation_dependency(
         audit_sink=audit_sink,
         action=AuthorizationAction.UPDATE,
         purposes=STUDENT_SELF,
-        resolver=_get_conversation,
+        resolver=read_conversation,
     )
 
 
 async def _teacher_help_conversation_metadata_resolver(conversation_id: str):
-    return _get_conversation(conversation_id)
+    return read_conversation(conversation_id)
 
 
 setattr(_teacher_help_conversation_dependency, "authorization_specs", (
@@ -986,7 +984,7 @@ async def request_teacher_help(
     now = _now()
     # The request is the student's own, so the language they are reading in
     # right now is the one the system message is written in (#124).
-    student_locale = _student_locale(student_id)
+    student_locale = locale_service.reader_locale(student_id)
 
     def record_help_usage(request: Mapping[str, object]) -> None:
         # Written after the case is durable and offered, so a first attempt
@@ -1007,7 +1005,7 @@ async def request_teacher_help(
             ),
             request_correlation_id=request_id,
             created_at=escalated_at,
-            account_fence_generation=_active_conversation_generation(student_id, get_table()),
+            account_fence_generation=active_conversation_generation(student_id, get_table()),
             metadata={
                 "conversation_id": body.conversationId,
                 "request_id": request_id,
@@ -1119,7 +1117,7 @@ async def withdraw_teacher_help_request(
         authorized_conversation_dependency(
             action=AuthorizationAction.UPDATE,
             purposes=STUDENT_SELF,
-            resolver=lambda conversation_id: _get_conversation(conversation_id),
+            resolver=lambda conversation_id: read_conversation(conversation_id),
         )
     ),
 ):
@@ -1174,7 +1172,7 @@ async def get_teacher_help_status(
         authorized_conversation_dependency(
             action=AuthorizationAction.READ,
             purposes=CONVERSATION_CONTENT_READ,
-            resolver=lambda conversation_id: _get_conversation(conversation_id),
+            resolver=lambda conversation_id: read_conversation(conversation_id),
         )
     ),
 ):
