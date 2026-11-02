@@ -1412,8 +1412,9 @@ async def add_note(
     }
     # The teacher's reply is also a message in the conversation, so it follows
     # the message contract the student's history reader enforces on every row
-    # (conversations._validate_history_message). Without it the student could
-    # no longer open the conversation once a teacher replied (#66, 2026-09-28).
+    # (ask_question._transcript._validate_history_message). Without it the
+    # student could no longer open the conversation once a teacher replied (#66,
+    # 2026-09-28).
     msg_id = str(uuid.uuid4())
     message_item = {
         "PK": _conv_pk(conv_id),

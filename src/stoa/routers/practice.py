@@ -356,7 +356,7 @@ def _actor_locale(actor: Actor) -> str:
     treats a non-critical lookup as best-effort rather than fatal.
 
     The policy itself lives in `locale_service.reader_locale`, so this and
-    `conversations._student_locale` cannot drift from each other (#124).
+    `ask_question._answering._student_locale` cannot drift from each other (#124).
     """
     return locale_service.reader_locale(actor.user_id)
 

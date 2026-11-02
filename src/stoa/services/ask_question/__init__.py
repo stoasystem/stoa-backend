@@ -22,7 +22,11 @@ from datetime import UTC, datetime, timezone
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import Actor
 from stoa.services.ask_question import _answering, _store, dispatch
-from stoa.services.ask_question._transcript import _conversation_repository_call
+from stoa.services.ask_question._transcript import (
+    _conversation_grade,
+    _conversation_repository_call,
+    _required_conversation_text,
+)
 from stoa.services.ask_question.models import (
     ChatMessage,
     GenerationProgressResponse,
@@ -68,6 +72,10 @@ def submit(
 
     Raises `AttachmentDecisionError` and `AllowanceFailure`; the route maps them.
     """
+    # A record the conversation cannot be read back from is refused before
+    # anything is read or written, as reading it would be.
+    subject = _required_conversation_text(conversation, "subject")
+    grade = _conversation_grade(conversation)
     command_context: dict[str, object] = {
         "actor": actor,
         "fingerprint": fingerprint,
@@ -93,8 +101,8 @@ def submit(
     committed = _answering.commit_message_command(
         conv_id=conversation_id,
         student_id=student_id,
-        subject=str(conversation.get("subject") or ""),
-        grade=str(conversation.get("grade") or ""),
+        subject=subject,
+        grade=grade,
         body=body,
         command_context=command_context,
     )

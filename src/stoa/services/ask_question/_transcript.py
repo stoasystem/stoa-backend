@@ -47,6 +47,13 @@ def _conversation_response_item(
     return dict(cast(Mapping[str, object], item))
 
 
+def _required_conversation_text(record: Mapping[str, object], field: str) -> str:
+    value = record.get(field)
+    if not isinstance(value, str) or not value:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return value
+
+
 def _conversation_grade(record: Mapping[str, object]) -> str:
     """The year group the conversation was opened for, which may be none yet.
 

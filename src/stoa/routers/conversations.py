@@ -81,6 +81,7 @@ from stoa.services.ask_question._transcript import (
     _get_conversation,
     _get_messages,
     _msg_sk,
+    _required_conversation_text,
 )
 from stoa.services.ask_question.models import (
     ChatMessage,
@@ -100,13 +101,6 @@ from stoa.services.ask_question.models import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def _required_conversation_text(record: Mapping[str, object], field: str) -> str:
-    value = record.get(field)
-    if not isinstance(value, str) or not value:
-        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-    return value
 
 
 def _conversation_title(record: Mapping[str, object]) -> str:
@@ -770,10 +764,6 @@ async def send_message(
     conv = _conversation_record(authorized.value)
 
     try:
-        # A record the conversation cannot be read back from is refused before
-        # anything is submitted, as reading it would be.
-        _required_conversation_text(conv, "subject")
-        _conversation_grade(conv)
         result = ask_question.submit(
             message_command["actor"],
             conv,
@@ -832,10 +822,6 @@ async def stream_message(
     conv = _conversation_record(authorized.value)
 
     try:
-        # A record the conversation cannot be read back from is refused before
-        # anything is submitted, as reading it would be.
-        _required_conversation_text(conv, "subject")
-        _conversation_grade(conv)
         result = ask_question.submit(
             message_command["actor"],
             conv,
