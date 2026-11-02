@@ -327,6 +327,33 @@ def update_locale_preference(user_id: str, locale: str, updated_at: str) -> User
     )
 
 
+def record_sign_in(
+    user_id: str, profile: Mapping[str, object], *, signed_in_at: str
+) -> None:
+    """Stamp `last_login_at` with one transaction and no reads of its own (#107).
+
+    The version checked is the one on the profile the sign-in itself just read,
+    so a sign-in costs no extra round trip. An edit that lands in between makes
+    this write lose rather than retry: missing one sign-in's time is cheaper
+    than another read. Edits read the version in the request that writes it, so
+    a sign-in can only move it under one inside that request, as any other
+    profile write can. The fence condition is what keeps an account that has
+    begun deletion from being written to.
+    """
+    account_deletion_repo.transact(
+        [
+            account_deletion_repo.active_fence_condition(user_id),
+            profile_update_operation(
+                user_id,
+                update_expression="SET last_login_at = :signed_in_at",
+                expression_attribute_values={":signed_in_at": signed_in_at},
+                expected_version=_optional_profile_version(profile.get("version")),
+            ),
+        ],
+        table=get_table(),
+    )
+
+
 TEACHER_AVAILABILITY_FIELDS = ("dispatch_availability", "availability_status", "teacher_status")
 
 
