@@ -74,34 +74,10 @@ def _app_for_user(user: dict) -> FastAPI:
     return app
 
 
-class FakeTable:
-    def __init__(self, pages):
-        self.pages = list(pages)
-        self.calls = []
-
-    def scan(self, **kwargs):
-        self.calls.append(kwargs)
-        return self.pages.pop(0)
-
-
 @pytest.fixture(autouse=True)
 def _no_formal_bindings(monkeypatch):
-    # Temporary names exist only inside this legacy-heavy test module so old
-    # fixtures can be migrated incrementally; production routes never import
-    # or call these removed authorization fallbacks.
-    monkeypatch.setattr(
-        parents,
-        "_resolve_parent_profile",
-        lambda *_args, **_kwargs: _resolved_parent(),
-        raising=False,
-    )
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda *_args: [], raising=False)
-    monkeypatch.setattr(
-        parents,
-        "_get_owned_child_profile",
-        lambda *_args: _child_profile(),
-        raising=False,
-    )
+    # One active, bidirectional parent-local -> child-1 binding, read through
+    # the same user_repo calls the route authorization makes.
     row = {
         "parent_id": "parent-local",
         "student_id": "child-1",
@@ -145,15 +121,6 @@ def _no_formal_bindings(monkeypatch):
         }
 
     monkeypatch.setattr(parents.user_repo, "get_user", get_user)
-
-
-def _resolved_parent() -> parents.ResolvedParent:
-    return parents.ResolvedParent(
-        claims_sub="cognito-sub",
-        email="p@example.com",
-        parent_user_id="parent-local",
-        profile={"user_id": "parent-local", "role": "parent"},
-    )
 
 
 def _child_profile() -> dict:
@@ -219,350 +186,6 @@ def _generated_report(student_id: str = "child-1", status: str = "email_sent") -
     if status == "generation_claimed":
         report.update({"email_status": "not_started"})
     return report
-
-
-def legacy_resolve_parent_profile_direct_lookup(monkeypatch):
-    profile = {"user_id": "parent-local", "email": "p@example.com", "role": "parent"}
-    monkeypatch.setattr(parents.user_repo, "get_user", lambda user_id, **_kwargs: profile)
-
-    def fail_get_user_by_email(email):
-        raise AssertionError("email fallback should not run")
-
-    monkeypatch.setattr(parents.user_repo, "get_user_by_email", fail_get_user_by_email)
-
-    resolved = parents._resolve_parent_profile(
-        {"sub": "parent-local", "username": "cognito-user", "role": "parent"},
-        _settings(),
-    )
-
-    assert resolved.claims_sub == "parent-local"
-    assert resolved.email == "p@example.com"
-    assert resolved.parent_user_id == "parent-local"
-    assert resolved.profile == profile
-
-
-def legacy_resolve_parent_profile_cognito_email_fallback(monkeypatch):
-    profile = {"user_id": "parent-local", "email": "p@example.com", "role": "parent"}
-    monkeypatch.setattr(parents.user_repo, "get_user", lambda user_id, **_kwargs: None)
-    monkeypatch.setattr(parents.user_repo, "get_user_by_email", lambda email: profile)
-
-    class FakeCognito:
-        def admin_get_user(self, **kwargs):
-            assert kwargs["UserPoolId"] == "pool-id"
-            assert kwargs["Username"] == "cognito-user"
-            return {"UserAttributes": [{"Name": "email", "Value": "p@example.com"}]}
-
-    monkeypatch.setattr(parents.boto3, "client", lambda service, region_name: FakeCognito())
-
-    resolved = parents._resolve_parent_profile(
-        {"sub": "cognito-sub", "username": "cognito-user", "role": "parent"},
-        _settings(),
-    )
-
-    assert resolved.claims_sub == "cognito-sub"
-    assert resolved.email == "p@example.com"
-    assert resolved.parent_user_id == "parent-local"
-
-
-def legacy_resolve_parent_profile_non_parent_raises_403(monkeypatch):
-    profile = {"user_id": "student-local", "email": "s@example.com", "role": "student"}
-    monkeypatch.setattr(parents.user_repo, "get_user", lambda user_id, **_kwargs: profile)
-
-    with pytest.raises(parents.HTTPException) as exc:
-        parents._resolve_parent_profile(
-            {"sub": "student-local", "username": "cognito-user", "role": "parent"},
-            _settings(),
-        )
-
-    assert exc.value.status_code == 403
-
-
-def legacy_scan_children_for_parent_paginates(monkeypatch):
-    table = FakeTable(
-        [
-            {
-                "Items": [{"user_id": "child-1", "role": "student", "parent_id": "parent"}],
-                "LastEvaluatedKey": {"PK": "USER#child-1", "SK": "PROFILE"},
-            },
-            {"Items": [{"user_id": "child-2", "role": "student", "parent_id": "parent"}]},
-        ]
-    )
-    monkeypatch.setattr(parents, "get_table", lambda: table)
-
-    children = parents._scan_children_for_parent("parent")
-
-    assert [child["user_id"] for child in children] == ["child-1", "child-2"]
-    assert table.calls[0]["ExpressionAttributeValues"] == {":pid": "parent", ":role": "student"}
-    assert table.calls[1]["ExclusiveStartKey"] == {"PK": "USER#child-1", "SK": "PROFILE"}
-
-
-def legacy_scan_children_for_parent_empty(monkeypatch):
-    monkeypatch.setattr(parents, "get_table", lambda: FakeTable([{"Items": []}]))
-
-    assert parents._scan_children_for_parent("parent") == []
-
-
-def legacy_list_children_for_parent_uses_formal_bindings(monkeypatch):
-    monkeypatch.setattr(
-        parents.user_repo,
-        "list_parent_student_bindings",
-        lambda parent_id: [
-            {
-                "parent_id": parent_id,
-                "student_id": "child-1",
-                "relationship": "guardian",
-                "status": "active",
-            }
-        ],
-    )
-    monkeypatch.setattr(
-        parents.user_repo,
-        "get_user",
-        lambda user_id, **_kwargs: {
-            "user_id": user_id,
-            "role": "student",
-            "name": "Anna Keller",
-            "email": "anna@example.com",
-        },
-    )
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_id: [])
-
-    children = parents._list_children_for_parent("parent-local")
-
-    assert children == [
-        {
-            "user_id": "child-1",
-            "role": "student",
-            "name": "Anna Keller",
-            "email": "anna@example.com",
-            "relationship": "guardian",
-        }
-    ]
-
-
-def legacy_parents_me_children_returns_items(monkeypatch):
-    parent = parents.ResolvedParent(
-        claims_sub="cognito-sub",
-        email="p@example.com",
-        parent_user_id="parent-local",
-        profile={"user_id": "parent-local", "role": "parent"},
-    )
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: parent)
-    monkeypatch.setattr(
-        parents,
-        "_scan_children_for_parent",
-        lambda parent_user_id: [
-            {
-                "user_id": "child-1",
-                "name": "Anna Keller",
-                "email": "anna@example.com",
-                "grade": "Grade 8",
-                "primary_subjects": ["Mathematics"],
-            }
-        ],
-    )
-
-    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
-    response = client.get("/parents/me/children")
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "items": [
-            {
-                "id": "child-1",
-                "userId": "child-1",
-                "name": "Anna Keller",
-                "email": "anna@example.com",
-                "grade": "Grade 8",
-                "subjects": ["Mathematics"],
-                "relationship": "child",
-            }
-        ]
-    }
-
-
-def legacy_parents_me_children_returns_empty_items(monkeypatch):
-    parent = parents.ResolvedParent(
-        claims_sub="cognito-sub",
-        email="p@example.com",
-        parent_user_id="parent-local",
-        profile={"user_id": "parent-local", "role": "parent"},
-    )
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: parent)
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [])
-
-    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
-    response = client.get("/parents/me/children")
-
-    assert response.status_code == 200
-    assert response.json() == {"items": []}
-
-
-@pytest.mark.parametrize("role", ["student", "teacher", "admin"])
-def legacy_parents_me_children_rejects_non_parent_roles(role):
-    client = TestClient(_app_for_user({"sub": f"{role}-sub", "role": role}))
-
-    response = client.get("/parents/me/children")
-
-    assert response.status_code == 403
-
-
-def legacy_children_allows_local_parent_id_when_sub_differs(monkeypatch):
-    parent = parents.ResolvedParent(
-        claims_sub="cognito-sub",
-        email="p@example.com",
-        parent_user_id="parent-local",
-        profile={"user_id": "parent-local", "role": "parent"},
-    )
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: parent)
-    monkeypatch.setattr(
-        parents,
-        "_scan_children_for_parent",
-        lambda parent_user_id: [
-            {
-                "user_id": "child-1",
-                "email": "child@example.com",
-                "grade": "Grade 8",
-                "subjects": ["Mathematics"],
-            }
-        ],
-    )
-
-    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
-    response = client.get("/parents/parent-local/children")
-
-    assert response.status_code == 200
-    assert response.json() == [
-        {
-            "user_id": "child-1",
-            "email": "child@example.com",
-            "grade": "Grade 8",
-            "subjects": ["Mathematics"],
-        }
-    ]
-
-
-def legacy_children_rejects_other_parent(monkeypatch):
-    parent = parents.ResolvedParent(
-        claims_sub="cognito-sub",
-        email="p@example.com",
-        parent_user_id="parent-local",
-        profile={"user_id": "parent-local", "role": "parent"},
-    )
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: parent)
-
-    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
-    response = client.get("/parents/other-parent/children")
-
-    assert response.status_code == 403
-
-
-def legacy_children_allows_admin(monkeypatch):
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [])
-
-    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
-    response = client.get("/parents/parent-local/children")
-
-    assert response.status_code == 200
-    assert response.json() == []
-
-
-@pytest.mark.parametrize("role", ["student", "teacher"])
-def legacy_children_rejects_other_roles(role):
-    client = TestClient(_app_for_user({"sub": f"{role}-sub", "role": role}))
-
-    response = client.get("/parents/parent-local/children")
-
-    assert response.status_code == 403
-
-
-def legacy_report_allows_local_parent_id_when_sub_differs(monkeypatch):
-    parent = parents.ResolvedParent(
-        claims_sub="cognito-sub",
-        email="p@example.com",
-        parent_user_id="parent-local",
-        profile={"user_id": "parent-local", "role": "parent"},
-    )
-    report = {
-        "report_id": "report-1",
-        "parent_id": "parent-local",
-        "student_id": "child-1",
-        "week_start": "2026-06-01",
-        "usage_count": 3,
-        "ai_resolved": 2,
-        "teacher_resolved": 1,
-        "weak_knowledge_points": ["fractions"],
-        "recommendations": "Practice fractions.",
-    }
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: parent)
-    monkeypatch.setattr(parents.report_repo, "get_report_by_week", lambda parent_id, week: report)
-
-    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
-    response = client.get("/parents/parent-local/reports/2026-06-01")
-
-    assert response.status_code == 200
-    assert response.json()["report_id"] == "report-1"
-
-
-def legacy_report_rejects_other_parent(monkeypatch):
-    parent = parents.ResolvedParent(
-        claims_sub="cognito-sub",
-        email="p@example.com",
-        parent_user_id="parent-local",
-        profile={"user_id": "parent-local", "role": "parent"},
-    )
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: parent)
-
-    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
-    response = client.get("/parents/other-parent/reports/2026-06-01")
-
-    assert response.status_code == 403
-
-
-def legacy_report_allows_admin(monkeypatch):
-    report = {
-        "report_id": "report-1",
-        "parent_id": "parent-local",
-        "student_id": "child-1",
-        "week_start": "2026-06-01",
-        "usage_count": 3,
-        "ai_resolved": 2,
-        "teacher_resolved": 1,
-        "weak_knowledge_points": [],
-        "recommendations": "",
-    }
-    monkeypatch.setattr(parents.report_repo, "get_report_by_week", lambda parent_id, week: report)
-
-    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
-    response = client.get("/parents/parent-local/reports/2026-06-01")
-
-    assert response.status_code == 200
-
-
-def legacy_report_missing_still_returns_404(monkeypatch):
-    monkeypatch.setattr(parents.report_repo, "get_report_by_week", lambda parent_id, week: None)
-
-    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
-    response = client.get("/parents/parent-local/reports/2026-06-01")
-
-    assert response.status_code == 404
-
-
-def legacy_get_owned_child_profile_returns_linked_child(monkeypatch):
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
-
-    child = parents._get_owned_child_profile(_resolved_parent(), "child-1")
-
-    assert child["user_id"] == "child-1"
-
-
-def legacy_get_owned_child_profile_rejects_unlinked_child(monkeypatch):
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
-
-    with pytest.raises(parents.HTTPException) as exc:
-        parents._get_owned_child_profile(_resolved_parent(), "other-child")
-
-    assert exc.value.status_code == 403
 
 
 def test_parent_children_list_requires_matching_active_bidirectional_binding(monkeypatch):
@@ -1210,8 +833,6 @@ def test_parent_child_week_report_available_when_same_week_sibling_first(monkeyp
     app.dependency_overrides[parents.get_settings] = _settings
     client = TestClient(app)
 
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_get_owned_child_profile", lambda resolved, child_id: _child_profile())
     monkeypatch.setattr(
         parents.report_repo,
         "get_report_for_child_by_week",
@@ -1248,8 +869,6 @@ def test_latest_report_for_child_pages_and_filters(monkeypatch):
 
 
 def test_parent_child_summary_aggregates_real_data(monkeypatch):
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
     monkeypatch.setattr(
         parents.question_repo,
         "list_by_student",
@@ -1341,8 +960,6 @@ def test_parent_child_summary_aggregates_real_data(monkeypatch):
 
 
 def test_parent_child_summary_empty_state(monkeypatch):
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
     monkeypatch.setattr(parents.question_repo, "list_by_student", lambda child_id, limit=20, last_key=None: {"Items": []})
     monkeypatch.setattr(parents.practice_repo, "get_progress", lambda child_id: [])
     monkeypatch.setattr(parents.practice_repo, "get_mistakes", lambda child_id: [])
@@ -1365,8 +982,6 @@ def test_parent_child_summary_empty_state(monkeypatch):
 
 
 def test_parent_child_summary_rejects_unlinked_before_data_reads(monkeypatch):
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
 
     def fail(*args, **kwargs):
         raise AssertionError("child data reader should not run")
@@ -1397,8 +1012,6 @@ def test_parent_child_summary_rejects_non_parent_roles(role):
 
 
 def test_parent_child_history_returns_newest_first_with_limit(monkeypatch):
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
     monkeypatch.setattr(
         parents.question_repo,
         "list_by_student",
@@ -1440,8 +1053,6 @@ def test_parent_child_history_returns_newest_first_with_limit(monkeypatch):
 
 
 def test_parent_child_history_empty_state(monkeypatch):
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
     monkeypatch.setattr(parents.question_repo, "list_by_student", lambda child_id, limit=20, last_key=None: {"Items": []})
     monkeypatch.setattr(parents.practice_repo, "get_progress", lambda child_id: [])
     monkeypatch.setattr(parents.practice_repo, "get_mistakes", lambda child_id: [])
@@ -1456,8 +1067,6 @@ def test_parent_child_history_empty_state(monkeypatch):
 
 
 def test_parent_child_history_rejects_unlinked_before_data_reads(monkeypatch):
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
 
     def fail(*args, **kwargs):
         raise AssertionError("history source should not run")
@@ -1488,8 +1097,6 @@ def test_parent_child_history_rejects_non_parent_roles(role):
 
 
 def test_parent_child_report_current_available(monkeypatch):
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
     monkeypatch.setattr(parents, "_latest_report_for_child", lambda parent_id, child_id: _report())
 
     client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
@@ -1502,8 +1109,6 @@ def test_parent_child_report_current_available(monkeypatch):
 
 @pytest.mark.parametrize("latest_report", [None, _report("sibling")])
 def test_parent_child_report_current_missing(monkeypatch, latest_report):
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
     monkeypatch.setattr(parents, "_latest_report_for_child", lambda parent_id, child_id: latest_report)
 
     client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
@@ -1518,8 +1123,6 @@ def test_parent_child_report_current_missing(monkeypatch, latest_report):
 
 
 def test_parent_child_report_rejects_unlinked_before_report_read(monkeypatch):
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
 
     def fail(*args, **kwargs):
         raise AssertionError("report reader should not run")
@@ -1539,8 +1142,6 @@ def test_parent_child_report_rejects_unlinked_before_report_read(monkeypatch):
 
 def test_parent_child_week_report_available_after_ownership(monkeypatch):
     calls = []
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
 
     def get_report(parent_id, student_id, week):
         calls.append((parent_id, student_id, week))
@@ -1557,8 +1158,6 @@ def test_parent_child_week_report_available_after_ownership(monkeypatch):
 
 
 def test_parent_child_week_report_returns_generated_detail_fields(monkeypatch):
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
     monkeypatch.setattr(
         parents.report_repo,
         "get_report_for_child_by_week",
@@ -1604,8 +1203,6 @@ def test_parent_child_week_report_returns_generated_detail_fields(monkeypatch):
 
 
 def test_parent_child_week_report_exposes_email_failed_state(monkeypatch):
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
     monkeypatch.setattr(
         parents.report_repo,
         "get_report_for_child_by_week",
@@ -1624,8 +1221,6 @@ def test_parent_child_week_report_exposes_email_failed_state(monkeypatch):
 
 
 def test_parent_child_week_report_exposes_generation_failed_state(monkeypatch):
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
     monkeypatch.setattr(
         parents.report_repo,
         "get_report_for_child_by_week",
@@ -1644,8 +1239,6 @@ def test_parent_child_week_report_exposes_generation_failed_state(monkeypatch):
 
 
 def test_parent_child_week_report_exposes_generation_pending_state(monkeypatch):
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
     monkeypatch.setattr(
         parents.report_repo,
         "get_report_for_child_by_week",
@@ -1663,8 +1256,6 @@ def test_parent_child_week_report_exposes_generation_pending_state(monkeypatch):
 
 
 def test_parent_child_week_report_rejects_sibling_returned_by_repo(monkeypatch):
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
     monkeypatch.setattr(
         parents.report_repo,
         "get_report_for_child_by_week",
@@ -1680,8 +1271,6 @@ def test_parent_child_week_report_rejects_sibling_returned_by_repo(monkeypatch):
 
 @pytest.mark.parametrize("week_report", [None, _report("sibling")])
 def test_parent_child_week_report_missing(monkeypatch, week_report):
-    monkeypatch.setattr(parents, "_resolve_parent_profile", lambda user, settings: _resolved_parent())
-    monkeypatch.setattr(parents, "_scan_children_for_parent", lambda parent_user_id: [_child_profile()])
     monkeypatch.setattr(
         parents.report_repo,
         "get_report_for_child_by_week",

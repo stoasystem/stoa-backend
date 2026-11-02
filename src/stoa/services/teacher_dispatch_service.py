@@ -81,9 +81,6 @@ def plan_dispatch(
     selected: list[dict[str, Any]] = []
     refused: list[dict[str, Any]] = []
     previous = set(_list_value(question.get("previous_dispatch_teacher_ids")))
-    current_teacher = str(question.get("dispatched_teacher_id") or "")
-    if question.get("dispatch_status") in {"timed_out", "reassigned"} and current_teacher:
-        previous.add(current_teacher)
 
     for profile in profiles:
         normalized = _normalize_teacher_profile(profile)
@@ -185,7 +182,7 @@ def build_dispatch_dashboard(
         if assigned in load and item.get("dispatch_status") == "dispatched":
             load[assigned]["assignedDispatches"] += 1
 
-    timeout_count = sum(1 for item in queue_items if item["dispatch"]["status"] in {"stale", "timed_out"})
+    timeout_count = sum(1 for item in queue_items if item["dispatch"]["status"] == "stale")
     reassignment_count = sum(int(item.get("dispatch_attempt_count") or 0) > 1 for item in queue_items)
     no_candidate_reasons: dict[str, int] = {}
     for item in queue_items:

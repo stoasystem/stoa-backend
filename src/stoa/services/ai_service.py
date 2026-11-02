@@ -120,9 +120,6 @@ class AIProviderResult(Generic[AIContent]):
 def inventory_ai_invocation_classes() -> dict[str, AIInvocationClass]:
     """Return the exhaustive direct InvokeModel caller inventory."""
     return {
-        "src/stoa/routers/conversations.py:_generate_title": (
-            AIInvocationClass.PROVIDER_COST_ONLY
-        ),
         # Streaming delivers the same answer under the same admission, so it
         # is charged to the student's allowance exactly as the buffered call is.
         "src/stoa/routers/conversations.py:invoke_model_with_response_stream": (

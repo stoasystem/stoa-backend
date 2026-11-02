@@ -683,27 +683,6 @@ def _counter_receipt_or_raise(result: RateAdmissionResult, label: str) -> dict[s
     )
 
 
-def check_and_record_chat(
-    student_id: str,
-    operation_id: str,
-    payload_digest: str,
-    limit: int | None = None,
-) -> dict[str, Any]:
-    """Legacy adapter; conversation commands remain the authoritative chat path."""
-    period = _today_utc()
-    result = check_and_record_operation(
-        owner_id=student_id,
-        kind="chat",
-        operation_id=build_rate_operation_id(
-            "chat", student_id, operation_id, period
-        ),
-        payload_digest=payload_digest,
-        quota_period=period,
-        limit=limit if limit is not None else settings.daily_chat_message_limit,
-    )
-    return _counter_receipt_or_raise(result, "chat message")
-
-
 def check_and_record_hint(
     student_id: str,
     challenge_id: str,

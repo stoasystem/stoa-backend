@@ -440,9 +440,6 @@ def test_inventory_classifies_every_source_invoke_model_call() -> None:
     inventory = ai_service.inventory_ai_invocation_classes()
 
     assert inventory == {
-        "src/stoa/routers/conversations.py:_generate_title": (
-            ai_service.AIInvocationClass.PROVIDER_COST_ONLY
-        ),
         "src/stoa/routers/conversations.py:invoke_model_with_response_stream": (
             ai_service.AIInvocationClass.USER_ALLOWANCE
         ),
