@@ -13,10 +13,11 @@ import logging
 from typing import Any
 from uuid import uuid4
 
+from boto3.dynamodb.conditions import Key
 from fastapi import HTTPException
 
 from stoa.config import Settings
-from stoa.db.dynamodb import stored_int
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import moderation_repo, question_repo
 from stoa.models.moderation import (
     ModerationCaseNoteRequest,
@@ -28,6 +29,7 @@ from stoa.models.moderation import (
     ModerationStatus,
     ModerationSurface,
 )
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.services import notification_service
 
 
@@ -65,6 +67,7 @@ def create_case(
         raise HTTPException(status_code=404, detail="Question not found")
     _require_report_access(question, user)
     _validate_surface(question, body.surface.value)
+    reported = _reported_message(question, body.surface.value, body.message_id)
 
     student_id = question.get("student_id")
     privacy_generation = stored_int(question.get("account_fence_generation"))
@@ -99,7 +102,7 @@ def create_case(
         "created_at": created_at,
         "updated_at": created_at,
         "closed_at": None,
-        "question_context": _question_context(question),
+        "question_context": _question_context(question, reported),
     }
     event = _event(
         case_id,
@@ -534,8 +537,11 @@ def _require_report_access(question: dict[str, Any], user: dict[str, Any]) -> No
     role = user.get("role")
     if role == "student" and question.get("student_id") != user.get("sub"):
         raise HTTPException(status_code=403, detail="Not your question")
-    if role == "teacher" and not _teacher_visible(question, str(user.get("sub") or "")):
-        raise HTTPException(status_code=403, detail="Question is not visible to this teacher workflow")
+    if role == "teacher" and not _teacher_holds(question, str(user.get("sub") or "")):
+        # The teacher policy also admits a teacher assigned to the student, who
+        # may read the request but not act on it (#73). Reporting is acting on
+        # it, so they are refused as a teacher who cannot see it is (#186).
+        raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND)
     if role not in {"student", "teacher", "admin"}:
         raise HTTPException(status_code=403, detail="Role is not permitted to report content")
 
@@ -543,21 +549,109 @@ def _require_report_access(question: dict[str, Any], user: dict[str, Any]) -> No
 def _validate_surface(question: dict[str, Any], surface: str) -> None:
     if surface == ModerationSurface.IMAGE_UPLOAD.value:
         raise HTTPException(status_code=400, detail="Image cases are opened by moderation only")
+    if _is_help_request(question):
+        # A help request's answers are messages in its conversation (#185);
+        # `_reported_message` finds the one reported.
+        return
     if surface == ModerationSurface.AI_ANSWER.value and not question.get("ai_response"):
         raise HTTPException(status_code=400, detail="Question has no AI answer to report")
     if surface == ModerationSurface.TEACHER_REPLY.value and not question.get("teacher_response"):
         raise HTTPException(status_code=400, detail="Question has no teacher reply to report")
 
 
-def _teacher_visible(question: dict[str, Any], teacher_id: str) -> bool:
-    if teacher_id and question.get("teacher_id") == teacher_id:
-        return True
-    return question.get("status") in {"escalated", "teacher_active", "resolved"}
+def _teacher_holds(question: dict[str, Any], teacher_id: str) -> bool:
+    """Whether the request is this teacher's: they took it, or it is offered to them now."""
+    if not teacher_id:
+        return False
+    holder = question.get("teacher_id")
+    if holder:
+        return holder == teacher_id
+    deadline = _aware(question.get("dispatch_deadline_at"))
+    return (
+        question.get("dispatched_teacher_id") == teacher_id
+        and deadline is not None
+        and deadline > datetime.now(timezone.utc)
+    )
 
 
-def _question_context(question: dict[str, Any]) -> dict[str, Any]:
+def _is_help_request(question: Mapping[str, Any]) -> bool:
+    return question.get("source") == "conversation_escalation" and bool(question.get("conversation_id"))
+
+
+# Who wrote what each surface reports, in a help request's conversation.
+_SURFACE_ROLES = {
+    ModerationSurface.QUESTION.value: "student",
+    ModerationSurface.AI_ANSWER.value: "assistant",
+    ModerationSurface.TEACHER_REPLY.value: "teacher",
+}
+
+
+def _reported_message(
+    question: dict[str, Any], surface: str, message_id: str | None
+) -> dict[str, Any] | None:
+    """The conversation message a help request's report is about (#185).
+
+    The message named, which must be one of the surface's author in this
+    conversation; without a name, an AI answer or teacher reply report is about
+    the latest one, and a report of the student's words is about the request.
+    An ordinary question keeps its answers on its row and names no message.
+    """
+    if not _is_help_request(question):
+        if message_id:
+            raise HTTPException(status_code=400, detail="Only a help request's messages can be named")
+        return None
+    role = _SURFACE_ROLES[surface]
+    if not message_id and role == "student":
+        return None
+    said = [
+        message
+        for message in _conversation_messages(str(question["conversation_id"]))
+        if message.get("role") == role
+        and message.get("student_id") == question.get("student_id")
+        and str(message.get("content") or "").strip()
+    ]
+    if message_id:
+        named = [message for message in said if message.get("message_id") == message_id]
+        if not named:
+            raise HTTPException(status_code=404, detail="Message not found")
+        return named[0]
+    if not said:
+        detail = (
+            "Question has no AI answer to report"
+            if role == "assistant"
+            else "Question has no teacher reply to report"
+        )
+        raise HTTPException(status_code=400, detail=detail)
+    # Message ids are random, so the keys do not run in the order of sending.
+    return max(said, key=lambda message: str(message.get("created_at") or ""))
+
+
+# A ceiling on the pages one read follows; a conversation is far from it.
+_MESSAGE_PAGE_LIMIT = 25
+
+
+def _conversation_messages(conversation_id: str) -> list[dict[str, Any]]:
+    table: Any = get_table()
+    request: dict[str, Any] = {
+        "KeyConditionExpression": (
+            Key("PK").eq(f"CONV#{conversation_id}") & Key("SK").begins_with("MSG#")
+        ),
+        "ConsistentRead": True,
+    }
+    messages: list[dict[str, Any]] = []
+    for _page in range(_MESSAGE_PAGE_LIMIT):
+        response = table.query(**request)
+        messages.extend(row for row in response.get("Items", []) if isinstance(row, dict))
+        cursor = response.get("LastEvaluatedKey")
+        if not cursor:
+            break
+        request["ExclusiveStartKey"] = cursor
+    return messages
+
+
+def _question_context(question: dict[str, Any], reported: Mapping[str, Any] | None = None) -> dict[str, Any]:
     ai_response = question.get("ai_response") or {}
-    return {
+    context = {
         "question_id": question.get("question_id"),
         "student_id": question.get("student_id"),
         "subject": question.get("subject"),
@@ -567,6 +661,17 @@ def _question_context(question: dict[str, Any]) -> dict[str, Any]:
         "teacher_response_preview": _preview(question.get("teacher_response")),
         "has_image": bool(question.get("image_s3_key") or question.get("has_image")),
     }
+    if reported is not None:
+        # The reported message's words go where the admin queue shows that
+        # surface's text: a help request has no answers on its row (#185).
+        field = {
+            "student": "content_preview",
+            "assistant": "ai_answer_preview",
+            "teacher": "teacher_response_preview",
+        }[str(reported["role"])]
+        context[field] = _preview(reported.get("content"))
+        context["reported_message_id"] = reported.get("message_id")
+    return context
 
 
 def _event(
