@@ -18,13 +18,14 @@ worker's sweep (`_sweep`). The entry points:
 - `cancel_for_account_deletion` is account deletion's: it cancels a command
   still active when the account's private rows are scrubbed.
 
-Who answers a committed command is `dispatch`'s to decide.
+Who answers a committed command is `dispatch`'s to decide. A question's own
+failures carry an `AskQuestionErrorCode`.
 """
 import logging
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timezone
 
-from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
+from stoa.security.attachment_errors import AttachmentDecisionError
 from stoa.security.identity import Actor
 from stoa.services.ask_question import _answering, _store, _sweep, dispatch
 from stoa.services.ask_question._transcript import (
@@ -32,6 +33,7 @@ from stoa.services.ask_question._transcript import (
     _conversation_repository_call,
     _required_conversation_text,
 )
+from stoa.services.ask_question.errors import AskQuestionErrorCode
 from stoa.services.ask_question.models import (
     ChatMessage,
     GenerationProgressResponse,
@@ -103,7 +105,7 @@ def submit(
             )
         )
         if state.disposition is _store.MessageCommandDisposition.IDEMPOTENCY_CONFLICT:
-            raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT)
+            raise AttachmentDecisionError(AskQuestionErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT)
         command_context["state"] = state
         command_context["existing"] = state.command
     committed = _answering.commit_message_command(
@@ -171,7 +173,7 @@ def answer(conversation_id: str, idempotency_key: str) -> str:
         committed = _answering.load_committed_message(command)
         _answering.generate_for_command(committed)
     except AttachmentDecisionError as error:
-        if error.code is AttachmentErrorCode.MESSAGE_IN_PROGRESS:
+        if error.code is AskQuestionErrorCode.MESSAGE_IN_PROGRESS:
             return "held"
         logger.warning("conversation_generation_failed code=%s", error.code.value)
         return "failed"
@@ -207,7 +209,7 @@ def progress(
         else None
     )
     if state is None:
-        raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_COMMAND_NOT_FOUND)
+        raise AttachmentDecisionError(AskQuestionErrorCode.MESSAGE_COMMAND_NOT_FOUND)
     state.steps, state.updatedAt = _store.read_generation_progress(
         conversation_id,
         owner_id=student_id,

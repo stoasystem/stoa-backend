@@ -1342,6 +1342,18 @@
         "title": "AnalyticsEventIn",
         "type": "object"
       },
+      "AskQuestionErrorCode": {
+        "enum": [
+          "message_idempotency_conflict",
+          "message_in_progress",
+          "message_daily_limit",
+          "message_failed",
+          "message_command_expired",
+          "message_command_not_found"
+        ],
+        "title": "AskQuestionErrorCode",
+        "type": "string"
+      },
       "AssignmentAutomationCandidateRequest": {
         "properties": {
           "approved": {
@@ -1850,7 +1862,15 @@
         "description": "`safe_attachment_error_body`: an upload or message-command failure.",
         "properties": {
           "code": {
-            "$ref": "#/components/schemas/AttachmentErrorCode"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AttachmentErrorCode"
+              },
+              {
+                "$ref": "#/components/schemas/AskQuestionErrorCode"
+              }
+            ],
+            "title": "Code"
           },
           "correlationId": {
             "title": "Correlationid",
@@ -1883,13 +1903,7 @@
           "storage_quota_exceeded",
           "upload_service_unavailable",
           "upload_code_invalid",
-          "upload_code_rate_limited",
-          "message_idempotency_conflict",
-          "message_in_progress",
-          "message_daily_limit",
-          "message_failed",
-          "message_command_expired",
-          "message_command_not_found"
+          "upload_code_rate_limited"
         ],
         "title": "AttachmentErrorCode",
         "type": "string"

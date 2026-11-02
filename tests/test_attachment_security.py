@@ -76,6 +76,7 @@ from stoa.services.document_extraction_service import (
     extract_xlsx_text,
 )
 from stoa.services.document_parser_worker import ParserResult
+from stoa.services.ask_question import AskQuestionErrorCode
 from stoa.services.ask_question import _store as ask_question_store
 
 
@@ -212,16 +213,17 @@ def test_upload_contract_rejects_unsupported_purpose(field: str, value: str) -> 
 
 def test_attachment_error_registry_is_exhaustive_and_retry_is_bounded() -> None:
     assert set(ATTACHMENT_ERROR_REGISTRY) == set(AttachmentErrorCode)
-    retryable = [code for code, contract in ATTACHMENT_ERROR_REGISTRY.items() if contract.retryable]
+    contracts = {code: code.contract for code in [*AttachmentErrorCode, *AskQuestionErrorCode]}
+    retryable = [code for code, contract in contracts.items() if contract.retryable]
     assert retryable == [
         AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE,
-        AttachmentErrorCode.MESSAGE_IN_PROGRESS,
+        AskQuestionErrorCode.MESSAGE_IN_PROGRESS,
     ]
     outage = ATTACHMENT_ERROR_REGISTRY[AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE]
     assert outage.idempotent_only is True
     assert outage.max_attempts == 2
-    assert ATTACHMENT_ERROR_REGISTRY[AttachmentErrorCode.MESSAGE_IN_PROGRESS].max_attempts == 20
-    assert {contract.client_action for contract in ATTACHMENT_ERROR_REGISTRY.values()} <= set(
+    assert AskQuestionErrorCode.MESSAGE_IN_PROGRESS.contract.max_attempts == 20
+    assert {contract.client_action for contract in contracts.values()} <= set(
         AttachmentClientAction
     )
 

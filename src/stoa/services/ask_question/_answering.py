@@ -56,6 +56,7 @@ from stoa.services.ask_question._transcript import (
     _msg_sk,
     _stored_student_message,
 )
+from stoa.services.ask_question.errors import AskQuestionErrorCode, parse_error_code
 from stoa.services.ask_question.models import (
     ChatMessage,
     GenerationProgressResponse,
@@ -775,40 +776,40 @@ def _completed_command_response(command: dict) -> SendMessageResponse | None:
 
 def _command_error_code(
     result: ask_question_store.MessageCommandResult,
-) -> AttachmentErrorCode:
+) -> AskQuestionErrorCode | AttachmentErrorCode:
     disposition = result.disposition
     if disposition is ask_question_store.MessageCommandDisposition.REJECTED:
         try:
-            code = AttachmentErrorCode(str(result.error_code))
+            code = parse_error_code(str(result.error_code))
         except ValueError:
             return AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
         if code in {
-            AttachmentErrorCode.MESSAGE_IN_PROGRESS,
-            AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT,
-            AttachmentErrorCode.MESSAGE_DAILY_LIMIT,
+            AskQuestionErrorCode.MESSAGE_IN_PROGRESS,
+            AskQuestionErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT,
+            AskQuestionErrorCode.MESSAGE_DAILY_LIMIT,
         }:
             return AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
         return code
     return {
         ask_question_store.MessageCommandDisposition.QUOTA_EXCEEDED: (
-            AttachmentErrorCode.MESSAGE_DAILY_LIMIT
+            AskQuestionErrorCode.MESSAGE_DAILY_LIMIT
         ),
         ask_question_store.MessageCommandDisposition.IDEMPOTENCY_CONFLICT: (
-            AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT
+            AskQuestionErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT
         ),
         ask_question_store.MessageCommandDisposition.RETRYABLE: (
             AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
         ),
         ask_question_store.MessageCommandDisposition.TERMINAL: (
-            AttachmentErrorCode.MESSAGE_FAILED
+            AskQuestionErrorCode.MESSAGE_FAILED
         ),
         ask_question_store.MessageCommandDisposition.EXPIRED: (
-            AttachmentErrorCode.MESSAGE_COMMAND_EXPIRED
+            AskQuestionErrorCode.MESSAGE_COMMAND_EXPIRED
         ),
         ask_question_store.MessageCommandDisposition.MISSING: (
-            AttachmentErrorCode.MESSAGE_COMMAND_NOT_FOUND
+            AskQuestionErrorCode.MESSAGE_COMMAND_NOT_FOUND
         ),
-    }.get(disposition, AttachmentErrorCode.MESSAGE_IN_PROGRESS)
+    }.get(disposition, AskQuestionErrorCode.MESSAGE_IN_PROGRESS)
 
 
 def _result_response(
@@ -910,7 +911,7 @@ def _wait_for_message_command(
         correlation_id=str((last.command or {}).get("command_id") or "message-command"),
         level=logging.WARNING,
     )
-    raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_IN_PROGRESS)
+    raise AttachmentDecisionError(AskQuestionErrorCode.MESSAGE_IN_PROGRESS)
 
 
 def _validate_replay_command(
@@ -1722,7 +1723,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 correlation_id=command_id,
                 level=logging.WARNING,
             )
-            raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_FAILED)
+            raise AttachmentDecisionError(AskQuestionErrorCode.MESSAGE_FAILED)
 
     allowance_metadata: dict[str, object] | None = None
     answer: ask_answer.AskAnswer
