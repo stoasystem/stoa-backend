@@ -31059,15 +31059,6 @@
               "title": "Limit",
               "type": "integer"
             }
-          },
-          {
-            "in": "query",
-            "name": "application_id",
-            "required": true,
-            "schema": {
-              "title": "Application Id",
-              "type": "string"
-            }
           }
         ],
         "responses": {
@@ -31123,9 +31114,7 @@
             }
           ],
           "classification": "authorized",
-          "identifiers": [
-            "application_id"
-          ]
+          "identifiers": []
         }
       },
       "post": {

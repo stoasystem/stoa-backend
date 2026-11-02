@@ -737,6 +737,56 @@ def teacher_capability_dependency(
     return dependency
 
 
+async def _authorize_teacher_application_reviewer(
+    *,
+    resource_id: str,
+    actor: Actor,
+    action: AuthorizationAction,
+    correlation_id: str,
+    audit_sink: AuthorizationAuditSink,
+) -> dict[str, object]:
+    resource = ResourceRef(
+        ResourceType.OPERATOR_RESOURCE,
+        resource_id,
+        actor.user_id,
+        relationship_known=True,
+    )
+    decision = operator_capability_decision(
+        actor,
+        capability="teacher_identity_reviewer",
+        resource=resource,
+        action=action,
+        purpose=AuthorizationPurpose.IDENTITY_MANAGEMENT,
+    )
+    if actor.role is not CanonicalRole.ADMIN:
+        from stoa.security.errors import SecurityErrorCode
+
+        decision = PolicyDecision(False, SecurityErrorCode.ACTION_NOT_ALLOWED)
+    decision = await _record_or_raise(
+        actor=actor,
+        resource=resource,
+        action=action,
+        purpose=AuthorizationPurpose.IDENTITY_MANAGEMENT,
+        decision=decision,
+        correlation_id=correlation_id,
+        audit_sink=audit_sink,
+        decision_kind="operator_capability",
+    )
+    if not decision.allowed:
+        from stoa.security.errors import SecurityErrorCode
+
+        _raise_http(SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id))
+    return {
+        "sub": actor.user_id,
+        "user_id": actor.user_id,
+        "role": actor.role.value,
+        "account_status": actor.account_status.value,
+        "capabilities": {
+            grant.capability: "granted" for grant in actor.current_grants
+        },
+    }
+
+
 def teacher_application_reviewer_dependency(action: AuthorizationAction):
     """Require the exact reviewer grant for one application identifier."""
 
@@ -749,51 +799,53 @@ def teacher_application_reviewer_dependency(action: AuthorizationAction):
         correlation_id: str = Depends(get_request_correlation_id),
         audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
     ) -> dict[str, object]:
-        resource = ResourceRef(
-            ResourceType.OPERATOR_RESOURCE,
-            application_id,
-            actor.user_id,
-            relationship_known=True,
-        )
-        decision = operator_capability_decision(
-            actor,
-            capability="teacher_identity_reviewer",
-            resource=resource,
-            action=action,
-            purpose=AuthorizationPurpose.IDENTITY_MANAGEMENT,
-        )
-        if actor.role is not CanonicalRole.ADMIN:
-            from stoa.security.errors import SecurityErrorCode
-
-            decision = PolicyDecision(False, SecurityErrorCode.ACTION_NOT_ALLOWED)
-        decision = await _record_or_raise(
+        return await _authorize_teacher_application_reviewer(
+            resource_id=application_id,
             actor=actor,
-            resource=resource,
             action=action,
-            purpose=AuthorizationPurpose.IDENTITY_MANAGEMENT,
-            decision=decision,
             correlation_id=correlation_id,
             audit_sink=audit_sink,
-            decision_kind="operator_capability",
         )
-        if not decision.allowed:
-            from stoa.security.errors import SecurityErrorCode
-
-            _raise_http(SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id))
-        return {
-            "sub": actor.user_id,
-            "user_id": actor.user_id,
-            "role": actor.role.value,
-            "account_status": actor.account_status.value,
-            "capabilities": {
-                grant.capability: "granted" for grant in actor.current_grants
-            },
-        }
 
     _set_dependency_metadata(dependency, (
         _metadata_spec(
             ResourceType.OPERATOR_RESOURCE,
             action,
+            AuthorizationPurpose.IDENTITY_MANAGEMENT,
+            resolve,
+        ),
+    ), required_capability="teacher_identity_reviewer")
+    return dependency
+
+
+def teacher_application_queue_dependency():
+    """Require the reviewer grant for the whole queue, which names no application.
+
+    The queue is selected by review state alone, so it is authorized against the
+    global operator resource, as the ``/admin`` list routes are: a reviewer grant
+    scoped to one application does not open the queue.
+    """
+
+    async def resolve(resource_id: str):
+        return {"resource_id": resource_id, "student_id": resource_id}
+
+    async def dependency(
+        actor: Actor = Depends(get_actor),
+        correlation_id: str = Depends(get_request_correlation_id),
+        audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
+    ) -> dict[str, object]:
+        return await _authorize_teacher_application_reviewer(
+            resource_id="global",
+            actor=actor,
+            action=AuthorizationAction.READ,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
+        )
+
+    _set_dependency_metadata(dependency, (
+        _metadata_spec(
+            ResourceType.OPERATOR_RESOURCE,
+            AuthorizationAction.READ,
             AuthorizationPurpose.IDENTITY_MANAGEMENT,
             resolve,
         ),

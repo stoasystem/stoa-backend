@@ -10,7 +10,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from stoa.config import Settings, get_settings
 from stoa.deps import get_verified_token
 from stoa.security.authorization import AuthorizationAction
-from stoa.security.route_authorization import teacher_application_reviewer_dependency
+from stoa.security.route_authorization import (
+    teacher_application_queue_dependency,
+    teacher_application_reviewer_dependency,
+)
 from stoa.security.route_inventory import explicit_route_classification
 from stoa.security.tokens import VerifiedAccessToken
 from stoa.services import public_identity_service, teacher_application_service
@@ -87,9 +90,7 @@ def apply(payload: TeacherApplicationRequest) -> dict[str, Any]:
 def pending_applications(
     review_state: str = "pending_review",
     limit: int = 50,
-    user: dict[str, Any] = Depends(
-        teacher_application_reviewer_dependency(AuthorizationAction.READ)
-    ),
+    user: dict[str, Any] = Depends(teacher_application_queue_dependency()),
 ) -> dict[str, Any]:
     return teacher_application_service.applications_for_reviewer(
         user, review_state=review_state, limit=limit
