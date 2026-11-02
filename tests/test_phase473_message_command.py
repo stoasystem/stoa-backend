@@ -20,6 +20,7 @@ from fakes.ask_question import (
     CONV,
     STUDENT,
     AtomicAllowanceTable,
+    _command_key,
     _commit,
     _patch_allowance_table,
     _submit,
@@ -270,7 +271,9 @@ def test_bind_transaction_uses_persisted_period_and_puts_usage_with_message_effe
         owner_id="student-1",
         limit_bytes=5 * 1024**3,
         now_iso="2026-07-18T00:00:02+00:00",
-        command=command,
+        trailing_operations=ask_question_store.message_committed_operations(
+            command, owner_id="student-1", now_iso="2026-07-18T00:00:02+00:00"
+        ),
     )
 
     usage_operation = next(
@@ -502,7 +505,7 @@ def test_create_conversation_routes_initial_message_through_shared_executor(
     assert body["messages"][0]["content"] == "through-shared-command"
     command = table.rows[
         tuple(
-            attachment_repo.message_command_key(body["id"], f"initial-{body['id']}").values()
+            _command_key(body["id"], f"initial-{body['id']}").values()
         )
     ]
     assert command["account_fence_generation"] == 7
@@ -555,7 +558,9 @@ def test_cross_midnight_replay_uses_original_quota_and_usage_identity() -> None:
         owner_id="student-1",
         limit_bytes=5 * 1024**3,
         now_iso="2026-07-18T00:00:05+00:00",
-        command=classified.command,
+        trailing_operations=ask_question_store.message_committed_operations(
+            classified.command, owner_id="student-1", now_iso="2026-07-18T00:00:05+00:00"
+        ),
     )
     usage_operation = next(
         operation
@@ -604,7 +609,7 @@ def test_polling_projects_nonlive_states_without_in_progress(
 ) -> None:
     """Waiting for another delivery, the command ends in a state that is not live."""
     _commit("message-key")
-    key = tuple(attachment_repo.message_command_key(CONV, "message-key").values())
+    key = tuple(_command_key(CONV, "message-key").values())
     held = dict(table.rows[key])
     held.update(
         status="ai_running",
@@ -638,7 +643,7 @@ def test_regular_and_sse_replay_exact_durable_rejection(table, model, suffix: st
     student_message_id = str(uuid5(UUID(command_id), "student-message"))
     table.seed(
         {
-            **attachment_repo.message_command_key(CONV, "message-key"),
+            **_command_key(CONV, "message-key"),
             **_command(
                 status="rejected",
                 error_code="storage_quota_exceeded",

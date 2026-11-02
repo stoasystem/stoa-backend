@@ -6,7 +6,7 @@ import base64
 import logging
 import re
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
@@ -475,21 +475,6 @@ def association_key(
     }
 
 
-def message_command_key(conversation_id: str, idempotency_key: str) -> dict[str, str]:
-    return {
-        "PK": f"CONV#{conversation_id}",
-        "SK": f"MESSAGE_COMMAND#{idempotency_key}",
-    }
-
-
-def chat_quota_key(owner_id: str, quota_period: str) -> dict[str, str]:
-    return {"PK": f"USAGE#{owner_id}", "SK": f"CHAT#{quota_period}"}
-
-
-def chat_quota_operation_key(owner_id: str, command_id: str) -> dict[str, str]:
-    return {"PK": f"USAGE#{owner_id}", "SK": f"CHAT_QUOTA_OP#{command_id}"}
-
-
 def build_conversation_write_transaction(
     *,
     item: dict[str, object],
@@ -757,54 +742,6 @@ def scrub_conversation_private_row(
         except account_deletion_repo.AccountDeletionConflict as exc:
             raise AttachmentRepositoryConflict("conditional_conflict") from exc
     return tombstone
-
-
-def _message_usage_event_item(
-    *, command: dict[str, object], owner_id: str, now_iso: str
-) -> dict[str, object]:
-    action = _required_text(command.get("usage_action"))
-    quota_period = _required_text(command.get("quota_period"))
-    idempotency_key = _required_text(command.get("usage_idempotency_key"))
-    counter_value = _required_integer(command.get("counter_value"), minimum=1)
-    resource_id = _required_text(command.get("usage_resource_id"))
-    return {
-        "PK": f"USAGE_LEDGER#{owner_id}",
-        "SK": f"EVENT#{action}#{quota_period}#{idempotency_key}",
-        "entity_type": "usage_ledger_event",
-        "schema_version": "usage-ledger.v1",
-        "event_id": _required_text(command.get("usage_event_id")),
-        "actor_id": owner_id,
-        "actor_role": "student",
-        "student_id": owner_id,
-        "action": action,
-        "quantity": 1,
-        "quota_period": quota_period,
-        "counter_key": f"USAGE#{owner_id}/CHAT#{quota_period}",
-        "counter_value_after": counter_value,
-        "idempotency_key": idempotency_key,
-        "request_correlation_id": resource_id,
-        "privacy": {
-            "raw_content_stored": False,
-            "raw_learning_content_stored": False,
-            "private_artifact_keys_stored": False,
-            "provider_payloads_stored": False,
-            "auth_tokens_stored": False,
-            "verification_codes_stored": False,
-        },
-        "metadata": {
-            "usage_type": "daily_chat_message",
-            "summary_group": "chat",
-            "quota_enforced": True,
-            "support_visible": True,
-            "conversation_id": _required_text(command.get("conversation_id")),
-            "request_id": resource_id,
-            "status": "sent",
-            "write_order": "message_effect_transaction",
-        },
-        "created_at": _required_text(command.get("created_at")),
-        "updated_at": now_iso,
-        "expires_at": _required_integer(command.get("expires_at"), minimum=1),
-    }
 
 
 def create_upload_intent(item: dict[str, object], *, table: object | None = None) -> None:
@@ -2240,7 +2177,7 @@ def build_message_attachment_transaction(
     owner_id: str,
     limit_bytes: int,
     now_iso: str,
-    command: dict[str, object] | None = None,
+    trailing_operations: Sequence[TransactionOperation] = (),
     account_fence_generation: int = 1,
 ) -> list[TransactionOperation]:
     operations: list[TransactionOperation] = [
@@ -2400,47 +2337,9 @@ def build_message_attachment_transaction(
                 },
             )
         )
-    if command is not None:
-        operations.append(
-            TransactionOperation(
-                TransactionOperationKind.USAGE_EVENT_PUT,
-                {
-                    "Put": {
-                        "Item": _message_usage_event_item(
-                            command=command, owner_id=owner_id, now_iso=now_iso
-                        ),
-                        "ConditionExpression": (
-                            "attribute_not_exists(PK) AND attribute_not_exists(SK)"
-                        ),
-                    }
-                },
-            )
-        )
-        operations.append(
-            TransactionOperation(
-                TransactionOperationKind.MESSAGE_COMMAND_UPDATE,
-                {
-                    "Update": {
-                        "Key": message_command_key(
-                            _required_text(command.get("conversation_id")),
-                            _required_text(command.get("idempotency_key")),
-                        ),
-                        "UpdateExpression": "SET #status=:committed, message_committed_at=:now",
-                        "ConditionExpression": (
-                            "owner_id=:owner AND fingerprint=:fingerprint AND #status=:claimed"
-                        ),
-                        "ExpressionAttributeNames": {"#status": "status"},
-                        "ExpressionAttributeValues": {
-                            ":owner": owner_id,
-                            ":fingerprint": command["fingerprint"],
-                            ":claimed": "claimed",
-                            ":committed": "message_committed",
-                            ":now": now_iso,
-                        },
-                    }
-                },
-            )
-        )
+    # What the message's owner writes with it (a question's own rows), built by
+    # that owner; they go last.
+    operations.extend(trailing_operations)
     return operations
 
 

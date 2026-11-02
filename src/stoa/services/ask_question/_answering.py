@@ -3,6 +3,7 @@
 Moved from `routers/conversations.py` (#218). Function bodies are as they were
 there; the router now reaches them through the package's entry points.
 """
+import functools
 import json
 import hashlib
 import logging
@@ -1462,7 +1463,9 @@ def commit_message_command(
                     actor=actor,
                     prepared=prepared,
                     effective_plan=effective_plan,
-                    command=command,
+                    command_operations=functools.partial(
+                        ask_question_store.message_committed_operations, command
+                    ),
                     deterministic_attachment_ids=command_attachment_ids,
                 )
             )

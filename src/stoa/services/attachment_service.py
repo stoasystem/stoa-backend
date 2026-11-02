@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -2636,10 +2636,16 @@ def bind_message_attachments(
     effective_plan: str,
     now: datetime | None = None,
     repository: Any = attachment_repo,
-    command: dict[str, Any] | None = None,
+    command_operations: Callable[..., Sequence[attachment_repo.TransactionOperation]]
+    | None = None,
     deterministic_attachment_ids: Sequence[object] | None = None,
 ) -> list[AttachmentSummary]:
-    """Atomically persist a message and every fresh/reused attachment reference."""
+    """Atomically persist a message and every fresh/reused attachment reference.
+
+    `command_operations(owner_id=..., now_iso=...)` builds what the message's
+    owner writes with it (a question's command row); they go last, in the same
+    transaction.
+    """
     now = (now or datetime.now(UTC)).astimezone(UTC)
     fresh_count = sum(kind == "upload" for kind, _ in prepared)
     if deterministic_attachment_ids is not None:
@@ -2710,7 +2716,11 @@ def bind_message_attachments(
                 owner_id=actor.user_id,
                 limit_bytes=limit,
                 now_iso=now.isoformat(),
-                command=command,
+                trailing_operations=(
+                    command_operations(owner_id=actor.user_id, now_iso=now.isoformat())
+                    if command_operations is not None
+                    else ()
+                ),
                 account_fence_generation=int(account_fence["generation"]),
             )
         )

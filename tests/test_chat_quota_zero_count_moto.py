@@ -80,7 +80,7 @@ def _claim(table, key: str) -> ask_question_store.MessageCommandResult:
 
 
 def _count(table) -> int | None:
-    item = table.get_item(Key=attachment_repo.chat_quota_key(OWNER, PERIOD),
+    item = table.get_item(Key=ask_question_store.chat_quota_key(OWNER, PERIOD),
                           ConsistentRead=True).get("Item")
     return None if item is None else int(item["count"])
 
@@ -99,7 +99,7 @@ def test_a_day_with_no_counter_row_claims_and_starts_it_at_one():
 @mock_aws
 def test_a_counter_row_that_holds_zero_claims_like_a_missing_one():
     table = _table()
-    table.put_item(Item={**attachment_repo.chat_quota_key(OWNER, PERIOD),
+    table.put_item(Item={**ask_question_store.chat_quota_key(OWNER, PERIOD),
                          "count": 0, "expires_at": EXPIRES})
 
     result = _claim(table, "after-reset")
@@ -138,7 +138,7 @@ def test_a_zero_row_still_refuses_a_claim_that_raced_past_it():
     # The compare-and-set still holds at zero: once another claim has moved the
     # row to 1, a claim built on the 0 it read cannot write 1 over it.
     table = _table()
-    table.put_item(Item={**attachment_repo.chat_quota_key(OWNER, PERIOD),
+    table.put_item(Item={**ask_question_store.chat_quota_key(OWNER, PERIOD),
                          "count": 0, "expires_at": EXPIRES})
     stale = ask_question_store.build_message_command_claim_transaction(
         command=_command("stale"),

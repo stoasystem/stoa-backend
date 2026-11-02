@@ -48,7 +48,7 @@ from stoa.services import (
     locale_service,
     star_map_candidates,
 )
-from stoa.services.ask_question import _answering, _transcript, dispatch
+from stoa.services.ask_question import _answering, _store, _transcript, dispatch
 from stoa.services.ask_question.models import SendMessageRequest, message_request_fingerprint
 from stoa.services.document_extraction_service import (
     DocumentExtractionFailure,
@@ -132,8 +132,13 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
     return table
 
 
+def _command_key(conversation_id: str, key: str) -> dict[str, str]:
+    """Where the question's command row for `key` is kept."""
+    return _store.message_command_key(conversation_id, key)
+
+
 def _command_row(table: FakeTable, key: str, conversation_id: str = CONV) -> dict[str, Any]:
-    return table.rows[tuple(attachment_repo.message_command_key(conversation_id, key).values())]
+    return table.rows[tuple(_command_key(conversation_id, key).values())]
 
 
 def _messages(table: FakeTable, role: str) -> list[dict[str, Any]]:

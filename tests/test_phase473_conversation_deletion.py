@@ -145,7 +145,9 @@ def test_command_claim_and_text_only_message_commit_share_account_fence() -> Non
         owner_id=STUDENT_ID,
         limit_bytes=100,
         now_iso=NOW,
-        command={**command, "owner_id": STUDENT_ID},
+        trailing_operations=ask_question_store.message_committed_operations(
+            {**command, "owner_id": STUDENT_ID}, owner_id=STUDENT_ID, now_iso=NOW
+        ),
         account_fence_generation=7,
     )
     assert commit[0].kind is attachment_repo.TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK

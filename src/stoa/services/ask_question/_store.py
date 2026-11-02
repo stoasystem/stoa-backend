@@ -68,6 +68,21 @@ MESSAGE_ATTEMPT_TRACE_FIELDS = (
 )
 
 
+def message_command_key(conversation_id: str, idempotency_key: str) -> dict[str, str]:
+    return {
+        "PK": f"CONV#{conversation_id}",
+        "SK": f"MESSAGE_COMMAND#{idempotency_key}",
+    }
+
+
+def chat_quota_key(owner_id: str, quota_period: str) -> dict[str, str]:
+    return {"PK": f"USAGE#{owner_id}", "SK": f"CHAT#{quota_period}"}
+
+
+def chat_quota_operation_key(owner_id: str, command_id: str) -> dict[str, str]:
+    return {"PK": f"USAGE#{owner_id}", "SK": f"CHAT_QUOTA_OP#{command_id}"}
+
+
 def generation_progress_key(conversation_id: str) -> dict[str, str]:
     return {"PK": f"CONV#{conversation_id}", "SK": "GENERATION"}
 
@@ -204,7 +219,7 @@ def get_message_command(
     table: object | None = None,
 ) -> dict[str, object] | None:
     response = attachment_repo._get_item(table or attachment_repo.get_table(),
-        Key=attachment_repo.message_command_key(conversation_id, idempotency_key), ConsistentRead=True
+        Key=message_command_key(conversation_id, idempotency_key), ConsistentRead=True
     )
     return attachment_repo._optional_mapping(response.get("Item"))
 
@@ -377,7 +392,7 @@ def build_message_command_claim_transaction(
             {
                 "Put": {
                     "Item": {
-                        **attachment_repo.message_command_key(
+                        **message_command_key(
                             str(command["conversation_id"]), str(command["idempotency_key"])
                         ),
                         **command,
@@ -397,7 +412,7 @@ def build_message_command_claim_transaction(
             {
                 "Put": {
                     "Item": {
-                        **attachment_repo.chat_quota_operation_key(owner_id, command_id),
+                        **chat_quota_operation_key(owner_id, command_id),
                         "entity_type": "chat_quota_operation",
                         "command_id": command_id,
                         "owner_id": owner_id,
@@ -414,12 +429,111 @@ def build_message_command_claim_transaction(
             attachment_repo.TransactionOperationKind.CHAT_QUOTA_UPDATE,
             {
                 "Update": {
-                    "Key": attachment_repo.chat_quota_key(owner_id, quota_period),
+                    "Key": chat_quota_key(owner_id, quota_period),
                     "UpdateExpression": "SET #count=:next, #ttl=if_not_exists(#ttl,:expires)",
                     "ConditionExpression": counter_condition,
                     "ExpressionAttributeNames": {"#count": "count", "#ttl": "expires_at"},
                     "ExpressionAttributeValues": {
                         **values,
+                    },
+                }
+            },
+        ),
+    ]
+
+
+def _message_usage_event_item(
+    *, command: dict[str, object], owner_id: str, now_iso: str
+) -> dict[str, object]:
+    action = attachment_repo._required_text(command.get("usage_action"))
+    quota_period = attachment_repo._required_text(command.get("quota_period"))
+    idempotency_key = attachment_repo._required_text(command.get("usage_idempotency_key"))
+    counter_value = attachment_repo._required_integer(command.get("counter_value"), minimum=1)
+    resource_id = attachment_repo._required_text(command.get("usage_resource_id"))
+    return {
+        "PK": f"USAGE_LEDGER#{owner_id}",
+        "SK": f"EVENT#{action}#{quota_period}#{idempotency_key}",
+        "entity_type": "usage_ledger_event",
+        "schema_version": "usage-ledger.v1",
+        "event_id": attachment_repo._required_text(command.get("usage_event_id")),
+        "actor_id": owner_id,
+        "actor_role": "student",
+        "student_id": owner_id,
+        "action": action,
+        "quantity": 1,
+        "quota_period": quota_period,
+        "counter_key": f"USAGE#{owner_id}/CHAT#{quota_period}",
+        "counter_value_after": counter_value,
+        "idempotency_key": idempotency_key,
+        "request_correlation_id": resource_id,
+        "privacy": {
+            "raw_content_stored": False,
+            "raw_learning_content_stored": False,
+            "private_artifact_keys_stored": False,
+            "provider_payloads_stored": False,
+            "auth_tokens_stored": False,
+            "verification_codes_stored": False,
+        },
+        "metadata": {
+            "usage_type": "daily_chat_message",
+            "summary_group": "chat",
+            "quota_enforced": True,
+            "support_visible": True,
+            "conversation_id": attachment_repo._required_text(command.get("conversation_id")),
+            "request_id": resource_id,
+            "status": "sent",
+            "write_order": "message_effect_transaction",
+        },
+        "created_at": attachment_repo._required_text(command.get("created_at")),
+        "updated_at": now_iso,
+        "expires_at": attachment_repo._required_integer(command.get("expires_at"), minimum=1),
+    }
+
+
+def message_committed_operations(
+    command: dict[str, object], *, owner_id: str, now_iso: str
+) -> list[attachment_repo.TransactionOperation]:
+    """What the student's message commit writes of the question, after the message itself.
+
+    The chat usage event the claim counted, and the command's step from
+    `claimed` to `message_committed`. They join the message's own transaction
+    (`attachment_service.bind_message_attachments`, as its
+    `command_operations`), last, so the command is committed exactly when the
+    message and its attachments are.
+    """
+    return [
+        attachment_repo.TransactionOperation(
+            attachment_repo.TransactionOperationKind.USAGE_EVENT_PUT,
+            {
+                "Put": {
+                    "Item": _message_usage_event_item(
+                        command=command, owner_id=owner_id, now_iso=now_iso
+                    ),
+                    "ConditionExpression": (
+                        "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                    ),
+                }
+            },
+        ),
+        attachment_repo.TransactionOperation(
+            attachment_repo.TransactionOperationKind.MESSAGE_COMMAND_UPDATE,
+            {
+                "Update": {
+                    "Key": message_command_key(
+                        attachment_repo._required_text(command.get("conversation_id")),
+                        attachment_repo._required_text(command.get("idempotency_key")),
+                    ),
+                    "UpdateExpression": "SET #status=:committed, message_committed_at=:now",
+                    "ConditionExpression": (
+                        "owner_id=:owner AND fingerprint=:fingerprint AND #status=:claimed"
+                    ),
+                    "ExpressionAttributeNames": {"#status": "status"},
+                    "ExpressionAttributeValues": {
+                        ":owner": owner_id,
+                        ":fingerprint": command["fingerprint"],
+                        ":claimed": "claimed",
+                        ":committed": "message_committed",
+                        ":now": now_iso,
                     },
                 }
             },
@@ -456,7 +570,7 @@ def claim_message_command_and_quota(
     for _ in range(3):
         try:
             raw_counter = attachment_repo._get_item(target,
-                Key=attachment_repo.chat_quota_key(owner_id, quota_period), ConsistentRead=True
+                Key=chat_quota_key(owner_id, quota_period), ConsistentRead=True
             ).get("Item")
             counter = attachment_repo._optional_mapping(raw_counter) or {}
         except Exception:
@@ -636,7 +750,7 @@ def claim_message_ai_lease(
                     attachment_repo.TransactionOperationKind.MESSAGE_COMMAND_UPDATE,
                     {
                         "Update": {
-                            "Key": attachment_repo.message_command_key(conversation_id, idempotency_key),
+                            "Key": message_command_key(conversation_id, idempotency_key),
                             "UpdateExpression": (
                                 "SET #status=:running, leaseOwner=:lease_owner, claimedAt=:claimed, "
                                 "expiresAt=:expires, attempt=:attempt "
@@ -776,7 +890,7 @@ def complete_message_command(
             attachment_repo.TransactionOperationKind.MESSAGE_COMMAND_UPDATE,
             {
                 "Update": {
-                    "Key": attachment_repo.message_command_key(conversation_id, idempotency_key),
+                    "Key": message_command_key(conversation_id, idempotency_key),
                     "UpdateExpression": (
                         "SET #status=:completed, result_json=:result, completed_at=:completed_at "
                         "REMOVE leaseOwner, claimedAt, expiresAt, "
@@ -869,7 +983,7 @@ def record_message_generation_context(
     try:
         response = attachment_repo._update_item(
             table or attachment_repo.get_table(),
-            Key=attachment_repo.message_command_key(conversation_id, idempotency_key),
+            Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression="SET generation_context=if_not_exists(generation_context, :context)",
             ConditionExpression=(
                 "owner_id=:owner AND #status IN (:committed, :running, :failed)"
@@ -914,7 +1028,7 @@ def reopen_failed_message_command(
     try:
         attachment_repo._update_item(
             table or attachment_repo.get_table(),
-            Key=attachment_repo.message_command_key(conversation_id, idempotency_key),
+            Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=(
                 "SET #status=:committed, message_committed_at=:now "
                 f"REMOVE {', '.join(MESSAGE_FAILURE_FIELDS)}"
@@ -962,7 +1076,7 @@ def fail_message_command(
     try:
         attachment_repo._update_item(
             table or attachment_repo.get_table(),
-            Key=attachment_repo.message_command_key(conversation_id, idempotency_key),
+            Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=(
                 "SET #status=:failed, failure_category=:category, "
                 "failure_retryable=:retryable, failed_at=:now "
@@ -1008,7 +1122,7 @@ def _leased_command_update(
     try:
         attachment_repo._update_item(
             table or attachment_repo.get_table(),
-            Key=attachment_repo.message_command_key(conversation_id, idempotency_key),
+            Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=update_expression,
             ConditionExpression=(
                 "owner_id=:owner AND #status=:running AND leaseOwner=:lease_owner "
@@ -1167,7 +1281,7 @@ def _unsettled_end_update(
     try:
         attachment_repo._update_item(
             table or attachment_repo.get_table(),
-            Key=attachment_repo.message_command_key(conversation_id, idempotency_key),
+            Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=update_expression,
             ConditionExpression=(
                 f"owner_id=:owner AND #status=:status AND {SETTLEMENT_ENDED_AT[status]}"
@@ -1261,7 +1375,7 @@ def close_stale_lease(
     try:
         attachment_repo._update_item(
             table or attachment_repo.get_table(),
-            Key=attachment_repo.message_command_key(conversation_id, idempotency_key),
+            Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=(
                 "SET #status=:terminal, terminal_at=:now_iso "
                 "REMOVE leaseOwner, claimedAt, expiresAt"
@@ -1312,7 +1426,7 @@ def renew_message_ai_lease(
                     attachment_repo.TransactionOperationKind.MESSAGE_COMMAND_UPDATE,
                     {
                         "Update": {
-                            "Key": attachment_repo.message_command_key(conversation_id, idempotency_key),
+                            "Key": message_command_key(conversation_id, idempotency_key),
                             "UpdateExpression": "SET claimedAt=:now, expiresAt=:expires",
                             "ConditionExpression": (
                                 "owner_id=:owner AND account_fence_generation=:generation AND "
@@ -1375,7 +1489,7 @@ def reject_message_command_and_compensate(
             attachment_repo.TransactionOperationKind.MESSAGE_COMMAND_REJECT,
             {
                 "Update": {
-                    "Key": attachment_repo.message_command_key(conversation_id, idempotency_key),
+                    "Key": message_command_key(conversation_id, idempotency_key),
                     "UpdateExpression": (
                         "SET #status=:rejected, error_code=:error, rejected_at=:now"
                     ),
@@ -1398,7 +1512,7 @@ def reject_message_command_and_compensate(
             attachment_repo.TransactionOperationKind.CHAT_QUOTA_OPERATION_DELETE,
             {
                 "Delete": {
-                    "Key": attachment_repo.chat_quota_operation_key(owner_id, command_id),
+                    "Key": chat_quota_operation_key(owner_id, command_id),
                     "ConditionExpression": "command_id=:command",
                     "ExpressionAttributeValues": {":command": command_id},
                 }
@@ -1408,7 +1522,7 @@ def reject_message_command_and_compensate(
             attachment_repo.TransactionOperationKind.CHAT_QUOTA_COMPENSATE,
             {
                 "Update": {
-                    "Key": attachment_repo.chat_quota_key(owner_id, quota_period),
+                    "Key": chat_quota_key(owner_id, quota_period),
                     "UpdateExpression": "SET #count=#count-:one",
                     "ConditionExpression": "#count=:expected AND #count>:zero",
                     "ExpressionAttributeNames": {"#count": "count"},
@@ -1464,7 +1578,7 @@ def mark_message_command_terminal(
 ) -> MessageCommandResult:
     try:
         attachment_repo._update_item(table or attachment_repo.get_table(),
-            Key=attachment_repo.message_command_key(conversation_id, idempotency_key),
+            Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=(
                 "SET #status=:terminal, terminal_at=:now REMOVE leaseOwner, claimedAt, expiresAt"
             ),
