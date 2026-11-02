@@ -156,6 +156,14 @@ def read_generation_progress(
     )
 
 
+# A command in one of these states may still be claimed, answered or retried;
+# account deletion cancels it (`cancel_stale_message_command`). Moved from
+# `attachment_repo` (#219).
+CONVERSATION_ACTIVE_COMMAND_STATES = frozenset(
+    {"claimed", "message_committed", "ai_running", "failed"}
+)
+
+
 def cancel_stale_message_command(
     command: dict[str, object],
     *,

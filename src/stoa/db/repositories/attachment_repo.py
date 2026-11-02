@@ -424,9 +424,6 @@ CONVERSATION_TOMBSTONE_ALLOWLIST = frozenset(
         "account_fence_generation",
     }
 )
-CONVERSATION_ACTIVE_COMMAND_STATES = frozenset(
-    {"claimed", "message_committed", "ai_running", "failed"}
-)
 CONVERSATION_PROVIDER_RETENTION_BOUNDARY = {
     "bedrock_request_response": "outside_backend_deletion_control"
 }

@@ -1,0 +1,361 @@
+"""The sweep: what the direct invocation missed, and what nobody else will settle.
+
+Moved from `jobs/conversation_generation.py` (#219, step 3 of #204). The
+Scheduler invokes the worker every five minutes to pick up what the direct
+invocation missed: a command committed but never claimed, and an attempt whose
+lease ran out because its Lambda died.
+
+The sweep also settles what a command left reserved and nothing else will
+settle: a `needs_reconciliation` command (the model was called, the answer
+lost), a reservation kept when no time was left to call (E10) that the student
+never sent again (E24), a command whose last attempt died, and one whose lease
+ran out with nobody taking it up in the window (E27). It is restored with the
+cost recorded at the reservation's ceiling.
+
+Either way the work is the package's `answer`, which claims the command's
+lease conditionally, so a duplicate delivery finds the lease held or the answer
+stored and leaves. How an attempt that ran out is recovered - again, finished
+from the answer it kept, or `needs_reconciliation` - is decided there too, the
+same for the worker and for a student retrying the same message.
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+from stoa.db.dynamodb import stored_int
+from stoa.db.repositories import allowance_repo
+from stoa.security.private_telemetry import emit_private_event
+from stoa.services import allowance_service, runtime_budget_service
+from stoa.services.ask_question import _store
+
+logger = logging.getLogger(__name__)
+
+# How long a committed command may wait for its direct invocation before the
+# sweep takes it. The request invokes right after committing, so a minute
+# covers a slow start without taking work a delivery is about to do.
+_UNCLAIMED_AFTER = timedelta(seconds=60)
+
+# The sweep answers only questions someone may still be waiting for, counted
+# from the latest attempt. The chat stops waiting after six minutes, and a live
+# lease is recovered within ten; an older command is left for the student's own
+# retry with the same key, which still resumes it. Without this, switching the
+# sweep on would answer, and charge for, every question that ever got stuck. An
+# answer already stored is finished for longer: that calls no model.
+_SWEEP_MAX_AGE = timedelta(minutes=20)
+
+# How long the sweep keeps trying to finish an answer already stored, counted
+# from the question. It retries every run while finishing fails; after this the
+# lease is stale and its reservation is settled instead (E27, E28).
+_KEPT_ANSWER_MAX_AGE = timedelta(days=1)
+
+# The sweep starts another answer only with this much of the Lambda left: the
+# model's own budget is 90 seconds, and one cut short by the timeout leaves its
+# lease to run out, which costs the student five minutes.
+_SWEEP_MIN_REMAINING_SECONDS = 100.0
+
+# How long a failure's reservation is left before the sweep settles it. A lost
+# answer is never tried again, so two sweep runs is enough to be sure no
+# attempt still holds it. A reservation kept at admission is the student's
+# retry to reuse for as long as the sweep would still answer that retry.
+_SETTLE_AFTER = {
+    "needs_reconciliation": timedelta(minutes=10),
+    "deadline_exceeded": timedelta(minutes=20),
+}
+assert set(_SETTLE_AFTER) == set(_store.UNSETTLED_RESERVATION_FAILURES)
+# A command whose last attempt died is left two sweep runs after it is marked,
+# as a lost answer is, before its reservation is settled (E27).
+_SETTLE_TERMINAL_AFTER = timedelta(minutes=10)
+
+# Settling calls no model; this is only enough for its few writes.
+_SETTLE_MIN_REMAINING_SECONDS = 10.0
+
+
+@dataclass(frozen=True, slots=True)
+class SweepSummary:
+    scanned_to_end: bool = True
+    candidates: int = 0
+    completed: int = 0
+    failed: int = 0
+    held: int = 0
+    settled: int = 0
+    # Waiting, but asked too long ago for anyone to be waiting for the answer.
+    too_old: int = 0
+    # Of those, attempts whose lease ran out and nobody took up: each still
+    # holds its reservation (ticket 15).
+    stale_leases: int = 0
+    missing: int = 0
+    # Broke in a way nothing expected; logged, and the sweep moved on.
+    errored: int = 0
+    # Left for the next run: too little of this Lambda remained.
+    deferred: int = 0
+    # Failures whose reservation the sweep released, its cost at the ceiling.
+    reconciled: int = 0
+
+
+def sweep(
+    remaining_seconds: Callable[[], float | None],
+    answer: Callable[[str, str], str],
+) -> SweepSummary:
+    """Generate what nobody claimed and what a dead attempt left, oldest first.
+
+    A `failed` command is never generated: a failed answer is the student's to
+    send again, and the command already says whether they may. Its reservation
+    is settled once nothing else will.
+    """
+    now = datetime.now(UTC)
+    commands, scanned_to_end = _store.scan_generation_sweep_commands()
+    if not scanned_to_end:
+        logger.warning("conversation_generation_sweep_page_limit")
+    waiting = [command for command in commands if _waiting_too_long(command, now)]
+    candidates = sorted(
+        (
+            command
+            for command in waiting
+            if _recent(command, now) or _finishable(command, now)
+        ),
+        key=lambda command: str(command.get("created_at") or ""),
+    )
+    outcomes = dict.fromkeys(
+        (
+            "completed",
+            "failed",
+            "held",
+            "settled",
+            "missing",
+            "errored",
+            "deferred",
+            "reconciled",
+        ),
+        0,
+    )
+    outcomes["too_old"] = len(waiting) - len(candidates)
+    outcomes["stale_leases"] = sum(1 for command in waiting if _stale_lease(command, now))
+    for command in candidates:
+        remaining = remaining_seconds()
+        if remaining is not None and remaining < _SWEEP_MIN_REMAINING_SECONDS:
+            outcomes["deferred"] += 1
+            continue
+        _bind_budget(remaining_seconds)
+        try:
+            outcome = answer(
+                str(command.get("conversation_id") or ""),
+                str(command.get("idempotency_key") or ""),
+            )
+        except Exception:
+            # One command must not hold up the rest; a raised run would be
+            # retried whole by the Scheduler, the same command first.
+            logger.exception("conversation_generation_sweep_command_failed")
+            outcome = "errored"
+        outcomes[outcome] += 1
+    unsettled = sorted(
+        (command for command in commands if _settlement_due(command, now)),
+        key=_ended_at,
+    )
+    for command in unsettled:
+        remaining = remaining_seconds()
+        if remaining is not None and remaining < _SETTLE_MIN_REMAINING_SECONDS:
+            outcomes["deferred"] += 1
+            continue
+        try:
+            outcome = settle_reservation(command)
+        except Exception:
+            logger.exception("conversation_generation_settlement_failed")
+            outcome = "errored"
+        outcomes[outcome] += 1
+    summary = SweepSummary(
+        scanned_to_end=scanned_to_end, candidates=len(candidates), **outcomes
+    )
+    logger.info(
+        "conversation_generation_sweep_summary %s",
+        " ".join(f"{name}={value}" for name, value in asdict(summary).items()),
+    )
+    return summary
+
+
+def settle_reservation(command: dict[str, Any]) -> str:
+    """Restore what a command left reserved, its cost at the reservation's ceiling.
+
+    Returns `reconciled` (a reservation was released), `settled` (there was
+    none left to release), `held` (the student sent it again, or another run
+    settled it) or `errored` (the ledger could not settle it; the next run
+    tries again). The command is first closed to retries, which would reuse the
+    reservation: a failure is made not retryable, a stale lease is ended
+    `terminal_failed`. It is marked settled last, so a run that stops in
+    between is finished by the next.
+    """
+    conversation_id = command.get("conversation_id")
+    idempotency_key = command.get("idempotency_key")
+    owner_id = command.get("owner_id")
+    read_status = command.get("status")
+    if not all(
+        isinstance(value, str) and value
+        for value in (conversation_id, idempotency_key, owner_id)
+    ):
+        logger.warning("conversation_generation_settlement_unreadable")
+        return "errored"
+    identity = {
+        "conversation_id": str(conversation_id),
+        "idempotency_key": str(idempotency_key),
+        "owner_id": str(owner_id),
+    }
+    if read_status == "ai_running":
+        lease_owner = command.get("leaseOwner")
+        expires_at = stored_int(command.get("expiresAt"))
+        if not isinstance(lease_owner, str) or expires_at is None:
+            logger.warning("conversation_generation_settlement_unreadable")
+            return "errored"
+        now = datetime.now(UTC)
+        # Ended here: settled as the command this write makes it.
+        ended_status, ended_at = "terminal_failed", now.isoformat()
+        if not _store.close_stale_lease(
+            **identity,
+            lease_owner=lease_owner,
+            expires_at=expires_at,
+            now_epoch=int(now.timestamp()),
+            now_iso=ended_at,
+        ):
+            return "held"
+    else:
+        ended = _ended_at(command)
+        if not ended:
+            logger.warning("conversation_generation_settlement_unreadable")
+            return "errored"
+        ended_status, ended_at = str(read_status), ended
+        if ended_status == "failed" and not _store.close_failure_for_settlement(
+            **identity, failed_at=ended_at
+        ):
+            return "held"
+    effect_id = command.get("allowance_effect_id")
+    released_now = False
+    if isinstance(effect_id, str) and effect_id:
+        released = allowance_service.release_unknown_cost_allowance(
+            beneficiary_id=str(command.get("student_id") or owner_id),
+            effect_id=effect_id,
+        )
+        if released.disposition in {
+            allowance_repo.ReleaseDisposition.RETRYABLE,
+            allowance_repo.ReleaseDisposition.INVALID_STATE,
+        }:
+            logger.warning(
+                "conversation_generation_settlement_refused disposition=%s",
+                released.disposition.value,
+            )
+            return "errored"
+        released_now = released.disposition is allowance_repo.ReleaseDisposition.RELEASED
+        if released_now:
+            # Before the mark: a repeated alert is better than a missing one.
+            emit_private_event(
+                "conversation_ai_needs_reconciliation_settled",
+                correlation_id=str(command.get("command_id") or ""),
+                level=logging.WARNING,
+            )
+    if not _store.mark_allowance_settled(
+        **identity,
+        status=ended_status,
+        ended_at=ended_at,
+        now_iso=datetime.now(UTC).isoformat(),
+    ):
+        return "held"
+    return "reconciled" if released_now else "settled"
+
+
+def _settlement_due(command: dict[str, Any], now: datetime) -> bool:
+    if "allowance_settled_at" in command:
+        return False
+    status = command.get("status")
+    if status == "ai_running":
+        return _stale_lease(command, now)
+    if status == "terminal_failed":
+        ended = _aware_time(command.get("terminal_at"))
+        return ended is not None and now - ended >= _SETTLE_TERMINAL_AFTER
+    if status != "failed":
+        return False
+    after = _SETTLE_AFTER.get(str(command.get("failure_category")))
+    failed = _aware_time(command.get("failed_at"))
+    return after is not None and failed is not None and now - failed >= after
+
+
+def _stale_lease(command: dict[str, Any], now: datetime) -> bool:
+    """A lease that ran out, and the window closed with nobody taking it up.
+
+    One that kept its answer is not, while the sweep still tries to finish it.
+    """
+    return (
+        command.get("status") == "ai_running"
+        and _waiting_too_long(command, now)
+        and not _recent(command, now)
+        and not _finishable(command, now)
+    )
+
+
+def _finishable(command: dict[str, Any], now: datetime) -> bool:
+    """Holds its stored answer, asked within `_KEPT_ANSWER_MAX_AGE`."""
+    if _store.kept_answer_attempt(command) is None:
+        return False
+    asked = _aware_time(command.get("created_at"))
+    return asked is not None and now - asked <= _KEPT_ANSWER_MAX_AGE
+
+
+def _ended_at(command: dict[str, Any]) -> str:
+    """When an ended command reached its end, as written; empty if it has none."""
+    field = _store.SETTLEMENT_ENDED_AT.get(str(command.get("status")))
+    ended = command.get(field) if field else None
+    return ended if isinstance(ended, str) else ""
+
+
+def _recent(command: dict[str, Any], now: datetime) -> bool:
+    """Last tried within `_SWEEP_MAX_AGE`; an unreadable time counts as old.
+
+    A running attempt is aged from its claim and a waiting command from when it
+    was committed (or sent again), so a third attempt claimed late in the
+    window is still taken up when its lease runs out. `created_at` is only the
+    fallback for a command that carries neither.
+    """
+    if command.get("status") == "ai_running":
+        claimed = stored_int(command.get("claimedAt"))
+        if claimed is not None:
+            return now - datetime.fromtimestamp(claimed, UTC) <= _SWEEP_MAX_AGE
+    elif command.get("message_committed_at") is not None:
+        committed = _aware_time(command.get("message_committed_at"))
+        return committed is not None and now - committed <= _SWEEP_MAX_AGE
+    asked = _aware_time(command.get("created_at"))
+    return asked is not None and now - asked <= _SWEEP_MAX_AGE
+
+
+def _aware_time(value: object) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
+
+
+def _waiting_too_long(command: dict[str, Any], now: datetime) -> bool:
+    status = command.get("status")
+    if status == "ai_running":
+        lease_expiry = stored_int(command.get("expiresAt"))
+        return lease_expiry is not None and lease_expiry <= int(now.timestamp())
+    if status != "message_committed":
+        return False
+    committed_at = command.get("message_committed_at")
+    try:
+        committed = datetime.fromisoformat(str(committed_at).replace("Z", "+00:00"))
+    except ValueError:
+        return True
+    if committed.tzinfo is None:
+        return True
+    return now - committed >= _UNCLAIMED_AFTER
+
+
+def _bind_budget(remaining_seconds: Callable[[], float | None]) -> None:
+    """Give the next answer's deadline this Lambda's remaining time."""
+    runtime_budget_service.begin_request(
+        started_monotonic=time.monotonic(),
+        remaining_seconds=remaining_seconds(),
+    )

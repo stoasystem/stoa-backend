@@ -28,8 +28,12 @@ from stoa.db.repositories import (
     websocket_repo,
 )
 from stoa.security.tokens import VerifiedAccessToken
-from stoa.services import attachment_service, help_requests, moderation_service
-from stoa.services.ask_question import _store as ask_question_store
+from stoa.services import (
+    ask_question,
+    attachment_service,
+    help_requests,
+    moderation_service,
+)
 
 
 ACCOUNT_DELETION_BRANCH_IDS = (
@@ -1008,16 +1012,12 @@ def _conversation_messages_branch(
     for item in page.items:
         identity = f"{item.get('PK')}|{item.get('SK')}"
         try:
-            if (
-                item.get("entity_type") == "message_command"
-                and item.get("status") in attachment_repo.CONVERSATION_ACTIVE_COMMAND_STATES
-            ):
-                ask_question_store.cancel_stale_message_command(
-                    item,
-                    owner_id=owner_id,
-                    deletion_generation=generation,
-                    now_iso=now_iso,
-                )
+            ask_question.cancel_for_account_deletion(
+                item,
+                owner_id=owner_id,
+                deletion_generation=generation,
+                now_iso=now_iso,
+            )
             conversation_id = str(item.get("conversation_id") or "")
             if item.get("attachment_ids") and conversation_id not in released_conversations:
                 release = attachment_service.release_conversation_attachments(
