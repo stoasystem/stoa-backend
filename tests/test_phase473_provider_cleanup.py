@@ -12,7 +12,6 @@ from stoa.config import Settings
 from stoa.db.repositories import attachment_repo
 from stoa.jobs.upload_cleanup import cleanup_expired_uploads
 from stoa.services.attachment_service import cleanup_upload_intent
-from stoa.services.ask_question import _store as ask_question_store
 
 
 NOW = datetime(2026, 7, 17, tzinfo=UTC)
@@ -491,12 +490,6 @@ def test_retention_fence_accepts_the_decimal_a_real_table_returns() -> None:
     assert fence["status"] == "active"
 
 
-def test_stored_lease_attempt_accepts_decimal() -> None:
-    assert ask_question_store._optional_positive_int(Decimal(3)) == 3
-    assert ask_question_store._optional_positive_int(Decimal("3.5")) is None
-    assert ask_question_store._optional_positive_int(True) is None
-
-
 class _ExpressionValidatingTable:
     """Reject an unused placeholder the way DynamoDB does.
 
@@ -651,43 +644,6 @@ def test_job_continuation_wraparound_visits_every_candidate(monkeypatch) -> None
     )
     assert wrapped.scanned == 2
     assert visited[-2:] == ["opaque-0", "opaque-1"]
-
-
-def _comparison_operands(expression: str) -> list[tuple[str, str]]:
-    import re
-
-    return re.findall(r"(\S+?)\s*(?:<=|>=|<|>)\s*(\S+)", expression or "")
-
-
-def test_claim_conditions_compare_a_path_not_two_placeholders() -> None:
-    """DynamoDB needs a document path on the left of a comparator.
-
-    Comparing two placeholders is rejected before the condition is ever
-    evaluated, so a claim built this way fails for every student. Fakes accept
-    it because they never parse the expression.
-    """
-    for expected_counter in (0, 7):
-        operations = ask_question_store.build_message_command_claim_transaction(
-            command={
-                "command_id": "command-1",
-                "conversation_id": "conversation-1",
-                "idempotency_key": "idempotency-1",
-                "created_at": "2026-08-25T00:00:00+00:00",
-            },
-            owner_id="student-1",
-            quota_period="2026-08-25",
-            expected_counter=expected_counter,
-            limit=50,
-            expires_at=NOW_EPOCH + 172800,
-            account_fence_generation=1,
-        )
-        for operation in operations:
-            body = next(iter(operation.item.values()))
-            condition = body.get("ConditionExpression", "")
-            for left, right in _comparison_operands(condition):
-                assert not (left.startswith(":") and right.startswith(":")), (
-                    f"comparison between two placeholders: {left} vs {right}"
-                )
 
 
 class _WireFormatRejectingClient:

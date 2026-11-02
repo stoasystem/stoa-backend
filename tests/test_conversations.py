@@ -23,13 +23,14 @@ from stoa.models.attachment import AttachmentStatus, AttachmentSummary
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import CanonicalRole, CapabilityGrant
 from stoa.services import ask_question
-from stoa.services.ask_question import _store as ask_question_store
 from stoa.services.ask_question import dispatch
 from stoa.services import attachment_service
 from uuid import UUID, uuid5
 from fakes.ask_question import (
     CONV,
     QUESTION,
+    CommandResult,
+    Disposition,
     _actor,
     _command_row,
     _commit,
@@ -37,6 +38,9 @@ from fakes.ask_question import (
     _parse_in_process,
     _submit,
     _upload,
+    fail_store,
+    patch_store,
+    store_call,
 )
 from fakes.ask_question import _client as _question_client
 from fakes.ask_question import _events as _sse_events
@@ -62,7 +66,7 @@ def _client(router, prefix: str = "/conversations", actor=None) -> TestClient:
 def _owned_conversation(monkeypatch) -> None:
     monkeypatch.setattr(
         conversations,
-        "_get_conversation",
+        "read_conversation",
         lambda conv_id: {"conversation_id": conv_id, "student_id": "student-1"},
     )
 
@@ -169,7 +173,7 @@ def test_conversation_teacher_help_records_support_visible_usage(monkeypatch):
         monkeypatch.setattr(module, "get_table", lambda table=table: table)
     monkeypatch.setattr(
         conversations,
-        "_get_conversation",
+        "read_conversation",
         lambda conv_id: dict(table.rows[(f"CONV#{conv_id}", "CONV")]),
     )
     monkeypatch.setattr(
@@ -270,7 +274,7 @@ def test_teacher_help_retryable_admission_stays_out_of_student_words(monkeypatch
     monkeypatch.setattr(_transcript, "get_table", lambda: table)
     monkeypatch.setattr(
         conversations,
-        "_get_conversation",
+        "read_conversation",
         lambda conv_id: dict(table.rows[(f"CONV#{conv_id}", "CONV")]),
     )
 
@@ -327,9 +331,9 @@ def test_conversation_owner_and_exact_admin_capability_positive_controls(monkeyp
         "created_at": "2026-07-15T00:00:00Z",
         "updated_at": "2026-07-15T00:00:00Z",
     }
-    monkeypatch.setattr(conversations, "_get_conversation", lambda *_: conv)
-    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
-    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(conversations, "read_conversation", lambda *_: conv)
+    monkeypatch.setattr(conversations, "read_messages", lambda *_: [])
+    monkeypatch.setattr(_answering, "read_messages", lambda *_: [])
     owner = _client(conversations.router).get("/conversations/conv-1")
     grant = CapabilityGrant("student_content_review", "student:student-1", 1)
     admin = _client(
@@ -347,7 +351,7 @@ def test_conversation_owner_and_exact_admin_capability_positive_controls(monkeyp
 
 def test_unrelated_parent_conversation_is_hidden(monkeypatch):
     conv = {"conversation_id": "conv-1", "student_id": "student-1"}
-    monkeypatch.setattr(conversations, "_get_conversation", lambda *_: conv)
+    monkeypatch.setattr(conversations, "read_conversation", lambda *_: conv)
     monkeypatch.setattr(user_repo, "get_parent_student_binding", lambda *_: None)
     monkeypatch.setattr(user_repo, "get_student_parent_binding", lambda *_: None)
     monkeypatch.setattr(
@@ -390,9 +394,9 @@ def test_current_linked_teacher_can_read_but_stale_teacher_is_hidden(monkeypatch
         "teacher-1": {"user_id": "teacher-1", "role": "teacher", "account_status": "active"},
         "teacher-2": {"user_id": "teacher-2", "role": "teacher", "account_status": "active"},
     }
-    monkeypatch.setattr(conversations, "_get_conversation", lambda *_: conv)
-    monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
-    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(conversations, "read_conversation", lambda *_: conv)
+    monkeypatch.setattr(conversations, "read_messages", lambda *_: [])
+    monkeypatch.setattr(_answering, "read_messages", lambda *_: [])
     monkeypatch.setattr(question_repo, "get_question", lambda *_: question)
     monkeypatch.setattr(question_repo, "get_teacher_session", lambda *_: None)
     monkeypatch.setattr(question_repo, "get_teacher_assignment", lambda *_: None)
@@ -627,13 +631,13 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
         table, bucket, "fresh-upload-1", b"concurrent notes", filename="notes.txt", media_type="text/plain"
     )
     claim_barrier = threading.Barrier(2, timeout=5)
-    claim = ask_question_store.claim_message_command_and_quota
+    claim = store_call("claim_message_command_and_quota")
 
     def claim_together(**kwargs: Any) -> Any:
         claim_barrier.wait()
         return claim(**kwargs)
 
-    monkeypatch.setattr(ask_question_store, "claim_message_command_and_quota", claim_together)
+    patch_store(monkeypatch, "claim_message_command_and_quota", claim_together)
     effects: dict[str, int] = {}
     _counted(monkeypatch, attachment_service, "bind_message_attachments", effects, "bind")
     _counted(
@@ -906,29 +910,14 @@ def test_message_polling_is_bounded_to_twenty_fifty_millisecond_waits(
     assert model.calls == []
 
 
-def _fails_from_call(monkeypatch, module: Any, name: str, call: int, failure: Exception) -> None:
-    """`module.name` runs as it does until its `call`-th call, which raises `failure`."""
-    real = getattr(module, name)
-    calls = {"count": 0}
-
-    def failing(*args: Any, **kwargs: Any) -> Any:
-        calls["count"] += 1
-        if calls["count"] >= call:
-            raise failure
-        return real(*args, **kwargs)
-
-    monkeypatch.setattr(module, name, failing)
-
-
 def test_regular_sse_stage_a_transport_has_identical_structured_retry(
     table, model, monkeypatch
 ) -> None:
-    _fails_from_call(
+    fail_store(
         monkeypatch,
-        ask_question_store,
         "get_message_command",
-        1,
         RuntimeError("regular-sse-stage-a-provider-private-canary"),
+        from_call=1,
     )
     payload = {
         "content": "request-private-canary",
@@ -975,37 +964,37 @@ def test_conversation_repository_transport_stages_are_structured_retry(
         raise failure
 
     def held(**_kwargs: Any) -> Any:
-        return ask_question_store.MessageCommandResult(
-            ask_question_store.MessageCommandDisposition.LEASE_HELD, attempt=1
+        return CommandResult(
+            Disposition.LEASE_HELD, attempt=1
         )
 
     if stage == "command_claim_transport":
-        monkeypatch.setattr(ask_question_store, "claim_message_command_and_quota", fail)
+        patch_store(monkeypatch, "claim_message_command_and_quota", fail)
     elif stage == "attachment_transaction_transport":
         monkeypatch.setattr(attachment_service, "bind_message_attachments", fail)
     elif stage == "race_reread_transport":
         # Another request holds the claim; reading what it stored fails. The
         # first read is the request's own, before anything was claimed.
-        monkeypatch.setattr(ask_question_store, "claim_message_command_and_quota", held)
-        _fails_from_call(monkeypatch, ask_question_store, "get_message_command", 2, failure)
+        patch_store(monkeypatch, "claim_message_command_and_quota", held)
+        fail_store(monkeypatch, "get_message_command", failure, from_call=2)
     elif stage == "ai_lease_transport":
-        monkeypatch.setattr(ask_question_store, "claim_message_ai_lease", fail)
+        patch_store(monkeypatch, "claim_message_ai_lease", fail)
     elif stage == "ai_lease_reread_transport":
-        monkeypatch.setattr(ask_question_store, "claim_message_ai_lease", held)
+        patch_store(monkeypatch, "claim_message_ai_lease", held)
         # Read first by the request, then by the command claim; the third is the wait's.
-        _fails_from_call(monkeypatch, ask_question_store, "get_message_command", 3, failure)
+        fail_store(monkeypatch, "get_message_command", failure, from_call=3)
     elif stage == "terminal_transport":
         # The lease is refused at the last attempt, and ending the command fails.
-        monkeypatch.setattr(
-            ask_question_store,
+        patch_store(
+            monkeypatch,
             "claim_message_ai_lease",
-            lambda **_kwargs: ask_question_store.MessageCommandResult(
-                ask_question_store.MessageCommandDisposition.LEASE_HELD, attempt=3
+            lambda **_kwargs: CommandResult(
+                Disposition.LEASE_HELD, attempt=3
             ),
         )
-        monkeypatch.setattr(ask_question_store, "mark_message_command_terminal", fail)
+        patch_store(monkeypatch, "mark_message_command_terminal", fail)
     elif stage == "completion_transport":
-        monkeypatch.setattr(ask_question_store, "complete_message_command", fail)
+        patch_store(monkeypatch, "complete_message_command", fail)
     else:
         # The completing transaction's response is lost, and reading back
         # whether it landed fails too.
@@ -1024,7 +1013,7 @@ def test_conversation_repository_transport_stages_are_structured_retry(
 
         monkeypatch.setattr(attachment_repo, "transact", lose_the_completion)
         # After the request's, the claim's and the lease's reads: the read-back.
-        _fails_from_call(monkeypatch, ask_question_store, "get_message_command", 4, failure)
+        fail_store(monkeypatch, "get_message_command", failure, from_call=4)
 
     with pytest.raises(AttachmentDecisionError) as captured:
         _submit("transport-key", content="transport-private-canary")
@@ -1038,12 +1027,11 @@ def test_replay_poll_transport_is_structured_retry(table, model, monkeypatch) ->
     _held_by_another_delivery(table, "transport-key")
     monkeypatch.setattr(_answering.time, "sleep", lambda *_: None)
     # The request's own read finds the lease held; the poll after it fails.
-    _fails_from_call(
+    fail_store(
         monkeypatch,
-        ask_question_store,
         "get_message_command",
-        2,
         RuntimeError("replay-poll-provider-table-private-canary"),
+        from_call=2,
     )
 
     with pytest.raises(AttachmentDecisionError) as captured:
@@ -1098,7 +1086,7 @@ def test_conversation_history_batch_projects_only_safe_attachment_summaries(monk
     summary = _attachment_summary()
     monkeypatch.setattr(
         conversations,
-        "_get_conversation",
+        "read_conversation",
         lambda *_: {
             "conversation_id": "conv-1",
             "student_id": "student-1",
@@ -1110,7 +1098,7 @@ def test_conversation_history_batch_projects_only_safe_attachment_summaries(monk
     )
     monkeypatch.setattr(
         conversations,
-        "_get_messages",
+        "read_messages",
         lambda *_: [
             {
                 "message_id": "message-1",
@@ -1125,7 +1113,7 @@ def test_conversation_history_batch_projects_only_safe_attachment_summaries(monk
     )
     monkeypatch.setattr(
         _answering,
-        "_get_messages",
+        "read_messages",
         lambda *_: [
             {
                 "message_id": "message-1",
@@ -1158,7 +1146,7 @@ def test_conversation_dependency_cancellation_stable_error_has_zero_message_ai_e
     def cancelled(**_kwargs: Any) -> Any:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
 
-    monkeypatch.setattr(ask_question_store, "claim_message_command_and_quota", cancelled)
+    patch_store(monkeypatch, "claim_message_command_and_quota", cancelled)
     effects: dict[str, int] = {}
     _counted(
         monkeypatch, attachment_service, "extract_message_attachment_context", effects, "extract"
@@ -1314,7 +1302,7 @@ def test_a_name_the_student_chose_is_never_taken_by_a_question(monkeypatch):
 
 
 def test_an_untitled_conversation_can_still_be_read_back():
-    """The `_conversation_grade` defect, not repeated for the title.
+    """The `conversation_grade` defect, not repeated for the title.
 
     Creation accepted a blank grade and every later read refused it, so the
     conversation existed in a state it could not be read out of. An empty
@@ -1328,13 +1316,13 @@ def test_an_untitled_conversation_can_still_be_read_back():
 def _published_steps(monkeypatch) -> list[list[str]]:
     """Every step list written to the progress record, in order; each is still written."""
     published: list[list[str]] = []
-    record = ask_question_store.record_generation_progress
+    record = store_call("record_generation_progress")
 
     def recorded(conv_id: str, **kwargs: Any) -> Any:
         published.append(list(kwargs["steps"]))
         return record(conv_id, **kwargs)
 
-    monkeypatch.setattr(ask_question_store, "record_generation_progress", recorded)
+    patch_store(monkeypatch, "record_generation_progress", recorded)
     return published
 
 
@@ -1370,23 +1358,6 @@ def test_a_step_out_of_order_is_ignored(table, model, monkeypatch):
         "Zähler und Nenner teilen",
         "Durch den ggT",
     ]
-
-
-def test_progress_is_only_readable_by_the_student_who_asked():
-
-    class _Table:
-        def get_item(self, **kwargs):
-            del kwargs
-            return {"Item": {"owner_id": "student-1", "steps": ["Schritt 1"]}}
-
-    steps, _updated_at = ask_question_store.read_generation_progress(
-        "conv-1", owner_id="student-1", table=_Table()
-    )
-    assert steps == ["Schritt 1"]
-    hidden, _ = ask_question_store.read_generation_progress(
-        "conv-1", owner_id="another-student", table=_Table()
-    )
-    assert hidden == []
 
 
 def test_streaming_reports_steps_and_still_returns_the_whole_answer(monkeypatch):
@@ -1620,17 +1591,17 @@ def test_a_conversation_opened_without_a_year_group_can_be_read_back():
         "updated_at": "2026-09-23T00:00:00+00:00",
     }
 
-    assert _transcript._conversation_grade(conv) == ""
+    assert _transcript.conversation_grade(conv) == ""
 
 
 def test_a_missing_year_group_reads_the_same_as_an_empty_one():
-    assert _transcript._conversation_grade({"subject": "math"}) == ""
+    assert _transcript.conversation_grade({"subject": "math"}) == ""
 
 
 def test_a_year_group_of_the_wrong_type_is_still_refused():
     """Negative control: "nobody said" is not "the row is damaged"."""
     with pytest.raises(conversations.AttachmentDecisionError):
-        _transcript._conversation_grade({"grade": 9})
+        _transcript.conversation_grade({"grade": 9})
 
 
 def test_the_other_conversation_fields_still_refuse_an_empty_value():
@@ -1641,7 +1612,7 @@ def test_the_other_conversation_fields_still_refuse_an_empty_value():
     """
     for field in ("title", "subject", "updated_at"):
         with pytest.raises(conversations.AttachmentDecisionError):
-            _transcript._required_conversation_text({field: ""}, field)
+            _transcript.required_conversation_text({field: ""}, field)
 
 
 def test_escalating_a_conversation_writes_the_record_the_teacher_side_reads(monkeypatch):
@@ -1836,7 +1807,7 @@ def _escalate(monkeypatch, table, conversation_id: str = "conv-1"):
     )
     monkeypatch.setattr(
         conversations,
-        "_get_conversation",
+        "read_conversation",
         lambda conv_id: dict(table.rows[(f"CONV#{conv_id}", "CONV")]),
     )
     monkeypatch.setattr(

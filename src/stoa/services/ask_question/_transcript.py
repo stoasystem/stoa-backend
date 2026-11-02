@@ -12,20 +12,20 @@ from typing import Any, Protocol, cast
 from boto3.dynamodb.conditions import Key
 
 from stoa.db.dynamodb import get_table, stored_int
-from stoa.db.repositories import attachment_repo
+from stoa.db.repositories import account_deletion_repo, attachment_repo
 from stoa.models.attachment import AttachmentSummary
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.services import attachment_service
-from stoa.services.ask_question.models import MessageQuote, _stored_quote
+from stoa.services.ask_question.models import MessageQuote, stored_quote
 
 
-class _DynamoConversationTable(Protocol):
+class DynamoConversationTable(Protocol):
     def query(self, **kwargs: object) -> dict[str, object]: ...
 
     def get_item(self, **kwargs: object) -> dict[str, object]: ...
 
 
-def _conversation_response_items(
+def conversation_response_items(
     response: Mapping[str, object],
 ) -> list[dict[str, object]]:
     raw_items = response.get("Items", [])
@@ -47,14 +47,14 @@ def _conversation_response_item(
     return dict(cast(Mapping[str, object], item))
 
 
-def _required_conversation_text(record: Mapping[str, object], field: str) -> str:
+def required_conversation_text(record: Mapping[str, object], field: str) -> str:
     value = record.get(field)
     if not isinstance(value, str) or not value:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     return value
 
 
-def _conversation_grade(record: Mapping[str, object]) -> str:
+def conversation_grade(record: Mapping[str, object]) -> str:
     """The year group the conversation was opened for, which may be none yet.
 
     A grade is asked for on the learning profile, not when an account is opened,
@@ -75,21 +75,30 @@ def _conversation_grade(record: Mapping[str, object]) -> str:
     return value
 
 
-def _conv_pk(conv_id: str) -> str:
+def active_conversation_generation(owner_id: str, table: Any) -> int:
+    """Resolve one exact active generation before a private conversation effect."""
+    try:
+        fence = account_deletion_repo.require_active_account_fence(owner_id, table=table)
+    except account_deletion_repo.AccountDeletionConflict:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from None
+    return int(fence["generation"])
+
+
+def conv_pk(conv_id: str) -> str:
     return f"CONV#{conv_id}"
 
 
-def _msg_sk(msg_id: str) -> str:
+def msg_sk(msg_id: str) -> str:
     return f"MSG#{msg_id}"
 
 
-def _get_conversation(conv_id: str) -> dict | None:
-    table = cast(_DynamoConversationTable, get_table())
-    resp = table.get_item(Key={"PK": _conv_pk(conv_id), "SK": "CONV"})
+def read_conversation(conv_id: str) -> dict | None:
+    table = cast(DynamoConversationTable, get_table())
+    resp = table.get_item(Key={"PK": conv_pk(conv_id), "SK": "CONV"})
     return _conversation_response_item(resp)
 
 
-def _get_messages(conv_id: str) -> list[dict]:
+def read_messages(conv_id: str) -> list[dict]:
     return _load_anchored_message_history(
         conversation_id=conv_id,
         owner_id=None,
@@ -126,8 +135,8 @@ def _validate_history_message(
     if (
         not isinstance(message_id, str)
         or not message_id
-        or item.get("PK") != _conv_pk(conversation_id)
-        or item.get("SK") != _msg_sk(message_id)
+        or item.get("PK") != conv_pk(conversation_id)
+        or item.get("SK") != msg_sk(message_id)
         or item.get("conversation_id") != conversation_id
         or (owner_id is not None and item.get("student_id") != owner_id)
         or not isinstance(item.get("student_id"), str)
@@ -165,7 +174,7 @@ def _load_anchored_message_history(
     for _page in range(64):
         request = {
             "KeyConditionExpression": (
-                Key("PK").eq(_conv_pk(conversation_id))
+                Key("PK").eq(conv_pk(conversation_id))
                 & Key("SK").begins_with("MSG#")
             ),
             "ScanIndexForward": True,
@@ -321,14 +330,14 @@ def _stored_student_message(
     """
     stored_student = _conversation_repository_call(
         lambda: table.get_item(
-            Key={"PK": _conv_pk(conv_id), "SK": _msg_sk(student_msg_id)},
+            Key={"PK": conv_pk(conv_id), "SK": msg_sk(student_msg_id)},
             ConsistentRead=True,
         ).get("Item")
     )
     if (
         not isinstance(stored_student, dict)
-        or stored_student.get("PK") != _conv_pk(conv_id)
-        or stored_student.get("SK") != _msg_sk(student_msg_id)
+        or stored_student.get("PK") != conv_pk(conv_id)
+        or stored_student.get("SK") != msg_sk(student_msg_id)
         or stored_student.get("entity_type") != "conversation_message"
         or stored_student.get("schema_version") != "conversation-message.v1"
         or stored_student.get("message_id") != student_msg_id
@@ -382,7 +391,7 @@ def _stored_student_message(
         attachment_ids, stored_attachments
     )
     raw_quote = stored_student.get("quote")
-    quote = _stored_quote(raw_quote)
+    quote = stored_quote(raw_quote)
     if (raw_quote is not None and quote is None) or (
         expected_quote is not None and quote != expected_quote
     ):

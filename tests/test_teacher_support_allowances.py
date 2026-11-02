@@ -596,7 +596,7 @@ def test_conversation_plan_denial_runs_before_case_message_and_usage_effect(
     monkeypatch.setattr(conversations, "get_table", lambda: table)
     monkeypatch.setattr(
         conversations,
-        "_active_conversation_generation",
+        "active_conversation_generation",
         lambda *_args: 1,
     )
     monkeypatch.setattr(

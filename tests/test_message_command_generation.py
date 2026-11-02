@@ -20,6 +20,7 @@ from fakes.ask_question import (
     ANSWER,
     CONV,
     _client,
+    _command_key,
     _command_row,
     _commit,
     _events,
@@ -31,7 +32,6 @@ from fakes.ask_question import (
 from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
-from stoa.db.repositories import attachment_repo
 from stoa.services import ai_service, ask_question, locale_service
 from stoa.services.ask_question import _answering
 
@@ -244,7 +244,7 @@ def test_a_command_written_before_the_split_still_reads_and_resumes(
     """In-flight commands of the previous version carry no generation context."""
     locale_service.set_request_locale("de")
     _commit("key-1")
-    key = tuple(attachment_repo.message_command_key(CONV, "key-1").values())
+    key = tuple(_command_key(CONV, "key-1").values())
     legacy = dict(table.rows[key])
     legacy.pop("generation_context")
     table.seed(legacy)
@@ -262,7 +262,7 @@ def test_a_command_written_before_the_split_still_reads_and_resumes(
 def test_an_old_running_command_reads_as_running(table, model) -> None:
     locale_service.set_request_locale("de")
     _commit("key-1")
-    key = tuple(attachment_repo.message_command_key(CONV, "key-1").values())
+    key = tuple(_command_key(CONV, "key-1").values())
     legacy = dict(table.rows[key])
     legacy.pop("generation_context")
     legacy.update(status="ai_running", attempt=1, leaseOwner="old", expiresAt=1)

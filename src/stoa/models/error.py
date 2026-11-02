@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, RootModel
 
 from stoa.security.attachment_errors import AttachmentErrorCode
 from stoa.security.errors import SecurityErrorCode
+from stoa.services.ask_question import AskQuestionErrorCode
 
 
 class _ErrorModel(BaseModel):
@@ -29,7 +30,7 @@ class SecurityErrorBody(_ErrorModel):
 class AttachmentErrorBody(_ErrorModel):
     """`safe_attachment_error_body`: an upload or message-command failure."""
 
-    code: AttachmentErrorCode
+    code: AttachmentErrorCode | AskQuestionErrorCode
     message: str
     correlation_id: str = Field(alias="correlationId")
 

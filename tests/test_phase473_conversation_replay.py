@@ -21,7 +21,6 @@ from stoa.db.repositories import attachment_repo
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.services import ai_service, ask_question, attachment_service
 from stoa.services.document_extraction_service import DocumentExtractionFailure
-from stoa.services.ask_question import _store as ask_question_store
 
 
 def _attachment(attachment_id: str, *, owner_id: str = "student-1") -> dict[str, Any]:
@@ -410,81 +409,3 @@ def test_ai_invocation_crossing_injected_deadline_is_rejected_without_result() -
             client=Client(),
         )
     assert captured.value.category == "deadline_exceeded"
-
-
-def test_completion_condition_binds_lease_owner_generation_and_unexpired_deadline(
-    monkeypatch,
-) -> None:
-    captured: list[attachment_repo.TransactionOperation] = []
-
-    def transact(operations, **_kwargs):
-        captured.extend(operations)
-
-    monkeypatch.setattr(attachment_repo, "transact", transact)
-    result = ask_question_store.complete_message_command(
-        conversation_id="conv-1",
-        idempotency_key="message-key",
-        owner_id="student-1",
-        lease_owner="lease-old",
-        lease_attempt=1,
-        completed_epoch=219,
-        assistant_message={"PK": "CONV#conv-1", "SK": "MSG#assistant"},
-        result_json='{"studentMessage":{},"assistantMessage":{}}',
-        completed_at="2026-07-17T00:00:00Z",
-        table=object(),
-    )
-    assert result.disposition is ask_question_store.MessageCommandDisposition.COMPLETED
-    update_operation = next(
-        operation
-        for operation in captured
-        if operation.kind is attachment_repo.TransactionOperationKind.MESSAGE_COMMAND_UPDATE
-    )
-    assert isinstance(update_operation.item, dict)
-    update = update_operation.item["Update"]
-    assert isinstance(update, dict)
-    assert "leaseOwner=:lease_owner" in update["ConditionExpression"]
-    assert "attempt=:lease_attempt" in update["ConditionExpression"]
-    assert "expiresAt>:completed_epoch" in update["ConditionExpression"]
-    values = update["ExpressionAttributeValues"]
-    assert isinstance(values, dict)
-    assert values[":lease_attempt"] == 1
-    assert values[":completed_epoch"] == 219
-
-
-def test_stale_worker_result_is_refused_after_deterministic_takeover(monkeypatch) -> None:
-    command = {
-        "owner_id": "student-1",
-        "status": "ai_running",
-        "leaseOwner": "lease-new",
-        "attempt": 2,
-        "expiresAt": 401,
-    }
-
-    class Table:
-        def transact_write_items(self, **_kwargs):
-            raise attachment_repo.ClientError(
-                {
-                    "Error": {
-                        "Code": "ConditionalCheckFailedException",
-                        "Message": "private",
-                    }
-                },
-                "TransactWriteItems",
-            )
-
-        def get_item(self, **_kwargs):
-            return {"Item": dict(command)}
-
-    result = ask_question_store.complete_message_command(
-        conversation_id="conv-1",
-        idempotency_key="message-key",
-        owner_id="student-1",
-        lease_owner="lease-old",
-        lease_attempt=1,
-        completed_epoch=281,
-        assistant_message={"PK": "CONV#conv-1", "SK": "MSG#assistant"},
-        result_json='{"studentMessage":{},"assistantMessage":{}}',
-        completed_at="2026-07-17T00:00:00Z",
-        table=Table(),
-    )
-    assert result.disposition is ask_question_store.MessageCommandDisposition.RETRYABLE

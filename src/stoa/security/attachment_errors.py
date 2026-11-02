@@ -8,7 +8,7 @@ import traceback
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import Any, Protocol
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -28,12 +28,10 @@ class AttachmentErrorCode(StrEnum):
     UPLOAD_SERVICE_UNAVAILABLE = "upload_service_unavailable"
     UPLOAD_CODE_INVALID = "upload_code_invalid"
     UPLOAD_CODE_RATE_LIMITED = "upload_code_rate_limited"
-    MESSAGE_IDEMPOTENCY_CONFLICT = "message_idempotency_conflict"
-    MESSAGE_IN_PROGRESS = "message_in_progress"
-    MESSAGE_DAILY_LIMIT = "message_daily_limit"
-    MESSAGE_FAILED = "message_failed"
-    MESSAGE_COMMAND_EXPIRED = "message_command_expired"
-    MESSAGE_COMMAND_NOT_FOUND = "message_command_not_found"
+
+    @property
+    def contract(self) -> AttachmentErrorContract:
+        return ATTACHMENT_ERROR_REGISTRY[self]
 
 
 class AttachmentClientAction(StrEnum):
@@ -117,39 +115,6 @@ ATTACHMENT_ERROR_REGISTRY: dict[AttachmentErrorCode, AttachmentErrorContract] = 
         "Too many attempts. Try again later.",
         AttachmentClientAction.RETRY_LATER,
     ),
-    AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT: AttachmentErrorContract(
-        409,
-        "This message key was already used for a different request.",
-        AttachmentClientAction.SELECT_FILE,
-    ),
-    AttachmentErrorCode.MESSAGE_IN_PROGRESS: AttachmentErrorContract(
-        409,
-        "This message is still being processed. Try again shortly.",
-        AttachmentClientAction.RETRY_LATER,
-        retryable=True,
-        idempotent_only=True,
-        max_attempts=20,
-    ),
-    AttachmentErrorCode.MESSAGE_DAILY_LIMIT: AttachmentErrorContract(
-        429,
-        "Your daily message limit is reached. Try again tomorrow.",
-        AttachmentClientAction.RETRY_LATER,
-    ),
-    AttachmentErrorCode.MESSAGE_FAILED: AttachmentErrorContract(
-        409,
-        "This message could not be completed. Send it again.",
-        AttachmentClientAction.RETRY_LATER,
-    ),
-    AttachmentErrorCode.MESSAGE_COMMAND_EXPIRED: AttachmentErrorContract(
-        409,
-        "This message request expired. Send it again.",
-        AttachmentClientAction.RETRY_LATER,
-    ),
-    AttachmentErrorCode.MESSAGE_COMMAND_NOT_FOUND: AttachmentErrorContract(
-        409,
-        "This message request is unavailable. Send it again.",
-        AttachmentClientAction.RETRY_LATER,
-    ),
 }
 
 if set(ATTACHMENT_ERROR_REGISTRY) != set(AttachmentErrorCode):
@@ -158,14 +123,29 @@ if set(ATTACHMENT_ERROR_REGISTRY) != set(AttachmentErrorCode):
     raise RuntimeError(f"attachment error registry is not exhaustive: missing={missing}, extra={extra}")
 
 
+class DecisionErrorCode(Protocol):
+    """A code an `AttachmentDecisionError` carries, with the contract it is sent under.
+
+    `AttachmentErrorCode` is one; a question's own failures are
+    `stoa.services.ask_question.AskQuestionErrorCode`, whose contracts that
+    package keeps. Both are rendered here until #211 gives errors one home.
+    """
+
+    @property
+    def value(self) -> str: ...
+
+    @property
+    def contract(self) -> AttachmentErrorContract: ...
+
+
 def safe_attachment_error_body(
-    code: AttachmentErrorCode,
+    code: DecisionErrorCode,
     *,
     correlation_id: str | None = None,
     **_ignored_sensitive_detail: Any,
 ) -> dict[str, str]:
     """Project only stable public fields; correlation IDs originate on the server."""
-    contract = ATTACHMENT_ERROR_REGISTRY[code]
+    contract = code.contract
     server_correlation_id = correlation_id or str(uuid4())
     return {
         "code": code.value,
@@ -194,7 +174,7 @@ def in_flight_cause() -> str | None:
 
 @dataclass(slots=True)
 class AttachmentDecisionError(Exception):
-    code: AttachmentErrorCode
+    code: DecisionErrorCode
     internal_detail: str | None = None
     correlation_id: str | None = None
 
@@ -208,7 +188,7 @@ class AttachmentDecisionError(Exception):
 
     @property
     def status_code(self) -> int:
-        return ATTACHMENT_ERROR_REGISTRY[self.code].http_status
+        return self.code.contract.http_status
 
     def public_body(self) -> dict[str, str]:
         return safe_attachment_error_body(self.code, correlation_id=self.correlation_id)
@@ -231,7 +211,7 @@ def log_attachment_failure(error: AttachmentDecisionError, route: str) -> None:
         f"{frame.filename.rsplit('/', 1)[-1]}:{frame.lineno}:{frame.name}"
         for frame in reversed(frames[-4:])
     )
-    contract = ATTACHMENT_ERROR_REGISTRY[error.code]
+    contract = error.code.contract
     log = logger.error if contract.http_status >= 500 else logger.info
     log(
         "attachment_failure code=%s status=%s route=%s correlation_id=%s detail=%s raised_at=%s",
@@ -252,13 +232,13 @@ class AttachmentHttpResponse:
 
 
 def attachment_http_response(
-    code: AttachmentErrorCode,
+    code: DecisionErrorCode,
     *,
     correlation_id: str | None = None,
     retry_after_seconds: int | None = None,
     **sensitive_detail: Any,
 ) -> AttachmentHttpResponse:
-    contract = ATTACHMENT_ERROR_REGISTRY[code]
+    contract = code.contract
     headers: dict[str, str] = {}
     if retry_after_seconds is not None:
         if not contract.retryable or not 1 <= retry_after_seconds <= 120:

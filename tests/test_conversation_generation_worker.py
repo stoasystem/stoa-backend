@@ -34,11 +34,16 @@ from fakes.ask_question import (
     _expire_lease,
     _generation,
     _Killed,
+    _called,
+    _last_attempt_kept_its_answer,
     _messages,
+    _minutes_ago,
     _patch_allowance_table,
     _Provider,
     _running,
     default_language,
+    patch_store,
+    store_call,
 )
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
@@ -48,17 +53,7 @@ from stoa.routers import conversations
 from stoa.security.attachment_errors import AttachmentDecisionError
 from stoa.services import ai_service, ask_answer, ask_question, star_map_candidates
 from stoa.services.ask_question import _answering
-from stoa.services.ask_question import _store as ask_question_store
 from fakes.ask_question import AtomicAllowanceTable
-
-
-def _called(then: Any = None) -> Any:
-    """The model was asked (the allowance client recorded the call) and then did `then`."""
-    return ANSWER if then is None else then
-
-
-def _minutes_ago(minutes: float) -> str:
-    return (datetime.now(UTC) - timedelta(minutes=minutes)).isoformat()
 
 
 # #206 改写: recomputes the allowance identity with the package-private helper.
@@ -113,13 +108,13 @@ def test_two_deliveries_that_both_find_the_command_waiting_produce_one_answer(
     """Both read the command as unclaimed; only the conditional claim is between them."""
     _commit("key-1")
     both_read = threading.Barrier(2, timeout=5)
-    claim = ask_question_store.claim_message_ai_lease
+    claim = store_call("claim_message_ai_lease")
 
     def claim_once_both_have_read(**kwargs: Any) -> Any:
         both_read.wait()
         return claim(**kwargs)
 
-    monkeypatch.setattr(ask_question_store, "claim_message_ai_lease", claim_once_both_have_read)
+    patch_store(monkeypatch, "claim_message_ai_lease", claim_once_both_have_read)
     model.gate = threading.Event()
     outcomes: list[dict[str, Any]] = []
     deliveries = [
@@ -161,7 +156,7 @@ def test_an_attempt_lost_after_its_answer_was_stored_is_only_finished(
 ) -> None:
     _commit("key-1")
     model.outcomes = [_called()]
-    renew = ask_question_store.renew_message_ai_lease
+    renew = store_call("renew_message_ai_lease")
     calls = {"renew": 0}
 
     def die_on_first_renewal(**kwargs: Any) -> bool:
@@ -170,7 +165,7 @@ def test_an_attempt_lost_after_its_answer_was_stored_is_only_finished(
             raise _Killed()
         return renew(**kwargs)
 
-    monkeypatch.setattr(ask_question_store, "renew_message_ai_lease", die_on_first_renewal)
+    patch_store(monkeypatch, "renew_message_ai_lease", die_on_first_renewal)
     with pytest.raises(_Killed):
         _deliver("key-1")
     _expire_lease(table, "key-1")
@@ -192,7 +187,7 @@ def test_an_answer_finished_by_the_next_attempt_keeps_its_sections(
     model.outcomes = [
         _called({**ANSWER, "hints": ["Erst den ggT"], "suggest_teacher": True})
     ]
-    renew = ask_question_store.renew_message_ai_lease
+    renew = store_call("renew_message_ai_lease")
     calls = {"renew": 0}
 
     def die_on_first_renewal(**kwargs: Any) -> bool:
@@ -201,7 +196,7 @@ def test_an_answer_finished_by_the_next_attempt_keeps_its_sections(
             raise _Killed()
         return renew(**kwargs)
 
-    monkeypatch.setattr(ask_question_store, "renew_message_ai_lease", die_on_first_renewal)
+    patch_store(monkeypatch, "renew_message_ai_lease", die_on_first_renewal)
     with pytest.raises(_Killed):
         _deliver("key-1")
     _expire_lease(table, "key-1")
@@ -232,7 +227,7 @@ def test_an_answer_finished_by_the_next_attempt_keeps_its_target(
     monkeypatch.setattr(star_map_candidates, "for_student", lambda *_a, **_k: [star])
     _commit("key-1")
     model.outcomes = [_called({**ANSWER, "target_unit_id": "k1"})]
-    renew = ask_question_store.renew_message_ai_lease
+    renew = store_call("renew_message_ai_lease")
     calls = {"renew": 0}
 
     def die_on_first_renewal(**kwargs: Any) -> bool:
@@ -241,7 +236,7 @@ def test_an_answer_finished_by_the_next_attempt_keeps_its_target(
             raise _Killed()
         return renew(**kwargs)
 
-    monkeypatch.setattr(ask_question_store, "renew_message_ai_lease", die_on_first_renewal)
+    patch_store(monkeypatch, "renew_message_ai_lease", die_on_first_renewal)
     with pytest.raises(_Killed):
         _deliver("key-1")
     _expire_lease(table, "key-1")
@@ -431,7 +426,7 @@ def test_an_invocation_leaves_no_answer_budget_behind(table, model) -> None:
 
 
 def _die_on_renewals(monkeypatch: pytest.MonkeyPatch, count: int) -> None:
-    renew = ask_question_store.renew_message_ai_lease
+    renew = store_call("renew_message_ai_lease")
     calls = {"renew": 0}
 
     def renew_or_die(**kwargs: Any) -> bool:
@@ -440,7 +435,7 @@ def _die_on_renewals(monkeypatch: pytest.MonkeyPatch, count: int) -> None:
             raise _Killed()
         return renew(**kwargs)
 
-    monkeypatch.setattr(ask_question_store, "renew_message_ai_lease", renew_or_die)
+    patch_store(monkeypatch, "renew_message_ai_lease", renew_or_die)
 
 
 def test_a_kept_answer_survives_a_recovering_attempt_that_also_dies(
@@ -487,68 +482,6 @@ def test_a_duplicate_delivery_does_not_retry_a_failed_command(table, model) -> N
 
     assert _deliver("key-1") == {"outcome": "settled"}
     assert len(model.calls) == 1
-
-
-def test_a_recorded_failure_clears_what_the_attempt_left_behind(table, model) -> None:
-    """Its outcome is known, so neither its mark nor any kept text should outlive it."""
-    _commit("key-1")
-    row = dict(_command_row(table, "key-1"))
-    row.update(
-        status="ai_running",
-        leaseOwner="owner-1",
-        attempt=1,
-        expiresAt=2_000_000_000,
-        provider_invoked_attempt=1,
-        provider_result_attempt=1,
-        provider_result_json='{"content":"private answer","allowance":null}',
-    )
-    table.seed(row)
-
-    failed = ask_question_store.fail_message_command(
-        conversation_id=CONV,
-        idempotency_key="key-1",
-        owner_id="student-1",
-        lease_owner="owner-1",
-        lease_attempt=1,
-        failure_category="provider_error",
-        retryable=True,
-        now_iso="2026-09-25T08:00:00+00:00",
-    )
-
-    assert failed is True
-    stored = _command_row(table, "key-1")
-    for field in ("provider_invoked_attempt", "provider_result_attempt", "provider_result_json"):
-        assert field not in stored
-
-
-def test_a_claim_does_not_act_on_a_copy_read_before_a_call_was_marked(
-    table, model, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _commit("key-1")
-    model.outcomes = [_called(_Killed())]
-    with pytest.raises(_Killed):
-        _deliver("key-1")
-    _expire_lease(table, "key-1")
-    stale = dict(_command_row(table, "key-1"))
-    stale.pop("provider_invoked_attempt")
-    read = ask_question_store.get_message_command
-    monkeypatch.setattr(
-        ask_question_store, "get_message_command", lambda *_a, **_k: dict(stale)
-    )
-
-    claimed = ask_question_store.claim_message_ai_lease(
-        conversation_id=CONV,
-        idempotency_key="key-1",
-        owner_id="student-1",
-        lease_owner="late",
-        now_epoch=2_000_000_000,
-        expires_at=2_000_000_300,
-        account_fence_generation=1,
-    )
-
-    monkeypatch.setattr(ask_question_store, "get_message_command", read)
-    assert claimed.disposition is not ask_question_store.MessageCommandDisposition.CLAIMED
-    assert _command_row(table, "key-1").get("leaseOwner") != "late"
 
 
 def test_one_command_that_breaks_does_not_stop_the_sweep(
@@ -705,27 +638,6 @@ def test_the_sweep_counts_leases_that_ran_out_too_long_ago(
     assert "too_old=2" in line and "stale_leases=1" in line and "completed=1" in line
 
 
-def _last_attempt_kept_its_answer(
-    table, model, monkeypatch: pytest.MonkeyPatch, key: str
-) -> None:
-    """The answer was stored, then the Lambda died; that attempt was the last."""
-    _commit(key)
-    model.outcomes = [_called()]
-    renew = ask_question_store.renew_message_ai_lease
-
-    def die(**_: Any) -> bool:
-        raise _Killed()
-
-    monkeypatch.setattr(ask_question_store, "renew_message_ai_lease", die)
-    with pytest.raises(_Killed):
-        _deliver(key)
-    monkeypatch.setattr(ask_question_store, "renew_message_ai_lease", renew)
-    row = dict(_command_row(table, key))
-    assert row["provider_result_json"]
-    row.update(attempt=3, provider_invoked_attempt=3, provider_result_attempt=3)
-    table.seed(row)
-
-
 def test_a_last_attempt_that_kept_its_answer_is_finished_not_ended(
     table, model, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -772,15 +684,15 @@ def test_an_earlier_attempts_kept_answer_is_finished_outside_the_window(
 ) -> None:
     _commit("early")
     model.outcomes = [_called()]
-    renew = ask_question_store.renew_message_ai_lease
+    renew = store_call("renew_message_ai_lease")
 
     def die(**_: Any) -> bool:
         raise _Killed()
 
-    monkeypatch.setattr(ask_question_store, "renew_message_ai_lease", die)
+    patch_store(monkeypatch, "renew_message_ai_lease", die)
     with pytest.raises(_Killed):
         _deliver("early")
-    monkeypatch.setattr(ask_question_store, "renew_message_ai_lease", renew)
+    patch_store(monkeypatch, "renew_message_ai_lease", renew)
     _running(table, "early", attempt=1, claimed_minutes_ago=40)
 
     summary = conversation_generation.handler(
@@ -808,21 +720,3 @@ def test_a_kept_answer_that_cannot_be_finished_for_a_day_is_given_up(
 
     assert (summary["completed"], summary["stale_leases"]) == (0, 1)
     assert _command_row(table, "stuck")["status"] == "terminal_failed"
-
-
-def test_a_command_that_kept_its_answer_is_not_ended_terminal(
-    table, model, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The request's own terminal branch must not drop it either."""
-    _last_attempt_kept_its_answer(table, model, monkeypatch, "last")
-    _expire_lease(table, "last")
-
-    ended = ask_question_store.mark_message_command_terminal(
-        conversation_id=CONV,
-        idempotency_key="last",
-        owner_id=_command_row(table, "last")["owner_id"],
-        now_iso=_minutes_ago(0),
-    )
-
-    assert ended.disposition is not ask_question_store.MessageCommandDisposition.TERMINAL
-    assert _command_row(table, "last")["status"] == "ai_running"

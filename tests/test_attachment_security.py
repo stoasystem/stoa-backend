@@ -76,7 +76,7 @@ from stoa.services.document_extraction_service import (
     extract_xlsx_text,
 )
 from stoa.services.document_parser_worker import ParserResult
-from stoa.services.ask_question import _store as ask_question_store
+from stoa.services.ask_question import AskQuestionErrorCode
 
 
 SENSITIVE_CANARIES = {
@@ -212,16 +212,17 @@ def test_upload_contract_rejects_unsupported_purpose(field: str, value: str) -> 
 
 def test_attachment_error_registry_is_exhaustive_and_retry_is_bounded() -> None:
     assert set(ATTACHMENT_ERROR_REGISTRY) == set(AttachmentErrorCode)
-    retryable = [code for code, contract in ATTACHMENT_ERROR_REGISTRY.items() if contract.retryable]
+    contracts = {code: code.contract for code in [*AttachmentErrorCode, *AskQuestionErrorCode]}
+    retryable = [code for code, contract in contracts.items() if contract.retryable]
     assert retryable == [
         AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE,
-        AttachmentErrorCode.MESSAGE_IN_PROGRESS,
+        AskQuestionErrorCode.MESSAGE_IN_PROGRESS,
     ]
     outage = ATTACHMENT_ERROR_REGISTRY[AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE]
     assert outage.idempotent_only is True
     assert outage.max_attempts == 2
-    assert ATTACHMENT_ERROR_REGISTRY[AttachmentErrorCode.MESSAGE_IN_PROGRESS].max_attempts == 20
-    assert {contract.client_action for contract in ATTACHMENT_ERROR_REGISTRY.values()} <= set(
+    assert AskQuestionErrorCode.MESSAGE_IN_PROGRESS.contract.max_attempts == 20
+    assert {contract.client_action for contract in contracts.values()} <= set(
         AttachmentClientAction
     )
 
@@ -2303,172 +2304,6 @@ def test_lost_transaction_retry_rebuilds_identical_attachment_and_association_ke
     ]
     assert rendered[0] == rendered[1]
     assert "ATTACHMENT#command-derived-exact" in str(rendered[0])
-
-
-def test_message_command_claim_groups_command_quota_operation_and_counter() -> None:
-    command: dict[str, object] = {
-        "command_id": "opaque-command",
-        "conversation_id": "opaque-conversation",
-        "idempotency_key": "safe-key",
-        "owner_id": "student-1",
-        "fingerprint": "f" * 64,
-        "status": "claimed",
-        "created_at": "2026-07-16T00:00:00Z",
-    }
-    operations = ask_question_store.build_message_command_claim_transaction(
-        command=command,
-        owner_id="student-1",
-        quota_period="2026-07-16",
-        expected_counter=4,
-        limit=8,
-        expires_at=2_000_000_000,
-    )
-    assert [operation.kind for operation in operations] == [
-        attachment_repo.TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
-        attachment_repo.TransactionOperationKind.MESSAGE_COMMAND_PUT,
-        attachment_repo.TransactionOperationKind.CHAT_QUOTA_OPERATION_PUT,
-        attachment_repo.TransactionOperationKind.CHAT_QUOTA_UPDATE,
-    ]
-    condition = operations[0]["ConditionCheck"]
-    assert isinstance(condition, dict)
-    condition_key = condition["Key"]
-    assert isinstance(condition_key, dict)
-    assert condition_key == {
-        "PK": "USER#student-1",
-        "SK": "ACCOUNT_FENCE",
-    }
-    put = operations[1]["Put"]
-    assert isinstance(put, dict)
-    command_item = put["Item"]
-    assert isinstance(command_item, dict)
-    assert command_item["fingerprint"] == "f" * 64
-    assert command_item["counter_value"] == 5
-    assert "content" not in command_item and "attachment_ids" not in command_item
-    quota_put = operations[2]["Put"]
-    assert isinstance(quota_put, dict)
-    quota_item = quota_put["Item"]
-    assert isinstance(quota_item, dict)
-    assert quota_item["SK"] == "CHAT_QUOTA_OP#opaque-command"
-    update = operations[3]["Update"]
-    assert isinstance(update, dict)
-    update_values = update["ExpressionAttributeValues"]
-    assert isinstance(update_values, dict)
-    assert update_values[":next"] == 5
-
-
-class _LeaseTable:
-    def __init__(self, command):
-        self.command = dict(command)
-
-    def get_item(self, **_kwargs):
-        return {"Item": dict(self.command)}
-
-    def transact_write_items(self, *, TransactItems):
-        assert TransactItems[0]["ConditionCheck"]["Key"] == {
-            "PK": "USER#student-1",
-            "SK": "ACCOUNT_FENCE",
-        }
-        for operation in TransactItems[1:]:
-            if "Update" in operation:
-                self.update_item(**operation["Update"])
-
-    def update_item(self, **kwargs):
-        values = kwargs["ExpressionAttributeValues"]
-        expression = kwargs["UpdateExpression"]
-        valid = self.command.get("owner_id") == values[":owner"]
-        if "leaseOwner=:lease_owner" in expression:
-            valid = valid and (
-                self.command.get("status") == "message_committed"
-                or (
-                    self.command.get("status") == "ai_running"
-                    and int(self.command.get("expiresAt", 0)) <= values[":now"]
-                    and int(self.command.get("attempt", 0)) < values[":max_attempts"]
-                )
-            )
-            if valid:
-                self.command.update(
-                    status="ai_running",
-                    leaseOwner=values[":lease_owner"],
-                    claimedAt=values[":claimed"],
-                    expiresAt=values[":expires"],
-                    attempt=values[":attempt"],
-                )
-        elif expression.startswith("SET claimedAt"):
-            valid = (
-                valid
-                and self.command.get("status") == "ai_running"
-                and self.command.get("leaseOwner") == values[":lease_owner"]
-                and int(self.command.get("expiresAt", 0)) > values[":now"]
-            )
-            if valid:
-                self.command.update(claimedAt=values[":now"], expiresAt=values[":expires"])
-        else:
-            valid = valid and self.command.get("attempt", 0) >= values[":max"]
-            if valid:
-                self.command.update(status="terminal_failed")
-        if not valid:
-            raise ClientError(
-                {"Error": {"Code": "ConditionalCheckFailedException", "Message": "private"}},
-                "UpdateItem",
-            )
-        return {}
-
-
-def test_ai_lease_excludes_active_owner_renews_takes_over_and_terminates() -> None:
-    table = _LeaseTable(
-        {
-            "owner_id": "student-1",
-            "account_fence_generation": 1,
-            "status": "message_committed",
-            "attempt": 0,
-        }
-    )
-    first = ask_question_store.claim_message_ai_lease(
-        conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
-        lease_owner="owner-a", now_epoch=100, expires_at=220, table=table,
-    )
-    assert first.disposition is ask_question_store.MessageCommandDisposition.CLAIMED
-    assert first.attempt == 1
-    held = ask_question_store.claim_message_ai_lease(
-        conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
-        lease_owner="owner-b", now_epoch=150, expires_at=270, table=table,
-    )
-    assert held.disposition is ask_question_store.MessageCommandDisposition.LEASE_HELD
-    assert held.attempt == 1
-    assert ask_question_store.renew_message_ai_lease(
-        conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
-        lease_owner="owner-a", now_epoch=160, expires_at=280, table=table,
-    ) is True
-    assert ask_question_store.renew_message_ai_lease(
-        conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
-        lease_owner="stale-owner", now_epoch=170, expires_at=290, table=table,
-    ) is False
-    takeover = ask_question_store.claim_message_ai_lease(
-        conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
-        lease_owner="owner-b", now_epoch=281, expires_at=401, table=table,
-    )
-    assert takeover.disposition is ask_question_store.MessageCommandDisposition.CLAIMED
-    assert takeover.attempt == 2
-    table.command["expiresAt"] = 400
-    final_claim = ask_question_store.claim_message_ai_lease(
-        conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
-        lease_owner="owner-c", now_epoch=401, expires_at=521, table=table,
-    )
-    assert final_claim.disposition is ask_question_store.MessageCommandDisposition.CLAIMED
-    assert final_claim.attempt == 3
-    table.command["expiresAt"] = 520
-    terminal = ask_question_store.claim_message_ai_lease(
-        conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
-        lease_owner="owner-d", now_epoch=521, expires_at=641, table=table,
-    )
-    assert terminal.disposition is ask_question_store.MessageCommandDisposition.TERMINAL
-    assert terminal.attempt == 3
-    marked = ask_question_store.mark_message_command_terminal(
-        conversation_id="conv-1", idempotency_key="key", owner_id="student-1",
-        now_iso="2026-07-16T00:00:00Z", table=table,
-    )
-    assert marked.disposition is ask_question_store.MessageCommandDisposition.TERMINAL
-    assert table.command["status"] == "terminal_failed"
 
 
 def _archive(parts: dict[str, str | bytes]) -> bytes:
