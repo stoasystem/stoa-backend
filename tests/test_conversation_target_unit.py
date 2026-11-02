@@ -25,7 +25,7 @@ from typing import Any
 import pytest
 
 from stoa.jobs import conversation_generation
-from stoa.routers import conversations
+from stoa.services.ask_question import _answering
 from stoa.services import curriculum_service, knowledge_mastery_service, star_map_candidates
 from test_async_generation_cutover import invokes as invokes  # noqa: F401 - the fixture
 from test_async_generation_cutover import switched_on as switched_on  # noqa: F401
@@ -337,7 +337,7 @@ def test_the_target_comes_through_the_real_model_path(
     """The model is told the rule, and a Chinese wish reaches it beside the map."""
     provider = _CapturingBedrockClient(_answer(_ref("funktionen-ableitung")))
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    monkeypatch.setattr(conversations.ai_service.boto3, "client", lambda *_a, **_k: provider)
+    monkeypatch.setattr(_answering.ai_service.boto3, "client", lambda *_a, **_k: provider)
     client = _client()
 
     response = _send(client, "key-1", language="de", content=WANT_TO_PRACTISE)

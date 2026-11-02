@@ -28,6 +28,7 @@ from fakes.dynamodb import FakeTable
 from stoa.db.repositories import attachment_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import conversations
+from stoa.services.ask_question import _answering, _transcript
 from stoa.services import ai_service, locale_service
 from test_conversations import _actor
 
@@ -72,14 +73,14 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
             "updated_at": "2026-09-24T08:00:00+00:00",
         }
     )
-    for module in (conversations, attachment_repo):
+    for module in (conversations, _answering, _transcript, attachment_repo):
         monkeypatch.setattr(module, "get_table", lambda table=table: table)
     monkeypatch.setattr(
         conversations.account_deletion_repo, "get_table", lambda: table, raising=False
     )
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 50)
+    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 50)
     monkeypatch.setattr(
-        conversations.entitlement_service,
+        _answering.entitlement_service,
         "resolve_student_entitlement",
         lambda *_a, **_k: {"effectivePlan": "free_trial", "allowanceVersion": 1},
     )
@@ -95,7 +96,7 @@ def model(monkeypatch: pytest.MonkeyPatch) -> FakeBedrock:
 
     model = FakeBedrock(answer=ANSWER)
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    monkeypatch.setattr(conversations.ai_service.boto3, "client", lambda *_a, **_k: model)
+    monkeypatch.setattr(_answering.ai_service.boto3, "client", lambda *_a, **_k: model)
     return model
 
 
@@ -226,7 +227,7 @@ def _commit(key: str) -> Any:
     body = conversations.SendMessageRequest.model_validate(
         {"content": QUESTION, "idempotencyKey": key}
     )
-    return conversations.commit_message_command(
+    return _answering.commit_message_command(
         conv_id=CONV,
         student_id=STUDENT,
         subject="Mathematik",
@@ -249,7 +250,7 @@ def test_generating_takes_the_language_from_the_command_not_the_request(
 
     # Whatever request is around when the answer is generated no longer counts.
     locale_service.set_request_locale("en")
-    result = conversations.generate_for_command(committed)
+    result = _answering.generate_for_command(committed)
 
     assert isinstance(result, conversations.SendMessageResponse)
     assert default_language(model) == "fr"
@@ -310,9 +311,9 @@ def test_an_answer_refused_over_its_usage_evidence_is_not_generated_again(
     """The model answered; only the accounting of it failed. Not a retry."""
 
     def refuse(*_a, **_k):
-        raise conversations._allowance_recoverable_failure()
+        raise _answering._allowance_recoverable_failure()
 
-    monkeypatch.setattr(conversations, "_message_allowance_metadata_from_provider", refuse)
+    monkeypatch.setattr(_answering, "_message_allowance_metadata_from_provider", refuse)
     client = _client()
 
     assert _send(client, "key-1").status_code == 503
@@ -328,10 +329,10 @@ def test_a_failure_the_provider_charged_for_is_not_generated_again(
 ) -> None:
     """A paid answer that could not be used is a known result, not a retry."""
     monkeypatch.setattr(
-        conversations, "_message_allowance_metadata_from_failure", lambda *_a, **_k: {}
+        _answering, "_message_allowance_metadata_from_failure", lambda *_a, **_k: {}
     )
-    monkeypatch.setattr(conversations, "_observe_message_provider_usage", lambda **_k: True)
-    monkeypatch.setattr(conversations, "_restore_message_allowance", lambda **_k: True)
+    monkeypatch.setattr(_answering, "_observe_message_provider_usage", lambda **_k: True)
+    monkeypatch.setattr(_answering, "_restore_message_allowance", lambda **_k: True)
     client = _client()
     model.outcomes = [ai_service.AIInvocationFailure("incomplete_output")]
     assert _send(client, "key-1").status_code == 503

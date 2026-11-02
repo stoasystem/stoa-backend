@@ -34,6 +34,8 @@ from stoa.config import Settings
 from stoa.db.repositories import account_deletion_repo, curriculum_ops_repo, usage_ledger_repo
 from stoa.models.billing import BillingPlanId
 from stoa.routers import conversations
+from stoa.services.ask_question import _answering
+from stoa.services.ask_question import _transcript
 from stoa.services import (
     curriculum_ops_service,
     help_requests,
@@ -241,6 +243,8 @@ def test_a_repeat_conversation_help_request_after_a_failed_ledger_write_records_
         }
     )
     monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
     service = conversations.teacher_support_allowance_service
     monkeypatch.setattr(
@@ -329,6 +333,8 @@ def _conversation_replay_scaffold(
     }
     table.seed(row)
     monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
     monkeypatch.setattr(conversations, "_get_conversation", lambda _conv_id: dict(row))
     service = conversations.teacher_support_allowance_service

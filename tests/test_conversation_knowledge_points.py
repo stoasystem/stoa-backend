@@ -26,6 +26,7 @@ import time_machine
 from fakes.dynamodb import transaction_canceled
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
+from stoa.services.ask_question import _answering
 from stoa.services import (
     curriculum_service,
     knowledge_mastery_service,
@@ -243,7 +244,7 @@ class _Bedrock:
 def bedrock(table, monkeypatch: pytest.MonkeyPatch) -> _Bedrock:
     provider = _Bedrock()
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    monkeypatch.setattr(conversations.ai_service.boto3, "client", lambda *_a, **_k: provider)
+    monkeypatch.setattr(_answering.ai_service.boto3, "client", lambda *_a, **_k: provider)
     return provider
 
 

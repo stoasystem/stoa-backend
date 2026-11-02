@@ -277,7 +277,7 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
         call="attachment_repo.read_message_command_result",
         fields=(("status", "closed_disposition", "_coerce_command_result", "typed_command_state"),),
         fake="src/stoa/routers/conversations.py:attachment_repo.read_message_command_result",
-        selector="tests/test_phase473_conversation_replay.py::test_regular_and_sse_share_one_closed_executor_boundary",
+        selector="tests/test_phase473_message_command.py::test_regular_and_sse_replay_exact_durable_rejection",
         decisions=("D-07", "D-08", "D-10", "D-13", "D-17"),
         transport="sse",
     )

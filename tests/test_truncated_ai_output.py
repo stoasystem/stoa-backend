@@ -16,6 +16,8 @@ from typing import Any
 import pytest
 
 from stoa.routers import conversations
+from stoa.services.ask_question import _answering
+from stoa.services.ask_question import _transcript
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.services import ai_service
 from stoa.services.ask_question import _store as ask_question_store
@@ -118,7 +120,7 @@ def _invoke(
     _patch_allowance_table(monkeypatch, table)
     monkeypatch.setattr(ai_service.boto3, "client", lambda *_a, **_k: provider)
     command = _command()
-    client = conversations._ConversationAllowanceBedrockClient(command)
+    client = _answering._ConversationAllowanceBedrockClient(command)
     kwargs: dict[str, Any] = {
         "system_prompt": "Answer the question.",
         "messages": [{"role": "user", "content": "Wie kürze ich Brüche?"}],
@@ -243,14 +245,14 @@ def test_the_evidence_on_a_failure_lets_the_reservation_be_released(
     table, command, outcome = _invoke(
         monkeypatch, text=_TRUNCATED, stop_reason="max_tokens", streamed=False
     )
-    metadata = conversations._message_allowance_metadata_from_failure(
+    metadata = _answering._message_allowance_metadata_from_failure(
         outcome, allowance_effect_id=str(command["allowance_effect_id"])
     )
     assert metadata is not None
-    assert conversations._observe_message_provider_usage(
+    assert _answering._observe_message_provider_usage(
         beneficiary_id="student-1", metadata=metadata
     )
-    assert conversations._restore_message_allowance(
+    assert _answering._restore_message_allowance(
         beneficiary_id="student-1", metadata=metadata
     )
 
@@ -266,7 +268,7 @@ def test_the_evidence_on_a_failure_lets_the_reservation_be_released(
 def test_a_failure_without_evidence_gives_no_metadata() -> None:
     failure = ai_service.AIInvocationFailure("deadline_exceeded")
     assert (
-        conversations._message_allowance_metadata_from_failure(
+        _answering._message_allowance_metadata_from_failure(
             failure, allowance_effect_id="a" * 64
         )
         is None
@@ -295,11 +297,14 @@ def _run_message_command(
         return True
 
     monkeypatch.setattr(conversations, "get_table", lambda: object())
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(_answering, "get_table", lambda: object())
+    monkeypatch.setattr(_transcript, "get_table", lambda: object())
+    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 8)
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
     monkeypatch.setattr(conversations, "_student_locale", lambda *_: "de")
     monkeypatch.setattr(
-        conversations, "_publish_generation_step", lambda *_a, **_k: lambda _i, _s: None
+        _answering, "_publish_generation_step", lambda *_a, **_k: lambda _i, _s: None
     )
     monkeypatch.setattr(
         conversations.attachment_service,
@@ -323,7 +328,7 @@ def _run_message_command(
     )
     monkeypatch.setattr(ask_question_store, "complete_message_command", complete)
     try:
-        outcome: Any = conversations._execute_message_command(
+        outcome: Any = _answering._execute_message_command(
             conv_id="conv-1",
             student_id="student-1",
             subject="math",

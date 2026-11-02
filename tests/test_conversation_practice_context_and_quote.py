@@ -23,6 +23,8 @@ from fakes.dynamodb import as_stored
 from stoa.db.repositories import practice_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import conversations
+from stoa.services.ask_question import _answering
+from stoa.services.ask_question import _transcript
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import (
     adaptive_learning_service,
@@ -715,11 +717,14 @@ def _run_message_command(monkeypatch, *, body_payload: dict[str, Any]) -> dict[s
     stored_messages: dict[str, Any] = {}
 
     monkeypatch.setattr(conversations, "get_table", lambda: object())
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
-    monkeypatch.setattr(conversations, "_attachment_plan_for_student", lambda *_: "free_trial")
+    monkeypatch.setattr(_answering, "get_table", lambda: object())
+    monkeypatch.setattr(_transcript, "get_table", lambda: object())
+    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(_answering, "_attachment_plan_for_student", lambda *_: "free_trial")
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
     monkeypatch.setattr(conversations, "_student_locale", lambda *_: "de")
-    monkeypatch.setattr(conversations.boto3, "client", lambda *_a, **_k: object())
+    monkeypatch.setattr(_answering.boto3, "client", lambda *_a, **_k: object())
     monkeypatch.setattr(
         conversations.attachment_service, "prepare_message_attachments", lambda *_a, **_k: []
     )
@@ -775,7 +780,7 @@ def _run_message_command(monkeypatch, *, body_payload: dict[str, Any]) -> dict[s
     resolved = None
     if body.practiceContext is not None:
         resolved = conversations._resolved_practice_context(STUDENT, body.practiceContext)
-    conversations._execute_message_command(
+    _answering._execute_message_command(
         conv_id="conv-1",
         student_id=STUDENT,
         subject="math",
@@ -880,6 +885,29 @@ def test_a_quoted_message_is_read_back_with_its_quote(monkeypatch):
     )
     monkeypatch.setattr(
         conversations,
+        "_get_messages",
+        lambda conv_id: [
+            {
+                "message_id": "m1",
+                "conversation_id": conv_id,
+                "student_id": STUDENT,
+                "role": "student",
+                "content": "warum?",
+                "created_at": "2026-10-09T00:00:00+00:00",
+                "quote": quote,
+            },
+            {
+                "message_id": "m2",
+                "conversation_id": conv_id,
+                "student_id": STUDENT,
+                "role": "assistant",
+                "content": "weil ...",
+                "created_at": "2026-10-09T00:00:01+00:00",
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        _answering,
         "_get_messages",
         lambda conv_id: [
             {

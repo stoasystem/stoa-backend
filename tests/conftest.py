@@ -32,7 +32,7 @@ os.environ.setdefault("AWS_DEFAULT_REGION", "eu-central-2")
 def stub_memory_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep AI memory personalisation out of message-command tests.
 
-    `conversations._execute_message_command` enriches the AI prompt with the
+    `ask_question._answering.commit_message_command` enriches the AI prompt with the
     student's weak topics, which costs three table reads, and with the stars on
     the student's map (#142), which costs more. Unstubbed, that turns every
     message-command test into a network round trip and can push a concurrent

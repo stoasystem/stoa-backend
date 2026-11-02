@@ -12,7 +12,8 @@ from fakes.dynamodb import as_stored as _as_stored
 
 from stoa.config import Settings
 from stoa.db.repositories import attachment_repo
-from stoa.routers import conversations
+from stoa.services.ask_question import _answering
+from stoa.services.ask_question import _transcript
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.services import ai_service, attachment_service
 from stoa.services.document_extraction_service import DocumentExtractionFailure
@@ -150,7 +151,7 @@ def test_replay_attachment_row_requires_exact_owner_active_schema_and_immutable_
 ) -> None:
     row = {**_attachment("attachment-1"), field: bad_value}
     with pytest.raises(AttachmentDecisionError) as captured:
-        conversations._validate_replay_attachment(
+        _transcript._validate_replay_attachment(
             row, attachment_id="attachment-1", owner_id="student-1"
         )
     assert captured.value.code is AttachmentErrorCode.UPLOAD_NOT_FOUND
@@ -165,7 +166,7 @@ def test_replay_attachment_row_is_accepted_in_the_shape_the_table_returns() -> N
     """
     row = _attachment("attachment-1")
     assert isinstance(row["content_length"], Decimal)
-    assert conversations._validate_replay_attachment(
+    assert _transcript._validate_replay_attachment(
         row, attachment_id="attachment-1", owner_id="student-1"
     ) is row
 
@@ -200,7 +201,7 @@ def test_history_snapshot_is_consistent_paginated_ordered_and_ignores_later_rows
         _message("student-old", "2026-07-17T00:00:00Z", "original question"),
         _message("assistant-old", "2026-07-17T00:00:01Z", "original reply"),
     ]
-    captured = conversations._history_snapshot_fingerprint(original)
+    captured = _answering._history_snapshot_fingerprint(original)
     later = _message("student-later", "2026-07-17T00:00:09Z", "later private canary")
     table = _HistoryTable(
         [
@@ -209,7 +210,7 @@ def test_history_snapshot_is_consistent_paginated_ordered_and_ignores_later_rows
         ]
     )
 
-    snapshot = conversations._load_anchored_message_history(
+    snapshot = _answering._load_anchored_message_history(
         conversation_id="conv-1",
         owner_id="student-1",
         expected_message_ids=["student-old", "assistant-old"],
@@ -234,7 +235,7 @@ def test_history_snapshot_rejects_missing_duplicate_changed_and_malformed_rows(
         _message("student-old", "2026-07-17T00:00:00Z", "original question"),
         _message("assistant-old", "2026-07-17T00:00:01Z", "original reply"),
     ]
-    fingerprint = conversations._history_snapshot_fingerprint(original)
+    fingerprint = _answering._history_snapshot_fingerprint(original)
     rows: Any = list(original)
     if mode == "missing":
         rows = rows[:1]
@@ -247,7 +248,7 @@ def test_history_snapshot_rejects_missing_duplicate_changed_and_malformed_rows(
     table = _HistoryTable([{"Items": rows}])
 
     with pytest.raises(AttachmentDecisionError) as captured:
-        conversations._load_anchored_message_history(
+        _answering._load_anchored_message_history(
             conversation_id="conv-1",
             owner_id="student-1",
             expected_message_ids=["student-old", "assistant-old"],
@@ -466,17 +467,3 @@ def test_stale_worker_result_is_refused_after_deterministic_takeover(monkeypatch
         table=Table(),
     )
     assert result.disposition is ask_question_store.MessageCommandDisposition.RETRYABLE
-
-
-def test_regular_and_sse_share_one_closed_executor_boundary() -> None:
-    source = open(conversations.__file__, encoding="utf-8").read()
-    # Every route (regular, SSE, initial message) goes through one submit
-    # boundary, which generates in the request or hands the answer to the
-    # worker; both commit through the one commit half. A replay raced during
-    # binding re-enters the commit half only.
-    assert source.count("_submit_message_command(") == 4
-    assert source.count("_execute_message_command(") == 2
-    assert source.count("commit_message_command(") == 4
-    assert "[attachment:" not in source
-    assert "Entschuldigung, ich konnte keine Antwort generieren." not in source
-    assert "Es gab ein technisches Problem." not in source

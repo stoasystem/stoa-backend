@@ -1,6 +1,6 @@
 """Integration tests for AI memory personalisation.
 
-These drive the real `conversations._execute_message_command` code path and
+These drive the real `_answering._execute_message_command` code path and
 read the system prompt the Bedrock double is sent, so they fail if the
 memory-context wiring breaks — unlike a test that re-implements the logic.
 
@@ -16,6 +16,8 @@ import pytest
 
 from fakes.bedrock import FakeBedrock, answer_without_allowance
 from stoa.routers import conversations
+from stoa.services.ask_question import _answering
+from stoa.services.ask_question import _transcript
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import adaptive_learning_service
 from stoa.services.ask_question import _store as ask_question_store
@@ -45,10 +47,13 @@ def _run_message_command(monkeypatch, *, memory_summary: Any) -> dict[str, Any]:
     command_state: dict[str, Any] = {}
 
     monkeypatch.setattr(conversations, "get_table", lambda: object())
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
-    monkeypatch.setattr(conversations, "_attachment_plan_for_student", lambda *_: "free_trial")
+    monkeypatch.setattr(_answering, "get_table", lambda: object())
+    monkeypatch.setattr(_transcript, "get_table", lambda: object())
+    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(_answering, "_attachment_plan_for_student", lambda *_: "free_trial")
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
-    monkeypatch.setattr(conversations.boto3, "client", lambda *_a, **_k: object())
+    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(_answering.boto3, "client", lambda *_a, **_k: object())
     monkeypatch.setattr(
         conversations.attachment_service, "prepare_message_attachments", lambda *_a, **_k: []
     )
@@ -96,7 +101,7 @@ def _run_message_command(monkeypatch, *, memory_summary: Any) -> dict[str, Any]:
         monkeypatch, FakeBedrock(answer={"steps": ["one"], "answer": "safe", "hints": []})
     )
 
-    conversations._execute_message_command(
+    _answering._execute_message_command(
         conv_id="conv-1",
         student_id="student-1",
         subject="math",

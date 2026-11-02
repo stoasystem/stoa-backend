@@ -21,7 +21,7 @@ import pytest
 from fakes.bedrock import FakeBedrock
 from stoa.db.repositories import allowance_repo
 from stoa.jobs import conversation_generation
-from stoa.routers import conversations
+from stoa.services.ask_question import _answering
 from stoa.services import ai_service, allowance_service
 from stoa.services.ask_question import _store as ask_question_store
 from test_conversation_generation_worker import _deliver, _expire_lease, _Killed, _running
@@ -97,11 +97,11 @@ class _Model:
 def model(monkeypatch: pytest.MonkeyPatch, table) -> _Model:
     model = _Model()
 
-    class Scripted(conversations._ConversationAllowanceBedrockClient):
+    class Scripted(_answering._ConversationAllowanceBedrockClient):
         def invoke_model(self, **kwargs: object) -> object:
             return model.invoke(self, self._invocation_method, **kwargs)
 
-    monkeypatch.setattr(conversations, "_ConversationAllowanceBedrockClient", Scripted)
+    monkeypatch.setattr(_answering, "_ConversationAllowanceBedrockClient", Scripted)
     monkeypatch.setattr(allowance_repo, "get_table", lambda: table)
     return model
 

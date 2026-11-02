@@ -1,7 +1,5 @@
 import json
-import asyncio
 import hashlib
-import inspect
 import subprocess
 import sys
 import threading
@@ -21,16 +19,13 @@ from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.config import Settings
 from stoa.services import locale_service, message_catalog
 from stoa.routers import conversations
+from stoa.services.ask_question import _answering
+from stoa.services.ask_question import _transcript
 from stoa.models.attachment import AttachmentStatus, AttachmentSummary
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
+from stoa.services import ask_question
 from stoa.services.ask_question import _store as ask_question_store
-
-
-def test_message_command_remains_the_authoritative_chat_quota_path() -> None:
-    source = inspect.getsource(conversations.commit_message_command)
-
-    assert "claim_message_command_and_quota" in source
 
 
 @pytest.fixture(autouse=True)
@@ -92,6 +87,8 @@ def _with_help_request(monkeypatch, **fields):
             }
         )
     monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
     _owned_conversation(monkeypatch)
     return table
 
@@ -264,6 +261,8 @@ def test_teacher_help_retryable_admission_stays_out_of_student_words(monkeypatch
     )
     table = _escalation_table()
     monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
     monkeypatch.setattr(
         conversations,
         "_get_conversation",
@@ -299,6 +298,8 @@ def test_conversation_list_and_create_derive_owner_from_actor(monkeypatch):
         or conversations.ConversationListPage([], False),
     )
     monkeypatch.setattr(conversations, "get_table", lambda: Table())
+    monkeypatch.setattr(_answering, "get_table", lambda: Table())
+    monkeypatch.setattr(_transcript, "get_table", lambda: Table())
     client = _client(conversations.router)
     assert client.get("/conversations").status_code == 200
     created = client.post("/conversations", json={"subject": "math", "grade": "Sek1"})
@@ -326,6 +327,7 @@ def test_conversation_owner_and_exact_admin_capability_positive_controls(monkeyp
     }
     monkeypatch.setattr(conversations, "_get_conversation", lambda *_: conv)
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
     owner = _client(conversations.router).get("/conversations/conv-1")
     grant = CapabilityGrant("student_content_review", "student:student-1", 1)
     admin = _client(
@@ -388,6 +390,7 @@ def test_current_linked_teacher_can_read_but_stale_teacher_is_hidden(monkeypatch
     }
     monkeypatch.setattr(conversations, "_get_conversation", lambda *_: conv)
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
     monkeypatch.setattr(question_repo, "get_question", lambda *_: question)
     monkeypatch.setattr(question_repo, "get_teacher_session", lambda *_: None)
     monkeypatch.setattr(question_repo, "get_teacher_assignment", lambda *_: None)
@@ -412,8 +415,8 @@ def test_other_actor_and_random_conversation_are_hidden_before_stream_bytes(monk
         lambda conv_id: real if conv_id == "conv-real" else None,
     )
     monkeypatch.setattr(
-        conversations,
-        "_execute_message_command",
+        _answering,
+        "commit_message_command",
         lambda **_kwargs: calls.append("message") or None,
     )
     client = _client(conversations.router, actor=_actor(user_id="student-2"))
@@ -433,8 +436,8 @@ def test_conversation_store_outage_returns_503_before_message_mutation(monkeypat
         lambda *_: (_ for _ in ()).throw(TimeoutError("store canary")),
     )
     monkeypatch.setattr(
-        conversations,
-        "_execute_message_command",
+        _answering,
+        "commit_message_command",
         lambda **_kwargs: calls.append("message") or None,
     )
     response = _client(conversations.router).post(
@@ -516,14 +519,14 @@ def test_message_fingerprint_is_versioned_typed_ordered_and_exact() -> None:
 
 def _completed_command(body: conversations.SendMessageRequest) -> dict:
     command_id = str(
-        conversations.uuid5(
-            conversations.NAMESPACE_URL,
+        _answering.uuid5(
+            _answering.NAMESPACE_URL,
             f"stoa.conversation.send.v1:conv-1:{body.idempotencyKey}",
         )
     )
-    student_id = str(conversations.uuid5(conversations.UUID(command_id), "student-message"))
+    student_id = str(_answering.uuid5(_answering.UUID(command_id), "student-message"))
     assistant_id = str(
-        conversations.uuid5(conversations.UUID(command_id), "assistant-message")
+        _answering.uuid5(_answering.UUID(command_id), "assistant-message")
     )
     response = conversations.SendMessageResponse(
         studentMessage=conversations.ChatMessage(
@@ -540,7 +543,7 @@ def _completed_command(body: conversations.SendMessageRequest) -> dict:
             "kind": "upload" if reference.upload_id else "attachment",
             "id": str(reference.upload_id or reference.attachment_id),
             "attachment_id": (
-                str(conversations.uuid5(conversations.UUID(command_id), f"attachment:{index}"))
+                str(_answering.uuid5(_answering.UUID(command_id), f"attachment:{index}"))
                 if reference.upload_id
                 else str(reference.attachment_id)
             ),
@@ -566,7 +569,7 @@ def _completed_command(body: conversations.SendMessageRequest) -> dict:
             if item["kind"] == "upload"
         ],
         "history_message_ids": [],
-        "history_fingerprint": conversations._history_snapshot_fingerprint([]),
+        "history_fingerprint": _answering._history_snapshot_fingerprint([]),
         "history_anchor_message_id": student_id,
         "history_anchor_created_at": "2026-07-16T00:00:00Z",
         "created_at": "2026-07-16T00:00:00Z",
@@ -587,13 +590,15 @@ def test_stage_a_completed_replay_bypasses_consumed_upload_resolution(
     command = _completed_command(body)
     effects = []
     monkeypatch.setattr(conversations, "get_table", lambda: object())
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(_answering, "get_table", lambda: object())
+    monkeypatch.setattr(_transcript, "get_table", lambda: object())
+    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 8)
     monkeypatch.setattr(
         conversations.attachment_service,
         "prepare_message_attachments",
         lambda *_args, **_kwargs: effects.append("prepare"),
     )
-    result = conversations._execute_message_command(
+    result = _answering._execute_message_command(
         conv_id="conv-1", student_id="student-1", subject="math", grade="Sek1",
         body=body,
         command_context={
@@ -627,11 +632,17 @@ def test_stage_a_mismatch_fails_before_attachment_lookup(monkeypatch) -> None:
         lambda *_args, **_kwargs: effects.append("prepare"),
     )
     with pytest.raises(HTTPException) as captured:
-        asyncio.run(
-            conversations._message_command_dependency(
-                "conv-1", body, _actor(), "correlation-1"
+        try:
+            ask_question.submit(
+                _actor(),
+                {"subject": "math", "grade": "Sek1"},
+                body,
+                conversations.message_request_fingerprint(body),
+                conversation_id="conv-1",
+                student_id="student-1",
             )
-        )
+        except AttachmentDecisionError as error:
+            conversations._raise_attachment(error, "correlation-1")
     detail = captured.value.detail
     assert isinstance(detail, dict)
     assert detail["code"] == "message_idempotency_conflict"
@@ -648,8 +659,11 @@ def test_new_foreign_attachment_has_zero_command_quota_or_ai_effect(monkeypatch)
     )
     effects = []
     monkeypatch.setattr(conversations, "get_table", lambda: object())
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(_answering, "get_table", lambda: object())
+    monkeypatch.setattr(_transcript, "get_table", lambda: object())
+    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 8)
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
     monkeypatch.setattr(
         conversations.attachment_service,
         "prepare_message_attachments",
@@ -663,10 +677,10 @@ def test_new_foreign_attachment_has_zero_command_quota_or_ai_effect(monkeypatch)
         lambda **_kwargs: effects.append("claim"),
     )
     monkeypatch.setattr(
-        conversations.ask_answer, "answer", lambda *_args, **_kwargs: effects.append("ai")
+        _answering.ask_answer, "answer", lambda *_args, **_kwargs: effects.append("ai")
     )
     with pytest.raises(AttachmentDecisionError) as captured:
-        conversations._execute_message_command(
+        _answering._execute_message_command(
             conv_id="conv-1", student_id="student-1", subject="math", grade="Sek1",
             body=body,
             command_context={
@@ -698,13 +712,16 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
     deterministic_attachment_ids = []
 
     monkeypatch.setattr(conversations, "get_table", lambda: object())
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(_answering, "get_table", lambda: object())
+    monkeypatch.setattr(_transcript, "get_table", lambda: object())
+    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 8)
     monkeypatch.setattr(
-        conversations, "_attachment_plan_for_student", lambda *_: "free_trial"
+        _answering, "_attachment_plan_for_student", lambda *_: "free_trial"
     )
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
-    monkeypatch.setattr(conversations.time, "sleep", lambda *_: threading.Event().wait(0.01))
-    monkeypatch.setattr(conversations.boto3, "client", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(_answering.time, "sleep", lambda *_: threading.Event().wait(0.01))
+    monkeypatch.setattr(_answering.boto3, "client", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(conversations.user_repo, "get_user", lambda _id, **_kwargs: {})
     monkeypatch.setattr(
         conversations.attachment_service,
@@ -787,7 +804,7 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
     def run():
         try:
             results.append(
-                conversations._execute_message_command(
+                _answering._execute_message_command(
                     conv_id="conv-1",
                     student_id="student-1",
                     subject="math",
@@ -812,8 +829,8 @@ def test_synchronized_duplicate_commands_converge_to_one_complete_effect_set(
         "claim": 2, "bind": 1, "extract": 1, "ai": 1, "complete": 1
     }
     expected_attachment_id = str(
-        conversations.uuid5(
-            conversations.UUID(command_state["command_id"]), "attachment:0"
+        _answering.uuid5(
+            _answering.UUID(command_state["command_id"]), "attachment:0"
         )
     )
     assert deterministic_attachment_ids == [(expected_attachment_id,)]
@@ -841,9 +858,11 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
 
     table = Table()
     monkeypatch.setattr(conversations, "get_table", lambda: table)
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 8)
     monkeypatch.setattr(
-        conversations, "_attachment_plan_for_student", lambda *_: "free_trial"
+        _answering, "_attachment_plan_for_student", lambda *_: "free_trial"
     )
     monkeypatch.setattr(
         conversations,
@@ -851,12 +870,17 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
         lambda *_: [dict(stored_student)] if stored_student else [],
     )
     monkeypatch.setattr(
-        conversations,
+        _answering,
+        "_get_messages",
+        lambda *_: [dict(stored_student)] if stored_student else [],
+    )
+    monkeypatch.setattr(
+        _answering,
         "_load_anchored_message_history",
         lambda **_kwargs: [],
     )
-    monkeypatch.setattr(conversations.time, "sleep", lambda *_: None)
-    monkeypatch.setattr(conversations.boto3, "client", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(_answering.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(_answering.boto3, "client", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(
         conversations.attachment_service,
         "prepare_message_attachments",
@@ -941,7 +965,7 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
         extract_context,
     )
 
-    first = conversations._execute_message_command(
+    first = _answering._execute_message_command(
         conv_id="conv-1",
         student_id="student-1",
         subject="math",
@@ -949,7 +973,7 @@ def test_committed_lost_response_same_fingerprint_retry_has_one_effect_set(
         body=body,
         command_context={"actor": _actor(), "fingerprint": fingerprint, "existing": None},
     )
-    replay = conversations._execute_message_command(
+    replay = _answering._execute_message_command(
         conv_id="conv-1",
         student_id="student-1",
         subject="math",
@@ -1145,9 +1169,9 @@ def test_message_polling_is_bounded_to_twenty_fifty_millisecond_waits(monkeypatc
             "fingerprint": "f" * 64,
         },
     )
-    monkeypatch.setattr(conversations.time, "sleep", lambda value: sleeps.append(value))
+    monkeypatch.setattr(_answering.time, "sleep", lambda value: sleeps.append(value))
     with pytest.raises(AttachmentDecisionError) as captured:
-        conversations._wait_for_message_command(
+        _answering._wait_for_message_command(
             "conv-1",
             "bounded-key",
             "f" * 64,
@@ -1166,8 +1190,11 @@ def _transport_body() -> conversations.SendMessageRequest:
 
 def _install_transport_happy_path(monkeypatch) -> None:
     monkeypatch.setattr(conversations, "get_table", lambda: object())
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(_answering, "get_table", lambda: object())
+    monkeypatch.setattr(_transcript, "get_table", lambda: object())
+    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 8)
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
     monkeypatch.setattr(
         conversations.attachment_service,
         "prepare_message_attachments",
@@ -1209,11 +1236,17 @@ def test_stage_a_transport_is_structured_retry_without_diagnostics(monkeypatch) 
     )
 
     with pytest.raises(HTTPException) as captured:
-        asyncio.run(
-            conversations._message_command_dependency(
-                "conv-1", body, _actor(), "server-correlation"
+        try:
+            ask_question.submit(
+                _actor(),
+                {"subject": "math", "grade": "Sek1"},
+                body,
+                conversations.message_request_fingerprint(body),
+                conversation_id="conv-1",
+                student_id="student-1",
             )
-        )
+        except AttachmentDecisionError as error:
+            conversations._raise_attachment(error, "server-correlation")
 
     assert captured.value.status_code == 503
     assert captured.value.detail == {
@@ -1374,7 +1407,7 @@ def test_conversation_repository_transport_stages_are_structured_retry(
         )
 
     with pytest.raises(AttachmentDecisionError) as captured:
-        conversations._execute_message_command(
+        _answering._execute_message_command(
             conv_id="conv-1",
             student_id="student-1",
             subject="math",
@@ -1401,7 +1434,7 @@ def test_replay_poll_transport_is_structured_retry(monkeypatch) -> None:
     )
 
     with pytest.raises(AttachmentDecisionError) as captured:
-        conversations._wait_for_message_command(
+        _answering._wait_for_message_command(
             "conv-1", "transport-key", "f" * 64, table=object()
         )
 
@@ -1419,9 +1452,16 @@ def test_resume_stored_message_transport_is_structured_retry(monkeypatch) -> Non
             RuntimeError("stored-message-provider-table-private-canary")
         ),
     )
+    monkeypatch.setattr(
+        _answering,
+        "_get_messages",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("stored-message-provider-table-private-canary")
+        ),
+    )
 
     with pytest.raises(AttachmentDecisionError) as captured:
-        conversations._execute_message_command(
+        _answering._execute_message_command(
             conv_id="conv-1",
             student_id="student-1",
             subject="math",
@@ -1462,9 +1502,9 @@ def test_regular_and_stream_message_use_identical_safe_attachment_summary(monkey
         "prepare_message_attachments",
         prepare_message_attachments,
     )
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 8)
     monkeypatch.setattr(
-        conversations, "_attachment_plan_for_student", lambda *_: "free_trial"
+        _answering, "_attachment_plan_for_student", lambda *_: "free_trial"
     )
     monkeypatch.setattr(
         conversations.attachment_service,
@@ -1474,8 +1514,8 @@ def test_regular_and_stream_message_use_identical_safe_attachment_summary(monkey
     payload = {"content": "use notes", "idempotencyKey": "attachment-parity", "attachmentIds": [{"attachmentId": "attachment-1"}]}
     monkeypatch.setattr(ask_question_store, "get_message_command", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        conversations,
-        "_execute_message_command",
+        _answering,
+        "commit_message_command",
         lambda **kwargs: conversations.SendMessageResponse(
             studentMessage=conversations.ChatMessage(
                 id="student-message", conversationId=kwargs["conv_id"], role="student",
@@ -1532,6 +1572,21 @@ def test_conversation_history_batch_projects_only_safe_attachment_summaries(monk
         ],
     )
     monkeypatch.setattr(
+        _answering,
+        "_get_messages",
+        lambda *_: [
+            {
+                "message_id": "message-1",
+                "role": "student",
+                "content": "my document",
+                "created_at": "2026-07-16T00:00:00Z",
+                "attachment_ids": ["attachment-1"],
+                "object_key": "uploads/private/provider-canary.pdf",
+                "extracted_text": "raw extracted canary",
+            }
+        ],
+    )
+    monkeypatch.setattr(
         conversations.attachment_service,
         "list_attachment_summaries",
         lambda ids: {"attachment-1": summary} if ids == ["attachment-1"] else {},
@@ -1559,16 +1614,17 @@ def test_conversation_dependency_cancellation_stable_error_has_zero_message_ai_e
             "grade": "Sek1",
         },
     )
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 8)
+    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 8)
     monkeypatch.setattr(conversations, "_get_messages", lambda *_: [])
+    monkeypatch.setattr(_answering, "_get_messages", lambda *_: [])
     monkeypatch.setattr(
         ask_question_store,
         "get_message_command",
         lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(
-        conversations,
-        "_execute_message_command",
+        _answering,
+        "commit_message_command",
         lambda **_kwargs: (_ for _ in ()).throw(
             AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
         ),
@@ -1586,7 +1642,7 @@ def test_conversation_dependency_cancellation_stable_error_has_zero_message_ai_e
         lambda *args, **kwargs: effects.append("extract"),
     )
     monkeypatch.setattr(
-        conversations.ask_answer, "answer", lambda *_args, **_kwargs: effects.append("ai")
+        _answering.ask_answer, "answer", lambda *_args, **_kwargs: effects.append("ai")
     )
     response = _client(conversations.router).post(
         "/conversations/conv-1/messages",
@@ -1755,7 +1811,7 @@ def test_only_whole_steps_are_published(monkeypatch):
         lambda conv_id, **kwargs: published.append(list(kwargs["steps"])) or True,
     )
 
-    publish = conversations._publish_generation_step("conv-1", "student-1")
+    publish = _answering._publish_generation_step("conv-1", "student-1")
     publish(0, "Schritt 1")
     publish(1, "Schritt 2")
 
@@ -1770,7 +1826,7 @@ def test_a_step_out_of_order_is_ignored(monkeypatch):
         lambda conv_id, **kwargs: published.append(list(kwargs["steps"])) or True,
     )
 
-    publish = conversations._publish_generation_step("conv-1", "student-1")
+    publish = _answering._publish_generation_step("conv-1", "student-1")
     publish(3, "out of order")
 
     assert published == []
@@ -1935,6 +1991,8 @@ def test_conversation_list_reaches_matching_row_after_filtered_gsi_page(monkeypa
     """Pages spent on messages must not be reported as an empty history."""
     table = _PagedIndexTable(_student_index_rows(messages=120, conversations_count=5))
     monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
 
     response = _client(conversations.router).get("/conversations")
 
@@ -1955,6 +2013,8 @@ def test_conversation_list_reaches_matching_row_after_filtered_gsi_page(monkeypa
 def test_conversation_list_reads_one_page_at_normal_volume_without_repeats(monkeypatch):
     table = _PagedIndexTable(_student_index_rows(messages=20, conversations_count=5))
     monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
 
     response = _client(conversations.router).get("/conversations")
 
@@ -1970,6 +2030,8 @@ def test_conversation_list_reports_an_exhausted_page_budget_as_truncated(monkeyp
     """A heavy history is bounded, and the caller is told it was cut short."""
     table = _PagedIndexTable(_student_index_rows(messages=400, conversations_count=2))
     monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
 
     page = conversations._list_conversations("student-1", page_budget=2)
 
@@ -1981,6 +2043,8 @@ def test_conversation_list_reports_an_exhausted_page_budget_as_truncated(monkeyp
 def test_conversation_list_stops_at_the_result_limit_and_says_so(monkeypatch):
     table = _PagedIndexTable(_student_index_rows(messages=0, conversations_count=250))
     monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
 
     page = conversations._list_conversations("student-1")
 

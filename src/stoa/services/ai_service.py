@@ -122,7 +122,7 @@ def inventory_ai_invocation_classes() -> dict[str, AIInvocationClass]:
     return {
         # Streaming delivers the same answer under the same admission, so it
         # is charged to the student's allowance exactly as the buffered call is.
-        "src/stoa/routers/conversations.py:invoke_model_with_response_stream": (
+        "src/stoa/services/ask_question/_answering.py:invoke_model_with_response_stream": (
             AIInvocationClass.USER_ALLOWANCE
         ),
         "src/stoa/services/ai_service.py:invoke_answer": (

@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -28,6 +28,9 @@ from stoa.services import (
     usage_ledger_service,
 )
 
+if TYPE_CHECKING:
+    from stoa.security.identity import Actor
+
 
 ASSIGNMENT_STATUSES = {"draft", "recommended", "assigned", "started", "completed", "skipped", "archived"}
 CREATABLE_STATUSES = {"draft", "recommended", "assigned"}
@@ -37,6 +40,26 @@ AUTOMATION_LEVELS = {"off", "suggest_only", "teacher_approved_batch", "auto_crea
 AUTOMATION_DELIVERY_MODES = {"draft", "recommended", "assigned"}
 AUTOMATION_SOURCE_TYPES = {"ai_draft", "curriculum_exercise", "memory_snapshot", "curriculum_topic"}
 CONFIDENCE_RANK = {"low": 1, "medium": 2, "high": 3}
+
+
+def actor_projection(actor: Actor) -> dict[str, Any]:
+    """Project an Actor into the dict shape the adaptive-learning service expects.
+
+    Kept beside the service because the adaptive routes and the question's AI
+    memory context (`ask_question`) both call it; one implementation keeps the
+    two from drifting apart. The package may not import a router (#218).
+    """
+    projection = {
+        "sub": actor.user_id,
+        "user_id": actor.user_id,
+        "role": actor.role.value,
+        "account_status": actor.account_status.value,
+        "capabilities": {
+            grant.capability: "granted" for grant in actor.current_grants
+        },
+    }
+    projection.update(dict(actor.auth_context))
+    return projection
 
 
 def now_iso() -> str:

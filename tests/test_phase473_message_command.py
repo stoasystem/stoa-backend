@@ -19,6 +19,8 @@ from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.db.repositories import attachment_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import conversations
+from stoa.services.ask_question import _answering
+from stoa.services.ask_question import _transcript
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services.ask_question import _store as ask_question_store
 
@@ -469,8 +471,15 @@ def test_create_conversation_routes_initial_message_through_shared_executor(
     command_contexts: list[dict[str, Any]] = []
     table = object()
     monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
     monkeypatch.setattr(
         conversations,
+        "_active_conversation_generation",
+        lambda _owner_id, _table: 7,
+    )
+    monkeypatch.setattr(
+        _answering,
         "_active_conversation_generation",
         lambda _owner_id, _table: 7,
     )
@@ -501,7 +510,7 @@ def test_create_conversation_routes_initial_message_through_shared_executor(
             ),
         )
 
-    monkeypatch.setattr(conversations, "_execute_message_command", execute_message_command)
+    monkeypatch.setattr(_answering, "commit_message_command", execute_message_command)
     response = _route_client().post(
         "/conversations",
         json={
@@ -613,9 +622,9 @@ def test_polling_projects_nonlive_states_without_in_progress(
         def get_item(self, **_kwargs):
             return {"Item": dict(command)} if command else {}
 
-    monkeypatch.setattr(conversations.time, "sleep", lambda *_: None)
+    monkeypatch.setattr(_answering.time, "sleep", lambda *_: None)
     with pytest.raises(conversations.AttachmentDecisionError) as captured:
-        conversations._wait_for_message_command(
+        _answering._wait_for_message_command(
             "conv-1",
             "message-key",
             "f" * 64,
@@ -670,6 +679,8 @@ def test_regular_and_sse_replay_exact_durable_rejection(
     )
     monkeypatch.setattr(attachment_repo, "get_table", lambda: table)
     monkeypatch.setattr(conversations, "get_table", lambda: table)
+    monkeypatch.setattr(_answering, "get_table", lambda: table)
+    monkeypatch.setattr(_transcript, "get_table", lambda: table)
     response = _route_client().post(
         f"/conversations/conv-1{suffix}",
         json={"content": "same", "idempotencyKey": "message-key"},

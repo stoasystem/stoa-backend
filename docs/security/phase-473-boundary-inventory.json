@@ -508,7 +508,7 @@
       ],
       "expected_type": "closed_disposition",
       "lower_fake_target": "src/stoa/routers/conversations.py:attachment_repo.read_message_command_result",
-      "malformed_selector": "tests/test_phase473_conversation_replay.py::test_regular_and_sse_share_one_closed_executor_boundary",
+      "malformed_selector": "tests/test_phase473_message_command.py::test_regular_and_sse_replay_exact_durable_rejection",
       "named_parser": "_coerce_command_result",
       "requirement_ids": [
         "V9PRIV-01",

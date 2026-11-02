@@ -2,6 +2,200 @@
 
 The package is being moved here from `routers/conversations.py`,
 `attachment_repo` and `jobs/conversation_generation.py` in four steps (#204).
-Step 1 (#217) moved only the rows the question keeps (`_store`); its entry
-points arrive in step 2.
+Step 1 (#217) moved the rows the question keeps (`_store`); step 2 (#218)
+moved the request half and the answering here, behind three entry points:
+
+- `submit` takes a student's message from the route that authorized it and
+  returns `Answered` (the answer, generated in the request) or `Accepted` (the
+  message is stored and its answer is on its way). A first send and a replay
+  of the same key go through it alike.
+- `answer` is the worker's: it takes one committed command to its answer, and
+  is safe to call again for the same command.
+- `progress` is where a command stands, for `GET /conversations/{id}/generation`.
+
+Who answers a committed command is `dispatch`'s to decide.
 """
+import logging
+from collections.abc import Mapping
+from datetime import UTC, datetime, timezone
+
+from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
+from stoa.security.identity import Actor
+from stoa.services.ask_question import _answering, _store, dispatch
+from stoa.services.ask_question._transcript import _conversation_repository_call
+from stoa.services.ask_question.models import (
+    ChatMessage,
+    GenerationProgressResponse,
+    MessageAcceptedResponse,
+    SendMessageRequest,
+    SendMessageResponse,
+)
+
+logger = logging.getLogger(__name__)
+
+Answered = SendMessageResponse
+"""已回答: the answer was generated in the request (200)."""
+
+Accepted = MessageAcceptedResponse
+"""已受理: the message is stored and the worker answers it (202)."""
+
+AllowanceFailure = _answering._ConversationAllowanceFailure
+"""Raised by `submit` when token admission refuses the answer (#206 replaces it)."""
+
+
+def submit(
+    actor: Actor,
+    conversation: Mapping[str, object],
+    body: SendMessageRequest,
+    fingerprint: str,
+    *,
+    conversation_id: str,
+    student_id: str,
+    practice_context: Mapping[str, object] | None = None,
+    new_conversation_generation: int | None = None,
+) -> Answered | Accepted:
+    """Commit the student's message, then answer it here or hand it over.
+
+    `actor` and `conversation` are what the route authorized; `fingerprint` is
+    the request's (`message_request_fingerprint`), compared against a stored
+    command before anything else is read; `practice_context` is the exercise
+    the route already resolved. A command already stored under this key is
+    replayed, waited for or resumed instead of claimed again.
+
+    `new_conversation_generation` is set only for the first message of a
+    conversation created in the same request, under that account fence
+    generation: no command can precede it, so none is read.
+
+    Raises `AttachmentDecisionError` and `AllowanceFailure`; the route maps them.
+    """
+    command_context: dict[str, object] = {
+        "actor": actor,
+        "fingerprint": fingerprint,
+        "existing": None,
+        "practice_context": practice_context,
+    }
+    if new_conversation_generation is not None:
+        command_context["account_fence_generation"] = new_conversation_generation
+    else:
+        state = _conversation_repository_call(
+            lambda: _store.read_message_command_result(
+                conversation_id,
+                body.idempotencyKey,
+                owner_id=actor.user_id,
+                fingerprint=fingerprint,
+                now_epoch=int(datetime.now(timezone.utc).timestamp()),
+            )
+        )
+        if state.disposition is _store.MessageCommandDisposition.IDEMPOTENCY_CONFLICT:
+            raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT)
+        command_context["state"] = state
+        command_context["existing"] = state.command
+    committed = _answering.commit_message_command(
+        conv_id=conversation_id,
+        student_id=student_id,
+        subject=str(conversation.get("subject") or ""),
+        grade=str(conversation.get("grade") or ""),
+        body=body,
+        command_context=command_context,
+    )
+    if isinstance(committed, SendMessageResponse):
+        return committed
+    answered = dispatch.dispatch(conversation_id, body.idempotencyKey, committed)
+    if answered is not None:
+        return answered
+    command = committed.command
+    return MessageAcceptedResponse(
+        conversationId=conversation_id,
+        commandId=str(command["command_id"]),
+        idempotencyKey=body.idempotencyKey,
+        studentMessage=ChatMessage(
+            id=str(command["student_message_id"]),
+            conversationId=conversation_id,
+            role="student",
+            content=committed.content,
+            createdAt=str(command["created_at"]),
+            status="sent",
+            attachments=committed.attachments,
+            quote=committed.quote,
+        ),
+    )
+
+
+def answer(conversation_id: str, idempotency_key: str) -> str:
+    """Take one command to its answer if it still needs one.
+
+    Returns `completed`, `failed` (the command says why), `held` (another
+    delivery holds its lease), `settled` (it needs nothing) or `missing`.
+    Safe on redelivery: the lease is claimed conditionally, so a duplicate
+    finds it held or the answer stored and leaves.
+    """
+    command = _store.get_message_command(conversation_id, idempotency_key)
+    if not isinstance(command, dict):
+        return "missing"
+    if command.get("status") == "failed":
+        # Whether it may be tried again is the student's to act on, with the
+        # same key (the request reopens it); a late or repeated delivery must
+        # not spend their attempts.
+        return "settled"
+    fingerprint = command.get("fingerprint")
+    owner_id = command.get("owner_id")
+    if not isinstance(fingerprint, str) or not isinstance(owner_id, str):
+        return "settled"
+    state = _store.classify_message_command(
+        command,
+        owner_id=owner_id,
+        fingerprint=fingerprint,
+        now_epoch=int(datetime.now(UTC).timestamp()),
+    )
+    if state.disposition is _store.MessageCommandDisposition.LEASE_HELD:
+        return "held"
+    if state.disposition is not _store.MessageCommandDisposition.RESUME:
+        return "settled"
+    try:
+        committed = _answering.load_committed_message(command)
+        _answering.generate_for_command(committed)
+    except AttachmentDecisionError as error:
+        if error.code is AttachmentErrorCode.MESSAGE_IN_PROGRESS:
+            return "held"
+        logger.warning("conversation_generation_failed code=%s", error.code.value)
+        return "failed"
+    except _answering._ConversationAllowanceFailure as failure:
+        logger.warning("conversation_generation_failed code=%s", failure.code)
+        return "failed"
+    return "completed"
+
+
+def progress(
+    conversation_id: str, idempotency_key: str | None, student_id: str
+) -> GenerationProgressResponse:
+    """Where an answer stands, for the student who asked.
+
+    Without a key, the conversation's latest steps. With one, the command it
+    names too, with only the steps its current attempt wrote; a key that names
+    no command of this student raises `AttachmentDecisionError`
+    (`MESSAGE_COMMAND_NOT_FOUND`).
+    """
+    if idempotency_key is None:
+        steps, updated_at = _store.read_generation_progress(
+            conversation_id, owner_id=student_id
+        )
+        return GenerationProgressResponse(
+            conversationId=conversation_id, steps=steps, updatedAt=updated_at
+        )
+    command = _conversation_repository_call(
+        lambda: _store.get_message_command(conversation_id, idempotency_key)
+    )
+    state = (
+        _answering._command_generation_state(conversation_id, command)
+        if isinstance(command, dict) and command.get("owner_id") == student_id
+        else None
+    )
+    if state is None:
+        raise AttachmentDecisionError(AttachmentErrorCode.MESSAGE_COMMAND_NOT_FOUND)
+    state.steps, state.updatedAt = _store.read_generation_progress(
+        conversation_id,
+        owner_id=student_id,
+        command_id=state.commandId,
+        attempt=state.attempt,
+    )
+    return state

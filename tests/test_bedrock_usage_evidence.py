@@ -440,7 +440,7 @@ def test_inventory_classifies_every_source_invoke_model_call() -> None:
     inventory = ai_service.inventory_ai_invocation_classes()
 
     assert inventory == {
-        "src/stoa/routers/conversations.py:invoke_model_with_response_stream": (
+        "src/stoa/services/ask_question/_answering.py:invoke_model_with_response_stream": (
             ai_service.AIInvocationClass.USER_ALLOWANCE
         ),
         "src/stoa/services/ai_service.py:invoke_answer": (
@@ -481,7 +481,7 @@ def test_inventory_classifies_every_source_invoke_model_call() -> None:
             self.generic_visit(node)
 
     for source_path in (
-        Path("src/stoa/routers/conversations.py"),
+        Path("src/stoa/services/ask_question/_answering.py"),
         Path("src/stoa/services/ai_service.py"),
         Path("src/stoa/services/report_service.py"),
     ):

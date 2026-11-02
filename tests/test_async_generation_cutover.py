@@ -21,6 +21,8 @@ import pytest
 
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
+from stoa.services.ask_question import _answering
+from stoa.services.ask_question import dispatch as ask_question_dispatch
 from stoa.services import ai_service
 from test_message_command_generation import (  # noqa: F401 - fixtures
     CONV,
@@ -55,14 +57,14 @@ class _Invokes:
 @pytest.fixture
 def invokes(monkeypatch: pytest.MonkeyPatch) -> _Invokes:
     invokes = _Invokes()
-    monkeypatch.setattr(conversations, "_invoke_generation_worker", invokes)
+    monkeypatch.setattr(ask_question_dispatch, "_invoke_generation_worker", invokes)
     return invokes
 
 
 @pytest.fixture
 def switched_on(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        conversations.settings, "conversation_generation_function_name", WORKER_ALIAS
+        ask_question_dispatch.settings, "conversation_generation_function_name", WORKER_ALIAS
     )
 
 
@@ -220,10 +222,10 @@ def test_a_failure_that_may_not_be_retried_is_not_reopened(
     table, model, invokes, switched_on, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        conversations, "_message_allowance_metadata_from_failure", lambda *_a, **_k: {}
+        _answering, "_message_allowance_metadata_from_failure", lambda *_a, **_k: {}
     )
-    monkeypatch.setattr(conversations, "_observe_message_provider_usage", lambda **_k: True)
-    monkeypatch.setattr(conversations, "_restore_message_allowance", lambda **_k: True)
+    monkeypatch.setattr(_answering, "_observe_message_provider_usage", lambda **_k: True)
+    monkeypatch.setattr(_answering, "_restore_message_allowance", lambda **_k: True)
     client = _client()
     model.outcomes = [ai_service.AIInvocationFailure("incomplete_output")]
     _send(client, "key-1")
@@ -242,13 +244,13 @@ def test_an_answer_longer_than_the_gateway_waits_no_longer_holds_the_request(
     """The audit's last latency contract: a 30-second answer and a 29-second gateway."""
     clock = {"now": 0.0}
 
-    answer = conversations.ask_answer.answer
+    answer = _answering.ask_answer.answer
 
     def thirty_second_answer(*args: Any, **kwargs: Any) -> Any:
         clock["now"] += 30.0
         return answer(*args, **kwargs)
 
-    monkeypatch.setattr(conversations.ask_answer, "answer", thirty_second_answer)
+    monkeypatch.setattr(_answering.ask_answer, "answer", thirty_second_answer)
 
     response = _send(_client(), "key-1")
 
@@ -291,9 +293,9 @@ def test_the_invoke_is_asynchronous_and_names_the_worker_alias(
         clients.append(kwargs)
         return _Lambda()
 
-    monkeypatch.setattr(conversations.boto3, "client", client)
+    monkeypatch.setattr(ask_question_dispatch.boto3, "client", client)
 
-    conversations._invoke_generation_worker({"conversation_id": CONV, "idempotency_key": "k"})
+    ask_question_dispatch._invoke_generation_worker({"conversation_id": CONV, "idempotency_key": "k"})
 
     [call] = calls
     assert call["FunctionName"] == WORKER_ALIAS
@@ -313,17 +315,17 @@ def test_a_new_conversation_whose_first_message_failed_names_itself_for_the_retr
     # #61: the conversation is stored before its first message is committed.
     # When that fails the error must say which conversation was made, so the
     # student's retry continues it instead of leaving it empty and making another.
-    real_commit = conversations.commit_message_command
+    real_commit = _answering.commit_message_command
 
     def refused(**kwargs: Any) -> Any:
-        raise conversations._ConversationAllowanceFailure(
+        raise _answering._ConversationAllowanceFailure(
             "allowance_finalization_recoverable",
             "This answer is safely recoverable while token accounting finishes.",
             "retry_same_message",
             503,
         )
 
-    monkeypatch.setattr(conversations, "commit_message_command", refused)
+    monkeypatch.setattr(_answering, "commit_message_command", refused)
     response = _client().post(
         "/conversations",
         json={"subject": "Mathematik", "grade": "Grade 6", "initialMessage": QUESTION},
@@ -335,7 +337,7 @@ def test_a_new_conversation_whose_first_message_failed_names_itself_for_the_retr
     conversation_id = detail["conversationId"]
     assert conversations._get_conversation(conversation_id)["student_id"]
 
-    monkeypatch.setattr(conversations, "commit_message_command", real_commit)
+    monkeypatch.setattr(_answering, "commit_message_command", real_commit)
     retry = _client().post(
         f"/conversations/{conversation_id}/messages/stream",
         json={"content": QUESTION, "idempotencyKey": f"initial-{conversation_id}"},
@@ -352,7 +354,7 @@ def test_any_refusal_of_the_first_message_with_a_structured_body_names_the_conve
     def refused(**kwargs: Any) -> Any:
         raise HTTPException(status_code=409, detail={"code": "some_conflict", "message": "No."})
 
-    monkeypatch.setattr(conversations, "commit_message_command", refused)
+    monkeypatch.setattr(_answering, "commit_message_command", refused)
     response = _client().post(
         "/conversations",
         json={"subject": "Mathematik", "grade": "Grade 6", "initialMessage": QUESTION},
@@ -371,8 +373,8 @@ def test_the_daily_message_limit_refusing_a_first_message_names_the_conversation
     # message limit raises an attachment decision, not an HTTP error, and the
     # request answered 500 with the conversation left behind.
     before = {row["conversation_id"] for row in table.rows.values() if row.get("SK") == "CONV"}
-    daily_limit = conversations._chat_limit_for_student
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", lambda *_: 0)
+    daily_limit = _answering._chat_limit_for_student
+    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 0)
 
     response = _client().post(
         "/conversations",
@@ -389,7 +391,7 @@ def test_the_daily_message_limit_refusing_a_first_message_names_the_conversation
     made = {row["conversation_id"] for row in table.rows.values() if row.get("SK") == "CONV"} - before
     assert made == {detail["conversationId"]}
 
-    monkeypatch.setattr(conversations, "_chat_limit_for_student", daily_limit)
+    monkeypatch.setattr(_answering, "_chat_limit_for_student", daily_limit)
     retry = _client().post(
         f"/conversations/{detail['conversationId']}/messages/stream",
         json={"content": QUESTION, "idempotencyKey": f"initial-{detail['conversationId']}"},

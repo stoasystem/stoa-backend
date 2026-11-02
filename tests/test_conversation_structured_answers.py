@@ -25,6 +25,7 @@ import pytest
 from fakes.bedrock import FakeBedrock
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
+from stoa.services.ask_question import _answering
 from stoa.services import ask_answer
 from test_async_generation_cutover import invokes as invokes  # noqa: F401 - the fixture
 from test_conversation_token_finalization import _patch_allowance_table
@@ -597,7 +598,7 @@ def test_the_sections_come_through_the_real_model_path(
     answer, label = ANSWERS[locale]
     provider = _CapturingBedrockClient(answer)
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    monkeypatch.setattr(conversations.ai_service.boto3, "client", lambda *_a, **_k: provider)
+    monkeypatch.setattr(_answering.ai_service.boto3, "client", lambda *_a, **_k: provider)
     client = _client()
 
     response = _send(client, "key-1", language=locale)

@@ -25,6 +25,7 @@ from fakes.dynamodb import FakeTable
 from stoa.db.repositories import attachment_repo
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
+from stoa.services.ask_question import _answering
 from stoa.services import attachment_service
 from stoa.services.document_extraction_service import (
     DocumentExtractionFailure,
@@ -91,7 +92,7 @@ class _Bucket:
 @pytest.fixture
 def bucket(monkeypatch: pytest.MonkeyPatch) -> _Bucket:
     bucket = _Bucket()
-    monkeypatch.setattr(conversations.boto3, "client", lambda *_a, **_k: bucket)
+    monkeypatch.setattr(_answering.boto3, "client", lambda *_a, **_k: bucket)
     return bucket
 
 
@@ -100,14 +101,14 @@ def model(monkeypatch: pytest.MonkeyPatch, bucket: _Bucket) -> FakeBedrock:
     """The Bedrock double behind the real allowance client; S3 is the bucket."""
     model = FakeBedrock(answer=MODEL_ANSWER)
     clients = {"s3": bucket, "bedrock-runtime": model}
-    monkeypatch.setattr(conversations.boto3, "client", lambda name, *_a, **_k: clients[name])
+    monkeypatch.setattr(_answering.boto3, "client", lambda name, *_a, **_k: clients[name])
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
     return model
 
 
 @pytest.fixture(autouse=True)
 def _plan(monkeypatch: pytest.MonkeyPatch, stub_memory_summary) -> None:
-    monkeypatch.setattr(conversations, "_attachment_plan_for_student", lambda *_: "free_trial")
+    monkeypatch.setattr(_answering, "_attachment_plan_for_student", lambda *_: "free_trial")
 
 
 @pytest.fixture(autouse=True)
@@ -360,7 +361,7 @@ def _commit(*upload_ids: str, key: str) -> None:
             "attachmentIds": [{"uploadId": upload_id} for upload_id in upload_ids],
         }
     )
-    conversations.commit_message_command(
+    _answering.commit_message_command(
         conv_id=CONV,
         student_id=STUDENT,
         subject="Mathematik",
@@ -514,7 +515,7 @@ def test_the_image_is_in_the_body_that_is_counted_and_the_body_that_is_sent(
     by counting it with the provider, then sends that same body."""
     bedrock = _Bedrock()
     clients = {"s3": bucket, "bedrock-runtime": bedrock}
-    monkeypatch.setattr(conversations.boto3, "client", lambda name, *_a, **_k: clients[name])
+    monkeypatch.setattr(_answering.boto3, "client", lambda name, *_a, **_k: clients[name])
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
     data = _image("JPEG")
     _upload(table, bucket, "upload-image", data, filename="a.jpg", media_type="image/jpeg")

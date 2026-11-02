@@ -29,6 +29,7 @@ from stoa.security.route_authorization import (
     authorized_student_resource_dependency,
 )
 from stoa.services import adaptive_learning_service
+from stoa.services.adaptive_learning_service import actor_projection
 
 router = APIRouter()
 
@@ -278,25 +279,6 @@ _parent_progress = authorized_student_resource_dependency(
     action=AuthorizationAction.READ,
     purposes={CanonicalRole.PARENT: AuthorizationPurpose.PARENT_OVERSIGHT},
 )
-
-
-def actor_projection(actor: Actor) -> dict[str, Any]:
-    """Project an Actor into the dict shape the adaptive-learning service expects.
-
-    Public because conversations.py builds AI memory context through the same
-    service; keeping one implementation avoids the two drifting apart.
-    """
-    projection = {
-        "sub": actor.user_id,
-        "user_id": actor.user_id,
-        "role": actor.role.value,
-        "account_status": actor.account_status.value,
-        "capabilities": {
-            grant.capability: "granted" for grant in actor.current_grants
-        },
-    }
-    projection.update(dict(actor.auth_context))
-    return projection
 
 
 async def _authorize_loaded_resource(
