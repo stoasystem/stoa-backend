@@ -77,7 +77,14 @@ def test_generation_progress_declares_the_unknown_command_conflict():
 
     (detail,) = _detail_variants(schema, body)
     assert _is_error_body(detail)
-    assert "message_command_not_found" in _resolve(schema, detail["properties"]["code"])["enum"]
+    # The code is either enum, the attachment's or the question's own (#220).
+    code = detail["properties"]["code"]
+    values = [
+        value
+        for variant in code.get("anyOf", [code])
+        for value in _resolve(schema, variant)["enum"]
+    ]
+    assert "message_command_not_found" in values
 
 
 def test_teacher_help_status_declares_never_escalated_as_not_found():
