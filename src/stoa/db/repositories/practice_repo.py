@@ -748,6 +748,33 @@ def all_challenges_answered_right(student_id: str) -> set[str]:
     return found
 
 
+def last_activity_by_unit(student_id: str) -> dict[str, str]:
+    """When this student last did something in each knowledge point (#164).
+
+    An answer, right or wrong, or a finished lesson: the student's own
+    evidence. Every page of both, as the map's other reads are.
+    """
+    table = get_table()
+    latest: dict[str, str] = {}
+
+    def note(unit_id: object, moment: object) -> None:
+        if unit_id and moment and str(moment) > latest.get(str(unit_id), ""):
+            latest[str(unit_id)] = str(moment)
+
+    for item in _query_all_challenge_pages(
+        table,
+        KeyConditionExpression=(
+            Key("PK").eq(f"ATTEMPTS#{student_id}") & Key("SK").begins_with("ATTEMPT#")
+        ),
+    ):
+        if item.get("self_reported") is not True:
+            note(item.get("unit_id"), item.get("created_at"))
+    for item in get_progress(student_id, None):
+        if item.get("status") == "completed":
+            note(item.get("unit_id"), item.get("completed_at"))
+    return latest
+
+
 def challenges_answered_right(student_id: str, lesson_id: str) -> set[str]:
     """The exercises of `lesson_id` the student has answered right at least once.
 

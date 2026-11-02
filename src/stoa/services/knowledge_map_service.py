@@ -27,7 +27,7 @@ import hashlib
 import logging
 import math
 from datetime import datetime, timezone
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from stoa.db.repositories import practice_repo, review_repo
@@ -111,6 +111,89 @@ def _recommended_unit(
     return ""
 
 
+def _recommendation(
+    stars: Sequence[dict[str, Any]],
+    *,
+    subject_id: str,
+    subject_of: Callable[[Mapping[str, Any]], str],
+    successors: Mapping[str, Sequence[str]],
+    facts: Mapping[str, knowledge_mastery_service.LitFact],
+    evidence: Mapping[str, str],
+) -> tuple[dict[str, Any], str, str | None] | None:
+    """The star one subject recommends, why, and after which lighting (#164).
+
+    Decided in stoa-frontend#474: the recommendation follows the student.
+    ``stars`` is the whole sky in course order (subject, chapter, unit).
+
+    1. A star in progress, the one with the latest evidence (ties: earlier in
+       the course), whatever its prerequisites: `in_progress`.
+    2. Else after the latest lighting - this subject's own, or another's whose
+       successor is here (ties: furthest in the course, this subject's own
+       first; a backfilled lighting counts): its successor on the frontier
+       that comes first in the course, else this subject's next frontier star
+       after it, wrapping round: `after_lit`.
+    3. Else the first frontier star: `start`.
+
+    The frontier is what is not lit and has every prerequisite lit; apart
+    from rule 1, only frontier stars are recommended.
+    """
+    position = {star["unitId"]: index for index, star in enumerate(stars)}
+    mine = [star for star in stars if subject_of(star) == subject_id]
+    by_id = {star["unitId"]: star for star in stars}
+
+    in_progress = [star for star in mine if star["state"] == "in_progress"]
+    if in_progress:
+        latest = max(
+            in_progress,
+            key=lambda star: (str(evidence.get(star["unitId"]) or ""), -position[star["unitId"]]),
+        )
+        return latest, "in_progress", None
+
+    frontier = [
+        star for star in mine if star["state"] != "lit" and not star.get("unlitPrerequisiteIds")
+    ]
+    if not frontier:
+        return None
+    frontier_ids = {star["unitId"] for star in frontier}
+
+    def after(lit_id: str) -> dict[str, Any] | None:
+        following = [
+            by_id[unit_id] for unit_id in successors.get(lit_id, ()) if unit_id in frontier_ids
+        ]
+        if following:
+            return min(following, key=lambda star: position[star["unitId"]])
+        if subject_of(by_id[lit_id]) != subject_id:
+            return None
+        # The course order, from the star after this one, round to the start.
+        place = position[lit_id]
+        later = [star for star in frontier if position[star["unitId"]] > place]
+        return (later or frontier)[0]
+
+    def lit_at(star: Mapping[str, Any]) -> str:
+        fact = facts.get(star["unitId"])
+        return fact.lit_at if fact else ""
+
+    lightings = [
+        star
+        for star in stars
+        if star["state"] == "lit"
+        and (
+            subject_of(star) == subject_id
+            or any(unit_id in by_id and subject_of(by_id[unit_id]) == subject_id
+                   for unit_id in successors.get(star["unitId"], ()))
+        )
+    ]
+    lightings.sort(
+        key=lambda star: (lit_at(star), subject_of(star) == subject_id, position[star["unitId"]]),
+        reverse=True,
+    )
+    for lit in lightings:
+        following = after(lit["unitId"])
+        if following is not None:
+            return following, "after_lit", lit["unitId"]
+    return frontier[0], "start", None
+
+
 def build_map(
     *,
     subject_id: str,
@@ -124,8 +207,13 @@ def build_map(
     skill_states: Mapping[str, knowledge_mastery_service.SkillMastery] | None = None,
     locale: str = "de",
     star_quiz_retry_at: Mapping[str, str] | None = None,
+    last_evidence_by_unit: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    """One sky from facts already read. Pure; no I/O."""
+    """One sky from facts already read. Pure; no I/O.
+
+    ``last_evidence_by_unit`` is when the student last did something in each
+    knowledge point (an answer, a finished lesson); the recommendation reads it.
+    """
     facts = lit_facts or {}
     retry_at = star_quiz_retry_at or {}
     subjects = [item for item in catalog.get("subjects") or () if isinstance(item, Mapping)]
@@ -231,12 +319,24 @@ def build_map(
             }
         )
 
+    successors: dict[str, list[str]] = {}
+    for unit in units:
+        for before in unit.get("prerequisiteUnitIds") or ():
+            successors.setdefault(str(before), []).append(str(unit.get("id") or ""))
     for galaxy in galaxies:
-        mine = [star for star in stars if _subject_of(star, subject_of_nebula) == galaxy["subjectId"]]
-        recommended = _recommended_unit(mine)
-        for star in mine:
-            if star["unitId"] == recommended:
-                star["recommendation"] = {"source": "system"}
+        if not galaxy["enrolled"]:
+            continue
+        picked = _recommendation(
+            stars,
+            subject_id=galaxy["subjectId"],
+            subject_of=lambda star: _subject_of(star, subject_of_nebula),
+            successors=successors,
+            facts=facts,
+            evidence=last_evidence_by_unit or {},
+        )
+        if picked is not None:
+            star, reason, related = picked
+            star["recommendation"] = {"source": "system", "reason": reason, "relatedUnitId": related}
 
     focused = [star for star in stars if _subject_of(star, subject_of_nebula) == subject_id]
     return {
@@ -294,6 +394,16 @@ def _review_due_by_unit(student_id: str, lessons: Sequence[Mapping[str, Any]]) -
         if unit_id:
             counts[unit_id] = counts.get(unit_id, 0) + 1
     return counts
+
+
+def _last_evidence_by_unit(student_id: str) -> dict[str, str]:
+    """When the student last did something in each knowledge point, for the recommendation."""
+    try:
+        return practice_repo.last_activity_by_unit(student_id)
+    except Exception:  # noqa: BLE001
+        # A recommendation without it still picks a star in progress, by order.
+        logger.warning("Last activity unavailable for the star map", exc_info=True)
+        return {}
 
 
 def _star_quiz_retry_at(student_id: str) -> dict[str, str]:
@@ -424,6 +534,7 @@ def knowledge_map(
         enrolled_subject_ids=enrolled,
         lit_facts=_lit_facts(student_id, states),
         star_quiz_retry_at=_star_quiz_retry_at(student_id),
+        last_evidence_by_unit=_last_evidence_by_unit(student_id),
         skill_states=(
             None if view == "skeleton"
             else knowledge_mastery_service.skill_states(student_id, locale=locale, catalog=catalog)

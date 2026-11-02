@@ -674,6 +674,10 @@ async def get_knowledge_map(
     can mark it and say which to learn first. `litAtSource` is `quiz` for a
     star lit by passing its star quiz, and `starQuizRetryAt` says when a star
     whose quiz was lost can be taken again - None when it can now (#165).
+    A recommended star's `recommendation` is `{source, reason, relatedUnitId}`:
+    `reason` is `in_progress`, `after_lit` (then `relatedUnitId` is the star
+    whose lighting it follows) or `start`; only subjects the student takes
+    carry one (#164).
     """
     try:
         return knowledge_map_service.knowledge_map(
