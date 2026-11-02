@@ -278,7 +278,7 @@ def test_teacher_current_task_is_narrow_and_queue_visibility_never_authorizes():
 
 @pytest.mark.parametrize(
     "change",
-    ["wrong_teacher", "stale_dispatch", "reassigned", "wrong_session", "suspended"],
+    ["wrong_teacher", "stale_dispatch", "revoked", "wrong_session", "suspended"],
 )
 def test_teacher_stale_wrong_or_suspended_task_denies_immediately(change):
     question = {
@@ -305,8 +305,8 @@ def test_teacher_stale_wrong_or_suspended_task_denies_immediately(change):
             dispatch_status="dispatched",
             dispatch_deadline_at="2020-01-01T00:00:00Z",
         )
-    elif change == "reassigned":
-        question["dispatch_status"] = "reassigned"
+    elif change == "revoked":
+        question["dispatch_status"] = "revoked"
     elif change == "wrong_session":
         session["teacher_id"] = "teacher-2"
     elif change == "suspended":
