@@ -119,7 +119,7 @@ def install_actor_overrides(app: FastAPI, user: dict) -> Actor:
                     )
                 )
             if current_actor.role is CanonicalRole.TEACHER and user.get("assigned", True):
-                question = (
+                request = (
                     _value
                     if resource.resource_type.value
                     in {"question", "teacher_help_request"}
@@ -129,22 +129,25 @@ def install_actor_overrides(app: FastAPI, user: dict) -> Actor:
                     resource.resource_type.value == "ai_teacher_draft"
                     and _value.get("question_id")
                 ):
+                    # The help request the draft was made from (#234).
+                    request_id = _value.get("question_id")
                     task_teachers = user.get("taskTeacherByQuestion") or {}
-                    question = {
-                        "question_id": _value.get("question_id"),
+                    request = {
+                        "conversation_id": request_id,
+                        "escalation_request_id": request_id,
                         "student_id": resource.student_id,
                         "teacher_id": task_teachers.get(
-                            _value.get("question_id"),
+                            request_id,
                             user.get("taskTeacherId", current_actor.user_id),
                         ),
-                        "status": user.get("taskStatus", "teacher_active"),
+                        "escalation_status": user.get("taskStatus", "in_progress"),
                         "dispatch_status": user.get("taskDispatchStatus", "accepted"),
                     }
                 return AuthorizationFacts(
                     teacher=TeacherAuthorizationFacts(
-                        question=question,
+                        request=request,
                         assignment=None
-                        if question
+                        if request
                         else {
                             "teacher_id": current_actor.user_id,
                             "student_id": resource.student_id,

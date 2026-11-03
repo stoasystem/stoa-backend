@@ -1,5 +1,5 @@
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from stoa.db.repositories import user_repo
@@ -26,6 +26,40 @@ def _question(**overrides):
     }
     item.update(overrides)
     return item
+
+
+def _request(**overrides):
+    """A help request record: what `/questions/{id}/reports` resolves (#189, #234)."""
+    item = {
+        "conversation_id": "question-1",
+        "escalation_request_id": "question-1",
+        "student_id": "student-1",
+        "account_fence_generation": 1,
+        "subject": "math",
+        "escalation_status": "pending",
+        "escalation_message": "Solve 2x = 10",
+    }
+    item.update(overrides)
+    return item
+
+
+def _serve_request(monkeypatch, **overrides):
+    from stoa.services import help_requests
+
+    monkeypatch.setattr(help_requests, "get", lambda *_a, **_k: _request(**overrides))
+
+
+def _report(user, **body):
+    """A report made through the service alone, of a row from the question lane.
+
+    The route resolves help requests only since #234; the service still reads
+    a question row itself when it is handed none.
+    """
+    from stoa.models.moderation import ModerationReportRequest
+
+    return moderation_service.create_case(
+        "question-1", ModerationReportRequest.model_validate(body), user
+    )
 
 
 def _case(**overrides):
@@ -109,18 +143,14 @@ def test_student_can_report_own_question_without_private_image_key(monkeypatch):
     )
     monkeypatch.setattr(moderation_service.moderation_repo, "put_event", lambda case_id, event: events.append(event))
 
-    response = _questions_app({"sub": "student-1", "role": "student"}).post(
-        "/questions/question-1/reports",
-        json={
-            "surface": "ai_answer",
-            "reason": "unsafe_content",
-            "severity": "high",
-            "note": "This answer looks unsafe",
-        },
+    body = _report(
+        {"sub": "student-1", "role": "student"},
+        surface="ai_answer",
+        reason="unsafe_content",
+        severity="high",
+        note="This answer looks unsafe",
     )
 
-    assert response.status_code == 201
-    body = response.json()
     assert body["status"] == "open"
     assert body["reason"] == "unsafe_content"
     assert body["question_context"]["ai_answer_preview"] == "x = 5"
@@ -132,7 +162,7 @@ def test_student_can_report_own_question_without_private_image_key(monkeypatch):
 
 
 def test_student_cannot_report_another_students_question(monkeypatch):
-    monkeypatch.setattr(moderation_service.question_repo, "get_question", lambda question_id: _question())
+    _serve_request(monkeypatch)
 
     response = _questions_app({"sub": "student-2", "role": "student"}).post(
         "/questions/question-1/reports",
@@ -144,7 +174,7 @@ def test_student_cannot_report_another_students_question(monkeypatch):
 
 def test_teacher_reporting_requires_visible_question(monkeypatch):
     _stub_teacher_authorization_facts(monkeypatch)
-    monkeypatch.setattr(moderation_service.question_repo, "get_question", lambda question_id: _question(status="pending"))
+    _serve_request(monkeypatch)
 
     response = _questions_app({"sub": "teacher-1", "role": "teacher"}).post(
         "/questions/question-1/reports",
@@ -156,11 +186,7 @@ def test_teacher_reporting_requires_visible_question(monkeypatch):
 
 def test_report_teacher_reply_requires_existing_reply(monkeypatch):
     _stub_teacher_authorization_facts(monkeypatch)
-    monkeypatch.setattr(
-        moderation_service.question_repo,
-        "get_question",
-        lambda question_id: _question(status="escalated", teacher_response=None),
-    )
+    _serve_request(monkeypatch, escalation_status="pending")
 
     response = _questions_app({"sub": "teacher-1", "role": "teacher"}).post(
         "/questions/question-1/reports",
@@ -238,7 +264,7 @@ def test_admin_can_open_update_and_note_moderation_case(monkeypatch):
 
 def test_nobody_can_report_an_image_case_themselves(monkeypatch):
     """`image_upload` cases are opened by image moderation only (#139)."""
-    monkeypatch.setattr(moderation_service.question_repo, "get_question", lambda question_id: _question())
+    _serve_request(monkeypatch)
     monkeypatch.setattr(
         moderation_service.moderation_repo,
         "put_case",
@@ -261,17 +287,12 @@ def test_the_teacher_who_answered_a_question_reports_its_reply_from_the_row(monk
     )
     monkeypatch.setattr(moderation_service.moderation_repo, "put_case", lambda item, event: None)
 
-    app = FastAPI()
-    app.include_router(questions.router, prefix="/questions")
-    install_actor_overrides(app, {"sub": "teacher-1", "role": "teacher"})
-
-    response = TestClient(app).post(
-        "/questions/question-1/reports",
-        json={"surface": "teacher_reply", "reason": "incorrect_answer", "severity": "medium"},
-    )
-
-    assert response.status_code == 201, response.text
-    context = response.json()["question_context"]
+    context = _report(
+        {"sub": "teacher-1", "role": "teacher"},
+        surface="teacher_reply",
+        reason="incorrect_answer",
+        severity="medium",
+    )["question_context"]
     assert context["teacher_response_preview"] == "Divide by 2."
     assert context["ai_answer_preview"] == "x = 5"
     assert "reported_message_id" not in context
@@ -280,9 +301,12 @@ def test_the_teacher_who_answered_a_question_reports_its_reply_from_the_row(monk
 def test_a_question_report_names_no_message(monkeypatch):
     monkeypatch.setattr(moderation_service.question_repo, "get_question", lambda question_id: _question())
 
-    response = _questions_app({"sub": "student-1", "role": "student"}).post(
-        "/questions/question-1/reports",
-        json={"surface": "ai_answer", "reason": "unsafe_content", "message_id": "msg-1"},
-    )
+    with pytest.raises(HTTPException) as refused:
+        _report(
+            {"sub": "student-1", "role": "student"},
+            surface="ai_answer",
+            reason="unsafe_content",
+            message_id="msg-1",
+        )
 
-    assert response.status_code == 400
+    assert refused.value.status_code == 400

@@ -379,15 +379,196 @@ def test_a_students_requests_are_found_by_the_student(world) -> None:
     assert "escalated" not in merged[1]
 
 
-# ── readers keyed by a question id ───────────────────────────────────────────
+# ── what a teacher may do (#234) ─────────────────────────────────────────────
+#
+# The expectations are the rules, written out: a request that ended without a
+# teacher, or was closed to its teacher ("revoked"), lets nobody do anything;
+# writes (RESPOND / RESOLVE / UPDATE) go to the holder of an in-progress or
+# resolved request, or to the teacher a live offer on a pending, unheld request
+# names who has not let it lapse before; reads (READ / CREATE) go to the holder,
+# else the offered teacher, while pending, in progress or resolved, unless the
+# offer has lapsed; nothing else (CLAIM) is allowed. No deadline is a live one;
+# one that cannot be read has passed.
+
+ME = TEACHER
+MAY_NOW = ASKED + timedelta(minutes=5)
+LIVE = (ASKED + timedelta(minutes=10)).isoformat()
+PAST = (ASKED + timedelta(minutes=1)).isoformat()
+Action = help_requests.AuthorizationAction
+WRITES = (Action.UPDATE, Action.RESPOND, Action.RESOLVE)
+READS = (Action.READ, Action.CREATE)
+ALL_ACTIONS = (*READS, *WRITES, Action.CLAIM)
+
+
+def _request(status: str, **fields) -> dict:
+    return {
+        "conversation_id": CONV,
+        "escalation_request_id": CONV,
+        "student_id": STUDENT,
+        "escalation_status": status,
+        **fields,
+    }
+
+
+def _offered(**fields) -> dict:
+    return _request(
+        "pending", dispatch_status="dispatched", dispatched_teacher_id=ME, **fields
+    )
+
+
+NOTHING: frozenset = frozenset()
+EVERYTHING_BUT_CLAIM = frozenset((*READS, *WRITES))
+TEACHER_MAY_CASES = {
+    "pending unassigned": (_request("pending", dispatch_status="unassigned"), NOTHING),
+    "pending offered live": (_offered(dispatch_deadline_at=LIVE), EVERYTHING_BUT_CLAIM),
+    "pending offered, no deadline": (_offered(), EVERYTHING_BUT_CLAIM),
+    "pending offered expired": (_offered(dispatch_deadline_at=PAST), NOTHING),
+    "pending offered, deadline unreadable": (
+        _offered(dispatch_deadline_at="not-a-time"),
+        NOTHING,
+    ),
+    "pending offered to a teacher who let it lapse before": (
+        _offered(dispatch_deadline_at=LIVE, previous_dispatch_teacher_ids=[ME]),
+        frozenset(READS),
+    ),
+    "pending offered to another": (
+        _request(
+            "pending",
+            dispatch_status="dispatched",
+            dispatched_teacher_id=OTHER,
+            dispatch_deadline_at=LIVE,
+        ),
+        NOTHING,
+    ),
+    "pending no_candidate": (
+        _request("pending", dispatch_status="no_candidate"),
+        NOTHING,
+    ),
+    "in_progress held by me": (
+        _request("in_progress", teacher_id=ME, dispatch_status="accepted"),
+        EVERYTHING_BUT_CLAIM,
+    ),
+    "in_progress held by me, a lapsed offer still on it": (
+        _request(
+            "in_progress",
+            teacher_id=ME,
+            dispatch_status="dispatched",
+            dispatched_teacher_id=ME,
+            dispatch_deadline_at=PAST,
+        ),
+        frozenset(WRITES),
+    ),
+    "in_progress held by another": (
+        _request("in_progress", teacher_id=OTHER, dispatch_status="accepted"),
+        NOTHING,
+    ),
+    "in_progress held by another, offered to me before": (
+        _request(
+            "in_progress", teacher_id=OTHER, dispatched_teacher_id=ME, dispatch_status="accepted"
+        ),
+        NOTHING,
+    ),
+    "resolved held by me": (
+        _request("resolved", teacher_id=ME, dispatch_status="accepted"),
+        EVERYTHING_BUT_CLAIM,
+    ),
+    "resolved held by another": (
+        _request("resolved", teacher_id=OTHER, dispatch_status="accepted"),
+        NOTHING,
+    ),
+    "withdrawn": (
+        _request("withdrawn", dispatch_status="withdrawn", dispatched_teacher_id=ME),
+        NOTHING,
+    ),
+    "expired": (
+        _request("expired", dispatch_status="expired", dispatched_teacher_id=ME),
+        NOTHING,
+    ),
+    "revoked": (
+        _request("resolved", teacher_id=ME, dispatch_status="revoked"),
+        NOTHING,
+    ),
+}
+
+
+@pytest.mark.parametrize("case", list(TEACHER_MAY_CASES))
+@pytest.mark.parametrize("action", ALL_ACTIONS, ids=lambda action: action.value)
+def test_what_a_teacher_may_do_to_a_request(case: str, action) -> None:
+    record, allowed = TEACHER_MAY_CASES[case]
+
+    assert help_requests.teacher_may(record, ME, action, now=MAY_NOW) is (action in allowed)
+
+
+def test_a_request_without_a_status_is_pending() -> None:
+    record = _offered(dispatch_deadline_at=LIVE)
+    del record["escalation_status"]
+
+    assert all(help_requests.teacher_may(record, ME, action, now=MAY_NOW) for action in WRITES)
+
+
+def test_an_offer_is_written_through_the_request_only() -> None:
+    """A live offer lets its teacher write the request itself, nothing else.
+
+    `teacher_may` answers for the request; which resource an offered teacher
+    writes through is the policy's to say. Writes through a question, a
+    conversation or a draft keyed by the request take holding it; reads do not.
+    """
+    from stoa.security.authorization import (
+        AuthorizationPurpose,
+        ResourceRef,
+        ResourceType,
+        TeacherAuthorizationFacts,
+    )
+
+    def facts(record: dict) -> TeacherAuthorizationFacts:
+        return TeacherAuthorizationFacts(
+            request=record,
+            teacher_account={"user_id": ME, "role": "teacher", "account_status": "active"},
+            student_account={"user_id": STUDENT, "role": "student", "account_status": "active"},
+        )
+
+    def permits(record: dict, resource_type, action) -> bool:
+        question_id = CONV if resource_type is ResourceType.AI_TEACHER_DRAFT else None
+        resource_id = "draft-1" if question_id else CONV
+        return facts(record).permits(
+            ME,
+            ResourceRef(resource_type, resource_id, STUDENT, question_id=question_id),
+            action,
+            AuthorizationPurpose.TEACHER_HELP,
+            MAY_NOW,
+        )
+
+    offered = _offered(dispatch_deadline_at=LIVE)
+    held = _request("in_progress", teacher_id=ME, dispatch_status="accepted")
+    for action in WRITES:
+        assert permits(offered, ResourceType.TEACHER_HELP_REQUEST, action)
+        for resource_type in (
+            ResourceType.QUESTION,
+            ResourceType.CONVERSATION,
+            ResourceType.AI_TEACHER_DRAFT,
+        ):
+            assert not permits(offered, resource_type, action)
+            assert permits(held, resource_type, action)
+    for action in READS:
+        for resource_type in (
+            ResourceType.TEACHER_HELP_REQUEST,
+            ResourceType.QUESTION,
+            ResourceType.CONVERSATION,
+            ResourceType.AI_TEACHER_DRAFT,
+        ):
+            assert permits(offered, resource_type, action)
+
+
+# ── the admin dashboard's reading of a request (#235 retires it) ─────────────
 
 
 def test_the_request_reads_as_a_question_where_one_is_expected(world) -> None:
     world.ask()
 
-    view = help_requests.question_view_for(CONV, table=world.table)
+    record = help_requests.get(CONV, table=world.table)
+    assert record is not None
+    view = help_requests.question_view(record)
 
-    assert view is not None
     assert view["question_id"] == CONV
     assert view["status"] == "escalated"
     assert view["source"] == "conversation_escalation"
@@ -476,14 +657,6 @@ def test_a_request_is_dated_when_asked_else_when_changed_else_now() -> None:
     view = help_requests.teacher_view(base, now=at(3))
     assert view.created_at == at(3)
     assert (view.request_id, view.subject, view.status, view.request_message) == (CONV, "General", "pending", None)
-
-
-def test_the_teacher_view_reads_the_question_view_alike(world) -> None:
-    world.ask()
-
-    assert help_requests.teacher_view(help_requests.question_view(world.record), now=at(1)) == (
-        help_requests.teacher_view(world.record, now=at(1))
-    )
 
 
 # ── the teacher's moves tell the student (#233) ──────────────────────────────

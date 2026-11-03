@@ -778,21 +778,21 @@ def test_digest_preview_filters_by_time_window(monkeypatch):
 
 def test_teacher_can_build_assistance_summary_seed(monkeypatch):
     stored = []
+    # A question id names a help request (#189); the route reads its record (#234).
     monkeypatch.setattr(
-        teachers.question_repo,
-        "get_question",
-        lambda question_id: {
-            "question_id": question_id,
+        teachers.help_requests,
+        "get",
+        lambda question_id, **_kwargs: {
+            "conversation_id": question_id,
+            "escalation_request_id": question_id,
             "student_id": "student-1",
-            "status": "teacher_active",
+            "escalation_status": "in_progress",
             "teacher_id": "teacher-1",
             "subject": "physics",
-            "content": "Why is friction opposite to motion?",
-            "ai_response": {"answer": "Friction resists relative motion."},
-            "topic_seeds": [{"label": "Forces and friction"}],
-            "knowledge_points": ["free-body diagrams"],
+            "escalation_message": "Why is friction opposite to motion?",
         },
     )
+    monkeypatch.setattr(teacher_assistance_service.learning_session, "history", lambda _id: [])
     monkeypatch.setattr(
         teacher_assistance_service.notification_repo,
         "put_summary_seed",
@@ -806,8 +806,10 @@ def test_teacher_can_build_assistance_summary_seed(monkeypatch):
     body = response.json()
     assert body["questionId"] == "question-1"
     assert body["subject"] == "physics"
-    assert body["weakTopics"] == ["Forces and friction", "free-body diagrams"]
-    assert "Forces and friction" in body["suggestedFocus"]
+    assert body["questionSummary"] == "Why is friction opposite to motion?"
+    # A request names no topic.
+    assert body["weakTopics"] == []
+    assert body["sourceCount"] == 1
     assert stored[0]["entity_type"] == "teacher_assistance_summary_seed"
 
 
@@ -1040,10 +1042,11 @@ SUBJECT_NAMES = {
 
 
 def _bare_question() -> dict:
+    """A help request record with a note, and no conversation to read (#234)."""
     return {
         "student_id": "student-1",
         "subject": "mathematics",
-        "content": "Bitte hilf mir beim Dividieren.",
+        "escalation_message": "Bitte hilf mir beim Dividieren.",
         "account_fence_generation": 1,
     }
 
@@ -1075,56 +1078,40 @@ def test_the_seed_is_written_in_the_language_of_the_teacher_reading_it(monkeypat
     assert len(set(produced.values())) == len(locale_service.SUPPORTED_LOCALES)
 
 
-def test_every_branch_of_the_seed_has_its_own_sentence(monkeypatch):
-    """The negative control: four different situations, four different lines.
-
-    Without it a `_suggested_focus` that returned the same sentence whatever
-    the question held would pass the locale test above.
-    """
-    cases = {
-        "bare": _bare_question(),
-        "with_topics": {**_bare_question(), "topic_seeds": [{"label": "Brüche"}]},
-        "after_reply": {**_bare_question(), "teacher_response": {"answer": "..."}},
-    }
-
-    produced = {
-        name: (
-            _seed_in(monkeypatch, "de", question)["studentContextSummary"],
-            _seed_in(monkeypatch, "de", question)["suggestedFocus"],
-        )
-        for name, question in cases.items()
-    }
-
-    assert len(set(produced.values())) == len(cases)
-
-
 def test_the_student_s_own_words_are_passed_through_not_rewritten(monkeypatch):
-    """Content is not copy: the question and the topic labels go through as they are."""
-    question = {**_bare_question(), "topic_seeds": [{"label": "Brüche"}]}
+    """Content is not copy: the student's note goes through as it is.
 
-    seed = _seed_in(monkeypatch, "fr", question)
+    A request names no topic, so there are none to pass (#234).
+    """
+    seed = _seed_in(monkeypatch, "fr", _bare_question())
 
     assert seed["questionSummary"] == "Bitte hilf mir beim Dividieren."
-    assert seed["weakTopics"] == ["Brüche"]
+    assert seed["weakTopics"] == []
 
 
 # ── the subject is named, not its id (#105) ───────────────────────────────
 
 
-def _summary_over_http(monkeypatch, language: str, question: dict) -> dict:
+def _summary_over_http(
+    monkeypatch, language: str, question: dict, *, conversation_seeded: bool = False
+) -> dict:
     """The assistance summary as the teacher's client fetches it, in `language`."""
     from stoa.main import RequestLocaleMiddleware
 
+    # A question id names a help request (#189); the route reads its record (#234).
     monkeypatch.setattr(
-        teachers.question_repo,
-        "get_question",
-        lambda question_id: {
-            "question_id": question_id,
-            "status": "teacher_active",
+        teachers.help_requests,
+        "get",
+        lambda question_id, **_kwargs: {
+            "conversation_id": question_id,
+            "escalation_request_id": question_id,
+            "escalation_status": "in_progress",
             "teacher_id": "teacher-1",
             **question,
         },
     )
+    if not conversation_seeded:
+        monkeypatch.setattr(teacher_assistance_service.learning_session, "history", lambda _id: [])
     monkeypatch.setattr(
         teacher_assistance_service.notification_repo, "put_summary_seed", lambda item: item
     )
@@ -1134,8 +1121,9 @@ def _summary_over_http(monkeypatch, language: str, question: dict) -> dict:
     app.add_middleware(RequestLocaleMiddleware)
     app.include_router(teachers.router, prefix="/teachers")
     install_actor_overrides(app, {"sub": "teacher-1", "role": "teacher"})
+    request_id = question.get("conversation_id", "question-1")
     response = TestClient(app).get(
-        "/teachers/questions/question-1/assistance-summary",
+        f"/teachers/questions/{request_id}/assistance-summary",
         headers={"Accept-Language": language},
     )
     locale_service.set_request_locale(None)
@@ -1144,30 +1132,26 @@ def _summary_over_http(monkeypatch, language: str, question: dict) -> dict:
 
 
 def test_the_context_sentence_names_the_subject_in_the_teacher_s_language(monkeypatch):
-    """Both sentences, all four languages: «… in Mathematik …», never «… in mathematics …».
+    """All four languages: «… in Mathematik …», never «… in mathematics …».
 
     `mathematics` is how rows from the question lane spell the subject; the
     sentence around it was already translated, the subject was not.
     """
-    with_topics = {**_bare_question(), "topic_seeds": [{"label": "Brüche"}]}
-
     produced = {
-        language: (
-            _summary_over_http(monkeypatch, language, with_topics)["studentContextSummary"],
-            _summary_over_http(monkeypatch, language, _bare_question())["studentContextSummary"],
-        )
+        language: _summary_over_http(monkeypatch, language, _bare_question())[
+            "studentContextSummary"
+        ]
         for language in SUBJECT_NAMES
     }
 
-    for language, sentences in produced.items():
-        for sentence in sentences:
-            assert SUBJECT_NAMES[language] in sentence, (language, sentence)
-            assert "mathematics" not in sentence, (language, sentence)
+    for language, sentence in produced.items():
+        assert SUBJECT_NAMES[language] in sentence, (language, sentence)
+        assert "mathematics" not in sentence, (language, sentence)
     assert produced["de"] == (
-        "Die Schülerin oder der Schüler zeigt Hinweise in Mathematik rund um Brüche.",
         "Die Schülerin oder der Schüler hat eine offene Anfrage in Mathematik, "
-        "noch ohne ausreichende Hinweise auf ein Thema.",
+        "noch ohne ausreichende Hinweise auf ein Thema."
     )
+    assert len(set(produced.values())) == len(SUBJECT_NAMES)
 
 
 def test_every_subject_id_and_alias_has_its_own_name(monkeypatch):
@@ -1198,12 +1182,12 @@ def test_every_subject_id_and_alias_has_its_own_name(monkeypatch):
 
 
 def _escalated_conversation(note: str = "") -> dict:
-    """The row `conversations._escalated_question_operation` writes: no answer on it."""
+    """The help request of `conv-1`: its note, and no answer on it (#178, #234)."""
     return {
         **_bare_question(),
-        "source": "conversation_escalation",
         "conversation_id": "conv-1",
-        "content": note,
+        "escalation_request_id": "conv-1",
+        "escalation_message": note,
     }
 
 
@@ -1224,7 +1208,7 @@ def _conversation_summary(monkeypatch, question: dict, *messages: dict) -> dict:
     for message in messages:
         seed_message(table, **message)
     patch_session_table(monkeypatch, table)
-    return _summary_over_http(monkeypatch, "de", question)
+    return _summary_over_http(monkeypatch, "de", question, conversation_seeded=True)
 
 
 # Message ids are random, so their keys do not run in the order they were sent.
@@ -1271,18 +1255,6 @@ def test_a_conversation_summary_is_cut_at_360_characters(monkeypatch):
 
     assert summary["questionSummary"] == "x" * 360
     assert summary["aiAnswerSummary"] == "y" * 360
-
-
-def test_a_request_from_the_retired_question_lane_reads_its_own_row(monkeypatch):
-    """The conversation is not read for a row that carries its question and answer."""
-    summary = _conversation_summary(
-        monkeypatch,
-        {**_bare_question(), "ai_response": {"answer": "Teile Zähler und Nenner."}},
-        *_CONVERSATION,
-    )
-
-    assert summary["questionSummary"] == "Bitte hilf mir beim Dividieren."
-    assert summary["aiAnswerSummary"] == "Teile Zähler und Nenner."
 
 
 # ── events sent to a whole role, read in each reader's language (#108) ─────
