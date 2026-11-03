@@ -7,7 +7,7 @@ import pytest
 
 from stoa.config import Settings
 from stoa.db.repositories import attachment_repo
-from stoa.services import attachment_service
+from stoa.services import attachment_service, learning_session
 
 
 OWNER = "student-retention"
@@ -132,7 +132,16 @@ def _condition_checks(operations: list[Any]) -> list[dict[str, Any]]:
 
 def test_message_association_transaction_checks_resource_and_account_fences() -> None:
     operations = attachment_repo.build_message_attachment_transaction(
-        message={"PK": "CONV#1", "SK": "MSG#1", "message_id": "message-1"},
+        message_put=learning_session.append(
+            "1",
+            role="student",
+            message_id="1",
+            student_id=OWNER,
+            generation=1,
+            content="a question",
+            created_at="2026-07-17T00:00:00+00:00",
+            attachment_ids=[],
+        ),
         fresh=[],
         reused=[_attachment()],
         associations=[_association()],

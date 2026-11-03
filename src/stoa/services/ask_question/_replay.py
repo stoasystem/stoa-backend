@@ -15,7 +15,7 @@ from stoa.models.attachment import AttachmentSummary
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.services import attachment_service
 from stoa.services.ask_question.models import MessageQuote, stored_quote
-from stoa.services.learning_session import conv_pk, msg_sk
+from stoa.services import learning_session
 
 
 def _validate_replay_attachment(
@@ -112,23 +112,15 @@ def _stored_student_message(
     summaries and the quote stored with it. `expected_content` and
     `expected_quote` are the request's, when there is a request.
     """
+    # The session checks the row is a message of this conversation and the
+    # student's (#227); what is left is the question's own.
     stored_student = _conversation_repository_call(
-        lambda: table.get_item(
-            Key={"PK": conv_pk(conv_id), "SK": msg_sk(student_msg_id)},
-            ConsistentRead=True,
-        ).get("Item")
+        lambda: learning_session.committed_message(
+            conv_id, student_msg_id, student_id=student_id
+        )
     )
     if (
-        not isinstance(stored_student, dict)
-        or stored_student.get("PK") != conv_pk(conv_id)
-        or stored_student.get("SK") != msg_sk(student_msg_id)
-        or stored_student.get("entity_type") != "conversation_message"
-        or stored_student.get("schema_version") != "conversation-message.v1"
-        or stored_student.get("message_id") != student_msg_id
-        or stored_student.get("conversation_id") != conv_id
-        or stored_student.get("student_id") != student_id
-        or stored_student.get("role") != "student"
-        or not isinstance(stored_student.get("content"), str)
+        stored_student.get("role") != "student"
         or (
             expected_content is not None
             and stored_student.get("content") != expected_content

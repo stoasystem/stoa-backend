@@ -2037,7 +2037,7 @@ def _batch_response_page(
 
 def build_message_attachment_transaction(
     *,
-    message: dict[str, object],
+    message_put: dict[str, object],
     fresh: list[tuple[dict[str, object], dict[str, object]]],
     reused: list[dict[str, object]],
     associations: list[dict[str, object]],
@@ -2077,24 +2077,8 @@ def build_message_attachment_transaction(
                 },
             )
         )
-    operations.extend(
-        [
-        TransactionOperation(
-            TransactionOperationKind.MESSAGE_PUT,
-            {
-                "Put": {
-                    "Item": {
-                        **message,
-                        "owner_id": owner_id,
-                        "student_id": owner_id,
-                        "account_fence_generation": account_fence_generation,
-                    },
-                    "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
-                }
-            },
-        )
-        ]
-    )
+    # The message's own put, as `learning_session.append` made it (#227).
+    operations.append(TransactionOperation(TransactionOperationKind.MESSAGE_PUT, message_put))
     for upload, attachment in fresh:
         upload_id = _required_text(upload.get("upload_id"))
         upload_version = _required_integer(upload.get("version"), minimum=1)

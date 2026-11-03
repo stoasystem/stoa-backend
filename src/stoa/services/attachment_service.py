@@ -2629,7 +2629,8 @@ def ensure_message_attachment_capacity(
 
 def bind_message_attachments(
     *,
-    message: dict[str, Any],
+    message_id: str,
+    message_put: Callable[[list[str], int], dict[str, object]],
     conversation_id: str,
     actor: Actor,
     prepared: list[tuple[str, dict[str, Any]]],
@@ -2641,6 +2642,10 @@ def bind_message_attachments(
     deterministic_attachment_ids: Sequence[object] | None = None,
 ) -> list[AttachmentSummary]:
     """Atomically persist a message and every fresh/reused attachment reference.
+
+    `message_put(attachment_ids, generation)` builds the message's own put
+    (`learning_session.append`), called once with the ids bound here and the
+    account fence generation the transaction is checked against.
 
     `command_operations(owner_id=..., now_iso=...)` builds what the message's
     owner writes with it (a question's command row); they go last, in the same
@@ -2687,7 +2692,7 @@ def bind_message_attachments(
         associations.append(
             {
                 **repository.association_key(
-                    attachment_id, "conversation", conversation_id, message["message_id"]
+                    attachment_id, "conversation", conversation_id, message_id
                 ),
                 "attachment_id": attachment_id,
                 "owner_id": actor.user_id,
@@ -2695,21 +2700,21 @@ def bind_message_attachments(
                 "entity_type": "attachment_association",
                 "resource_type": "conversation",
                 "resource_id": conversation_id,
-                "message_id": message["message_id"],
+                "message_id": message_id,
                 "created_at": now.isoformat(),
             }
         )
         summaries.append(_attachment_summary(attachment))
-    message["attachment_ids"] = bound_attachment_ids
     limit = storage_limit_for_entitlement(effective_plan)
     ensure_message_attachment_capacity(
         prepared, actor.user_id, effective_plan, repository=repository
     )
     try:
         account_fence = _require_active_account_fence_for_repository(repository, actor.user_id)
+        generation = int(account_fence["generation"])
         repository.transact(
             repository.build_message_attachment_transaction(
-                message=message,
+                message_put=message_put(bound_attachment_ids, generation),
                 fresh=fresh,
                 reused=reused,
                 associations=associations,
@@ -2721,7 +2726,7 @@ def bind_message_attachments(
                     if command_operations is not None
                     else ()
                 ),
-                account_fence_generation=int(account_fence["generation"]),
+                account_fence_generation=generation,
             )
         )
     except account_deletion_repo.AccountDeletionConflict:

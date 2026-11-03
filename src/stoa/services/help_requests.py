@@ -396,33 +396,25 @@ def ask(
     note = str(message or "").strip()
     if note:
         record["escalation_message"] = note
-    system_row = {
-        "PK": f"CONV#{conversation_id}",
-        "SK": f"MSG#{conversation_id}",
-        "entity_type": "conversation_message",
-        "schema_version": "conversation-message.v1",
-        "message_id": conversation_id,
-        "conversation_id": conversation_id,
-        "student_id": student_id,
-        "owner_id": student_id,
-        "account_fence_generation": generation,
-        "role": "system",
-        "content": system_message,
-        "system_event": "teacher_help_requested",
-        "escalation_message": message,
-        "created_at": timestamp,
-    }
+    # The system message that opens the request in the conversation; its id
+    # is the conversation's, so a conversation has one.
+    system_message_put = learning_session.append(
+        conversation_id,
+        role="system",
+        message_id=conversation_id,
+        student_id=student_id,
+        generation=generation,
+        content=system_message,
+        created_at=timestamp,
+        system_event="teacher_help_requested",
+        escalation_message=message,
+    )
     record_operations = learning_session.build_conversation_write_transaction(
         item=record, owner_id=student_id, generation=generation
     )
     rows: list[dict[str, Any]] = [
         *cast(list[dict[str, Any]], record_operations),
-        cast(
-            dict[str, Any],
-            learning_session.build_conversation_write_transaction(
-                item=system_row, owner_id=student_id, generation=generation
-            )[1],
-        ),
+        cast(dict[str, Any], system_message_put),
         {
             "ConditionCheck": {
                 "Key": {"PK": f"CONV#{conversation_id}", "SK": "CONV"},

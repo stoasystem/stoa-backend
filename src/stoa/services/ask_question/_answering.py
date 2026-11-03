@@ -63,9 +63,7 @@ from stoa.services import learning_session
 from stoa.services.learning_session import (
     DynamoConversationTable,
     active_conversation_generation,
-    conv_pk,
     conversation_grade,
-    msg_sk,
 )
 
 logger = logging.getLogger(__name__)
@@ -1393,24 +1391,27 @@ def commit_message_command(
                 **command,
                 "counter_value": int(claim_result.counter_value or 0),
             }
-        student_item = {
-            "PK": conv_pk(conv_id),
-            "SK": msg_sk(student_msg_id),
-            "entity_type": "conversation_message",
-            "schema_version": "conversation-message.v1",
-            "message_id": student_msg_id,
-            "conversation_id": conv_id,
-            "student_id": student_id,
-            "owner_id": student_id,
-            "account_fence_generation": account_fence_generation,
-            "role": "student",
-            "content": body.content,
-            "created_at": created_at,
-        }
-        if body.quote is not None:
-            # Stored beside the message, so reading the conversation back shows
-            # the quote above the question exactly as it was asked.
-            student_item["quote"] = _quote_payload(body.quote)
+        # The message is the actor's, written under the fence generation and
+        # with the attachment ids that binding decides. The quote is stored
+        # beside it, so reading the conversation back shows the quote above the
+        # question exactly as it was asked.
+        student_quote = _quote_payload(body.quote) if body.quote is not None else None
+
+        def student_message_put(
+            attachment_ids: list[str], generation: int
+        ) -> dict[str, object]:
+            return learning_session.append(
+                conv_id,
+                role="student",
+                message_id=student_msg_id,
+                student_id=actor.user_id,
+                generation=generation,
+                content=body.content,
+                created_at=created_at,
+                attachment_ids=attachment_ids,
+                quote=student_quote,
+            )
+
         command_attachment_ids = command.get("deterministic_attachment_ids")
         if not isinstance(command_attachment_ids, list) or any(
             not isinstance(value, str) or not value
@@ -1422,7 +1423,8 @@ def commit_message_command(
         try:
             attachments = _conversation_repository_call(
                 lambda: attachment_service.bind_message_attachments(
-                    message=student_item,
+                    message_id=student_msg_id,
+                    message_put=student_message_put,
                     conversation_id=conv_id,
                     actor=actor,
                     prepared=prepared,
@@ -1898,23 +1900,18 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     result = SendMessageResponse(
         studentMessage=student_message, assistantMessage=assistant_message
     )
-    assistant_item = {
-        "PK": conv_pk(conv_id),
-        "SK": msg_sk(assistant_msg_id),
-        "entity_type": "conversation_message",
-        "schema_version": "conversation-message.v1",
-        "message_id": assistant_msg_id,
-        "conversation_id": conv_id,
-        "student_id": student_id,
-        "owner_id": student_id,
-        "account_fence_generation": account_fence_generation,
-        "role": "assistant",
-        "content": answer.content,
-        "created_at": assistant_created_at,
-        "structured": structured_payload(answer.structured),
-        **({"target_unit_id": answer.target_unit_id} if answer.target_unit_id else {}),
-        **(allowance_metadata or {}),
-    }
+    assistant_message_put = learning_session.append(
+        conv_id,
+        role="assistant",
+        message_id=assistant_msg_id,
+        student_id=student_id,
+        generation=account_fence_generation,
+        content=answer.content,
+        created_at=assistant_created_at,
+        structured=structured_payload(answer.structured),
+        target_unit_id=answer.target_unit_id,
+        allowance=allowance_metadata,
+    )
     # What the answer counts on the knowledge-base gap list (#142) and records
     # as asked knowledge points (#143), once per question; which those are is
     # the answer's to say (`ask_answer`).
@@ -1938,7 +1935,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 lease_owner=lease_owner,
                 lease_attempt=lease_attempt,
                 completed_epoch=completed_epoch,
-                assistant_message=assistant_item,
+                assistant_message_put=assistant_message_put,
                 result_json=_message_result_json(result, allowance_metadata),
                 completed_at=assistant_created_at,
                 account_fence_generation=account_fence_generation,

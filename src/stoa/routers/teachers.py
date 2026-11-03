@@ -1384,36 +1384,14 @@ async def add_note(
         "teacher_response_format": reply_fields["teacher_response_format"],
         "created_at": now,
     }
-    # The teacher's reply is also a message in the conversation, so it follows
-    # the message contract the student's history reader enforces on every row
-    # (learning_session._history._validate_history_message). Without it the
-    # student could no longer open the conversation once a teacher replied (#66,
-    # 2026-09-28).
+    # The teacher's reply is also a message in the conversation, appended by
+    # the learning session, so it follows the message contract the student's
+    # history reader enforces on every row. Without it the student could no
+    # longer open the conversation once a teacher replied (#66, 2026-09-28).
     msg_id = str(uuid.uuid4())
-    message_item = {
-        "PK": learning_session.conv_pk(conv_id),
-        "SK": f"MSG#{msg_id}",
-        "entity_type": "conversation_message",
-        "schema_version": "conversation-message.v1",
-        "message_id": msg_id,
-        "conversation_id": conv_id,
-        "student_id": student_id,
-        "owner_id": student_id,
-        "account_fence_generation": generation,
-        "role": "teacher",
-        "content": reply_fields["teacher_response"],
-        "teacher_response_rich": reply_fields["teacher_response_rich"],
-        "teacher_response_format": reply_fields["teacher_response_format"],
-        "created_at": now,
-    }
-    # The student sees who wrote each reply, as named when it was written (#65):
-    # the profile's name only, never the email; without one the frontend says
-    # "teacher".
-    author_name = (teacher_profile or {}).get("name")
-    if isinstance(author_name, str) and author_name.strip():
-        message_item["author_name"] = author_name.strip()
     image_operations: list[dict[str, Any]] = []
     attachments: list[AttachmentSummary] = []
+    message_attachment_ids: list[str] | None = None
     if reply_images:
         image_operations, attachments = attachment_service.reply_image_operations(
             reply_images,
@@ -1424,8 +1402,24 @@ async def add_note(
             message_id=msg_id,
         )
         attachment_ids = [summary.attachment_id for summary in attachments]
-        message_item["attachment_ids"] = attachment_ids
+        message_attachment_ids = attachment_ids
         note_item["attachment_ids"] = attachment_ids
+    # The student sees who wrote each reply, as named when it was written (#65):
+    # the profile's name only, never the email; without one the frontend says
+    # "teacher".
+    message_put = learning_session.append(
+        conv_id,
+        role="teacher",
+        message_id=msg_id,
+        student_id=student_id,
+        generation=generation,
+        content=reply_fields["teacher_response"],
+        created_at=now,
+        teacher_response_rich=reply_fields["teacher_response_rich"],
+        teacher_response_format=reply_fields["teacher_response_format"],
+        author_name=(teacher_profile or {}).get("name"),
+        attachment_ids=message_attachment_ids,
+    )
 
     if not help_requests.holder_or_offered(conv, teacher_id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_NOT_HELD)
@@ -1438,12 +1432,10 @@ async def add_note(
             conv,
             teacher_id=teacher_id,
             reply_operations=(
-                *(
-                    learning_session.build_conversation_write_transaction(
-                        item=item, owner_id=student_id, generation=generation
-                    )[1]
-                    for item in (note_item, message_item)
-                ),
+                learning_session.build_conversation_write_transaction(
+                    item=note_item, owner_id=student_id, generation=generation
+                )[1],
+                message_put,
                 *image_operations,
             ),
             now=now,

@@ -1,13 +1,14 @@
 """A learning session: a student's conversation, its record and its messages.
 
 The partition `CONV#{id}` holds the record (`SK=CONV`) and the messages
-(`SK=MSG#…`) every role writes. The package is being given its one owner in
+(`SK` under `_store.MESSAGE_PREFIX`) every role writes. The package is being given its one owner in
 three steps (#205). Step 1 (#226) moved the reads and the record here: the
 conversation reads from the question package's transcript module (now gone), the
 message queries of the teacher routes, moderation and the AI teacher tools, the
 record read of the phone upload codes, and the record's fenced writes from
 `attachment_repo`. `_store` is the only module that reaches the table for these
-rows. Step 2 (#205) moves the message writers here. The entry points:
+rows. Step 2 (#227) moved the message writers here: every message row is
+made by `append`. The entry points:
 
 - `open` starts a session for a student behind their account fence and returns
   its stored record.
@@ -16,7 +17,10 @@ rows. Step 2 (#205) moves the message writers here. The entry points:
 - `history` is every message, oldest first, as `Message` values; the student's
   `ChatMessage` and the teacher's `MessageOut` are built from them.
 - `history_rows` and `anchored_history` are the question's: the checked rows
-  it fingerprints, and the exact snapshot a committed command names.
+  it fingerprints, and the exact snapshot a committed command names;
+  `committed_message` is the one checked row its replay reads back.
+- `append` is the put that adds a message, by any role, to the caller's
+  transaction.
 
 A record or message the session cannot be read back from raises
 `AttachmentDecisionError` (`UPLOAD_SERVICE_UNAVAILABLE`).
@@ -28,8 +32,9 @@ from typing import Any, Protocol, cast
 
 from stoa.db.repositories import account_deletion_repo
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
-from stoa.services.learning_session import _history, _store
-from stoa.services.learning_session._history import Message, Role, message_from_row
+from stoa.services.learning_session import _history, _store, _write
+from stoa.services.learning_session._history import Message, message_from_row
+from stoa.services.learning_session._write import Role, append
 from stoa.services.learning_session._store import (
     build_conversation_write_transaction,
     conv_pk,
@@ -42,7 +47,9 @@ __all__ = [
     "Role",
     "active_conversation_generation",
     "anchored_history",
+    "append",
     "build_conversation_write_transaction",
+    "committed_message",
     "conv_pk",
     "conversation_grade",
     "conversation_response_items",
@@ -214,3 +221,22 @@ def history_fingerprint(rows: list[dict]) -> str:
 def stored_message(conversation_id: str, message_id: str) -> object:
     """One message row as stored, unchecked; `None` when there is none."""
     return _store.get_message(conversation_id, message_id)
+
+
+def committed_message(
+    conversation_id: str, message_id: str, *, student_id: str
+) -> dict[str, object]:
+    """One message row of the student's, read strongly and checked.
+
+    Refused with `UPLOAD_SERVICE_UNAVAILABLE` when there is no such row or the
+    row is not a message of this session that is the student's.
+    """
+    row = _store.get_message(conversation_id, message_id)
+    if row is None:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    checked = _write.validate_message_row(
+        row, conversation_id=conversation_id, owner_id=student_id
+    )
+    if checked.get("message_id") != message_id:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+    return checked

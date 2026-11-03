@@ -1,8 +1,9 @@
 """A session's messages as they are read back: checked, ordered, typed.
 
-Moved from the question package's transcript module (#226). `_validate_history_message` is
-still the read side's check on every row; step 2 of #205 makes it the append's
-invariant and leaves a defensive check for older rows here.
+Moved from the question package's transcript module (#226). The row contract,
+`_write.validate_message_row`, is the append's invariant since step 2 of #205
+(#227); the readers here still hold every row to it, as a defensive check on
+rows written before `append` wrote them.
 """
 
 from __future__ import annotations
@@ -11,13 +12,11 @@ import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.services.learning_session import _store
-from stoa.services.learning_session._store import conv_pk, msg_sk
-
-Role = Literal["student", "assistant", "teacher", "system"]
+from stoa.services.learning_session._write import Role, validate_message_row
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,7 +55,7 @@ def _optional_text(value: object) -> str | None:
 
 
 def message_from_row(row: Mapping[str, Any]) -> Message:
-    """The typed message for a row `_validate_history_message` accepted."""
+    """The typed message for a row `validate_message_row` accepted."""
     raw_ids = row.get("attachment_ids", [])
     rich = row.get("teacher_response_rich")
     return Message(
@@ -97,32 +96,6 @@ def _history_snapshot_fingerprint(messages: list[dict]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _validate_history_message(
-    item: Any, *, conversation_id: str, owner_id: str | None
-) -> dict:
-    if not isinstance(item, dict):
-        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-    message_id = item.get("message_id")
-    if (
-        not isinstance(message_id, str)
-        or not message_id
-        or item.get("PK") != conv_pk(conversation_id)
-        or item.get("SK") != msg_sk(message_id)
-        or item.get("conversation_id") != conversation_id
-        or (owner_id is not None and item.get("student_id") != owner_id)
-        or not isinstance(item.get("student_id"), str)
-        or not item["student_id"]
-        or item.get("role") not in {"student", "assistant", "teacher", "system"}
-        or not isinstance(item.get("content"), str)
-        or not isinstance(item.get("created_at"), str)
-        or not item["created_at"]
-        or item.get("entity_type") != "conversation_message"
-        or item.get("schema_version") != "conversation-message.v1"
-    ):
-        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-    return item
-
-
 def _load_anchored_message_history(
     *,
     conversation_id: str,
@@ -149,7 +122,7 @@ def _load_anchored_message_history(
             )
         page = response.get("Items", [])
         items.extend(
-            _validate_history_message(
+            validate_message_row(
                 item, conversation_id=conversation_id, owner_id=owner_id
             )
             for item in page
