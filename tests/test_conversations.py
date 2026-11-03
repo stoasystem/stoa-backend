@@ -380,13 +380,14 @@ def test_current_linked_teacher_can_read_but_stale_teacher_is_hidden(monkeypatch
         "created_at": "2026-07-15T00:00:00Z",
         "updated_at": "2026-07-15T00:00:00Z",
     }
-    question = {
-        "question_id": "question-1",
+    # The help request the conversation names (#234).
+    request = {
         "conversation_id": "conv-1",
+        "escalation_request_id": "conv-1",
         "student_id": "student-1",
         "teacher_id": "teacher-1",
         "dispatch_status": "accepted",
-        "status": "teacher_active",
+        "escalation_status": "in_progress",
     }
     accounts = {
         "student-1": {"user_id": "student-1", "role": "student", "account_status": "active"},
@@ -395,8 +396,9 @@ def test_current_linked_teacher_can_read_but_stale_teacher_is_hidden(monkeypatch
     }
     monkeypatch.setattr(learning_session, "read", lambda *_: conv)
     monkeypatch.setattr(learning_session, "history_rows", lambda *_: [])
-    monkeypatch.setattr(question_repo, "get_question", lambda *_: question)
-    monkeypatch.setattr(question_repo, "get_teacher_session", lambda *_: None)
+    from stoa.services import help_requests
+
+    monkeypatch.setattr(help_requests, "get", lambda *_a, **_k: request)
     monkeypatch.setattr(question_repo, "get_teacher_assignment", lambda *_: None)
     monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: accounts.get(user_id))
     current = _client(conversations.router, actor=_actor(CanonicalRole.TEACHER, "teacher-1")).get(
@@ -1624,8 +1626,8 @@ def test_escalating_a_conversation_writes_the_record_the_teacher_side_reads(monk
     assert item["created_at"] == item["escalated_at"]
     # A version every later write is conditioned on.
     assert int(item["version"]) >= 1
-    # What a reader keyed by a question id is given.
-    assert help_requests.question_view(dict(item))["status"] == "escalated"
+    # What a reader keyed by a question id is given: the record itself (#234).
+    assert help_requests.get("conv-1", table=table) == dict(item)
 
 
 def test_escalating_the_same_conversation_twice_cannot_open_a_second_case(monkeypatch):
@@ -1799,10 +1801,10 @@ def test_the_escalation_lands_in_the_queue_the_teacher_actually_reads(monkeypatc
     assert "escalated" not in table.rows[("CONV#conv-1", "CONV")]
 
     # The teacher side, reading the same table through its own read.
-    listed = [help_requests.question_view(record) for record in help_requests.list_all(table=table)]
-    assert [item["question_id"] for item in listed] == [request_id]
+    listed = help_requests.list_all(table=table)
+    assert [item["escalation_request_id"] for item in listed] == [request_id]
     assert listed[0]["subject"] == "physics"
-    assert listed[0]["status"] == "escalated"
+    assert listed[0]["escalation_status"] == "pending"
 
 
 def test_the_case_the_student_spent_is_on_the_table_too(monkeypatch):

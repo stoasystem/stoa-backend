@@ -8,7 +8,7 @@ from typing import NoReturn
 
 from fastapi import Depends, HTTPException, Query
 
-from stoa.db.repositories import notification_repo, question_repo, user_repo
+from stoa.db.repositories import notification_repo, user_repo
 from stoa.db.repositories import practice_repo
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
@@ -261,23 +261,20 @@ def authorized_student_resource_dependency(
     return dependency
 
 
-def help_request_as_question(request_id: str) -> dict | None:
-    """A help request, told as the question its id names (#189).
-
-    The teacher's frontend passes a help request's id where a question id is
-    asked for (the assistance summary, AI drafts, reports); a request is no
-    longer a row in the question table, so those routes ask for it here.
-    """
-    from stoa.services import help_requests
-
-    return help_requests.question_view_for(request_id, table=question_repo.get_table())
-
-
 def authorized_question_dependency(
     *, action: AuthorizationAction, purposes: PurposeMap
 ):
+    """A route keyed by a question id, which is a help request's id (#189).
+
+    The teacher's frontend passes a help request's id where a question id is
+    asked for (the assistance summary, reports); the request is loaded once,
+    as stored, and handed to the policy and the handler alike (#234).
+    """
+
     async def resolve(question_id: str):
-        item = question_repo.get_question(question_id) or help_request_as_question(question_id)
+        from stoa.services import help_requests
+
+        item = help_requests.get(question_id)
         if not item:
             return None
         student_id = str(item.get("student_id") or "")
@@ -287,7 +284,6 @@ def authorized_question_dependency(
                 question_id,
                 student_id,
                 question_id=question_id,
-                session_id=str(item.get("session_id") or "") or None,
             ),
             item,
         )
@@ -877,7 +873,6 @@ async def authorize_conversation_resource(
                 resource_id,
                 student_id,
                 question_id=str(item.get("question_id") or "") or None,
-                session_id=str(item.get("session_id") or "") or None,
             ),
             item,
         )
@@ -948,7 +943,9 @@ async def authorize_teacher_loaded_resource(
     """Authorize one already-resolved teacher task object without reloading it."""
     student_id = str(loaded.get("student_id") or "")
     id_field = {
-        ResourceType.QUESTION: "question_id",
+        # A question id is a help request's id since #189, and a request's id
+        # is its conversation's.
+        ResourceType.QUESTION: "conversation_id",
         ResourceType.TEACHER_HELP_REQUEST: "conversation_id",
         ResourceType.AI_TEACHER_DRAFT: "draft_id",
     }.get(resource_type, "resource_id")
@@ -958,8 +955,15 @@ async def authorize_teacher_loaded_resource(
             resource_type,
             canonical_id,
             student_id,
-            question_id=str(loaded.get("question_id") or "") or None,
-            session_id=str(loaded.get("session_id") or "") or None,
+            # A draft names its request as `question_id`; a request record
+            # names itself.
+            question_id=str(
+                loaded.get("question_id")
+                or loaded.get("escalation_request_id")
+                or loaded.get("conversation_id")
+                or ""
+            )
+            or None,
         ),
         loaded,
     )

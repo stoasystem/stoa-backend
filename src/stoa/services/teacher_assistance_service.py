@@ -24,8 +24,12 @@ def now_iso() -> str:
 def build_summary_seed(
     authorized: AuthorizedResource, actor: Actor
 ) -> dict[str, Any]:
-    """Build a bounded seed from the exact question authorized by the route."""
-    question = dict(authorized.value)
+    """Build a bounded seed from the exact help request authorized by the route.
+
+    The route is keyed by a question id, which is the request's id (#189);
+    the record is handed over as stored (#234).
+    """
+    request = dict(authorized.value)
     question_id = authorized.ref.resource_id
 
     created_at = now_iso()
@@ -34,24 +38,25 @@ def build_summary_seed(
     # language straight away (#124). What is stored stays a record of what that
     # teacher was shown; nothing re-renders it afterwards.
     locale = locale_service.reader_locale(actor.user_id)
-    topic_labels = _topic_labels(question)
-    question_text, ai_answer = _question_and_answer(question)
+    question_text, ai_answer = _question_and_answer(request)
     seed = {
         "entity_type": notification_repo.SUMMARY_SEED_ENTITY,
         "summary_id": f"assist-{uuid4().hex}",
         "question_id": question_id,
-        "student_id": question.get("student_id"),
-        "subject": str(question.get("subject") or "general"),
-        "student_context_summary": _student_context_summary(question, topic_labels, locale),
+        "student_id": request.get("student_id"),
+        "subject": str(request.get("subject") or "general"),
+        # A request carries no topics: nothing on it names one yet.
+        "student_context_summary": _student_context_summary(request, locale),
         "question_summary": _preview(question_text, limit=360),
         "ai_answer_summary": _preview(ai_answer, limit=360),
-        "weak_topics": topic_labels,
-        "suggested_focus": _suggested_focus(question, topic_labels, locale),
-        "source_count": _source_count(question, has_answer=bool(ai_answer)),
+        "weak_topics": [],
+        "suggested_focus": message_catalog.text("assistance.focus.default", locale),
+        # The request itself, and the answer when there is one.
+        "source_count": 2 if ai_answer else 1,
         "created_at": created_at,
         "created_by": actor.user_id,
-        "owner_id": question.get("student_id"),
-        "account_fence_generation": question.get("account_fence_generation"),
+        "owner_id": request.get("student_id"),
+        "account_fence_generation": request.get("account_fence_generation"),
     }
     persisted = notification_repo.put_summary_seed(seed)
     if isinstance(persisted, dict):
@@ -75,21 +80,17 @@ def summary_seed_response(seed: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _question_and_answer(question: dict[str, Any]) -> tuple[str, str]:
+def _question_and_answer(request: dict[str, Any]) -> tuple[str, str]:
     """What the student asked and what the assistant answered, as written.
 
-    A request raised from an Ask conversation has a row that holds neither:
-    `content` is only the note the student added, often nothing, and no answer
-    is written on it (#178). Those come from the conversation - its last
-    question and its last answer, the note after the question.
+    A request holds neither: `escalation_message` is only the note the student
+    added, often nothing, and no answer is written on it (#178). Those come
+    from the conversation - its last question and its last answer, the note
+    after the question.
     """
-    if question.get("source") != "conversation_escalation":
-        raw_ai_response = question.get("ai_response")
-        ai_response = raw_ai_response if isinstance(raw_ai_response, dict) else {}
-        return str(question.get("content") or ""), str(ai_response.get("answer") or "")
-    messages = _conversation_messages(str(question.get("conversation_id") or ""))
+    messages = _conversation_messages(str(request.get("conversation_id") or ""))
     asked = _last_said(messages, "student")
-    note = str(question.get("content") or "").strip()
+    note = str(request.get("escalation_message") or "").strip()
     return " — ".join(part for part in (asked, note) if part), _last_said(messages, "assistant")
 
 
@@ -109,52 +110,14 @@ def _last_said(messages: list[learning_session.Message], role: str) -> str:
     return max(said, key=lambda message: message.created_at).content
 
 
-def _student_context_summary(question: dict[str, Any], topics: list[str], locale: str) -> str:
+def _student_context_summary(request: dict[str, Any], locale: str) -> str:
     # The subject is named in the reader's language: the stored id is a key,
     # and «in mathematics» inside a German sentence was what teachers read
-    # (#105). The topic labels are content the assistant wrote, and go in as
-    # they are.
-    subject = learning_profile_service.subject_name(question.get("subject"), locale)
-    if topics:
-        return message_catalog.text(
-            "assistance.context.with_topics",
-            locale,
-            subject=subject,
-            topics=", ".join(topics[:3]),
-        )
+    # (#105).
+    subject = learning_profile_service.subject_name(request.get("subject"), locale)
     return message_catalog.text(
         "assistance.context.without_topics", locale, subject=subject
     )
-
-
-def _suggested_focus(question: dict[str, Any], topics: list[str], locale: str) -> str:
-    if question.get("teacher_response"):
-        return message_catalog.text("assistance.focus.after_reply", locale)
-    if topics:
-        return message_catalog.text("assistance.focus.with_topics", locale, topic=topics[0])
-    return message_catalog.text("assistance.focus.default", locale)
-
-
-def _topic_labels(question: dict[str, Any]) -> list[str]:
-    labels: list[str] = []
-    for seed in question.get("topic_seeds") or []:
-        if isinstance(seed, dict) and seed.get("label"):
-            labels.append(str(seed["label"]))
-    for point in question.get("knowledge_points") or []:
-        if point:
-            labels.append(str(point))
-    return list(dict.fromkeys(labels))[:5]
-
-
-def _source_count(question: dict[str, Any], *, has_answer: bool) -> int:
-    count = 1
-    if has_answer:
-        count += 1
-    if question.get("teacher_response"):
-        count += 1
-    if question.get("topic_seeds") or question.get("knowledge_points"):
-        count += 1
-    return count
 
 
 def _preview(value: Any, *, limit: int) -> str:

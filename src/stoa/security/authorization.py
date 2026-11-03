@@ -22,7 +22,6 @@ from stoa.security.errors import (
     safe_error_response,
 )
 from stoa.security.events import SecurityEvent, project_security_event
-from stoa.models.question import ENDED_WITHOUT_TEACHER
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
 
 
@@ -106,7 +105,6 @@ class ResourceRef:
     student_id: str
     owner_id: str | None = None
     question_id: str | None = None
-    session_id: str | None = None
     relationship_known: bool = False
     safe_support_metadata: bool = False
     course_id: str | None = None
@@ -155,8 +153,8 @@ class ParentAuthorizationFacts:
 
 @dataclass(frozen=True, slots=True)
 class TeacherAuthorizationFacts:
-    question: Mapping[str, object] | None = None
-    session: Mapping[str, object] | None = None
+    #: The help request the resource belongs to, as stored (#234).
+    request: Mapping[str, object] | None = None
     assignment: Mapping[str, object] | None = None
     teacher_account: Mapping[str, object] | None = None
     student_account: Mapping[str, object] | None = None
@@ -209,13 +207,13 @@ class TeacherAuthorizationFacts:
     ) -> bool:
         if purpose is not AuthorizationPurpose.TEACHER_HELP:
             return False
-        question = self.question
-        if not question or question.get("student_id") != resource.student_id:
+        request = self.request
+        if not request or request.get("student_id") != resource.student_id:
             return False
+        # A request's id is its conversation's (#189); either names it.
         linked_ids = {
-            str(question.get("question_id") or ""),
-            str(question.get("conversation_id") or ""),
-            str(question.get("session_id") or ""),
+            str(request.get("escalation_request_id") or ""),
+            str(request.get("conversation_id") or ""),
         }
         if resource.resource_type not in {
             ResourceType.QUESTION,
@@ -247,80 +245,25 @@ class TeacherAuthorizationFacts:
             AuthorizationAction.UPDATE,
             AuthorizationAction.RESPOND,
             AuthorizationAction.RESOLVE,
-            AuthorizationAction.CLAIM,
         }:
             return False
-        dispatch_status = str(question.get("dispatch_status") or "unassigned")
-        if action is AuthorizationAction.CLAIM:
-            if resource.resource_type is not ResourceType.QUESTION:
-                return False
-            if question.get("status") == "teacher_active":
-                return (
-                    question.get("teacher_id") == actor_id
-                    and bool(question.get("session_id"))
-                    and bool(question.get("teacher_takeover_claim_id"))
-                )
-            if question.get("status") != "escalated":
-                return False
-            if actor_id in _string_set(question.get("previous_dispatch_teacher_ids")):
-                return False
-            if dispatch_status == "dispatched":
-                return question.get("dispatched_teacher_id") == actor_id and not _expired(
-                    question.get("dispatch_deadline_at"), now
-                )
-            return dispatch_status in {"", "unassigned", "pending"}
-
-        if dispatch_status in {"revoked"} | ENDED_WITHOUT_TEACHER:
+        if (
+            action in _TEACHER_WRITE_ACTIONS
+            and resource.resource_type is not ResourceType.TEACHER_HELP_REQUEST
+            and request.get("teacher_id") != actor_id
+        ):
+            # An offered teacher's first write takes the request, and only the
+            # request's own routes bind that offer into their write (#66);
+            # writing through anything else keyed by it takes holding it.
             return False
-        if action in {
-            AuthorizationAction.RESPOND,
-            AuthorizationAction.RESOLVE,
-            AuthorizationAction.UPDATE,
-        }:
-            # A chat help request offered to this teacher is taken by their first
-            # write on it; the route binds that exact offer into the same
-            # transaction (teacher_dispatch_service.advance_help_request).
-            # stoasystem/stoa-backend#66.
-            if resource.resource_type is ResourceType.TEACHER_HELP_REQUEST and _holds_live_offer(
-                question, actor_id, now
-            ):
-                pass
-            elif question.get("teacher_id") != actor_id:
-                return False
-            elif question.get("status") not in {"teacher_active", "resolved"}:
-                return False
-        else:
-            current_teacher = question.get("teacher_id") or question.get("dispatched_teacher_id")
-            if current_teacher != actor_id:
-                return False
-            if question.get("status") not in {"escalated", "teacher_active", "resolved"}:
-                return False
-            if dispatch_status == "dispatched" and _expired(
-                question.get("dispatch_deadline_at"), now
-            ):
-                return False
-        if self.session:
-            session = self.session
-            if (
-                session.get("teacher_id") != actor_id
-                or session.get("student_id") != resource.student_id
-            ):
-                return False
-            if session.get("resolved_at") and action is not AuthorizationAction.READ:
-                return False
-        return True
+        from stoa.services import help_requests
+
+        return help_requests.teacher_may(request, actor_id, action, now=now)
 
 
-def _holds_live_offer(question: Mapping[str, object], actor_id: str, now: datetime) -> bool:
-    """Whether an open chat help request is currently offered to this teacher."""
-    return (
-        not question.get("teacher_id")
-        and question.get("status") == "escalated"
-        and question.get("dispatch_status") == "dispatched"
-        and question.get("dispatched_teacher_id") == actor_id
-        and actor_id not in _string_set(question.get("previous_dispatch_teacher_ids"))
-        and not _expired(question.get("dispatch_deadline_at"), now)
-    )
+_TEACHER_WRITE_ACTIONS = frozenset(
+    {AuthorizationAction.RESPOND, AuthorizationAction.RESOLVE, AuthorizationAction.UPDATE}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -483,9 +426,9 @@ async def record_authorization_decision(
             resource_id=resource.resource_id,
             student_id=resource.student_id,
             owner_id=resource.owner_id,
-            scope_discriminator="|".join(
-                value for value in (resource.question_id, resource.session_id) if value
-            ),
+            # Once the question id joined to a teacher session's; no row
+            # written carries one, so it was always the question id (#234).
+            scope_discriminator=resource.question_id or "",
             action=action.value,
             purpose=purpose.value,
             result="allowed" if decision.allowed else decision.result_code.value,
@@ -636,32 +579,28 @@ class CurrentAuthorizationFactRepository:
                     )
                 )
 
-            from stoa.security.route_authorization import help_request_as_question
+            from stoa.services import help_requests
 
-            def task(question_id: str) -> dict | None:
-                # A help request is not a question row since #189; its id
-                # names it all the same.
-                return question_repo.get_question(question_id) or help_request_as_question(
-                    question_id
-                )
+            def task(request_id: str) -> dict | None:
+                # A question id, a draft's and an attachment's, is a help
+                # request's id since #189.
+                return help_requests.get(request_id)
 
-            question = resource_value if resource.resource_type is ResourceType.QUESTION else None
+            request = resource_value if resource.resource_type is ResourceType.QUESTION else None
             if resource.resource_type is ResourceType.CONVERSATION and resource.question_id:
-                question = task(resource.question_id)
+                request = task(resource.question_id)
             if resource.resource_type in {
                 ResourceType.TEACHER_HELP_REQUEST,
                 ResourceType.AI_TEACHER_DRAFT,
             }:
-                question = task(resource.question_id) if resource.question_id else resource_value
+                request = task(resource.question_id) if resource.question_id else resource_value
             if resource.resource_type is ResourceType.ATTACHMENT:
                 # Read under the help request it was sent in: the resolver
-                # hands that request's row, as the request's own routes do (#140).
-                question = resource_value
-            session_id = str(resource.session_id or (question or {}).get("session_id") or "")
+                # hands that request's record, as the request's own routes do (#140).
+                request = resource_value
             return AuthorizationFacts(
                 teacher=TeacherAuthorizationFacts(
-                    question=question,
-                    session=question_repo.get_teacher_session(session_id),
+                    request=request,
                     assignment=question_repo.get_teacher_assignment(
                         actor.user_id, resource.student_id
                     ),
@@ -982,11 +921,11 @@ def _relationship_known_to_actor(actor: Actor, resource: AuthorizedResource) -> 
         )
     if actor.role is CanonicalRole.TEACHER and resource.facts.teacher:
         facts = resource.facts.teacher
-        question = facts.question or {}
+        request = facts.request or {}
         assignment = facts.assignment or {}
         return bool(
-            question.get("teacher_id") == actor.user_id
-            or question.get("dispatched_teacher_id") == actor.user_id
+            request.get("teacher_id") == actor.user_id
+            or request.get("dispatched_teacher_id") == actor.user_id
             or (
                 assignment.get("teacher_id") == actor.user_id
                 and assignment.get("student_id") == resource.ref.student_id
@@ -1214,16 +1153,17 @@ def _matrix_teacher_facts(
     if relation not in {"assigned", "dispatched", "unassigned", "other_dispatch"}:
         return None
     teacher_id = "teacher-1" if relation in {"assigned", "dispatched"} else "teacher-2"
-    question = {
-        "question_id": resource_id,
+    request = {
+        "conversation_id": resource_id,
+        "escalation_request_id": resource_id,
         "student_id": student_id,
         "teacher_id": teacher_id,
         "dispatched_teacher_id": teacher_id,
         "dispatch_status": "accepted",
-        "status": "teacher_active",
+        "escalation_status": "in_progress",
     }
     return TeacherAuthorizationFacts(
-        question=question,
+        request=request,
         teacher_account={"user_id": "teacher-1", "role": "teacher", "account_status": "active"},
         student_account={"user_id": student_id, "role": "student", "account_status": "active"},
     )

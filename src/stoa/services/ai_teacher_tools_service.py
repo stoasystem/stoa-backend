@@ -30,7 +30,7 @@ def create_summary_draft(
     authorized: AuthorizedResource, actor: Actor
 ) -> dict[str, Any]:
     return draft_response(
-        _store_summary_draft(question=dict(authorized.value), actor=actor)
+        _store_summary_draft(request=dict(authorized.value), actor=actor)
     )
 
 
@@ -50,11 +50,12 @@ def create_exercise_draft(
     difficulty = _require_choice(difficulty, DIFFICULTIES, "difficulty")
     exercise_count = _require_count(exercise_count)
 
-    question = dict(authorized_context.value) if question_id else None
-    evidence_questions = [question] if question else []
-    if question and str(question.get("student_id") or "") != student_id:
+    # `question_id` names a help request (#189); the context is its record.
+    request = dict(authorized_context.value) if question_id else None
+    evidence = [request] if request else []
+    if request and str(request.get("student_id") or "") != student_id:
         raise HTTPException(status_code=400, detail="Question does not belong to the requested student")
-    source_context = _source_context(evidence_questions, student_id=student_id)
+    source_context = _source_context(evidence, student_id=student_id)
     created_at = now_iso()
     draft_id = f"aitool-{uuid4().hex}"
     item: ai_teacher_tools_repo.AIDraftItem = {
@@ -151,11 +152,11 @@ def regenerate_draft(
     item = dict(authorized.value)
     draft_id = authorized.ref.resource_id
     if item.get("draft_type") == "teacher_summary":
-        question = (authorized.facts.teacher.question if authorized.facts.teacher else None)
-        if not question:
+        request = authorized.facts.teacher.request if authorized.facts.teacher else None
+        if not request:
             raise HTTPException(status_code=409, detail="Draft question context is unavailable")
         regenerated = _store_summary_draft(
-            question=dict(question), actor=actor, previous_draft_id=draft_id
+            request=dict(request), actor=actor, previous_draft_id=draft_id
         )
     elif item.get("draft_type") == "practice_exercise":
         regenerated = _regenerate_exercise_draft(item, actor)
@@ -199,34 +200,38 @@ def draft_response(item: dict[str, Any]) -> dict[str, Any]:
 
 def _store_summary_draft(
     *,
-    question: dict[str, Any],
+    request: dict[str, Any],
     actor: Actor,
     previous_draft_id: str | None = None,
 ) -> dict[str, Any]:
+    """A summary draft of one help request, as stored.
+
+    A request names no topic and holds no answer, so the draft takes the
+    no-topic sentences throughout.
+    """
     created_at = now_iso()
-    topics = _topic_labels(question)
-    raw_ai_response = question.get("ai_response")
-    ai_response: dict[str, Any] = raw_ai_response if isinstance(raw_ai_response, dict) else {}
     draft_id = f"aitool-{uuid4().hex}"
     item = {
         "entity_type": ai_teacher_tools_repo.DRAFT_ENTITY,
         "draft_id": draft_id,
         "draft_type": "teacher_summary",
         "status": "draft",
-        "student_id": question.get("student_id"),
-        "question_id": question.get("question_id"),
-        "subject": _safe_subject(question.get("subject")),
-        "topic_ids": [learning_profile_service.normalize_topic_id(topic) for topic in topics],
+        "student_id": request.get("student_id"),
+        "question_id": _request_id(request),
+        "subject": _safe_subject(request.get("subject")),
+        "topic_ids": [],
         "difficulty": None,
         "exercise_count": 0,
-        "session_summary": _session_summary(question, ai_response),
-        "misconception_summary": _misconception_summary(question, topics),
-        "suggested_teaching_focus": _suggested_focus(question, topics),
-        "draft_followup_explanation": _draft_followup(question, topics),
+        "session_summary": f"Student asked: {_preview(request.get('escalation_message'), limit=180)}.",
+        "misconception_summary": "No specific misconception identified yet; start with a diagnostic check.",
+        "suggested_teaching_focus": (
+            "Ask the student to explain what they tried, then model the smallest next step."
+        ),
+        "draft_followup_explanation": _draft_followup(request),
         "items": [],
         "answer_key": [],
         "explanations": [],
-        "source_context": _source_context([question], student_id=str(question.get("student_id") or "")),
+        "source_context": _source_context([request], student_id=str(request.get("student_id") or "")),
         "prompt_version": PROMPT_VERSION,
         "created_by": actor.user_id,
         "created_by_role": actor.role.value,
@@ -282,35 +287,15 @@ def _regenerate_exercise_draft(item: dict[str, Any], actor: Actor) -> dict[str, 
     return regenerated
 
 
-def _session_summary(question: dict[str, Any], ai_response: dict[str, Any]) -> str:
-    content = _preview(question.get("content"), limit=180)
-    answer = _preview(ai_response.get("answer"), limit=180)
-    if answer:
-        return f"Student asked: {content}. AI response focused on: {answer}."
-    return f"Student asked: {content}."
+def _request_id(request: dict[str, Any]) -> str:
+    # A request's id is its conversation's (#189); the record names it both ways.
+    return str(request.get("escalation_request_id") or request.get("conversation_id"))
 
 
-def _misconception_summary(question: dict[str, Any], topics: list[str]) -> str:
-    if topics:
-        return f"Likely misconception or weak area: {', '.join(topics[:3])}."
-    if question.get("student_feedback"):
-        return "Student feedback suggests this answer may need teacher clarification."
-    return "No specific misconception identified yet; start with a diagnostic check."
-
-
-def _suggested_focus(question: dict[str, Any], topics: list[str]) -> str:
-    if question.get("teacher_response"):
-        return "Continue from the existing teacher reply and confirm the next step."
-    if topics:
-        return f"Clarify {topics[0]} before moving to a full solution."
-    return "Ask the student to explain what they tried, then model the smallest next step."
-
-
-def _draft_followup(question: dict[str, Any], topics: list[str]) -> str:
-    subject = _safe_subject(question.get("subject"))
-    topic = topics[0] if topics else "the core concept"
+def _draft_followup(request: dict[str, Any]) -> str:
+    subject = _safe_subject(request.get("subject"))
     return (
-        f"Let's focus on {topic}. First, tell me which step feels unclear. "
+        "Let's focus on the core concept. First, tell me which step feels unclear. "
         f"Then we will solve one {subject} example together before you try the next one."
     )
 
@@ -345,30 +330,14 @@ def _exercise_explanations(topic_ids: list[str], count: int) -> list[dict[str, A
     ]
 
 
-def _source_context(questions: list[dict[str, Any]], *, student_id: str) -> dict[str, Any]:
+def _source_context(requests: list[dict[str, Any]], *, student_id: str) -> dict[str, Any]:
+    present = [request for request in requests if request]
     return {
         "studentId": student_id,
-        "evidenceQuestionIds": [
-            str(question.get("question_id"))
-            for question in questions
-            if question and question.get("question_id")
-        ],
-        "topicLabels": list(dict.fromkeys(label for question in questions for label in _topic_labels(question)))[:8],
-        "sourceCount": len([question for question in questions if question]),
+        "evidenceQuestionIds": [_request_id(request) for request in present],
+        "topicLabels": [],
+        "sourceCount": len(present),
     }
-
-
-def _topic_labels(question: dict[str, Any]) -> list[str]:
-    labels: list[str] = []
-    for seed in question.get("topic_seeds") or []:
-        if isinstance(seed, dict):
-            label = seed.get("label") or seed.get("topic_id")
-            if label:
-                labels.append(str(label))
-    for point in question.get("knowledge_points") or []:
-        if point:
-            labels.append(str(point))
-    return list(dict.fromkeys(labels))[:5]
 
 
 def _normalize_subject(subject: str) -> str:

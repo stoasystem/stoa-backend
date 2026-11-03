@@ -176,16 +176,21 @@ def test_teacher_router_exposes_no_legacy_route():
 
 def test_assistance_summary_requires_current_teacher_and_uses_authorized_question(monkeypatch):
     stored = []
-    question = {
-        "question_id": "question-1",
+    # A question id names a help request (#189); the route reads its record (#234).
+    request = {
+        "conversation_id": "question-1",
+        "escalation_request_id": "question-1",
         "student_id": "student-1",
-        "status": "teacher_active",
+        "escalation_status": "in_progress",
         "teacher_id": "teacher-1",
         "subject": "math",
-        "content": "Explain fractions",
+        "escalation_message": "Explain fractions",
         "private_profile": "must-not-leak",
     }
-    monkeypatch.setattr(teachers.question_repo, "get_question", lambda _id: question)
+    monkeypatch.setattr(teachers.help_requests, "get", lambda _id, **_kwargs: request)
+    monkeypatch.setattr(
+        teachers.teacher_assistance_service.learning_session, "history", lambda _id: []
+    )
     monkeypatch.setattr(
         teachers.teacher_assistance_service.notification_repo,
         "put_summary_seed",

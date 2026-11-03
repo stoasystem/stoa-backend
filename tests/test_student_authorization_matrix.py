@@ -204,8 +204,7 @@ def _teacher_decision(
     resource_type=ResourceType.QUESTION,
     resource_id="question-1",
     *,
-    question=None,
-    session=None,
+    request=None,
     assignment=None,
     action=AuthorizationAction.READ,
     purpose=AuthorizationPurpose.TEACHER_HELP,
@@ -218,8 +217,7 @@ def _teacher_decision(
         relationship_known=True,
     )
     facts = TeacherAuthorizationFacts(
-        question=question,
-        session=session,
+        request=request,
         assignment=assignment,
         teacher_account={
             "user_id": "teacher-1",
@@ -242,79 +240,64 @@ def _teacher_decision(
 
 def test_teacher_current_task_is_narrow_and_queue_visibility_never_authorizes():
     current = {
-        "question_id": "question-1",
+        "conversation_id": "question-1",
+        "escalation_request_id": "question-1",
         "student_id": "student-1",
         "teacher_id": "teacher-1",
-        "session_id": "session-1",
-        "status": "teacher_active",
+        "escalation_status": "in_progress",
         "dispatch_status": "accepted",
         "queue_visible_at": "2026-07-15T09:00:00Z",
     }
-    session = {
-        "session_id": "session-1",
-        "question_id": "question-1",
-        "teacher_id": "teacher-1",
-        "student_id": "student-1",
-        "resolved_at": None,
-    }
-    assert _teacher_decision(question=current, session=session).allowed is True
+    assert _teacher_decision(request=current).allowed is True
     assert (
         _teacher_decision(
             ResourceType.REPORT,
             "report-1",
-            question=current,
-            session=session,
+            request=current,
         ).allowed
         is False
     )
     queue_only = {
-        "question_id": "question-1",
+        "conversation_id": "question-1",
+        "escalation_request_id": "question-1",
         "student_id": "student-1",
-        "status": "escalated",
+        "escalation_status": "pending",
         "queue_visible_at": "2026-07-15T09:00:00Z",
     }
-    assert _teacher_decision(question=queue_only).allowed is False
+    assert _teacher_decision(request=queue_only).allowed is False
 
 
 @pytest.mark.parametrize(
     "change",
-    ["wrong_teacher", "stale_dispatch", "revoked", "wrong_session", "suspended"],
+    ["wrong_teacher", "stale_dispatch", "revoked", "suspended"],
 )
 def test_teacher_stale_wrong_or_suspended_task_denies_immediately(change):
-    question = {
-        "question_id": "question-1",
+    request = {
+        "conversation_id": "question-1",
+        "escalation_request_id": "question-1",
         "student_id": "student-1",
         "teacher_id": "teacher-1",
-        "session_id": "session-1",
-        "status": "teacher_active",
+        "escalation_status": "in_progress",
         "dispatch_status": "accepted",
-    }
-    session = {
-        "session_id": "session-1",
-        "teacher_id": "teacher-1",
-        "student_id": "student-1",
-        "resolved_at": None,
     }
     teacher_status = "active"
     if change == "wrong_teacher":
-        question["teacher_id"] = "teacher-2"
+        request["teacher_id"] = "teacher-2"
     elif change == "stale_dispatch":
-        question.update(
+        request.update(
             teacher_id=None,
+            escalation_status="pending",
             dispatched_teacher_id="teacher-1",
             dispatch_status="dispatched",
             dispatch_deadline_at="2020-01-01T00:00:00Z",
         )
     elif change == "revoked":
-        question["dispatch_status"] = "revoked"
-    elif change == "wrong_session":
-        session["teacher_id"] = "teacher-2"
+        request["dispatch_status"] = "revoked"
     elif change == "suspended":
         teacher_status = "suspended"
     assert (
         _teacher_decision(
-            question=question,
-            session=session,
+            request=request,
             teacher_status=teacher_status,
         ).allowed
         is False

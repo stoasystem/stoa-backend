@@ -41,6 +41,7 @@ from stoa.config import settings
 from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo
 from stoa.models.attachment import AttachmentSummary
+from stoa.security.authorization import AuthorizationAction
 from stoa.security.private_telemetry import emit_private_event
 from stoa.services import (
     attachment_service,
@@ -77,9 +78,9 @@ _NO_CANDIDATE_FIELDS = ("dispatch_no_candidate_reason", "dispatch_no_candidate_s
 # A scan's ceiling on pages; the table is far from it.
 _SCAN_PAGE_LIMIT = 1000
 
-# The question words a request's state is told in, for the readers that take
-# a request where they take a question: authorization and the routes keyed by
-# a question id (the assistance summary, AI drafts, reports).
+# The question words a request's state is told in, for the one reader left
+# that takes a request where it takes a question: the admin dispatch
+# dashboard (#235 retires it).
 _QUESTION_STATUS = {
     PENDING: "escalated",
     IN_PROGRESS: "teacher_active",
@@ -283,8 +284,7 @@ class TeacherView:
 def teacher_view(record: Mapping[str, Any], *, now: str | None = None) -> TeacherView:
     """The request as a teacher reads it (#215 decision 2).
 
-    Takes the record, or `question_view` of it: both carry the record's own
-    fields. A request is dated when it was asked, else when it last changed,
+    A request is dated when it was asked, else when it last changed,
     else ``now``.
     """
     conversation_id = _text(record.get("conversation_id"))
@@ -307,11 +307,9 @@ def teacher_view(record: Mapping[str, Any], *, now: str | None = None) -> Teache
 
 
 def question_view(record: Mapping[str, Any]) -> dict[str, Any]:
-    """The request told as a question, for the readers keyed by a question id.
+    """The request told as a question, for the admin dispatch dashboard.
 
-    Authorization judges a teacher's task on a question's fields; the
-    assistance summary, AI drafts and reports take a question. The request id
-    is the question id they are given.
+    Its last reader; #235 removes both.
     """
     view = dict(record)
     view.update(
@@ -330,12 +328,6 @@ def question_view(record: Mapping[str, Any]) -> dict[str, Any]:
     return view
 
 
-def question_view_for(request_id: str, *, table: Any | None = None) -> dict[str, Any] | None:
-    """`question_view` of the request with this id, or None when there is none."""
-    record = get(request_id, table=table)
-    return question_view(record) if record else None
-
-
 def holder_or_offered(record: Mapping[str, Any], teacher_id: str) -> bool:
     """Whether this teacher may write the request at all.
 
@@ -346,6 +338,69 @@ def holder_or_offered(record: Mapping[str, Any], teacher_id: str) -> bool:
     if holder:
         return holder == teacher_id
     return str(record.get("dispatched_teacher_id") or "") == teacher_id
+
+
+# A teacher's writes on a request; reading it, and making a summary, a draft or
+# a report from it (CREATE), are its reads.
+_TEACHER_WRITES = frozenset(
+    {AuthorizationAction.RESPOND, AuthorizationAction.RESOLVE, AuthorizationAction.UPDATE}
+)
+_TEACHER_READS = frozenset({AuthorizationAction.READ, AuthorizationAction.CREATE})
+# Closed to every teacher: ended without one (`_end` writes the outcome here),
+# or closed to the teacher whose account was scrubbed from it (`scrub_teacher`).
+_CLOSED_DISPATCH = frozenset({"revoked", WITHDRAWN, EXPIRED})
+
+
+def teacher_may(
+    record: Mapping[str, Any], teacher_id: str, action: AuthorizationAction, *, now: datetime
+) -> bool:
+    """Whether the request lets this teacher do this to it (#215 decision 6).
+
+    The policy asks this once it has matched the resource to the request; the
+    accounts, a standing assignment, and which resources an offered teacher
+    may write through are the policy's to judge.
+
+    - A request that ended without a teacher, or was closed to its teacher,
+      lets nobody do anything.
+    - RESPOND / RESOLVE / UPDATE: the teacher holding it, while in progress or
+      resolved; or, while it is pending and nobody holds it, the teacher a live
+      offer names, unless that teacher let it lapse before.
+    - READ / CREATE: the teacher holding it, else the one it was offered to,
+      while pending, in progress or resolved, unless the offer has lapsed.
+    - Anything else, a claim among them: no.
+
+    A deadline that cannot be read counts as passed (`_deadline_passed`).
+    """
+    status = _status(record)
+    dispatch_status = str(record.get("dispatch_status") or "")
+    if status in {WITHDRAWN, EXPIRED} or dispatch_status in _CLOSED_DISPATCH:
+        return False
+    holder = str(record.get("teacher_id") or "")
+    offered = str(record.get("dispatched_teacher_id") or "")
+    lapsed = dispatch_status == "dispatched" and _deadline_passed(
+        record.get("dispatch_deadline_at"), now
+    )
+    if action in _TEACHER_WRITES:
+        previous = record.get("previous_dispatch_teacher_ids")
+        let_lapse = isinstance(previous, (list, tuple, set, frozenset)) and teacher_id in {
+            str(item) for item in previous
+        }
+        live_offer = (
+            not holder
+            and status == PENDING
+            and dispatch_status == "dispatched"
+            and offered == teacher_id
+            and not let_lapse
+            and not lapsed
+        )
+        return live_offer or (holder == teacher_id and status in {IN_PROGRESS, RESOLVED})
+    if action in _TEACHER_READS:
+        return (
+            (holder or offered) == teacher_id
+            and status in {PENDING, IN_PROGRESS, RESOLVED}
+            and not lapsed
+        )
+    return False
 
 
 def sla(record: Mapping[str, Any]) -> dict[str, Any]:
@@ -1382,6 +1437,24 @@ def _now() -> str:
 
 def _parse(value: Any) -> datetime | None:
     return cast(datetime | None, teacher_dispatch_service.parse_timestamp(value))
+
+
+def _deadline_passed(value: Any, now: datetime) -> bool:
+    """Whether an offer's deadline has passed, as authorization reads one.
+
+    No deadline has not passed; one that cannot be read has, so doubt refuses
+    the teacher. Offering and the sweep read deadlines with `_expired`, where
+    doubt keeps the offer.
+    """
+    if not value:
+        return False
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed <= now
+    except (TypeError, ValueError):
+        return True
 
 
 def _expired(deadline: Any, now: str) -> bool:

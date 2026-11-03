@@ -447,7 +447,7 @@ def test_a_teacher_assigned_to_the_student_cannot_write_a_request_they_do_not_ho
         async def facts_for(self, actor, resource, action, purpose, value):
             return AuthorizationFacts(
                 teacher=TeacherAuthorizationFacts(
-                    question=value,
+                    request=value,
                     assignment={
                         "teacher_id": assigned,
                         "student_id": STUDENT,

@@ -14,7 +14,6 @@ from stoa.config import Settings, get_settings
 from stoa.db.repositories import (
     asked_knowledge_repo,
     attachment_repo,
-    question_repo,
     user_repo,
 )
 from stoa.db.dynamodb import get_table
@@ -42,7 +41,6 @@ from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
     authorized_ai_teacher_draft_dependency,
     authorized_question_dependency,
-    help_request_as_question,
     authorized_teacher_resource_dependency,
     authorize_teacher_loaded_resource,
     get_authorization_fact_repository,
@@ -131,12 +129,12 @@ _HELP_REQUEST_CHANGED = {
 
 # Canonical teacher portal, availability, help-request, and AI-tool routes.
 def _resolve_help_request(request_id: str) -> TeacherItem | None:
-    """The help request with this id, told the way authorization judges a task.
+    """The help request with this id, as stored; authorization judges it so (#234).
 
     A request's id is its conversation's (#189), so this is one strong read.
     """
     record = help_requests.get(request_id, table=get_table())
-    return _teacher_mapping(help_requests.question_view(record)) if record else None
+    return _teacher_mapping(record) if record else None
 
 
 async def _current_help_requests(
@@ -147,7 +145,7 @@ async def _current_help_requests(
 ) -> list[TeacherItem]:
     current: list[TeacherItem] = []
     for record in help_requests.list_all(table=get_table()):
-        conv = _teacher_mapping(help_requests.question_view(record))
+        conv = _teacher_mapping(record)
         try:
             await authorize_teacher_loaded_resource(
                 actor=actor,
@@ -442,7 +440,8 @@ async def _authorize_ai_question_context(
     correlation_id: str,
     audit_sink: AuthorizationAuditSink,
 ) -> AuthorizedResource:
-    question = (question_repo.get_question(question_id) or help_request_as_question(question_id))
+    # A question id is a help request's id (#189).
+    question = help_requests.get(question_id)
     if not question:
         raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND)
     return await authorize_teacher_loaded_resource(
@@ -486,7 +485,7 @@ async def _ai_question_context_dependency(
 
 
 async def _ai_question_metadata_resolver(question_id: str):
-    return (question_repo.get_question(question_id) or help_request_as_question(question_id))
+    return help_requests.get(question_id)
 
 
 _ai_question_context_dependency.authorization_specs = tuple(  # type: ignore[attr-defined]
