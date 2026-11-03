@@ -68,7 +68,6 @@ PLATFORM_OPERATIONS_READER = "platform_operations_reader"
 NOTIFICATION_EVENT_INSPECTOR = "notification_event_inspector"
 NOTIFICATION_DELIVERY_HEALTH_READER = "notification_delivery_health_reader"
 PARENT_BINDING_REPAIRER = "parent_binding_repairer"
-TEACHER_DISPATCH_OPERATOR = "teacher_dispatch_operator"
 USAGE_EVENT_INSPECTOR = "usage_event_inspector"
 USAGE_RECONCILIATION_OPERATOR = "usage_reconciliation_operator"
 REPORT_METADATA_READER = "report_metadata_reader"
@@ -106,7 +105,6 @@ KNOWN_CAPABILITIES = frozenset(
         NOTIFICATION_EVENT_INSPECTOR,
         NOTIFICATION_DELIVERY_HEALTH_READER,
         PARENT_BINDING_REPAIRER,
-        TEACHER_DISPATCH_OPERATOR,
         USAGE_EVENT_INSPECTOR,
         USAGE_RECONCILIATION_OPERATOR,
         REPORT_METADATA_READER,

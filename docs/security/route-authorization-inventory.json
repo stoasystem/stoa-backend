@@ -817,22 +817,6 @@
   {
     "authorization": [
       {
-        "action": "read",
-        "capability": "teacher_dispatch_operator",
-        "purpose": "global_operations",
-        "resource_type": "operator_resource"
-      }
-    ],
-    "classification": "admin-capability",
-    "family": "admin",
-    "identifiers": [],
-    "method": "GET",
-    "path": "/admin/teacher-dispatch/dashboard",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
         "action": "lookup",
         "capability": "student_support_lookup",
         "purpose": "account_operations",

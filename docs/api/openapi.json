@@ -22400,53 +22400,6 @@
         }
       }
     },
-    "/admin/teacher-dispatch/dashboard": {
-      "get": {
-        "description": "Return aggregate teacher dispatch, load, and SLA-risk visibility.",
-        "operationId": "get_teacher_dispatch_dashboard_admin_teacher_dispatch_dashboard_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthenticatedResponse"
-                }
-              }
-            },
-            "description": "No usable bearer token"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Teacher Dispatch Dashboard",
-        "tags": [
-          "admin"
-        ],
-        "x-stoa-authorization": {
-          "authorization": [
-            {
-              "action": "read",
-              "capability": "teacher_dispatch_operator",
-              "purpose": "global_operations",
-              "resource_type": "operator_resource"
-            }
-          ],
-          "classification": "admin-capability",
-          "identifiers": []
-        }
-      }
-    },
     "/admin/teacher-support/allowances/{student_id}": {
       "get": {
         "description": "How many teacher-support cases this student has in a week, and from where.",

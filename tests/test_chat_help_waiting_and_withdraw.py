@@ -13,7 +13,6 @@ test_chat_help_request_lifecycle.py.
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timedelta
 
 from fastapi import FastAPI
@@ -94,14 +93,6 @@ def _status(client: TestClient) -> dict:
     response = client.get(f"/teacher-help/conversations/{CONV}/request")
     assert response.status_code == 200, response.text
     return response.json()
-
-
-def _on_the_dispatch_board() -> bool:
-    """Whether the admin dispatch dashboard lists the request."""
-    from stoa.routers import admin
-
-    board = asyncio.run(admin.get_teacher_dispatch_dashboard(user={"role": "admin"}))
-    return any(item.get("questionId") == lifecycle.REQUEST for item in board["dispatchAttempts"])
 
 
 # --- Recording that nobody could be offered the request ---
@@ -386,12 +377,6 @@ def test_another_student_cannot_withdraw_it(table) -> None:
     )
     assert response.status_code in {403, 404}
     assert _help(table)["escalation_status"] == "pending"
-
-
-def test_a_withdrawn_request_drops_off_the_dispatch_board(table) -> None:
-    assert _on_the_dispatch_board()
-    assert _withdraw(_student()).status_code == 200
-    assert not _on_the_dispatch_board()
 
 
 def _before_the_write(monkeypatch, change) -> None:

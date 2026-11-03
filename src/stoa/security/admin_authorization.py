@@ -608,8 +608,6 @@ def classify_admin_route(method: str, path: str) -> AdminRoutePolicy:
                        AuthorizationAction.EXPORT if "warehouse-export" in path else AuthorizationAction.READ)
     if path.startswith("/admin/external-activation"):
         return _policy("production_readiness_reader", AuthorizationPurpose.GLOBAL_OPERATIONS, AuthorizationAction.READ)
-    if path.startswith("/admin/teacher-dispatch"):
-        return _policy("teacher_dispatch_operator", AuthorizationPurpose.GLOBAL_OPERATIONS, AuthorizationAction.READ)
     if path in {"/admin/stats", "/admin/core-smoke"}:
         return _policy("platform_operations_reader", AuthorizationPurpose.GLOBAL_OPERATIONS, AuthorizationAction.READ)
     raise KeyError(f"unclassified admin route: {method} {path}")

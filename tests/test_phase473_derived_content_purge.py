@@ -50,6 +50,24 @@ def _question(**overrides: Any) -> dict[str, Any]:
     return _as_stored(item)
 
 
+def _help_request() -> dict[str, Any]:
+    """The help request a report is made from: what the report route resolves (#189)."""
+    return _as_stored(
+        {
+            "PK": f"CONV#{QUESTION_ID}",
+            "SK": "HELP",
+            "entity_type": "help_request",
+            "conversation_id": QUESTION_ID,
+            "escalation_request_id": QUESTION_ID,
+            "student_id": STUDENT_ID,
+            "account_fence_generation": 7,
+            "subject": "private-math",
+            "escalation_status": "pending",
+            "escalation_message": "private question canary",
+        }
+    )
+
+
 def _summary(**overrides: Any) -> dict[str, Any]:
     item = {
         "PK": f"MODERATION#{CASE_ID}",
@@ -134,11 +152,6 @@ def test_moderation_create_binds_authoritative_owner_generation_and_handoff(
     stored: dict[str, Any] = {}
     handoff: dict[str, Any] = {}
     monkeypatch.setattr(
-        moderation_service.question_repo,
-        "get_question",
-        lambda _question_id: _question(),
-    )
-    monkeypatch.setattr(
         moderation_service.moderation_repo,
         "put_case",
         lambda item, *args, **kwargs: stored.update(item) or dict(item),
@@ -157,12 +170,13 @@ def test_moderation_create_binds_authoritative_owner_generation_and_handoff(
     created = moderation_service.create_case(
         QUESTION_ID,
         ModerationReportRequest(
-            surface=ModerationSurface.AI_ANSWER,
+            surface=ModerationSurface.QUESTION,
             reason=ModerationReason.UNSAFE_CONTENT,
             severity=ModerationSeverity.HIGH,
             note="private report note canary",
         ),
         {"sub": STUDENT_ID, "role": "student"},
+        request=_help_request(),
     )
 
     assert stored["student_id"] == STUDENT_ID

@@ -1,31 +1,13 @@
 import pytest
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from stoa.db.repositories import user_repo
+from stoa.db.repositories import question_repo, user_repo
 from stoa.deps import get_actor
 from stoa.routers import admin, questions
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.services import moderation_service
+from stoa.services import learning_session, moderation_service
 from actor_helpers import install_actor_overrides
-
-
-def _question(**overrides):
-    item = {
-        "question_id": "question-1",
-        "student_id": "student-1",
-        "account_fence_generation": 1,
-        "subject": "math",
-        "content": "Solve 2x = 10",
-        "status": "ai_answered",
-        "ai_response": {"answer": "x = 5"},
-        "teacher_id": None,
-        "teacher_response": "Divide by 2.",
-        "image_s3_key": "private/student-1/question.png",
-        "has_image": True,
-    }
-    item.update(overrides)
-    return item
 
 
 def _request(**overrides):
@@ -49,16 +31,12 @@ def _serve_request(monkeypatch, **overrides):
     monkeypatch.setattr(help_requests, "get", lambda *_a, **_k: _request(**overrides))
 
 
-def _report(user, **body):
-    """A report made through the service alone, of a row from the question lane.
-
-    The route resolves help requests only since #234; the service still reads
-    a question row itself when it is handed none.
-    """
+def _report(user, request, **body):
+    """A report made through the service alone, of the help request handed to it."""
     from stoa.models.moderation import ModerationReportRequest
 
     return moderation_service.create_case(
-        "question-1", ModerationReportRequest.model_validate(body), user
+        "question-1", ModerationReportRequest.model_validate(body), user, request=request
     )
 
 
@@ -119,8 +97,7 @@ def _admin_app(user):
 
 
 def _stub_teacher_authorization_facts(monkeypatch):
-    monkeypatch.setattr(moderation_service.question_repo, "get_teacher_session", lambda *_: None)
-    monkeypatch.setattr(moderation_service.question_repo, "get_teacher_assignment", lambda *_: None)
+    monkeypatch.setattr(question_repo, "get_teacher_assignment", lambda *_: None)
     monkeypatch.setattr(
         user_repo,
         "get_user",
@@ -135,7 +112,20 @@ def _stub_teacher_authorization_facts(monkeypatch):
 def test_student_can_report_own_question_without_private_image_key(monkeypatch):
     stored = {}
     events = []
-    monkeypatch.setattr(moderation_service.question_repo, "get_question", lambda question_id: _question())
+    monkeypatch.setattr(
+        moderation_service.learning_session,
+        "history",
+        lambda conversation_id: [
+            learning_session.Message(
+                id="msg-answer",
+                conversation_id=conversation_id,
+                student_id="student-1",
+                role="assistant",
+                content="x = 5",
+                created_at="2026-06-08T09:59:00+00:00",
+            )
+        ],
+    )
     monkeypatch.setattr(
         moderation_service.moderation_repo,
         "put_case",
@@ -145,6 +135,8 @@ def test_student_can_report_own_question_without_private_image_key(monkeypatch):
 
     body = _report(
         {"sub": "student-1", "role": "student"},
+        # An image key on the record would not be copied either.
+        _request(image_s3_key="private/student-1/question.png"),
         surface="ai_answer",
         reason="unsafe_content",
         severity="high",
@@ -154,6 +146,9 @@ def test_student_can_report_own_question_without_private_image_key(monkeypatch):
     assert body["status"] == "open"
     assert body["reason"] == "unsafe_content"
     assert body["question_context"]["ai_answer_preview"] == "x = 5"
+    assert body["question_context"]["content_preview"] == "Solve 2x = 10"
+    # The case keeps the request's own state word, not a question's.
+    assert body["question_context"]["status"] == "pending"
     assert "image_s3_key" not in str(body)
     assert "private/student-1/question.png" not in str(body)
     assert stored["reporter_id"] == "student-1"
@@ -277,36 +272,3 @@ def test_nobody_can_report_an_image_case_themselves(monkeypatch):
     )
 
     assert response.status_code == 400
-
-
-def test_the_teacher_who_answered_a_question_reports_its_reply_from_the_row(monkeypatch):
-    monkeypatch.setattr(
-        moderation_service.question_repo,
-        "get_question",
-        lambda question_id: _question(status="resolved", teacher_id="teacher-1"),
-    )
-    monkeypatch.setattr(moderation_service.moderation_repo, "put_case", lambda item, event: None)
-
-    context = _report(
-        {"sub": "teacher-1", "role": "teacher"},
-        surface="teacher_reply",
-        reason="incorrect_answer",
-        severity="medium",
-    )["question_context"]
-    assert context["teacher_response_preview"] == "Divide by 2."
-    assert context["ai_answer_preview"] == "x = 5"
-    assert "reported_message_id" not in context
-
-
-def test_a_question_report_names_no_message(monkeypatch):
-    monkeypatch.setattr(moderation_service.question_repo, "get_question", lambda question_id: _question())
-
-    with pytest.raises(HTTPException) as refused:
-        _report(
-            {"sub": "student-1", "role": "student"},
-            surface="ai_answer",
-            reason="unsafe_content",
-            message_id="msg-1",
-        )
-
-    assert refused.value.status_code == 400
