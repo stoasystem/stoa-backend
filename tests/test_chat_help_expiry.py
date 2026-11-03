@@ -29,7 +29,6 @@ from test_chat_help_waiting_and_withdraw import (
     _admit_case,
     _before_the_write,
     _nobody_available,
-    _on_the_dispatch_board,
     _spent,
     _status,
     _student,
@@ -163,12 +162,12 @@ def test_a_teacher_accepting_at_the_same_moment_wins(table, notices, monkeypatch
 
 def test_an_expired_request_is_not_offered_again(table, notices) -> None:
     _nobody_available(table)
-    assert _on_the_dispatch_board()
+    assert [record["conversation_id"] for record in help_requests.list_open(table=table)] == [CONV]
     _sweep(_after(DAY + 60))
     later = _sweep(_after(DAY + 600))
     assert later["conversationsWaiting"] == 0
     assert later["conversationsExpired"] == []
-    assert not _on_the_dispatch_board()
+    assert help_requests.list_open(table=table) == []
 
 
 def test_the_student_reads_expired(table, notices) -> None:
