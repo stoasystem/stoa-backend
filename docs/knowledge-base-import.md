@@ -101,7 +101,26 @@ All data files live outside the repository, e.g. in `.scratch/knowledge-base/`.
 11. **Dry run and apply** each manifest through `POST /admin/curriculum/migrations/dry-run`
     and `.../apply`. Every practice set becomes a draft; nothing is published.
 12. **Review** the drafts in the curriculum workflow. Once the licence permission is in
-    writing, publish the reviewed practice sets.
+    writing, publish the reviewed practice sets with
+    `scripts/publish_curriculum_drafts.py`, which makes the submit-review, approve and
+    publish calls for every draft of the manifests, under your own admin session (its
+    access token in `STOA_ADMIN_TOKEN`):
+
+    ```
+    uv run python scripts/publish_curriculum_drafts.py dry-run --base-url https://api.stoaedu.ch --manifest manifests/ --report plan.json
+    uv run python scripts/publish_curriculum_drafts.py apply --base-url https://api.stoaedu.ch --manifest manifests/ --confirm confirm_...
+    ```
+
+    The session needs the author, reviewer and publisher capabilities; each call is
+    checked as if made by hand. The dry run changes nothing: it lists every practice set
+    with the steps it still needs, or why it stays (already published, a reviewer asked
+    for changes, blocking validation issues), and prints a confirmation code for that
+    list. `apply` takes the code, plans again and refuses if the list changed. `--only` and
+    `--exclude` take a file of publicLessonIds, one per line, to publish part of the
+    import; `--migration ID` names a migration instead of its manifest. The first refused
+    or failed call stops the run and says where (an access token that expired, a stale
+    published version); run the dry run again and apply its new code to go on - published
+    sets are skipped, and a set left in review or approved continues from there.
 13. **Go live:** `seed_practice.py --knowledge-base-live` writes the stars and nebulae
     active, and the English and physics subjects with them.
 14. **Prerequisites:** once stoa-backend#125 stops prerequisites from locking a star, add
