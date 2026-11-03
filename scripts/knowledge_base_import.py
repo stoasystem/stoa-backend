@@ -743,6 +743,9 @@ def apply_merges(
 
 #: A small star's exercises are cut into practice sets of at most this many.
 EXERCISES_PER_SET = 10
+#: A stage of a small star with fewer exercises than this joins the next one (or,
+#: when it is the last, the one before), so a practice set is more than a question.
+MIN_EXERCISES_PER_SET = 3
 PART = {"de": "Teil", "en": "Part", "fr": "Partie", "it": "Parte"}
 STAGE = {"de": "Stufe", "en": "Level", "fr": "Niveau", "it": "Livello"}
 #: Inside a star its knowledge points are layered by the upstream edges between
@@ -771,6 +774,32 @@ def point_layers(
         return layers[point]
 
     return {point: min(layer(point), MAX_LAYERS) for point in star_points}
+
+
+def stages(by_layer: Mapping[int, Sequence[Any]]) -> list[tuple[int, int, list[Any]]]:
+    """A small star's layers as stages (first layer, last layer, exercises): in
+    layer order, a stage under MIN_EXERCISES_PER_SET takes in the next layer, and
+    a thin last stage joins the one before it."""
+    out: list[tuple[int, int, list[Any]]] = []
+    for layer, exercises in sorted(by_layer.items()):
+        if out and len(out[-1][2]) < MIN_EXERCISES_PER_SET:
+            first, _last, held = out[-1]
+            out[-1] = (first, layer, [*held, *exercises])
+        else:
+            out.append((layer, layer, list(exercises)))
+    if len(out) > 1 and len(out[-1][2]) < MIN_EXERCISES_PER_SET:
+        _first, last, held = out.pop()
+        first, _last, before = out[-1]
+        out[-1] = (first, last, [*before, *held])
+    return out
+
+
+def parts(exercises: Sequence[Any]) -> list[list[Any]]:
+    """Exercises cut into as few practice sets of at most EXERCISES_PER_SET as
+    they need, of even size, so no part is a leftover question or two."""
+    count = -(-len(exercises) // EXERCISES_PER_SET)
+    size = -(-len(exercises) // count) if count else 0
+    return [list(exercises[i:i + size]) for i in range(0, len(exercises), size)] if size else []
 
 
 def _requires(edges: Iterable[Mapping[str, Any]]) -> dict[str, set[str]]:
@@ -907,7 +936,7 @@ def manifests(
     source_version: str,
     zap: Sequence[Mapping[str, Any]] = (),
 ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Draft practice sets - one per small star and layer, cut in parts - with the
+    """Draft practice sets - one per small star and stage of layers, cut in parts - with the
     report, the star file and the skill vocabulary the platform reads.
 
     A set says which knowledge points come before it (`requiresPoints`): the
@@ -945,16 +974,18 @@ def manifests(
             by_layer: dict[int, list[dict[str, Any]]] = defaultdict(list)
             for exercise in exercises:
                 by_layer[layer_of[exercise["point"]]].append(exercise)
-            for layer, layered in sorted(by_layer.items()):
-                parts = [layered[i:i + EXERCISES_PER_SET] for i in range(0, len(layered), EXERCISES_PER_SET)]
-                for part_index, part in enumerate(parts, start=1):
-                    lesson_id = f"{skill}--{layer}" + (f"-{part_index}" if len(parts) > 1 else "")
+            staged = stages(by_layer)
+            for layer, last_layer, layered in staged:
+                cut = parts(layered)
+                for part_index, part in enumerate(cut, start=1):
+                    lesson_id = f"{skill}--{layer}" + (f"-{part_index}" if len(cut) > 1 else "")
                     titles = {}
                     for locale in LOCALES:
                         title = type_titles[locale]
-                        if len(by_layer) > 1:
-                            title = f"{title} · {STAGE[locale]} {layer}"
-                        if len(parts) > 1:
+                        if len(staged) > 1:
+                            span = f"{layer}" if layer == last_layer else f"{layer}–{last_layer}"
+                            title = f"{title} · {STAGE[locale]} {span}"
+                        if len(cut) > 1:
                             title = f"{title} · {PART[locale]} {part_index}"
                         titles[locale] = title
                     practice_sets[lesson_id] = titles
@@ -988,7 +1019,7 @@ def manifests(
                     })
                     report_exercises.extend(
                         {"sourceId": e["sourceId"], "exercise": e["id"], "star": unit_id,
-                         "questionType": slug, "layer": layer, "practiceSet": lesson_id}
+                         "questionType": slug, "layer": layer_of[e["point"]], "practiceSet": lesson_id}
                         for e in part
                     )
 
@@ -1010,11 +1041,11 @@ def manifests(
         skills.setdefault(skill, {"subject": "mathematics", "unit": unit_id, "titles": dict(type_titles),
                                   "extension": catalog.is_extension("mathematics", slug)})
         exercises = sorted(exercises, key=lambda e: e["id"])
-        parts = [exercises[i:i + EXERCISES_PER_SET] for i in range(0, len(exercises), EXERCISES_PER_SET)]
-        for part_index, part in enumerate(parts, start=1):
-            lesson_id = f"{skill}--zap" + (f"-{part_index}" if len(parts) > 1 else "")
+        cut = parts(exercises)
+        for part_index, part in enumerate(cut, start=1):
+            lesson_id = f"{skill}--zap" + (f"-{part_index}" if len(cut) > 1 else "")
             titles = {
-                locale: f"{type_titles[locale]} · ZAP" + (f" · {PART[locale]} {part_index}" if len(parts) > 1 else "")
+                locale: f"{type_titles[locale]} · ZAP" + (f" · {PART[locale]} {part_index}" if len(cut) > 1 else "")
                 for locale in LOCALES
             }
             practice_sets[lesson_id] = titles
