@@ -19,6 +19,7 @@ import json
 import pytest
 
 import test_chat_help_request_lifecycle as lifecycle
+from fakes.learning_session import seed_message
 from stoa.services import account_deletion_service as service
 
 COMMAND_ID = "cmd-e2e"
@@ -51,14 +52,16 @@ def table(monkeypatch):
     lifecycle._dispatch_to(table, lifecycle.TEACHER)
     assert lifecycle._reply(lifecycle._client(), PRIVATE[0]).status_code in {200, 201}
     student = lifecycle.STUDENT
+    seed_message(
+        table,
+        conversation_id=lifecycle.CONV,
+        role="student",
+        message_id="student-1",
+        student_id=student,
+        content=PRIVATE[1],
+        created_at="2026-09-28T12:01:00+00:00",
+    )
     table.seed(
-        {
-            "PK": f"CONV#{lifecycle.CONV}", "SK": "MSG#student-1", "entity_type": "conversation_message",
-            "schema_version": "conversation-message.v1", "message_id": "student-1",
-            "conversation_id": lifecycle.CONV, "student_id": student, "owner_id": student,
-            "account_fence_generation": 1, "role": "student", "content": PRIVATE[1],
-            "created_at": "2026-09-28T12:01:00+00:00",
-        },
         {
             "PK": "QUESTION#q-lane", "SK": "META", "entity_type": "question", "schema_version": "question.v1",
             "question_id": "q-lane", "student_id": student, "owner_id": student, "status": "resolved",

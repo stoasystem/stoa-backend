@@ -15,6 +15,7 @@ import sys
 
 
 from fakes.dynamodb import FakeTable
+from fakes.learning_session import seed_message
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -25,15 +26,23 @@ from stoa.routers import students
 STUDENT = "student-77"
 
 
+def _message(table: FakeTable, conversation_id: str, index: int, created_at: str) -> None:
+    seed_message(
+        table,
+        conversation_id=conversation_id,
+        role="student",
+        message_id=f"{index:03d}",
+        student_id=STUDENT,
+        content="m",
+        created_at=created_at,
+    )
+
+
 def _table(monkeypatch) -> FakeTable:
     table = FakeTable()
+    for i in range(25):
+        _message(table, "c1", i, f"2026-09-2{i % 9}T10:{i:02d}:00+00:00")
     rows = [
-        {"PK": "CONV#c1", "SK": f"MSG#{i:03d}", "entity_type": "conversation_message",
-         "student_id": STUDENT, "owner_id": STUDENT, "role": "student", "content": "m",
-         "created_at": f"2026-09-2{i % 9}T10:{i:02d}:00+00:00"}
-        for i in range(25)
-    ]
-    rows += [
         {"PK": f"QUESTION#q{n}", "SK": "META", "entity_type": "question", "question_id": f"q{n}",
          "student_id": STUDENT, "status": "ai_answered", "subject": "math", "content": f"question {n}",
          "created_at": f"2026-09-1{n}T09:00:00+00:00"}
@@ -112,14 +121,8 @@ def test_questions_are_found_behind_more_than_one_page_of_other_rows(monkeypatch
     # a student's messages outnumber a page. 120 messages newer than the oldest
     # question sit between it and the rest.
     table = _table(monkeypatch)
-    table.seed(
-        *[
-            {"PK": "CONV#c2", "SK": f"MSG#{i:03d}", "entity_type": "conversation_message",
-             "student_id": STUDENT, "owner_id": STUDENT, "role": "student", "content": "m",
-             "created_at": f"2026-09-15T{i // 60:02d}:{i % 60:02d}:00+00:00"}
-            for i in range(120)
-        ]
-    )
+    for i in range(120):
+        _message(table, "c2", i, f"2026-09-15T{i // 60:02d}:{i % 60:02d}:00+00:00")
 
     # One call returns a full page, however many index pages it takes.
     page = question_repo.list_questions_by_student(STUDENT, limit=3)

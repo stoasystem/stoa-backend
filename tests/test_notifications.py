@@ -7,7 +7,6 @@ from fastapi.testclient import TestClient
 
 from stoa.config import Settings
 from stoa.routers import notifications, teachers
-from stoa.services.learning_session import _store as learning_session_store
 from stoa.db.repositories import question_repo, user_repo
 from stoa.services import (
     locale_service,
@@ -18,6 +17,7 @@ from stoa.services import (
 )
 from actor_helpers import install_actor_overrides
 from fakes.dynamodb import FakeTable
+from fakes.learning_session import patch_session_table, seed_message
 
 
 def _app(router, prefix: str, user: dict) -> TestClient:
@@ -1208,15 +1208,12 @@ def _escalated_conversation(note: str = "") -> dict:
 
 
 def _message(message_id: str, role: str, content: str, created_at: str) -> dict:
+    """A message of `conv-1`, to plant with `seed_message`."""
     return {
-        "PK": "CONV#conv-1",
-        "SK": f"MSG#{message_id}",
-        "entity_type": "conversation_message",
-        "schema_version": "conversation-message.v1",
-        "message_id": message_id,
         "conversation_id": "conv-1",
-        "student_id": "student-1",
         "role": role,
+        "message_id": message_id,
+        "student_id": "student-1",
         "content": content,
         "created_at": created_at,
     }
@@ -1224,8 +1221,9 @@ def _message(message_id: str, role: str, content: str, created_at: str) -> dict:
 
 def _conversation_summary(monkeypatch, question: dict, *messages: dict) -> dict:
     table = FakeTable()
-    table.seed(*messages)
-    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
+    for message in messages:
+        seed_message(table, **message)
+    patch_session_table(monkeypatch, table)
     return _summary_over_http(monkeypatch, "de", question)
 
 

@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from actor_helpers import install_actor_overrides
+from fakes.learning_session import seed_message
 from stoa.deps import get_s3_client
 from stoa.routers import files, teachers
 from stoa.security.route_authorization import get_authorization_fact_repository
@@ -67,22 +68,18 @@ def _attachment_row(attachment_id: str, owner_id: str = STUDENT) -> dict[str, An
     }
 
 
-def _message_row(message_id: str, created_at: str, **extra: Any) -> dict[str, Any]:
+def _message_row(table, message_id: str, created_at: str, **fields: Any) -> None:
     # A student's message as every writer stores it: the teacher's detail reads
     # the session's checked history since #226.
-    return {
-        "PK": f"CONV#{CONV}",
-        "SK": f"MSG#{message_id}",
-        "entity_type": "conversation_message",
-        "schema_version": "conversation-message.v1",
-        "message_id": message_id,
-        "conversation_id": CONV,
-        "owner_id": STUDENT,
-        "student_id": STUDENT,
-        "role": "student",
-        "created_at": created_at,
-        **extra,
-    }
+    seed_message(
+        table,
+        conversation_id=CONV,
+        role="student",
+        message_id=message_id,
+        student_id=STUDENT,
+        created_at=created_at,
+        **fields,
+    )
 
 
 @pytest.fixture
@@ -94,14 +91,15 @@ def sent_image(table):
     table.seed(
         _attachment_row(ATTACHMENT),
         _attachment_row(OTHER_ATTACHMENT),
-        _message_row(
-            "msg-photo",
-            "2026-09-28T11:58:30+00:00",
-            content="What is step 2 here?",
-            attachment_ids=[ATTACHMENT],
-        ),
-        _message_row("msg-text", "2026-09-28T11:59:00+00:00", content="Still stuck."),
     )
+    _message_row(
+        table,
+        "msg-photo",
+        "2026-09-28T11:58:30+00:00",
+        content="What is step 2 here?",
+        attachment_ids=[ATTACHMENT],
+    )
+    _message_row(table, "msg-text", "2026-09-28T11:59:00+00:00", content="Still stuck.")
     return table
 
 

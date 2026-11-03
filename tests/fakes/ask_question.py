@@ -34,6 +34,7 @@ from fastapi.testclient import TestClient
 from audit_helpers import MemoryAuthorizationAuditSink
 from fakes.bedrock import FakeBedrock
 from fakes.dynamodb import FakeTable
+from fakes.learning_session import patch_session_table, seed_conversation
 from stoa.db.repositories import attachment_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.jobs import conversation_generation
@@ -49,7 +50,6 @@ from stoa.services import (
     star_map_candidates,
 )
 from stoa.services.ask_question import _answering, _store, dispatch
-from stoa.services.learning_session import _store as learning_session_store
 from stoa.services.ask_question.models import SendMessageRequest, message_request_fingerprint
 from stoa.services.document_extraction_service import (
     DocumentExtractionFailure,
@@ -101,22 +101,10 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
     """The student's conversation, on the table every read of the question reaches."""
     table = _Table()
     table.seed_active_account(STUDENT)
-    table.seed(
-        {
-            "PK": f"CONV#{CONV}",
-            "SK": "CONV",
-            "entity_type": "conversation",
-            "conversation_id": CONV,
-            "student_id": STUDENT,
-            "owner_id": STUDENT,
-            "account_fence_generation": 1,
-            "subject": "Mathematik",
-            "grade": "Grade 6",
-            "title": "Mathematik · Grade 6",
-            "updated_at": "2026-09-24T08:00:00+00:00",
-        }
-    )
-    for module in (conversations, _answering, learning_session_store, attachment_repo):
+    seed_conversation(table, conversation_id=CONV, student_id=STUDENT)
+    patch_session_table(monkeypatch, table)
+    # These still reach the table themselves for rows that are not the session's.
+    for module in (conversations, _answering, attachment_repo):
         monkeypatch.setattr(module, "get_table", lambda table=table: table)
     monkeypatch.setattr(
         conversations.account_deletion_repo, "get_table", lambda: table, raising=False

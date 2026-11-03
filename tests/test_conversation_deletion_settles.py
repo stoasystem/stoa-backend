@@ -10,6 +10,7 @@ tests mocked the scan, so none of them ran into it.
 from __future__ import annotations
 
 from fakes.dynamodb import FakeTable
+from fakes.learning_session import seed_conversation, seed_message
 
 from stoa.db.repositories import attachment_repo
 
@@ -18,8 +19,9 @@ STUDENT = "student-78"
 
 def test_the_scan_skips_tombstones_but_not_live_rows():
     table = FakeTable()
+    seed_conversation(table, conversation_id="live", student_id=STUDENT, title="t")
+    # A tombstone the deletion wrote: not a session record any more.
     table.seed(
-        {"PK": "CONV#live", "SK": "CONV", "owner_id": STUDENT, "student_id": STUDENT, "title": "t"},
         {
             "PK": "CONV#gone",
             "SK": "CONV",
@@ -28,9 +30,18 @@ def test_the_scan_skips_tombstones_but_not_live_rows():
             "status": "deleted",
             "owner_deletion_generation": 1,
         },
-        # A live row that merely has a status of its own is still found.
-        {"PK": "CONV#live", "SK": "MSG#1", "owner_id": STUDENT, "student_id": STUDENT, "status": "sent"},
     )
+    # A live row that merely has a status of its own is still found.
+    seed_message(
+        table,
+        conversation_id="live",
+        role="student",
+        message_id="1",
+        student_id=STUDENT,
+        content="",
+        created_at="2026-09-24T08:00:00+00:00",
+    )
+    table.rows[("CONV#live", "MSG#1")]["status"] = "sent"
 
     page = attachment_repo.scan_conversation_private_rows(STUDENT, table=table)
 

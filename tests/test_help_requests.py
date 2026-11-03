@@ -12,9 +12,10 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fakes.dynamodb import FakeTable
+from fakes.learning_session import seed_conversation
 
 from stoa.db.repositories import account_deletion_repo
-from stoa.services import help_requests, teacher_support_allowance_service
+from stoa.services import help_requests, learning_session, teacher_support_allowance_service
 
 STUDENT = "student-189"
 TEACHER = "teacher-189"
@@ -76,19 +77,15 @@ class World:
 @pytest.fixture
 def world(monkeypatch) -> World:
     table = FakeTable()
+    seed_conversation(
+        table,
+        conversation_id=CONV,
+        student_id=STUDENT,
+        subject="mathematics",
+        grade="6",
+        now=at(-30),
+    )
     table.seed(
-        {
-            "PK": f"CONV#{CONV}",
-            "SK": "CONV",
-            "entity_type": "conversation",
-            "conversation_id": CONV,
-            "student_id": STUDENT,
-            "owner_id": STUDENT,
-            "account_fence_generation": 1,
-            "subject": "mathematics",
-            "grade": "6",
-            "created_at": at(-30),
-        },
         {"PK": f"USER#{STUDENT}", "SK": "ACCOUNT_FENCE", "status": "active", "generation": 1},
         *_teacher(TEACHER),
         *_teacher(OTHER, "paused"),
@@ -268,7 +265,17 @@ def test_the_offered_teacher_takes_it_and_its_first_reply_is_the_first_response(
 
 def test_replying_to_an_offer_takes_it_in_the_same_write(world) -> None:
     world.ask()
-    message = {"Put": {"Item": {"PK": f"CONV#{CONV}", "SK": "MSG#reply", "role": "teacher"}}}
+    message = learning_session.append(
+        CONV,
+        role="teacher",
+        message_id="reply",
+        student_id=STUDENT,
+        generation=1,
+        content="",
+        created_at=at(3),
+        teacher_response_rich={"version": 1, "blocks": []},
+        teacher_response_format="stoa_teacher_reply_v1",
+    )
 
     help_requests.reply(world.record, teacher_id=TEACHER, reply_operations=(message,), now=at(3), table=world.table)
 

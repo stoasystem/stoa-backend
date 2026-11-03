@@ -113,6 +113,37 @@ def test_direct_router_writes_are_forbidden_by_static_writer_gate() -> None:
         session_source = path.read_text(encoding="utf-8")
         assert ".put_item(" not in session_source, path.name
         assert ".update_item(" not in session_source, path.name
+    # Every message row is made by `learning_session.append` (#227): the
+    # teacher's reply, the system message that opens a help request and the
+    # question's student and assistant messages. None of them builds the row.
+    # (`teachers.py` still puts rows of its own through `_teacher_put`, so it
+    # is not held to "no `.put_item(`" here.)
+    teacher_source = Path("src/stoa/routers/teachers.py").read_text(encoding="utf-8")
+    assert "learning_session.append(" in teacher_source
+    assert '"SK": f"MSG#' not in teacher_source
+    assert "conversation-message.v1" not in teacher_source
+    assert '"entity_type": "conversation_message"' not in teacher_source
+    assert "learning_session.append(" in help_source
+    answering_source = Path("src/stoa/services/ask_question/_answering.py").read_text(
+        encoding="utf-8"
+    )
+    assert "learning_session.append(" in answering_source
+    # The message row's shape is named only inside the session package (#228).
+    # The account-deletion inventory names the entity type to find the rows it
+    # scrubs; it is the one place outside the package allowed to.
+    inventory = {Path("src/stoa/db/repositories/attachment_repo.py")}
+    for path in sorted(Path("src/stoa").rglob("*.py")):
+        if session in path.parents:
+            continue
+        text = path.read_text(encoding="utf-8")
+        assert "conversation-message.v1" not in text, path
+        assert '"entity_type": "conversation_message"' not in text, path
+        if path not in inventory:
+            assert '"conversation_message"' not in text, path
+        # The message key prefix belongs to the session's store alone.
+        assert "MSG#" not in text, path
+    for path in session_modules:
+        assert "MSG#" not in path.read_text(encoding="utf-8"), path.name
 
 
 def test_private_row_discovery_is_strong_paginated_and_scrub_is_allowlisted() -> None:

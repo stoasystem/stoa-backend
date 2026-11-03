@@ -6,6 +6,8 @@ from stoa.routers import students
 from stoa.security import route_authorization
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
 from audit_helpers import MemoryAuthorizationAuditSink
+from fakes.dynamodb import FakeTable
+from fakes.learning_session import seed_conversation, seed_message
 
 
 def _actor(role, user_id, grants=()):
@@ -72,6 +74,8 @@ def _profiles(monkeypatch):
 
 
 # The student index is keyed on student_id, which every one of these carries.
+# The rows the student index carries, planted where they are made.
+_PLANTED = FakeTable()
 MIXED_STUDENT_INDEX_ROWS = [
     {
         "PK": "QUESTION#q-1",
@@ -83,16 +87,14 @@ MIXED_STUDENT_INDEX_ROWS = [
         "prompt": "Why does this factor?",
         "created_at": "2026-08-20T10:00:00+00:00",
     },
-    {
-        "PK": "CONV#c-1",
-        "SK": "CONV",
-        "entity_type": "conversation",
-        "conversation_id": "c-1",
-        "student_id": "student-1",
-        "subject": "physics",
-        "title": "Physics - 9",
-        "created_at": "2026-08-21T10:00:00+00:00",
-    },
+    seed_conversation(
+        _PLANTED,
+        conversation_id="c-1",
+        student_id="student-1",
+        subject="physics",
+        title="Physics - 9",
+        now="2026-08-21T10:00:00+00:00",
+    ),
     {
         "PK": "USAGE_LEDGER#student-1",
         "SK": "EVENT#question#2026-08-21",
@@ -100,13 +102,15 @@ MIXED_STUDENT_INDEX_ROWS = [
         "student_id": "student-1",
         "created_at": "2026-08-21T10:00:01+00:00",
     },
-    {
-        "PK": "CONV#c-1",
-        "SK": "MSG#m-1",
-        "entity_type": "conversation_message",
-        "student_id": "student-1",
-        "created_at": "2026-08-21T10:00:02+00:00",
-    },
+    seed_message(
+        _PLANTED,
+        conversation_id="c-1",
+        role="student",
+        message_id="m-1",
+        student_id="student-1",
+        content="",
+        created_at="2026-08-21T10:00:02+00:00",
+    ),
     {
         "PK": "REPORT#weekly-1",
         "SK": "SUMMARY",

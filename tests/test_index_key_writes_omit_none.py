@@ -30,13 +30,12 @@ from fastapi.testclient import TestClient
 import pytest
 
 from fakes.dynamodb import FakeTable
+from fakes.learning_session import patch_session_table, seed_conversation
 from stoa.config import Settings
 from stoa.db.repositories import account_deletion_repo, curriculum_ops_repo, usage_ledger_repo
 from stoa.models.billing import BillingPlanId
 from stoa.routers import conversations
 from stoa.services import learning_session
-from stoa.services.learning_session import _store as learning_session_store
-from stoa.services.ask_question import _answering
 from stoa.services import (
     curriculum_ops_service,
     help_requests,
@@ -227,25 +226,17 @@ def test_a_repeat_conversation_help_request_after_a_failed_ledger_write_records_
     keyed by that request and its day."""
     table = FakeTable()
     table.seed_active_account("student-1")
-    table.seed(
-        {
-            "PK": "CONV#conv-1",
-            "SK": "CONV",
-            "entity_type": "conversation",
-            "conversation_id": "conv-1",
-            "student_id": "student-1",
-            "owner_id": "student-1",
-            "account_fence_generation": 1,
-            "subject": "physics",
-            "grade": "Sek1",
-            "status": "active",
-            "created_at": NOW,
-            "updated_at": NOW,
-        }
+    seed_conversation(
+        table,
+        conversation_id="conv-1",
+        student_id="student-1",
+        subject="physics",
+        grade="Sek1",
+        now=NOW,
+        status="active",
     )
     monkeypatch.setattr(conversations, "get_table", lambda: table)
-    monkeypatch.setattr(_answering, "get_table", lambda: table)
-    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
+    patch_session_table(monkeypatch, table)
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
     service = conversations.teacher_support_allowance_service
     monkeypatch.setattr(
@@ -318,24 +309,17 @@ def _conversation_replay_scaffold(
     """
     table = FakeTable()
     table.seed_active_account("student-1")
-    row: dict[str, object] = {
-        "PK": "CONV#conv-1",
-        "SK": "CONV",
-        "entity_type": "conversation",
-        "conversation_id": "conv-1",
-        "student_id": "student-1",
-        "owner_id": "student-1",
-        "account_fence_generation": 1,
-        "subject": "physics",
-        "grade": "Sek1",
-        "status": "active",
-        "created_at": NOW,
-        "updated_at": NOW,
-    }
-    table.seed(row)
+    row = seed_conversation(
+        table,
+        conversation_id="conv-1",
+        student_id="student-1",
+        subject="physics",
+        grade="Sek1",
+        now=NOW,
+        status="active",
+    )
     monkeypatch.setattr(conversations, "get_table", lambda: table)
-    monkeypatch.setattr(_answering, "get_table", lambda: table)
-    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
+    patch_session_table(monkeypatch, table)
     monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
     monkeypatch.setattr(learning_session, "read", lambda _conv_id: dict(row))
     service = conversations.teacher_support_allowance_service
