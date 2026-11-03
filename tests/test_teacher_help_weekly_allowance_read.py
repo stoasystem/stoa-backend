@@ -16,6 +16,7 @@ from decimal import Decimal
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from fakes.dynamodb import FakeTable
+from fakes.learning_session import seed_conversation
 import pytest
 
 from actor_helpers import install_actor_overrides
@@ -60,21 +61,14 @@ def _weekly_cases(table: FakeTable, cases: int, *, version: int = 1) -> None:
 
 
 def _conversation(table: FakeTable, conversation_id: str) -> str:
-    table.seed(
-        {
-            "PK": f"CONV#{conversation_id}",
-            "SK": "CONV",
-            "account_fence_generation": 1,
-            "conversation_id": conversation_id,
-            "created_at": WEDNESDAY,
-            "entity_type": "conversation",
-            "grade": "6",
-            "owner_id": STUDENT,
-            "student_id": STUDENT,
-            "subject": "mathematics",
-            "title": "Fractions",
-            "updated_at": WEDNESDAY,
-        }
+    seed_conversation(
+        table,
+        conversation_id=conversation_id,
+        student_id=STUDENT,
+        subject="mathematics",
+        grade="6",
+        title="Fractions",
+        now=WEDNESDAY,
     )
     return conversation_id
 

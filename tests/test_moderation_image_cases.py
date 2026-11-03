@@ -44,11 +44,11 @@ from stoa.deps import (
 )
 from stoa.jobs import moderation_image_retention
 from stoa.routers import admin, files, notifications
-from stoa.services.learning_session import _store as learning_session_store
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import account_deletion_service, locale_service, message_catalog
 from actor_helpers import install_actor_overrides
 from fakes.dynamodb import FakeTable, as_stored
+from fakes.learning_session import patch_session_table, seed_conversation
 from fakes.rekognition import FakeRekognition
 from fakes.s3 import MultipartS3
 
@@ -95,20 +95,19 @@ class _World:
         self.table = FakeTable()
         self.table.seed_active_account(STUDENT, generation=3)
         self.table.seed_active_account(OTHER_STUDENT)
-        for user_id in (STUDENT, OTHER_STUDENT):
-            self.table.seed(
-                {
-                    "PK": f"CONV#{CONVERSATION if user_id == STUDENT else 'conv-other'}",
-                    "SK": "CONV",
-                    "entity_type": "conversation",
-                    "conversation_id": CONVERSATION if user_id == STUDENT else "conv-other",
-                    "student_id": user_id,
-                    "title": "Fractions",
-                }
-            )
+        seed_conversation(
+            self.table,
+            conversation_id=CONVERSATION,
+            student_id=STUDENT,
+            title="Fractions",
+            generation=3,
+        )
+        seed_conversation(
+            self.table, conversation_id="conv-other", student_id=OTHER_STUDENT, title="Fractions"
+        )
+        patch_session_table(monkeypatch, self.table)
         for module in (
             attachment_repo,
-            learning_session_store,
             account_deletion_repo,
             moderation_repo,
             notification_repo,

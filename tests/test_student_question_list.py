@@ -23,6 +23,7 @@ from fastapi.testclient import TestClient
 
 import test_chat_help_request_lifecycle as lifecycle
 from actor_helpers import install_actor_overrides
+from fakes.learning_session import seed_message
 from stoa.routers import students
 
 
@@ -31,18 +32,16 @@ def table(monkeypatch):
     table = lifecycle.table.__wrapped__(monkeypatch)
     lifecycle._dispatch_to(table, lifecycle.TEACHER)
     lifecycle._help(table)["previous_dispatch_teacher_ids"] = ["teacher-who-timed-out"]
+    seed_message(
+        table,
+        conversation_id=lifecycle.CONV,
+        role="student",
+        message_id="m-1",
+        student_id=lifecycle.STUDENT,
+        content="Step 2 makes no sense to me.",
+        created_at=lifecycle.CREATED,
+    )
     table.seed(
-        {
-            "PK": f"CONV#{lifecycle.CONV}",
-            "SK": "MSG#m-1",
-            "entity_type": "conversation_message",
-            "message_id": "m-1",
-            "conversation_id": lifecycle.CONV,
-            "student_id": lifecycle.STUDENT,
-            "role": "student",
-            "content": "Step 2 makes no sense to me.",
-            "created_at": lifecycle.CREATED,
-        },
         # A question-lane question, dispatched and with a teacher who lapsed.
         {
             "PK": "QUESTION#q-lane", "SK": "META", "entity_type": "question", "question_id": "q-lane",

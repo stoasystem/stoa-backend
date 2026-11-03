@@ -15,6 +15,7 @@ import sys
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from fakes.dynamodb import FakeTable
+from fakes.learning_session import seed_conversation
 import pytest
 
 from actor_helpers import install_actor_overrides
@@ -52,21 +53,16 @@ def _teacher_rows(teacher_id: str) -> list[dict]:
 def build_table(monkeypatch) -> FakeTable:
     """The production-shaped rows these tests share; other files build on it too."""
     table = FakeTable()
+    seed_conversation(
+        table,
+        conversation_id=CONV,
+        student_id=STUDENT,
+        subject="mathematics",
+        grade="6",
+        title="Fractions",
+        now=CREATED,
+    )
     table.seed(
-        {
-            "PK": f"CONV#{CONV}",
-            "SK": "CONV",
-            "account_fence_generation": 1,
-            "conversation_id": CONV,
-            "created_at": CREATED,
-            "entity_type": "conversation",
-            "grade": "6",
-            "owner_id": STUDENT,
-            "student_id": STUDENT,
-            "subject": "mathematics",
-            "title": "Fractions",
-            "updated_at": CREATED,
-        },
         {
             "PK": f"CONV#{CONV}",
             "SK": "HELP",

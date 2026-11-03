@@ -35,11 +35,7 @@ from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentE
 from stoa.services.learning_session import _history, _store, _write
 from stoa.services.learning_session._history import Message, message_from_row
 from stoa.services.learning_session._write import Role, append
-from stoa.services.learning_session._store import (
-    build_conversation_write_transaction,
-    conv_pk,
-    msg_sk,
-)
+from stoa.services.learning_session._store import build_conversation_write_transaction, conv_pk
 
 __all__ = [
     "DynamoConversationTable",
@@ -56,8 +52,6 @@ __all__ = [
     "history",
     "history_fingerprint",
     "history_rows",
-    "message_from_row",
-    "msg_sk",
     "open",
     "owned_by",
     "read",
@@ -85,6 +79,29 @@ def active_conversation_generation(owner_id: str, table: Any) -> int:
     return int(fence["generation"])
 
 
+def _record(
+    conversation_id: str,
+    student_id: str,
+    *,
+    subject: str,
+    grade: str,
+    title: str,
+    now: str,
+) -> dict[str, object]:
+    """The record `open` stores, before the owner and fence are stamped on it."""
+    return {
+        **_store.record_key(conversation_id),
+        "conversation_id": conversation_id,
+        "student_id": student_id,
+        "entity_type": "conversation",
+        "subject": subject,
+        "grade": grade,
+        "title": title,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
 def open(
     student_id: str, *, subject: str, grade: str, title: str, now: str
 ) -> dict[str, object]:
@@ -96,17 +113,9 @@ def open(
     """
     conversation_id = str(uuid.uuid4())
     table = _store.table()
-    record: dict[str, object] = {
-        **_store.record_key(conversation_id),
-        "conversation_id": conversation_id,
-        "student_id": student_id,
-        "entity_type": "conversation",
-        "subject": subject,
-        "grade": grade,
-        "title": title,
-        "created_at": now,
-        "updated_at": now,
-    }
+    record = _record(
+        conversation_id, student_id, subject=subject, grade=grade, title=title, now=now
+    )
     generation = active_conversation_generation(student_id, table)
     return _store.create_conversation_record(
         record,

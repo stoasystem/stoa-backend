@@ -52,12 +52,12 @@ from stoa.deps import (
 )
 from stoa.routers import conversations, upload_codes
 from stoa.services.ask_question import _answering
-from stoa.services.learning_session import _store as learning_session_store
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import attachment_service, rate_limit, upload_code_service
 from fakes.bedrock import FakeBedrock, answer_without_allowance
 from fakes.dynamodb import FakeTable
+from fakes.learning_session import patch_session_table, seed_conversation
 from fakes.rekognition import FakeRekognition
 from fakes.s3 import MultipartS3
 
@@ -89,20 +89,13 @@ def _pdf() -> bytes:
     return b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n"
 
 
-def _conversation(conversation_id: str, student_id: str) -> dict[str, Any]:
-    return {
-        "PK": f"CONV#{conversation_id}",
-        "SK": "CONV",
-        "entity_type": "conversation",
-        "conversation_id": conversation_id,
-        "student_id": student_id,
-        "owner_id": student_id,
-        "account_fence_generation": 1,
-        "subject": "Mathematik",
-        "grade": "Grade 6",
-        "title": "Mathematik · Grade 6",
-        "updated_at": "2026-10-29T08:00:00+00:00",
-    }
+def _conversation(table: FakeTable, conversation_id: str, student_id: str) -> None:
+    seed_conversation(
+        table,
+        conversation_id=conversation_id,
+        student_id=student_id,
+        now="2026-10-29T08:00:00+00:00",
+    )
 
 
 class _Table(FakeTable):
@@ -131,10 +124,10 @@ class _Api:
         moderation: FakeRekognition | None = None,
         settings: Settings | None = None,
     ) -> None:
+        patch_session_table(monkeypatch, table)
         for module in (
             conversations,
             _answering,
-            learning_session_store,
             attachment_repo,
             upload_code_repo,
             rate_limit,
@@ -310,11 +303,9 @@ def table() -> FakeTable:
     table = _Table()
     table.seed_active_account(STUDENT)
     table.seed_active_account(OTHER_STUDENT)
-    table.seed(
-        _conversation(CONV, STUDENT),
-        _conversation(OTHER_CONV, STUDENT),
-        _conversation(FOREIGN_CONV, OTHER_STUDENT),
-    )
+    _conversation(table, CONV, STUDENT)
+    _conversation(table, OTHER_CONV, STUDENT)
+    _conversation(table, FOREIGN_CONV, OTHER_STUDENT)
     return table
 
 

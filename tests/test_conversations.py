@@ -11,14 +11,15 @@ import pytest
 from datetime import datetime, timezone
 
 from audit_helpers import MemoryAuthorizationAuditSink
+from fakes.dynamodb import FakeTable as _FakeTable
 from fakes.dynamodb import as_stored as _as_stored
+from fakes.learning_session import patch_session_table, seed_conversation, seed_message
 from stoa.db.repositories import attachment_repo, question_repo, user_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.config import Settings
 from stoa.services import locale_service, message_catalog
 from stoa.routers import conversations
 from stoa.services import learning_session
-from stoa.services.learning_session import _store as learning_session_store
 from stoa.services.ask_question import _answering
 from stoa.models.attachment import AttachmentStatus, AttachmentSummary
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
@@ -97,8 +98,7 @@ def _with_help_request(monkeypatch, **fields):
             }
         )
     monkeypatch.setattr(conversations, "get_table", lambda: table)
-    monkeypatch.setattr(_answering, "get_table", lambda: table)
-    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
+    patch_session_table(monkeypatch, table)
     _owned_conversation(monkeypatch)
     return table
 
@@ -271,8 +271,7 @@ def test_teacher_help_retryable_admission_stays_out_of_student_words(monkeypatch
     )
     table = _escalation_table()
     monkeypatch.setattr(conversations, "get_table", lambda: table)
-    monkeypatch.setattr(_answering, "get_table", lambda: table)
-    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
+    patch_session_table(monkeypatch, table)
     monkeypatch.setattr(
         learning_session,
         "read",
@@ -1466,29 +1465,29 @@ class _PagedIndexTable:
 
 def _student_index_rows(*, messages: int, conversations_count: int, student_id="student-1"):
     """Newest first, as the descending index returns them: messages, then history."""
+    planted = _FakeTable()
     rows = [
-        {
-            "PK": f"CONV#noise-{index}",
-            "SK": f"MSG#msg-{index}",
-            "student_id": student_id,
-            "entity_type": "conversation_message",
-            "created_at": f"2026-07-20T00:{index // 60:02d}:{index % 60:02d}Z",
-        }
+        seed_message(
+            planted,
+            conversation_id=f"noise-{index}",
+            role="student",
+            message_id=f"msg-{index}",
+            student_id=student_id,
+            content="",
+            created_at=f"2026-07-20T00:{index // 60:02d}:{index % 60:02d}Z",
+        )
         for index in range(messages)
     ]
     rows += [
-        {
-            "PK": f"CONV#history-{index}",
-            "SK": "CONV",
-            "conversation_id": f"history-{index}",
-            "student_id": student_id,
-            "entity_type": "conversation",
-            "subject": "math",
-            "grade": "Sek1",
-            "title": f"History {index}",
-            "created_at": f"2026-07-15T00:00:{index:02d}Z",
-            "updated_at": f"2026-07-15T00:00:{index:02d}Z",
-        }
+        seed_conversation(
+            planted,
+            conversation_id=f"history-{index}",
+            student_id=student_id,
+            subject="math",
+            grade="Sek1",
+            title=f"History {index}",
+            now=f"2026-07-15T00:00:{index:02d}Z",
+        )
         for index in range(conversations_count)
     ]
     return rows
@@ -1498,8 +1497,7 @@ def test_conversation_list_reaches_matching_row_after_filtered_gsi_page(monkeypa
     """Pages spent on messages must not be reported as an empty history."""
     table = _PagedIndexTable(_student_index_rows(messages=120, conversations_count=5))
     monkeypatch.setattr(conversations, "get_table", lambda: table)
-    monkeypatch.setattr(_answering, "get_table", lambda: table)
-    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
+    patch_session_table(monkeypatch, table)
 
     response = _client(conversations.router).get("/conversations")
 
@@ -1520,8 +1518,7 @@ def test_conversation_list_reaches_matching_row_after_filtered_gsi_page(monkeypa
 def test_conversation_list_reads_one_page_at_normal_volume_without_repeats(monkeypatch):
     table = _PagedIndexTable(_student_index_rows(messages=20, conversations_count=5))
     monkeypatch.setattr(conversations, "get_table", lambda: table)
-    monkeypatch.setattr(_answering, "get_table", lambda: table)
-    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
+    patch_session_table(monkeypatch, table)
 
     response = _client(conversations.router).get("/conversations")
 
@@ -1537,8 +1534,7 @@ def test_conversation_list_reports_an_exhausted_page_budget_as_truncated(monkeyp
     """A heavy history is bounded, and the caller is told it was cut short."""
     table = _PagedIndexTable(_student_index_rows(messages=400, conversations_count=2))
     monkeypatch.setattr(conversations, "get_table", lambda: table)
-    monkeypatch.setattr(_answering, "get_table", lambda: table)
-    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
+    patch_session_table(monkeypatch, table)
 
     page = conversations._list_conversations("student-1", page_budget=2)
 
@@ -1550,8 +1546,7 @@ def test_conversation_list_reports_an_exhausted_page_budget_as_truncated(monkeyp
 def test_conversation_list_stops_at_the_result_limit_and_says_so(monkeypatch):
     table = _PagedIndexTable(_student_index_rows(messages=0, conversations_count=250))
     monkeypatch.setattr(conversations, "get_table", lambda: table)
-    monkeypatch.setattr(_answering, "get_table", lambda: table)
-    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
+    patch_session_table(monkeypatch, table)
 
     page = conversations._list_conversations("student-1")
 
@@ -1734,35 +1729,17 @@ def _escalation_table():
             "version": 3,
         }
     )
-    table.rows[("CONV#conv-1", "CONV")] = _as_stored(
-        {
-            "PK": "CONV#conv-1",
-            "SK": "CONV",
-            "entity_type": "conversation",
-            "conversation_id": "conv-1",
-            "student_id": "student-1",
-            "owner_id": "student-1",
-            "account_fence_generation": 1,
-            "subject": "physics",
-            "grade": "Sek1",
-        }
-    )
+    _conversation(table, "conv-1")
     return table
 
 
 def _conversation(table, conversation_id: str) -> None:
-    table.rows[(f"CONV#{conversation_id}", "CONV")] = _as_stored(
-        {
-            "PK": f"CONV#{conversation_id}",
-            "SK": "CONV",
-            "entity_type": "conversation",
-            "conversation_id": conversation_id,
-            "student_id": "student-1",
-            "owner_id": "student-1",
-            "account_fence_generation": 1,
-            "subject": "physics",
-            "grade": "Sek1",
-        }
+    seed_conversation(
+        table,
+        conversation_id=conversation_id,
+        student_id="student-1",
+        subject="physics",
+        grade="Sek1",
     )
 
 

@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from actor_helpers import install_actor_overrides
+from fakes.learning_session import seed_message
 from stoa.routers import questions
 from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import moderation_service
@@ -45,32 +46,25 @@ STUDENT_WORDS = "Why is x not 4?"
 TEACHER_REPLY = "Look at the denominators first."
 
 
-def _message(message_id: str, role: str, content: str, created_at: str) -> dict[str, Any]:
-    return {
-        "PK": f"CONV#{CONV}",
-        "SK": f"MSG#{message_id}",
-        "entity_type": "conversation_message",
-        "schema_version": "conversation-message.v1",
-        "message_id": message_id,
-        "conversation_id": CONV,
-        "student_id": STUDENT,
-        "owner_id": STUDENT,
-        "account_fence_generation": 1,
-        "role": role,
-        "content": content,
-        "created_at": created_at,
-    }
+def _message(table, message_id: str, role: str, content: str, created_at: str) -> None:
+    seed_message(
+        table,
+        conversation_id=CONV,
+        role=role,
+        message_id=message_id,
+        student_id=STUDENT,
+        content=content,
+        created_at=created_at,
+    )
 
 
 @pytest.fixture
 def said(table):
     """The conversation before help was asked: two AI answers and a question between."""
     # The ids run against the order of sending, as random ids may.
-    table.seed(
-        _message("msg-z-first-answer", "assistant", FIRST_ANSWER, "2026-09-28T11:57:00+00:00"),
-        _message("msg-m-student", "student", STUDENT_WORDS, "2026-09-28T11:58:00+00:00"),
-        _message("msg-a-latest-answer", "assistant", LATEST_ANSWER, "2026-09-28T11:59:00+00:00"),
-    )
+    _message(table, "msg-z-first-answer", "assistant", FIRST_ANSWER, "2026-09-28T11:57:00+00:00")
+    _message(table, "msg-m-student", "student", STUDENT_WORDS, "2026-09-28T11:58:00+00:00")
+    _message(table, "msg-a-latest-answer", "assistant", LATEST_ANSWER, "2026-09-28T11:59:00+00:00")
     return table
 
 

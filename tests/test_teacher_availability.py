@@ -266,14 +266,8 @@ def test_cross_teacher_help_request_update_is_hidden_before_mutation(monkeypatch
         escalated_at="2026-07-15T08:00:00+00:00",
     )
     table = FakeTable()
+    seed_conversation(table, conversation_id="conv-1", student_id="student-1")
     table.seed(
-        {
-            "PK": "CONV#conv-1",
-            "SK": "CONV",
-            "entity_type": "conversation",
-            "conversation_id": "conv-1",
-            "student_id": "student-1",
-        },
         record,
         # The holder's write binds their account and the student's fence.
         {"PK": "USER#teacher-1", "SK": "PROFILE", "user_id": "teacher-1", "role": "teacher",
@@ -340,6 +334,7 @@ def test_help_request_authorization_outage_returns_503_before_mutation(monkeypat
 # Stubbing the repository is how "every save writes `available`" went unseen.
 
 from fakes.dynamodb import FakeTable  # noqa: E402
+from fakes.learning_session import seed_conversation  # noqa: E402
 
 from stoa.db.repositories import account_deletion_repo, user_repo  # noqa: E402
 

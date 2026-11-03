@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from fakes.ask_question import CONV, _command_row, _commit, _parse_in_process, _submit, _upload
+from fakes.ask_question import _command_row, _commit, _parse_in_process, _submit, _upload
 from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fixture
 from fakes.ask_question import bucket as bucket  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
@@ -19,7 +19,7 @@ from fakes.dynamodb import as_stored as _as_stored
 from stoa.config import Settings
 from stoa.db.repositories import attachment_repo
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
-from stoa.services import ai_service, ask_question, attachment_service
+from stoa.services import ai_service, attachment_service
 from stoa.services.document_extraction_service import DocumentExtractionFailure
 
 
@@ -192,90 +192,6 @@ def test_replay_attachment_row_is_accepted_in_the_shape_the_table_returns(
     [attachment] = answered.studentMessage.attachments
     assert attachment.filename == "notes.txt"
     assert len(model.calls) == 1
-
-
-def _message(message_id: str, created_at: str, content: str) -> dict[str, Any]:
-    return {
-        "PK": f"CONV#{CONV}",
-        "SK": f"MSG#{message_id}",
-        "entity_type": "conversation_message",
-        "schema_version": "conversation-message.v1",
-        "message_id": message_id,
-        "conversation_id": CONV,
-        "student_id": "student-1",
-        "owner_id": "student-1",
-        "account_fence_generation": 1,
-        "role": "student" if message_id.startswith("student") else "assistant",
-        "content": content,
-        "created_at": created_at,
-    }
-
-
-def _committed_after_two_messages(table) -> None:
-    """A conversation with one exchange in it, and a question committed after it."""
-    table.seed(
-        _message("student-old", "2026-07-17T00:00:00Z", "original question"),
-        _message("assistant-old", "2026-07-17T00:00:01Z", "original reply"),
-    )
-    _commit("history-key")
-    assert _command_row(table, "history-key")["history_message_ids"] == [
-        "student-old",
-        "assistant-old",
-    ]
-
-
-def test_history_snapshot_is_consistent_paginated_ordered_and_ignores_later_rows(
-    table, model
-) -> None:
-    _committed_after_two_messages(table)
-    table.seed(_message("student-later", "2099-07-17T00:00:09Z", "later private canary"))
-    table.page_item_cap = 1
-    table.requests.clear()
-
-    assert ask_question.answer(CONV, "history-key") == "completed"
-
-    # Read page by page, each page strongly consistent.
-    history = [
-        request
-        for operation, request in table.requests
-        if operation == "query" and request.get("ConsistentRead") is True
-    ]
-    assert len(history) >= 3
-    assert any("ExclusiveStartKey" in request for request in history)
-    sent = json.dumps(model.requests[-1]["messages"], ensure_ascii=False)
-    assert sent.index("original question") < sent.index("original reply")
-    assert "later private canary" not in sent
-
-
-@pytest.mark.parametrize("mode", ["missing", "duplicate", "changed", "malformed-page"])
-def test_history_snapshot_rejects_missing_duplicate_changed_and_malformed_rows(
-    table, model, monkeypatch, mode: str
-) -> None:
-    _committed_after_two_messages(table)
-    if mode == "missing":
-        del table.rows[(f"CONV#{CONV}", "MSG#assistant-old")]
-    elif mode == "duplicate":
-        table.seed(
-            {**_message("student-old", "2026-07-17T00:00:00Z", "original question"),
-             "SK": "MSG#student-old-again"}
-        )
-    elif mode == "changed":
-        table.rows[(f"CONV#{CONV}", "MSG#assistant-old")]["content"] = "changed after command"
-    else:
-        query = table.query
-
-        def malformed(**kwargs: Any) -> Any:
-            page = query(**kwargs)
-            return {**page, "Items": {}}
-
-        monkeypatch.setattr(table, "query", malformed)
-
-    # The student sends it again; the history it was asked after is read back.
-    with pytest.raises(AttachmentDecisionError) as captured:
-        _submit("history-key")
-
-    assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-    assert model.calls == []
 
 
 def _provider_body(data: bytes, *, read_error: bool = False, close_error: bool = False):
