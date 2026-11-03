@@ -531,7 +531,8 @@ def test_routes_admit_only_at_first_case_and_later_actions_do_not_mutate_allowan
             teachers.update_help_request,
             teachers.add_note,
             help_requests.dispatch,
-            help_requests.advance,
+            help_requests.take_or_finish,
+            help_requests._advance,
             help_requests.reply,
         )
     )

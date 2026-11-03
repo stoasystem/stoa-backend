@@ -40,8 +40,10 @@ from boto3.dynamodb.conditions import Attr, Key
 from stoa.config import settings
 from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo
+from stoa.models.attachment import AttachmentSummary
 from stoa.security.private_telemetry import emit_private_event
 from stoa.services import (
+    attachment_service,
     learning_session,
     notification_service,
     teacher_dispatch_service,
@@ -255,6 +257,53 @@ def student_view(record: Mapping[str, Any], *, now: str | None = None) -> tuple[
     if record.get("dispatch_status") == "no_candidate":
         return "waiting_no_teacher", ""
     return PENDING, ""
+
+
+@dataclass(frozen=True)
+class TeacherView:
+    """What a teacher is shown of a request: the list, the detail and the stats.
+
+    ``status`` is the stored one (#215 decision 3): a teacher never sees the
+    student's `assigned` or `waiting_no_teacher`.
+    """
+
+    request_id: str
+    conversation_id: str
+    student_id: str
+    subject: str
+    grade: str
+    status: str
+    request_message: str | None
+    created_at: str
+    first_teacher_action_at: str | None
+    resolved_at: str | None
+    sla: dict[str, Any]
+
+
+def teacher_view(record: Mapping[str, Any], *, now: str | None = None) -> TeacherView:
+    """The request as a teacher reads it (#215 decision 2).
+
+    Takes the record, or `question_view` of it: both carry the record's own
+    fields. A request is dated when it was asked, else when it last changed,
+    else ``now``.
+    """
+    conversation_id = _text(record.get("conversation_id"))
+    return TeacherView(
+        request_id=_text(record.get("escalation_request_id"), default=conversation_id),
+        conversation_id=conversation_id,
+        student_id=_text(record.get("student_id")),
+        subject=_text(record.get("subject"), default="General"),
+        grade=_text(record.get("grade")),
+        status=_status(record),
+        request_message=_optional_text(record.get("escalation_message")),
+        created_at=_text(
+            record.get("escalated_at"),
+            default=_text(record.get("updated_at"), default=now or _now()),
+        ),
+        first_teacher_action_at=_optional_text(record.get("first_teacher_action_at")),
+        resolved_at=_optional_text(record.get("escalation_resolved_at")),
+        sla=sla(record),
+    )
 
 
 def question_view(record: Mapping[str, Any]) -> dict[str, Any]:
@@ -756,7 +805,41 @@ def _end(
 # ── The teacher's moves ──────────────────────────────────────────────────────
 
 
-def advance(
+def take_or_finish(
+    record: Mapping[str, Any],
+    *,
+    teacher_id: str,
+    target: str,
+    now: str | None = None,
+    resolution_note: str | None = None,
+    table: Any | None = None,
+) -> dict[str, Any]:
+    """Take a request (`in_progress`), finish it (`resolved`), or both at once.
+
+    The teacher it is offered to takes it with their first write; the holder
+    moves it on. Returns the record as written. When this write took the
+    request, the student is told a teacher has it, once the write has landed
+    (#215 decision 4); telling is best effort. Raises `HelpRequestConflict`
+    when anything the move was decided on has moved.
+    """
+    timestamp = now or _now()
+    written = _advance(
+        record,
+        teacher_id=teacher_id,
+        target=target,
+        now=timestamp,
+        resolution_note=resolution_note,
+        table=table,
+    )
+    if not record.get("teacher_id"):
+        try:
+            notification_service.emit_teacher_help_takeover(conversation=written, teacher_id=teacher_id)
+        except Exception as exc:  # noqa: BLE001 - best effort by contract
+            logger.warning("teacher_help_takeover_alert_failed error=%s", type(exc).__name__)
+    return written
+
+
+def _advance(
     record: Mapping[str, Any],
     *,
     teacher_id: str,
@@ -766,15 +849,14 @@ def advance(
     reply_operations: Sequence[dict[str, Any]] = (),
     table: Any | None = None,
 ) -> dict[str, Any]:
-    """Move a request to `target` for `teacher_id`: take it, finish it, or both.
+    """Move a request to `target` for `teacher_id`, telling nobody.
 
-    The teacher it is offered to takes it with their first write; the holder
-    moves it on. ``reply_operations`` is a reply written in the same
-    transaction - replying to an offer takes it - and a reply is what stamps
-    the first response (#189 Q4). Every condition the decision rested on is in
-    the write: the exact live offer, that this teacher has not let it lapse
-    before, the teacher's active account and profile, the student's fence and
-    the record's version. If any moved, nothing is written and
+    ``reply_operations`` is a reply written in the same transaction - replying
+    to an offer takes it - and a reply is what stamps the first response
+    (#189 Q4). Every condition the decision rested on is in the write: the
+    exact live offer, that this teacher has not let it lapse before, the
+    teacher's active account and profile, the student's fence and the
+    record's version. If any moved, nothing is written and
     `HelpRequestConflict` is raised.
     """
     if target not in TEACHER_TARGETS:
@@ -826,45 +908,234 @@ def advance(
     )
 
 
+@dataclass(frozen=True)
+class Reply:
+    """A teacher's reply in a request (#215 decision 5): its `NOTE#` row, read back.
+
+    ``attachments`` is filled when the reply was just written; a reply read
+    back carries only ``attachment_ids``, which the reader resolves.
+    """
+
+    id: str
+    content: str
+    created_at: str
+    teacher_id: str
+    teacher_name: str
+    rich: dict[str, Any] | None
+    format: str | None
+    attachment_ids: list[str]
+    attachments: list[AttachmentSummary]
+
+
 def reply(
     record: Mapping[str, Any],
     *,
     teacher_id: str,
-    reply_operations: Sequence[dict[str, Any]],
+    author_name: str | None,
+    content: str,
+    rich: dict[str, Any] | None,
+    format: str | None,
+    images: Sequence[dict[str, Any]] = (),
     now: str | None = None,
     table: Any | None = None,
-) -> dict[str, Any]:
-    """The holder's reply, written only while the request is still theirs.
+) -> Reply:
+    """The holder's reply, and its images, written only while the request is theirs.
 
-    A request the teacher has not taken yet is taken by the reply (`advance`).
-    A resolved request still takes its holder's replies (#189 decision 2). The
-    first reply is the request's first response.
+    The reply is a `NOTE#` row and a teacher message in the student's
+    conversation, written in one transaction with the record. A request the
+    teacher is offered is taken by the reply; a resolved request still takes
+    its holder's replies (#189 decision 2); the first reply is the request's
+    first response. The rows are the student's: stamped with the student as
+    owner and written behind their account fence, so the student's deletion
+    removes them and a late reply cannot bring them back (#74). The teacher's
+    identity stays on them when the teacher is deleted (user decision,
+    2026-09-28). Once written the student is told of the reply - one event,
+    also when the reply took the request - best effort.
     """
     timestamp = now or _now()
     store: Any = table or get_table()
-    if str(record.get("teacher_id") or "") != teacher_id:
-        if holder_or_offered(record, teacher_id):
-            return advance(
-                record,
-                teacher_id=teacher_id,
-                target=IN_PROGRESS,
-                now=timestamp,
-                reply_operations=reply_operations,
-                table=store,
-            )
+    holds = str(record.get("teacher_id") or "") == teacher_id
+    if not holds and not holder_or_offered(record, teacher_id):
         raise HelpRequestConflict("help request is not this teacher's")
-    changes: dict[str, Any] = {"updated_at": timestamp}
-    if not record.get("first_teacher_action_at"):
-        changes["first_teacher_action_at"] = timestamp
-    return _write(
-        record,
-        changes,
-        condition="teacher_id = :teacher",
-        values={":teacher": teacher_id},
-        extra=tuple(reply_operations),
-        fence=True,
-        table=store,
+    conversation_id = _text(record.get("conversation_id"))
+    student_id = _text(record.get("student_id"))
+    try:
+        # The generation stamped on the rows is the one the fence check holds
+        # them to, read from the fence itself, not a copy on the record.
+        generation = int(
+            account_deletion_repo.require_active_account_fence(student_id, table=store)["generation"]
+        )
+    except account_deletion_repo.AccountDeletionConflict as exc:
+        raise HelpRequestConflict("student account is not writable") from exc
+    note_id = str(uuid.uuid4())
+    # The reply is also a message in the conversation, appended by the
+    # learning session, so it follows the message contract the student's
+    # history reader enforces on every row (#66, 2026-09-28).
+    message_id = str(uuid.uuid4())
+    image_operations: list[dict[str, Any]] = []
+    attachments: list[AttachmentSummary] = []
+    attachment_ids: list[str] | None = None
+    if images:
+        image_operations, attachments = attachment_service.reply_image_operations(
+            images,
+            teacher_id=teacher_id,
+            student_id=student_id,
+            account_fence_generation=generation,
+            conversation_id=conversation_id,
+            message_id=message_id,
+        )
+        attachment_ids = [summary.attachment_id for summary in attachments]
+    teacher_name = _text(author_name, default="Teacher")
+    note_row = _reply_row(
+        conversation_id=conversation_id,
+        note_id=note_id,
+        teacher_id=teacher_id,
+        teacher_name=teacher_name,
+        content=content,
+        rich=rich,
+        format=format,
+        created_at=timestamp,
+        attachment_ids=attachment_ids,
     )
+    # The student sees who wrote each reply, as named when it was written
+    # (#65): the profile's name only, never the email.
+    message_put = learning_session.append(
+        conversation_id,
+        role="teacher",
+        message_id=message_id,
+        student_id=student_id,
+        generation=generation,
+        content=content,
+        created_at=timestamp,
+        teacher_response_rich=rich,
+        teacher_response_format=format,
+        author_name=author_name,
+        attachment_ids=attachment_ids,
+    )
+    reply_operations = (
+        learning_session.build_conversation_write_transaction(
+            item=note_row, owner_id=student_id, generation=generation
+        )[1],
+        message_put,
+        *image_operations,
+    )
+    if holds:
+        changes: dict[str, Any] = {"updated_at": timestamp}
+        if not record.get("first_teacher_action_at"):
+            changes["first_teacher_action_at"] = timestamp
+        written = _write(
+            record,
+            changes,
+            condition="teacher_id = :teacher",
+            values={":teacher": teacher_id},
+            extra=reply_operations,
+            fence=True,
+            table=store,
+        )
+    else:
+        written = _advance(
+            record,
+            teacher_id=teacher_id,
+            target=IN_PROGRESS,
+            now=timestamp,
+            reply_operations=reply_operations,
+            table=store,
+        )
+    try:
+        notification_service.emit_teacher_help_reply(
+            conversation=written, teacher_id=teacher_id, reply_id=note_id
+        )
+    except Exception as exc:  # noqa: BLE001 - best effort by contract
+        logger.warning("teacher_help_reply_alert_failed error=%s", type(exc).__name__)
+    return Reply(
+        id=note_id,
+        content=content,
+        created_at=timestamp,
+        teacher_id=teacher_id,
+        teacher_name=teacher_name,
+        rich=rich,
+        format=format,
+        attachment_ids=list(attachment_ids or []),
+        attachments=attachments,
+    )
+
+
+def _reply_row(
+    *,
+    conversation_id: str,
+    note_id: str,
+    teacher_id: str,
+    teacher_name: str,
+    content: str,
+    rich: dict[str, Any] | None,
+    format: str | None,
+    created_at: str,
+    attachment_ids: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """A reply's `NOTE#` row, before the owner and fence stamps of its write."""
+    row: dict[str, Any] = {
+        "PK": learning_session.conv_pk(conversation_id),
+        "SK": f"NOTE#{note_id}",
+        "entity_type": "conversation_teacher_note",
+        "note_id": note_id,
+        "conversation_id": conversation_id,
+        "teacher_id": teacher_id,
+        "teacher_name": teacher_name,
+        "content": content,
+        "teacher_response_rich": rich,
+        "teacher_response_format": format,
+        "created_at": created_at,
+    }
+    if attachment_ids:
+        row["attachment_ids"] = list(attachment_ids)
+    return row
+
+
+def replies(conversation_id: str, *, table: Any | None = None) -> list[Reply]:
+    """The teachers' replies in a request, oldest first: one page of its `NOTE#` rows."""
+    store: Any = table or get_table()
+    response = store.query(
+        KeyConditionExpression=(
+            Key("PK").eq(learning_session.conv_pk(conversation_id)) & Key("SK").begins_with("NOTE#")
+        ),
+        ScanIndexForward=True,
+    )
+    items = response.get("Items", []) if isinstance(response, Mapping) else None
+    if not isinstance(items, list):
+        raise HelpRequestUnavailable(conversation_id)
+    return [_reply_from_row(item, conversation_id) for item in items]
+
+
+def _reply_from_row(row: object, conversation_id: str) -> Reply:
+    if not isinstance(row, Mapping):
+        raise HelpRequestUnavailable(conversation_id)
+    required = [row.get(field) for field in ("note_id", "content", "created_at")]
+    if not all(isinstance(value, str) and value for value in required):
+        raise HelpRequestUnavailable(conversation_id)
+    rich = row.get("teacher_response_rich")
+    return Reply(
+        id=str(required[0]),
+        content=str(required[1]),
+        created_at=str(required[2]),
+        teacher_id=_text(row.get("teacher_id")),
+        teacher_name=_text(row.get("teacher_name"), default="Teacher"),
+        rich=dict(rich) if isinstance(rich, Mapping) else None,
+        format=_optional_text(row.get("teacher_response_format")),
+        attachment_ids=[str(value) for value in _id_list(row.get("attachment_ids"))],
+        attachments=[],
+    )
+
+
+def _id_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, (set, tuple)):
+        return list(value)
+    if isinstance(value, str):
+        return [part.strip() for part in value.split(",") if part.strip()]
+    return [value]
 
 
 def _teacher_standing_conditions(teacher_id: str, table: Any) -> tuple[dict[str, Any], ...]:
@@ -1128,6 +1399,14 @@ def _seconds_between(start: Any, end: Any) -> int | None:
     if not started or not ended:
         return None
     return max(0, int((ended - started).total_seconds()))
+
+
+def _text(value: Any, *, default: str = "") -> str:
+    return value if isinstance(value, str) else default
+
+
+def _optional_text(value: Any) -> str | None:
+    return value if isinstance(value, str) else None
 
 
 def _int(value: Any, default: int) -> int:
