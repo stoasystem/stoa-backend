@@ -211,7 +211,7 @@ def _store_summary_draft(
     """
     created_at = now_iso()
     draft_id = f"aitool-{uuid4().hex}"
-    item = {
+    item: dict[str, Any] = {
         "entity_type": ai_teacher_tools_repo.DRAFT_ENTITY,
         "draft_id": draft_id,
         "draft_type": "teacher_summary",
