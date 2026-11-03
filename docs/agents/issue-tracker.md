@@ -37,12 +37,28 @@ Create a GitHub issue.
 
 Run `gh issue view <number> --comments`.
 
+## Lines
+
+Every open issue in this repo and in its sibling repo belongs to exactly one **line**, shown by a numbered label that both repos share. The number is the line's rank: lower goes first.
+
+| Label | Covers |
+|---|---|
+| `1-主线：提问→AI→老师兜底` | The main line: a student asks, the AI answers, a teacher steps in as fallback. Includes whatever blocks shipping that loop, such as compliance, moderation and uploads. |
+| `2-星图与练习题库` | Star map, learning path, exercises, quizzes and course content. |
+| `3-安全与稳定性` | Production walkthroughs, billing, the admin console and data correctness. |
+| `4-美化与细节` | Copy, translations and low-priority display details. |
+
+- **Pick the line when the issue is created.** A new map, a ticket under a map, a `/to-tickets` ticket and an issue that `/triage` accepts each get one line label in the same `gh issue create` or `gh issue edit` call.
+- **A ticket takes its map's line**, unless its content plainly belongs to another line. Then label it by content.
+- **`priority:P0` is only for line 1.** Urgent work on another line gets `priority:P1` at most. If it truly can't wait, ask the user whether it belongs on line 1 instead.
+- **Unsure which line?** Ask the user before creating the issue. Never create, rename or renumber a line label; only the user changes lines, in both repos at once.
+
 ## Wayfinding operations
 
 Used by `/wayfinder`. The **map** is a single issue with **child** issues as tickets.
 
-- **Map**: a single issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body. `gh issue create --label wayfinder:map`.
-- **Child ticket**: an issue linked to the map as a GitHub sub-issue (`gh api` on the sub-issues endpoint). Where sub-issues aren't enabled, add the child to a task list in the map body and put `Part of #<map>` at the top of the child body. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving dev.
+- **Map**: a single issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body, plus one line label (see [Lines](#lines)), settled with the user while naming the destination. `gh issue create --label wayfinder:map --label "<line>"`.
+- **Child ticket**: an issue linked to the map as a GitHub sub-issue (`gh api` on the sub-issues endpoint). Where sub-issues aren't enabled, add the child to a task list in the map body and put `Part of #<map>` at the top of the child body. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`) and the map's line label. Once claimed, the ticket is assigned to the driving dev.
 - **Blocking**: GitHub's **native issue dependencies**, the canonical, UI-visible representation. Add an edge with `gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`, where `<blocker-db-id>` is the blocker's numeric **database id** (`gh api repos/<owner>/<repo>/issues/<n> --jq .id`, _not_ the `#number` or `node_id`). GitHub reports `issue_dependencies_summary.blocked_by` (open blockers only, the live gate). Where dependencies aren't available, fall back to a `Blocked by: #<n>, #<n>` line at the top of the child body. A ticket is unblocked when every blocker is closed.
 - **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
 - **Claim**: `gh issue edit <n> --add-assignee @me`, the session's first write.
