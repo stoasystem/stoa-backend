@@ -1,20 +1,17 @@
 """Teacher routes — work queue, takeover, reply, resolve."""
 import logging
-import uuid
 
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Literal, NamedTuple, NoReturn, Protocol, runtime_checkable
 
-from boto3.dynamodb.conditions import Key
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import (
-    account_deletion_repo,
     asked_knowledge_repo,
     attachment_repo,
     question_repo,
@@ -57,7 +54,6 @@ from stoa.services import (
     attachment_service,
     help_requests,
     learning_session,
-    notification_service,
     teacher_assistance_service,
     teacher_dispatch_service,
     teacher_reply_service,
@@ -72,11 +68,6 @@ type TeacherItem = dict[str, object]
 @runtime_checkable
 class _PutTable(Protocol):
     def put_item(self, **kwargs: object) -> object: ...
-
-
-@runtime_checkable
-class _QueryTable(Protocol):
-    def query(self, **kwargs: object) -> object: ...
 
 
 @runtime_checkable
@@ -100,23 +91,11 @@ def _teacher_mapping(value: object) -> TeacherItem:
     return result
 
 
-def _teacher_query(table: object, **kwargs: object) -> TeacherItem:
-    if not isinstance(table, _QueryTable):
-        raise RuntimeError("teacher data dependency unavailable")
-    return _teacher_mapping(table.query(**kwargs))
-
-
 def _teacher_put(table: object, **kwargs: object) -> object:
     if not isinstance(table, _PutTable):
         raise RuntimeError("teacher data dependency unavailable")
     return table.put_item(**kwargs)
 
-
-def _teacher_items(response: Mapping[str, object]) -> list[TeacherItem]:
-    items = response.get("Items", [])
-    if not isinstance(items, list):
-        raise RuntimeError("teacher data dependency unavailable")
-    return [_teacher_mapping(item) for item in items]
 
 
 def _text(value: object, *, default: str = "") -> str:
@@ -220,18 +199,6 @@ def _parse_time(value: object) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def _list_value(value: object) -> list[object]:
-    if value is None:
-        return []
-    if isinstance(value, list):
-        return value
-    if isinstance(value, (set, tuple)):
-        return list(value)
-    if isinstance(value, str):
-        return [part.strip() for part in value.split(",") if part.strip()]
-    return [value]
-
-
 # ---------------------------------------------------------------------------
 # Response models
 # ---------------------------------------------------------------------------
@@ -307,6 +274,37 @@ class TeacherHelpRequestDetail(BaseModel):
     # the answers in this conversation named, newest first, as the prep summary
     # of a question names its topics. Empty when none were recorded.
     weakTopics: list[str] = Field(default_factory=list)
+
+
+def _help_request_summary(
+    view: help_requests.TeacherView, *, student_name: str
+) -> TeacherHelpRequestSummary:
+    return TeacherHelpRequestSummary(
+        requestId=view.request_id,
+        conversationId=view.conversation_id,
+        studentName=student_name,
+        subject=view.subject,
+        grade=view.grade,
+        status=view.status,
+        requestMessage=view.request_message,
+        createdAt=view.created_at,
+        firstTeacherActionAt=view.first_teacher_action_at,
+        sla=view.sla,
+    )
+
+
+def _note_out(
+    reply: help_requests.Reply, attachments: list[AttachmentSummary]
+) -> TeacherNoteOut:
+    return TeacherNoteOut(
+        id=reply.id,
+        note=reply.content,
+        createdAt=reply.created_at,
+        teacher={"id": reply.teacher_id, "name": reply.teacher_name},
+        richContent=reply.rich,
+        responseFormat=reply.format,
+        attachments=attachments,
+    )
 
 
 class UpdateStatusRequest(BaseModel):
@@ -590,10 +588,6 @@ class _HelpRequestAttachment(NamedTuple):
     attachment: TeacherItem
 
 
-def _attachment_ids(message: Mapping[str, object]) -> list[str]:
-    return [str(value) for value in _list_value(message.get("attachment_ids"))]
-
-
 def _raise_attachment(error: AttachmentDecisionError, correlation_id: str) -> NoReturn:
     error.correlation_id = correlation_id
     log_attachment_failure(error, route="teachers")
@@ -863,18 +857,20 @@ async def get_stats(
     correlation_id: str = Depends(get_request_correlation_id),
     audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
 ):
-    escalated = await _current_help_requests(actor, facts, correlation_id, audit_sink)
-    pending = sum(1 for c in escalated if c.get("escalation_status", "pending") == "pending")
+    views = [
+        help_requests.teacher_view(c)
+        for c in await _current_help_requests(actor, facts, correlation_id, audit_sink)
+    ]
+    pending = sum(1 for view in views if view.status == "pending")
     response_times = [
-        snapshot["requestToFirstActionMinutes"]
-        for snapshot in (help_requests.sla(c) for c in escalated)
-        if isinstance(snapshot["requestToFirstActionMinutes"], int)
+        view.sla["requestToFirstActionMinutes"]
+        for view in views
+        if isinstance(view.sla["requestToFirstActionMinutes"], int)
     ]
     resolved_today_count = sum(
-        1 for c in escalated
-        if c.get("escalation_status") == "resolved"
-        and _text(c.get("escalation_resolved_at"))[:10]
-        == datetime.now(timezone.utc).date().isoformat()
+        1 for view in views
+        if view.status == "resolved"
+        and (view.resolved_at or "")[:10] == datetime.now(timezone.utc).date().isoformat()
     )
     return TeacherStats(
         pendingRequests=pending,
@@ -1094,24 +1090,10 @@ async def list_help_requests(
         key=lambda candidate: _text(candidate.get("escalated_at")),
         reverse=True,
     ):
-        conv_id = _text(conv.get("conversation_id"))
-        student_name = _get_student_name(_text(conv.get("student_id")))
-        esc_status = _text(conv.get("escalation_status"), default="pending")
-        items.append(TeacherHelpRequestSummary(
-            requestId=_text(conv.get("escalation_request_id"), default=conv_id),
-            conversationId=conv_id,
-            studentName=student_name,
-            subject=_text(conv.get("subject"), default="General"),
-            grade=_text(conv.get("grade")),
-            status=esc_status,
-            requestMessage=_optional_text(conv.get("escalation_message")),
-            createdAt=_text(
-                conv.get("escalated_at"),
-                default=_text(conv.get("updated_at"), default=_now()),
-            ),
-            firstTeacherActionAt=_optional_text(conv.get("first_teacher_action_at")),
-            sla=help_requests.sla(conv),
-        ).model_dump())
+        view = help_requests.teacher_view(conv)
+        items.append(
+            _help_request_summary(view, student_name=_get_student_name(view.student_id)).model_dump()
+        )
     return {"items": items}
 
 
@@ -1129,10 +1111,10 @@ async def get_help_request(
     """Get full detail of a specific help request including conversation messages."""
     table = get_table()
 
-    conv = dict(authorized.value)
+    view = help_requests.teacher_view(authorized.value)
 
-    conv_id = _required_text(conv.get("conversation_id"))
-    student_id = _required_text(conv.get("student_id"))
+    conv_id = _required_text(view.conversation_id)
+    student_id = _required_text(view.student_id)
     student_profile = user_repo.get_user(student_id)
     student_name = _text(
         (student_profile or {}).get("name"), default="Student"
@@ -1151,56 +1133,33 @@ async def get_help_request(
         )
         attachment_summaries = {}
     messages = [message_out(m, attachment_summaries) for m in history]
-
-    # Load notes stored as NOTE# items in the conversation
-    notes_resp = _teacher_query(
-        table,
-        KeyConditionExpression=(
-            Key("PK").eq(learning_session.conv_pk(conv_id)) & Key("SK").begins_with("NOTE#")
-        ),
-        ScanIndexForward=True,
-    )
     notes = [
-        TeacherNoteOut(
-            id=_required_text(n.get("note_id")),
-            note=_required_text(n.get("content")),
-            createdAt=_required_text(n.get("created_at")),
-            teacher={
-                "id": _text(n.get("teacher_id")),
-                "name": _text(n.get("teacher_name"), default="Teacher"),
-            },
-            richContent=(
-                dict(rich_content)
-                if isinstance(
-                    rich_content := n.get("teacher_response_rich"), Mapping
-                )
-                else None
-            ),
-            responseFormat=_optional_text(n.get("teacher_response_format")),
-            attachments=[
+        _note_out(
+            reply,
+            [
                 attachment_summaries[value]
-                for value in _attachment_ids(n)
+                for value in reply.attachment_ids
                 if value in attachment_summaries
             ],
         )
-        for n in _teacher_items(notes_resp)
+        for reply in help_requests.replies(conv_id, table=table)
     ]
 
     return TeacherHelpRequestDetail(
-        requestId=_text(conv.get("escalation_request_id"), default=conv_id),
+        requestId=view.request_id,
         conversationId=conv_id,
         student={
             "id": student_id,
             "name": student_name,
-            "grade": _text(conv.get("grade")),
+            "grade": view.grade,
         },
-        subject=_text(conv.get("subject"), default="General"),
-        status=_text(conv.get("escalation_status"), default="pending"),
-        requestMessage=_optional_text(conv.get("escalation_message")),
+        subject=view.subject,
+        status=view.status,
+        requestMessage=view.request_message,
         messages=messages,
         notes=notes,
-        firstTeacherActionAt=_optional_text(conv.get("first_teacher_action_at")),
-        sla=help_requests.sla(conv),
+        firstTeacherActionAt=view.first_teacher_action_at,
+        sla=view.sla,
         weakTopics=_asked_topics(conv_id),
     )
 
@@ -1272,44 +1231,24 @@ async def update_help_request(
     The teacher it is offered to takes it with their first write, and finishing
     it straight from the offer takes and finishes it at once (#66).
     """
-    now = _now()
     conv = dict(authorized.value)
-    # Taken now, by this write: nobody held it before. Finishing an offer
-    # straight away takes it too, in the same write.
-    takes_it = not conv.get("teacher_id")
-    if help_requests.holder_or_offered(conv, actor.user_id):
-        try:
-            conv = help_requests.advance(
-                conv,
-                teacher_id=actor.user_id,
-                target=body.status,
-                now=now,
-                resolution_note=body.resolutionNote,
-                table=get_table(),
-            )
-        except help_requests.HelpRequestConflict as exc:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
-            ) from exc
-    else:
+    if not help_requests.holder_or_offered(conv, actor.user_id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_NOT_HELD)
-    if takes_it:
-        notification_service.emit_teacher_help_takeover(conversation=conv, teacher_id=actor.user_id)
-
-    conv_id = _required_text(conv.get("conversation_id"))
-    student_name = _get_student_name(_text(conv.get("student_id")))
-    return TeacherHelpRequestSummary(
-        requestId=_text(conv.get("escalation_request_id"), default=conv_id),
-        conversationId=conv_id,
-        studentName=student_name,
-        subject=_text(conv.get("subject"), default="General"),
-        grade=_text(conv.get("grade")),
-        status=body.status,
-        requestMessage=_optional_text(conv.get("escalation_message")),
-        createdAt=_text(conv.get("escalated_at"), default=now),
-        firstTeacherActionAt=_optional_text(conv.get("first_teacher_action_at")),
-        sla=help_requests.sla(conv),
-    )
+    try:
+        written = help_requests.take_or_finish(
+            conv,
+            teacher_id=actor.user_id,
+            target=body.status,
+            now=_now(),
+            resolution_note=body.resolutionNote,
+            table=get_table(),
+        )
+    except help_requests.HelpRequestConflict as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
+        ) from exc
+    view = help_requests.teacher_view(written)
+    return _help_request_summary(view, student_name=_get_student_name(view.student_id))
 
 
 @router.post("/me/help-requests/{request_id}/notes", response_model=TeacherNoteOut)
@@ -1331,17 +1270,9 @@ async def add_note(
     Only the teacher the request is with posts into it, and its images with it
     (#145): the request's authorization is settled before an upload is looked at.
     """
-    table = get_table()
     conv = dict(authorized.value)
-
-    conv_id = _required_text(conv.get("conversation_id"))
     teacher_id = actor.user_id
     teacher_profile = user_repo.get_user(teacher_id)
-    teacher_name = _text(
-        (teacher_profile or {}).get("name"), default="Teacher"
-    )
-    note_id = str(uuid.uuid4())
-    now = _now()
     try:
         reply_fields = teacher_reply_service.normalize_teacher_reply(body.content, body.richContent)
     except teacher_reply_service.TeacherReplyValidationError as exc:
@@ -1352,110 +1283,22 @@ async def add_note(
         )
     except AttachmentDecisionError as error:
         _raise_attachment(error, correlation_id)
-
-    # A reply belongs to the student's conversation: stamped with the student
-    # as owner and written behind their account fence, so the student's
-    # deletion removes it and a late reply cannot bring it back (#74). The
-    # teacher's identity stays on it when the teacher is deleted (user
-    # decision, 2026-09-28).
-    student_id = _text(conv.get("student_id"))
-    try:
-        # The generation stamped on the rows is the one the fence check holds
-        # them to, read from the fence itself, not a copy on the conversation.
-        generation = int(
-            account_deletion_repo.require_active_account_fence(student_id, table=table)[
-                "generation"
-            ]
-        )
-    except account_deletion_repo.AccountDeletionConflict as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
-        ) from exc
-    note_item = {
-        "PK": learning_session.conv_pk(conv_id),
-        "SK": f"NOTE#{note_id}",
-        "entity_type": "conversation_teacher_note",
-        "note_id": note_id,
-        "conversation_id": conv_id,
-        "teacher_id": teacher_id,
-        "teacher_name": teacher_name,
-        "content": reply_fields["teacher_response"],
-        "teacher_response_rich": reply_fields["teacher_response_rich"],
-        "teacher_response_format": reply_fields["teacher_response_format"],
-        "created_at": now,
-    }
-    # The teacher's reply is also a message in the conversation, appended by
-    # the learning session, so it follows the message contract the student's
-    # history reader enforces on every row. Without it the student could no
-    # longer open the conversation once a teacher replied (#66, 2026-09-28).
-    msg_id = str(uuid.uuid4())
-    image_operations: list[dict[str, Any]] = []
-    attachments: list[AttachmentSummary] = []
-    message_attachment_ids: list[str] | None = None
-    if reply_images:
-        image_operations, attachments = attachment_service.reply_image_operations(
-            reply_images,
-            teacher_id=teacher_id,
-            student_id=student_id,
-            account_fence_generation=generation,
-            conversation_id=conv_id,
-            message_id=msg_id,
-        )
-        attachment_ids = [summary.attachment_id for summary in attachments]
-        message_attachment_ids = attachment_ids
-        note_item["attachment_ids"] = attachment_ids
-    # The student sees who wrote each reply, as named when it was written (#65):
-    # the profile's name only, never the email; without one the frontend says
-    # "teacher".
-    message_put = learning_session.append(
-        conv_id,
-        role="teacher",
-        message_id=msg_id,
-        student_id=student_id,
-        generation=generation,
-        content=reply_fields["teacher_response"],
-        created_at=now,
-        teacher_response_rich=reply_fields["teacher_response_rich"],
-        teacher_response_format=reply_fields["teacher_response_format"],
-        author_name=(teacher_profile or {}).get("name"),
-        attachment_ids=message_attachment_ids,
-    )
-
     if not help_requests.holder_or_offered(conv, teacher_id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_NOT_HELD)
-    # The reply and the request move together: a reply to an offer takes it,
-    # a holder's reply lands only while the request is still theirs, and the
-    # first reply is the request's first response (#189). The rows are written
-    # behind the student's account fence, which the module adds once.
     try:
-        conv = help_requests.reply(
+        written = help_requests.reply(
             conv,
             teacher_id=teacher_id,
-            reply_operations=(
-                learning_session.build_conversation_write_transaction(
-                    item=note_item, owner_id=student_id, generation=generation
-                )[1],
-                message_put,
-                *image_operations,
-            ),
-            now=now,
-            table=table,
+            author_name=_optional_text((teacher_profile or {}).get("name")),
+            content=reply_fields["teacher_response"],
+            rich=reply_fields["teacher_response_rich"],
+            format=reply_fields["teacher_response_format"],
+            images=reply_images,
+            now=_now(),
+            table=get_table(),
         )
     except help_requests.HelpRequestConflict as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
         ) from exc
-
-    # One notification for the reply, also when the reply took the request.
-    notification_service.emit_teacher_help_reply(
-        conversation=conv, teacher_id=teacher_id, reply_id=note_id
-    )
-    return TeacherNoteOut(
-        id=note_id,
-        note=reply_fields["teacher_response"],
-        createdAt=now,
-        teacher={"id": teacher_id, "name": teacher_name},
-        richContent=reply_fields["teacher_response_rich"],
-        responseFormat=reply_fields["teacher_response_format"],
-        attachments=attachments,
-    )
+    return _note_out(written, written.attachments)

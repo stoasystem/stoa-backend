@@ -11,8 +11,8 @@ helpers instead of writing the rows by hand, so a change to the shape
   (decision 8): every session read and write goes through
   `learning_session._store.get_table`.
 
-Teacher-note rows (`NOTE#…`) belong to the help request and stay hand-seeded
-until #215 moves them.
+Teacher-note rows (`NOTE#…`) belong to the help request: `fakes.help_requests.seed_reply`
+plants them (#233).
 """
 
 from __future__ import annotations

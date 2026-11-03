@@ -266,7 +266,7 @@ def test_exact_verified_subject_command_replays_without_actor_authority() -> Non
             service.begin_or_replay_deletion(**arguments)
 
 
-def test_every_primary_writer_uses_the_same_active_fence_and_exact_generation() -> None:
+def test_every_primary_writer_uses_the_same_active_fence_and_exact_generation(monkeypatch) -> None:
     repository, _service, _job = _deletion_modules()
     expected_key = repository.account_fence_key(STUDENT_ID)
 
@@ -281,9 +281,14 @@ def test_every_primary_writer_uses_the_same_active_fence_and_exact_generation() 
     help_ops: list[dict[str, Any]] = []
 
     class _CapturingTable:
+        def get_item(self, **_kwargs: Any) -> dict[str, Any]:
+            # The student's fence, which the reply's rows are stamped from.
+            return {"Item": {"status": "active", "generation": 4}}
+
         def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
             help_ops.extend(operations)
 
+    monkeypatch.setattr(help_requests.notification_service, "emit_teacher_help_reply", lambda **_kwargs: None)
     help_requests.reply(
         {
             "conversation_id": "c-1",
@@ -294,7 +299,11 @@ def test_every_primary_writer_uses_the_same_active_fence_and_exact_generation() 
             "version": 1,
         },
         teacher_id="teacher-1",
-        reply_operations=(),
+        author_name="Teacher One",
+        content="Subtract 5 from both sides.",
+        rich={"version": 1, "blocks": []},
+        format="stoa_teacher_reply_v1",
+        images=(),
         now=NOW,
         table=_CapturingTable(),
     )

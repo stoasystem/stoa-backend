@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from fakes.dynamodb import FakeTable
 from stoa.routers import admin, teachers
+from stoa.services import help_requests
 from actor_helpers import install_actor_overrides
 
 
@@ -109,12 +110,12 @@ def test_teacher_note_accepts_rich_teacher_reply_payload(monkeypatch):
     # The holder's reply is one transaction behind the student's fence (#74).
     captured: list[dict] = []
     monkeypatch.setattr(
-        teachers.account_deletion_repo,
+        help_requests.account_deletion_repo,
         "require_active_account_fence",
         lambda user_id, generation=None, *, table=None: {"status": "active", "generation": 4},
     )
     monkeypatch.setattr(
-        teachers.account_deletion_repo,
+        help_requests.account_deletion_repo,
         "transact",
         lambda operations, *, table=None: captured.extend(operations),
     )

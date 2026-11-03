@@ -116,10 +116,12 @@ def test_direct_router_writes_are_forbidden_by_static_writer_gate() -> None:
     # Every message row is made by `learning_session.append` (#227): the
     # teacher's reply, the system message that opens a help request and the
     # question's student and assistant messages. None of them builds the row.
-    # (`teachers.py` still puts rows of its own through `_teacher_put`, so it
-    # is not held to "no `.put_item(`" here.)
+    # The teacher's reply is appended by `help_requests.reply` (#233), so the
+    # teacher routes append nothing themselves. (`teachers.py` still puts rows
+    # of its own through `_teacher_put`, so it is not held to "no `.put_item(`"
+    # here.)
     teacher_source = Path("src/stoa/routers/teachers.py").read_text(encoding="utf-8")
-    assert "learning_session.append(" in teacher_source
+    assert "learning_session.append(" not in teacher_source
     assert '"SK": f"MSG#' not in teacher_source
     assert "conversation-message.v1" not in teacher_source
     assert '"entity_type": "conversation_message"' not in teacher_source

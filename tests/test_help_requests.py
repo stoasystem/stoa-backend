@@ -12,10 +12,11 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fakes.dynamodb import FakeTable
+from fakes.help_requests import seed_reply
 from fakes.learning_session import seed_conversation
 
 from stoa.db.repositories import account_deletion_repo
-from stoa.services import help_requests, learning_session, teacher_support_allowance_service
+from stoa.services import help_requests, teacher_support_allowance_service
 
 STUDENT = "student-189"
 TEACHER = "teacher-189"
@@ -28,6 +29,21 @@ Refund = teacher_support_allowance_service.TeacherSupportRefundDisposition
 
 def at(minutes: float = 0) -> str:
     return (ASKED + timedelta(minutes=minutes)).isoformat()
+
+
+def _reply(record: dict, *, now: str, table: FakeTable, teacher_id: str = TEACHER, **fields) -> help_requests.Reply:
+    return help_requests.reply(
+        record,
+        teacher_id=teacher_id,
+        author_name=fields.pop("author_name", "Frau Muster"),
+        content=fields.pop("content", "Subtract 5 from both sides."),
+        rich={"version": 1, "blocks": []},
+        format="stoa_teacher_reply_v1",
+        images=(),
+        now=now,
+        table=table,
+        **fields,
+    )
 
 
 def _teacher(teacher_id: str, availability: str = "available") -> list[dict]:
@@ -110,7 +126,12 @@ def world(monkeypatch) -> World:
 
     monkeypatch.setattr(teacher_support_allowance_service, "admit_teacher_support_case", admit)
     monkeypatch.setattr(teacher_support_allowance_service, "refund_teacher_support_case", refund)
-    for name in ("emit_teacher_help_dispatched", "emit_teacher_help_expired"):
+    for name in (
+        "emit_teacher_help_dispatched",
+        "emit_teacher_help_expired",
+        "emit_teacher_help_takeover",
+        "emit_teacher_help_reply",
+    ):
         monkeypatch.setattr(
             help_requests.notification_service,
             name,
@@ -248,49 +269,40 @@ def test_a_long_wait_with_nobody_free_is_reported(world, monkeypatch) -> None:
 def test_the_offered_teacher_takes_it_and_its_first_reply_is_the_first_response(world) -> None:
     world.ask()
 
-    taken = help_requests.advance(world.record, teacher_id=TEACHER, target="in_progress", now=at(4), table=world.table)
+    taken = help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="in_progress", now=at(4), table=world.table)
     assert taken["teacher_id"] == TEACHER
     # Taking it is not a response (#189 Q4).
     assert "first_teacher_action_at" not in world.record
 
-    replied = help_requests.reply(
-        world.record, teacher_id=TEACHER, reply_operations=(), now=at(7), table=world.table
-    )
-    assert replied["first_teacher_action_at"] == at(7)
+    _reply(world.record, now=at(7), table=world.table)
+    assert world.record["first_teacher_action_at"] == at(7)
     assert help_requests.sla(world.record)["requestToFirstActionMinutes"] == 7
 
-    help_requests.reply(world.record, teacher_id=TEACHER, reply_operations=(), now=at(9), table=world.table)
+    _reply(world.record, now=at(9), table=world.table)
     assert world.record["first_teacher_action_at"] == at(7)
 
 
 def test_replying_to_an_offer_takes_it_in_the_same_write(world) -> None:
     world.ask()
-    message = learning_session.append(
-        CONV,
-        role="teacher",
-        message_id="reply",
-        student_id=STUDENT,
-        generation=1,
-        content="",
-        created_at=at(3),
-        teacher_response_rich={"version": 1, "blocks": []},
-        teacher_response_format="stoa_teacher_reply_v1",
-    )
+    world.events.clear()
 
-    help_requests.reply(world.record, teacher_id=TEACHER, reply_operations=(message,), now=at(3), table=world.table)
+    written = _reply(world.record, now=at(3), table=world.table)
 
     record = world.record
     assert record["teacher_id"] == TEACHER
     assert record["escalation_status"] == "in_progress"
     assert record["first_teacher_action_at"] == at(3)
-    assert (f"CONV#{CONV}", "MSG#reply") in world.table.rows
+    assert (f"CONV#{CONV}", f"NOTE#{written.id}") in world.table.rows
+    assert [row for key, row in world.table.rows.items() if key[1].startswith("MSG#") and row["role"] == "teacher"]
+    # The student hears of the reply, not separately of the take-over.
+    assert [name for name, _ in world.events] == ["emit_teacher_help_reply"]
 
 
 def test_a_teacher_without_the_offer_cannot_take_it(world) -> None:
     world.ask()
 
     with pytest.raises(help_requests.HelpRequestConflict):
-        help_requests.advance(world.record, teacher_id=OTHER, target="in_progress", now=at(2), table=world.table)
+        help_requests.take_or_finish(world.record, teacher_id=OTHER, target="in_progress", now=at(2), table=world.table)
     assert "teacher_id" not in world.record
 
 
@@ -298,29 +310,29 @@ def test_a_lapsed_offer_cannot_be_taken(world) -> None:
     world.ask()
 
     with pytest.raises(help_requests.HelpRequestConflict):
-        help_requests.advance(world.record, teacher_id=TEACHER, target="in_progress", now=at(11), table=world.table)
+        help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="in_progress", now=at(11), table=world.table)
 
 
 def test_a_write_on_a_stale_read_is_refused(world) -> None:
     world.ask()
     stale = world.record
-    help_requests.advance(stale, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
+    help_requests.take_or_finish(stale, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
 
     with pytest.raises(help_requests.HelpRequestConflict):
-        help_requests.advance(stale, teacher_id=TEACHER, target="resolved", now=at(3), table=world.table)
+        help_requests.take_or_finish(stale, teacher_id=TEACHER, target="resolved", now=at(3), table=world.table)
 
 
 def test_resolving_ends_it_and_the_holder_can_still_reply(world) -> None:
     world.ask()
-    help_requests.advance(world.record, teacher_id=TEACHER, target="resolved", now=at(5), table=world.table, resolution_note="done")
+    help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="resolved", now=at(5), table=world.table, resolution_note="done")
 
     record = world.record
     assert record["escalation_status"] == "resolved"
     assert record["escalation_resolved_at"] == at(5)
-    help_requests.reply(record, teacher_id=TEACHER, reply_operations=(), now=at(6), table=world.table)
+    _reply(record, now=at(6), table=world.table)
     assert world.record["escalation_status"] == "resolved"
     with pytest.raises(help_requests.HelpRequestConflict):
-        help_requests.advance(world.record, teacher_id=TEACHER, target="in_progress", now=at(7), table=world.table)
+        help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="in_progress", now=at(7), table=world.table)
 
 
 # ── the student ──────────────────────────────────────────────────────────────
@@ -328,7 +340,7 @@ def test_resolving_ends_it_and_the_holder_can_still_reply(world) -> None:
 
 def test_a_taken_request_cannot_be_withdrawn(world) -> None:
     world.ask()
-    help_requests.advance(world.record, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
+    help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
 
     with pytest.raises(help_requests.HelpRequestEndingRefused) as refused:
         help_requests.withdraw(CONV, student_id=STUDENT, now=at(3), table=world.table)
@@ -343,7 +355,7 @@ def test_withdrawing_takes_the_offer_off(world) -> None:
     assert withdrawn["escalation_status"] == "withdrawn"
     assert "dispatched_teacher_id" not in world.record
     with pytest.raises(help_requests.HelpRequestConflict):
-        help_requests.advance(withdrawn, teacher_id=TEACHER, target="in_progress", now=at(3), table=world.table)
+        help_requests.take_or_finish(withdrawn, teacher_id=TEACHER, target="in_progress", now=at(3), table=world.table)
 
 
 def test_another_student_cannot_withdraw_it(world) -> None:
@@ -388,7 +400,7 @@ def test_the_request_reads_as_a_question_where_one_is_expected(world) -> None:
 
 def test_deleting_the_holder_returns_an_open_request_to_waiting(world) -> None:
     world.ask()
-    help_requests.advance(world.record, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
+    help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
     world.table.rows[(f"USER#{TEACHER}", "ACCOUNT_FENCE")].update(status="deletion_pending", generation=2)
 
     help_requests.scrub_teacher(world.record, teacher_id=TEACHER, generation=2, now=at(3), table=world.table)
@@ -402,7 +414,7 @@ def test_deleting_the_holder_returns_an_open_request_to_waiting(world) -> None:
 
 def test_deleting_a_teacher_keeps_a_resolved_request_resolved(world) -> None:
     world.ask()
-    help_requests.advance(world.record, teacher_id=TEACHER, target="resolved", now=at(2), table=world.table)
+    help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="resolved", now=at(2), table=world.table)
     world.table.rows[(f"USER#{TEACHER}", "ACCOUNT_FENCE")].update(status="deletion_pending", generation=2)
 
     help_requests.scrub_teacher(world.record, teacher_id=TEACHER, generation=2, now=at(3), table=world.table)
@@ -414,7 +426,7 @@ def test_deleting_a_teacher_keeps_a_resolved_request_resolved(world) -> None:
 def test_a_scrub_on_a_stale_read_is_retried_not_applied(world) -> None:
     world.ask()
     stale = world.record
-    help_requests.advance(stale, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
+    help_requests.take_or_finish(stale, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
     world.table.rows[(f"USER#{TEACHER}", "ACCOUNT_FENCE")].update(status="deletion_pending", generation=2)
 
     with pytest.raises(account_deletion_repo.AccountDeletionRowConflict):
@@ -427,5 +439,162 @@ def test_a_teacher_who_let_it_lapse_cannot_take_it_even_holding_an_offer(world) 
     world.table.rows[(f"CONV#{CONV}", "HELP")]["previous_dispatch_teacher_ids"] = [TEACHER]
 
     with pytest.raises(help_requests.HelpRequestConflict):
-        help_requests.advance(world.record, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
+        help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
     assert "teacher_id" not in world.record
+
+
+# ── the teacher's view (#233) ────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("stored", ["pending", "in_progress", "resolved", "withdrawn", "expired"])
+def test_a_teacher_reads_the_stored_status_never_the_students(stored) -> None:
+    record = {
+        "conversation_id": CONV,
+        "escalation_request_id": CONV,
+        "student_id": STUDENT,
+        "escalation_status": stored,
+        "escalated_at": at(),
+        "subject": "mathematics",
+        "grade": "6",
+        "escalation_message": "Step 2?",
+        "dispatch_status": "no_candidate",
+    }
+
+    view = help_requests.teacher_view(record, now=at(5))
+
+    assert view.status == stored
+    assert (view.request_id, view.conversation_id, view.student_id) == (CONV, CONV, STUDENT)
+    assert (view.subject, view.grade, view.request_message) == ("mathematics", "6", "Step 2?")
+    assert view.sla == help_requests.sla(record)
+
+
+def test_a_request_is_dated_when_asked_else_when_changed_else_now() -> None:
+    base = {"conversation_id": CONV}
+
+    assert help_requests.teacher_view({**base, "escalated_at": at(1), "updated_at": at(2)}, now=at(3)).created_at == at(1)
+    assert help_requests.teacher_view({**base, "updated_at": at(2)}, now=at(3)).created_at == at(2)
+    view = help_requests.teacher_view(base, now=at(3))
+    assert view.created_at == at(3)
+    assert (view.request_id, view.subject, view.status, view.request_message) == (CONV, "General", "pending", None)
+
+
+def test_the_teacher_view_reads_the_question_view_alike(world) -> None:
+    world.ask()
+
+    assert help_requests.teacher_view(help_requests.question_view(world.record), now=at(1)) == (
+        help_requests.teacher_view(world.record, now=at(1))
+    )
+
+
+# ── the teacher's moves tell the student (#233) ──────────────────────────────
+
+
+def test_taking_tells_the_student_once_and_finishing_tells_nobody(world) -> None:
+    world.ask()
+    world.events.clear()
+
+    taken = help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
+    help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="resolved", now=at(3), table=world.table)
+
+    assert [name for name, _ in world.events] == ["emit_teacher_help_takeover"]
+    assert world.events[0][1] == {"conversation": taken, "teacher_id": TEACHER}
+
+
+def test_a_refused_take_tells_nobody(world) -> None:
+    world.ask()
+    world.events.clear()
+
+    with pytest.raises(help_requests.HelpRequestConflict):
+        help_requests.take_or_finish(world.record, teacher_id=OTHER, target="in_progress", now=at(2), table=world.table)
+    assert world.events == []
+
+
+def test_a_failed_notice_does_not_undo_the_take(world, monkeypatch) -> None:
+    world.ask()
+
+    def fail(**_kwargs):
+        raise RuntimeError("notifications down")
+
+    monkeypatch.setattr(help_requests.notification_service, "emit_teacher_help_takeover", fail)
+
+    taken = help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
+
+    assert taken["teacher_id"] == TEACHER == world.record["teacher_id"]
+
+
+def test_a_reply_is_one_transaction_and_one_notice(world, monkeypatch) -> None:
+    world.ask()
+    help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
+    world.events.clear()
+    transactions: list[list[dict]] = []
+    real_transact = account_deletion_repo.transact
+
+    def capture(operations, *, table=None):
+        transactions.append(list(operations))
+        return real_transact(operations, table=table)
+
+    monkeypatch.setattr(account_deletion_repo, "transact", capture)
+
+    written = _reply(world.record, now=at(4), table=world.table, author_name="  Frau Muster ")
+
+    [operations] = transactions
+    fence, update, note_put, message_put = operations
+    assert fence["ConditionCheck"]["Key"] == {"PK": f"USER#{STUDENT}", "SK": "ACCOUNT_FENCE"}
+    assert update["Update"]["Key"] == {"PK": f"CONV#{CONV}", "SK": "HELP"}
+    note = note_put["Put"]["Item"]
+    message = message_put["Put"]["Item"]
+    assert note["SK"] == f"NOTE#{written.id}"
+    assert note["owner_id"] == STUDENT and note["teacher_name"] == "  Frau Muster "
+    assert message["role"] == "teacher" and message["author_name"] == "Frau Muster"
+    assert note["created_at"] == message["created_at"] == world.record["updated_at"] == at(4)
+    assert "attachment_ids" not in note
+    assert (written.teacher_name, written.content, written.attachment_ids) == (
+        "  Frau Muster ",
+        "Subtract 5 from both sides.",
+        [],
+    )
+    assert [name for name, _ in world.events] == ["emit_teacher_help_reply"]
+    assert world.events[0][1]["reply_id"] == written.id
+
+
+def test_a_reply_without_a_name_is_signed_teacher(world) -> None:
+    world.ask()
+
+    written = _reply(world.record, now=at(3), table=world.table, author_name=None)
+
+    assert written.teacher_name == "Teacher"
+    assert world.table.rows[(f"CONV#{CONV}", f"NOTE#{written.id}")]["teacher_name"] == "Teacher"
+
+
+def test_a_teacher_neither_holding_nor_offered_cannot_reply(world) -> None:
+    world.ask()
+    world.events.clear()
+
+    with pytest.raises(help_requests.HelpRequestConflict):
+        _reply(world.record, now=at(3), table=world.table, teacher_id=OTHER)
+    assert not [key for key in world.table.rows if key[1].startswith("NOTE#")]
+    assert world.events == []
+
+
+def test_replies_are_read_back_oldest_first(world) -> None:
+    world.ask()
+    for note_id, minutes in (("b", 6), ("a", 4)):
+        seed_reply(
+            world.table,
+            conversation_id=CONV,
+            note_id=f"{minutes:02d}-{note_id}",
+            teacher_id=TEACHER,
+            teacher_name="Frau Muster",
+            content=f"reply {note_id}",
+            created_at=at(minutes),
+            student_id=STUDENT,
+            attachment_ids=["att-1"] if note_id == "b" else None,
+        )
+
+    replies = help_requests.replies(CONV, table=world.table)
+
+    assert [reply.content for reply in replies] == ["reply a", "reply b"]
+    assert replies[1].attachment_ids == ["att-1"] and replies[0].attachment_ids == []
+    assert replies[0].rich == {"version": 1, "blocks": []}
+    assert replies[0].format == "stoa_teacher_reply_v1"
+    assert replies[0].attachments == []
