@@ -32,8 +32,6 @@ NOW = "2026-09-19T10:00:00+00:00"
 PARENT = "parent-a"
 STUDENT = "student-b"
 STRANGER = "student-c"
-QUESTION_ID = "question-1"
-STRANGER_QUESTION_ID = "question-9"
 
 
 def _profile(user_id: str, role: str, status: str = "active") -> dict[str, Any]:
@@ -47,38 +45,6 @@ def _profile(user_id: str, role: str, status: str = "active") -> dict[str, Any]:
         # the self-service path, which is not what these routes are probing.
         "date_of_birth": "2000-01-01",
     }
-
-
-QUESTIONS = {
-    QUESTION_ID: {
-        "question_id": QUESTION_ID,
-        "student_id": STUDENT,
-        "subject": "math",
-        "content": "1 + 1",
-        "status": "ai_answered",
-        "created_at": NOW,
-        "ai_response": None,
-        "teacher_id": None,
-        "teacher_response": None,
-        "knowledge_points": [],
-        "student_feedback": None,
-        "resolved_at": None,
-    },
-    STRANGER_QUESTION_ID: {
-        "question_id": STRANGER_QUESTION_ID,
-        "student_id": STRANGER,
-        "subject": "math",
-        "content": "2 + 2",
-        "status": "ai_answered",
-        "created_at": NOW,
-        "ai_response": None,
-        "teacher_id": None,
-        "teacher_response": None,
-        "knowledge_points": [],
-        "student_feedback": None,
-        "resolved_at": None,
-    },
-}
 
 
 @pytest.fixture
@@ -111,9 +77,6 @@ def table(
     monkeypatch.setattr(
         "stoa.routers.conversations._list_conversations",
         lambda *_a, **_k: ConversationListPage([], False),
-    )
-    monkeypatch.setattr(
-        question_repo, "get_question", lambda question_id: deepcopy(QUESTIONS.get(question_id))
     )
     monkeypatch.setattr(
         adaptive.adaptive_learning_service,

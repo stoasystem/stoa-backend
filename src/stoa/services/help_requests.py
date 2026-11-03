@@ -78,9 +78,9 @@ _NO_CANDIDATE_FIELDS = ("dispatch_no_candidate_reason", "dispatch_no_candidate_s
 # A scan's ceiling on pages; the table is far from it.
 _SCAN_PAGE_LIMIT = 1000
 
-# The question words a request's state is told in, for the one reader left
-# that takes a request where it takes a question: the admin dispatch
-# dashboard (#235 retires it).
+# The question words a request's state is told in. Their one reader is
+# `sla_metrics`: the admin stats count requests beside the legacy question rows,
+# in those rows' words.
 _QUESTION_STATUS = {
     PENDING: "escalated",
     IN_PROGRESS: "teacher_active",
@@ -169,7 +169,7 @@ def list_all(*, table: Any | None = None) -> list[dict[str, Any]]:
 
 def list_open(*, table: Any | None = None) -> list[dict[str, Any]]:
     """The requests a student is still waiting on: pending ones."""
-    return [record for record in list_all(table=table) if _status(record) == PENDING]
+    return [record for record in list_all(table=table) if stored_status(record) == PENDING]
 
 
 def for_student(student_id: str, *, table: Any | None = None) -> dict[str, dict[str, Any]]:
@@ -236,7 +236,8 @@ def _overlay(record: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _status(record: Mapping[str, Any]) -> str:
+def stored_status(record: Mapping[str, Any]) -> str:
+    """The request's own state word, as stored: `pending` until a teacher takes it."""
     return str(record.get("escalation_status") or PENDING)
 
 
@@ -247,7 +248,7 @@ def student_view(record: Mapping[str, Any], *, now: str | None = None) -> tuple[
     the request: it took it, or its offer has not lapsed.
     """
     timestamp = now or _now()
-    stored = _status(record)
+    stored = stored_status(record)
     holder = str(record.get("teacher_id") or "")
     if stored != PENDING:
         return stored, holder
@@ -294,7 +295,7 @@ def teacher_view(record: Mapping[str, Any], *, now: str | None = None) -> Teache
         student_id=_text(record.get("student_id")),
         subject=_text(record.get("subject"), default="General"),
         grade=_text(record.get("grade")),
-        status=_status(record),
+        status=stored_status(record),
         request_message=_optional_text(record.get("escalation_message")),
         created_at=_text(
             record.get("escalated_at"),
@@ -304,28 +305,6 @@ def teacher_view(record: Mapping[str, Any], *, now: str | None = None) -> Teache
         resolved_at=_optional_text(record.get("escalation_resolved_at")),
         sla=sla(record),
     )
-
-
-def question_view(record: Mapping[str, Any]) -> dict[str, Any]:
-    """The request told as a question, for the admin dispatch dashboard.
-
-    Its last reader; #235 removes both.
-    """
-    view = dict(record)
-    view.update(
-        {
-            "question_id": str(record.get("escalation_request_id") or record.get("conversation_id")),
-            "entity_type": "question",
-            "source": "conversation_escalation",
-            "status": _QUESTION_STATUS.get(_status(record), _status(record)),
-            "content": str(record.get("escalation_message") or ""),
-            "teacher_requested_at": record.get("escalated_at"),
-            "dispatch_status": str(
-                record.get("dispatch_status") or ("accepted" if record.get("teacher_id") else "unassigned")
-            ),
-        }
-    )
-    return view
 
 
 def holder_or_offered(record: Mapping[str, Any], teacher_id: str) -> bool:
@@ -371,7 +350,7 @@ def teacher_may(
 
     A deadline that cannot be read counts as passed (`_deadline_passed`).
     """
-    status = _status(record)
+    status = stored_status(record)
     dispatch_status = str(record.get("dispatch_status") or "")
     if status in {WITHDRAWN, EXPIRED} or dispatch_status in _CLOSED_DISPATCH:
         return False
@@ -420,7 +399,7 @@ def sla_metrics(record: Mapping[str, Any]) -> dict[str, Any]:
     """One request in the words `teacher_reply_service.aggregate_teacher_sla` counts."""
     first_reply = _seconds_between(record.get("escalated_at"), record.get("first_teacher_action_at"))
     return {
-        "status": _QUESTION_STATUS.get(_status(record), _status(record)),
+        "status": _QUESTION_STATUS.get(stored_status(record), stored_status(record)),
         "teacher_requested_at": record.get("escalated_at"),
         "sla_request_to_first_reply_seconds": first_reply,
         "sla_request_to_takeover_seconds": _seconds_between(
@@ -602,7 +581,7 @@ def dispatch(record: Mapping[str, Any], *, now: str | None = None, table: Any | 
     """
     timestamp = now or _now()
     store: Any = table or get_table()
-    if _status(record) != PENDING or record.get("teacher_id") or _live_offer(record, timestamp):
+    if stored_status(record) != PENDING or record.get("teacher_id") or _live_offer(record, timestamp):
         return dict(record)
     previous = _previous(record, timestamp)
     plan = teacher_dispatch_service.plan_dispatch(
@@ -784,7 +763,7 @@ def _end(
         owner = str(record.get("student_id") or "")
         if not owner or (student_id is not None and owner != student_id):
             raise HelpRequestEndingRefused("teacher_help_request_not_found")
-        current = _status(record)
+        current = stored_status(record)
         if current == outcome:
             return _Ending(record, changed=False)
         if record.get("teacher_id") or current in {IN_PROGRESS, RESOLVED}:
@@ -918,7 +897,7 @@ def _advance(
         raise ValueError(f"unsupported help request status: {target}")
     timestamp = now or _now()
     store: Any = table or get_table()
-    current = _status(record)
+    current = stored_status(record)
     holder = str(record.get("teacher_id") or "")
     if current not in OPEN or (holder and holder != teacher_id):
         raise HelpRequestConflict("help request is not open to this teacher")
@@ -1332,7 +1311,7 @@ def scrub_teacher(
     remove: tuple[str, ...] = ()
     if holds:
         remove = ("teacher_id", "accepted_at", *_OFFER_FIELDS)
-        if _status(record) in OPEN:
+        if stored_status(record) in OPEN:
             changes.update({"escalation_status": PENDING, "dispatch_status": "unassigned"})
         else:
             changes["dispatch_status"] = "revoked"

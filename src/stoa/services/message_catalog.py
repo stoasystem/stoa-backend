@@ -271,12 +271,6 @@ TEXT: dict[str, dict[str, str]] = {
         "it": "Richiesta di aiuto a un insegnante inviata.",
     },
     # ── the seed a teacher is shown beside a help request ────────────────
-    "assistance.context.with_topics": {
-        "de": "Die Schülerin oder der Schüler zeigt Hinweise in {subject} rund um {topics}.",
-        "en": "Student has active {subject} evidence around {topics}.",
-        "fr": "L'élève montre des indices en {subject} autour de {topics}.",
-        "it": "Lo studente mostra indizi in {subject} su {topics}.",
-    },
     "assistance.context.without_topics": {
         "de": (
             "Die Schülerin oder der Schüler hat eine offene Anfrage in {subject}, "
@@ -291,18 +285,6 @@ TEXT: dict[str, dict[str, str]] = {
             "Lo studente ha una richiesta aperta in {subject}, "
             "ancora senza indizi sufficienti su un argomento."
         ),
-    },
-    "assistance.focus.after_reply": {
-        "de": "Sieh dir die vorherige Antwort an und mach beim offenen Schritt weiter.",
-        "en": "Review the previous teacher reply and continue from the student's unresolved step.",
-        "fr": "Relis la réponse précédente et reprends à l'étape restée ouverte.",
-        "it": "Rileggi la risposta precedente e riprendi dal passaggio rimasto aperto.",
-    },
-    "assistance.focus.with_topics": {
-        "de": "Kläre zuerst das Missverständnis bei {topic}, bevor du die Schritte zeigst.",
-        "en": "Clarify the core misconception around {topic} before giving final steps.",
-        "fr": "Clarifie d'abord le malentendu sur {topic} avant de donner les étapes.",
-        "it": "Chiarisci prima l'equivoco su {topic}, poi mostra i passaggi.",
     },
     "assistance.focus.default": {
         "de": "Stell eine diagnostische Frage und erkläre dann den kleinsten nächsten Schritt.",

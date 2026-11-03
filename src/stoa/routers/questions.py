@@ -18,7 +18,7 @@ from stoa.security.route_authorization import (
     QUESTION_CONTENT_READ,
     authorized_question_dependency,
 )
-from stoa.services import help_requests, moderation_service
+from stoa.services import moderation_service
 
 router = APIRouter()
 
@@ -44,10 +44,7 @@ async def report_question_content(
             authorized.ref.resource_id,
             body,
             {"sub": actor.user_id, "role": actor.role.value},
-            # The case keeps the request's context in question words; until
-            # #235 retires them the request is handed over told as a question,
-            # so the case stored is the one stored before #234.
-            question=help_requests.question_view(authorized.value),
+            request=authorized.value,
         )
     except SecurityDecisionError as error:
         # Refused as the authorization above refuses a request it cannot see.

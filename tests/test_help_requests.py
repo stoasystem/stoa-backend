@@ -559,23 +559,6 @@ def test_an_offer_is_written_through_the_request_only() -> None:
             assert permits(offered, resource_type, action)
 
 
-# ── the admin dashboard's reading of a request (#235 retires it) ─────────────
-
-
-def test_the_request_reads_as_a_question_where_one_is_expected(world) -> None:
-    world.ask()
-
-    record = help_requests.get(CONV, table=world.table)
-    assert record is not None
-    view = help_requests.question_view(record)
-
-    assert view["question_id"] == CONV
-    assert view["status"] == "escalated"
-    assert view["source"] == "conversation_escalation"
-    assert view["content"] == "Step 2?"
-    assert view["student_id"] == STUDENT
-
-
 # ── account deletion ─────────────────────────────────────────────────────────
 
 

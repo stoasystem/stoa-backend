@@ -300,9 +300,9 @@ def test_draft_repository_outage_returns_503_before_tool_invocation(monkeypatch)
 
 # ── what a help request's summary and drafts store (#234) ────────────────────
 #
-# Pinned from what the services stored when they were handed
-# `help_requests.question_view` of this record, before #234 handed them the
-# record itself: the stored rows must not change by a byte.
+# Pinned from what the services stored when they were handed this record told
+# as a question, before #234 handed them the record itself: the stored rows
+# must not change by a byte.
 
 _PINNED_RECORD = {
     "PK": "CONV#conv-1",

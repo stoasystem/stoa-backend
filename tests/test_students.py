@@ -200,8 +200,6 @@ def test_active_bidirectional_parent_can_read_summary(monkeypatch):
 
 def test_scoped_teacher_and_exact_admin_content_capability_positive_controls(monkeypatch):
     _profiles(monkeypatch)
-    monkeypatch.setattr(students.question_repo, "get_question", lambda *_: None)
-    monkeypatch.setattr(students.question_repo, "get_teacher_session", lambda *_: None)
     monkeypatch.setattr(
         students.question_repo,
         "get_teacher_assignment",

@@ -1,18 +1,5 @@
-
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
-from stoa.routers import admin, teachers
 from stoa.services import help_requests, teacher_dispatch_service
-from actor_helpers import install_actor_overrides
 from fakes.dynamodb import FakeTable, as_stored as _as_stored
-
-
-def _app(router, prefix: str, user: dict) -> TestClient:
-    app = FastAPI()
-    app.include_router(router, prefix=prefix)
-    install_actor_overrides(app, user)
-    return TestClient(app)
 
 
 QUESTION = _as_stored({
@@ -20,8 +7,6 @@ QUESTION = _as_stored({
     "student_id": "student-1",
     "subject": "math",
     "status": "escalated",
-    "teacher_requested_at": "2026-06-15T10:00:00+00:00",
-    "queue_visible_at": "2026-06-15T10:00:00+00:00",
     "version": 1,
 })
 
@@ -230,86 +215,4 @@ def test_dispatch_scans_continue_after_nonempty_business_rejected_page(monkeypat
     for walk in (profile_scans, request_scans):
         assert len(walk) > 1
         assert all("ExclusiveStartKey" in call for call in walk[1:])
-
-
-def test_admin_dispatch_dashboard_is_aggregate_and_content_safe(monkeypatch):
-    table = FakeTable()
-    table.seed(
-        _help_row(
-            "conv-old",
-            escalation_message="private student content",
-            dispatch_status="dispatched",
-            dispatched_teacher_id="teacher-low-load",
-            dispatch_deadline_at="2026-06-15T10:10:00+00:00",
-            dispatch_attempt_count=2,
-        ),
-        _help_row(
-            "conv-no-candidate",
-            dispatch_status="unassigned",
-            dispatch_no_candidate_reason="subject_mismatch",
-        ),
-        # A request the student took back is no longer waiting on anyone.
-        _help_row("conv-withdrawn", escalation_status="withdrawn", dispatch_status="withdrawn"),
-    )
-    monkeypatch.setattr(admin, "get_table", lambda: table)
-    monkeypatch.setattr(admin.teacher_dispatch_service, "list_teacher_profiles", lambda: [TEACHERS[0]])
-    monkeypatch.setattr(admin.teacher_dispatch_service, "_now", lambda: "2026-06-15T10:15:00+00:00")
-
-    response = _app(admin.router, "/admin", {"sub": "admin-1", "role": "admin"}).get(
-        "/admin/teacher-dispatch/dashboard"
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["queue"]["count"] == 2
-    assert body["queue"]["timeoutCount"] == 1
-    assert body["queue"]["reassignmentCount"] == 1
-    assert body["queue"]["noCandidateReasons"] == {"subject_mismatch": 1}
-    serialized = str(body)
-    assert "private student content" not in serialized
-
-
-def _paged_scan_table(rows, page_rows: int = 50) -> FakeTable:
-    """A real table whose response cap falls after `page_rows` rows read.
-
-    `Limit` and the response cap both count evaluated rows, so a page can come back
-    empty while escalated questions wait two pages further on. The double this
-    replaced cut the page correctly but was still hand-written; the cap now comes
-    from the shared one.
-    """
-    table = FakeTable(page_item_cap=page_rows)
-    table.seed(*rows)
-    return table
-
-
-def _queue_rows(*, answered: int, escalated: int):
-    rows = [
-        {
-            **QUESTION,
-            "PK": f"QUESTION#answered-{index}",
-            "SK": "META",
-            "question_id": f"answered-{index}",
-            "status": "answered",
-        }
-        for index in range(answered)
-    ]
-    rows += [
-        {
-            **QUESTION,
-            "PK": f"QUESTION#waiting-{index}",
-            "SK": "META",
-            "question_id": f"waiting-{index}",
-        }
-        for index in range(escalated)
-    ]
-    return rows
-
-
-def _queue_response(monkeypatch, table):
-    monkeypatch.setattr(teachers, "get_table", lambda: table)
-    monkeypatch.setattr(teachers, "_now", lambda: "2026-06-15T10:05:00+00:00")
-    return _app(teachers.router, "/teachers", {"sub": "teacher-1", "role": "teacher"}).get(
-        "/teachers/queue"
-    )
-
 

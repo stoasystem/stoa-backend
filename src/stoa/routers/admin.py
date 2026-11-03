@@ -69,7 +69,6 @@ from stoa.services import (
     curriculum_migration_service,
     curriculum_ops_service,
     help_requests,
-    teacher_dispatch_service,
     subscription_service,
     teacher_reply_service,
     account_verification_service,
@@ -3392,18 +3391,6 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
         escalated=escalated,
         teacher_sla=teacher_reply_service.aggregate_teacher_sla([*questions, *help_metrics]),
         counts_complete=users_complete and questions_complete,
-    )
-
-
-@router.get("/teacher-dispatch/dashboard")
-async def get_teacher_dispatch_dashboard(user: dict = Depends(require_role("admin"))):
-    """Return aggregate teacher dispatch, load, and SLA-risk visibility."""
-    return teacher_dispatch_service.build_dispatch_dashboard(
-        [
-            help_requests.question_view(record)
-            for record in help_requests.list_all(table=get_table())
-            if record.get("escalation_status") not in {help_requests.WITHDRAWN, help_requests.EXPIRED}
-        ]
     )
 
 

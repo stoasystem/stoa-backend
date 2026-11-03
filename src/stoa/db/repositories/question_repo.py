@@ -72,37 +72,6 @@ def _response(value: object) -> QuestionItem:
     return {key: item for key, item in value.items() if isinstance(key, str)}
 
 
-def question_item(item: QuestionItem) -> QuestionItem:
-    """Build the canonical question transaction item without persisting it."""
-    return {"PK": f"QUESTION#{item['question_id']}", "SK": "META", **item}
-
-
-def get_question(
-    question_id: str, *, table: object | None = None
-) -> QuestionItem | None:
-    table = _table(table)
-    resp = _get_item(table,
-        Key={"PK": f"QUESTION#{question_id}", "SK": "META"},
-        ConsistentRead=True,
-    )
-    item = resp.get("Item")
-    return _response(item) if isinstance(item, dict) else None
-
-
-def get_teacher_session(
-    session_id: str, *, table: object | None = None
-) -> QuestionItem | None:
-    """Read a current teacher-session snapshot without changing its lifecycle."""
-    if not session_id:
-        return None
-    response = _get_item(_table(table),
-        Key={"PK": f"SESSION#{session_id}", "SK": "META"},
-        ConsistentRead=True,
-    )
-    item = response.get("Item")
-    return _response(item) if isinstance(item, dict) else None
-
-
 def _frame(value: str) -> bytes:
     encoded = value.encode("utf-8")
     return struct.pack(">I", len(encoded)) + encoded

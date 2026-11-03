@@ -18,7 +18,7 @@ from fastapi import HTTPException
 
 from stoa.config import Settings
 from stoa.db.dynamodb import stored_int
-from stoa.db.repositories import moderation_repo, question_repo
+from stoa.db.repositories import moderation_repo
 from stoa.models.moderation import (
     ModerationCaseNoteRequest,
     ModerationCaseUpdateRequest,
@@ -30,7 +30,7 @@ from stoa.models.moderation import (
     ModerationSurface,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
-from stoa.services import learning_session, notification_service
+from stoa.services import help_requests, learning_session, notification_service
 
 
 logger = logging.getLogger(__name__)
@@ -56,21 +56,24 @@ def now_iso() -> str:
 
 
 def create_case(
-    question_id: str,
+    request_id: str,
     body: ModerationReportRequest,
     user: dict[str, Any],
     *,
-    question: dict[str, Any] | None = None,
+    request: Mapping[str, Any],
 ) -> dict[str, Any]:
-    question = question if question is not None else question_repo.get_question(question_id)
-    if not question:
-        raise HTTPException(status_code=404, detail="Question not found")
-    _require_report_access(question, user)
-    _validate_surface(question, body.surface.value)
-    reported = _reported_message(question, body.surface.value, body.message_id)
+    """Open a case on what was said in a help request (#185).
 
-    student_id = question.get("student_id")
-    privacy_generation = stored_int(question.get("account_fence_generation"))
+    ``request`` is the help request record as stored, which the report route
+    has resolved and authorized; ``request_id`` is its id, which the case keeps
+    as its `question_id`.
+    """
+    _require_report_access(request, user)
+    _validate_surface(body.surface.value)
+    reported = _reported_message(request, body.surface.value, body.message_id)
+
+    student_id = request.get("student_id")
+    privacy_generation = stored_int(request.get("account_fence_generation"))
     if (
         not isinstance(student_id, str)
         or not student_id
@@ -91,7 +94,7 @@ def create_case(
         "reason": body.reason.value,
         "severity": body.severity.value,
         "surface": body.surface.value,
-        "question_id": question_id,
+        "question_id": request_id,
         "student_id": student_id,
         "privacy_generation": privacy_generation,
         "reporter_id": reporter_id,
@@ -102,7 +105,7 @@ def create_case(
         "created_at": created_at,
         "updated_at": created_at,
         "closed_at": None,
-        "question_context": _question_context(question, reported),
+        "question_context": _question_context(request, reported),
     }
     event = _event(
         case_id,
@@ -583,11 +586,11 @@ def add_note(case_id: str, body: ModerationCaseNoteRequest, user: dict[str, Any]
     return updated
 
 
-def _require_report_access(question: dict[str, Any], user: dict[str, Any]) -> None:
+def _require_report_access(request: Mapping[str, Any], user: dict[str, Any]) -> None:
     role = user.get("role")
-    if role == "student" and question.get("student_id") != user.get("sub"):
+    if role == "student" and request.get("student_id") != user.get("sub"):
         raise HTTPException(status_code=403, detail="Not your question")
-    if role == "teacher" and not _teacher_holds(question, str(user.get("sub") or "")):
+    if role == "teacher" and not _teacher_holds(request, str(user.get("sub") or "")):
         # The teacher policy also admits a teacher assigned to the student, who
         # may read the request but not act on it (#73). Reporting is acting on
         # it, so they are refused as a teacher who cannot see it is (#186).
@@ -596,36 +599,26 @@ def _require_report_access(question: dict[str, Any], user: dict[str, Any]) -> No
         raise HTTPException(status_code=403, detail="Role is not permitted to report content")
 
 
-def _validate_surface(question: dict[str, Any], surface: str) -> None:
+def _validate_surface(surface: str) -> None:
+    # A help request's answers are messages in its conversation (#185);
+    # `_reported_message` finds the one reported.
     if surface == ModerationSurface.IMAGE_UPLOAD.value:
         raise HTTPException(status_code=400, detail="Image cases are opened by moderation only")
-    if _is_help_request(question):
-        # A help request's answers are messages in its conversation (#185);
-        # `_reported_message` finds the one reported.
-        return
-    if surface == ModerationSurface.AI_ANSWER.value and not question.get("ai_response"):
-        raise HTTPException(status_code=400, detail="Question has no AI answer to report")
-    if surface == ModerationSurface.TEACHER_REPLY.value and not question.get("teacher_response"):
-        raise HTTPException(status_code=400, detail="Question has no teacher reply to report")
 
 
-def _teacher_holds(question: dict[str, Any], teacher_id: str) -> bool:
+def _teacher_holds(request: Mapping[str, Any], teacher_id: str) -> bool:
     """Whether the request is this teacher's: they took it, or it is offered to them now."""
     if not teacher_id:
         return False
-    holder = question.get("teacher_id")
+    holder = request.get("teacher_id")
     if holder:
         return holder == teacher_id
-    deadline = _aware(question.get("dispatch_deadline_at"))
+    deadline = _aware(request.get("dispatch_deadline_at"))
     return (
-        question.get("dispatched_teacher_id") == teacher_id
+        request.get("dispatched_teacher_id") == teacher_id
         and deadline is not None
         and deadline > datetime.now(timezone.utc)
     )
-
-
-def _is_help_request(question: Mapping[str, Any]) -> bool:
-    return question.get("source") == "conversation_escalation" and bool(question.get("conversation_id"))
 
 
 # Who wrote what each surface reports, in a help request's conversation.
@@ -637,27 +630,22 @@ _SURFACE_ROLES = {
 
 
 def _reported_message(
-    question: dict[str, Any], surface: str, message_id: str | None
+    request: Mapping[str, Any], surface: str, message_id: str | None
 ) -> learning_session.Message | None:
     """The conversation message a help request's report is about (#185).
 
     The message named, which must be one of the surface's author in this
     conversation; without a name, an AI answer or teacher reply report is about
     the latest one, and a report of the student's words is about the request.
-    An ordinary question keeps its answers on its row and names no message.
     """
-    if not _is_help_request(question):
-        if message_id:
-            raise HTTPException(status_code=400, detail="Only a help request's messages can be named")
-        return None
     role = _SURFACE_ROLES[surface]
     if not message_id and role == "student":
         return None
     said = [
         message
-        for message in learning_session.history(str(question["conversation_id"]))
+        for message in learning_session.history(str(request["conversation_id"]))
         if message.role == role
-        and message.student_id == question.get("student_id")
+        and message.student_id == request.get("student_id")
         and message.content.strip()
     ]
     if message_id:
@@ -677,22 +665,26 @@ def _reported_message(
 
 
 def _question_context(
-    question: dict[str, Any], reported: learning_session.Message | None = None
+    request: Mapping[str, Any], reported: learning_session.Message | None = None
 ) -> dict[str, Any]:
-    ai_response = question.get("ai_response") or {}
+    """What the admin queue shows of the request, in the case's question fields.
+
+    The student's note is the request's words. Its answers are messages in the
+    conversation, not on the record, and it keeps no image (#185).
+    """
     context = {
-        "question_id": question.get("question_id"),
-        "student_id": question.get("student_id"),
-        "subject": question.get("subject"),
-        "status": question.get("status"),
-        "content_preview": _preview(question.get("content")),
-        "ai_answer_preview": _preview(ai_response.get("answer") if isinstance(ai_response, dict) else None),
-        "teacher_response_preview": _preview(question.get("teacher_response")),
-        "has_image": bool(question.get("image_s3_key") or question.get("has_image")),
+        "question_id": str(request.get("escalation_request_id") or request.get("conversation_id")),
+        "student_id": request.get("student_id"),
+        "subject": request.get("subject"),
+        "status": help_requests.stored_status(request),
+        "content_preview": _preview(request.get("escalation_message") or ""),
+        "ai_answer_preview": None,
+        "teacher_response_preview": None,
+        "has_image": False,
     }
     if reported is not None:
         # The reported message's words go where the admin queue shows that
-        # surface's text: a help request has no answers on its row (#185).
+        # surface's text.
         field = {
             "student": "content_preview",
             "assistant": "ai_answer_preview",

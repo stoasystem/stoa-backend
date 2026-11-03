@@ -1284,7 +1284,6 @@ def _bell(monkeypatch, user_id: str, role: str, locale: str) -> list[dict]:
         user_repo, "get_user", lambda wanted, **_kwargs: reader if wanted == user_id else None
     )
     # A teacher's facts are looked up even for their own bell; they hold none here.
-    monkeypatch.setattr(question_repo, "get_teacher_session", lambda *_a, **_k: None)
     monkeypatch.setattr(question_repo, "get_teacher_assignment", lambda *_a, **_k: None)
     client = _app(notifications.router, "/notifications", {"sub": user_id, "role": role})
     response = client.get("/notifications")
