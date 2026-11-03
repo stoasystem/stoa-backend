@@ -42,6 +42,7 @@ from fakes.ask_question import _private_message as _message
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from stoa.db.repositories import attachment_repo
+from stoa.services import learning_session
 from stoa.services.ask_question import _store as ask_question_store
 
 
@@ -173,10 +174,36 @@ def test_claim_true_limit_requires_durable_counter_evidence() -> None:
     assert table.transactions == []
 
 
+def _student_message_put(created_at: str) -> dict[str, object]:
+    return learning_session.append(
+        "conv-1",
+        role="student",
+        message_id="student-message-1",
+        student_id="student-1",
+        generation=1,
+        content="question",
+        created_at=created_at,
+        attachment_ids=[],
+    )
+
+
+def _assistant_message_put(message_id: str) -> dict[str, object]:
+    return learning_session.append(
+        "conv-1",
+        role="assistant",
+        message_id=message_id,
+        student_id="student-1",
+        generation=1,
+        content="answer",
+        created_at="2026-07-18T00:00:03+00:00",
+        structured=None,
+    )
+
+
 def test_bind_transaction_uses_persisted_period_and_puts_usage_with_message_effects() -> None:
     command = _message_command(counter_value=3)
     operations = attachment_repo.build_message_attachment_transaction(
-        message={"PK": "CONV#conv-1", "SK": "MSG#student-message-1"},
+        message_put=_student_message_put("2026-07-18T00:00:02+00:00"),
         fresh=[],
         reused=[],
         associations=[],
@@ -247,7 +274,7 @@ def test_completion_transport_is_typed_and_commit_then_raise_reconciles(
         idempotency_key="message-key",
         owner_id="student-1",
         lease_owner="lease-1",
-        assistant_message={"PK": "CONV#conv-1", "SK": "MSG#assistant-message-1"},
+        assistant_message_put=_assistant_message_put("assistant-message-1"),
         result_json='{"studentMessage":{},"assistantMessage":{}}',
         completed_at="2026-07-18T00:00:03+00:00",
         table=table,
@@ -394,7 +421,7 @@ def test_cross_midnight_replay_uses_original_quota_and_usage_identity() -> None:
     )
     assert classified.command is not None
     operations = attachment_repo.build_message_attachment_transaction(
-        message={"PK": "CONV#conv-1", "SK": "MSG#student-message-1"},
+        message_put=_student_message_put("2026-07-18T00:00:05+00:00"),
         fresh=[],
         reused=[],
         associations=[],
@@ -625,7 +652,7 @@ def test_completion_condition_binds_lease_owner_generation_and_unexpired_deadlin
         lease_owner="lease-old",
         lease_attempt=1,
         completed_epoch=219,
-        assistant_message={"PK": "CONV#conv-1", "SK": "MSG#assistant"},
+        assistant_message_put=_assistant_message_put("assistant"),
         result_json='{"studentMessage":{},"assistantMessage":{}}',
         completed_at="2026-07-17T00:00:00Z",
         table=object(),
@@ -679,7 +706,7 @@ def test_stale_worker_result_is_refused_after_deterministic_takeover(monkeypatch
         lease_owner="lease-old",
         lease_attempt=1,
         completed_epoch=281,
-        assistant_message={"PK": "CONV#conv-1", "SK": "MSG#assistant"},
+        assistant_message_put=_assistant_message_put("assistant"),
         result_json='{"studentMessage":{},"assistantMessage":{}}',
         completed_at="2026-07-17T00:00:00Z",
         table=Table(),
@@ -959,8 +986,18 @@ def test_command_claim_and_text_only_message_commit_share_account_fence() -> Non
     assert isinstance(values, dict)
     assert values[":generation"] == 7
 
+    private = _message()
     commit = attachment_repo.build_message_attachment_transaction(
-        message=_message(),
+        message_put=learning_session.append(
+            CONVERSATION_ID,
+            role="student",
+            message_id=private["message_id"],
+            student_id=STUDENT_ID,
+            generation=7,
+            content=private["content"],
+            created_at=private["created_at"],
+            attachment_ids=private["attachment_ids"],
+        ),
         fresh=[],
         reused=[],
         associations=[],

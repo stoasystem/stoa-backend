@@ -90,7 +90,10 @@ def build_conversation_write_transaction(
     generation: int,
     mode: str = "put",
 ) -> list[dict[str, object]]:
-    """Build one owner-stamped conversation write behind the permanent fence."""
+    """Build one owner-stamped conversation write behind the permanent fence.
+
+    Message rows no longer go through it: `append` (in `_write`) makes them.
+    """
     if not owner_id or type(generation) is not int or generation <= 0:
         raise AttachmentRepositoryConflict("conditional_conflict")
     stamped = {

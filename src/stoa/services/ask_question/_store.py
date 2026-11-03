@@ -836,7 +836,7 @@ def complete_message_command(
     idempotency_key: str,
     owner_id: str,
     lease_owner: str,
-    assistant_message: dict[str, object],
+    assistant_message_put: dict[str, object],
     result_json: str,
     completed_at: str,
     lease_attempt: int = 1,
@@ -872,19 +872,10 @@ def complete_message_command(
                 owner_id, account_fence_generation
             ),
         ),
+        # The answer's own put, as `learning_session.append` made it (#227).
         attachment_repo.TransactionOperation(
             attachment_repo.TransactionOperationKind.ASSISTANT_MESSAGE_PUT,
-            {
-                "Put": {
-                    "Item": {
-                        **assistant_message,
-                        "owner_id": owner_id,
-                        "student_id": owner_id,
-                        "account_fence_generation": account_fence_generation,
-                    },
-                    "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
-                }
-            },
+            assistant_message_put,
         ),
         attachment_repo.TransactionOperation(
             attachment_repo.TransactionOperationKind.MESSAGE_COMMAND_UPDATE,
@@ -953,7 +944,7 @@ def complete_message_command(
                 idempotency_key=idempotency_key,
                 owner_id=owner_id,
                 lease_owner=lease_owner,
-                assistant_message=assistant_message,
+                assistant_message_put=assistant_message_put,
                 result_json=result_json,
                 completed_at=completed_at,
                 lease_attempt=lease_attempt,

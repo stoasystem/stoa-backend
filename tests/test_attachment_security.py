@@ -44,6 +44,7 @@ from stoa.security.attachment_errors import (
     safe_attachment_error_body,
 )
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
+from stoa.services import learning_session
 from stoa.services.attachment_service import (
     bind_message_attachments,
     complete_upload,
@@ -1628,6 +1629,32 @@ def test_repository_coordinate_compatibility_aliases_reject_invalid_values(
         )
 
 
+def _message_put(
+    conversation_id: str,
+    message_id: str,
+    bound: list[list[str]] | None = None,
+    *,
+    content: str = "a question",
+):
+    """The student message put binding is handed, recording the ids it binds."""
+
+    def put(attachment_ids: list[str], generation: int) -> dict[str, object]:
+        if bound is not None:
+            bound.append(list(attachment_ids))
+        return learning_session.append(
+            conversation_id,
+            role="student",
+            message_id=message_id,
+            student_id=_student_actor().user_id,
+            generation=generation,
+            content=content,
+            created_at=ATTACHMENT_TEST_NOW.isoformat(),
+            attachment_ids=attachment_ids,
+        )
+
+    return put
+
+
 class _MessageAttachmentRepository:
     association_key = staticmethod(attachment_repo.association_key)
     build_message_attachment_transaction = staticmethod(
@@ -1765,12 +1792,8 @@ def test_fresh_and_reused_message_attachments_share_one_atomic_transaction() -> 
         repository=repository,
     )
     summaries = bind_message_attachments(
-        message={
-            "PK": "CONV#conv-1",
-            "SK": "MSG#message-1",
-            "message_id": "message-1",
-            "content": "use both",
-        },
+        message_id="message-1",
+        message_put=_message_put("conv-1", "message-1", content="use both"),
         conversation_id="conv-1",
         actor=_student_actor(),
         prepared=prepared,
@@ -2098,11 +2121,8 @@ def test_transaction_quota_race_dependency_cancellation_is_zero_effect_and_stabl
     ]
     def call():
         return bind_message_attachments(
-            message={
-                "PK": "CONV#conv-zero-effect",
-                "SK": "MSG#message-zero-effect",
-                "message_id": "message-zero-effect",
-            },
+            message_id="message-zero-effect",
+            message_put=_message_put("conv-zero-effect", "message-zero-effect"),
             conversation_id="conv-zero-effect",
             actor=_student_actor(),
             prepared=prepared_message,
@@ -2140,7 +2160,8 @@ def test_saved_attachment_reuse_does_not_mutate_storage_usage() -> None:
         repository=repository,
     )
     bind_message_attachments(
-        message={"PK": "CONV#other", "SK": "MSG#new", "message_id": "new"},
+        message_id="new",
+        message_put=_message_put("other", "new"),
         conversation_id="other",
         actor=_student_actor(),
         prepared=prepared,
@@ -2164,14 +2185,11 @@ def test_deterministic_fresh_attachment_ids_preserve_exact_order_and_keys() -> N
         uploads={"upload-1": first, "upload-2": second},
         attachments={"attachment-saved": saved},
     )
-    message = {
-        "PK": "CONV#conv-deterministic",
-        "SK": "MSG#message-deterministic",
-        "message_id": "message-deterministic",
-    }
+    bound: list[list[str]] = []
     expected = ["command-derived-fresh-0", "command-derived-fresh-1"]
     summaries = bind_message_attachments(
-        message=message,
+        message_id="message-deterministic",
+        message_put=_message_put("conv-deterministic", "message-deterministic", bound),
         conversation_id="conv-deterministic",
         actor=_student_actor(),
         prepared=[("upload", first), ("attachment", saved), ("upload", second)],
@@ -2180,12 +2198,8 @@ def test_deterministic_fresh_attachment_ids_preserve_exact_order_and_keys() -> N
         now=ATTACHMENT_TEST_NOW,
         repository=repository,
     )
-    assert message["attachment_ids"] == [
-        expected[0],
-        "attachment-saved",
-        expected[1],
-    ]
-    assert [summary.attachment_id for summary in summaries] == message["attachment_ids"]
+    assert bound == [[expected[0], "attachment-saved", expected[1]]]
+    assert [summary.attachment_id for summary in summaries] == bound[0]
     operations = repository.transactions[0]
     put_items = [
         item
@@ -2214,7 +2228,7 @@ def test_deterministic_fresh_attachment_ids_preserve_exact_order_and_keys() -> N
                 "message-deterministic",
             ).values()
         )
-        for value in message["attachment_ids"]
+        for value in bound[0]
     }
 
 
@@ -2226,15 +2240,12 @@ def test_deterministic_fresh_attachment_id_cardinality_fails_before_effects(
     supplied: list[str | None],
 ) -> None:
     repository = _MessageAttachmentRepository(uploads={"upload-1": _validated_upload()})
-    message = {
-        "PK": "CONV#conv-cardinality",
-        "SK": "MSG#message-cardinality",
-        "message_id": "message-cardinality",
-    }
+    bound: list[list[str]] = []
     values: list[object] = list(supplied) if supplied != [None] else [None]
     with pytest.raises(AttachmentDecisionError) as captured:
         bind_message_attachments(
-            message=message,
+            message_id="message-cardinality",
+            message_put=_message_put("conv-cardinality", "message-cardinality", bound),
             conversation_id="conv-cardinality",
             actor=_student_actor(),
             prepared=[("upload", repository.uploads["upload-1"])],
@@ -2244,7 +2255,7 @@ def test_deterministic_fresh_attachment_id_cardinality_fails_before_effects(
         )
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
     assert repository.transactions == []
-    assert "attachment_ids" not in message
+    assert bound == []
 
 
 def test_saved_reuse_consumes_no_deterministic_fresh_id() -> None:
@@ -2253,9 +2264,10 @@ def test_saved_reuse_consumes_no_deterministic_fresh_id() -> None:
         uploads={"upload-1": _validated_upload()},
         attachments={"attachment-saved": saved},
     )
-    message = {"PK": "CONV#c", "SK": "MSG#m", "message_id": "m"}
+    bound: list[list[str]] = []
     bind_message_attachments(
-        message=message,
+        message_id="m",
+        message_put=_message_put("c", "m", bound),
         conversation_id="c",
         actor=_student_actor(),
         prepared=[("attachment", saved), ("upload", repository.uploads["upload-1"])],
@@ -2264,7 +2276,7 @@ def test_saved_reuse_consumes_no_deterministic_fresh_id() -> None:
         now=ATTACHMENT_TEST_NOW,
         repository=repository,
     )
-    assert message["attachment_ids"] == ["attachment-saved", "only-fresh-id"]
+    assert bound == [["attachment-saved", "only-fresh-id"]]
 
 
 def test_lost_transaction_retry_rebuilds_identical_attachment_and_association_keys() -> None:
@@ -2280,7 +2292,8 @@ def test_lost_transaction_retry_rebuilds_identical_attachment_and_association_ke
     for _ in range(2):
         with pytest.raises(AttachmentDecisionError) as captured:
             bind_message_attachments(
-                message={"PK": "CONV#c", "SK": "MSG#m", "message_id": "m"},
+                message_id="m",
+                message_put=_message_put("c", "m"),
                 conversation_id="c",
                 actor=_student_actor(),
                 prepared=[("upload", repository.uploads["upload-1"])],
