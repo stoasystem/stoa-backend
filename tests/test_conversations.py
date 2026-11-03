@@ -17,8 +17,9 @@ from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.config import Settings
 from stoa.services import locale_service, message_catalog
 from stoa.routers import conversations
+from stoa.services import learning_session
+from stoa.services.learning_session import _store as learning_session_store
 from stoa.services.ask_question import _answering
-from stoa.services.ask_question import _transcript
 from stoa.models.attachment import AttachmentStatus, AttachmentSummary
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import CanonicalRole, CapabilityGrant
@@ -65,8 +66,8 @@ def _client(router, prefix: str = "/conversations", actor=None) -> TestClient:
 
 def _owned_conversation(monkeypatch) -> None:
     monkeypatch.setattr(
-        conversations,
-        "read_conversation",
+        learning_session,
+        "read",
         lambda conv_id: {"conversation_id": conv_id, "student_id": "student-1"},
     )
 
@@ -97,7 +98,7 @@ def _with_help_request(monkeypatch, **fields):
         )
     monkeypatch.setattr(conversations, "get_table", lambda: table)
     monkeypatch.setattr(_answering, "get_table", lambda: table)
-    monkeypatch.setattr(_transcript, "get_table", lambda: table)
+    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
     _owned_conversation(monkeypatch)
     return table
 
@@ -172,8 +173,8 @@ def test_conversation_teacher_help_records_support_visible_usage(monkeypatch):
     for module in (conversations, teacher_dispatch_service):
         monkeypatch.setattr(module, "get_table", lambda table=table: table)
     monkeypatch.setattr(
-        conversations,
-        "read_conversation",
+        learning_session,
+        "read",
         lambda conv_id: dict(table.rows[(f"CONV#{conv_id}", "CONV")]),
     )
     monkeypatch.setattr(
@@ -271,10 +272,10 @@ def test_teacher_help_retryable_admission_stays_out_of_student_words(monkeypatch
     table = _escalation_table()
     monkeypatch.setattr(conversations, "get_table", lambda: table)
     monkeypatch.setattr(_answering, "get_table", lambda: table)
-    monkeypatch.setattr(_transcript, "get_table", lambda: table)
+    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
     monkeypatch.setattr(
-        conversations,
-        "read_conversation",
+        learning_session,
+        "read",
         lambda conv_id: dict(table.rows[(f"CONV#{conv_id}", "CONV")]),
     )
 
@@ -331,9 +332,8 @@ def test_conversation_owner_and_exact_admin_capability_positive_controls(monkeyp
         "created_at": "2026-07-15T00:00:00Z",
         "updated_at": "2026-07-15T00:00:00Z",
     }
-    monkeypatch.setattr(conversations, "read_conversation", lambda *_: conv)
-    monkeypatch.setattr(conversations, "read_messages", lambda *_: [])
-    monkeypatch.setattr(_answering, "read_messages", lambda *_: [])
+    monkeypatch.setattr(learning_session, "read", lambda *_: conv)
+    monkeypatch.setattr(learning_session, "history_rows", lambda *_: [])
     owner = _client(conversations.router).get("/conversations/conv-1")
     grant = CapabilityGrant("student_content_review", "student:student-1", 1)
     admin = _client(
@@ -351,7 +351,7 @@ def test_conversation_owner_and_exact_admin_capability_positive_controls(monkeyp
 
 def test_unrelated_parent_conversation_is_hidden(monkeypatch):
     conv = {"conversation_id": "conv-1", "student_id": "student-1"}
-    monkeypatch.setattr(conversations, "read_conversation", lambda *_: conv)
+    monkeypatch.setattr(learning_session, "read", lambda *_: conv)
     monkeypatch.setattr(user_repo, "get_parent_student_binding", lambda *_: None)
     monkeypatch.setattr(user_repo, "get_student_parent_binding", lambda *_: None)
     monkeypatch.setattr(
@@ -394,9 +394,8 @@ def test_current_linked_teacher_can_read_but_stale_teacher_is_hidden(monkeypatch
         "teacher-1": {"user_id": "teacher-1", "role": "teacher", "account_status": "active"},
         "teacher-2": {"user_id": "teacher-2", "role": "teacher", "account_status": "active"},
     }
-    monkeypatch.setattr(conversations, "read_conversation", lambda *_: conv)
-    monkeypatch.setattr(conversations, "read_messages", lambda *_: [])
-    monkeypatch.setattr(_answering, "read_messages", lambda *_: [])
+    monkeypatch.setattr(learning_session, "read", lambda *_: conv)
+    monkeypatch.setattr(learning_session, "history_rows", lambda *_: [])
     monkeypatch.setattr(question_repo, "get_question", lambda *_: question)
     monkeypatch.setattr(question_repo, "get_teacher_session", lambda *_: None)
     monkeypatch.setattr(question_repo, "get_teacher_assignment", lambda *_: None)
@@ -1085,8 +1084,8 @@ def test_regular_and_stream_message_use_identical_safe_attachment_summary(
 def test_conversation_history_batch_projects_only_safe_attachment_summaries(monkeypatch) -> None:
     summary = _attachment_summary()
     monkeypatch.setattr(
-        conversations,
-        "read_conversation",
+        learning_session,
+        "read",
         lambda *_: {
             "conversation_id": "conv-1",
             "student_id": "student-1",
@@ -1097,26 +1096,13 @@ def test_conversation_history_batch_projects_only_safe_attachment_summaries(monk
         },
     )
     monkeypatch.setattr(
-        conversations,
-        "read_messages",
+        learning_session,
+        "history_rows",
         lambda *_: [
             {
                 "message_id": "message-1",
-                "role": "student",
-                "content": "my document",
-                "created_at": "2026-07-16T00:00:00Z",
-                "attachment_ids": ["attachment-1"],
-                "object_key": "uploads/private/provider-canary.pdf",
-                "extracted_text": "raw extracted canary",
-            }
-        ],
-    )
-    monkeypatch.setattr(
-        _answering,
-        "read_messages",
-        lambda *_: [
-            {
-                "message_id": "message-1",
+                "conversation_id": "conv-1",
+                "student_id": "student-1",
                 "role": "student",
                 "content": "my document",
                 "created_at": "2026-07-16T00:00:00Z",
@@ -1184,8 +1170,8 @@ def test_only_the_placeholder_title_is_replaced(monkeypatch):
     updates = []
 
     monkeypatch.setattr(
-        conversations.attachment_repo,
-        "retitle_conversation",
+        learning_session,
+        "retitle",
         lambda conversation_id, **kwargs: updates.append(kwargs) or True,
     )
 
@@ -1232,8 +1218,8 @@ def test_the_first_question_names_an_untitled_conversation(monkeypatch):
     """The behaviour that must survive: empty now, the question afterwards."""
     updates = []
     monkeypatch.setattr(
-        conversations.attachment_repo,
-        "retitle_conversation",
+        learning_session,
+        "retitle",
         lambda conversation_id, **kwargs: updates.append(kwargs) or True,
     )
 
@@ -1261,8 +1247,8 @@ def test_every_placeholder_a_conversation_has_ever_carried_is_still_claimable(mo
     """
     updates = []
     monkeypatch.setattr(
-        conversations.attachment_repo,
-        "retitle_conversation",
+        learning_session,
+        "retitle",
         lambda conversation_id, **kwargs: updates.append(kwargs) or True,
     )
     placeholders = conversations._placeholder_conversation_titles("math", "Grade 6")
@@ -1286,8 +1272,8 @@ def test_a_name_the_student_chose_is_never_taken_by_a_question(monkeypatch):
     """
     updates = []
     monkeypatch.setattr(
-        conversations.attachment_repo,
-        "retitle_conversation",
+        learning_session,
+        "retitle",
         lambda conversation_id, **kwargs: updates.append(kwargs) or True,
     )
 
@@ -1513,7 +1499,7 @@ def test_conversation_list_reaches_matching_row_after_filtered_gsi_page(monkeypa
     table = _PagedIndexTable(_student_index_rows(messages=120, conversations_count=5))
     monkeypatch.setattr(conversations, "get_table", lambda: table)
     monkeypatch.setattr(_answering, "get_table", lambda: table)
-    monkeypatch.setattr(_transcript, "get_table", lambda: table)
+    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
 
     response = _client(conversations.router).get("/conversations")
 
@@ -1535,7 +1521,7 @@ def test_conversation_list_reads_one_page_at_normal_volume_without_repeats(monke
     table = _PagedIndexTable(_student_index_rows(messages=20, conversations_count=5))
     monkeypatch.setattr(conversations, "get_table", lambda: table)
     monkeypatch.setattr(_answering, "get_table", lambda: table)
-    monkeypatch.setattr(_transcript, "get_table", lambda: table)
+    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
 
     response = _client(conversations.router).get("/conversations")
 
@@ -1552,7 +1538,7 @@ def test_conversation_list_reports_an_exhausted_page_budget_as_truncated(monkeyp
     table = _PagedIndexTable(_student_index_rows(messages=400, conversations_count=2))
     monkeypatch.setattr(conversations, "get_table", lambda: table)
     monkeypatch.setattr(_answering, "get_table", lambda: table)
-    monkeypatch.setattr(_transcript, "get_table", lambda: table)
+    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
 
     page = conversations._list_conversations("student-1", page_budget=2)
 
@@ -1565,7 +1551,7 @@ def test_conversation_list_stops_at_the_result_limit_and_says_so(monkeypatch):
     table = _PagedIndexTable(_student_index_rows(messages=0, conversations_count=250))
     monkeypatch.setattr(conversations, "get_table", lambda: table)
     monkeypatch.setattr(_answering, "get_table", lambda: table)
-    monkeypatch.setattr(_transcript, "get_table", lambda: table)
+    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
 
     page = conversations._list_conversations("student-1")
 
@@ -1591,17 +1577,17 @@ def test_a_conversation_opened_without_a_year_group_can_be_read_back():
         "updated_at": "2026-09-23T00:00:00+00:00",
     }
 
-    assert _transcript.conversation_grade(conv) == ""
+    assert learning_session.conversation_grade(conv) == ""
 
 
 def test_a_missing_year_group_reads_the_same_as_an_empty_one():
-    assert _transcript.conversation_grade({"subject": "math"}) == ""
+    assert learning_session.conversation_grade({"subject": "math"}) == ""
 
 
 def test_a_year_group_of_the_wrong_type_is_still_refused():
     """Negative control: "nobody said" is not "the row is damaged"."""
     with pytest.raises(conversations.AttachmentDecisionError):
-        _transcript.conversation_grade({"grade": 9})
+        learning_session.conversation_grade({"grade": 9})
 
 
 def test_the_other_conversation_fields_still_refuse_an_empty_value():
@@ -1612,7 +1598,7 @@ def test_the_other_conversation_fields_still_refuse_an_empty_value():
     """
     for field in ("title", "subject", "updated_at"):
         with pytest.raises(conversations.AttachmentDecisionError):
-            _transcript.required_conversation_text({field: ""}, field)
+            learning_session.required_conversation_text({field: ""}, field)
 
 
 def test_escalating_a_conversation_writes_the_record_the_teacher_side_reads(monkeypatch):
@@ -1806,8 +1792,8 @@ def _escalate(monkeypatch, table, conversation_id: str = "conv-1"):
         lambda user_id, **_kwargs: dict(table.rows.get((f"USER#{user_id}", "PROFILE")) or {}),
     )
     monkeypatch.setattr(
-        conversations,
-        "read_conversation",
+        learning_session,
+        "read",
         lambda conv_id: dict(table.rows[(f"CONV#{conv_id}", "CONV")]),
     )
     monkeypatch.setattr(

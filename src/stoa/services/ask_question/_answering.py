@@ -44,18 +44,9 @@ from stoa.services import (
 )
 from stoa.services.adaptive_learning_service import actor_projection
 from stoa.services.ask_question import _store as ask_question_store
-from stoa.services.ask_question._transcript import (
-    DynamoConversationTable,
+from stoa.services.ask_question._replay import (
     _conversation_repository_call,
-    _history_snapshot_fingerprint,
-    _load_anchored_message_history,
     _stored_student_message,
-    active_conversation_generation,
-    conv_pk,
-    conversation_grade,
-    msg_sk,
-    read_conversation,
-    read_messages,
 )
 from stoa.services.ask_question.errors import AskQuestionErrorCode, parse_error_code
 from stoa.services.ask_question.models import (
@@ -67,6 +58,14 @@ from stoa.services.ask_question.models import (
     _quote_payload,
     structured_payload,
     target_unit,
+)
+from stoa.services import learning_session
+from stoa.services.learning_session import (
+    DynamoConversationTable,
+    active_conversation_generation,
+    conv_pk,
+    conversation_grade,
+    msg_sk,
 )
 
 logger = logging.getLogger(__name__)
@@ -1060,12 +1059,11 @@ def load_committed_message(command: dict) -> CommittedMessage:
     if generation is None or generation < 1:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     prior_messages = _conversation_repository_call(
-        lambda: _load_anchored_message_history(
-            conversation_id=conv_id,
+        lambda: learning_session.anchored_history(
+            conv_id,
             owner_id=student_id,
-            expected_message_ids=command["history_message_ids"],
-            expected_fingerprint=command["history_fingerprint"],
-            table=table,
+            message_ids=command["history_message_ids"],
+            fingerprint=command["history_fingerprint"],
         )
     )
     content, prepared, attachments, quote = _stored_student_message(
@@ -1078,7 +1076,7 @@ def load_committed_message(command: dict) -> CommittedMessage:
     )
     if not isinstance(command.get("generation_context"), Mapping):
         context = _generation_context_without_request(
-            student_id, _conversation_repository_call(lambda: read_conversation(conv_id))
+            student_id, _conversation_repository_call(lambda: learning_session.read(conv_id))
         )
         command["generation_context"] = _conversation_repository_call(
             lambda: ask_question_store.record_message_generation_context(
@@ -1303,20 +1301,19 @@ def commit_message_command(
     }
     if existing:
         prior_messages = _conversation_repository_call(
-            lambda: _load_anchored_message_history(
-                conversation_id=conv_id,
+            lambda: learning_session.anchored_history(
+                conv_id,
                 owner_id=student_id,
-                expected_message_ids=command["history_message_ids"],
-                expected_fingerprint=command["history_fingerprint"],
-                table=table,
+                message_ids=command["history_message_ids"],
+                fingerprint=command["history_fingerprint"],
             )
         )
     else:
-        prior_messages = _conversation_repository_call(lambda: read_messages(conv_id))
+        prior_messages = _conversation_repository_call(lambda: learning_session.history_rows(conv_id))
         command["history_message_ids"] = [
             item["message_id"] for item in prior_messages
         ]
-        command["history_fingerprint"] = _history_snapshot_fingerprint(prior_messages)
+        command["history_fingerprint"] = learning_session.history_fingerprint(prior_messages)
 
     quota_limit = _conversation_repository_call(
         lambda: _chat_limit_for_student(student_id)

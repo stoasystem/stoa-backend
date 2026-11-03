@@ -44,6 +44,7 @@ from stoa.deps import (
 )
 from stoa.jobs import moderation_image_retention
 from stoa.routers import admin, files, notifications
+from stoa.services.learning_session import _store as learning_session_store
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import account_deletion_service, locale_service, message_catalog
 from actor_helpers import install_actor_overrides
@@ -105,7 +106,13 @@ class _World:
                     "title": "Fractions",
                 }
             )
-        for module in (attachment_repo, account_deletion_repo, moderation_repo, notification_repo):
+        for module in (
+            attachment_repo,
+            learning_session_store,
+            account_deletion_repo,
+            moderation_repo,
+            notification_repo,
+        ):
             monkeypatch.setattr(module, "get_table", lambda: self.table)
         monkeypatch.setenv("STOA_ENABLE_BEST_EFFORT_NOTIFICATIONS", "true")
         # The admin reads in the language they stored; no request asked for one

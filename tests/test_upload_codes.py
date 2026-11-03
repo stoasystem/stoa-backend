@@ -51,7 +51,8 @@ from stoa.deps import (
     get_settings,
 )
 from stoa.routers import conversations, upload_codes
-from stoa.services.ask_question import _answering, _transcript
+from stoa.services.ask_question import _answering
+from stoa.services.learning_session import _store as learning_session_store
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import attachment_service, rate_limit, upload_code_service
@@ -133,7 +134,7 @@ class _Api:
         for module in (
             conversations,
             _answering,
-            _transcript,
+            learning_session_store,
             attachment_repo,
             upload_code_repo,
             rate_limit,

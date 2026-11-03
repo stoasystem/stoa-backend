@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from stoa.config import Settings
 from stoa.routers import notifications, teachers
+from stoa.services.learning_session import _store as learning_session_store
 from stoa.db.repositories import question_repo, user_repo
 from stoa.services import (
     locale_service,
@@ -1224,7 +1225,7 @@ def _message(message_id: str, role: str, content: str, created_at: str) -> dict:
 def _conversation_summary(monkeypatch, question: dict, *messages: dict) -> dict:
     table = FakeTable()
     table.seed(*messages)
-    monkeypatch.setattr(teacher_assistance_service, "get_table", lambda: table)
+    monkeypatch.setattr(learning_session_store, "get_table", lambda: table)
     return _summary_over_http(monkeypatch, "de", question)
 
 

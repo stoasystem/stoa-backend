@@ -14,11 +14,10 @@ import logging
 from typing import Any
 from uuid import uuid4
 
-from boto3.dynamodb.conditions import Key
 from fastapi import HTTPException
 
 from stoa.config import Settings
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import moderation_repo, question_repo
 from stoa.models.moderation import (
     ModerationCaseNoteRequest,
@@ -31,7 +30,7 @@ from stoa.models.moderation import (
     ModerationSurface,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
-from stoa.services import notification_service
+from stoa.services import learning_session, notification_service
 
 
 logger = logging.getLogger(__name__)
@@ -639,7 +638,7 @@ _SURFACE_ROLES = {
 
 def _reported_message(
     question: dict[str, Any], surface: str, message_id: str | None
-) -> dict[str, Any] | None:
+) -> learning_session.Message | None:
     """The conversation message a help request's report is about (#185).
 
     The message named, which must be one of the surface's author in this
@@ -656,13 +655,13 @@ def _reported_message(
         return None
     said = [
         message
-        for message in _conversation_messages(str(question["conversation_id"]))
-        if message.get("role") == role
-        and message.get("student_id") == question.get("student_id")
-        and str(message.get("content") or "").strip()
+        for message in learning_session.history(str(question["conversation_id"]))
+        if message.role == role
+        and message.student_id == question.get("student_id")
+        and message.content.strip()
     ]
     if message_id:
-        named = [message for message in said if message.get("message_id") == message_id]
+        named = [message for message in said if message.id == message_id]
         if not named:
             raise HTTPException(status_code=404, detail="Message not found")
         return named[0]
@@ -674,33 +673,12 @@ def _reported_message(
         )
         raise HTTPException(status_code=400, detail=detail)
     # Message ids are random, so the keys do not run in the order of sending.
-    return max(said, key=lambda message: str(message.get("created_at") or ""))
+    return max(said, key=lambda message: message.created_at)
 
 
-# A ceiling on the pages one read follows; a conversation is far from it.
-_MESSAGE_PAGE_LIMIT = 25
-
-
-def _conversation_messages(conversation_id: str) -> list[dict[str, Any]]:
-    table: Any = get_table()
-    request: dict[str, Any] = {
-        "KeyConditionExpression": (
-            Key("PK").eq(f"CONV#{conversation_id}") & Key("SK").begins_with("MSG#")
-        ),
-        "ConsistentRead": True,
-    }
-    messages: list[dict[str, Any]] = []
-    for _page in range(_MESSAGE_PAGE_LIMIT):
-        response = table.query(**request)
-        messages.extend(row for row in response.get("Items", []) if isinstance(row, dict))
-        cursor = response.get("LastEvaluatedKey")
-        if not cursor:
-            break
-        request["ExclusiveStartKey"] = cursor
-    return messages
-
-
-def _question_context(question: dict[str, Any], reported: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def _question_context(
+    question: dict[str, Any], reported: learning_session.Message | None = None
+) -> dict[str, Any]:
     ai_response = question.get("ai_response") or {}
     context = {
         "question_id": question.get("question_id"),
@@ -719,9 +697,9 @@ def _question_context(question: dict[str, Any], reported: Mapping[str, Any] | No
             "student": "content_preview",
             "assistant": "ai_answer_preview",
             "teacher": "teacher_response_preview",
-        }[str(reported["role"])]
-        context[field] = _preview(reported.get("content"))
-        context["reported_message_id"] = reported.get("message_id")
+        }[reported.role]
+        context[field] = _preview(reported.content)
+        context["reported_message_id"] = reported.id
     return context
 
 

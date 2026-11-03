@@ -52,7 +52,7 @@ from stoa.models.upload_code import (
 )
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.services import attachment_service, rate_limit
+from stoa.services import attachment_service, learning_session, rate_limit
 from stoa.services.file_validation_service import MIME_BY_EXTENSION
 
 
@@ -453,7 +453,7 @@ def _issued_row(code: str, now_epoch: int) -> dict[str, Any]:
     if row.get("conversation_id") is None:
         return row
     try:
-        conversation = upload_code_repo.get_conversation(str(row["conversation_id"]))
+        conversation = learning_session.read(str(row["conversation_id"]))
     except Exception:
         raise _unavailable() from None
     if (

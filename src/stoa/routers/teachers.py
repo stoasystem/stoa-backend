@@ -56,6 +56,7 @@ from stoa.services import (
     ai_teacher_tools_service,
     attachment_service,
     help_requests,
+    learning_session,
     notification_service,
     teacher_assistance_service,
     teacher_dispatch_service,
@@ -66,11 +67,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 type TeacherItem = dict[str, object]
-
-
-@runtime_checkable
-class _GetTable(Protocol):
-    def get_item(self, **kwargs: object) -> object: ...
 
 
 @runtime_checkable
@@ -102,12 +98,6 @@ def _teacher_mapping(value: object) -> TeacherItem:
             raise RuntimeError("teacher data dependency unavailable")
         result[key] = member
     return result
-
-
-def _teacher_get(table: object, **kwargs: object) -> TeacherItem:
-    if not isinstance(table, _GetTable):
-        raise RuntimeError("teacher data dependency unavailable")
-    return _teacher_mapping(table.get_item(**kwargs))
 
 
 def _teacher_query(table: object, **kwargs: object) -> TeacherItem:
@@ -161,29 +151,6 @@ _HELP_REQUEST_CHANGED = {
 
 
 # Canonical teacher portal, availability, help-request, and AI-tool routes.
-def _conv_pk(conv_id: str) -> str:
-    return f"CONV#{conv_id}"
-
-
-def _get_conversation(conv_id: str) -> TeacherItem | None:
-    resp = _teacher_get(
-        get_table(), Key={"PK": _conv_pk(conv_id), "SK": "CONV"}
-    )
-    item = resp.get("Item")
-    return _teacher_mapping(item) if item is not None else None
-
-
-def _get_messages(conv_id: str) -> list[TeacherItem]:
-    resp = _teacher_query(
-        get_table(),
-        KeyConditionExpression=(
-            Key("PK").eq(_conv_pk(conv_id)) & Key("SK").begins_with("MSG#")
-        ),
-        ScanIndexForward=True,
-    )
-    return _teacher_items(resp)
-
-
 def _resolve_help_request(request_id: str) -> TeacherItem | None:
     """The help request with this id, told the way authorization judges a task.
 
@@ -293,6 +260,25 @@ class MessageOut(BaseModel):
     # What the student sent with the message (#140); the content is read at
     # GET /teachers/me/help-requests/{requestId}/attachments/{attachmentId}/content.
     attachments: list[AttachmentSummary] = Field(default_factory=list)
+
+
+def message_out(
+    message: learning_session.Message,
+    attachment_summaries: Mapping[str, AttachmentSummary],
+) -> MessageOut:
+    """The teacher's view of a stored message, with the attachments it carries."""
+    return MessageOut(
+        id=message.id,
+        conversationId=message.conversation_id,
+        role=message.role,
+        content=message.content,
+        createdAt=message.created_at,
+        attachments=[
+            attachment_summaries[value]
+            for value in message.attachment_ids
+            if value in attachment_summaries
+        ],
+    )
 
 
 class TeacherNoteOut(BaseModel):
@@ -629,7 +615,9 @@ def _sent_in_help_request(
     Whose it is is the policy's to judge: only the student's own is read.
     """
     conv_id = _required_text(conv.get("conversation_id"))
-    if not any(attachment_id in _attachment_ids(m) for m in _get_messages(conv_id)):
+    if not any(
+        attachment_id in m.attachment_ids for m in learning_session.history(conv_id)
+    ):
         return None
     item = attachment_repo.get_attachment(attachment_id)
     if not isinstance(item, dict) or item.get("status") != "active":
@@ -1150,10 +1138,10 @@ async def get_help_request(
         (student_profile or {}).get("name"), default="Student"
     )
 
-    raw_messages = _get_messages(conv_id)
+    history = learning_session.history(conv_id)
     try:
         attachment_summaries = attachment_service.list_attachment_summaries(
-            [value for m in raw_messages for value in _attachment_ids(m)]
+            [value for m in history for value in m.attachment_ids]
         )
     except attachment_repo.AttachmentRepositoryConflict as exc:
         # The request opens without them rather than not at all: before #140
@@ -1162,27 +1150,13 @@ async def get_help_request(
             "help_request_attachment_summaries_unavailable category=%s", exc
         )
         attachment_summaries = {}
-    messages = [
-        MessageOut(
-            id=_required_text(m.get("message_id")),
-            conversationId=conv_id,
-            role=_required_text(m.get("role")),
-            content=_required_text(m.get("content")),
-            createdAt=_required_text(m.get("created_at")),
-            attachments=[
-                attachment_summaries[value]
-                for value in _attachment_ids(m)
-                if value in attachment_summaries
-            ],
-        )
-        for m in raw_messages
-    ]
+    messages = [message_out(m, attachment_summaries) for m in history]
 
     # Load notes stored as NOTE# items in the conversation
     notes_resp = _teacher_query(
         table,
         KeyConditionExpression=(
-            Key("PK").eq(_conv_pk(conv_id)) & Key("SK").begins_with("NOTE#")
+            Key("PK").eq(learning_session.conv_pk(conv_id)) & Key("SK").begins_with("NOTE#")
         ),
         ScanIndexForward=True,
     )
@@ -1398,7 +1372,7 @@ async def add_note(
             status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
         ) from exc
     note_item = {
-        "PK": _conv_pk(conv_id),
+        "PK": learning_session.conv_pk(conv_id),
         "SK": f"NOTE#{note_id}",
         "entity_type": "conversation_teacher_note",
         "note_id": note_id,
@@ -1412,12 +1386,12 @@ async def add_note(
     }
     # The teacher's reply is also a message in the conversation, so it follows
     # the message contract the student's history reader enforces on every row
-    # (ask_question._transcript._validate_history_message). Without it the
+    # (learning_session._history._validate_history_message). Without it the
     # student could no longer open the conversation once a teacher replied (#66,
     # 2026-09-28).
     msg_id = str(uuid.uuid4())
     message_item = {
-        "PK": _conv_pk(conv_id),
+        "PK": learning_session.conv_pk(conv_id),
         "SK": f"MSG#{msg_id}",
         "entity_type": "conversation_message",
         "schema_version": "conversation-message.v1",
@@ -1465,7 +1439,7 @@ async def add_note(
             teacher_id=teacher_id,
             reply_operations=(
                 *(
-                    attachment_repo.build_conversation_write_transaction(
+                    learning_session.build_conversation_write_transaction(
                         item=item, owner_id=student_id, generation=generation
                     )[1]
                     for item in (note_item, message_item)

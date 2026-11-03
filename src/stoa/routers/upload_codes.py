@@ -16,7 +16,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from stoa.config import Settings, get_settings
-from stoa.db.repositories import upload_code_repo
 from stoa.deps import (
     get_actor,
     get_image_moderation_client,
@@ -52,7 +51,7 @@ from stoa.security.route_authorization import (
     authorized_conversation_dependency,
 )
 from stoa.security.route_inventory import explicit_route_classification
-from stoa.services import rate_limit, upload_code_service
+from stoa.services import learning_session, rate_limit, upload_code_service
 
 
 conversation_router = APIRouter()
@@ -62,7 +61,7 @@ router = APIRouter()
 
 
 def _live_conversation(conversation_id: str):
-    item = upload_code_repo.get_conversation(conversation_id)
+    item = learning_session.read(conversation_id)
     if item is None or item.get("status") == "deleted":
         return None
     return item

@@ -6,13 +6,15 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from boto3.dynamodb.conditions import Key
-
-from stoa.db.dynamodb import get_table
 from stoa.db.repositories import notification_repo
 from stoa.security.authorization import AuthorizedResource
 from stoa.security.identity import Actor
-from stoa.services import learning_profile_service, locale_service, message_catalog
+from stoa.services import (
+    learning_profile_service,
+    learning_session,
+    locale_service,
+    message_catalog,
+)
 
 
 def now_iso() -> str:
@@ -91,40 +93,20 @@ def _question_and_answer(question: dict[str, Any]) -> tuple[str, str]:
     return " — ".join(part for part in (asked, note) if part), _last_said(messages, "assistant")
 
 
-# A ceiling on the pages one read follows; a conversation is far from it.
-_MESSAGE_PAGE_LIMIT = 25
-
-
-def _conversation_messages(conversation_id: str) -> list[dict[str, Any]]:
+def _conversation_messages(conversation_id: str) -> list[learning_session.Message]:
     if not conversation_id:
         return []
-    table: Any = get_table()
-    request: dict[str, Any] = {
-        "KeyConditionExpression": (
-            Key("PK").eq(f"CONV#{conversation_id}") & Key("SK").begins_with("MSG#")
-        ),
-    }
-    messages: list[dict[str, Any]] = []
-    for _page in range(_MESSAGE_PAGE_LIMIT):
-        response = table.query(**request)
-        messages.extend(row for row in response.get("Items", []) if isinstance(row, dict))
-        cursor = response.get("LastEvaluatedKey")
-        if not cursor:
-            break
-        request["ExclusiveStartKey"] = cursor
-    return messages
+    return learning_session.history(conversation_id)
 
 
-def _last_said(messages: list[dict[str, Any]], role: str) -> str:
-    # Message ids are random, so the keys do not run in the order of sending.
+def _last_said(messages: list[learning_session.Message], role: str) -> str:
+    # The latest by when it was sent, as `history` orders them.
     said = [
-        message
-        for message in messages
-        if message.get("role") == role and str(message.get("content") or "").strip()
+        message for message in messages if message.role == role and message.content.strip()
     ]
     if not said:
         return ""
-    return str(max(said, key=lambda message: str(message.get("created_at") or ""))["content"])
+    return max(said, key=lambda message: message.created_at).content
 
 
 def _student_context_summary(question: dict[str, Any], topics: list[str], locale: str) -> str:

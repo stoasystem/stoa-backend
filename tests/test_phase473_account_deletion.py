@@ -18,7 +18,7 @@ from stoa.db.repositories import (
 from stoa.security.errors import SecurityDecisionError
 from stoa.security.identity import AccountStatus, resolve_actor
 from stoa.security.tokens import VerifiedAccessToken
-from stoa.services import help_requests
+from stoa.services import help_requests, learning_session
 
 
 STUDENT_ID = "student-delete-1"
@@ -299,8 +299,8 @@ def test_every_primary_writer_uses_the_same_active_fence_and_exact_generation() 
         table=_CapturingTable(),
     )
     # The question attachment writer this checked went with #148; a
-    # conversation write is the attachment repository's writer now.
-    attachment_checks = attachment_repo.build_conversation_write_transaction(
+    # conversation write is the learning session's writer now (#226).
+    attachment_checks = learning_session.build_conversation_write_transaction(
         item={"PK": "CONV#c-1", "SK": "CONV", "conversation_id": "c-1"},
         owner_id=STUDENT_ID,
         generation=4,

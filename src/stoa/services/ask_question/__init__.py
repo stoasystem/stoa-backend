@@ -28,11 +28,7 @@ from datetime import UTC, datetime, timezone
 from stoa.security.attachment_errors import AttachmentDecisionError
 from stoa.security.identity import Actor
 from stoa.services.ask_question import _answering, _store, _sweep, dispatch
-from stoa.services.ask_question._transcript import (
-    conversation_grade,
-    _conversation_repository_call,
-    required_conversation_text,
-)
+from stoa.services.ask_question._replay import _conversation_repository_call
 from stoa.services.ask_question.errors import AskQuestionErrorCode
 from stoa.services.ask_question.models import (
     ChatMessage,
@@ -41,6 +37,7 @@ from stoa.services.ask_question.models import (
     SendMessageRequest,
     SendMessageResponse,
 )
+from stoa.services.learning_session import conversation_grade, required_conversation_text
 
 logger = logging.getLogger(__name__)
 

@@ -39,9 +39,10 @@ from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.config import settings
 from stoa.db.dynamodb import get_table, stored_int
-from stoa.db.repositories import account_deletion_repo, attachment_repo
+from stoa.db.repositories import account_deletion_repo
 from stoa.security.private_telemetry import emit_private_event
 from stoa.services import (
+    learning_session,
     notification_service,
     teacher_dispatch_service,
     teacher_reply_service,
@@ -411,14 +412,14 @@ def ask(
         "escalation_message": message,
         "created_at": timestamp,
     }
-    record_operations = attachment_repo.build_conversation_write_transaction(
+    record_operations = learning_session.build_conversation_write_transaction(
         item=record, owner_id=student_id, generation=generation
     )
     rows: list[dict[str, Any]] = [
         *cast(list[dict[str, Any]], record_operations),
         cast(
             dict[str, Any],
-            attachment_repo.build_conversation_write_transaction(
+            learning_session.build_conversation_write_transaction(
                 item=system_row, owner_id=student_id, generation=generation
             )[1],
         ),

@@ -45,7 +45,7 @@ from stoa.security.identity import Actor, CanonicalRole
 from stoa.services.ai_service import PromptImage
 from stoa.services.file_validation_service import MIME_BY_EXTENSION
 from stoa.services.file_validation_service import ValidationFailure, validate_uploaded_file
-from stoa.services import moderation_service
+from stoa.services import learning_session, moderation_service
 from stoa.services.image_moderation_service import (
     MODERATED_TYPES,
     ImageContentBlocked,
@@ -861,7 +861,7 @@ def create_upload_intent(
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from None
     account_fence_generation = int(account_fence["generation"])
     if request.conversation_id is not None and not _gateway_call(
-        lambda: repository.owns_conversation(request.conversation_id, actor.user_id)
+        lambda: learning_session.owned_by(request.conversation_id, actor.user_id)
     ):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     now = (now or datetime.now(UTC)).astimezone(UTC)

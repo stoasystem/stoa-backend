@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from stoa.models.attachment import AttachmentReference, AttachmentSummary
 from stoa.services import ask_answer
 from stoa.services.ask_answer import StructuredAnswer
+from stoa.services.learning_session import Message
 
 
 class PracticeContextReference(BaseModel):
@@ -197,6 +198,30 @@ class ChatMessage(BaseModel):
     # The star the student asked to go to, on an assistant answer that
     # recognised one on their map (#124). None on every other message.
     targetUnit: TargetUnit | None = None
+
+
+def chat_message(
+    message: Message, attachment_summaries: Mapping[str, AttachmentSummary]
+) -> ChatMessage:
+    """The student's view of a stored message, with the attachments it carries."""
+    author = message.author_name if message.role == "teacher" else None
+    return ChatMessage(
+        id=message.id,
+        conversationId=message.conversation_id,
+        role=message.role,
+        content=message.content,
+        createdAt=message.created_at,
+        status=message.status,
+        attachments=[
+            attachment_summaries[value]
+            for value in message.attachment_ids
+            if value in attachment_summaries
+        ],
+        authorName=(author.strip() or None) if author is not None else None,
+        quote=stored_quote(message.quote),
+        structured=stored_structured(message.structured),
+        targetUnit=target_unit(message.target_unit_id),
+    )
 
 
 class SendMessageResponse(BaseModel):
