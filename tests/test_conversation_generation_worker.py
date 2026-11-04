@@ -52,11 +52,10 @@ from stoa.jobs import conversation_generation
 from stoa.routers import conversations
 from stoa.security.attachment_errors import AttachmentDecisionError
 from stoa.services import ai_service, ask_answer, ask_question, star_map_candidates
-from stoa.services.ask_question import _answering
+from stoa.services.ask_question import _admission, _answering
 from fakes.ask_question import AtomicAllowanceTable
 
 
-# #206 改写: recomputes the allowance identity with the package-private helper.
 def _asked_at(table, row: dict[str, Any], when: str) -> None:
     """Move when the question was asked, with its message and allowance identity."""
     row["created_at"] = row["history_anchor_created_at"] = when
@@ -67,7 +66,7 @@ def _asked_at(table, row: dict[str, Any], when: str) -> None:
     ]
     table.seed({**student, "created_at": when})
     row.update(
-        _answering._conversation_allowance_command_fields(
+        _admission.allowance_identity(
             row,
             {
                 "effectivePlan": row["allowance_plan_id"],
@@ -363,12 +362,11 @@ def test_the_worker_handler_ships_in_the_lambda_package() -> None:
     )
 
 
-# #206 改写: the two tests below build the allowance client directly.
-def _allowance_client(monkeypatch: pytest.MonkeyPatch):
+def _metered(monkeypatch: pytest.MonkeyPatch, on_invocation):
     provider = _Provider(text=_COMPLETE, stop_reason="end_turn")
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
     monkeypatch.setattr(ai_service.boto3, "client", lambda *_a, **_k: provider)
-    return _answering._ConversationAllowanceBedrockClient(_command()), provider
+    return _admission.meter(_command()).model(on_invocation), provider
 
 
 def _ask(client) -> Any:
@@ -376,7 +374,7 @@ def _ask(client) -> Any:
         "Answer the question.",
         [{"role": "user", "content": "Wie kürze ich Brüche?"}],
         input_size=21,
-        effect_id=client.allowance_effect_id,
+        effect_id=client.effect_id,
         client=client,
         observed_at=NOW,
         on_step=lambda _i, _s: None,
@@ -386,9 +384,10 @@ def _ask(client) -> Any:
 def test_the_call_is_recorded_after_admission_and_before_the_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client, provider = _allowance_client(monkeypatch)
     seen: list[int] = []
-    client.on_invocation = lambda: seen.append(len(provider.invoke_calls)) or True
+    client, provider = _metered(
+        monkeypatch, lambda: seen.append(len(provider.invoke_calls)) or True
+    )
 
     _ask(client)
 
@@ -399,8 +398,7 @@ def test_the_call_is_recorded_after_admission_and_before_the_provider(
 def test_no_call_is_made_when_the_record_of_it_cannot_be_written(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client, provider = _allowance_client(monkeypatch)
-    client.on_invocation = lambda: False
+    client, provider = _metered(monkeypatch, lambda: False)
 
     with pytest.raises(ai_service.AIInvocationFailure) as failure:
         _ask(client)

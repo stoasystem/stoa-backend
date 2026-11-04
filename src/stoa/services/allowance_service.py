@@ -110,6 +110,11 @@ def zurich_week(observed_at: datetime | None = None) -> ZurichWeek:
     )
 
 
+def week_identity(observed_at: datetime) -> str:
+    """The Zurich week `observed_at` falls in, as allowances name it: `2026-W13`."""
+    return zurich_week(observed_at).identity
+
+
 def plan_allowance_budget(
     plan_id: BillingPlanId | str,
     *,
@@ -330,7 +335,7 @@ def get_allowance_projection(
     output_used = finalized_output + reserved_output
     input_remaining = max(0, budget.input_tokens - input_used)
     output_remaining = max(0, budget.output_tokens - output_used)
-    identity = f"{week.iso_year:04d}-W{week.iso_week:02d}"
+    identity = week.identity
     projection: dict[str, Any] = {
         "schemaVersion": "allowance_projection.v1",
         "beneficiaryId": beneficiary,
@@ -396,5 +401,6 @@ __all__ = [
     "record_provider_usage",
     "reserve_token_allowance",
     "restore_user_allowance",
+    "week_identity",
     "zurich_week",
 ]

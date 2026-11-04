@@ -1,32 +1,28 @@
-"""Commit a question, answer it, settle its allowance, replay it.
+"""Commit a question, answer it, replay it; its allowance goes through `_admission`.
 
 Moved from `routers/conversations.py` (#218). Function bodies are as they were
 there; the router now reaches them through the package's entry points.
 """
 import functools
 import json
-import hashlib
 import logging
 import time
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, cast
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 import boto3
-from fastapi import status
 
 from stoa.config import settings
 from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import (
-    allowance_repo,
     asked_knowledge_repo,
     knowledge_gap_repo,
     user_repo,
 )
-from stoa.models.allowance import ProviderUsageEvidence
 from stoa.models.attachment import AttachmentSummary
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import Actor
@@ -34,16 +30,16 @@ from stoa.security.private_telemetry import emit_private_event
 from stoa.services import (
     adaptive_learning_service,
     ai_service,
-    allowance_service,
     ask_answer,
     attachment_service,
-    bedrock_token_count_service,
     entitlement_service,
     locale_service,
     runtime_budget_service,
 )
 from stoa.services.adaptive_learning_service import actor_projection
+from stoa.services.ask_question import _admission
 from stoa.services.ask_question import _store as ask_question_store
+from stoa.services.ask_question._admission import AdmissionError, UsageEvidence
 from stoa.services.ask_question._replay import (
     _conversation_repository_call,
     _stored_student_message,
@@ -73,30 +69,9 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-# ── AI message allowance and settlement ───────────────────────────────────────
-# 「AI 消息准入」#206 replaces this whole block, from here to its end marker:
-# eligibility, the reservation before the model is called, the provider usage
-# observed after, and finalizing or restoring it. Moved as it stood (#218).
-
-class _ConversationAllowanceFailure(Exception):
-    """Stable public failure for conversation allowance convergence."""
-
-    def __init__(self, code: str, message: str, action: str, http_status: int):
-        self.code = code
-        self.message = message
-        self.action = action
-        self.http_status = http_status
-        super().__init__(code)
-
-
-def _allowance_recoverable_failure() -> _ConversationAllowanceFailure:
-    return _ConversationAllowanceFailure(
-        "allowance_finalization_recoverable",
-        "This answer is safely recoverable while token accounting finishes.",
-        "retry_same_message",
-        status.HTTP_503_SERVICE_UNAVAILABLE,
-    )
-
+# ── AI message allowance ──────────────────────────────────────────────────────
+# What the answer is charged is `_admission`'s (#240). What stays here is the
+# eligibility read, until 「准入一次读」#241 moves it there as `admit`.
 
 def _chat_limit_for_student(student_id: str) -> int:
     entitlement = entitlement_service.resolve_student_entitlement(student_id, settings=settings)
@@ -119,455 +94,17 @@ def _conversation_entitlement_snapshot(
         settings=settings,
     )
     if not isinstance(entitlement, Mapping):
-        raise _allowance_recoverable_failure()
+        raise AdmissionError(AskQuestionErrorCode.ALLOWANCE_UNAVAILABLE)
     return entitlement
-
-
-def _conversation_allowance_command_fields(
-    command: Mapping[str, object],
-    entitlement: Mapping[str, object],
-) -> dict[str, object]:
-    """Bind one allowance identity to the durable message command snapshot."""
-    command_id = str(command.get("command_id") or "")
-    assistant_message_id = str(command.get("assistant_message_id") or "")
-    student_id = str(command.get("student_id") or command.get("owner_id") or "")
-    created_at = str(command.get("created_at") or "")
-    if not command_id or not assistant_message_id or not student_id or not created_at:
-        raise _allowance_recoverable_failure()
-    try:
-        observed_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-    except ValueError:
-        raise _allowance_recoverable_failure() from None
-    if observed_at.tzinfo is None:
-        raise _allowance_recoverable_failure()
-    plan_id = str(
-        entitlement.get("effectivePlan")
-        or entitlement.get("effective_plan")
-        or "free_trial"
-    )
-    # The entitlement and the command both come off the table, which returns
-    # every stored number as Decimal, and the identity payload below is JSON.
-    raw_version = stored_int(
-        entitlement.get("allowanceVersion")
-        or entitlement.get("allowance_version")
-        or entitlement.get("planVersion")
-        or 1
-    )
-    if raw_version is None or raw_version < 1:
-        raise _allowance_recoverable_failure()
-    grant_id = str(
-        entitlement.get("grantId")
-        or entitlement.get("grant_id")
-        or entitlement.get("source")
-        or "student-local"
-    )
-    week = allowance_service.zurich_week(observed_at)
-    week_identity = f"{week.iso_year:04d}-W{week.iso_week:02d}"
-    payload = json.dumps(
-        {
-            "command_id": command_id,
-            "assistant_message_id": assistant_message_id,
-            "student_id": student_id,
-            "plan_id": plan_id,
-            "grant_id": grant_id,
-            "allowance_version": raw_version,
-            "week": week_identity,
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode()
-    effect_id = hashlib.sha256(
-        b"stoa.conversation.allowance-effect.v1\x00" + payload
-    ).hexdigest()
-    return {
-        "allowance_effect_id": effect_id,
-        "allowance_plan_id": plan_id,
-        "allowance_grant_id": grant_id,
-        "allowance_version": raw_version,
-        "allowance_week_identity": week_identity,
-    }
-
-
-def _conversation_allowance_coordinates(
-    command: Mapping[str, object],
-) -> tuple[str, str, int, int]:
-    effect_id = command.get("allowance_effect_id")
-    plan_id = command.get("allowance_plan_id")
-    grant_id = command.get("allowance_grant_id")
-    week_identity = command.get("allowance_week_identity")
-    # The table returns both numbers as Decimal, and everything downstream of
-    # here takes whole `int` only.
-    allowance_version = stored_int(command.get("allowance_version"))
-    generation = stored_int(command.get("account_fence_generation"))
-    if (
-        not isinstance(effect_id, str)
-        or len(effect_id) != 64
-        or any(character not in "0123456789abcdef" for character in effect_id)
-        or not isinstance(plan_id, str)
-        or not plan_id
-        or not isinstance(grant_id, str)
-        or not grant_id
-        or not isinstance(week_identity, str)
-        or not week_identity
-        or allowance_version is None
-        or allowance_version < 1
-        or generation is None
-        or generation < 1
-    ):
-        raise _allowance_recoverable_failure()
-    expected = _conversation_allowance_command_fields(
-        command,
-        {
-            "effectivePlan": plan_id,
-            "grantId": grant_id,
-            "allowanceVersion": allowance_version,
-        },
-    )
-    if (
-        expected["allowance_effect_id"] != effect_id
-        or expected["allowance_week_identity"] != week_identity
-    ):
-        raise _allowance_recoverable_failure()
-    return effect_id, plan_id, allowance_version, generation
-
-
-class _ConversationAllowanceBedrockClient:
-    """Count and reserve the durable message effect before InvokeModel."""
-
-    def __init__(self, command: Mapping[str, object]) -> None:
-        self._deadline_monotonic: float | None = None
-        self._clock: Callable[[], float] = time.monotonic
-        (
-            self.allowance_effect_id,
-            self.plan_id,
-            self.allowance_version,
-            self.account_fence_generation,
-        ) = _conversation_allowance_coordinates(command)
-        self._command = dict(command)
-        created_at = str(command.get("created_at") or "")
-        try:
-            self._observed_at = datetime.fromisoformat(
-                created_at.replace("Z", "+00:00")
-            )
-        except ValueError:
-            raise _allowance_recoverable_failure() from None
-        if self._observed_at.tzinfo is None:
-            raise _allowance_recoverable_failure()
-        self._runtime_client: object | None = None
-        self._invocation_method = "invoke_model"
-        # Records that the model is about to be called; False means the call
-        # may not be made. Set by `generate_for_command` for the leased attempt.
-        self.on_invocation: Callable[[], bool] | None = None
-
-    def mark_invocation(self) -> None:
-        """Record the call before it is made; refuse one that was not recorded.
-
-        Nothing has been paid for at this point, so the failures raised here
-        leave the command free to be generated again.
-        """
-        if self.on_invocation is None:
-            return
-        try:
-            recorded = self.on_invocation()
-        except Exception:
-            raise ai_service.AIInvocationFailure("invocation_not_recorded") from None
-        if not recorded:
-            raise ai_service.AIInvocationFailure("lease_lost")
-
-    def bind_deadline(self, deadline_monotonic: float, clock: Callable[[], float]) -> None:
-        """Take the answer's deadline from `ai_service.invoke_answer`, its one source."""
-        self._deadline_monotonic = deadline_monotonic
-        self._clock = clock
-
-    def invoke_model(self, **kwargs: object) -> object:
-        model_id = kwargs.get("modelId")
-        request_body = kwargs.get("body")
-        if not isinstance(model_id, str) or not isinstance(request_body, str):
-            raise _ConversationAllowanceFailure(
-                "provider_token_count_unavailable",
-                "Token admission is temporarily unavailable. Retry this message.",
-                "retry_same_message",
-                status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        remaining = (
-            None
-            if self._deadline_monotonic is None
-            else self._deadline_monotonic - self._clock()
-        )
-        runtime_client = self._runtime_client or ai_service.boto3.client(
-            "bedrock-runtime",
-            region_name=ai_service.settings.aws_region,
-            config=ai_service.bedrock_runtime_config(remaining),
-        )
-        self._runtime_client = runtime_client
-        try:
-            foundation_model_id = (
-                bedrock_token_count_service.foundation_model_id_for_profile(
-                    model_id
-                )
-            )
-            inference_profile_id: str | None = model_id
-        except bedrock_token_count_service.ProviderTokenCountUnavailable:
-            foundation_model_id = model_id
-            inference_profile_id = None
-        try:
-            input_tokens = bedrock_token_count_service.count_input_tokens(
-                request_body,
-                model_id=foundation_model_id,
-                inference_profile_id=inference_profile_id,
-                region=ai_service.settings.aws_region,
-                runtime_client=runtime_client,
-            )
-            parsed_body = json.loads(request_body)
-            max_output_tokens = parsed_body.get("max_tokens")
-            if type(max_output_tokens) is not int or max_output_tokens < 1:
-                raise bedrock_token_count_service.ProviderTokenCountUnavailable()
-        except (
-            bedrock_token_count_service.ProviderTokenCountUnavailable,
-            json.JSONDecodeError,
-        ):
-            raise _ConversationAllowanceFailure(
-                "provider_token_count_unavailable",
-                "Token admission is temporarily unavailable. Retry this message.",
-                "retry_same_message",
-                status.HTTP_503_SERVICE_UNAVAILABLE,
-            ) from None
-
-        reservation = allowance_service.reserve_token_allowance(
-            beneficiary_id=str(self._command["student_id"]),
-            effect_id=self.allowance_effect_id,
-            plan_id=self.plan_id,
-            allowance_version=self.allowance_version,
-            input_tokens=input_tokens,
-            max_output_tokens=max_output_tokens,
-            observed_at=self._observed_at,
-            account_fence_generation=self.account_fence_generation,
-        )
-        if reservation.disposition is allowance_repo.ReservationDisposition.LIMIT_EXCEEDED:
-            raise _ConversationAllowanceFailure(
-                "allowance_exhausted",
-                "Weekly AI token allowance is exhausted.",
-                "view_allowance",
-                status.HTTP_429_TOO_MANY_REQUESTS,
-            )
-        if reservation.disposition not in {
-            allowance_repo.ReservationDisposition.ADMITTED,
-            allowance_repo.ReservationDisposition.REPLAYED,
-        }:
-            raise _allowance_recoverable_failure()
-
-        # Counting and reserving can take the time up. Starting a generation
-        # now would only be cut off by the Lambda; fail recoverably instead.
-        # The reservation is kept on purpose: the ledger restores only after
-        # provider usage, and the student's retry of this message reuses it.
-        if (
-            self._deadline_monotonic is not None
-            and self._clock() >= self._deadline_monotonic
-        ):
-            raise ai_service.AIInvocationFailure("deadline_exceeded")
-
-        invoke = getattr(runtime_client, self._invocation_method, None)
-        if not callable(invoke):
-            raise RuntimeError("Bedrock invocation dependency unavailable")
-        self.mark_invocation()
-        return invoke(**kwargs)
-
-    def invoke_model_with_response_stream(self, **kwargs: object) -> object:
-        """Admit the same way, then stream. Admission does not depend on how
-        the answer is delivered."""
-        self._invocation_method = "invoke_model_with_response_stream"
-        try:
-            return self.invoke_model(**kwargs)
-        finally:
-            self._invocation_method = "invoke_model"
-
-
-_MESSAGE_ALLOWANCE_FIELDS = frozenset(
-    {
-        "allowance_effect_id",
-        "provider_usage_evidence_id",
-        "allowance_finalization_status",
-        "provider_request_id_digest",
-        "provider_model_id_digest",
-        "provider_input_tokens",
-        "provider_output_tokens",
-    }
-)
-
-
-def _validated_message_allowance_metadata(
-    value: object,
-) -> dict[str, object] | None:
-    if not isinstance(value, Mapping) or not _MESSAGE_ALLOWANCE_FIELDS.issubset(value):
-        return None
-    metadata = {field: value[field] for field in _MESSAGE_ALLOWANCE_FIELDS}
-    digest_fields = (
-        "allowance_effect_id",
-        "provider_request_id_digest",
-        "provider_model_id_digest",
-    )
-    if any(
-        not isinstance(metadata[field], str)
-        or len(str(metadata[field])) != 64
-        or any(
-            character not in "0123456789abcdef"
-            for character in str(metadata[field])
-        )
-        for field in digest_fields
-    ):
-        return None
-    if (
-        not isinstance(metadata["provider_usage_evidence_id"], str)
-        or not metadata["provider_usage_evidence_id"]
-        or metadata["allowance_finalization_status"] != "durable_result_boundary"
-        or stored_int(metadata["provider_input_tokens"]) is None
-        or int(metadata["provider_input_tokens"]) < 0
-        or stored_int(metadata["provider_output_tokens"]) is None
-        or int(metadata["provider_output_tokens"]) < 0
-    ):
-        return None
-    return metadata
-
-
-def _message_allowance_metadata_from_provider(
-    provider_result: ai_service.AIProviderResult[dict[str, object]],
-    *,
-    allowance_effect_id: str,
-) -> dict[str, object]:
-    if provider_result.invocation_class is not ai_service.AIInvocationClass.USER_ALLOWANCE:
-        raise _allowance_recoverable_failure()
-    return _message_allowance_metadata_from_usage(
-        provider_result.usage,
-        allowance_effect_id=allowance_effect_id,
-    )
-
-
-def _message_allowance_metadata_from_failure(
-    failure: BaseException,
-    *,
-    allowance_effect_id: str,
-) -> dict[str, object] | None:
-    """The allowance metadata for a paid reply that could not be used, if any."""
-    usage = getattr(failure, "usage", None)
-    if not isinstance(failure, ai_service.AIInvocationFailure) or usage is None:
-        return None
-    return _message_allowance_metadata_from_usage(
-        usage,
-        allowance_effect_id=allowance_effect_id,
-    )
-
-
-def _message_allowance_metadata_from_usage(
-    usage: ProviderUsageEvidence,
-    *,
-    allowance_effect_id: str,
-) -> dict[str, object]:
-    metadata = {
-        "allowance_effect_id": allowance_effect_id,
-        "provider_usage_evidence_id": usage.evidence_id,
-        "allowance_finalization_status": "durable_result_boundary",
-        "provider_request_id_digest": usage.provider_request_id_digest,
-        "provider_model_id_digest": usage.model_id_digest,
-        "provider_input_tokens": usage.input_tokens,
-        "provider_output_tokens": usage.output_tokens,
-    }
-    validated = _validated_message_allowance_metadata(metadata)
-    if validated is None:
-        raise _allowance_recoverable_failure()
-    return validated
-
-
-def _observe_message_provider_usage(
-    *,
-    beneficiary_id: str,
-    metadata: object,
-) -> bool:
-    validated = _validated_message_allowance_metadata(metadata)
-    if validated is None:
-        return metadata is None
-    # The counts go on to an allowance service that takes whole `int` only.
-    input_tokens = stored_int(validated["provider_input_tokens"])
-    output_tokens = stored_int(validated["provider_output_tokens"])
-    if input_tokens is None or output_tokens is None:
-        return False
-    observed = allowance_service.record_provider_usage(
-        beneficiary_id=beneficiary_id,
-        effect_id=str(validated["allowance_effect_id"]),
-        provider_request_id=str(validated["provider_request_id_digest"]),
-        model_id=str(validated["provider_model_id_digest"]),
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-    )
-    return (
-        observed.disposition
-        in {
-            allowance_repo.ProviderUsageDisposition.RECORDED,
-            allowance_repo.ProviderUsageDisposition.REPLAYED,
-        }
-        and observed.evidence is not None
-    )
-
-
-def _finalize_message_allowance(
-    *,
-    beneficiary_id: str,
-    metadata: object,
-) -> bool:
-    validated = _validated_message_allowance_metadata(metadata)
-    if validated is None:
-        return metadata is None
-    finalized = allowance_service.finalize_token_allowance(
-        beneficiary_id=beneficiary_id,
-        effect_id=str(validated["allowance_effect_id"]),
-        technical_validation_passed=True,
-        safety_check_passed=True,
-        durable_result_stored=True,
-        stable_replay_readable=True,
-    )
-    return (
-        finalized.disposition
-        in {
-            allowance_repo.FinalizationDisposition.FINALIZED,
-            allowance_repo.FinalizationDisposition.REPLAYED,
-        }
-        and finalized.finalization is not None
-    )
-
-
-def _restore_message_allowance(
-    *,
-    beneficiary_id: str,
-    metadata: object,
-) -> bool:
-    validated = _validated_message_allowance_metadata(metadata)
-    if validated is None:
-        return metadata is None
-    restored = allowance_service.restore_user_allowance(
-        beneficiary_id=beneficiary_id,
-        effect_id=str(validated["allowance_effect_id"]),
-        technical_validation_passed=False,
-        safety_check_passed=True,
-        durable_result_stored=False,
-        stable_replay_readable=False,
-    )
-    return (
-        restored.disposition
-        in {
-            allowance_repo.FinalizationDisposition.RESTORED,
-            allowance_repo.FinalizationDisposition.REPLAYED,
-        }
-        and restored.finalization is not None
-    )
 
 
 def _message_result_json(
     response: SendMessageResponse,
-    metadata: object,
+    evidence: UsageEvidence | None,
 ) -> str:
     payload = response.model_dump(mode="json", by_alias=True)
-    validated = _validated_message_allowance_metadata(metadata)
-    if validated is not None:
-        payload["_allowance"] = validated
+    if evidence is not None:
+        payload["_allowance"] = evidence.to_json()
     return json.dumps(
         payload,
         ensure_ascii=False,
@@ -576,9 +113,9 @@ def _message_result_json(
     )
 
 
-def _message_allowance_metadata_from_command(
+def _usage_evidence_from_command(
     command: Mapping[str, object],
-) -> dict[str, object] | None:
+) -> UsageEvidence | None:
     result_json = command.get("result_json")
     if not isinstance(result_json, str) or not result_json:
         return None
@@ -588,10 +125,7 @@ def _message_allowance_metadata_from_command(
         return None
     if not isinstance(payload, Mapping):
         return None
-    return _validated_message_allowance_metadata(payload.get("_allowance"))
-
-
-# ── end of the AI message allowance block (#206) ──────────────────────────────
+    return UsageEvidence.from_json(payload.get("_allowance"))
 
 
 GENERATION_PROGRESS_TTL_SECONDS = 3600
@@ -810,24 +344,9 @@ def _result_response(
     response = _completed_command_response(command)
     if response is None:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-    metadata = _message_allowance_metadata_from_command(command)
-    if metadata is not None:
-        owner_id = command.get("owner_id")
-        command_effect_id = command.get("allowance_effect_id")
-        if (
-            not isinstance(owner_id, str)
-            or not owner_id
-            or (
-                command_effect_id is not None
-                and metadata["allowance_effect_id"] != command_effect_id
-            )
-        ):
-            raise _allowance_recoverable_failure()
-        if not _finalize_message_allowance(
-            beneficiary_id=owner_id,
-            metadata=metadata,
-        ):
-            raise _allowance_recoverable_failure()
+    evidence = _usage_evidence_from_command(command)
+    if evidence is not None:
+        _admission.meter(command).finalize(evidence)
     return response
 
 
@@ -1098,8 +617,8 @@ def load_committed_message(command: dict) -> CommittedMessage:
 
 def _stored_provider_result(
     command: Mapping[str, object], attempt: int
-) -> tuple[ask_answer.AskAnswer, dict[str, object] | None] | None:
-    """The answer a lost attempt kept on the command, and its allowance, if it kept one."""
+) -> tuple[ask_answer.AskAnswer, UsageEvidence | None] | None:
+    """The answer a lost attempt kept on the command, and its usage, if it kept any."""
     raw = command.get("provider_result_json")
     if stored_int(command.get("provider_result_attempt")) != attempt or not isinstance(raw, str):
         return None
@@ -1112,11 +631,11 @@ def _stored_provider_result(
     answer = ask_answer.AskAnswer.from_json(payload.get("answer"))
     if answer is None:
         return None
-    metadata = payload.get("allowance")
-    validated = _validated_message_allowance_metadata(metadata)
-    if metadata is not None and validated is None:
+    stored = payload.get("allowance")
+    evidence = UsageEvidence.from_json(stored)
+    if stored is not None and evidence is None:
         return None
-    return answer, validated
+    return answer, evidence
 
 
 def _record_generation_failure(
@@ -1357,7 +876,7 @@ def commit_message_command(
                 )
             )
             command.update(
-                _conversation_allowance_command_fields(command, entitlement)
+                _admission.allowance_identity(command, entitlement)
             )
             claim_result = _coerce_command_result(
                 _conversation_repository_call(
@@ -1504,16 +1023,7 @@ def commit_message_command(
                 },
             )
 
-    if not all(
-        field in command
-        for field in (
-            "allowance_effect_id",
-            "allowance_plan_id",
-            "allowance_grant_id",
-            "allowance_version",
-            "allowance_week_identity",
-        )
-    ):
+    if not all(field in command for field in _admission.ALLOWANCE_IDENTITY_FIELDS):
         entitlement = _conversation_repository_call(
             lambda: _conversation_entitlement_snapshot(
                 student_id,
@@ -1521,7 +1031,7 @@ def commit_message_command(
             )
         )
         command.update(
-            _conversation_allowance_command_fields(command, entitlement)
+            _admission.allowance_identity(command, entitlement)
         )
 
     if not isinstance(command.get("generation_context"), Mapping):
@@ -1692,10 +1202,11 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             )
             raise AttachmentDecisionError(AskQuestionErrorCode.MESSAGE_FAILED)
 
-    allowance_metadata: dict[str, object] | None = None
+    allowance = _admission.meter(command)
+    evidence: UsageEvidence | None = None
     answer: ask_answer.AskAnswer
     if recovered is not None:
-        answer, allowance_metadata = recovered
+        answer, evidence = recovered
     else:
         active_conversation_generation(student_id, table)
         attachment_context = ""
@@ -1735,16 +1246,17 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             reserve_seconds=_AI_PERSIST_RESERVE_SECONDS,
         )
         active_conversation_generation(student_id, table)
-        allowance_client = _ConversationAllowanceBedrockClient(command)
-        allowance_client.on_invocation = lambda: _conversation_repository_call(
-            lambda: ask_question_store.record_provider_invocation(
-                conversation_id=conv_id,
-                idempotency_key=idempotency_key,
-                owner_id=student_id,
-                lease_owner=lease_owner,
-                lease_attempt=lease_attempt_number,
-                now_epoch=int(datetime.now(timezone.utc).timestamp()),
-                table=table,
+        metered = allowance.model(
+            on_invocation=lambda: _conversation_repository_call(
+                lambda: ask_question_store.record_provider_invocation(
+                    conversation_id=conv_id,
+                    idempotency_key=idempotency_key,
+                    owner_id=student_id,
+                    lease_owner=lease_owner,
+                    lease_attempt=lease_attempt_number,
+                    now_epoch=int(datetime.now(timezone.utc).timestamp()),
+                    table=table,
+                )
             )
         )
         provider_answered = False
@@ -1768,10 +1280,10 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                     memory_context=memory_context,
                 ),
                 ask_answer.ModelCall(
-                    model=allowance_client,
+                    model=metered,
                     deadline_monotonic=ai_deadline,
                     correlation_id=command_id,
-                    effect_id=allowance_client.allowance_effect_id,
+                    effect_id=metered.effect_id,
                     on_step=_publish_generation_step(
                         conv_id, student_id, command_id=command_id, attempt=lease_result.attempt
                     ),
@@ -1779,42 +1291,33 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             )
             provider_answered = True
             assert answer.provider is not None
-            allowance_metadata = _message_allowance_metadata_from_provider(
-                answer.provider,
-                allowance_effect_id=allowance_client.allowance_effect_id,
+            evidence = UsageEvidence.from_provider(
+                answer.provider, effect_id=metered.effect_id
             )
-        except _ConversationAllowanceFailure as failure:
+        except AdmissionError as failure:
             # Refused at counting, admission or the allowance itself, before the
             # model was paid for, the same message may be sent again. Refused over
             # the evidence of an answer that did come back, it may not.
-            record_failure(failure.code, retryable=not provider_answered)
+            record_failure(failure.code.value, retryable=not provider_answered)
             raise
         except Exception as exc:
-            if allowance_metadata is None:
+            if evidence is None:
                 # A reply that was cut off or garbled was still paid for; its usage
                 # rides on the failure so the reservation can be released here.
-                allowance_metadata = _message_allowance_metadata_from_failure(
-                    exc,
-                    allowance_effect_id=allowance_client.allowance_effect_id,
-                )
-            if allowance_metadata is not None:
-                observed = _observe_message_provider_usage(
-                    beneficiary_id=student_id,
-                    metadata=allowance_metadata,
-                )
-                restored = observed and _restore_message_allowance(
-                    beneficiary_id=student_id,
-                    metadata=allowance_metadata,
-                )
-                if not restored:
-                    raise _allowance_recoverable_failure() from None
+                evidence = UsageEvidence.from_failure(exc, effect_id=metered.effect_id)
+            if evidence is not None:
+                try:
+                    allowance.observe(evidence)
+                    allowance.restore(evidence)
+                except AdmissionError as failure:
+                    raise failure from None
             # A reply that was paid for is a known result: generating the same
             # command again would call the model for an effect already settled.
             record_failure(
                 exc.category
                 if isinstance(exc, ai_service.AIInvocationFailure)
                 else "provider_error",
-                retryable=allowance_metadata is None,
+                retryable=evidence is None,
             )
             emit_private_event(
                 "conversation_ai_failed",
@@ -1838,7 +1341,10 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 lease_attempt=lease_attempt_number,
                 now_epoch=int(datetime.now(timezone.utc).timestamp()),
                 result_json=json.dumps(
-                    {"answer": answer.to_json(), "allowance": allowance_metadata},
+                    {
+                        "answer": answer.to_json(),
+                        "allowance": None if evidence is None else evidence.to_json(),
+                    },
                     ensure_ascii=False,
                     separators=(",", ":"),
                 ),
@@ -1846,11 +1352,8 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             )
         except Exception:
             logger.warning("provider_result_not_kept", exc_info=True)
-    if allowance_metadata is not None and not _observe_message_provider_usage(
-        beneficiary_id=student_id,
-        metadata=allowance_metadata,
-    ):
-        raise _allowance_recoverable_failure()
+    if evidence is not None:
+        allowance.observe(evidence)
 
     active_conversation_generation(student_id, table)
     completed_epoch = int(datetime.now(timezone.utc).timestamp())
@@ -1910,7 +1413,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
         created_at=assistant_created_at,
         structured=structured_payload(answer.structured),
         target_unit_id=answer.target_unit_id,
-        allowance=allowance_metadata,
+        allowance=None if evidence is None else evidence.to_json(),
     )
     # What the answer counts on the knowledge-base gap list (#142) and records
     # as asked knowledge points (#143), once per question; which those are is
@@ -1936,7 +1439,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                 lease_attempt=lease_attempt,
                 completed_epoch=completed_epoch,
                 assistant_message_put=assistant_message_put,
-                result_json=_message_result_json(result, allowance_metadata),
+                result_json=_message_result_json(result, evidence),
                 completed_at=assistant_created_at,
                 account_fence_generation=account_fence_generation,
                 knowledge_gap_updates=knowledge_gaps,
@@ -1950,10 +1453,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
             stored = _result_response(completion)
             assert stored is not None
             return stored
-        if not _finalize_message_allowance(
-            beneficiary_id=student_id,
-            metadata=allowance_metadata,
-        ):
-            raise _allowance_recoverable_failure()
+        if evidence is not None:
+            allowance.finalize(evidence)
         return result
     raise AttachmentDecisionError(_command_error_code(completion))

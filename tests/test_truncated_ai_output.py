@@ -7,11 +7,6 @@ that the failure still carries the provider's usage evidence so the student's
 reserved allowance can be released.
 """
 
-# #206 改写: the tests that call `_answering._ConversationAllowanceBedrockClient`,
-# `_message_allowance_metadata_from_failure`, `_observe_message_provider_usage`
-# and `_restore_message_allowance` test the allowance internals directly, and
-# are rewritten when "AI 消息准入" (#206) replaces that block.
-
 from __future__ import annotations
 
 import json
@@ -32,7 +27,8 @@ from fakes.ask_question import (
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.services import ai_service, ask_question
-from stoa.services.ask_question import _answering
+from stoa.services.ask_question import _admission
+from stoa.services.ask_question._admission import UsageEvidence
 from fakes.ask_question import AtomicAllowanceTable
 
 
@@ -58,12 +54,12 @@ def _invoke(
     _patch_allowance_table(monkeypatch, table)
     monkeypatch.setattr(ai_service.boto3, "client", lambda *_a, **_k: provider)
     command = _command()
-    client = _answering._ConversationAllowanceBedrockClient(command)
+    client = _admission.meter(command).model()
     kwargs: dict[str, Any] = {
         "system_prompt": "Answer the question.",
         "messages": [{"role": "user", "content": "Wie kürze ich Brüche?"}],
         "input_size": 21,
-        "effect_id": client.allowance_effect_id,
+        "effect_id": client.effect_id,
         "client": client,
         "observed_at": NOW,
     }
@@ -183,16 +179,13 @@ def test_the_evidence_on_a_failure_lets_the_reservation_be_released(
     table, command, outcome = _invoke(
         monkeypatch, text=_TRUNCATED, stop_reason="max_tokens", streamed=False
     )
-    metadata = _answering._message_allowance_metadata_from_failure(
-        outcome, allowance_effect_id=str(command["allowance_effect_id"])
+    evidence = UsageEvidence.from_failure(
+        outcome, effect_id=str(command["allowance_effect_id"])
     )
-    assert metadata is not None
-    assert _answering._observe_message_provider_usage(
-        beneficiary_id="student-1", metadata=metadata
-    )
-    assert _answering._restore_message_allowance(
-        beneficiary_id="student-1", metadata=metadata
-    )
+    assert evidence is not None
+    allowance = _admission.meter(command)
+    allowance.observe(evidence)
+    allowance.restore(evidence)
 
     counter = table.counter()
     assert counter["reserved_input_tokens"] == 0
@@ -201,16 +194,6 @@ def test_the_evidence_on_a_failure_lets_the_reservation_be_released(
     assert counter["provider_cost_input_tokens"] == 70
     assert counter["provider_cost_output_tokens"] == 2048
     assert len(table.evidence()) == 1
-
-
-def test_a_failure_without_evidence_gives_no_metadata() -> None:
-    failure = ai_service.AIInvocationFailure("deadline_exceeded")
-    assert (
-        _answering._message_allowance_metadata_from_failure(
-            failure, allowance_effect_id="a" * 64
-        )
-        is None
-    )
 
 
 def test_a_truncated_streamed_answer_is_not_sent_and_its_reservation_is_released(

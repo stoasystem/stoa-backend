@@ -1349,7 +1349,10 @@
           "message_daily_limit",
           "message_failed",
           "message_command_expired",
-          "message_command_not_found"
+          "message_command_not_found",
+          "allowance_exhausted",
+          "provider_token_count_unavailable",
+          "allowance_unavailable"
         ],
         "title": "AskQuestionErrorCode",
         "type": "string"

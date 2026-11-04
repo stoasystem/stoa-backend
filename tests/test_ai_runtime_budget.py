@@ -8,10 +8,6 @@ already used the time up. This is the interim fix; answers that need more than
 the Lambda's lifetime are E11's.
 """
 
-# #206 改写: the allowance-client tests here build
-# `_answering._ConversationAllowanceBedrockClient` and read the deadline
-# constants directly; they are rewritten when "AI 消息准入" (#206) lands.
-
 from __future__ import annotations
 
 import asyncio
@@ -29,7 +25,7 @@ from fakes.ask_question import (
 )
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from stoa.services import ai_service, runtime_budget_service
-from stoa.services.ask_question import _answering
+from stoa.services.ask_question import _admission, _answering
 from fakes.ask_question import AtomicAllowanceTable
 
 
@@ -165,7 +161,7 @@ def test_the_allowance_wrapper_uses_the_same_transport_limits(
     built = _factory(monkeypatch, provider)
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
     client = (
-        _answering._ConversationAllowanceBedrockClient(_command())
+        _admission.meter(_command()).model()
         if through_allowance
         else None
     )
@@ -192,7 +188,7 @@ def test_no_generation_starts_once_admission_has_used_up_the_time(
     table = AtomicAllowanceTable()
     _patch_allowance_table(monkeypatch, table)
     command = _command()
-    client = _answering._ConversationAllowanceBedrockClient(command)
+    client = _admission.meter(command).model()
 
     with pytest.raises(ai_service.AIInvocationFailure) as failure:
         _answer(client, clock, deadline=20.0)
@@ -206,7 +202,7 @@ def test_no_generation_starts_once_admission_has_used_up_the_time(
     clock.now = 0.0
     retry_provider = _Provider(clock)
     _factory(monkeypatch, retry_provider)
-    retry = _answering._ConversationAllowanceBedrockClient(command)
+    retry = _admission.meter(command).model()
     assert _answer(retry, clock, deadline=20.0).content == ANSWER
     assert len(retry_provider.invocations) == 1
     effects = [i for i in table.items.values() if i.get("entity_type") == "allowance_effect"]
@@ -233,7 +229,7 @@ def test_an_answer_that_takes_ten_seconds_still_succeeds(
     provider = _Provider(clock, count_at=1.0, answer_at=10.0)
     _factory(monkeypatch, provider)
     _patch_allowance_table(monkeypatch, AtomicAllowanceTable())
-    client = _answering._ConversationAllowanceBedrockClient(_command())
+    client = _admission.meter(_command()).model()
 
     assert _answer(client, clock, deadline=20.0).content == ANSWER
     assert provider.invocations == [1.0]

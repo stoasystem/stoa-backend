@@ -47,9 +47,6 @@ Answered = SendMessageResponse
 Accepted = MessageAcceptedResponse
 """已受理: the message is stored and the worker answers it (202)."""
 
-AllowanceFailure = _answering._ConversationAllowanceFailure
-"""Raised by `submit` when token admission refuses the answer (#206 replaces it)."""
-
 SweepSummary = _sweep.SweepSummary
 """What one `sweep` run did, counted by outcome."""
 
@@ -77,7 +74,8 @@ def submit(
     conversation created in the same request, under that account fence
     generation: no command can precede it, so none is read.
 
-    Raises `AttachmentDecisionError` and `AllowanceFailure`; the route maps them.
+    Raises `AttachmentDecisionError` (the weekly allowance's refusals among
+    them, as `_admission.AdmissionError`); the route maps it.
     """
     # A record the conversation cannot be read back from is refused before
     # anything is read or written, as reading it would be.
@@ -173,9 +171,6 @@ def answer(conversation_id: str, idempotency_key: str) -> str:
         if error.code is AskQuestionErrorCode.MESSAGE_IN_PROGRESS:
             return "held"
         logger.warning("conversation_generation_failed code=%s", error.code.value)
-        return "failed"
-    except _answering._ConversationAllowanceFailure as failure:
-        logger.warning("conversation_generation_failed code=%s", failure.code)
         return "failed"
     return "completed"
 

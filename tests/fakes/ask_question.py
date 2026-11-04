@@ -49,7 +49,7 @@ from stoa.services import (
     locale_service,
     star_map_candidates,
 )
-from stoa.services.ask_question import _answering, _store, dispatch
+from stoa.services.ask_question import _admission, _answering, _store, dispatch
 from stoa.services.ask_question.models import SendMessageRequest, message_request_fingerprint
 from stoa.services.document_extraction_service import (
     DocumentExtractionFailure,
@@ -159,26 +159,49 @@ def _patch_allowance_table(
     """Have the token allowance the answer is admitted by read and write `table`."""
     reserve, observe, finalize, restore = _ALLOWANCE
     monkeypatch.setattr(
-        _answering.allowance_service,
+        allowance_service,
         "reserve_token_allowance",
         lambda **kwargs: reserve(**kwargs, table=table),
     )
     monkeypatch.setattr(
-        _answering.allowance_service,
+        allowance_service,
         "record_provider_usage",
         lambda **kwargs: observe(**kwargs, table=table),
     )
     monkeypatch.setattr(
-        _answering.allowance_service,
+        allowance_service,
         "finalize_token_allowance",
         lambda **kwargs: finalize(**kwargs, table=table),
     )
     monkeypatch.setattr(
-        _answering.allowance_service,
+        allowance_service,
         "restore_user_allowance",
         lambda **kwargs: restore(**kwargs, table=table),
     )
 
+
+
+def charge_failures_as_paid(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Have every failed answer count as a reply the provider charged for.
+
+    Its evidence is observed and the reservation restored without touching the
+    ledger, as `_admission`'s meter does with a real one.
+    """
+    paid = _admission.UsageEvidence(
+        effect_id="0" * 64,
+        evidence_id="paid-failure",
+        request_id_digest="1" * 64,
+        model_id_digest="2" * 64,
+        input_tokens=1,
+        output_tokens=1,
+    )
+    monkeypatch.setattr(
+        _admission.UsageEvidence,
+        "from_failure",
+        classmethod(lambda _cls, *_a, **_k: paid),
+    )
+    monkeypatch.setattr(_admission.Meter, "observe", lambda _self, _evidence: None)
+    monkeypatch.setattr(_admission.Meter, "restore", lambda _self, _evidence: None)
 
 @pytest.fixture
 def model(monkeypatch: pytest.MonkeyPatch) -> FakeBedrock:
@@ -470,7 +493,7 @@ def _private_message(sk: str = "MSG#student", **overrides: Any) -> dict[str, Any
     return item
 
 
-# ── A provider answering with fixed text, for the allowance tests (#206 改写) ──
+# ── A provider answering with fixed text, for the allowance tests ───────────
 
 
 class _ResponseBody:
@@ -497,7 +520,7 @@ def _command() -> dict[str, object]:
         "created_at": NOW.isoformat(),
     }
     command.update(
-        _answering._conversation_allowance_command_fields(
+        _admission.allowance_identity(
             command,
             {
                 "effectivePlan": "free_trial",

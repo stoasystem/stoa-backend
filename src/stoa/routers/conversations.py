@@ -117,22 +117,6 @@ def _conversation_record(value: object) -> Mapping[str, object]:
     return value
 
 
-def _raise_conversation_allowance_failure(
-    error: ask_question.AllowanceFailure,
-    *,
-    correlation_id: str,
-) -> None:
-    raise HTTPException(
-        status_code=error.http_status,
-        detail={
-            "code": error.code,
-            "message": error.message,
-            "action": error.action,
-        },
-        headers={"X-Correlation-ID": correlation_id},
-    ) from error
-
-
 # ── DynamoDB helpers ───────────────────────────────────────────────────────────
 
 def _now() -> str:
@@ -588,17 +572,10 @@ async def create_conversation(
                 practice_context=practice_context,
                 new_conversation_generation=generation,
             )
-        except ask_question.AllowanceFailure as error:
-            try:
-                _raise_conversation_allowance_failure(
-                    error,
-                    correlation_id=correlation_id,
-                )
-            except HTTPException as refusal:
-                raise _naming_the_conversation(refusal, conv_id) from error
         except AttachmentDecisionError as error:
-            # The daily message limit, among others: the same conversion the
-            # message routes make, then the conversation's id.
+            # The daily message limit and the weekly allowance, among others:
+            # the same conversion the message routes make, then the
+            # conversation's id.
             try:
                 _raise_attachment(error, correlation_id)
             except HTTPException as refusal:
@@ -724,11 +701,6 @@ async def send_message(
             student_id=student_id,
             practice_context=message_command["practice_context"],
         )
-    except ask_question.AllowanceFailure as error:
-        _raise_conversation_allowance_failure(
-            error,
-            correlation_id=correlation_id,
-        )
     except AttachmentDecisionError as error:
         _raise_attachment(error, correlation_id)
     _adopt_question_as_title(conv_id, conv, body.content)
@@ -781,11 +753,6 @@ async def stream_message(
             conversation_id=conv_id,
             student_id=student_id,
             practice_context=message_command["practice_context"],
-        )
-    except ask_question.AllowanceFailure as error:
-        _raise_conversation_allowance_failure(
-            error,
-            correlation_id=correlation_id,
         )
     except AttachmentDecisionError as error:
         _raise_attachment(error, correlation_id)

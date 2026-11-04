@@ -21,6 +21,10 @@ class AskQuestionErrorCode(StrEnum):
     MESSAGE_FAILED = "message_failed"
     MESSAGE_COMMAND_EXPIRED = "message_command_expired"
     MESSAGE_COMMAND_NOT_FOUND = "message_command_not_found"
+    # The weekly AI allowance (准入, `_admission`).
+    ALLOWANCE_EXHAUSTED = "allowance_exhausted"
+    PROVIDER_TOKEN_COUNT_UNAVAILABLE = "provider_token_count_unavailable"
+    ALLOWANCE_UNAVAILABLE = "allowance_unavailable"
 
     @property
     def contract(self) -> AttachmentErrorContract:
@@ -59,6 +63,24 @@ ASK_QUESTION_ERROR_REGISTRY: dict[AskQuestionErrorCode, AttachmentErrorContract]
     AskQuestionErrorCode.MESSAGE_COMMAND_NOT_FOUND: AttachmentErrorContract(
         409,
         "This message request is unavailable. Send it again.",
+        AttachmentClientAction.RETRY_LATER,
+    ),
+    AskQuestionErrorCode.ALLOWANCE_EXHAUSTED: AttachmentErrorContract(
+        429,
+        "Weekly AI token allowance is exhausted.",
+        AttachmentClientAction.RETRY_LATER,
+    ),
+    # Nothing was paid for: the same message may be sent again.
+    AskQuestionErrorCode.PROVIDER_TOKEN_COUNT_UNAVAILABLE: AttachmentErrorContract(
+        503,
+        "Token admission is temporarily unavailable. Retry this message.",
+        AttachmentClientAction.RETRY_LATER,
+    ),
+    # The allowance could not be read or settled. The answer, if there is one,
+    # is kept: sending the same message again returns it once settling succeeds.
+    AskQuestionErrorCode.ALLOWANCE_UNAVAILABLE: AttachmentErrorContract(
+        503,
+        "This answer is safely recoverable while token accounting finishes.",
         AttachmentClientAction.RETRY_LATER,
     ),
 }

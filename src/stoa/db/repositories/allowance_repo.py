@@ -172,7 +172,7 @@ def _payload_digest(kind: str, values: Mapping[str, object]) -> str:
 
 
 def _week_identity(week: ZurichWeek) -> str:
-    return f"{week.iso_year:04d}-W{week.iso_week:02d}"
+    return week.identity
 
 
 def _partition(beneficiary_id: str) -> str:
