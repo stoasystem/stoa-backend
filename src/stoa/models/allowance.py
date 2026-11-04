@@ -74,7 +74,7 @@ class ZurichWeek(_AllowanceModel):
         return f"{self.iso_year:04d}-W{self.iso_week:02d}"
 
 
-_LOCKED_BUDGETS: dict[BillingPlanId, tuple[int, int, int, TeacherSupportScope]] = {
+LOCKED_BUDGETS: dict[BillingPlanId, tuple[int, int, int, TeacherSupportScope]] = {
     BillingPlanId.FREE_TRIAL: (50_000, 10_000, 0, TeacherSupportScope.NONE),
     BillingPlanId.STUDENT: (500_000, 100_000, 0, TeacherSupportScope.NONE),
     BillingPlanId.TEACHER_SUPPORTED: (
@@ -108,7 +108,7 @@ class PlanAllowanceBudget(_AllowanceModel):
             self.teacher_support_cases,
             self.teacher_support_scope,
         )
-        if actual != _LOCKED_BUDGETS[self.plan_id]:
+        if actual != LOCKED_BUDGETS[self.plan_id]:
             raise ValueError("allowance budget does not match the canonical plan")
         return self
 

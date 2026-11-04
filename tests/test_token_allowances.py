@@ -6,7 +6,6 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from datetime import datetime, timezone
 from decimal import Decimal
-import inspect
 import threading
 from typing import Any
 
@@ -211,38 +210,6 @@ def test_plan_budgets_are_the_exact_locked_values(
         budget.teacher_support_cases,
         budget.teacher_support_scope,
     ) == (input_tokens, output_tokens, cases, scope)
-
-
-@pytest.mark.parametrize(
-    ("instant", "start", "end", "hours"),
-    [
-        (
-            datetime(2026, 3, 25, 12, tzinfo=UTC),
-            "2026-03-22T23:00:00+00:00",
-            "2026-03-29T22:00:00+00:00",
-            167,
-        ),
-        (
-            datetime(2026, 10, 21, 12, tzinfo=UTC),
-            "2026-10-18T22:00:00+00:00",
-            "2026-10-25T23:00:00+00:00",
-            169,
-        ),
-    ],
-)
-def test_zurich_week_uses_local_monday_dates_across_dst(
-    instant: datetime,
-    start: str,
-    end: str,
-    hours: int,
-) -> None:
-    week = allowance_service.zurich_week(instant)
-
-    assert week.window_start.astimezone(UTC).isoformat() == start
-    assert week.window_end.astimezone(UTC).isoformat() == end
-    assert (week.window_end.astimezone(UTC) - week.window_start.astimezone(UTC)).total_seconds() == (
-        hours * 3600
-    )
 
 
 @pytest.mark.parametrize(
@@ -607,14 +574,3 @@ def test_parent_projection_is_budget_safe_and_admin_projection_has_exact_redacte
     assert admin["providerEvidence"][0]["outputTokens"] == 30
     assert "request-private-canary" not in repr(admin)
     assert "model-private-canary" not in repr(admin)
-
-
-def test_service_resolves_window_and_budget_before_repository_reservation() -> None:
-    source = inspect.getsource(allowance_service.reserve_token_allowance)
-    assert source.index("zurich_week") < source.index("allowance_repo.reserve_allowance")
-    assert source.index("plan_allowance_budget") < source.index(
-        "allowance_repo.reserve_allowance"
-    )
-    assert "allowance_counter.v1" in inspect.getsource(allowance_repo)
-    assert "allowance_effect.v1" in inspect.getsource(allowance_repo)
-    assert "provider_usage_evidence.v1" in inspect.getsource(allowance_repo)

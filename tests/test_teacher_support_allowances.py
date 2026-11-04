@@ -570,7 +570,7 @@ def test_the_chat_escalation_dispatches_to_a_teacher() -> None:
 def test_service_reuses_allowance_week_budget_and_conditional_effect_counter() -> None:
     source = inspect.getsource(teacher_support_allowance_service)
 
-    assert "allowance_service.zurich_week" in source
+    assert "weekly_counter.zurich_week" in source
     assert "allowance_service.plan_allowance_budget" in source
     assert "attribute_not_exists(PK) AND attribute_not_exists(SK)" in source
     assert "state_version=:expected_state_version" in source
