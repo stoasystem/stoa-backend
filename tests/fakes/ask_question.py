@@ -32,10 +32,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
+from fakes.admission import seed_plan
 from fakes.bedrock import FakeBedrock
 from fakes.dynamodb import FakeTable
 from fakes.learning_session import patch_session_table, seed_conversation
-from stoa.db.repositories import attachment_repo
+from stoa.db.repositories import allowance_repo, attachment_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
@@ -109,12 +110,10 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
     monkeypatch.setattr(
         conversations.account_deletion_repo, "get_table", lambda: table, raising=False
     )
-    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 50)
-    monkeypatch.setattr(
-        _answering.entitlement_service,
-        "resolve_student_entitlement",
-        lambda *_a, **_k: {"effectivePlan": "free_trial", "allowanceVersion": 1},
-    )
+    seed_plan(monkeypatch)
+    # The week a question is admitted against: on this table, until a test
+    # points the allowance at its own.
+    monkeypatch.setattr(allowance_repo, "get_table", lambda table=table: table)
     monkeypatch.setattr(conversations.user_repo, "get_user", lambda *_a, **_k: {})
     # Answered in the request unless a test hands the answer to the worker.
     monkeypatch.setattr(dispatch.settings, "conversation_generation_function_name", "")
@@ -149,6 +148,7 @@ _ALLOWANCE = (
     allowance_service.record_provider_usage,
     allowance_service.finalize_token_allowance,
     allowance_service.restore_user_allowance,
+    allowance_service.week_exhausted,
 )
 
 
@@ -157,7 +157,7 @@ def _patch_allowance_table(
     table: AtomicAllowanceTable,
 ) -> None:
     """Have the token allowance the answer is admitted by read and write `table`."""
-    reserve, observe, finalize, restore = _ALLOWANCE
+    reserve, observe, finalize, restore, exhausted = _ALLOWANCE
     monkeypatch.setattr(
         allowance_service,
         "reserve_token_allowance",
@@ -177,6 +177,11 @@ def _patch_allowance_table(
         allowance_service,
         "restore_user_allowance",
         lambda **kwargs: restore(**kwargs, table=table),
+    )
+    monkeypatch.setattr(
+        allowance_service,
+        "week_exhausted",
+        lambda **kwargs: exhausted(**kwargs, table=table),
     )
 
 

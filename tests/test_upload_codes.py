@@ -55,6 +55,7 @@ from stoa.services.ask_question import _answering
 from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import attachment_service, rate_limit, upload_code_service
+from fakes.admission import seed_plan
 from fakes.ask_question import AtomicAllowanceTable, _patch_allowance_table
 from fakes.bedrock import FakeBedrock
 from fakes.dynamodb import FakeTable
@@ -151,13 +152,7 @@ class _Api:
             "client",
             lambda name, *_a, **_k: self.model if name == "bedrock-runtime" else self.s3,
         )
-        monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 50)
-        monkeypatch.setattr(_answering, "_attachment_plan_for_student", lambda *_: "free_trial")
-        monkeypatch.setattr(
-            _answering.entitlement_service,
-            "resolve_student_entitlement",
-            lambda *_a, **_k: {"effectivePlan": "free_trial", "allowanceVersion": 1},
-        )
+        seed_plan(monkeypatch)
         self.profiles = {
             student: {"user_id": student, "role": "student", "account_status": "active"}
             for student in (STUDENT, OTHER_STUDENT)

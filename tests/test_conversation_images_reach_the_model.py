@@ -55,8 +55,8 @@ def _image(fmt: str, size: tuple[int, int] = (32, 24)) -> bytes:
 
 
 @pytest.fixture(autouse=True)
-def _plan(monkeypatch: pytest.MonkeyPatch, stub_memory_summary) -> None:
-    monkeypatch.setattr(_answering, "_attachment_plan_for_student", lambda *_: "free_trial")
+def _no_memory_personalisation(stub_memory_summary) -> None:
+    """The prompt enrichment reads three tables; keep it out."""
 
 
 @pytest.fixture(autouse=True)

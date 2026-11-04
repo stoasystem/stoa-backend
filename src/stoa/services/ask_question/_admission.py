@@ -1,4 +1,10 @@
-"""准入: what one question's answer is charged to the student's weekly allowance.
+"""准入: whether a question may be sent, and what its answer is charged.
+
+A question is **admitted** once, when it is first submitted (`admit`): its
+eligibility is read once, which gives today's message limit, the plan its
+attachments are counted under and the allowance identity stored with the
+command; and a week with nothing left refuses it before anything is stored.
+Replays and the worker read only what the command stored.
 
 A question is charged through its **meter** (`meter(command)`), built from the
 message command alone. The meter's `model` is what the answer is asked of in
@@ -15,8 +21,6 @@ anything other than success raises `AdmissionError`, carrying the code the
 student is sent. The order of those calls is the caller's, unchanged from when
 this lived in `_answering` (#218).
 
-The first-submission half — reading eligibility once, checking the week's
-balance — is #241.
 """
 
 from __future__ import annotations
@@ -28,11 +32,17 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
+from stoa.config import settings
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import allowance_repo
 from stoa.models.allowance import ProviderUsageEvidence
 from stoa.security.attachment_errors import AttachmentDecisionError
-from stoa.services import ai_service, allowance_service, bedrock_token_count_service
+from stoa.services import (
+    ai_service,
+    allowance_service,
+    bedrock_token_count_service,
+    entitlement_service,
+)
 from stoa.services.ask_question.errors import AskQuestionErrorCode
 
 
@@ -65,6 +75,83 @@ def _observed_at(command: Mapping[str, object]) -> datetime:
     if observed_at.tzinfo is None:
         raise _unavailable()
     return observed_at
+
+
+# ── Admission, when a question is first submitted ─────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class Admitted:
+    """What a first submission may go ahead with, from its one eligibility read."""
+
+    daily_limit: int
+    """Today's message limit, enforced where the command is claimed."""
+    attachment_plan: str
+    """The plan the message's attachments are counted under."""
+    identity: dict[str, object]
+    """The allowance fields the command is stored with (`ALLOWANCE_IDENTITY_FIELDS`)."""
+
+
+def admit(student_id: str, command_draft: Mapping[str, object]) -> Admitted:
+    """Admit a question being submitted for the first time.
+
+    `command_draft` is the command about to be claimed. Raises `AdmissionError`:
+    `ALLOWANCE_EXHAUSTED` when the week has nothing left in either dimension,
+    before today's message is counted or anything is stored;
+    `ALLOWANCE_UNAVAILABLE` when the eligibility cannot be read.
+    """
+    entitlement = _read_entitlement(student_id)
+    identity = allowance_identity(command_draft, entitlement)
+    if allowance_service.week_exhausted(
+        beneficiary_id=student_id,
+        plan_id=str(identity["allowance_plan_id"]),
+        allowance_version=_whole(identity["allowance_version"]),
+        observed_at=_observed_at(command_draft),
+    ):
+        raise AdmissionError(AskQuestionErrorCode.ALLOWANCE_EXHAUSTED)
+    limits = entitlement.get("limits")
+    daily_limit = (
+        stored_int(limits.get("dailyChatMessageLimit"))
+        if isinstance(limits, Mapping)
+        else None
+    )
+    return Admitted(
+        daily_limit=(
+            settings.daily_chat_message_limit if daily_limit is None else daily_limit
+        ),
+        attachment_plan=str(entitlement.get("effectivePlan") or "free_trial"),
+        identity=identity,
+    )
+
+
+def identity_of_unstamped(command: Mapping[str, object]) -> dict[str, object]:
+    """The allowance identity of a command claimed without one stored on it.
+
+    Commands claimed before 2026-07-24 (476-18) were stored without it, and
+    one left `message_committed` or failed then is still resumable. Reads the
+    student's eligibility as it is now; every newer command carries its own.
+    """
+    student_id = str(command.get("student_id") or command.get("owner_id") or "")
+    if not student_id:
+        raise _unavailable()
+    return allowance_identity(command, _read_entitlement(student_id))
+
+
+def _read_entitlement(student_id: str) -> Mapping[str, object]:
+    """The student's eligibility: the one place a question reads it."""
+    entitlement = entitlement_service.resolve_student_entitlement(
+        student_id, settings=settings
+    )
+    if not isinstance(entitlement, Mapping):
+        raise _unavailable()
+    return entitlement
+
+
+def _whole(value: object) -> int:
+    whole = stored_int(value)
+    if whole is None:
+        raise _unavailable()
+    return whole
 
 
 # ── The allowance identity a command is charged under ─────────────────────────
