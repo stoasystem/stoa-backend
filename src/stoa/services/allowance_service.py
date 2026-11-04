@@ -291,6 +291,37 @@ def release_unknown_cost_allowance(
     )
 
 
+def week_exhausted(
+    *,
+    beneficiary_id: str,
+    plan_id: BillingPlanId | str,
+    allowance_version: int,
+    observed_at: datetime,
+    table: object | None = None,
+) -> bool:
+    """Whether the week `observed_at` falls in has nothing left to reserve.
+
+    Finalized and still-reserved tokens both count as used; either dimension
+    reaching its budget is enough. A week that is not yet exhausted may still
+    refuse a reservation, which asks for the request's own size.
+    """
+    observed = _aware(observed_at, "observed_at")
+    budget = plan_allowance_budget(plan_id, allowance_version=allowance_version)
+    counter = allowance_repo.get_allowance_counter(
+        beneficiary_id=_required_text(beneficiary_id, "beneficiary_id"),
+        week=zurich_week(observed),
+        table=table,
+    )
+    values: dict[str, object] = {} if counter is None else counter
+    used_input = _exact_count(
+        values.get("finalized_input_tokens", 0), "finalized_input_tokens"
+    ) + _exact_count(values.get("reserved_input_tokens", 0), "reserved_input_tokens")
+    used_output = _exact_count(
+        values.get("finalized_output_tokens", 0), "finalized_output_tokens"
+    ) + _exact_count(values.get("reserved_output_tokens", 0), "reserved_output_tokens")
+    return used_input >= budget.input_tokens or used_output >= budget.output_tokens
+
+
 def _used_percent(used: int, budget: int) -> float:
     return round((used / budget) * 100, 4)
 
@@ -401,6 +432,7 @@ __all__ = [
     "record_provider_usage",
     "reserve_token_allowance",
     "restore_user_allowance",
+    "week_exhausted",
     "week_identity",
     "zurich_week",
 ]

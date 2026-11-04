@@ -1,30 +1,42 @@
-"""准入: a question's answer charged to the student's weekly allowance (#206).
+"""准入: whether a question may be sent, and what its answer is charged (#206).
 
-Everything goes through `_admission`'s meter and usage evidence, on the real
-ledger over an in-memory allowance table, with only the Bedrock runtime faked.
+The charge goes through `_admission`'s meter and usage evidence, on the real
+ledger over an in-memory allowance table, with only the Bedrock runtime faked;
+admission at the first submission goes through the message route, with the
+student's eligibility seeded by `fakes.admission`.
 """
 
 from __future__ import annotations
 
 import copy
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
+from fakes.admission import seed_plan, seed_week_used
 from fakes.ask_question import (
+    CONV,
     NOW,
+    STUDENT,
     AtomicAllowanceTable,
     CommandResult,
     Disposition,
+    _client,
     _command,
+    _command_key,
+    _messages,
     _patch_allowance_table,
     _ResponseBody,
+    _send,
 )
+from fakes.ask_question import model as model  # noqa: F401 - the fixture
+from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from stoa.db.repositories import allowance_repo
 from stoa.routers import conversations
-from stoa.services import ai_service, allowance_service
+from stoa.services import ai_service, allowance_service, entitlement_service
 from stoa.services.ask_question import _admission, _answering
 from stoa.services.ask_question._admission import AdmissionError, UsageEvidence
 from stoa.services.ask_question.errors import AskQuestionErrorCode
@@ -503,3 +515,88 @@ def test_week_identity_is_the_zurich_iso_week(observed_at: str, identity: str) -
 def test_a_command_is_charged_in_the_week_it_was_asked() -> None:
     command = _command()
     assert command["allowance_week_identity"] == allowance_service.week_identity(NOW)
+
+
+# ── Admission at the first submission (#241) ─────────────────────────────────
+
+
+def _usage_rows(table: Any) -> list[dict[str, Any]]:
+    """Today's message counter and its per-command marks."""
+    return [row for (pk, _sk), row in table.rows.items() if pk.startswith("USAGE#")]
+
+
+def test_a_question_reads_eligibility_once_and_its_replay_none(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eligibility = seed_plan(monkeypatch)
+    client = _client()
+
+    first = _send(client, "admitted-once")
+    assert first.status_code == 200, first.text
+    assert eligibility.reads == [STUDENT]
+
+    replay = _send(client, "admitted-once")
+    assert replay.status_code == 200, replay.text
+    assert eligibility.reads == [STUDENT]
+    assert len(model.calls) == 1
+
+
+def test_a_week_with_nothing_left_refuses_before_anything_is_stored(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    allowance = AtomicAllowanceTable()
+    _patch_allowance_table(monkeypatch, allowance)
+    seed_week_used(allowance, STUDENT, at=datetime.now(UTC))
+
+    refused = _send(_client(), "week-spent")
+
+    assert refused.status_code == 429, refused.text
+    assert refused.json()["detail"]["code"] == "allowance_exhausted"
+    assert model.calls == [] and model.counted == 0
+    assert _messages(table, "student") == []
+    assert tuple(_command_key(CONV, "week-spent").values()) not in table.rows
+    # Today's message was not counted against the daily limit.
+    assert _usage_rows(table) == []
+
+
+def test_a_week_with_room_left_admits_the_question(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    allowance = AtomicAllowanceTable()
+    _patch_allowance_table(monkeypatch, allowance)
+    budget = allowance_service.plan_allowance_budget("free_trial", allowance_version=1)
+    seed_week_used(
+        allowance, STUDENT, at=datetime.now(UTC), input_tokens=budget.input_tokens - 1_000
+    )
+
+    answered = _send(_client(), "week-almost-spent")
+
+    assert answered.status_code == 200, answered.text
+    assert len(model.calls) == 1
+
+
+def test_the_admitted_limit_is_the_one_the_claim_enforces(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_plan(monkeypatch, daily_limit=1)
+    client = _client()
+
+    assert _send(client, "first-today").status_code == 200
+    second = _send(client, "second-today")
+
+    assert second.status_code == 429, second.text
+    assert second.json()["detail"]["code"] == "message_daily_limit"
+
+
+def test_an_unreadable_eligibility_is_unavailable(
+    table, model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        entitlement_service, "resolve_student_entitlement", lambda *_a, **_k: None
+    )
+
+    refused = _send(_client(), "eligibility-unreadable")
+
+    assert refused.status_code == 503, refused.text
+    assert refused.json()["detail"]["code"] == "allowance_unavailable"
+    assert model.calls == []

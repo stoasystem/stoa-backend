@@ -20,6 +20,7 @@ from typing import Any
 import pytest
 from fastapi import HTTPException
 
+from fakes.admission import seed_plan
 from fakes.ask_question import (
     charge_failures_as_paid,
     CONV,
@@ -292,12 +293,7 @@ def test_a_new_conversation_whose_first_message_failed_names_itself_for_the_retr
     # When that fails the error must say which conversation was made, so the
     # student's retry continues it instead of leaving it empty and making another.
     # Token admission refuses an entitlement whose allowance version is damaged.
-    entitlement = _answering.entitlement_service.resolve_student_entitlement
-    monkeypatch.setattr(
-        _answering.entitlement_service,
-        "resolve_student_entitlement",
-        lambda *_a, **_k: {"effectivePlan": "free_trial", "allowanceVersion": -1},
-    )
+    seed_plan(monkeypatch, allowance_version=-1)
     response = _client().post(
         "/conversations",
         json={"subject": "Mathematik", "grade": "Grade 6", "initialMessage": QUESTION},
@@ -310,9 +306,7 @@ def test_a_new_conversation_whose_first_message_failed_names_itself_for_the_retr
     assert table.rows[(f"CONV#{conversation_id}", "CONV")]["student_id"]
     assert _messages(table, "student") == []
 
-    monkeypatch.setattr(
-        _answering.entitlement_service, "resolve_student_entitlement", entitlement
-    )
+    seed_plan(monkeypatch)
     retry = _client().post(
         f"/conversations/{conversation_id}/messages/stream",
         json={"content": QUESTION, "idempotencyKey": f"initial-{conversation_id}"},
@@ -346,7 +340,7 @@ def test_the_daily_message_limit_refusing_a_first_message_names_the_conversation
     # message limit raises an attachment decision, not an HTTP error, and the
     # request answered 500 with the conversation left behind.
     before = {row["conversation_id"] for row in table.rows.values() if row.get("SK") == "CONV"}
-    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 0)
+    seed_plan(monkeypatch, daily_limit=0)
 
     response = _client().post(
         "/conversations",
@@ -363,7 +357,7 @@ def test_the_daily_message_limit_refusing_a_first_message_names_the_conversation
     made = {row["conversation_id"] for row in table.rows.values() if row.get("SK") == "CONV"} - before
     assert made == {detail["conversationId"]}
 
-    monkeypatch.setattr(_answering, "_chat_limit_for_student", lambda *_: 50)
+    seed_plan(monkeypatch)
     retry = _client().post(
         f"/conversations/{detail['conversationId']}/messages/stream",
         json={"content": QUESTION, "idempotencyKey": f"initial-{detail['conversationId']}"},

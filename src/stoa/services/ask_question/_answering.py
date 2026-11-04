@@ -32,7 +32,6 @@ from stoa.services import (
     ai_service,
     ask_answer,
     attachment_service,
-    entitlement_service,
     locale_service,
     runtime_budget_service,
 )
@@ -70,33 +69,8 @@ def _now() -> str:
 
 
 # ── AI message allowance ──────────────────────────────────────────────────────
-# What the answer is charged is `_admission`'s (#240). What stays here is the
-# eligibility read, until 「准入一次读」#241 moves it there as `admit`.
-
-def _chat_limit_for_student(student_id: str) -> int:
-    entitlement = entitlement_service.resolve_student_entitlement(student_id, settings=settings)
-    limits = entitlement.get("limits") or {}
-    return int(limits.get("dailyChatMessageLimit") or settings.daily_chat_message_limit)
-
-
-def _attachment_plan_for_student(student_id: str) -> str:
-    entitlement = entitlement_service.resolve_student_entitlement(student_id, settings=settings)
-    return str(entitlement.get("effectivePlan") or "free_trial")
-
-
-def _conversation_entitlement_snapshot(
-    student_id: str,
-    *,
-    table: object,
-) -> Mapping[str, object]:
-    entitlement = entitlement_service.resolve_student_entitlement(
-        student_id,
-        settings=settings,
-    )
-    if not isinstance(entitlement, Mapping):
-        raise AdmissionError(AskQuestionErrorCode.ALLOWANCE_UNAVAILABLE)
-    return entitlement
-
+# Admission and what the answer is charged are `_admission`'s (#240, #241);
+# what stays here is where the usage evidence is kept beside the answer.
 
 def _message_result_json(
     response: SendMessageResponse,
@@ -832,8 +806,12 @@ def commit_message_command(
         ]
         command["history_fingerprint"] = learning_session.history_fingerprint(prior_messages)
 
-    quota_limit = _conversation_repository_call(
-        lambda: _chat_limit_for_student(student_id)
+    # Admitted once, at the first submission; a command already stored carries
+    # what that admission decided.
+    admitted = (
+        None
+        if existing
+        else _conversation_repository_call(lambda: _admission.admit(student_id, command))
     )
     resume_after_message = bool(
         existing
@@ -860,31 +838,25 @@ def commit_message_command(
         )
         effective_plan = "free_trial"
         if body.attachmentIds:
-            effective_plan = _conversation_repository_call(
-                lambda: _attachment_plan_for_student(student_id)
+            effective_plan = (
+                admitted.attachment_plan
+                if admitted is not None
+                else str(command.get("allowance_plan_id") or "free_trial")
             )
             _conversation_repository_call(
                 lambda: attachment_service.ensure_message_attachment_capacity(
                     prepared, student_id, effective_plan
                 )
             )
-        if not existing:
-            entitlement = _conversation_repository_call(
-                lambda: _conversation_entitlement_snapshot(
-                    student_id,
-                    table=table,
-                )
-            )
-            command.update(
-                _admission.allowance_identity(command, entitlement)
-            )
+        if admitted is not None:
+            command.update(admitted.identity)
             claim_result = _coerce_command_result(
                 _conversation_repository_call(
                 lambda: ask_question_store.claim_message_command_and_quota(
                     command=command,
                     owner_id=student_id,
                     quota_period=quota_period,
-                        limit=quota_limit,
+                        limit=admitted.daily_limit,
                         expires_at=command_expires_at,
                         account_fence_generation=account_fence_generation,
                         table=table,
@@ -1024,14 +996,10 @@ def commit_message_command(
             )
 
     if not all(field in command for field in _admission.ALLOWANCE_IDENTITY_FIELDS):
-        entitlement = _conversation_repository_call(
-            lambda: _conversation_entitlement_snapshot(
-                student_id,
-                table=table,
-            )
-        )
         command.update(
-            _admission.allowance_identity(command, entitlement)
+            _conversation_repository_call(
+                lambda: _admission.identity_of_unstamped(command)
+            )
         )
 
     if not isinstance(command.get("generation_context"), Mapping):
