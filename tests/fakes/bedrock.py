@@ -124,24 +124,3 @@ class FakeBedrock:
         if isinstance(outcome, str):
             return outcome
         return json.dumps(outcome, ensure_ascii=False)
-
-
-def answer_without_allowance(monkeypatch: Any, model: FakeBedrock) -> FakeBedrock:
-    """Ask `model` for the conversation answer with the token allowance left out.
-
-    For tests about what reaches the prompt, which stub the table the allowance
-    and the call record would be written to: the worker's allowance client
-    hands the request straight to `model`, and the answer carries no allowance
-    to settle.
-    """
-    from stoa.services.ask_question import _answering
-
-    class _Unmetered(_answering._ConversationAllowanceBedrockClient):
-        def invoke_model(self, **kwargs: Any) -> Any:
-            return getattr(model, self._invocation_method)(**kwargs)
-
-    monkeypatch.setattr(_answering, "_ConversationAllowanceBedrockClient", _Unmetered)
-    monkeypatch.setattr(
-        _answering, "_message_allowance_metadata_from_provider", lambda *_a, **_k: None
-    )
-    return model

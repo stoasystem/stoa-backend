@@ -17,6 +17,7 @@ from __future__ import annotations
 import pytest
 
 from fakes.ask_question import (
+    charge_failures_as_paid,
     ANSWER,
     CONV,
     _client,
@@ -33,7 +34,8 @@ from fakes.ask_question import _no_memory_personalisation  # noqa: F401 - the fi
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from stoa.services import ai_service, ask_question, locale_service
-from stoa.services.ask_question import _answering
+from stoa.services.ask_question import _admission
+from stoa.services.ask_question.errors import AskQuestionErrorCode
 
 
 def test_a_committed_and_generated_answer_still_streams_as_before(table, model) -> None:
@@ -169,21 +171,18 @@ def test_an_answer_refused_over_its_usage_evidence_is_not_generated_again(
     """The model answered; only the accounting of it failed. Not a retry."""
 
     def refuse(*_a, **_k):
-        raise ask_question.AllowanceFailure(
-            "allowance_finalization_recoverable",
-            "This answer is safely recoverable while token accounting finishes.",
-            "retry_same_message",
-            503,
-        )
+        raise _admission.AdmissionError(AskQuestionErrorCode.ALLOWANCE_UNAVAILABLE)
 
-    monkeypatch.setattr(_answering, "_message_allowance_metadata_from_provider", refuse)
+    monkeypatch.setattr(
+        _admission.UsageEvidence, "from_provider", classmethod(refuse)
+    )
     client = _client()
 
     assert _send(client, "key-1").status_code == 503
 
     generation = _generation(client, "key-1")
     assert generation["status"] == "failed"
-    assert generation["failureCategory"] == "allowance_finalization_recoverable"
+    assert generation["failureCategory"] == "allowance_unavailable"
     assert generation["retryable"] is False
 
 
@@ -191,11 +190,7 @@ def test_a_failure_the_provider_charged_for_is_not_generated_again(
     table, model, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A paid answer that could not be used is a known result, not a retry."""
-    monkeypatch.setattr(
-        _answering, "_message_allowance_metadata_from_failure", lambda *_a, **_k: {}
-    )
-    monkeypatch.setattr(_answering, "_observe_message_provider_usage", lambda **_k: True)
-    monkeypatch.setattr(_answering, "_restore_message_allowance", lambda **_k: True)
+    charge_failures_as_paid(monkeypatch)
     client = _client()
     model.outcomes = [ai_service.AIInvocationFailure("incomplete_output")]
     assert _send(client, "key-1").status_code == 503

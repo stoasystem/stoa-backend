@@ -68,6 +68,11 @@ class ZurichWeek(_AllowanceModel):
             raise ValueError("ISO week coordinates must match the Zurich window start")
         return self
 
+    @property
+    def identity(self) -> str:
+        """The week as allowances name it: `2026-W13`."""
+        return f"{self.iso_year:04d}-W{self.iso_week:02d}"
+
 
 _LOCKED_BUDGETS: dict[BillingPlanId, tuple[int, int, int, TeacherSupportScope]] = {
     BillingPlanId.FREE_TRIAL: (50_000, 10_000, 0, TeacherSupportScope.NONE),

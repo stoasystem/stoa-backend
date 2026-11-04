@@ -29,10 +29,10 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from stoa.db.dynamodb import stored_int
-from stoa.db.repositories import allowance_repo
 from stoa.security.private_telemetry import emit_private_event
-from stoa.services import allowance_service, runtime_budget_service
-from stoa.services.ask_question import _store
+from stoa.services import runtime_budget_service
+from stoa.services.ask_question import _admission, _store
+from stoa.services.ask_question._admission import AdmissionError
 
 logger = logging.getLogger(__name__)
 
@@ -231,30 +231,21 @@ def settle_reservation(command: dict[str, Any]) -> str:
             **identity, failed_at=ended_at
         ):
             return "held"
-    effect_id = command.get("allowance_effect_id")
-    released_now = False
-    if isinstance(effect_id, str) and effect_id:
-        released = allowance_service.release_unknown_cost_allowance(
-            beneficiary_id=str(command.get("student_id") or owner_id),
-            effect_id=effect_id,
+    try:
+        released_now = _admission.meter(command).release()
+    except AdmissionError as refused:
+        logger.warning(
+            "conversation_generation_settlement_refused detail=%s",
+            refused.internal_detail,
         )
-        if released.disposition in {
-            allowance_repo.ReleaseDisposition.RETRYABLE,
-            allowance_repo.ReleaseDisposition.INVALID_STATE,
-        }:
-            logger.warning(
-                "conversation_generation_settlement_refused disposition=%s",
-                released.disposition.value,
-            )
-            return "errored"
-        released_now = released.disposition is allowance_repo.ReleaseDisposition.RELEASED
-        if released_now:
-            # Before the mark: a repeated alert is better than a missing one.
-            emit_private_event(
-                "conversation_ai_needs_reconciliation_settled",
-                correlation_id=str(command.get("command_id") or ""),
-                level=logging.WARNING,
-            )
+        return "errored"
+    if released_now:
+        # Before the mark: a repeated alert is better than a missing one.
+        emit_private_event(
+            "conversation_ai_needs_reconciliation_settled",
+            correlation_id=str(command.get("command_id") or ""),
+            level=logging.WARNING,
+        )
     if not _store.mark_allowance_settled(
         **identity,
         status=ended_status,

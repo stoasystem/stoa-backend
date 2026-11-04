@@ -21,6 +21,7 @@ import pytest
 from fastapi import HTTPException
 
 from fakes.ask_question import (
+    charge_failures_as_paid,
     CONV,
     QUESTION,
     WORKER_ALIAS,
@@ -193,11 +194,7 @@ def test_a_retry_whose_invoke_is_lost_is_swept(table, model, invokes) -> None:
 def test_a_failure_that_may_not_be_retried_is_not_reopened(
     table, model, invokes, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        _answering, "_message_allowance_metadata_from_failure", lambda *_a, **_k: {}
-    )
-    monkeypatch.setattr(_answering, "_observe_message_provider_usage", lambda **_k: True)
-    monkeypatch.setattr(_answering, "_restore_message_allowance", lambda **_k: True)
+    charge_failures_as_paid(monkeypatch)
     client = _client()
     model.outcomes = [ai_service.AIInvocationFailure("incomplete_output")]
     _send(client, "key-1")
@@ -308,7 +305,7 @@ def test_a_new_conversation_whose_first_message_failed_names_itself_for_the_retr
 
     assert response.status_code == 503, response.text
     detail = response.json()["detail"]
-    assert detail["code"] == "allowance_finalization_recoverable"
+    assert detail["code"] == "allowance_unavailable"
     conversation_id = detail["conversationId"]
     assert table.rows[(f"CONV#{conversation_id}", "CONV")]["student_id"]
     assert _messages(table, "student") == []

@@ -36,7 +36,7 @@ from fakes.bedrock import FakeBedrock
 from stoa.db.repositories import allowance_repo
 from stoa.jobs import conversation_generation
 from stoa.services import ai_service, allowance_service
-from stoa.services.ask_question import _answering
+from stoa.services.ask_question import _admission
 from stoa.services.ask_question import _sweep as ask_question_sweep
 
 RESERVED_INPUT = 120
@@ -51,7 +51,7 @@ def _no_memory_personalisation(stub_memory_summary) -> None:
 class _Model:
     """Scripts the allowance client the answer is asked through (#176).
 
-    The worker hands `ask_answer` a `_ConversationAllowanceBedrockClient`; this
+    The worker hands `ask_answer` the meter's `MeteredModel`; this
     one does not admit by itself but takes each outcome as a dict of steps:
     `reserve` (admission reserved), `usage` (the provider reported these
     counts), `call` (the call was recorded), and `then`, the answer the Bedrock
@@ -69,7 +69,7 @@ class _Model:
         if outcome.get("reserve"):
             reserved = allowance_service.reserve_token_allowance(
                 beneficiary_id=STUDENT,
-                effect_id=client.allowance_effect_id,
+                effect_id=client.effect_id,
                 plan_id=client.plan_id,
                 allowance_version=client.allowance_version,
                 input_tokens=RESERVED_INPUT,
@@ -81,7 +81,7 @@ class _Model:
         if usage := outcome.get("usage"):
             observed = allowance_service.record_provider_usage(
                 beneficiary_id=STUDENT,
-                effect_id=client.allowance_effect_id,
+                effect_id=client.effect_id,
                 provider_request_id="req-1",
                 model_id="model-1",
                 input_tokens=usage[0],
@@ -97,17 +97,17 @@ class _Model:
         return getattr(self.runtime, method)(**kwargs)
 
 
-# #206 改写: scripts the package-private allowance client, so its settlement
-# outcomes can be set one step at a time.
+# Scripts the metered model, so its settlement outcomes can be set one step
+# at a time.
 @pytest.fixture
 def model(monkeypatch: pytest.MonkeyPatch, table) -> _Model:
     model = _Model()
 
-    class Scripted(_answering._ConversationAllowanceBedrockClient):
+    class Scripted(_admission.MeteredModel):
         def invoke_model(self, **kwargs: object) -> object:
             return model.invoke(self, self._invocation_method, **kwargs)
 
-    monkeypatch.setattr(_answering, "_ConversationAllowanceBedrockClient", Scripted)
+    monkeypatch.setattr(_admission, "MeteredModel", Scripted)
     monkeypatch.setattr(allowance_repo, "get_table", lambda: table)
     return model
 
