@@ -195,31 +195,39 @@ def test_list_and_detail_are_owner_scoped_paginated_and_have_no_quota_gate() -> 
     )
     assert [item.attachment_id for item in second.items] == ["attachment-2"]
     detail = attachment_service.saved_attachment_detail(
-        attachment_service.resolve_owned_attachment(
-            "attachment-2", _actor(), repository=repository
+        attachment_service.readable_attachment(
+            _actor(), "attachment-2", repository=repository
         )
     )
     assert detail.attachment_id == "attachment-2"
     assert not hasattr(repository, "get_storage_usage")
 
 
+def _without(field: str) -> dict[str, Any]:
+    item = _saved_attachment()
+    item.pop(field)
+    return item
+
+
 @pytest.mark.parametrize(
     "item,actor",
     [
         (None, _actor()),
-        (_saved_attachment(owner_id="student-2"), _actor()),
         (_saved_attachment(status="deletion_pending"), _actor()),
+        (_saved_attachment(owner_id=""), _actor()),
+        (_without("immutable_version_id"), _actor()),
+        (_without("content_sha256"), _actor()),
+        ({**_saved_attachment(), "content_length": 0}, _actor()),
         (_saved_attachment(), _actor(active=False)),
     ],
 )
-def test_detail_conceals_missing_foreign_inactive_and_revoked(
+def test_readable_attachment_refuses_missing_inactive_incomplete_and_revoked(
     item: dict[str, Any] | None, actor: Actor
 ) -> None:
+    """One judgement for every reader (#253): a refusal looks like a missing attachment."""
     repository = _OwnerRepository([item] if item else [])
     with pytest.raises(attachment_errors.AttachmentDecisionError) as captured:
-        attachment_service.resolve_owned_attachment(
-            "attachment-1", actor, repository=repository
-        )
+        attachment_service.readable_attachment(actor, "attachment-1", repository=repository)
     assert captured.value.code is attachment_errors.AttachmentErrorCode.UPLOAD_NOT_FOUND
     assert set(captured.value.public_body()) == {"code", "message", "correlationId"}
 
@@ -517,3 +525,31 @@ def test_download_body_helper_accepts_file_like_stream_contract() -> None:
     # provider body itself or requiring a fully buffered response model.
     body = BytesIO(b"abc")
     assert body.read(2) == b"ab"
+
+
+def test_readable_attachment_reads_a_live_one_whoever_the_policy_let_in() -> None:
+    """Whose it is is the route's policy; the resolver judges only the attachment."""
+    repository = _OwnerRepository([_saved_attachment()])
+    teacher = Actor(
+        "teacher-1", "issuer", "subject", CanonicalRole.TEACHER, AccountStatus.ACTIVE, "teacher"
+    )
+    assert attachment_service.readable_attachment(
+        teacher, "attachment-1", repository=repository
+    )["attachment_id"] == "attachment-1"
+
+
+def test_a_message_reuses_only_the_students_own_saved_attachment() -> None:
+    repository = _OwnerRepository([_saved_attachment(owner_id="student-2")])
+    with pytest.raises(attachment_errors.AttachmentDecisionError) as captured:
+        attachment_service.prepare_message_attachments(
+            [attachment_models.AttachmentReference(attachmentId="attachment-1")],
+            _actor(),
+            repository=repository,
+        )
+    assert captured.value.code is attachment_errors.AttachmentErrorCode.UPLOAD_NOT_FOUND
+
+
+def test_a_broken_row_can_still_be_deleted_but_not_read() -> None:
+    broken = _without("immutable_etag")
+    assert not attachment_service.is_live_attachment(broken)
+    assert attachment_service.is_live_attachment(broken, for_reading=False)

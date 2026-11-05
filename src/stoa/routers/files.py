@@ -48,6 +48,7 @@ from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import uploads
 from stoa.services.attachment_service import (
     delete_saved_attachment,
+    is_live_attachment,
     list_owned_attachments,
     prepare_saved_attachment_download,
     saved_attachment_detail,
@@ -122,11 +123,9 @@ def _raise_security(error: SecurityDecisionError) -> Never:
 def _owned_attachment_dependency(action: AuthorizationAction):
     async def resolve(attachment_id: str):
         item = attachment_repo.get_attachment(attachment_id)
-        if not isinstance(item, dict) or item.get("status") != "active":
+        if not is_live_attachment(item, for_reading=action is AuthorizationAction.READ):
             return None
-        owner_id = item.get("owner_id")
-        if not isinstance(owner_id, str) or not owner_id:
-            return None
+        owner_id = item["owner_id"]
         return AuthorizedResource(
             ResourceRef(
                 ResourceType.ATTACHMENT,

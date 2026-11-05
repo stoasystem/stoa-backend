@@ -613,9 +613,7 @@ def _sent_in_help_request(
     ):
         return None
     item = attachment_repo.get_attachment(attachment_id)
-    if not isinstance(item, dict) or item.get("status") != "active":
-        return None
-    return item
+    return item if attachment_service.is_live_attachment(item) else None
 
 
 async def _help_request_attachment_dependency(
