@@ -19,6 +19,7 @@ from typing import Any
 
 import pytest
 
+from fakes.dynamodb import FakeTable
 from stoa.services import teacher_support_allowance_service as service
 
 from test_teacher_support_allowances import AtomicSupportTable, _case_committer, _grant
@@ -500,30 +501,6 @@ def test_a_second_administrator_writing_the_same_row_is_refused_not_merged(
     assert service.assigned_weekly_cases(_stored(admin_table)) == 30
 
 
-def test_each_write_carries_the_version_it_read(admin_table, monkeypatch: pytest.MonkeyPatch) -> None:
-    _seed_profile(admin_table, STUDENT, "student")
-    client = _admin_client()
-    puts: list[dict[str, Any]] = []
-    original = admin_table.put_item
-
-    def recording_put(**kwargs: Any) -> dict[str, Any]:
-        if str(kwargs.get("Item", {}).get("SK")) == service.ASSIGNED_ALLOWANCE_SK:
-            puts.append(kwargs)
-        return original(**kwargs)
-
-    monkeypatch.setattr(admin_table, "put_item", recording_put)
-
-    first = client.put(ALLOWANCE_PATH, json={"weekly_cases": 9, "reason": "a"}).json()
-    second = client.put(ALLOWANCE_PATH, json={"weekly_cases": 11, "reason": "b"}).json()
-
-    assert (first["stateVersion"], second["stateVersion"]) == (1, 2)
-    # The first write may only create; the second may only replace version 1.
-    assert puts[0]["ConditionExpression"] == "attribute_not_exists(PK)"
-    assert "ExpressionAttributeValues" not in puts[0]
-    assert puts[1]["ConditionExpression"] == "state_version = :expected"
-    assert puts[1]["ExpressionAttributeValues"] == {":expected": 1}
-
-
 def test_an_account_that_is_not_a_student_has_no_such_figure(admin_table) -> None:
     _seed_profile(admin_table, STUDENT, "teacher")
 
@@ -675,3 +652,74 @@ def test_an_administrator_raising_the_figure_mid_request_does_not_503_the_studen
     counter = next(row for k, row in table.items.items() if k[1].startswith("WEEK#"))
     assert int(counter["limit"]) == 30
     assert int(table.items[key]["weekly_cases"]) == 30
+
+
+# --- The figure's own rules, in the service ---------------------------------
+#
+# The endpoint only maps them to HTTP; what a write may replace is the service's.
+
+
+def _recording(table: Any, puts: list[dict[str, Any]]) -> None:
+    original = table.put_item
+
+    def put_item(**kwargs: Any) -> dict[str, Any]:
+        puts.append(kwargs)
+        return original(**kwargs)
+
+    table.put_item = put_item
+
+
+def test_each_write_carries_the_version_it_read() -> None:
+    table = FakeTable()
+    puts: list[dict[str, Any]] = []
+    _recording(table, puts)
+
+    first = service.set_assigned_weekly_cases(STUDENT, 9, actor_id="admin-1", now=NOW, table=table)
+    second = service.set_assigned_weekly_cases(STUDENT, 11, actor_id="admin-1", now=NOW, table=table)
+
+    assert (first.state_version, second.state_version) == (1, 2)
+    # The first write may only create; the second may only replace version 1.
+    assert puts[0]["ConditionExpression"] == "attribute_not_exists(PK)"
+    assert "ExpressionAttributeValues" not in puts[0]
+    assert puts[1]["ConditionExpression"] == "state_version = :expected"
+    assert puts[1]["ExpressionAttributeValues"] == {":expected": 1}
+    assert service.read_assigned_weekly_cases(STUDENT, table=table) == service.AssignedWeeklyCases(
+        weekly_cases=11, source="administrator", state_version=2
+    )
+
+
+def test_a_figure_replaced_between_reading_and_writing_is_not_overwritten() -> None:
+    table = FakeTable()
+    service.set_assigned_weekly_cases(STUDENT, 12, actor_id="admin-1", now=NOW, table=table)
+    key = (f"USER#{STUDENT}", service.ASSIGNED_ALLOWANCE_SK)
+    original = table.get_item
+
+    def get_item_then_intrude(**kwargs: Any) -> dict[str, Any]:
+        response = original(**kwargs)
+        row = deepcopy(table.rows[key])
+        row["weekly_cases"] = Decimal("30")
+        row["state_version"] = Decimal("2")
+        table.rows[key] = row
+        return response
+
+    table.get_item = get_item_then_intrude
+    written = service.set_assigned_weekly_cases(STUDENT, 5, actor_id="admin-2", now=NOW, table=table)
+
+    assert written.disposition is service.AssignedCasesDisposition.VERSION_CONFLICT
+    assert written.state_version is None
+    assert int(table.rows[key]["weekly_cases"]) == 30
+
+
+def test_a_student_nobody_has_raised_reads_as_the_default() -> None:
+    assert service.read_assigned_weekly_cases(STUDENT, table=FakeTable()) == service.AssignedWeeklyCases(
+        weekly_cases=7, source="default", state_version=None
+    )
+
+
+@pytest.mark.parametrize("cases", [-1, service.ASSIGNED_WEEKLY_CASES_MAXIMUM + 1, True])
+def test_a_figure_out_of_range_is_not_written(cases: object) -> None:
+    table = FakeTable()
+
+    with pytest.raises(ValueError):
+        service.set_assigned_weekly_cases(STUDENT, cases, actor_id="admin-1", now=NOW, table=table)  # type: ignore[arg-type]
+    assert table.rows == {}
