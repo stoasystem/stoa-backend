@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import sys
@@ -133,7 +134,7 @@ def privileged_login(base_url: str, email: str, password: str, client_id: str, e
     return token
 
 
-# A one pixel PNG; the point is to exercise intent, chunk and complete, not the image.
+# A one pixel PNG; the point is to exercise intent, part and complete, not the image.
 PROBE_PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 )
@@ -153,17 +154,24 @@ def upload_probe_image(base_url: str, token: str) -> dict:
     )
     upload_id = intent["uploadId"]
 
-    chunk = urllib.request.Request(
-        f"{base_url}/files/{upload_id}/chunks/1", data=PROBE_PNG, method="PUT"
+    # The bytes go to S3 on a URL signed for their length and SHA-256 (ADR-004).
+    signed = request(
+        base_url, "POST", f"/files/{upload_id}/parts/1",
+        token=token,
+        body={
+            "sizeBytes": len(PROBE_PNG),
+            "checksumSha256": hashlib.sha256(PROBE_PNG).hexdigest(),
+        },
     )
-    chunk.add_header("Content-Type", "application/octet-stream")
-    chunk.add_header("Authorization", f"Bearer {token}")
+    part = urllib.request.Request(signed["url"], data=PROBE_PNG, method=signed["method"])
+    for name, value in signed["headers"].items():
+        part.add_header(name, value)
     try:
-        with urllib.request.urlopen(chunk, timeout=40) as response:
+        with urllib.request.urlopen(part, timeout=40) as response:
             if response.status != 200:
-                raise SmokeFailure(f"chunk upload returned {response.status}")
+                raise SmokeFailure(f"part upload returned {response.status}")
     except urllib.error.HTTPError as exc:
-        raise SmokeFailure(f"chunk upload returned {exc.code}: {exc.read().decode()[:160]}") from None
+        raise SmokeFailure(f"part upload returned {exc.code}: {exc.read().decode()[:160]}") from None
 
     completed = request(
         base_url, "POST", f"/files/{upload_id}/complete", token=token, body={"partCount": 1}

@@ -2,7 +2,7 @@
 
 from typing import Never
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from stoa.config import Settings, get_settings
@@ -20,7 +20,6 @@ from stoa.models.attachment import (
     SavedAttachmentDeleteResult,
     SavedAttachmentDetail,
     SavedAttachmentPage,
-    UploadChunkResponse,
     UploadIntentRequest,
     UploadIntentResponse,
     UploadPartUrlRequest,
@@ -52,7 +51,6 @@ from stoa.services.attachment_service import (
     delete_saved_attachment,
     list_owned_attachments,
     prepare_saved_attachment_download,
-    put_upload_chunk,
     saved_attachment_detail,
     sign_upload_part,
 )
@@ -284,37 +282,6 @@ async def sign_owned_upload_part(
             body,
             actor,
             signer=signer,
-            settings=settings,
-        )
-    except AttachmentDecisionError as error:
-        _raise_safe(error, correlation_id)
-
-
-@router.put(
-    "/{upload_id}/chunks/{part_number}",
-    response_model=UploadChunkResponse,
-    deprecated=True,
-    description=(
-        "Superseded by POST /files/{upload_id}/parts/{part_number}: a full part sent "
-        "here is over Lambda's 6 MB request limit once API Gateway base64-encodes it."
-    ),
-)
-async def upload_owned_chunk(
-    upload_id: str,
-    part_number: int,
-    request: Request,
-    actor: Actor = Depends(_upload_actor_dependency),
-    s3=Depends(get_s3_client),
-    settings: Settings = Depends(get_settings),
-    correlation_id: str = Depends(get_request_correlation_id),
-):
-    try:
-        return await put_upload_chunk(
-            upload_id,
-            part_number,
-            request.stream(),
-            actor,
-            s3=s3,
             settings=settings,
         )
     except AttachmentDecisionError as error:

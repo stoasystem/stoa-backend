@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import base64
 from datetime import datetime, timezone
 import hashlib
@@ -19,10 +18,8 @@ from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services.attachment_service import (
     _exact_object_versions,
     _matching_exact_version,
-    _reconcile_provider_part,
-    _terminal_abort,
+    _provider_parts,
     _validate_and_promote_completed,
-    put_upload_chunk,
 )
 
 
@@ -64,197 +61,8 @@ def _pending_upload(*, expected_size: int = 3) -> dict[str, Any]:
     }
 
 
-async def _chunks(value: bytes):
-    yield value
-
-
 def _provider_checksum(value: bytes) -> str:
     return base64.b64encode(hashlib.sha256(value).digest()).decode("ascii")
-
-
-class _PartRepository:
-    def __init__(self, *, attempt: int = 1) -> None:
-        self.item = _pending_upload()
-        self.part: dict[str, Any] | None = None
-        self.attempt = attempt
-        self.completions: list[dict[str, Any]] = []
-
-    def get_upload_intent(self, upload_id: str) -> dict[str, Any]:
-        return dict(self.item)
-
-    def claim_upload_part(
-        self,
-        upload_id: str,
-        part_number: int,
-        checksum: str,
-        length: int,
-        lease_owner: str,
-        now_epoch: int,
-    ) -> dict[str, Any]:
-        self.part = {
-            "status": "uploading",
-            "part_number": part_number,
-            "checksum_sha256": checksum,
-            "content_length": length,
-            "lease_owner": lease_owner,
-            "lease_expires_at": now_epoch + 120,
-            "attempt": self.attempt,
-        }
-        return dict(self.part)
-
-    def get_upload_part(self, upload_id: str, part_number: int) -> dict[str, Any] | None:
-        return dict(self.part) if self.part else None
-
-    def complete_upload_part(
-        self, upload_id: str, part_number: int, lease_owner: str, **ack: Any
-    ) -> bool:
-        self.completions.append(dict(ack))
-        assert self.part is not None
-        self.part.update(ack, status="completed")
-        return True
-
-
-class _UploadPartProvider:
-    def __init__(self, response: dict[str, Any]) -> None:
-        self.response = response
-        self.calls = 0
-
-    def upload_part(self, **kwargs: Any) -> dict[str, Any]:
-        self.calls += 1
-        return dict(self.response)
-
-
-def test_put_upload_chunk_part_acknowledgement_commit_then_raise_reconciles_without_second_write() -> None:
-    data = b"abc"
-
-    class Repository(_PartRepository):
-        def __init__(self) -> None:
-            super().__init__()
-            self.claims = 0
-
-        def claim_upload_part(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-            result = super().claim_upload_part(*args, **kwargs)
-            self.claims += 1
-            result["attempt"] = self.claims
-            assert self.part is not None
-            self.part["attempt"] = self.claims
-            return result
-
-    class Provider:
-        def __init__(self) -> None:
-            self.uploads = 0
-            self.part: dict[str, Any] | None = None
-
-        def upload_part(self, **kwargs: Any) -> dict[str, Any]:
-            self.uploads += 1
-            self.part = {
-                "PartNumber": kwargs["PartNumber"],
-                "Size": kwargs["ContentLength"],
-                "ETag": '"provider-etag"',
-                "ChecksumSHA256": kwargs["ChecksumSHA256"],
-            }
-            raise RuntimeError("provider-diagnostic-canary")
-
-        def list_parts(self, **kwargs: Any) -> dict[str, Any]:
-            assert self.part is not None
-            return {"Parts": [dict(self.part)], "IsTruncated": False}
-
-    repository, provider = Repository(), Provider()
-    with pytest.raises(AttachmentDecisionError) as first:
-        asyncio.run(
-            put_upload_chunk(
-                "upload-1", 1, _chunks(data), _actor(), s3=provider,
-                settings=Settings(s3_images_bucket="private-bucket-canary"),
-                now=_UPLOAD_NOW,
-                repository=repository,
-            )
-        )
-    assert first.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-    assert "provider-diagnostic-canary" not in str(first.value)
-    assert repository.claims == 1
-    assert provider.uploads == 1
-
-    replay = asyncio.run(
-        put_upload_chunk(
-            "upload-1", 1, _chunks(data), _actor(), s3=provider,
-            settings=Settings(s3_images_bucket="private-bucket-canary"),
-            now=_UPLOAD_NOW,
-            repository=repository,
-        )
-    )
-    assert replay["status"] == "accepted"
-    assert provider.uploads == 1
-
-
-@pytest.mark.parametrize("etag", [None, "", " \t", False, True, 0, 1, [], {}])
-def test_put_upload_chunk_part_acknowledgement_rejects_nonblank_nonstring_etag(etag: Any) -> None:
-    data = b"abc"
-    repository = _PartRepository()
-    response = {"ChecksumSHA256": _provider_checksum(data)}
-    if etag is not None:
-        response["ETag"] = etag
-    provider = _UploadPartProvider(response)
-
-    with pytest.raises(AttachmentDecisionError) as captured:
-        asyncio.run(
-            put_upload_chunk(
-                "upload-1",
-                1,
-                _chunks(data),
-                _actor(),
-                s3=provider,
-                settings=Settings(s3_images_bucket="private-bucket-canary"),
-                now=_UPLOAD_NOW,
-                repository=repository,
-            )
-        )
-
-    assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-    assert provider.calls == 1
-    assert repository.completions == []
-    assert all(value not in str(captured.value) for value in PRIVATE_CANARIES)
-
-
-@pytest.mark.parametrize(
-    "checksum",
-    [
-        None,
-        "",
-        "not-base64",
-        base64.b64encode(b"short").decode("ascii"),
-        _provider_checksum(b"different"),
-        False,
-        1,
-        [],
-        {},
-    ],
-)
-def test_put_upload_chunk_part_acknowledgement_rejects_missing_malformed_or_unequal_checksum(
-    checksum: Any,
-) -> None:
-    repository = _PartRepository()
-    response: dict[str, Any] = {"ETag": '"provider-etag"'}
-    if checksum is not None:
-        response["ChecksumSHA256"] = checksum
-    provider = _UploadPartProvider(response)
-
-    with pytest.raises(AttachmentDecisionError) as captured:
-        asyncio.run(
-            put_upload_chunk(
-                "upload-1",
-                1,
-                _chunks(b"abc"),
-                _actor(),
-                s3=provider,
-                settings=Settings(s3_images_bucket="private-bucket-canary"),
-                now=_UPLOAD_NOW,
-                repository=repository,
-            )
-        )
-
-    assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-    assert provider.calls == 1
-    assert repository.completions == []
 
 
 class _ForbiddenTable:
@@ -299,30 +107,15 @@ class _ListPartsProvider:
         return dict(self.pages[len(self.requests) - 1])
 
 
-def _reconcile(
-    provider: _ListPartsProvider,
-    *, repository: _PartRepository | None = None,
-) -> tuple[bool, _PartRepository]:
-    repository = repository or _PartRepository(attempt=2)
-    repository.part = {
-        "status": "uploading",
-        "part_number": 1,
-        "checksum_sha256": hashlib.sha256(b"abc").hexdigest(),
-        "content_length": 3,
-        "lease_owner": "lease-owner",
-        "attempt": 2,
-    }
-    adopted = _reconcile_provider_part(
-        repository.item,
-        1,
-        3,
-        hashlib.sha256(b"abc").hexdigest(),
-        "lease-owner",
+# The tests below keep their `reconcile_provider_part` names: the phase-473
+# boundary inventory names them as selectors. The listing they exercise is
+# `_provider_parts`, which completion uses to adopt the parts S3 holds.
+def _reconcile(provider: _ListPartsProvider) -> dict[int, tuple[int, str, str]]:
+    return _provider_parts(
+        _pending_upload(),
         s3=provider,
         settings=Settings(s3_images_bucket="private-bucket-canary"),
-        repository=repository,
     )
-    return adopted, repository
 
 
 def test_reconcile_provider_part_list_parts_paginates_with_strict_progressing_marker() -> None:
@@ -343,11 +136,10 @@ def test_reconcile_provider_part_list_parts_paginates_with_strict_progressing_ma
         ]
     )
 
-    adopted, repository = _reconcile(provider)
+    parts = _reconcile(provider)
 
-    assert adopted is True
+    assert parts == {1: (3, '"etag"', _provider_checksum(b"abc"))}
     assert provider.requests[1]["PartNumberMarker"] == 1
-    assert repository.completions
 
 
 @pytest.mark.parametrize("marker", [None, 0, -1, True, "1", "", [], {}])
@@ -411,28 +203,6 @@ def test_reconcile_provider_part_list_parts_rejects_duplicate_conflicting_part()
         _reconcile(provider)
 
     assert captured.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-
-
-def test_terminal_abort_stale_cas_performs_no_provider_mutation() -> None:
-    class Repository:
-        def mark_upload_terminal(self, *args: Any, **kwargs: Any) -> bool:
-            return False
-
-    class Provider:
-        aborts = 0
-
-        def abort_multipart_upload(self, **kwargs: Any) -> None:
-            self.aborts += 1
-
-    provider = Provider()
-    _terminal_abort(
-        _pending_upload(),
-        _actor(),
-        s3=provider,
-        settings=Settings(s3_images_bucket="private-bucket-canary"),
-        repository=Repository(),
-    )
-    assert provider.aborts == 0
 
 
 class _VersionProvider:

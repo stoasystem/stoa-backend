@@ -63,7 +63,7 @@ _IMAGE_EXTENSIONS = frozenset({"jpg", "jpeg", "png"})
 _LIVE_UPLOAD_STATES = frozenset(
     {"issuing", "pending_upload", "assembling", "validating", "promoting"}
 )
-_READY_UPLOAD_STATES = frozenset({"validated", "consuming", "consumed"})
+_READY_UPLOAD_STATES = frozenset({"validated", "consumed"})
 _T = TypeVar("_T")
 _CODE_ID = re.compile(r"^[0-9a-f]{32}$")
 _SECRET = re.compile(r"^[A-Za-z0-9_-]{43}$")

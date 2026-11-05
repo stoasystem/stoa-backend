@@ -101,31 +101,6 @@ def test_legacy_presign_and_finalize_routes_are_absent(monkeypatch) -> None:
     assert client.post("/files/upload-1/finalize").status_code in {404, 405}
 
 
-def test_chunk_route_projects_no_provider_receipt(monkeypatch) -> None:
-    async def put(upload_id, part_number, chunks, actor, **kwargs):
-        async for _ in chunks:
-            pass
-        return {
-            "uploadId": upload_id,
-            "partNumber": part_number,
-            "sizeBytes": 3,
-            "checksumSha256": "0" * 64,
-            "status": "accepted",
-        }
-
-    monkeypatch.setattr(files, "put_upload_chunk", put)
-    response = _client(monkeypatch).put("/files/upload-1/chunks/1", content=b"abc")
-    assert response.status_code == 200
-    assert set(response.json()) == {
-        "uploadId",
-        "partNumber",
-        "sizeBytes",
-        "checksumSha256",
-        "status",
-    }
-    assert all(value not in response.text.lower() for value in ("etag", "versionid", "uploadid-provider", "bucket"))
-
-
 def test_issuance_dependency_failure_has_exact_safe_503(monkeypatch) -> None:
     def unavailable(*args, **kwargs):
         raise AttachmentDecisionError(
@@ -231,14 +206,7 @@ class _GatewayRepository:
         self.item["operation_fence"] = "replacement-fence"
         return dict(self.item)
 
-    def claim_upload_part(self, *args, **kwargs):
-        self._fail("chunk_claim")
-        if self.stage == "replay_poll":
-            return {"status": "uploading", "lease_owner": "other-worker", "attempt": 1}
-        return {"status": "uploading", "lease_owner": args[4], "attempt": 2}
-
     def get_upload_part(self, *args, **kwargs):
-        self._fail("replay_poll")
         return None
 
 
@@ -266,10 +234,6 @@ class _GatewayS3:
         return {"Body": object()}
 
     def list_parts(self, **kwargs):
-        if self.stage == "provider_reconciliation":
-            raise RuntimeError("provider part ledger canary")
-        if self.stage == "malformed_provider_reconciliation":
-            return {"Parts": [None]}
         return {"Parts": []}
 
 
@@ -324,55 +288,6 @@ def test_complete_gateway_dependency_matrix_is_one_redacted_safe_503(
         "dependency_failure",
     ):
         assert canary not in rendered
-
-
-@pytest.mark.parametrize(
-    "stage",
-    [
-        "chunk_claim",
-        "replay_poll",
-        "provider_reconciliation",
-        "malformed_provider_reconciliation",
-    ],
-)
-def test_chunk_gateway_dependency_matrix_is_one_redacted_safe_503(
-    monkeypatch, stage: str
-) -> None:
-    repository = _GatewayRepository(stage)
-    s3 = _GatewayS3(stage)
-
-    async def no_sleep(_seconds):
-        return None
-
-    async def put(upload_id, part_number, chunks, actor, **kwargs):
-        return await attachment_service.put_upload_chunk(
-            upload_id,
-            part_number,
-            chunks,
-            actor,
-            s3=s3,
-            settings=Settings(s3_images_bucket="private-bucket-canary"),
-            now=datetime(2026, 7, 16, tzinfo=UTC),
-            repository=repository,
-        )
-
-    monkeypatch.setattr(attachment_service.asyncio, "sleep", no_sleep)
-    monkeypatch.setattr(files, "put_upload_chunk", put)
-    response = _client(monkeypatch).put("/files/upload-1/chunks/1", content=b"abc")
-    assert response.status_code == 503
-    assert response.json()["detail"]["code"] == "upload_service_unavailable"
-    assert set(response.json()["detail"]) == {"code", "message", "correlationId"}
-    assert response.headers["Retry-After"] == "30"
-    assert all(
-        canary not in response.text
-        for canary in (
-            "student-1",
-            "private-stage-key-canary",
-            "private-multipart-canary",
-            "provider",
-            "dependency_failure",
-        )
-    )
 
 
 def test_conditional_foreign_or_stale_gateway_state_stays_concealed_404(

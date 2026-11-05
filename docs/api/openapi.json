@@ -13604,46 +13604,6 @@
         "title": "UpdateStudentProfileRequest",
         "type": "object"
       },
-      "UploadChunkResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "checksumSha256": {
-            "pattern": "^[0-9a-f]{64}$",
-            "title": "Checksumsha256",
-            "type": "string"
-          },
-          "partNumber": {
-            "minimum": 1.0,
-            "title": "Partnumber",
-            "type": "integer"
-          },
-          "sizeBytes": {
-            "exclusiveMinimum": 0.0,
-            "title": "Sizebytes",
-            "type": "integer"
-          },
-          "status": {
-            "pattern": "^accepted$",
-            "title": "Status",
-            "type": "string"
-          },
-          "uploadId": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Uploadid",
-            "type": "string"
-          }
-        },
-        "required": [
-          "uploadId",
-          "partNumber",
-          "sizeBytes",
-          "checksumSha256",
-          "status"
-        ],
-        "title": "UploadChunkResponse",
-        "type": "object"
-      },
       "UploadCodeCompleteRequest": {
         "additionalProperties": false,
         "properties": {
@@ -14113,15 +14073,19 @@
         "type": "string"
       },
       "UploadStatus": {
+        "description": "Every state an upload row is written in, in the order an upload moves.",
         "enum": [
           "issuing",
           "pending_upload",
           "assembling",
           "validating",
+          "promoting",
           "validated",
-          "consuming",
           "consumed",
           "invalid",
+          "cleanup_pending",
+          "cleanup_blocked",
+          "cleanup_complete",
           "expired"
         ],
         "title": "UploadStatus",
@@ -25701,88 +25665,6 @@
           "classification": "authorized",
           "identifiers": [
             "conversationId"
-          ]
-        }
-      }
-    },
-    "/files/{upload_id}/chunks/{part_number}": {
-      "put": {
-        "deprecated": true,
-        "description": "Superseded by POST /files/{upload_id}/parts/{part_number}: a full part sent here is over Lambda's 6 MB request limit once API Gateway base64-encodes it.",
-        "operationId": "upload_owned_chunk_files__upload_id__chunks__part_number__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "upload_id",
-            "required": true,
-            "schema": {
-              "title": "Upload Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "part_number",
-            "required": true,
-            "schema": {
-              "title": "Part Number",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UploadChunkResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthenticatedResponse"
-                }
-              }
-            },
-            "description": "No usable bearer token"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Upload Owned Chunk",
-        "tags": [
-          "files"
-        ],
-        "x-stoa-authorization": {
-          "authorization": [
-            {
-              "action": "update",
-              "capability": null,
-              "purpose": "self_service",
-              "resource_type": "upload"
-            }
-          ],
-          "classification": "authorized",
-          "identifiers": [
-            "upload_id"
           ]
         }
       }
