@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 import json
+import logging
 from typing import Any
 
 import boto3
@@ -14,6 +15,8 @@ import boto3
 from stoa.config import Settings, settings
 from stoa.db.repositories import attachment_repo
 from stoa.services.attachment_service import cleanup_upload_intent
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_BATCH_LIMIT = 25
 MAX_BATCH_LIMIT = 100
@@ -145,6 +148,21 @@ def handler(event: dict[str, Any] | None, context: Any) -> dict[str, int | str |
         max_pages=event.get("maxPages", DEFAULT_MAX_PAGES),
         continuation_token=event.get("continuationToken"),
         remaining_seconds=(lambda: remaining() / 1000) if callable(remaining) else None,
+    )
+    # The schedule invokes asynchronously and nobody reads the return value, so the
+    # counts go to the log. The cursor stays out: it decodes to table keys.
+    logger.info(
+        "upload_cleanup_run_completed scanned=%s claimed=%s deleted=%s retryable=%s "
+        "protected=%s deferred=%s skipped=%s invalid_continuation=%s more_to_do=%s",
+        result.scanned,
+        result.claimed,
+        result.deleted,
+        result.retryable,
+        result.protected,
+        result.deferred,
+        result.skipped,
+        result.invalid_continuation,
+        "true" if result.continuation_token else "false",
     )
     return result.public_dict()
 
