@@ -48,6 +48,7 @@ EXPECTED_HANDLERS = {
     "stoa.jobs.weekly_reports.handler": "stoa/jobs/weekly_reports.py",
     "stoa.jobs.account_deletion.handler": "stoa/jobs/account_deletion.py",
     "stoa.jobs.conversation_generation.handler": "stoa/jobs/conversation_generation.py",
+    "stoa.jobs.upload_cleanup.handler": "stoa/jobs/upload_cleanup.py",
 }
 HASHED_SOURCE_ROOTS = ("src/stoa",)
 HASHED_ROOT_FILES = ("requirements.txt", "pyproject.toml")

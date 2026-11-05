@@ -452,7 +452,9 @@ def test_gateway_issuance_is_owner_bound_opaque_and_multipart_private() -> None:
         "status",
     }
     assert repository.item and repository.item["owner_id"] == "student-1"
-    assert repository.item["expires_at"] == 1767227400
+    # The usable window, not the table TTL: an issued upload has no `expires_at` (#250).
+    assert repository.item["usable_until"] == 1767227400
+    assert "expires_at" not in repository.item
     assert repository.item["status"] == "pending_upload"
     assert "staging_object_key" in repository.item
     assert repository.item["multipart_upload_id"] == "private-provider-upload-id"

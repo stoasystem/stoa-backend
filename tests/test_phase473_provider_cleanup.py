@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from stoa.config import Settings
+from stoa.config import UPLOAD_ROW_RETENTION_SECONDS, Settings
 from stoa.db.repositories import attachment_repo
 from stoa.jobs.upload_cleanup import cleanup_expired_uploads
 from stoa.services.attachment_service import cleanup_upload_intent
@@ -457,7 +457,8 @@ def test_part_rows_receive_lifecycle_ttl() -> None:
     )
 
     assert table.item is not None
-    assert table.item["expires_at"] == parent_expiry
+    # The part outlives its upload's window by the retention (#250).
+    assert table.item["expires_at"] == parent_expiry + UPLOAD_ROW_RETENTION_SECONDS
 
 
 class _DecimalFenceTable:
@@ -559,7 +560,8 @@ def test_part_claim_accepts_the_decimal_a_real_table_returns() -> None:
     )
 
     assert table.item is not None
-    assert table.item["expires_at"] == parent_expiry
+    # The part outlives its upload's window by the retention (#250).
+    assert table.item["expires_at"] == parent_expiry + UPLOAD_ROW_RETENTION_SECONDS
 
 
 class _EligibilityRecordingTable:

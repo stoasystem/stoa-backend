@@ -387,9 +387,9 @@ def cleanup_upload_intent(
     """Safely advance one terminal/expired upload toward idempotent deletion."""
     status = str(candidate.get("status") or "")
     now_epoch = int(now.timestamp())
-    if status not in {"invalid", "expired", "cleanup_pending"} and int(
-        candidate.get("expires_at", 0)
-    ) > now_epoch:
+    if status not in {"invalid", "expired", "cleanup_pending"} and (
+        attachment_repo.usable_until(candidate) > now_epoch
+    ):
         # The short operation lease authorizes takeover/reconciliation only;
         # it never shortens the owner-visible 30-minute intent lifetime.
         return "skipped"
@@ -879,7 +879,7 @@ def create_upload_intent(
     upload_id = upload_id or str(uuid4())
     staging_object_key = f"staging/{uuid4().hex}/{upload_id}.{extension}"
     operation_fence = uuid4().hex
-    expires_epoch = int(now.timestamp()) + UPLOAD_INTENT_TTL_SECONDS
+    usable_epoch = int(now.timestamp()) + UPLOAD_INTENT_TTL_SECONDS
     part_count = (request.size_bytes + UPLOAD_CHUNK_BYTES - 1) // UPLOAD_CHUNK_BYTES
     item = {
         "upload_id": upload_id,
@@ -902,7 +902,9 @@ def create_upload_intent(
         "operation_takeover_count": 0,
         "account_fence_generation": account_fence_generation,
         "created_at": now.isoformat(),
-        "expires_at": expires_epoch,
+        # Not `expires_at`: that is the table's TTL, set only once the row has
+        # ended (#250), or the table would delete it under the cleanup.
+        "usable_until": usable_epoch,
     }
     if request.conversation_id is not None:
         item["conversation_id"] = request.conversation_id
@@ -971,7 +973,7 @@ def create_upload_intent(
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
     return {
         "uploadId": upload_id,
-        "expiresAt": datetime.fromtimestamp(expires_epoch, UTC),
+        "expiresAt": datetime.fromtimestamp(usable_epoch, UTC),
         "maxBytes": max_bytes,
         "chunkBytes": UPLOAD_CHUNK_BYTES,
         "acceptedTypes": list(allowed),
@@ -2165,7 +2167,7 @@ def resolve_owned_upload(
     if not item or item.get("owner_id") != actor.user_id:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     now_epoch = int((now or datetime.now(UTC)).timestamp())
-    if int(item.get("expires_at", 0)) <= now_epoch:
+    if attachment_repo.usable_until(item) <= now_epoch:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_EXPIRED)
     return item
 

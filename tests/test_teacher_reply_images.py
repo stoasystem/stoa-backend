@@ -236,6 +236,26 @@ def test_the_student_sees_the_image_a_teacher_replied_with(table, api, accept_fi
     assert _upload_status(table, upload_id) == "consumed"
 
 
+
+def test_a_consumed_upload_leaves_the_table_a_week_later_not_before(table, api) -> None:
+    """#250: the table's TTL is `expires_at`; an upload sets it only once it has ended."""
+    import time
+
+    from stoa.config import UPLOAD_ROW_RETENTION_SECONDS
+
+    _dispatch_to(table, TEACHER)
+    teacher = api.client()
+    upload_id = api.uploaded(teacher, _png())
+    row = table.rows[(f"UPLOAD#{upload_id}", "META")]
+    assert "expires_at" not in row
+    assert int(row["usable_until"]) > time.time()
+
+    assert _reply(teacher, upload_id).status_code == 200
+
+    row = table.rows[(f"UPLOAD#{upload_id}", "META")]
+    assert row["status"] == "consumed"
+    assert abs(int(row["expires_at"]) - (time.time() + UPLOAD_ROW_RETENTION_SECONDS)) < 120
+
 def test_the_teacher_sees_their_image_in_the_request_too(table, api) -> None:
     _dispatch_to(table, TEACHER)
     teacher = api.client()
