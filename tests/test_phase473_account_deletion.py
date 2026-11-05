@@ -346,7 +346,7 @@ def test_upload_intent_is_fenced_before_any_provider_creation() -> None:
     source = inspect.getsource(
         importlib.import_module("stoa.services.attachment_service").create_upload_intent
     )
-    persist = source.index("prepare(item)")
+    persist = source.index("prepare_staging_issuance(item)")
     provider = source.index("create_multipart_upload")
     assert persist < provider
     assert "account_fence_generation" in source

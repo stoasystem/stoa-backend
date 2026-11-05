@@ -57,6 +57,11 @@ class ReviewedFlow:
     decisions: tuple[str, ...]
     requirements: tuple[str, ...] = REQUIREMENTS
     transport: str | None = None
+    # Where the read lives now, as (file, symbol), when refactoring moved it
+    # after the candidate was sealed. The candidate is still read at the
+    # registered location; a tree without it must hold the read here, in a
+    # symbol that makes the registered client call.
+    successor: tuple[str, str] | None = None
 
 
 def _flows(
@@ -69,6 +74,7 @@ def _flows(
     selector: str,
     decisions: tuple[str, ...],
     transport: str | None = None,
+    successor: tuple[str, str] | None = None,
 ) -> list[ReviewedFlow]:
     return [
         ReviewedFlow(
@@ -84,6 +90,7 @@ def _flows(
             malformed_selector=selector,
             decisions=decisions,
             transport=transport,
+            successor=successor,
         )
         for field, expected, parser, validator in fields
     ]
@@ -94,6 +101,8 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
         file="src/stoa/services/attachment_service.py",
         symbol="_reconcile_provider_part",
         call="s3.list_parts",
+        # The chunk route went in #251; completion lists the parts S3 holds here.
+        successor=("src/stoa/services/attachment_service.py", "_provider_parts"),
         fields=(
             ("Parts", "list[object]", "_provider_mapping", "exact_list_of_mappings"),
             ("Parts[].PartNumber", "positive_int", "_positive_provider_integer", "type_is_int_not_bool"),
@@ -437,6 +446,17 @@ def _normalized_digest(node: ast.AST) -> str:
     return sha256(_stable_ast_dump(node).encode()).hexdigest()
 
 
+def _makes_call(symbol: ast.AST, client_call: str) -> bool:
+    """Whether `symbol` calls the method `client_call` names (`s3.list_parts`)."""
+    method = client_call.rsplit(".", 1)[-1]
+    return any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == method
+        for node in ast.walk(symbol)
+    )
+
+
 def _boundary_id(flow: ReviewedFlow) -> str:
     identity = "\0".join(
         (flow.file, flow.symbol, flow.client_call, flow.field or flow.body_operation or "", flow.transport or "")
@@ -531,23 +551,37 @@ def discover_dataflows(root: Path | str) -> list[dict[str, Any]]:
     complete = (root / "docs/security/phase-473-private-store-inventory.json").is_file()
     parsed: dict[str, tuple[ast.Module, dict[str, ast.FunctionDef | ast.AsyncFunctionDef]]] = {}
     rows: list[dict[str, Any]] = []
+    def symbol_at(file: str, name: str) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+        if file not in parsed:
+            tree = ast.parse((root / file).read_text(), filename=file)
+            parsed[file] = (tree, _symbol_nodes(tree))
+        return parsed[file][1].get(name)
+
     for flow in REVIEWED_FLOWS:
+        source_file, source_symbol = flow.file, flow.symbol
         path = root / flow.file
-        if not path.is_file():
+        symbol = symbol_at(flow.file, flow.symbol) if path.is_file() else None
+        if symbol is None and flow.successor is not None:
+            successor_file, successor_symbol = flow.successor
+            if (root / successor_file).is_file():
+                symbol = symbol_at(successor_file, successor_symbol)
+                if symbol is not None and not _makes_call(symbol, flow.client_call):
+                    raise BoundaryViolation(
+                        f"successor does not make the registered call: "
+                        f"{successor_file}:{successor_symbol}:{flow.client_call}"
+                    )
+                source_file, source_symbol = successor_file, successor_symbol
+        if not path.is_file() and symbol is None:
             if complete:
                 raise BoundaryViolation(f"registered source file missing: {flow.file}")
             continue
-        if flow.file not in parsed:
-            tree = ast.parse(path.read_text(), filename=flow.file)
-            parsed[flow.file] = (tree, _symbol_nodes(tree))
-        symbol = parsed[flow.file][1].get(flow.symbol)
         if symbol is None:
             raise BoundaryViolation(f"registered source symbol missing: {flow.file}:{flow.symbol}")
         row: dict[str, Any] = {
             "boundary_id": _boundary_id(flow),
             "source": {
-                "file": flow.file,
-                "symbol": flow.symbol,
+                "file": source_file,
+                "symbol": source_symbol,
                 "span": [symbol.lineno, symbol.end_lineno],
                 "normalized_ast_sha256": _normalized_digest(symbol),
             },
