@@ -249,3 +249,26 @@ def test_a_cleaned_upload_starts_its_ttl() -> None:
     row = _row(table, "u-ended")
     assert row["status"] == "cleanup_complete"
     assert _expires_in_a_week(row)
+
+
+def test_the_account_deletion_function_runs_the_sweep_by_name(
+    monkeypatch: pytest.MonkeyPatch, cleaned
+) -> None:
+    """stoa-infra schedules the sweep on the account-deletion function (#256)."""
+    from stoa.jobs import account_deletion
+
+    repository = _Pages([[_candidate(1)]])
+    monkeypatch.setattr(
+        attachment_repo, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
+    )
+    monkeypatch.setattr(upload_cleanup.boto3, "client", lambda *_a, **_k: MultipartS3(BUCKET))
+    monkeypatch.setattr(
+        account_deletion,
+        "run_pending_deletions",
+        lambda **_k: pytest.fail("the sweep is not an account deletion"),
+    )
+
+    result = account_deletion.handler({"source": "stoa.scheduler", "job": "upload_cleanup"}, None)
+
+    assert result["deleted"] == 1
+    assert cleaned == ["u1"]

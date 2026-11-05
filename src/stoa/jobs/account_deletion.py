@@ -216,7 +216,7 @@ async def continue_deletion_command(
         return
 
 
-def handler(event: dict[str, Any] | None, _context: Any) -> dict[str, int]:
+def handler(event: dict[str, Any] | None, _context: Any) -> dict[str, Any]:
     event = event or {}
     if event.get("job") == "moderation_image_retention":
         # A second, daily schedule on this function, which already holds the
@@ -224,5 +224,11 @@ def handler(event: dict[str, Any] | None, _context: Any) -> dict[str, int]:
         from stoa.jobs import moderation_image_retention
 
         return moderation_image_retention.handler(event, _context)
+    if event.get("job") == "upload_cleanup":
+        # Every 15 minutes (#250): the upload sweep. This function already
+        # cleans uploads when it deletes an account, with the same code.
+        from stoa.jobs import upload_cleanup
+
+        return upload_cleanup.handler(event, _context)
     summary = run_pending_deletions(limit=min(max(int(event.get("limit", 25)), 1), 100))
     return asdict(summary)
