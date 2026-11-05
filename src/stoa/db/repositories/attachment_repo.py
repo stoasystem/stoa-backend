@@ -8,6 +8,7 @@ import re
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol, runtime_checkable
@@ -15,7 +16,7 @@ from typing import Protocol, runtime_checkable
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
 
-from stoa.config import UPLOAD_INTENT_TTL_SECONDS
+from stoa.config import UPLOAD_INTENT_TTL_SECONDS, UPLOAD_ROW_RETENTION_SECONDS
 from stoa.db.repositories import account_deletion_repo
 from stoa.db.dynamodb import get_table
 
@@ -786,15 +787,13 @@ def claim_upload_part(
     if isinstance(now_epoch, bool) or not isinstance(now_epoch, int) or now_epoch < 0:
         raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
     target = table or get_table()
-    intent_expires_at = now_epoch + UPLOAD_INTENT_TTL_SECONDS
+    intent_usable_until = now_epoch + UPLOAD_INTENT_TTL_SECONDS
     if hasattr(target, "get_item"):
         intent = get_upload_intent(upload_id, table=target)
         if intent is None:
             raise AttachmentRepositoryConflict("conditional_conflict")
-        # DynamoDB returns stored numbers as Decimal, so this has to go through the
-        # same normalizer as every other stored integer in this repository.
-        intent_expires_at = _required_integer(intent.get("expires_at"))
-        if intent_expires_at <= now_epoch:
+        intent_usable_until = usable_until(intent)
+        if intent_usable_until <= now_epoch:
             raise AttachmentRepositoryConflict("conditional_conflict")
     item = {
         **upload_part_key(upload_id, part_number),
@@ -805,7 +804,7 @@ def claim_upload_part(
         "content_length": length,
         "lease_owner": lease_owner,
         "lease_expires_at": now_epoch + 120,
-        "expires_at": intent_expires_at,
+        "expires_at": intent_usable_until + UPLOAD_ROW_RETENTION_SECONDS,
         "attempt": 1,
     }
     try:
@@ -892,8 +891,8 @@ def pin_upload_part(
     intent = get_upload_intent(upload_id, table=target)
     if intent is None:
         raise AttachmentRepositoryConflict("conditional_conflict")
-    intent_expires_at = _required_integer(intent.get("expires_at"))
-    if intent_expires_at <= now_epoch:
+    intent_usable_until = usable_until(intent)
+    if intent_usable_until <= now_epoch:
         raise AttachmentRepositoryConflict("conditional_conflict")
     item = {
         **upload_part_key(upload_id, part_number),
@@ -903,7 +902,7 @@ def pin_upload_part(
         "checksum_sha256": checksum_sha256,
         "content_length": length,
         "lease_owner": PRESIGNED_PART_OWNER,
-        "expires_at": intent_expires_at,
+        "expires_at": intent_usable_until + UPLOAD_ROW_RETENTION_SECONDS,
         "attempt": 1,
     }
     try:
@@ -1203,7 +1202,7 @@ def list_upload_cleanup_candidates(
             "begins_with(PK,:upload) AND SK=:meta AND ("
             "#status IN (:invalid,:expired,:cleanup_pending) OR ("
             "#status IN (:pending,:validating,:validated,:issuing,:assembling,:promoting) "
-            "AND expires_at<=:now))"
+            "AND " + PAST_USABLE + "))"
         ),
         "ExpressionAttributeNames": {"#status": "status"},
         "ExpressionAttributeValues": {
@@ -1256,7 +1255,7 @@ def claim_upload_cleanup(
                 "#version=:version AND ("
                 "#status IN (:invalid,:expired,:cleanup_pending) OR ("
                 "#status IN (:pending,:validating,:validated,:issuing,:assembling,:promoting) "
-                "AND expires_at<=:now))"
+                "AND " + PAST_USABLE + "))"
             ),
             ExpressionAttributeNames={"#status": "status", "#version": "version"},
             ExpressionAttributeValues={
@@ -1336,8 +1335,13 @@ def block_upload_cleanup(upload_id: str, version: int, *, table: object | None =
     return _cleanup_update(
         upload_id,
         version,
-        "SET #status=:blocked, #version=:next REMOVE cleanup_reference_cursor",
-        {":blocked": "cleanup_blocked", ":next": version + 1},
+        "SET #status=:blocked, #version=:next, expires_at=:retire "
+        "REMOVE cleanup_reference_cursor",
+        {
+            ":blocked": "cleanup_blocked",
+            ":next": version + 1,
+            ":retire": _retire_at(),
+        },
         table=table,
     )
 
@@ -1353,7 +1357,8 @@ def complete_upload_cleanup(
         _update_item(table or get_table(),
             Key=upload_key(upload_id),
             UpdateExpression=(
-                "SET #status=:complete, #version=:next, cleaned_at=:cleaned_at "
+                "SET #status=:complete, #version=:next, cleaned_at=:cleaned_at, "
+                "expires_at=:retire "
                 "REMOVE staging_object_key, staging_version_id, staging_etag, "
                 "multipart_upload_id, immutable_object_key, immutable_version_id, "
                 "immutable_etag, operation_kind, operation_fence, "
@@ -1380,6 +1385,7 @@ def complete_upload_cleanup(
                 ":version": version,
                 ":next": version + 1,
                 ":cleaned_at": cleaned_at,
+                ":retire": _retire_at(),
                 ":true": True,
             },
         )
@@ -2092,10 +2098,11 @@ def build_message_attachment_transaction(
                         "Update": {
                             "Key": upload_key(upload_id),
                             "UpdateExpression": (
-                                "SET #s=:consumed, #v=#v+:one, durable_attachment_id=:attachment_id"
+                                "SET #s=:consumed, #v=#v+:one, durable_attachment_id=:attachment_id, "
+                                "expires_at=:retire"
                             ),
                             "ConditionExpression": (
-                                "#owner=:owner AND #s=:validated AND #v=:version AND expires_at>:now"
+                                "#owner=:owner AND #s=:validated AND #v=:version AND " + USABLE
                             ),
                             "ExpressionAttributeNames": {
                                 "#owner": "owner_id",
@@ -2109,6 +2116,7 @@ def build_message_attachment_transaction(
                                 ":version": upload_version,
                                 ":one": 1,
                                 ":now": consume_epoch,
+                                ":retire": consume_epoch + UPLOAD_ROW_RETENTION_SECONDS,
                                 ":attachment_id": attachment_id,
                             },
                         }
@@ -2237,10 +2245,10 @@ def build_reply_image_operations(
                     "UpdateExpression": (
                         "SET #s=:consumed, #v=#v+:one, durable_attachment_id=:attachment_id, "
                         "#owner=:owner, student_id=:owner, "
-                        "account_fence_generation=:generation"
+                        "account_fence_generation=:generation, expires_at=:retire"
                     ),
                     "ConditionExpression": (
-                        "#owner=:uploader AND #s=:validated AND #v=:version AND expires_at>:now"
+                        "#owner=:uploader AND #s=:validated AND #v=:version AND " + USABLE
                     ),
                     "ExpressionAttributeNames": {
                         "#owner": "owner_id",
@@ -2256,6 +2264,8 @@ def build_reply_image_operations(
                         ":version": _required_integer(upload.get("version"), minimum=1),
                         ":one": 1,
                         ":now": _required_integer(upload.get("consume_epoch")),
+                        ":retire": _required_integer(upload.get("consume_epoch"))
+                        + UPLOAD_ROW_RETENTION_SECONDS,
                         ":attachment_id": attachment_id,
                     },
                 }
@@ -2857,6 +2867,27 @@ def release_validation(
     )
 
 
+# An upload's usable window (#250). The table's TTL attribute is `expires_at`,
+# so a row written before `usable_until` existed carries its window there.
+USABLE = "(usable_until > :now OR (attribute_not_exists(usable_until) AND expires_at > :now))"
+PAST_USABLE = (
+    "(usable_until <= :now OR (attribute_not_exists(usable_until) AND expires_at <= :now))"
+)
+
+
+def usable_until(item: Mapping[str, object]) -> int:
+    """Until when an upload may still be used, as the epoch second it ends."""
+    stored = item.get("usable_until")
+    if stored is None:
+        stored = item.get("expires_at", 0)
+    return _required_integer(stored)
+
+
+def _retire_at() -> int:
+    """When an upload row that has just ended leaves the table, by its TTL."""
+    return int(datetime.now(UTC).timestamp()) + UPLOAD_ROW_RETENTION_SECONDS
+
+
 def _transition(
     upload_id: str,
     owner_id: str,
@@ -2880,9 +2911,8 @@ def _transition(
     }
     condition = "#owner = :owner AND #status = :source AND #version = :version"
     if now_epoch is not None:
-        names["#expiry"] = "expires_at"
         values[":now"] = now_epoch
-        condition += " AND #expiry > :now"
+        condition += " AND " + USABLE
     update = "SET #status = :target, #version = :next"
     for index, (name, value) in enumerate((attributes or {}).items()):
         names[f"#a{index}"] = name

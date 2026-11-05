@@ -13,6 +13,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 LOCAL_REPORTS_BUCKET_PLACEHOLDER = "stoa-reports"
 PRODUCTION_ENVIRONMENTS = {"production", "prod"}
 UPLOAD_INTENT_TTL_SECONDS = 1800
+# How long an upload row stays on the table once it has ended (#250): the
+# table's TTL attribute is `expires_at`, so it is set only then, never while
+# the upload is in use. The usable window is `usable_until`.
+UPLOAD_ROW_RETENTION_SECONDS = 7 * 24 * 3600
 IMAGE_MAX_BYTES = 10 * 1024 * 1024
 DOCUMENT_MAX_BYTES = 50 * 1024 * 1024
 IMAGE_MAX_EDGE = 4096

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 import json
@@ -18,6 +19,11 @@ DEFAULT_BATCH_LIMIT = 25
 MAX_BATCH_LIMIT = 100
 DEFAULT_PAGE_LIMIT = 100
 MAX_PAGE_LIMIT = 100
+# Pages of the table scanned per run, at most, while looking for a batch.
+DEFAULT_MAX_PAGES = 200
+MAX_PAGES = 1000
+# Stop scanning or cleaning with this much of the Lambda's time left.
+MIN_REMAINING_SECONDS = 20.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,20 +51,40 @@ def cleanup_expired_uploads(
     page_limit: int = DEFAULT_PAGE_LIMIT,
     continuation_token: str | None = None,
     repository: Any = attachment_repo,
+    max_pages: int = DEFAULT_MAX_PAGES,
+    remaining_seconds: Callable[[], float] | None = None,
 ) -> CleanupSummary:
-    """Process at most one page and one explicit batch without exposing coordinates."""
+    """Clean at most one batch, finding it anywhere in the table.
+
+    A scheduled run starts from the top every time, so the scan goes on page
+    after page until the batch is full, the table ends, or the page or time
+    budget is spent (#250): a run that looked at the first page only would
+    never reach most of the table. A run stopped early returns where it got
+    to as an opaque continuation, for a run started by hand.
+    """
     batch_limit = _bounded_limit(batch_limit, DEFAULT_BATCH_LIMIT, MAX_BATCH_LIMIT)
     page_limit = _bounded_limit(page_limit, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT)
+    max_pages = _bounded_limit(max_pages, DEFAULT_MAX_PAGES, MAX_PAGES)
     try:
         cursor = _decode_cursor(continuation_token)
     except ValueError:
         return CleanupSummary(invalid_continuation=1)
     current = (now or datetime.now(UTC)).astimezone(UTC)
-    candidates, next_cursor = repository.list_upload_cleanup_candidates(
-        int(current.timestamp()),
-        limit=page_limit,
-        exclusive_start_key=cursor,
-    )
+
+    def out_of_time() -> bool:
+        return remaining_seconds is not None and remaining_seconds() < MIN_REMAINING_SECONDS
+
+    candidates: list[Any] = []
+    next_cursor: dict[str, Any] | None = cursor
+    for _ in range(max_pages):
+        page, next_cursor = repository.list_upload_cleanup_candidates(
+            int(current.timestamp()),
+            limit=page_limit,
+            exclusive_start_key=next_cursor,
+        )
+        candidates.extend(page)
+        if len(candidates) >= batch_limit or next_cursor is None or out_of_time():
+            break
     counts = {
         "deleted": 0,
         "retryable": 0,
@@ -67,7 +93,11 @@ def cleanup_expired_uploads(
         "skipped": 0,
     }
     selected = candidates[:batch_limit]
-    for candidate in selected:
+    for index, candidate in enumerate(selected):
+        if out_of_time():
+            # What is left is still a candidate next run; stop before the Lambda does.
+            selected = selected[:index]
+            break
         try:
             outcome = cleanup_upload_intent(
                 candidate,
@@ -86,9 +116,10 @@ def cleanup_expired_uploads(
             outcome = "retryable"
         counts[outcome] += 1
     continuation = next_cursor
-    if len(candidates) > batch_limit:
-        # Resume after the last selected record without returning raw coordinates.
-        continuation = _candidate_cursor(selected[-1])
+    if len(candidates) > len(selected):
+        # Resume after the last selected record without returning raw coordinates;
+        # with none cleaned, from where this run started.
+        continuation = _candidate_cursor(selected[-1]) if selected else cursor
     return CleanupSummary(
         scanned=len(selected),
         claimed=len(selected) - counts["skipped"],
@@ -98,14 +129,22 @@ def cleanup_expired_uploads(
 
 
 def handler(event: dict[str, Any] | None, context: Any) -> dict[str, int | str | None]:
-    """Scheduled Lambda entrypoint returning category counts and an opaque cursor only."""
+    """Scheduled Lambda entrypoint returning category counts and an opaque cursor only.
+
+    The schedule sends `{"source": "stoa.scheduler", "job": "upload_cleanup"}`;
+    `batchLimit`, `pageLimit`, `maxPages` and `continuationToken` are for a run
+    started by hand.
+    """
     event = event or {}
+    remaining = getattr(context, "get_remaining_time_in_millis", None)
     result = cleanup_expired_uploads(
         s3=boto3.client("s3", region_name=settings.aws_region),
         settings_obj=settings,
         batch_limit=event.get("batchLimit", DEFAULT_BATCH_LIMIT),
         page_limit=event.get("pageLimit", DEFAULT_PAGE_LIMIT),
+        max_pages=event.get("maxPages", DEFAULT_MAX_PAGES),
         continuation_token=event.get("continuationToken"),
+        remaining_seconds=(lambda: remaining() / 1000) if callable(remaining) else None,
     )
     return result.public_dict()
 
