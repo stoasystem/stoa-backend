@@ -13,8 +13,7 @@ from typing import Any
 import boto3
 
 from stoa.config import Settings, settings
-from stoa.db.repositories import attachment_repo
-from stoa.services.attachment_service import cleanup_upload_intent
+from stoa.services import uploads
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +52,6 @@ def cleanup_expired_uploads(
     batch_limit: int = DEFAULT_BATCH_LIMIT,
     page_limit: int = DEFAULT_PAGE_LIMIT,
     continuation_token: str | None = None,
-    repository: Any = attachment_repo,
     max_pages: int = DEFAULT_MAX_PAGES,
     remaining_seconds: Callable[[], float] | None = None,
 ) -> CleanupSummary:
@@ -80,7 +78,7 @@ def cleanup_expired_uploads(
     candidates: list[Any] = []
     next_cursor: dict[str, Any] | None = cursor
     for _ in range(max_pages):
-        page, next_cursor = repository.list_upload_cleanup_candidates(
+        page, next_cursor = uploads.cleanup_candidates(
             int(current.timestamp()),
             limit=page_limit,
             exclusive_start_key=next_cursor,
@@ -102,13 +100,12 @@ def cleanup_expired_uploads(
             selected = selected[:index]
             break
         try:
-            outcome = cleanup_upload_intent(
+            outcome = uploads.cleanup(
                 candidate,
                 s3=s3,
                 settings=settings_obj,
                 now=current,
                 reference_scan_limit=page_limit,
-                repository=repository,
             )
             if outcome not in counts:
                 outcome = "retryable"

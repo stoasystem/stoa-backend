@@ -170,7 +170,7 @@ def create_conversation_record(
 def owns_conversation(
     conversation_id: str, owner_id: str, *, table: object | None = None
 ) -> bool:
-    """Whether this learning session exists and is the owner's own."""
+    """Whether this learning session exists, is the owner's own, and is not deleted."""
     target = table or get_table()
     item = attachment_repo._optional_mapping(
         attachment_repo._get_item(
@@ -183,6 +183,7 @@ def owns_conversation(
         item is not None
         and item.get("entity_type") == "conversation"
         and item.get("student_id") == owner_id
+        and item.get("status") != "deleted"
     )
 
 

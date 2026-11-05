@@ -11,7 +11,9 @@ import pytest
 from stoa.config import UPLOAD_ROW_RETENTION_SECONDS, Settings
 from stoa.db.repositories import attachment_repo
 from stoa.jobs.upload_cleanup import cleanup_expired_uploads
-from stoa.services.attachment_service import cleanup_upload_intent
+from stoa.services.uploads._lifecycle import cleanup_upload_intent
+from stoa.services import uploads
+from stoa.services.uploads import _store as upload_store
 
 
 NOW = datetime(2026, 7, 17, tzinfo=UTC)
@@ -446,7 +448,7 @@ def test_part_rows_receive_lifecycle_ttl() -> None:
     parent_expiry = NOW_EPOCH + 600
     table = _PutRecordingTable(intent_expires_at=parent_expiry)
 
-    attachment_repo.pin_upload_part(
+    upload_store.pin_upload_part(
         "opaque-upload",
         1,
         "a" * 64,
@@ -523,7 +525,7 @@ class _ExpressionValidatingTable:
 def test_upload_transition_declares_no_unused_placeholder() -> None:
     table = _ExpressionValidatingTable()
 
-    claimed = attachment_repo.claim_staging_assembly(
+    claimed = upload_store.claim_staging_assembly(
         "opaque-upload",
         "owner-1",
         3,
@@ -548,7 +550,7 @@ def test_part_pin_accepts_the_decimal_a_real_table_returns() -> None:
     parent_expiry = NOW_EPOCH + 600
     table = _PutRecordingTable(intent_expires_at=Decimal(parent_expiry))
 
-    attachment_repo.pin_upload_part(
+    upload_store.pin_upload_part(
         "opaque-upload",
         1,
         "a" * 64,
@@ -574,15 +576,15 @@ class _EligibilityRecordingTable:
 def test_repository_candidate_policy_never_uses_operation_lease_as_ttl() -> None:
     table = _EligibilityRecordingTable()
 
-    attachment_repo.list_upload_cleanup_candidates(NOW_EPOCH, limit=10, table=table)
+    upload_store.list_upload_cleanup_candidates(NOW_EPOCH, limit=10, table=table)
 
     assert table.scan_request is not None
     assert "operation_lease_expires_at" not in table.scan_request["FilterExpression"]
 
 
 def test_job_isolates_candidate_failure_and_preserves_continuation(monkeypatch) -> None:
-    uploads = [_candidate(f"opaque-{index}") for index in range(3)]
-    repository = StatefulCleanupRepository(uploads)
+    rows = [_candidate(f"opaque-{index}") for index in range(3)]
+    repository = StatefulCleanupRepository(rows)
     visited: list[str] = []
 
     def isolated(candidate, **kwargs):
@@ -591,14 +593,16 @@ def test_job_isolates_candidate_failure_and_preserves_continuation(monkeypatch) 
             raise RuntimeError("candidate-private-provider-diagnostic-canary")
         return "deleted"
 
-    monkeypatch.setattr("stoa.jobs.upload_cleanup.cleanup_upload_intent", isolated)
+    monkeypatch.setattr(uploads, "cleanup", isolated)
+    monkeypatch.setattr(
+        upload_store, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
+    )
     result = cleanup_expired_uploads(
         s3=StatefulProvider(),
         settings_obj=Settings(s3_images_bucket="private-bucket-canary"),
         now=NOW,
         batch_limit=2,
         page_limit=3,
-        repository=repository,
     )
 
     assert visited == ["opaque-0", "opaque-1"]
@@ -608,15 +612,18 @@ def test_job_isolates_candidate_failure_and_preserves_continuation(monkeypatch) 
 
 
 def test_job_continuation_wraparound_visits_every_candidate(monkeypatch) -> None:
-    uploads = [_candidate(f"opaque-{index}") for index in range(5)]
-    repository = StatefulCleanupRepository(uploads)
+    rows = [_candidate(f"opaque-{index}") for index in range(5)]
+    repository = StatefulCleanupRepository(rows)
     visited: list[str] = []
 
     def observed(candidate, **kwargs):
         visited.append(candidate["upload_id"])
         return "deferred"
 
-    monkeypatch.setattr("stoa.jobs.upload_cleanup.cleanup_upload_intent", observed)
+    monkeypatch.setattr(uploads, "cleanup", observed)
+    monkeypatch.setattr(
+        upload_store, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
+    )
     token = None
     for _ in range(3):
         result = cleanup_expired_uploads(
@@ -626,8 +633,7 @@ def test_job_continuation_wraparound_visits_every_candidate(monkeypatch) -> None
             batch_limit=2,
             page_limit=5,
             continuation_token=token,
-            repository=repository,
-        )
+            )
         token = result.continuation_token
 
     assert visited == ["opaque-0", "opaque-1", "opaque-2", "opaque-3", "opaque-4"]
@@ -640,7 +646,6 @@ def test_job_continuation_wraparound_visits_every_candidate(monkeypatch) -> None
         batch_limit=2,
         page_limit=5,
         continuation_token=token,
-        repository=repository,
     )
     assert wrapped.scanned == 2
     assert visited[-2:] == ["opaque-0", "opaque-1"]

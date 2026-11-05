@@ -34,7 +34,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 import pytest
 
-from stoa.config import Settings
+from stoa.config import UPLOAD_INTENT_TTL_SECONDS, Settings
 from stoa.db.repositories import (
     account_deletion_repo,
     attachment_repo,
@@ -404,15 +404,13 @@ def test_the_moment_between_spending_the_code_and_opening_the_upload_is_progress
     api = _Api(monkeypatch, table)
     issued = api.code()
     seen: list[str] = []
-    real_open = upload_code_service.attachment_service.create_upload_intent
+    real_open = upload_code_service.uploads.start
 
     def computer_polls_first(*args: Any, **kwargs: Any):
         seen.append(api.status(issued["codeId"]).json()["status"])
         return real_open(*args, **kwargs)
 
-    monkeypatch.setattr(
-        upload_code_service.attachment_service, "create_upload_intent", computer_polls_first
-    )
+    monkeypatch.setattr(upload_code_service.uploads, "start", computer_polls_first)
 
     assert api.redeem(issued["code"]).status_code == 200
     assert seen == ["uploading"]
@@ -984,3 +982,18 @@ def test_a_code_made_for_no_conversation_is_as_short_lived_and_single_use(monkey
     fresh = api.issue_unbound().json()
     assert api.redeem(fresh["code"]).status_code == 200
     assert _refusal(api.redeem(fresh["code"])) == INVALID
+
+
+def test_a_photo_left_past_its_usable_window_shows_expired_not_ready(monkeypatch, table) -> None:
+    """The computer showed "ready" for a photo that could no longer be sent (#252)."""
+    api = _Api(monkeypatch, table)
+    issued = api.code()
+    _token, completed = api.phone_upload(issued["code"], _png())
+    assert completed.status_code == 200
+    assert api.status(issued["codeId"]).json()["status"] == "ready"
+
+    api.clock.now = START + timedelta(seconds=UPLOAD_INTENT_TTL_SECONDS + 1)
+
+    shown = api.status(issued["codeId"]).json()
+    assert (shown["status"], shown.get("uploadId")) == ("expired", None)
+    assert api.preview(issued["codeId"]).status_code == 404

@@ -8,6 +8,7 @@ import pytest
 from stoa.config import Settings
 from stoa.db.repositories import attachment_repo
 from stoa.services import attachment_service, learning_session
+from stoa.services.uploads import _store as upload_store
 
 
 OWNER = "student-retention"
@@ -257,7 +258,7 @@ class _CaptureUpdateTable:
 def test_promotion_success_persists_cleanup_debt_before_staging_delete() -> None:
     table = _CaptureUpdateTable()
 
-    assert attachment_repo.record_immutable_version(
+    assert upload_store.record_immutable_version(
         "upload-1",
         OWNER,
         4,

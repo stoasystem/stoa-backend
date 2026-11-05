@@ -18,8 +18,9 @@ from typing import Any
 import pytest
 
 from stoa.config import UPLOAD_INTENT_TTL_SECONDS, UPLOAD_ROW_RETENTION_SECONDS, Settings
-from stoa.db.repositories import attachment_repo
 from stoa.jobs import upload_cleanup
+from stoa.services import uploads
+from stoa.services.uploads import _store as upload_store
 from fakes.dynamodb import FakeTable
 from fakes.s3 import MultipartS3
 
@@ -78,8 +79,8 @@ def test_an_upload_past_its_window_signs_no_more_parts(monkeypatch, table, field
 
 
 def test_usable_until_falls_back_to_the_ttl_field_of_an_old_row() -> None:
-    assert attachment_repo.usable_until({"usable_until": 10, "expires_at": 99}) == 10
-    assert attachment_repo.usable_until({"expires_at": 99}) == 99
+    assert upload_store.usable_until({"usable_until": 10, "expires_at": 99}) == 10
+    assert upload_store.usable_until({"expires_at": 99}) == 99
 
 
 # ── The sweep pages through the whole table ───────────────────────────────────
@@ -111,24 +112,28 @@ def cleaned(monkeypatch: pytest.MonkeyPatch) -> list[str]:
         seen.append(candidate["upload_id"])
         return "deleted"
 
-    monkeypatch.setattr(upload_cleanup, "cleanup_upload_intent", cleanup)
+    monkeypatch.setattr(uploads, "cleanup", cleanup)
     return seen
 
 
-def _sweep(repository: _Pages, **kwargs: Any) -> upload_cleanup.CleanupSummary:
+def _sweep(
+    monkeypatch: pytest.MonkeyPatch, repository: _Pages, **kwargs: Any
+) -> upload_cleanup.CleanupSummary:
+    monkeypatch.setattr(
+        upload_store, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
+    )
     return upload_cleanup.cleanup_expired_uploads(
         s3=MultipartS3(BUCKET),
         settings_obj=Settings(s3_images_bucket=BUCKET),
-        repository=repository,
         **kwargs,
     )
 
 
-def test_candidates_past_the_first_page_are_cleaned(cleaned) -> None:
+def test_candidates_past_the_first_page_are_cleaned(monkeypatch, cleaned) -> None:
     # Most of the table is not uploads: the first pages match nothing.
     repository = _Pages([[], [], [_candidate(1)], [], [_candidate(2)]])
 
-    summary = _sweep(repository)
+    summary = _sweep(monkeypatch, repository)
 
     assert cleaned == ["u1", "u2"]
     assert summary.deleted == 2
@@ -136,10 +141,10 @@ def test_candidates_past_the_first_page_are_cleaned(cleaned) -> None:
     assert len(repository.reads) == 5
 
 
-def test_one_run_cleans_at_most_one_batch(cleaned) -> None:
+def test_one_run_cleans_at_most_one_batch(monkeypatch, cleaned) -> None:
     repository = _Pages([[_candidate(n) for n in range(30)], [_candidate(99)]])
 
-    summary = _sweep(repository)
+    summary = _sweep(monkeypatch, repository)
 
     assert len(cleaned) == upload_cleanup.DEFAULT_BATCH_LIMIT == 25
     assert summary.continuation_token is not None
@@ -147,7 +152,7 @@ def test_one_run_cleans_at_most_one_batch(cleaned) -> None:
     assert len(repository.reads) == 1
 
 
-def test_a_run_short_of_time_stops_before_the_lambda_does(cleaned) -> None:
+def test_a_run_short_of_time_stops_before_the_lambda_does(monkeypatch, cleaned) -> None:
     repository = _Pages([[_candidate(1)], [_candidate(2)], [_candidate(3)]])
     calls = 0
 
@@ -156,17 +161,17 @@ def test_a_run_short_of_time_stops_before_the_lambda_does(cleaned) -> None:
         calls += 1
         return 60.0 if calls == 1 else 5.0
 
-    _sweep(repository, remaining_seconds=remaining)
+    _sweep(monkeypatch, repository, remaining_seconds=remaining)
 
     # Stopped scanning after the second page, and cleaned nothing it had no time for.
     assert len(repository.reads) == 2
     assert cleaned == []
 
 
-def test_the_page_budget_bounds_one_run(cleaned) -> None:
+def test_the_page_budget_bounds_one_run(monkeypatch, cleaned) -> None:
     repository = _Pages([[] for _ in range(10)])
 
-    summary = _sweep(repository, max_pages=3)
+    summary = _sweep(monkeypatch, repository, max_pages=3)
 
     assert len(repository.reads) == 3
     assert cleaned == []
@@ -176,7 +181,7 @@ def test_the_page_budget_bounds_one_run(cleaned) -> None:
 def test_the_scheduled_event_runs_the_sweep(monkeypatch: pytest.MonkeyPatch, cleaned) -> None:
     repository = _Pages([[_candidate(1)]])
     monkeypatch.setattr(
-        attachment_repo, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
+        upload_store, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
     )
     monkeypatch.setattr(upload_cleanup.boto3, "client", lambda *_a, **_k: MultipartS3(BUCKET))
 
@@ -197,7 +202,7 @@ def test_each_run_logs_its_counts_without_the_cursor(
     # the log line is the only place a run's counts show up (#256).
     repository = _Pages([[_candidate(1), _candidate(2)], [_candidate(3)]])
     monkeypatch.setattr(
-        attachment_repo, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
+        upload_store, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
     )
     monkeypatch.setattr(upload_cleanup.boto3, "client", lambda *_a, **_k: MultipartS3(BUCKET))
 
@@ -248,7 +253,7 @@ def test_a_protected_upload_starts_its_ttl() -> None:
     table = FakeTable()
     _cleanup_pending(table)
 
-    assert attachment_repo.block_upload_cleanup("u-ended", 3, table=table)
+    assert upload_store.block_upload_cleanup("u-ended", 3, table=table)
 
     row = _row(table, "u-ended")
     assert row["status"] == "cleanup_blocked"
@@ -265,7 +270,7 @@ def test_a_cleaned_upload_starts_its_ttl() -> None:
         cleanup_parts_absent=True,
     )
 
-    assert attachment_repo.complete_upload_cleanup(
+    assert upload_store.complete_upload_cleanup(
         "u-ended", 3, datetime.now(UTC).isoformat(), table=table
     )
 
@@ -282,7 +287,7 @@ def test_the_account_deletion_function_runs_the_sweep_by_name(
 
     repository = _Pages([[_candidate(1)]])
     monkeypatch.setattr(
-        attachment_repo, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
+        upload_store, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
     )
     monkeypatch.setattr(upload_cleanup.boto3, "client", lambda *_a, **_k: MultipartS3(BUCKET))
     monkeypatch.setattr(

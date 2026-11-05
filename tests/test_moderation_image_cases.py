@@ -46,6 +46,7 @@ from stoa.jobs import moderation_image_retention
 from stoa.routers import admin, files, notifications
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import account_deletion_service, locale_service, message_catalog
+from stoa.services.uploads import _store as upload_store
 from actor_helpers import install_actor_overrides
 from fakes.dynamodb import FakeTable, as_stored
 from fakes.learning_session import patch_session_table, seed_conversation
@@ -496,7 +497,7 @@ def test_a_lost_image_keeps_account_deletion_waiting(world, monkeypatch) -> None
 def test_a_retried_refusal_opens_no_second_case(world, monkeypatch) -> None:
     """The case is written, then ending the upload fails; the retry finds the case."""
     upload_id = world.upload(_png())
-    mark_invalid = attachment_repo.mark_invalid
+    mark_invalid = upload_store.mark_invalid
     failures = [RuntimeError("table unavailable")]
 
     def fail_once(*args: Any, **kwargs: Any) -> Any:
@@ -504,7 +505,7 @@ def test_a_retried_refusal_opens_no_second_case(world, monkeypatch) -> None:
             raise failures.pop()
         return mark_invalid(*args, **kwargs)
 
-    monkeypatch.setattr(attachment_repo, "mark_invalid", fail_once)
+    monkeypatch.setattr(upload_store, "mark_invalid", fail_once)
 
     assert world.complete(upload_id).status_code == 503
     assert world.complete(upload_id).status_code == 422

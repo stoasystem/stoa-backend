@@ -13,12 +13,14 @@ from pydantic import BaseModel
 import pytest
 
 from stoa.config import Settings, get_settings
+from stoa.db.repositories import attachment_repo
 from stoa.deps import get_actor, get_s3_client
 from stoa.models import attachment as attachment_models
 from stoa.routers import files
 from stoa.security import attachment_errors
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import attachment_service
+from fakes.dynamodb import FakeTable
 
 
 PRIVATE_CANARIES = (
@@ -360,7 +362,11 @@ class _PurgeRepository:
         return []
 
 
-def test_purge_hook_returns_typed_independent_progress_without_aggregate_authority() -> None:
+def test_purge_hook_returns_typed_independent_progress_without_aggregate_authority(
+    monkeypatch,
+) -> None:
+    # The account's upload rows are the upload package's: none, on an empty table.
+    monkeypatch.setattr(attachment_repo, "get_table", lambda: FakeTable())
     result_type = getattr(attachment_service, "AttachmentPurgeBranchResult", None)
     assert result_type is not None
     assert not hasattr(result_type, "finalize_account")

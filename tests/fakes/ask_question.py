@@ -57,6 +57,7 @@ from stoa.services.document_extraction_service import (
     extract_attachment_text,
 )
 from stoa.services.document_parser_worker import ParserResult
+from stoa.services.uploads import _store as upload_store
 from test_token_allowances import AtomicAllowanceTable  # re-exported for the question tests
 
 CONV = "conv-1"
@@ -1059,7 +1060,7 @@ def _upload(
     bucket.put(key, "immutable-version", data)
     table.seed(
         {
-            **attachment_repo.upload_key(upload_id),
+            **upload_store.upload_key(upload_id),
             "upload_id": upload_id,
             "owner_id": STUDENT,
             "immutable_object_key": key,
