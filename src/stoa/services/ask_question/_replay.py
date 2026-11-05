@@ -21,7 +21,9 @@ from stoa.services import learning_session
 def _validate_replay_attachment(
     item: Any, *, attachment_id: str, owner_id: str
 ) -> dict[str, Any]:
-    if not isinstance(item, dict):
+    # Readable at all first, as every reader judges it; then what a replay
+    # needs on top: the exact row, the student's, of this schema.
+    if not attachment_service.is_live_attachment(item) or not isinstance(item, dict):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     text_fields = (
         "immutable_object_key",

@@ -41,7 +41,7 @@ from stoa.models.attachment import (
     UploadPurpose,
 )
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
-from stoa.security.identity import Actor
+from stoa.security.identity import AccountStatus, Actor
 from stoa.services.ai_service import PromptImage
 from stoa.services.file_validation_service import ValidationFailure, validate_uploaded_file
 from stoa.services.document_extraction_service import (
@@ -417,20 +417,44 @@ def _exact_version_absence(
     return False, {"KeyMarker": previous[0], "VersionIdMarker": previous[1]}, page
 
 
-def resolve_owned_attachment(
-    attachment_id: str, actor: Actor, *, repository: Any = attachment_repo
+def is_live_attachment(item: object, *, for_reading: bool = True) -> bool:
+    """Whether a stored row is a live attachment: active and owned.
+
+    For reading it must also name every immutable field its bytes are read and
+    checked by (`IMMUTABLE_OBJECT_FIELDS`); a row without them is refused, not
+    read. Deleting one needs only the first two, so a broken row can still go.
+    """
+    if not isinstance(item, Mapping) or item.get("status") != AttachmentStatus.ACTIVE:
+        return False
+    owner_id = item.get("owner_id")
+    if not isinstance(owner_id, str) or not owner_id:
+        return False
+    if for_reading:
+        try:
+            _require_immutable_record(item)
+        except (AttachmentDecisionError, TypeError, ValueError):
+            return False
+    return True
+
+
+def readable_attachment(
+    actor: Actor, attachment_id: str, *, repository: Any = attachment_repo
 ) -> dict[str, Any]:
+    """The live attachment an authorized actor asked for, or `UPLOAD_NOT_FOUND`.
+
+    Who may read whose attachment (its owner, a parent or teacher the policy
+    lets in) is the route's to decide before it asks; this decides whether the
+    attachment can be read at all, and whether the actor's account still can.
+    Everything that reads an attachment for someone judges it here, or by
+    `is_live_attachment` on a row it has already read.
+    """
+    if actor.account_status is not AccountStatus.ACTIVE:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     item = _gateway_call(lambda: repository.get_attachment(attachment_id))
     if item is not None and not isinstance(item, dict):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-    if (
-        actor.account_status.value != "active"
-        or not item
-        or item.get("owner_id") != actor.user_id
-        or item.get("status") != "active"
-    ):
+    if not is_live_attachment(item):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
-    _require_immutable_record(item)
     return item
 
 
@@ -767,9 +791,12 @@ def prepare_message_attachments(
             _require_immutable_record(item)
             prepared.append(("upload", item))
         else:
-            item = resolve_owned_attachment(
-                str(reference.attachment_id), actor, repository=repository
+            item = readable_attachment(
+                actor, str(reference.attachment_id), repository=repository
             )
+            # A message carries only the student's own saved attachments.
+            if item.get("owner_id") != actor.user_id:
+                raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
             prepared.append(("attachment", item))
     _require_model_sized_images(item for _, item in prepared)
     return prepared
@@ -1692,18 +1719,18 @@ def list_attachment_summaries(
     return {
         attachment_id: _attachment_summary(item)
         for attachment_id, item in records.items()
-        if item.get("status") == "active"
+        if is_live_attachment(item)
     }
 
 
 def attachment_summaries_for_records(
     attachment_ids: list[str], records: dict[str, dict[str, Any]]
 ) -> list[AttachmentSummary]:
-    """Project already-authorized active records without another repository read."""
+    """Project already-authorized live records without another repository read."""
     return [
         _attachment_summary(records[value])
         for value in attachment_ids
-        if value in records and records[value].get("status") == "active"
+        if value in records and is_live_attachment(records[value])
     ]
 
 
