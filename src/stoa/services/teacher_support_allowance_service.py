@@ -98,7 +98,7 @@ class TeacherSupportRefundResult:
 
 def current_week_identity(observed_at: datetime | None = None) -> str:
     """The Zurich week a case spent at ``observed_at`` would be counted in."""
-    return _week_identity(weekly_counter.zurich_week(_aware(observed_at, "observed_at")))
+    return weekly_counter.zurich_week(_aware(observed_at, "observed_at")).identity
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,10 +229,6 @@ def _parse_timestamp(value: object, field: str) -> datetime:
     return parsed
 
 
-def _week_identity(week: ZurichWeek) -> str:
-    return f"{week.iso_year:04d}-W{week.iso_week:02d}"
-
-
 def _case_key(case_kind: str, support_case_id: str) -> dict[str, str]:
     identity = _domain_digest(
         b"stoa.teacher-support.case.v1",
@@ -240,13 +236,6 @@ def _case_key(case_kind: str, support_case_id: str) -> dict[str, str]:
         support_case_id,
     )
     return {"PK": f"TEACHER_SUPPORT_CASE#{identity}", "SK": "ADMISSION"}
-
-
-def _counter_key(scope_id: str, week_identity: str) -> dict[str, str]:
-    return {
-        "PK": f"TEACHER_SUPPORT#{scope_id}",
-        "SK": f"WEEK#{week_identity}",
-    }
 
 
 def _granting_parent(
@@ -287,10 +276,30 @@ def _resolve_scope(
     none - which today is every student, payments being frozen - the student
     has the figure they were assigned.
     """
-    paid = _resolve_paid_scope(beneficiary_id, table=table)
+    beneficiary = _required_text(beneficiary_id, "beneficiary_id")
+    student = _active_student(beneficiary)
+    if student is None:
+        return None
+    paid = _resolve_paid_scope(beneficiary, student, table=table)
     if paid is not None:
         return paid
-    return _resolve_assigned_scope(beneficiary_id, table=table)
+    return _resolve_assigned_scope(beneficiary, student, table=table)
+
+
+def _active_student(beneficiary: str) -> dict[str, object] | None:
+    """The student's profile, when it is an active student's; read once per scope."""
+    try:
+        student = _mapping(user_repo.get_user(beneficiary))
+    except Exception:
+        raise _DependencyFailure("student entitlement is unavailable") from None
+    if (
+        student is None
+        or student.get("user_id") != beneficiary
+        or student.get("role") != "student"
+        or student.get("account_status") != "active"
+    ):
+        return None
+    return student
 
 
 def assigned_weekly_cases(student: Mapping[str, object] | None) -> int:
@@ -304,7 +313,8 @@ def assigned_weekly_cases(student: Mapping[str, object] | None) -> int:
 
 
 def _resolve_assigned_scope(
-    beneficiary_id: str,
+    beneficiary: str,
+    student: Mapping[str, object],
     *,
     table: object,
 ) -> _ResolvedScope | None:
@@ -316,32 +326,12 @@ def _resolve_assigned_scope(
     added here - the case repository already contributes it, and one transaction
     cannot target the same row twice.
     """
-    beneficiary = _required_text(beneficiary_id, "beneficiary_id")
-    try:
-        student = _mapping(user_repo.get_user(beneficiary))
-    except Exception:
-        raise _DependencyFailure("student entitlement is unavailable") from None
-    if student is None:
-        return None
-    if (
-        student.get("user_id") != beneficiary
-        or student.get("role") != "student"
-        or student.get("account_status") != "active"
-    ):
-        return None
     try:
         profile_version = _positive_integer(student.get("version"), "version")
     except ValueError:
         return None
 
-    try:
-        raised = _mapping(
-            _strong_get(table, {"PK": f"USER#{beneficiary}", "SK": ASSIGNED_ALLOWANCE_SK})
-        )
-    except _DependencyFailure:
-        raise
-    except Exception:
-        raise _DependencyFailure("assigned allowance is unavailable") from None
+    raised = _strong_get(table, {"PK": f"USER#{beneficiary}", "SK": ASSIGNED_ALLOWANCE_SK})
     allowance_version: int | None = None
     if raised is not None:
         if raised.get("entity_type") != "teacher_support_assigned_allowance" or raised.get(
@@ -385,23 +375,11 @@ def _resolve_assigned_scope(
 
 
 def _resolve_paid_scope(
-    beneficiary_id: str,
+    beneficiary: str,
+    student: Mapping[str, object],
     *,
     table: object,
 ) -> _ResolvedScope | None:
-    beneficiary = _required_text(beneficiary_id, "beneficiary_id")
-    try:
-        student = _mapping(user_repo.get_user(beneficiary))
-    except Exception:
-        raise _DependencyFailure("student entitlement is unavailable") from None
-    if student is None:
-        return None
-    if (
-        student.get("user_id") != beneficiary
-        or student.get("role") != "student"
-        or student.get("account_status") != "active"
-    ):
-        return None
     try:
         parent_id, grant, authority = _granting_parent(student, beneficiary, table=table)
     except Exception:
@@ -652,7 +630,7 @@ def _student_profile_condition(
         ":active": "active",
         ":version": student_profile_version,
     }
-    if _relationship_source(scope) == paid_entitlement_service.RELATIONSHIP_SOURCE_BINDING:
+    if scope.relationship_source == paid_entitlement_service.RELATIONSHIP_SOURCE_BINDING:
         expression += " AND parent_id=:parent_id AND parent_binding_status=:active"
         values[":parent_id"] = scope.parent_id
     return {
@@ -669,15 +647,11 @@ def _student_profile_condition(
     }
 
 
-def _relationship_source(scope: _ResolvedScope) -> str:
-    return scope.relationship_source
-
-
 def _relationship_conditions(scope: _ResolvedScope) -> tuple[AdmissionOperation, ...]:
     """Fence the two rows of whichever table authorized the grant."""
     if scope.support_source == SUPPORT_SOURCE_ASSIGNED:
         return ()
-    if _relationship_source(scope) == paid_entitlement_service.RELATIONSHIP_SOURCE_LINK:
+    if scope.relationship_source == paid_entitlement_service.RELATIONSHIP_SOURCE_LINK:
         return (
             _link_condition(
                 key=parent_link_repo.parent_side_key(
@@ -842,20 +816,25 @@ def _classify_existing(
     )
 
 
-def _validated_counter(
-    item: Mapping[str, object],
-    *,
-    scope: _ResolvedScope,
-    week: ZurichWeek,
-) -> tuple[int, int]:
-    identity = _week_identity(week)
+def _read_counter(
+    target: object, scope: _ResolvedScope, week: ZurichWeek
+) -> weekly_counter.Counter | None:
+    """The scope's counter for `week`, with the fields only this service writes checked.
+
+    The shape every counter shares is `weekly_counter`'s to check.
+    """
+    try:
+        counter = weekly_counter.read(
+            weekly_counter.CASES, scope.support_scope_id, week, table=target
+        )
+    except weekly_counter.CounterUnavailable as exc:
+        raise _DependencyFailure(str(exc)) from None
+    if counter is None:
+        return None
+    item = counter.item
     assigned = scope.support_source == SUPPORT_SOURCE_ASSIGNED
     if (
-        item.get("entity_type") != "teacher_support_counter"
-        or item.get("schema_version") != COUNTER_SCHEMA_VERSION
-        or item.get("support_scope_id") != scope.support_scope_id
-        or item.get("support_scope") != scope.support_scope.value
-        or item.get("week_identity") != identity
+        item.get("support_scope") != scope.support_scope.value
         or item.get("plan_id") != str(scope.plan_id)
         or item.get("plan_version") != scope.plan_version
         or item.get("allowance_version") != scope.allowance_version
@@ -866,19 +845,18 @@ def _validated_counter(
         or (not assigned and item.get("limit") != scope.limit)
     ):
         raise _DependencyFailure("teacher-support counter is malformed")
-    admitted_cases = _stored_nonnegative_integer(
-        item.get("admitted_cases"), "admitted_cases"
-    )
-    state_version = _positive_integer(
-        item.get("state_version"), "state_version"
-    )
-    if admitted_cases > scope.limit:
-        # Same reasoning in the other direction: lowering the figure below what
-        # the week already spent is a refusal for the rest of the week, not a
-        # damaged row. Under a fixed plan figure it is still damage.
-        if not assigned:
-            raise _DependencyFailure("teacher-support counter is malformed")
-    return admitted_cases, state_version
+    if counter.count("admitted_cases") > scope.limit and not assigned:
+        # Lowering an assigned figure below what the week already spent is a
+        # refusal for the rest of the week, not a damaged row. Under a fixed plan
+        # figure it is damage.
+        raise _DependencyFailure("teacher-support counter is malformed")
+    return counter
+
+
+def _spent(target: object, scope: _ResolvedScope, week: ZurichWeek) -> int:
+    """How many cases the scope has spent in `week`; what both reads report."""
+    counter = _read_counter(target, scope, week)
+    return 0 if counter is None else counter.count("admitted_cases")
 
 
 def admit_teacher_support_case(
@@ -921,13 +899,13 @@ def admit_teacher_support_case(
             beneficiary_id=beneficiary,
         )
     week = weekly_counter.zurich_week(observed)
-    identity = _week_identity(week)
+    identity = week.identity
     # Resolved once per attempt, not once per call. The scope carries the
     # versions this admission fences, so a scope read before somebody changed
     # the student's figure can only ever be refused - and refused four times in
     # a row reaches the student as a 503 for something an administrator did to
     # help them.
-    for _ in range(4):
+    def attempt() -> TeacherSupportAdmissionResult:
         try:
             scope = _resolve_scope(beneficiary, table=target)
         except _DependencyFailure:
@@ -939,7 +917,6 @@ def admit_teacher_support_case(
             return TeacherSupportAdmissionResult(
                 TeacherSupportAdmissionDisposition.PLAN_DENIED
             )
-        counter_key = _counter_key(scope.support_scope_id, identity)
         try:
             existing = _strong_get(target, receipt_key)
             if existing is not None:
@@ -949,23 +926,13 @@ def admit_teacher_support_case(
                     case_kind=kind,
                     beneficiary_id=beneficiary,
                 )
-            raw_counter = _strong_get(target, counter_key)
-            if raw_counter is None:
-                admitted_cases = 0
-                state_version = 0
-                counter_exists = False
-            else:
-                admitted_cases, state_version = _validated_counter(
-                    raw_counter,
-                    scope=scope,
-                    week=week,
-                )
-                counter_exists = True
+            counter = _read_counter(target, scope, week)
         except _DependencyFailure:
             logger.warning("Teacher-support admission deferred", exc_info=True)
             return TeacherSupportAdmissionResult(
                 TeacherSupportAdmissionDisposition.RETRYABLE
             )
+        admitted_cases = 0 if counter is None else counter.count("admitted_cases")
         if admitted_cases >= scope.limit:
             return TeacherSupportAdmissionResult(
                 TeacherSupportAdmissionDisposition.LIMIT_EXCEEDED
@@ -1005,45 +972,22 @@ def admit_teacher_support_case(
             "state_version": 1,
             "admitted_at": _timestamp(observed),
         }
-        counter = {
-            **counter_key,
-            "entity_type": "teacher_support_counter",
-            "schema_version": COUNTER_SCHEMA_VERSION,
-            "support_scope": scope.support_scope.value,
-            "support_scope_id": scope.support_scope_id,
-            "plan_id": str(scope.plan_id),
-            "plan_version": scope.plan_version,
-            "allowance_version": scope.allowance_version,
-            "grant_id": scope.grant_id,
-            "week_identity": identity,
-            "window_start": _timestamp(week.window_start),
-            "window_end": _timestamp(week.window_end),
-            "admitted_cases": post_count,
-            "limit": scope.limit,
-            "state_version": state_version + 1,
-            "updated_at": _timestamp(observed),
-        }
-        if not counter_exists:
-            counter["created_at"] = _timestamp(observed)
-        counter_condition: AdmissionOperation = {
-            "Put": {
-                "Item": counter,
-                "ConditionExpression": (
-                    "state_version=:expected_state_version"
-                    if counter_exists
-                    else "attribute_not_exists(PK) AND attribute_not_exists(SK)"
-                ),
-                **(
-                    {
-                        "ExpressionAttributeValues": {
-                            ":expected_state_version": state_version
-                        }
-                    }
-                    if counter_exists
-                    else {}
-                ),
-            }
-        }
+        counter_operation = weekly_counter.write(
+            weekly_counter.CASES,
+            scope.support_scope_id,
+            week,
+            counter,
+            counts={"admitted_cases": post_count},
+            fields={
+                "support_scope": scope.support_scope.value,
+                "plan_id": str(scope.plan_id),
+                "plan_version": scope.plan_version,
+                "allowance_version": scope.allowance_version,
+                "grant_id": scope.grant_id,
+                "limit": scope.limit,
+            },
+            at=observed,
+        )
         operations = (
             *_grant_condition_operations(scope),
             {
@@ -1054,14 +998,19 @@ def admit_teacher_support_case(
                     ),
                 }
             },
-            counter_condition,
+            counter_operation,
         )
-        if _persisted(persist_case, tuple(operations), what="case"):
-            return TeacherSupportAdmissionResult(
-                TeacherSupportAdmissionDisposition.ADMITTED,
-                _admission_from_item(receipt),
-            )
-    return TeacherSupportAdmissionResult(TeacherSupportAdmissionDisposition.RETRYABLE)
+        if not _persisted(persist_case, tuple(operations), what="case"):
+            raise weekly_counter.CounterConflict()
+        return TeacherSupportAdmissionResult(
+            TeacherSupportAdmissionDisposition.ADMITTED,
+            _admission_from_item(receipt),
+        )
+
+    return weekly_counter.retry(
+        attempt,
+        exhausted=TeacherSupportAdmissionResult(TeacherSupportAdmissionDisposition.RETRYABLE),
+    )
 
 
 def refund_teacher_support_case(
@@ -1073,7 +1022,6 @@ def refund_teacher_support_case(
     persist_refund: PersistCase,
     observed_at: datetime | None = None,
     table: object | None = None,
-    attempts: int = 4,
 ) -> TeacherSupportRefundResult:
     """Give an admitted case back, once, to the week it was taken from (#86).
 
@@ -1082,12 +1030,13 @@ def refund_teacher_support_case(
     lowered by one under the same compare-and-set an admission writes it with,
     so a refund and an admission racing for one counter cannot both win.
 
-    ``persist_refund`` is called exactly once per attempt and must commit the
-    caller's own writes in the same transaction. A caller whose own writes were
-    built from a read of its own passes ``attempts=1`` and retries itself, so a
-    refused write is followed by a fresh read rather than the same stale one. A case that was never
-    admitted, or was already refunded, is still handed over as a check on what
-    was seen, so the caller's row moves commit either way.
+    One attempt: ``persist_refund`` is called exactly once and must commit the
+    caller's own writes in the same transaction. A write that did not commit
+    returns ``RETRYABLE``, and the caller - whose own writes were built from a
+    read of its own - reads again and calls again, under `weekly_counter.retry`,
+    so a refused write is never followed by the same stale one. A case that was
+    never admitted, or was already refunded, is still handed over as a check on
+    what was seen, so the caller's row moves commit either way.
     """
     case_id = _required_text(support_case_id, "support_case_id")
     kind = _required_text(case_kind, "case_kind", maximum=20)
@@ -1101,105 +1050,92 @@ def refund_teacher_support_case(
     target = table or get_table()
     receipt_key = _case_key(kind, case_id)
 
-    for _ in range(max(1, attempts)):
-        try:
-            receipt = _strong_get(target, receipt_key)
-        except _DependencyFailure:
-            logger.warning("Teacher-support refund deferred", exc_info=True)
-            return TeacherSupportRefundResult(TeacherSupportRefundDisposition.RETRYABLE)
+    retryable = TeacherSupportRefundResult(TeacherSupportRefundDisposition.RETRYABLE)
+    try:
+        receipt = _strong_get(target, receipt_key)
+    except _DependencyFailure:
+        logger.warning("Teacher-support refund deferred", exc_info=True)
+        return retryable
 
-        if receipt is None:
-            seen = _refund_seen_check(receipt_key, "attribute_not_exists(PK)")
-            if _persisted(persist_refund, (seen,), what="refund"):
-                return TeacherSupportRefundResult(TeacherSupportRefundDisposition.NOT_ADMITTED)
-            continue
-        if (
-            receipt.get("beneficiary_id") != beneficiary
-            or receipt.get("case_kind") != kind
-            or receipt.get("support_case_id") != case_id
-        ):
-            logger.error("Teacher-support refund refused: the receipt names another case")
+    if receipt is None:
+        seen = _refund_seen_check(receipt_key, "attribute_not_exists(PK)")
+        if _persisted(persist_refund, (seen,), what="refund"):
+            return TeacherSupportRefundResult(TeacherSupportRefundDisposition.NOT_ADMITTED)
+        return retryable
+    if (
+        receipt.get("beneficiary_id") != beneficiary
+        or receipt.get("case_kind") != kind
+        or receipt.get("support_case_id") != case_id
+    ):
+        logger.error("Teacher-support refund refused: the receipt names another case")
+        return TeacherSupportRefundResult(TeacherSupportRefundDisposition.IDEMPOTENCY_CONFLICT)
+    if receipt.get("refunded_at"):
+        seen = _refund_seen_check(receipt_key, "attribute_exists(refunded_at)")
+        if _persisted(persist_refund, (seen,), what="refund"):
             return TeacherSupportRefundResult(
-                TeacherSupportRefundDisposition.IDEMPOTENCY_CONFLICT
-            )
-        if receipt.get("refunded_at"):
-            seen = _refund_seen_check(receipt_key, "attribute_exists(refunded_at)")
-            if _persisted(persist_refund, (seen,), what="refund"):
-                return TeacherSupportRefundResult(
-                    TeacherSupportRefundDisposition.ALREADY_REFUNDED,
-                    str(receipt.get("week_identity") or "") or None,
-                )
-            continue
-
-        try:
-            _admission_from_item(receipt)
-            receipt_version = _positive_integer(receipt.get("state_version"), "state_version")
-            counter_key = _counter_key(
-                _required_text(receipt.get("support_scope_id"), "support_scope_id"),
-                _required_text(receipt.get("week_identity"), "week_identity", maximum=8),
-            )
-            counter = _strong_get(target, counter_key)
-            if (
-                counter is None
-                or counter.get("entity_type") != "teacher_support_counter"
-                or counter.get("support_scope_id") != receipt.get("support_scope_id")
-                or counter.get("week_identity") != receipt.get("week_identity")
-            ):
-                raise _DependencyFailure("teacher-support counter is missing for a receipt")
-            admitted = _stored_nonnegative_integer(
-                counter.get("admitted_cases"), "admitted_cases"
-            )
-            counter_version = _positive_integer(counter.get("state_version"), "state_version")
-            if admitted < 1:
-                raise _DependencyFailure("teacher-support counter has no case to give back")
-        except (_DependencyFailure, ValueError):
-            # A receipt with no case on its counter is damage, not a race: the
-            # refund waits for a repair rather than inventing a count.
-            logger.error("Teacher-support refund refused on damaged rows", exc_info=True)
-            return TeacherSupportRefundResult(TeacherSupportRefundDisposition.RETRYABLE)
-
-        stamp = _timestamp(observed)
-        operations = (
-            {
-                "Put": {
-                    "Item": {
-                        **receipt,
-                        "refunded_at": stamp,
-                        "refund_reason": refund_reason,
-                        "state_version": receipt_version + 1,
-                    },
-                    "ConditionExpression": (
-                        "state_version = :receipt_version "
-                        "AND attribute_not_exists(refunded_at)"
-                    ),
-                    "ExpressionAttributeValues": {":receipt_version": receipt_version},
-                }
-            },
-            {
-                "Put": {
-                    "Item": {
-                        **counter,
-                        "admitted_cases": admitted - 1,
-                        "state_version": counter_version + 1,
-                        "updated_at": stamp,
-                    },
-                    "ConditionExpression": (
-                        "state_version = :expected_state_version "
-                        "AND admitted_cases = :expected_admitted_cases"
-                    ),
-                    "ExpressionAttributeValues": {
-                        ":expected_state_version": counter_version,
-                        ":expected_admitted_cases": admitted,
-                    },
-                }
-            },
-        )
-        if _persisted(persist_refund, operations, what="refund"):
-            return TeacherSupportRefundResult(
-                TeacherSupportRefundDisposition.REFUNDED,
+                TeacherSupportRefundDisposition.ALREADY_REFUNDED,
                 str(receipt.get("week_identity") or "") or None,
             )
-    return TeacherSupportRefundResult(TeacherSupportRefundDisposition.RETRYABLE)
+        return retryable
+
+    try:
+        admission = _admission_from_item(receipt)
+        receipt_version = _positive_integer(receipt.get("state_version"), "state_version")
+        # The receipt's own week, not the current one: a case goes back to the
+        # week it was taken from.
+        week = weekly_counter.zurich_week(admission.window_start)
+        if (
+            week.identity != admission.week_identity
+            or week.window_end != admission.window_end
+        ):
+            raise _DependencyFailure("teacher-support receipt names no Zurich week")
+        counter = weekly_counter.read(
+            weekly_counter.CASES, admission.support_scope_id, week, table=target
+        )
+        if counter is None:
+            raise _DependencyFailure("teacher-support counter is missing for a receipt")
+        admitted = counter.count("admitted_cases")
+        if admitted < 1:
+            raise _DependencyFailure("teacher-support counter has no case to give back")
+    except (_DependencyFailure, weekly_counter.CounterUnavailable, ValueError):
+        # A receipt with no case on its counter is damage, not a race: the
+        # refund waits for a repair rather than inventing a count.
+        logger.error("Teacher-support refund refused on damaged rows", exc_info=True)
+        return retryable
+
+    operations = (
+        {
+            "Put": {
+                "Item": {
+                    **receipt,
+                    "refunded_at": _timestamp(observed),
+                    "refund_reason": refund_reason,
+                    "state_version": receipt_version + 1,
+                },
+                "ConditionExpression": (
+                    "state_version = :receipt_version "
+                    "AND attribute_not_exists(refunded_at)"
+                ),
+                "ExpressionAttributeValues": {":receipt_version": receipt_version},
+            }
+        },
+        # Under its version only: the version goes up on every write, so a
+        # counter still at the version read still holds the count read.
+        weekly_counter.write(
+            weekly_counter.CASES,
+            admission.support_scope_id,
+            week,
+            counter,
+            counts={"admitted_cases": admitted - 1},
+            at=observed,
+        ),
+    )
+    if _persisted(persist_refund, operations, what="refund"):
+        return TeacherSupportRefundResult(
+            TeacherSupportRefundDisposition.REFUNDED,
+            admission.week_identity,
+        )
+    return retryable
 
 
 def _refund_seen_check(key: Mapping[str, str], condition: str) -> AdmissionOperation:
@@ -1234,14 +1170,9 @@ def get_teacher_support_projection(
     if scope is None:
         raise ValueError("teacher support is not included in the active plan")
     week = weekly_counter.zurich_week(observed)
-    identity = _week_identity(week)
+    identity = week.identity
     try:
-        item = _strong_get(target, _counter_key(scope.support_scope_id, identity))
-        admitted = (
-            0
-            if item is None
-            else _validated_counter(item, scope=scope, week=week)[0]
-        )
+        admitted = _spent(target, scope, week)
     except _DependencyFailure:
         raise ValueError("teacher-support projection is temporarily unavailable") from None
     return {
@@ -1282,8 +1213,7 @@ def get_student_teacher_support_standing(
                 "weeklyCases": 0,
                 "resetsAt": None,
             }
-        item = _strong_get(target, _counter_key(scope.support_scope_id, _week_identity(week)))
-        admitted = 0 if item is None else _validated_counter(item, scope=scope, week=week)[0]
+        admitted = _spent(target, scope, week)
     except _DependencyFailure:
         raise ValueError("teacher-support standing is temporarily unavailable") from None
     # An administrator may lower the figure below what the week already spent.

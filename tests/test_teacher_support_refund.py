@@ -20,7 +20,7 @@ from typing import Any
 from fakes.dynamodb import FakeTable
 import pytest
 
-from stoa.db.repositories import account_deletion_repo
+from stoa.db.repositories import account_deletion_repo, weekly_counter
 from stoa.services import teacher_support_allowance_service as service
 
 
@@ -228,16 +228,17 @@ def test_the_caller_is_still_given_one_write_to_commit_its_own_rows(
     assert _spent(table) == (0 if state == "refunded" else 1)
 
 
-def test_a_counter_moved_by_an_admission_is_retried_not_overwritten(
+def test_a_counter_moved_by_an_admission_is_not_overwritten(
     table: FakeTable,
 ) -> None:
+    """One attempt per call: the caller reads its own rows again and calls again."""
     _admit(table, "conv-1")
-    calls = 0
+    moved = False
 
     def admit_in_between(operations: tuple[dict[str, Any], ...]) -> bool:
-        nonlocal calls
-        calls += 1
-        if calls == 1:
+        nonlocal moved
+        if not moved:
+            moved = True
             # Another request is admitted after the refund read the counter.
             _admit(table, "conv-2")
         try:
@@ -246,21 +247,23 @@ def test_a_counter_moved_by_an_admission_is_retried_not_overwritten(
             return False
         return True
 
-    result = _refund(table, "conv-1", persist=admit_in_between)
-    assert result.disposition is Refund.REFUNDED
-    assert calls == 2
+    assert _refund(table, "conv-1", persist=admit_in_between).disposition is Refund.RETRYABLE
+    assert _spent(table) == 2
+    assert "refunded_at" not in _receipt(table, "conv-1")
+
+    assert _refund(table, "conv-1", persist=admit_in_between).disposition is Refund.REFUNDED
     assert _spent(table) == 1
 
 
 def test_two_refunds_racing_give_back_one_case(table: FakeTable) -> None:
     _admit(table, "conv-1")
     _admit(table, "conv-2")
-    calls = 0
+    raced = False
 
     def race(operations: tuple[dict[str, Any], ...]) -> bool:
-        nonlocal calls
-        calls += 1
-        if calls == 1:
+        nonlocal raced
+        if not raced:
+            raced = True
             assert _refund(table, "conv-1").disposition is Refund.REFUNDED
         try:
             account_deletion_repo.transact(list(operations), table=table)
@@ -268,16 +271,16 @@ def test_two_refunds_racing_give_back_one_case(table: FakeTable) -> None:
             return False
         return True
 
-    result = _refund(table, "conv-1", persist=race)
-    assert result.disposition is Refund.ALREADY_REFUNDED
+    assert _refund(table, "conv-1", persist=race).disposition is Refund.RETRYABLE
+    assert _refund(table, "conv-1", persist=race).disposition is Refund.ALREADY_REFUNDED
     assert _spent(table) == 1
 
 
 def test_a_counter_already_at_zero_is_not_taken_below_it(table: FakeTable) -> None:
     _admit(table, "conv-1")
     receipt = _receipt(table, "conv-1")
-    counter_key = service._counter_key(
-        str(receipt["support_scope_id"]), str(receipt["week_identity"])
+    counter_key = weekly_counter.key(
+        weekly_counter.CASES, str(receipt["support_scope_id"]), weekly_counter.zurich_week(NOW)
     )
     table.rows[(counter_key["PK"], counter_key["SK"])]["admitted_cases"] = Decimal(0)
     assert _refund(table, "conv-1").disposition is Refund.RETRYABLE

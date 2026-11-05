@@ -21,7 +21,8 @@ import pytest
 
 from stoa.services import teacher_support_allowance_service as service
 
-from test_teacher_support_allowances import AtomicSupportTable, _case_committer
+from test_teacher_support_allowances import AtomicSupportTable, _case_committer, _grant
+from test_teacher_support_allowances import grants as grants  # noqa: F401 - the fixture
 
 
 NOW = datetime(2026, 9, 24, 9, 0, tzinfo=timezone.utc)
@@ -168,28 +169,38 @@ def test_lowering_the_figure_below_what_was_spent_refuses_rather_than_fails(
     assert _admit(table, "q-after").disposition.value == "limit_exceeded"
 
 
-def test_a_paid_grant_still_wins_where_one_exists(monkeypatch) -> None:
+def test_a_paid_grant_still_wins_where_one_exists(
+    grants: dict[str, dict[str, object]],
+) -> None:
     """The assigned figure is a floor, not a replacement.
 
     A family that bought the wider budget keeps it, and the scope spent against
     is still the grant's - otherwise the counters would part company.
     """
-    table = AtomicSupportTable()
-    paid = object()
-    monkeypatch.setattr(service, "_resolve_paid_scope", lambda *_a, **_k: paid)
+    grants["student-1"] = _grant("student-1", plan_id="family")
 
-    assert service._resolve_scope(STUDENT, table=table) is paid
+    projection = service.get_teacher_support_projection(
+        beneficiary_id="student-1", observed_at=NOW, table=AtomicSupportTable()
+    )
+
+    assert projection["planId"] == "family"
+    assert projection["supportScope"] == "shared_family"
+    assert projection["limit"] == 10
 
 
+@pytest.mark.parametrize(("field", "value"), [("role", "parent"), ("account_status", "suspended")])
 def test_an_account_that_is_not_an_active_student_gets_nothing(
-    monkeypatch, student
+    monkeypatch, student, field: str, value: str
 ) -> None:
-    for field, value in (("role", "parent"), ("account_status", "suspended")):
-        row = _profile(**{field: value})
-        monkeypatch.setattr(
-            service.user_repo, "get_user", lambda _uid, r=row, **_kw: deepcopy(r)
-        )
-        assert service._resolve_assigned_scope(STUDENT, table=AtomicSupportTable()) is None
+    row = _profile(**{field: value})
+    monkeypatch.setattr(service.user_repo, "get_user", lambda _uid, **_kw: deepcopy(row))
+
+    standing = service.get_student_teacher_support_standing(
+        beneficiary_id=STUDENT, observed_at=NOW, table=AtomicSupportTable()
+    )
+
+    assert standing["canRequest"] is False
+    assert standing["blockedReason"] == "teacher_support_not_included"
 
 
 def test_the_fence_is_the_student_and_nothing_else(student) -> None:
@@ -308,15 +319,22 @@ def test_a_malformed_raised_row_is_a_dependency_failure_not_a_free_pass(
 
 def test_two_students_do_not_share_a_week(student, monkeypatch) -> None:
     """Per beneficiary, so one student's week cannot spend another's."""
-    table = AtomicSupportTable()
-    first = service._resolve_assigned_scope(STUDENT, table=table)
-    other_row = _profile(user_id="student-assigned-2")
+    other = "student-assigned-2"
     monkeypatch.setattr(
-        service.user_repo, "get_user", lambda _uid, **_kw: deepcopy(other_row)
+        service.user_repo,
+        "get_user",
+        lambda uid, **_kw: deepcopy(_profile(user_id=uid)),
     )
-    second = service._resolve_assigned_scope("student-assigned-2", table=table)
+    table = AtomicSupportTable()
+    for index in range(3):
+        assert _admit(table, f"q-{index}").disposition.value == "admitted"
 
-    assert first.support_scope_id != second.support_scope_id
+    standing = service.get_student_teacher_support_standing(
+        beneficiary_id=other, observed_at=NOW, table=table
+    )
+
+    assert standing["remainingCases"] == 7
+    assert len(table.support_rows("teacher_support_counter")) == 1
 
 
 def test_the_counter_write_is_a_compare_and_set(student) -> None:

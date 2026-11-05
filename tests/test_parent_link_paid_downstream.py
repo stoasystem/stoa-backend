@@ -38,6 +38,20 @@ from stoa.services import (
 )
 
 
+def _paid_scope(table: Any):
+    """The paid allowance alone, without the assigned figure every student also has."""
+    service = teacher_support_allowance_service
+    student = service._active_student(STUDENT)
+    return None if student is None else service._resolve_paid_scope(STUDENT, student, table=table)
+
+
+def _assigned_scope(table: Any):
+    service = teacher_support_allowance_service
+    student = service._active_student(STUDENT)
+    assert student is not None
+    return service._resolve_assigned_scope(STUDENT, student, table=table)
+
+
 PARENT = "parent-1"
 STUDENT = "student-1"
 DIGEST = "a" * 64
@@ -575,7 +589,7 @@ def test_pending_link_is_not_a_paid_relationship(table: ConditionalTable) -> Non
     with pytest.raises(paid_entitlement_service.PaidGrantConflict):
         _build(table)
     assert (
-        teacher_support_allowance_service._resolve_paid_scope(STUDENT, table=table) is None
+        _paid_scope(table) is None
     )
     resolved = entitlement_service.resolve_student_entitlement(
         STUDENT, settings=_settings()
@@ -599,7 +613,7 @@ def test_half_stored_link_is_not_a_paid_relationship(
     with pytest.raises(paid_entitlement_service.PaidGrantConflict):
         _build(table)
     assert (
-        teacher_support_allowance_service._resolve_paid_scope(STUDENT, table=table) is None
+        _paid_scope(table) is None
     )
 
 
@@ -789,7 +803,7 @@ def test_a_relationship_that_died_on_both_tables_is_denied_not_retried(
     _revoke_legacy_binding(table)
 
     assert (
-        teacher_support_allowance_service._resolve_paid_scope(STUDENT, table=table)
+        _paid_scope(table)
         is None
     )
 
@@ -804,9 +818,7 @@ def test_a_relationship_that_died_on_both_tables_is_denied_not_retried(
     )
     # And it is the student's own scope: the assigned one, not the dead grant's.
     assert result.admission.support_scope_id == (
-        teacher_support_allowance_service._resolve_assigned_scope(
-            STUDENT, table=table
-        ).support_scope_id
+        _assigned_scope(table).support_scope_id
     )
 
 
@@ -896,7 +908,7 @@ def test_every_service_reads_the_same_relationship_cell(
     authority = paid_entitlement_service.relationship_authority(
         PARENT, STUDENT, student=profile
     )
-    scope = teacher_support_allowance_service._resolve_paid_scope(STUDENT, table=table)
+    scope = _paid_scope(table)
     resolved = entitlement_service.resolve_student_entitlement(
         STUDENT, settings=_settings()
     )
@@ -1024,7 +1036,7 @@ def test_a_non_child_link_is_not_a_paid_relationship(table: ConditionalTable) ->
     with pytest.raises(paid_entitlement_service.PaidGrantConflict):
         _build(table)
     assert (
-        teacher_support_allowance_service._resolve_paid_scope(STUDENT, table=table) is None
+        _paid_scope(table) is None
     )
     resolved = entitlement_service.resolve_student_entitlement(
         STUDENT, settings=_settings()
@@ -1064,7 +1076,7 @@ def test_a_profile_bound_student_never_reaches_a_paying_link_parent(
         )
     ] == [PARENT]
     assert (
-        teacher_support_allowance_service._resolve_paid_scope(STUDENT, table=table) is None
+        _paid_scope(table) is None
     )
     assert (
         entitlement_service.resolve_student_entitlement(STUDENT, settings=_settings())[

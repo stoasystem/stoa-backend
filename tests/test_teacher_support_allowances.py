@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from fakes.dynamodb import FakeTable, condition_holds
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import asyncio
 import inspect
@@ -420,34 +420,6 @@ def test_concurrent_final_slot_has_one_winner(
     assert table.support_rows("teacher_support_counter")[0]["admitted_cases"] == 2
 
 
-def test_zurich_dst_window_and_adjacent_week_do_not_roll_over(
-    grants: dict[str, dict[str, object]],
-) -> None:
-    grants["student-1"] = _grant("student-1")
-    table = AtomicSupportTable()
-
-    spring = _admit(
-        table,
-        case_id="spring",
-        observed_at=datetime(2026, 3, 25, 12, tzinfo=UTC),
-    )
-    next_week = _admit(
-        table,
-        case_id="next-week",
-        observed_at=datetime(2026, 3, 30, 12, tzinfo=UTC),
-    )
-
-    assert spring.admission is not None
-    assert spring.admission.week_identity == "2026-W13"
-    assert (
-        spring.admission.window_end - spring.admission.window_start
-    ).total_seconds() == 167 * 3600
-    assert next_week.admission is not None
-    assert next_week.admission.week_identity == "2026-W14"
-    assert next_week.admission.post_admission_count == 1
-    assert len(table.support_rows("teacher_support_counter")) == 2
-
-
 @pytest.mark.parametrize(
     "grant",
     [
@@ -567,13 +539,40 @@ def test_the_chat_escalation_dispatches_to_a_teacher() -> None:
     )
 
 
-def test_service_reuses_allowance_week_budget_and_conditional_effect_counter() -> None:
-    source = inspect.getsource(teacher_support_allowance_service)
+def test_a_counter_written_again_keeps_when_it_was_created(
+    grants: dict[str, dict[str, object]],
+) -> None:
+    """Every admission used to rebuild the counter row and drop `created_at`."""
+    grants["student-1"] = _grant("student-1")
+    table = AtomicSupportTable()
+    _admit(table, case_id="first", observed_at=NOW)
+    [counter] = table.support_rows("teacher_support_counter")
+    created = counter["created_at"]
 
-    assert "weekly_counter.zurich_week" in source
-    assert "allowance_service.plan_allowance_budget" in source
-    assert "attribute_not_exists(PK) AND attribute_not_exists(SK)" in source
-    assert "state_version=:expected_state_version" in source
+    _admit(table, case_id="second", observed_at=NOW + timedelta(hours=1))
+
+    [counter] = table.support_rows("teacher_support_counter")
+    assert counter["admitted_cases"] == 2
+    assert counter["created_at"] == created
+    assert counter["updated_at"] == (NOW + timedelta(hours=1)).isoformat()
+
+
+def test_a_counter_that_already_lost_created_at_still_admits(
+    grants: dict[str, dict[str, object]],
+) -> None:
+    """Rows written before #245 have no `created_at`; they are read as they are."""
+    grants["student-1"] = _grant("student-1")
+    table = AtomicSupportTable()
+    _admit(table, case_id="first")
+    [key] = [
+        key for key, item in table.items.items() if item.get("entity_type") == "teacher_support_counter"
+    ]
+    del table.items[key]["created_at"]
+
+    assert _admit(table, case_id="second").disposition.value == "admitted"
+    [counter] = table.support_rows("teacher_support_counter")
+    assert counter["admitted_cases"] == 2
+    assert "created_at" not in counter
 
 
 def test_conversation_plan_denial_runs_before_case_message_and_usage_effect(

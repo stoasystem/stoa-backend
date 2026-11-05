@@ -39,7 +39,7 @@ from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.config import settings
 from stoa.db.dynamodb import get_table, stored_int
-from stoa.db.repositories import account_deletion_repo
+from stoa.db.repositories import account_deletion_repo, weekly_counter
 from stoa.models.attachment import AttachmentSummary
 from stoa.security.authorization import AuthorizationAction
 from stoa.security.private_telemetry import emit_private_event
@@ -746,14 +746,16 @@ def _end(
     """End a request nobody took, and give its case back.
 
     ``student_id`` is the withdrawing student, checked against the record; the
-    sweep passes none. Each pass reads afresh and makes one attempt; a refused
-    write is followed by a new read, never by the same write again.
+    sweep passes none. Each attempt reads afresh and the refund makes one
+    write; a refused write is followed by a new read, never by the same write
+    again (`weekly_counter.retry`, the one place the attempts are counted).
     """
     allowance = teacher_support_allowance_service
     store: Any = table or get_table()
     timestamp = now or _now()
     observed = _parse(timestamp) or datetime.now(timezone.utc)
-    for _ in range(4):
+
+    def attempt() -> _Ending:
         try:
             record = get(conversation_id, table=store)
         except HelpRequestUnavailable as exc:
@@ -812,7 +814,6 @@ def _end(
             persist_refund=persist,
             observed_at=observed,
             table=store,
-            attempts=1,
         )
         Disposition = allowance.TeacherSupportRefundDisposition
         if result.disposition in {
@@ -833,7 +834,12 @@ def _end(
         if result.disposition is Disposition.IDEMPOTENCY_CONFLICT:
             raise HelpRequestEndingRefused("teacher_help_request_not_withdrawable")
         # Retryable: something moved (a teacher, the counter). Read again.
-    raise HelpRequestEndingUnavailable(conversation_id)
+        raise weekly_counter.CounterConflict()
+
+    ending = weekly_counter.retry(attempt, exhausted=None)
+    if ending is None:
+        raise HelpRequestEndingUnavailable(conversation_id)
+    return ending
 
 
 # ── The teacher's moves ──────────────────────────────────────────────────────

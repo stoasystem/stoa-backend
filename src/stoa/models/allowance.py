@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
@@ -169,31 +169,12 @@ class AllowanceFinalization(_AllowanceModel):
         return self
 
 
-class TeacherSupportAdmission(_AllowanceModel):
-    case_id: OpaqueText = Field(alias="caseId")
-    effect_id: OpaqueText = Field(alias="effectId")
-    beneficiary_id: OpaqueText = Field(alias="beneficiaryId")
-    plan_id: Literal[
-        BillingPlanId.TEACHER_SUPPORTED,
-        BillingPlanId.FAMILY,
-    ] = Field(alias="planId")
-    grant_id: OpaqueText = Field(alias="grantId")
-    allowance_version: PositiveVersion = Field(alias="allowanceVersion")
-    week: ZurichWeek
-    admitted_cases: Annotated[int, Field(strict=True, ge=1, le=1)] = Field(
-        alias="admittedCases"
-    )
-    state_version: PositiveVersion = Field(alias="stateVersion")
-    admitted_at: datetime = Field(alias="admittedAt")
-
-
 __all__ = [
     "MAX_EXACT_COUNT",
     "AllowanceFinalization",
     "AllowanceReservation",
     "PlanAllowanceBudget",
     "ProviderUsageEvidence",
-    "TeacherSupportAdmission",
     "TeacherSupportScope",
     "ZurichWeek",
 ]
