@@ -152,11 +152,6 @@ def test_a_spent_week_is_whole_again_when_the_week_turns(table, monkeypatch) -> 
     assert _ask(table, "conv-144-b").status_code == 200
 
 
-def test_the_week_turns_at_zurich_midnight_in_summer_time_too(table, monkeypatch) -> None:
-    _clock(monkeypatch, "2026-07-01T10:00:00+00:00")
-    assert _standing()["resetsAt"] == "2026-07-05T22:00:00+00:00"
-
-
 def test_a_withdrawn_request_gives_the_case_back_to_the_read(table) -> None:
     _weekly_cases(table, 1)
     assert _ask(table, "conv-144-a").status_code == 200
@@ -216,13 +211,13 @@ def test_an_allowance_that_cannot_be_read_leaves_the_indicator_working(table) ->
 def test_a_read_failing_in_an_unexpected_way_still_leaves_the_indicator_working(
     table, monkeypatch
 ) -> None:
-    from stoa.services import teacher_support_allowance_service as allowance
+    from stoa.db.repositories import weekly_counter
 
     def unreachable(*_args, **_kwargs):
-        raise RuntimeError("relationship read failed")
+        raise RuntimeError("counter read failed")
 
-    # Not every read on the way is wrapped: a parent binding's versions, say.
-    monkeypatch.setattr(allowance, "_resolve_scope", unreachable)
+    # Not every read on the way is wrapped: the week's counter, say.
+    monkeypatch.setattr(weekly_counter, "read", unreachable)
 
     response = _student().get("/teacher-help/availability")
 

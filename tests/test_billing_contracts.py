@@ -18,7 +18,6 @@ from stoa.models.allowance import (
     AllowanceReservation,
     PlanAllowanceBudget,
     ProviderUsageEvidence,
-    TeacherSupportAdmission,
     ZurichWeek,
 )
 from stoa.models.billing import (
@@ -115,7 +114,6 @@ def test_all_public_contract_symbols_are_models_or_closed_enums() -> None:
         AllowanceReservation,
         ProviderUsageEvidence,
         AllowanceFinalization,
-        TeacherSupportAdmission,
     )
 
     assert all(issubclass(enum, StrEnum) for enum in enums)
@@ -598,44 +596,6 @@ def test_allowance_reservation_and_finalization_keep_user_debit_and_provider_cos
     assert reservation.week.window_start == MONDAY
     assert finalization.finalized_input_tokens == 123
     assert finalization.provider_cost_retained is True
-
-
-def test_teacher_support_admission_debits_exactly_one_case() -> None:
-    admission = TeacherSupportAdmission.model_validate(
-        {
-            "caseId": "case-1",
-            "effectId": "support-case:case-1",
-            "beneficiaryId": "student-1",
-            "planId": "teacher_supported",
-            "grantId": "grant-1",
-            "allowanceVersion": 1,
-            "week": _week_payload(),
-            "admittedCases": 1,
-            "stateVersion": 1,
-            "admittedAt": "2026-07-24T08:00:00Z",
-        }
-    )
-
-    assert admission.admitted_cases == 1
-
-
-@pytest.mark.parametrize("invalid", [0, 2, -1, 1.5, True])
-def test_teacher_support_admission_rejects_non_single_case_debits(invalid: object) -> None:
-    payload: dict[str, object] = {
-        "caseId": "case-1",
-        "effectId": "support-case:case-1",
-        "beneficiaryId": "student-1",
-        "planId": "teacher_supported",
-        "grantId": "grant-1",
-        "allowanceVersion": 1,
-        "week": _week_payload(),
-        "admittedCases": invalid,
-        "stateVersion": 1,
-        "admittedAt": "2026-07-24T08:00:00Z",
-    }
-
-    with pytest.raises(ValidationError):
-        TeacherSupportAdmission.model_validate(payload)
 
 
 def test_support_projection_serializes_named_public_fields_by_alias() -> None:
