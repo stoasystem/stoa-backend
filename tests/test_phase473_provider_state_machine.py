@@ -15,12 +15,13 @@ from stoa.config import DOCUMENT_MAX_BYTES, Settings
 from stoa.db.repositories import attachment_repo
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.services.attachment_service import (
+from stoa.services.uploads._lifecycle import (
     _exact_object_versions,
     _matching_exact_version,
     _provider_parts,
     _validate_and_promote_completed,
 )
+from stoa.services.uploads import _store as upload_store
 
 
 PRIVATE_CANARIES = (
@@ -85,7 +86,7 @@ def test_complete_upload_part_acknowledgement_repository_rejects_invalid_invaria
     part_number: Any, etag: Any, checksum: Any
 ) -> None:
     with pytest.raises(attachment_repo.AttachmentRepositoryConflict):
-        attachment_repo.complete_upload_part(
+        upload_store.complete_upload_part(
             "upload-1",
             part_number,
             "lease-owner",

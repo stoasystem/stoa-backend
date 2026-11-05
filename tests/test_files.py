@@ -9,7 +9,7 @@ from stoa.deps import get_actor, get_s3_client
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.routers import files
-from stoa.services import attachment_service
+from stoa.services.uploads import _lifecycle as upload_lifecycle
 from stoa.db.repositories import attachment_repo
 
 
@@ -40,7 +40,7 @@ def test_gateway_intent_returns_only_opaque_contract(monkeypatch) -> None:
             "status": "pending_upload",
         }
 
-    monkeypatch.setattr(files, "create_upload_intent", create)
+    monkeypatch.setattr(files.uploads, "start", create)
     response = _client(monkeypatch).post(
         "/files/intents",
         json={
@@ -65,8 +65,8 @@ def test_gateway_intent_returns_only_opaque_contract(monkeypatch) -> None:
 
 def test_complete_returns_validated_contract(monkeypatch) -> None:
     monkeypatch.setattr(
-        files,
-        "complete_upload",
+        files.uploads,
+        "complete",
         lambda upload_id, part_count, actor, **kwargs: {
             "uploadId": upload_id,
             "status": "validated",
@@ -85,7 +85,7 @@ def test_missing_and_foreign_complete_have_same_safe_shape(monkeypatch) -> None:
             internal_detail="uploads/private-provider-canary",
         )
 
-    monkeypatch.setattr(files, "complete_upload", missing)
+    monkeypatch.setattr(files.uploads, "complete", missing)
     response = _client(monkeypatch).post(
         "/files/foreign-upload/complete", json={"partCount": 1}
     )
@@ -108,7 +108,7 @@ def test_issuance_dependency_failure_has_exact_safe_503(monkeypatch) -> None:
             internal_detail="provider staging-key multipart-id canary",
         )
 
-    monkeypatch.setattr(files, "create_upload_intent", unavailable)
+    monkeypatch.setattr(files.uploads, "start", unavailable)
     response = _client(monkeypatch).post(
         "/files/intents",
         json={
@@ -261,7 +261,7 @@ def test_complete_gateway_dependency_matrix_is_one_redacted_safe_503(
     s3 = _GatewayS3(stage)
 
     def complete(upload_id, part_count, actor, **kwargs):
-        return attachment_service.complete_upload(
+        return upload_lifecycle.complete_upload(
             upload_id,
             part_count,
             actor,
@@ -271,7 +271,7 @@ def test_complete_gateway_dependency_matrix_is_one_redacted_safe_503(
             repository=repository,
         )
 
-    monkeypatch.setattr(files, "complete_upload", complete)
+    monkeypatch.setattr(files.uploads, "complete", complete)
     response = _client(monkeypatch).post("/files/upload-1/complete", json={"partCount": 1})
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "upload_service_unavailable"
@@ -301,7 +301,7 @@ def test_conditional_foreign_or_stale_gateway_state_stays_concealed_404(
     monkeypatch.setattr(repository, "get_upload_intent", get_upload_intent)
 
     def complete(upload_id, part_count, actor, **kwargs):
-        return attachment_service.complete_upload(
+        return upload_lifecycle.complete_upload(
             upload_id,
             part_count,
             actor,
@@ -310,7 +310,7 @@ def test_conditional_foreign_or_stale_gateway_state_stays_concealed_404(
             repository=repository,
         )
 
-    monkeypatch.setattr(files, "complete_upload", complete)
+    monkeypatch.setattr(files.uploads, "complete", complete)
     response = _client(monkeypatch).post(
         "/files/foreign-or-stale-canary/complete", json={"partCount": 1}
     )

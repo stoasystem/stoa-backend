@@ -131,7 +131,7 @@ def read(conversation_id: str) -> dict | None:
 
 
 def owned_by(conversation_id: str, student_id: str) -> bool:
-    """Whether this learning session exists and is the student's own."""
+    """Whether this learning session exists, is the student's own, and is not deleted."""
     return _store.owns_conversation(conversation_id, student_id)
 
 

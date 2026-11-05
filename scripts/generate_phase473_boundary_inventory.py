@@ -101,8 +101,9 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
         file="src/stoa/services/attachment_service.py",
         symbol="_reconcile_provider_part",
         call="s3.list_parts",
-        # The chunk route went in #251; completion lists the parts S3 holds here.
-        successor=("src/stoa/services/attachment_service.py", "_provider_parts"),
+        # The chunk route went in #251; completion lists the parts S3 holds here,
+        # in the upload package since #252.
+        successor=("src/stoa/services/uploads/_lifecycle.py", "_provider_parts"),
         fields=(
             ("Parts", "list[object]", "_provider_mapping", "exact_list_of_mappings"),
             ("Parts[].PartNumber", "positive_int", "_positive_provider_integer", "type_is_int_not_bool"),
@@ -119,6 +120,8 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
     + _flows(
         file="src/stoa/services/attachment_service.py",
         symbol="_exact_multipart_absence",
+        # Moved with the rest of an upload's life into the upload package (#252).
+        successor=("src/stoa/services/uploads/_lifecycle.py", "_exact_multipart_absence"),
         call="s3.list_multipart_uploads",
         fields=(
             ("Uploads", "list[object]", "_provider_mapping", "exact_list_of_mappings"),
@@ -154,6 +157,8 @@ REVIEWED_FLOWS: tuple[ReviewedFlow, ...] = tuple(
         ReviewedFlow(
             file="src/stoa/services/attachment_service.py",
             symbol="_exact_object_digest",
+            # Moved with the rest of an upload's life into the upload package (#252).
+            successor=("src/stoa/services/uploads/_lifecycle.py", "_exact_object_digest"),
             client_call="s3.get_object",
             field=None,
             body_operation="Body.read+Body.close",

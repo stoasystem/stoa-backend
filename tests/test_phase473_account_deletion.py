@@ -344,7 +344,7 @@ def test_every_primary_writer_uses_the_same_active_fence_and_exact_generation(mo
 
 def test_upload_intent_is_fenced_before_any_provider_creation() -> None:
     source = inspect.getsource(
-        importlib.import_module("stoa.services.attachment_service").create_upload_intent
+        importlib.import_module("stoa.services.uploads._lifecycle").create_upload_intent
     )
     persist = source.index("prepare_staging_issuance(item)")
     provider = source.index("create_multipart_upload")

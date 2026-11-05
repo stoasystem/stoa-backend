@@ -45,14 +45,12 @@ from stoa.security.identity import Actor
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_inventory import explicit_route_classification
 from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.services import uploads
 from stoa.services.attachment_service import (
-    complete_upload,
-    create_upload_intent,
     delete_saved_attachment,
     list_owned_attachments,
     prepare_saved_attachment_download,
     saved_attachment_detail,
-    sign_upload_part,
 )
 
 
@@ -85,7 +83,7 @@ async def _upload_intent_actor_dependency(actor: Actor = Depends(get_actor)) -> 
     return actor
 
 
-# An intent may name the learning session it is for; `create_upload_intent`
+# An intent may name the learning session it is for; `uploads.start`
 # refuses one that is not the student's own (#139).
 _upload_intent_actor_dependency.authorization_specs = (  # type: ignore[attr-defined]
     AuthorizationSpec(
@@ -259,7 +257,7 @@ async def create_owned_upload_intent(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     try:
-        return create_upload_intent(body, actor, s3=s3, settings=settings)
+        return uploads.start(body, actor, s3=s3, settings=settings)
     except AttachmentDecisionError as error:
         _raise_safe(error, correlation_id)
 
@@ -276,7 +274,7 @@ async def sign_owned_upload_part(
 ):
     """Sign a URL the browser puts one part on, straight to S3 (ADR-004, #136)."""
     try:
-        return sign_upload_part(
+        return uploads.sign_part(
             upload_id,
             part_number,
             body,
@@ -299,7 +297,7 @@ async def complete_owned_upload(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     try:
-        return complete_upload(
+        return uploads.complete(
             upload_id,
             body.part_count,
             actor,

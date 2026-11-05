@@ -40,11 +40,15 @@ from uuid import UUID, uuid4
 from stoa.config import IMAGE_MAX_BYTES, Settings
 from stoa.db.repositories import (
     account_deletion_repo,
-    attachment_repo,
     upload_code_repo,
     user_repo,
 )
-from stoa.models.attachment import UploadIntentRequest, UploadPartUrlRequest, UploadPurpose
+from stoa.models.attachment import (
+    UploadIntentRequest,
+    UploadPartUrlRequest,
+    UploadPurpose,
+    UploadStatus,
+)
 from stoa.models.upload_code import (
     UploadCodeCompleteRequest,
     UploadCodePartRequest,
@@ -52,18 +56,20 @@ from stoa.models.upload_code import (
 )
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
-from stoa.services import attachment_service, learning_session, rate_limit
+from stoa.services import attachment_service, learning_session, rate_limit, uploads
 from stoa.services.file_validation_service import MIME_BY_EXTENSION
 
 
 CODE_TTL_SECONDS = 600
 UPLOAD_TOKEN_TTL_SECONDS = 600
 _IMAGE_EXTENSIONS = frozenset({"jpg", "jpeg", "png"})
-# Upload states from which the phone can still finish; anything else has failed.
-_LIVE_UPLOAD_STATES = frozenset(
-    {"issuing", "pending_upload", "assembling", "validating", "promoting"}
-)
-_READY_UPLOAD_STATES = frozenset({"validated", "consumed"})
+# What the computer shows for each phase of the phone's upload.
+_SHOWN_PHASE = {
+    uploads.Phase.READY: "ready",
+    uploads.Phase.IN_PROGRESS: "uploading",
+    uploads.Phase.FAILED: "failed",
+    uploads.Phase.EXPIRED: "expired",
+}
 _T = TypeVar("_T")
 _CODE_ID = re.compile(r"^[0-9a-f]{32}$")
 _SECRET = re.compile(r"^[A-Za-z0-9_-]{43}$")
@@ -317,18 +323,14 @@ def code_status(conversation_id: str | None, code_id: str, actor: Actor) -> dict
     if row.get("status") == "redeemed":
         expires_at = int(row["token_expires_at"])
         try:
-            upload = attachment_repo.get_upload_intent(str(row["upload_id"]))
-        except Exception:
+            phase = uploads.status(str(row["upload_id"]), actor.user_id, now=_now())
+        except AttachmentDecisionError:
             raise _unavailable() from None
-        upload_status = (upload or {}).get("status")
-        if upload_status in _READY_UPLOAD_STATES:
-            status, upload_id = "ready", str(row["upload_id"])
-        elif upload is None or upload_status in _LIVE_UPLOAD_STATES:
-            # No row yet: the phone has spent the code and its upload is being
-            # opened. Until the token runs out that is progress, not failure.
-            status = "uploading"
-        else:
-            status = "failed"
+        # No upload yet: the phone has spent the code and its upload is being
+        # opened. Until the token runs out that is progress, not failure.
+        status = _SHOWN_PHASE[phase or uploads.Phase.IN_PROGRESS]
+        if phase is uploads.Phase.READY:
+            upload_id = str(row["upload_id"])
     if status in {"waiting", "uploading"} and now_epoch >= expires_at:
         status = "expired"
     # When a phone took the code, so the computer can say so: whoever scans the QR
@@ -366,17 +368,9 @@ def preview_upload(
     row = _owned_code_row(conversation_id, code_id, actor)
     if row.get("status") != "redeemed":
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
-    try:
-        upload = attachment_repo.get_upload_intent(str(row["upload_id"]))
-    except Exception:
-        raise _unavailable() from None
-    if (
-        not isinstance(upload, dict)
-        or upload.get("owner_id") != actor.user_id
-        or upload.get("status") not in _READY_UPLOAD_STATES
-    ):
-        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
-    return attachment_service.prepare_saved_attachment_download(upload, s3=s3, settings=settings)
+    return uploads.preview(
+        str(row["upload_id"]), actor.user_id, s3=s3, settings=settings, now=_now()
+    )
 
 
 # -- the phone ------------------------------------------------------------------
@@ -417,7 +411,7 @@ def redeem_code(
     if not claimed:
         _refuse(source_digest, settings)
     try:
-        intent = attachment_service.create_upload_intent(
+        intent = uploads.start(
             UploadIntentRequest(
                 purpose=UploadPurpose.CONVERSATION_ATTACHMENT,
                 filename=request.filename,
@@ -453,14 +447,10 @@ def _issued_row(code: str, now_epoch: int) -> dict[str, Any]:
     if row.get("conversation_id") is None:
         return row
     try:
-        conversation = learning_session.read(str(row["conversation_id"]))
+        owned = learning_session.owned_by(str(row["conversation_id"]), str(row["owner_id"]))
     except Exception:
         raise _unavailable() from None
-    if (
-        conversation is None
-        or conversation.get("student_id") != row["owner_id"]
-        or conversation.get("status") == "deleted"
-    ):
+    if not owned:
         raise _invalid()
     return row
 
@@ -489,7 +479,7 @@ def sign_part(
     row = _counting_refusals(
         source_digest, settings, lambda: _redeemed_row(request.upload_token.get_secret_value())
     )
-    signed = attachment_service.sign_upload_part(
+    signed = uploads.sign_part(
         str(row["upload_id"]),
         part_number,
         UploadPartUrlRequest(sizeBytes=request.size_bytes, checksumSha256=request.checksum_sha256),
@@ -514,7 +504,7 @@ def complete(
     row = _counting_refusals(
         source_digest, settings, lambda: _redeemed_row(request.upload_token.get_secret_value())
     )
-    completed = attachment_service.complete_upload(
+    completed = uploads.complete(
         str(row["upload_id"]),
         request.part_count,
         _owner_actor(row),
@@ -523,6 +513,6 @@ def complete(
         now=_now(),
         moderation=moderation,
     )
-    if completed.get("status") != "validated":
+    if completed.get("status") != UploadStatus.VALIDATED:
         raise _unavailable()
-    return {"status": "validated"}
+    return {"status": UploadStatus.VALIDATED.value}
