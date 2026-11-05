@@ -190,6 +190,29 @@ def test_the_scheduled_event_runs_the_sweep(monkeypatch: pytest.MonkeyPatch, cle
     assert cleaned == ["u1"]
 
 
+def test_each_run_logs_its_counts_without_the_cursor(
+    monkeypatch: pytest.MonkeyPatch, cleaned, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The schedule invokes asynchronously, so the returned summary is seen by no one;
+    # the log line is the only place a run's counts show up (#256).
+    repository = _Pages([[_candidate(1), _candidate(2)], [_candidate(3)]])
+    monkeypatch.setattr(
+        attachment_repo, "list_upload_cleanup_candidates", repository.list_upload_cleanup_candidates
+    )
+    monkeypatch.setattr(upload_cleanup.boto3, "client", lambda *_a, **_k: MultipartS3(BUCKET))
+
+    with caplog.at_level("INFO", logger=upload_cleanup.__name__):
+        result = upload_cleanup.handler(
+            {"source": "stoa.scheduler", "job": "upload_cleanup", "batchLimit": 1}, None
+        )
+
+    [line] = [r.getMessage() for r in caplog.records if r.name == upload_cleanup.__name__]
+    assert line.startswith("upload_cleanup_run_completed ")
+    assert "scanned=1 " in line and "deleted=1 " in line and "retryable=0 " in line
+    assert line.endswith("more_to_do=true")
+    assert result["continuation_token"] not in line
+
+
 def test_the_sweep_handler_ships_in_the_lambda_package() -> None:
     import build_lambda_dist
 
