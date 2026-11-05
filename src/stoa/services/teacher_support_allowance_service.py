@@ -13,6 +13,8 @@ import hashlib
 import struct
 from typing import Any
 
+from botocore.exceptions import ClientError
+
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import (
     account_deletion_repo,
@@ -310,6 +312,111 @@ def assigned_weekly_cases(student: Mapping[str, object] | None) -> int:
     if stored is None or stored < 0 or stored > ASSIGNED_WEEKLY_CASES_MAXIMUM:
         return ASSIGNED_WEEKLY_TEACHER_SUPPORT_CASES
     return stored
+
+
+# ── The assigned figure, as an administrator sets it ──────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class AssignedWeeklyCases:
+    """A student's assigned weekly figure and where it comes from."""
+
+    weekly_cases: int
+    # `administrator` once somebody has set it, `default` until then.
+    source: str
+    # The version of the row it was read from; None while there is none.
+    state_version: int | None
+
+
+class AssignedCasesDisposition(StrEnum):
+    WRITTEN = "written"
+    # Somebody else replaced the figure between this read and this write; theirs stands.
+    VERSION_CONFLICT = "version_conflict"
+
+
+@dataclass(frozen=True, slots=True)
+class AssignedCasesWrite:
+    disposition: AssignedCasesDisposition
+    # The version written, when it was.
+    state_version: int | None = None
+
+
+def _assigned_allowance_key(student_id: str) -> dict[str, str]:
+    return {"PK": f"USER#{student_id}", "SK": ASSIGNED_ALLOWANCE_SK}
+
+
+def read_assigned_weekly_cases(
+    student_id: str, *, table: object | None = None
+) -> AssignedWeeklyCases:
+    """The student's assigned weekly figure, read strongly off their own row.
+
+    The same row and the same fallback the admission reads, so what an
+    administrator is shown is what the student may spend.
+    """
+    student = _required_text(student_id, "student_id")
+    stored = _strong_get(table or get_table(), _assigned_allowance_key(student))
+    return AssignedWeeklyCases(
+        weekly_cases=assigned_weekly_cases(stored),
+        source="administrator" if stored else "default",
+        state_version=None if stored is None else _stored_integer(stored.get("state_version")),
+    )
+
+
+def set_assigned_weekly_cases(
+    student_id: str,
+    weekly_cases: int,
+    *,
+    actor_id: str,
+    now: datetime | None = None,
+    table: object | None = None,
+) -> AssignedCasesWrite:
+    """Replace the student's weekly figure, under the version it was read at.
+
+    Two administrators changing the same student at once cannot both believe
+    they set it: the first write may only create the row, every later one only
+    replace the version it read. The admission fences that same version, so a
+    case is never spent against a figure replaced between reading and writing.
+    """
+    student = _required_text(student_id, "student_id")
+    if (
+        isinstance(weekly_cases, bool)
+        or not isinstance(weekly_cases, int)
+        or not 0 <= weekly_cases <= ASSIGNED_WEEKLY_CASES_MAXIMUM
+    ):
+        raise ValueError("weekly_cases is out of range")
+    target = table or get_table()
+    key = _assigned_allowance_key(student)
+    previous = _strong_get(target, key)
+    next_version = (
+        0 if previous is None else (_stored_integer(previous.get("state_version")) or 0)
+    ) + 1
+    condition: dict[str, object] = (
+        {"ConditionExpression": "attribute_not_exists(PK)"}
+        if previous is None
+        else {
+            "ConditionExpression": "state_version = :expected",
+            "ExpressionAttributeValues": {":expected": next_version - 1},
+        }
+    )
+    try:
+        target.put_item(  # type: ignore[attr-defined]
+            Item={
+                **key,
+                "entity_type": "teacher_support_assigned_allowance",
+                "schema_version": ASSIGNED_ALLOWANCE_SCHEMA_VERSION,
+                "student_id": student,
+                "weekly_cases": weekly_cases,
+                "state_version": next_version,
+                "updated_at": _timestamp(_aware(now, "now")),
+                "updated_by": actor_id,
+            },
+            **condition,
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return AssignedCasesWrite(AssignedCasesDisposition.VERSION_CONFLICT)
+        raise
+    return AssignedCasesWrite(AssignedCasesDisposition.WRITTEN, next_version)
 
 
 def _resolve_assigned_scope(
@@ -1228,6 +1335,9 @@ def get_student_teacher_support_standing(
 
 
 __all__ = [
+    "AssignedCasesDisposition",
+    "AssignedCasesWrite",
+    "AssignedWeeklyCases",
     "TeacherSupportAdmissionDisposition",
     "TeacherSupportAdmissionResult",
     "TeacherSupportRefundDisposition",
@@ -1237,5 +1347,7 @@ __all__ = [
     "current_week_identity",
     "get_student_teacher_support_standing",
     "get_teacher_support_projection",
+    "read_assigned_weekly_cases",
     "refund_teacher_support_case",
+    "set_assigned_weekly_cases",
 ]

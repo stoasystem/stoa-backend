@@ -9,13 +9,12 @@ from uuid import uuid4
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
-from botocore.exceptions import ClientError
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import JSONResponse, Response
 
 from stoa.config import Settings, get_settings
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import get_table
 from stoa.deps import get_s3_client
 from stoa.db.repositories import (
     account_deletion_repo,
@@ -281,21 +280,13 @@ async def read_teacher_support_allowance(
     profile = _account_profile_or_404(student_id)
     if str(profile.get("role") or "") != "student":
         raise HTTPException(status_code=409, detail={"code": "account_not_a_student"})
-    table = get_table()
-    raised = _admin_mapping(
-        table.get_item(
-            Key={
-                "PK": f"USER#{student_id}",
-                "SK": teacher_support_allowance_service.ASSIGNED_ALLOWANCE_SK,
-            },
-            ConsistentRead=True,
-        )
-    ).get("Item")
-    stored = _admin_mapping(raised) if isinstance(raised, dict) else None
+    assigned = teacher_support_allowance_service.read_assigned_weekly_cases(
+        student_id, table=get_table()
+    )
     return {
         "studentId": student_id,
-        "weeklyCases": teacher_support_allowance_service.assigned_weekly_cases(stored),
-        "source": "administrator" if stored else "default",
+        "weeklyCases": assigned.weekly_cases,
+        "source": assigned.source,
         "default": teacher_support_allowance_service.ASSIGNED_WEEKLY_TEACHER_SUPPORT_CASES,
         "maximum": teacher_support_allowance_service.ASSIGNED_WEEKLY_CASES_MAXIMUM,
     }
@@ -318,47 +309,20 @@ async def set_teacher_support_allowance(
     if str(profile.get("role") or "") != "student":
         raise HTTPException(status_code=409, detail={"code": "account_not_a_student"})
 
-    table = get_table()
-    key = {
-        "PK": f"USER#{student_id}",
-        "SK": teacher_support_allowance_service.ASSIGNED_ALLOWANCE_SK,
-    }
-    existing = _admin_mapping(
-        table.get_item(Key=key, ConsistentRead=True)
-    ).get("Item")
-    previous = _admin_mapping(existing) if isinstance(existing, dict) else None
-    next_version = (stored_int((previous or {}).get("state_version")) or 0) + 1
-    now = datetime.now(timezone.utc).isoformat()
-    item = {
-        **key,
-        "entity_type": "teacher_support_assigned_allowance",
-        "schema_version": teacher_support_allowance_service.ASSIGNED_ALLOWANCE_SCHEMA_VERSION,
-        "student_id": student_id,
-        "weekly_cases": body.weekly_cases,
-        "state_version": next_version,
-        "updated_at": now,
-        "updated_by": str(user.get("sub") or user.get("user_id") or ""),
-    }
-    condition = (
-        "attribute_not_exists(PK)"
-        if previous is None
-        else "state_version = :expected"
+    written = teacher_support_allowance_service.set_assigned_weekly_cases(
+        student_id,
+        body.weekly_cases,
+        actor_id=str(user.get("sub") or user.get("user_id") or ""),
+        table=get_table(),
     )
-    values = {} if previous is None else {":expected": next_version - 1}
-    try:
-        table.put_item(
-            Item=item,
-            ConditionExpression=condition,
-            **({"ExpressionAttributeValues": values} if values else {}),
-        )
-    except ClientError as exc:
+    if (
+        written.disposition
+        is teacher_support_allowance_service.AssignedCasesDisposition.VERSION_CONFLICT
+    ):
         # A concurrent administrator got there first. Their figure stands; this
         # one is refused rather than silently overwriting it.
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            raise HTTPException(
-                status_code=409, detail={"code": "allowance_version_conflict"}
-            ) from exc
-        raise
+        raise HTTPException(status_code=409, detail={"code": "allowance_version_conflict"})
+    next_version = written.state_version
 
     _record_account_admin_event(
         actor=user,
