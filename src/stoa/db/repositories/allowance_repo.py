@@ -12,7 +12,7 @@ import json
 from typing import Any
 
 from stoa.db.dynamodb import get_table, stored_int
-from stoa.db.repositories import account_deletion_repo
+from stoa.db.repositories import account_deletion_repo, weekly_counter
 from stoa.models.allowance import (
     MAX_EXACT_COUNT,
     AllowanceFinalization,
@@ -24,7 +24,6 @@ from stoa.models.allowance import (
 from stoa.models.billing import BillingPlanId
 
 
-ALLOWANCE_COUNTER_SCHEMA_VERSION = "allowance_counter.v1"
 ALLOWANCE_EFFECT_SCHEMA_VERSION = "allowance_effect.v1"
 PROVIDER_USAGE_EVIDENCE_SCHEMA_VERSION = "provider_usage_evidence.v1"
 _PROVIDER_EVIDENCE_DOMAIN = b"stoa.allowance.provider-evidence.v1"
@@ -171,19 +170,8 @@ def _payload_digest(kind: str, values: Mapping[str, object]) -> str:
     return hashlib.sha256(b"stoa.allowance.payload.v1\x00" + payload).hexdigest()
 
 
-def _week_identity(week: ZurichWeek) -> str:
-    return week.identity
-
-
 def _partition(beneficiary_id: str) -> str:
     return f"ALLOWANCE#{_required_text(beneficiary_id, 'beneficiary_id')}"
-
-
-def _counter_key(beneficiary_id: str, week_identity: str) -> dict[str, str]:
-    return {
-        "PK": _partition(beneficiary_id),
-        "SK": f"WEEK#{_required_text(week_identity, 'week_identity', maximum=8)}",
-    }
 
 
 def _effect_key(beneficiary_id: str, effect_id: str) -> dict[str, str]:
@@ -301,110 +289,50 @@ def _put_replace(
     return {"Put": payload}
 
 
-def _put_initial_counter(item: Mapping[str, object]) -> dict[str, Any]:
-    return {
-        "Put": {
-            "Item": dict(item),
-            "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
-        }
-    }
-
-
 def _transact(operations: list[dict[str, Any]], *, table: object) -> None:
     account_deletion_repo.transact(operations, table=table)
 
 
-_COUNTER_FIELDS = (
-    "finalized_input_tokens",
-    "finalized_output_tokens",
-    "reserved_input_tokens",
-    "reserved_output_tokens",
-    "provider_cost_input_tokens",
-    "provider_cost_output_tokens",
-)
+def _read_counter(
+    target: object, beneficiary_id: str, week: ZurichWeek
+) -> weekly_counter.Counter | None:
+    """The student's token counter for `week`, with the ledger's own fields checked.
 
-
-def _empty_counter(
-    *,
-    beneficiary_id: str,
-    week: ZurichWeek,
-    budget: PlanAllowanceBudget,
-    account_fence_generation: int,
-    observed_at: datetime,
-) -> AllowanceItem:
-    identity = _week_identity(week)
-    return {
-        **_counter_key(beneficiary_id, identity),
-        "entity_type": "allowance_counter",
-        "schema_version": ALLOWANCE_COUNTER_SCHEMA_VERSION,
-        "beneficiary_id": beneficiary_id,
-        "week_identity": identity,
-        "window_start": _timestamp_text(week.window_start),
-        "window_end": _timestamp_text(week.window_end),
-        "plan_id": str(budget.plan_id),
-        "allowance_version": budget.allowance_version,
-        "budget_input_tokens": budget.input_tokens,
-        "budget_output_tokens": budget.output_tokens,
-        "finalized_input_tokens": 0,
-        "finalized_output_tokens": 0,
-        "reserved_input_tokens": 0,
-        "reserved_output_tokens": 0,
-        "provider_cost_input_tokens": 0,
-        "provider_cost_output_tokens": 0,
-        "state_version": 0,
-        "account_fence_generation": account_fence_generation,
-        "created_at": _timestamp_text(observed_at),
-        "updated_at": _timestamp_text(observed_at),
-    }
-
-
-def _validated_counter(
-    item: Mapping[str, object],
-    *,
-    beneficiary_id: str,
-    week: ZurichWeek,
-) -> AllowanceItem:
-    identity = _week_identity(week)
-    if (
-        item.get("entity_type") != "allowance_counter"
-        or item.get("schema_version") != ALLOWANCE_COUNTER_SCHEMA_VERSION
-        or item.get("beneficiary_id") != beneficiary_id
-        or item.get("week_identity") != identity
-        or item.get("PK") != _partition(beneficiary_id)
-        or item.get("SK") != f"WEEK#{identity}"
-        or item.get("window_start") != _timestamp_text(week.window_start)
-        or item.get("window_end") != _timestamp_text(week.window_end)
-    ):
-        raise _AllowanceDependencyFailure("malformed allowance counter")
-    normalized = dict(item)
+    The shape every counter shares is `weekly_counter`'s to check; the plan,
+    budget, versions and timestamps are the ledger's.
+    """
     try:
-        for field in _COUNTER_FIELDS:
-            normalized[field] = _stored_count(item.get(field), field)
-        normalized["budget_input_tokens"] = _stored_count(
+        counter = weekly_counter.read(
+            weekly_counter.TOKENS, beneficiary_id, week, table=target
+        )
+    except weekly_counter.CounterUnavailable as exc:
+        raise _AllowanceDependencyFailure(str(exc)) from None
+    if counter is None:
+        return None
+    item = counter.item
+    try:
+        item["budget_input_tokens"] = _stored_count(
             item.get("budget_input_tokens"), "budget_input_tokens", positive=True
         )
-        normalized["budget_output_tokens"] = _stored_count(
+        item["budget_output_tokens"] = _stored_count(
             item.get("budget_output_tokens"), "budget_output_tokens", positive=True
         )
-        normalized["state_version"] = _stored_count(
-            item.get("state_version"), "state_version", positive=True
-        )
-        normalized["allowance_version"] = _stored_count(
+        item["allowance_version"] = _stored_count(
             item.get("allowance_version"), "allowance_version", positive=True
         )
-        normalized["account_fence_generation"] = _stored_count(
+        item["account_fence_generation"] = _stored_count(
             item.get("account_fence_generation"),
             "account_fence_generation",
             positive=True,
         )
-        normalized["plan_id"] = str(
+        item["plan_id"] = str(
             BillingPlanId(_required_text(item.get("plan_id"), "plan_id"))
         )
         _required_text(item.get("created_at"), "created_at")
         _required_text(item.get("updated_at"), "updated_at")
     except ValueError as exc:
         raise _AllowanceDependencyFailure("malformed allowance counter") from exc
-    return normalized
+    return counter
 
 
 def _checked_add(left: int, right: int) -> int:
@@ -531,7 +459,7 @@ def reserve_allowance(
     if not isinstance(week, ZurichWeek) or not isinstance(budget, PlanAllowanceBudget):
         raise ValueError("validated week and budget are required")
     now = _aware_timestamp(observed_at, "observed_at")
-    identity = _week_identity(week)
+    identity = week.identity
     digest = _payload_digest(
         "reservation",
         {
@@ -554,7 +482,6 @@ def reserve_allowance(
 
     target = table or get_table()
     effect_key = _effect_key(beneficiary, effect)
-    counter_key = _counter_key(beneficiary, identity)
     try:
         existing = _strong_get(target, effect_key)
     except _AllowanceDependencyFailure:
@@ -585,7 +512,7 @@ def reserve_allowance(
     except (account_deletion_repo.AccountDeletionConflict, TypeError, ValueError):
         return ReservationResult(ReservationDisposition.RETRYABLE)
 
-    for _ in range(4):
+    def attempt() -> ReservationResult:
         try:
             existing = _strong_get(target, effect_key)
             if existing is not None:
@@ -595,54 +522,39 @@ def reserve_allowance(
                     effect_id=effect,
                     payload_digest=digest,
                 )
-            raw_counter = _strong_get(target, counter_key)
-            if raw_counter is None:
-                counter = _empty_counter(
-                    beneficiary_id=beneficiary,
-                    week=week,
-                    budget=budget,
-                    account_fence_generation=generation,
-                    observed_at=now,
-                )
-                counter_exists = False
-            else:
-                counter = _validated_counter(
-                    raw_counter, beneficiary_id=beneficiary, week=week
-                )
-                counter_exists = True
+            counter = _read_counter(target, beneficiary, week)
         except _AllowanceDependencyFailure:
             return ReservationResult(ReservationDisposition.RETRYABLE)
 
+        finalized_input = 0 if counter is None else counter.count("finalized_input_tokens")
+        finalized_output = 0 if counter is None else counter.count("finalized_output_tokens")
+        reserved_input = 0 if counter is None else counter.count("reserved_input_tokens")
+        reserved_output = 0 if counter is None else counter.count("reserved_output_tokens")
         try:
-            input_used = _checked_add(
-                _stored_count(counter["finalized_input_tokens"], "finalized_input_tokens"),
-                _stored_count(counter["reserved_input_tokens"], "reserved_input_tokens"),
-            )
-            output_used = _checked_add(
-                _stored_count(counter["finalized_output_tokens"], "finalized_output_tokens"),
-                _stored_count(counter["reserved_output_tokens"], "reserved_output_tokens"),
-            )
+            input_used = _checked_add(finalized_input, reserved_input)
+            output_used = _checked_add(finalized_output, reserved_output)
         except _AllowanceDependencyFailure:
             return ReservationResult(ReservationDisposition.RETRYABLE)
-        stored_allowance_version = _stored_count(counter["allowance_version"], "allowance_version")
-        if budget.allowance_version < stored_allowance_version:
-            return ReservationResult(ReservationDisposition.RETRYABLE)
-        if (
-            budget.allowance_version == stored_allowance_version
-            and (
-                counter["plan_id"] != str(budget.plan_id)
-                or counter["budget_input_tokens"] != budget.input_tokens
-                or counter["budget_output_tokens"] != budget.output_tokens
-            )
-        ):
-            return ReservationResult(ReservationDisposition.RETRYABLE)
+        if counter is not None:
+            stored_allowance_version = counter.count("allowance_version")
+            if budget.allowance_version < stored_allowance_version:
+                return ReservationResult(ReservationDisposition.RETRYABLE)
+            if (
+                budget.allowance_version == stored_allowance_version
+                and (
+                    counter.item["plan_id"] != str(budget.plan_id)
+                    or counter.item["budget_input_tokens"] != budget.input_tokens
+                    or counter.item["budget_output_tokens"] != budget.output_tokens
+                )
+            ):
+                return ReservationResult(ReservationDisposition.RETRYABLE)
         if (
             input_used + requested_input > budget.input_tokens
             or output_used + requested_output > budget.output_tokens
         ):
             return ReservationResult(ReservationDisposition.LIMIT_EXCEEDED)
 
-        next_version = _stored_count(counter["state_version"], "state_version") + 1
+        next_version = (0 if counter is None else counter.state_version) + 1
         reservation = AllowanceReservation(
             reservationId=effect,
             effectId=effect,
@@ -680,29 +592,23 @@ def reserve_allowance(
             "updated_at": _timestamp_text(now),
             "expires_at": _timestamp_text(week.window_end),
         }
-        next_counter = {
-            **counter,
-            "plan_id": str(budget.plan_id),
-            "allowance_version": budget.allowance_version,
-            "budget_input_tokens": budget.input_tokens,
-            "budget_output_tokens": budget.output_tokens,
-            "reserved_input_tokens": input_used
-            - _stored_count(counter["finalized_input_tokens"], "finalized_input_tokens")
-            + requested_input,
-            "reserved_output_tokens": output_used
-            - _stored_count(counter["finalized_output_tokens"], "finalized_output_tokens")
-            + requested_output,
-            "state_version": next_version,
-            "account_fence_generation": generation,
-            "updated_at": _timestamp_text(now),
-        }
-        counter_operation = (
-            _put_replace(
-                next_counter,
-                expected_state_version=_stored_count(counter["state_version"], "state_version"),
-            )
-            if counter_exists
-            else _put_initial_counter(next_counter)
+        counter_operation = weekly_counter.write(
+            weekly_counter.TOKENS,
+            beneficiary,
+            week,
+            counter,
+            counts={
+                "reserved_input_tokens": reserved_input + requested_input,
+                "reserved_output_tokens": reserved_output + requested_output,
+            },
+            fields={
+                "plan_id": str(budget.plan_id),
+                "allowance_version": budget.allowance_version,
+                "budget_input_tokens": budget.input_tokens,
+                "budget_output_tokens": budget.output_tokens,
+                "account_fence_generation": generation,
+            },
+            at=now,
         )
         operations = [
             account_deletion_repo.active_fence_condition(beneficiary, generation),
@@ -723,12 +629,15 @@ def reserve_allowance(
                     effect_id=effect,
                     payload_digest=digest,
                 )
-            continue
+            raise weekly_counter.CounterConflict() from None
         return ReservationResult(
             ReservationDisposition.ADMITTED,
             reservation=_reservation_from_effect(next_effect),
         )
-    return ReservationResult(ReservationDisposition.RETRYABLE)
+
+    return weekly_counter.retry(
+        attempt, exhausted=ReservationResult(ReservationDisposition.RETRYABLE)
+    )
 
 
 def _evidence_from_item(item: Mapping[str, object]) -> ProviderUsageEvidence:
@@ -858,7 +767,7 @@ def _record_usage(
     except _AllowanceDependencyFailure:
         return ProviderUsageResult(ProviderUsageDisposition.RETRYABLE)
 
-    for _ in range(4):
+    def attempt() -> ProviderUsageResult:
         try:
             raw_effect = _strong_get(target, effect_key)
             if raw_effect is None:
@@ -881,14 +790,11 @@ def _record_usage(
                     "window_end": current_effect["window_end"],
                 }
             )
-            raw_counter = _strong_get(
-                target, _counter_key(beneficiary, str(current_effect["week_identity"]))
-            )
-            if raw_counter is None:
+            if current_effect["week_identity"] != week.identity:
                 return ProviderUsageResult(ProviderUsageDisposition.RETRYABLE)
-            counter = _validated_counter(
-                raw_counter, beneficiary_id=beneficiary, week=week
-            )
+            counter = _read_counter(target, beneficiary, week)
+            if counter is None:
+                return ProviderUsageResult(ProviderUsageDisposition.RETRYABLE)
         except (_AllowanceDependencyFailure, TypeError, ValueError, KeyError):
             return ProviderUsageResult(ProviderUsageDisposition.RETRYABLE)
 
@@ -923,20 +829,13 @@ def _record_usage(
         }
         try:
             next_provider_input = _checked_add(
-                _stored_count(counter["provider_cost_input_tokens"], "provider_cost_input_tokens"), actual_input
+                counter.count("provider_cost_input_tokens"), actual_input
             )
             next_provider_output = _checked_add(
-                _stored_count(counter["provider_cost_output_tokens"], "provider_cost_output_tokens"), actual_output
+                counter.count("provider_cost_output_tokens"), actual_output
             )
         except _AllowanceDependencyFailure:
             return ProviderUsageResult(ProviderUsageDisposition.RETRYABLE)
-        next_counter = {
-            **counter,
-            "provider_cost_input_tokens": next_provider_input,
-            "provider_cost_output_tokens": next_provider_output,
-            "state_version": _stored_count(counter["state_version"], "state_version") + 1,
-            "updated_at": _timestamp_text(now),
-        }
         operations = [
             account_deletion_repo.active_fence_condition(
                 beneficiary,
@@ -948,9 +847,16 @@ def _record_usage(
                 expected_state_version=_stored_count(current_effect["state_version"], "state_version"),
                 expected_state="reserved",
             ),
-            _put_replace(
-                next_counter,
-                expected_state_version=_stored_count(counter["state_version"], "state_version"),
+            weekly_counter.write(
+                weekly_counter.TOKENS,
+                beneficiary,
+                week,
+                counter,
+                counts={
+                    "provider_cost_input_tokens": next_provider_input,
+                    "provider_cost_output_tokens": next_provider_output,
+                },
+                at=now,
             ),
         ]
         try:
@@ -964,12 +870,15 @@ def _record_usage(
                 return _classify_provider_evidence(
                     raced, payload_digest=payload_digest
                 )
-            continue
+            raise weekly_counter.CounterConflict() from None
         return ProviderUsageResult(
             ProviderUsageDisposition.RECORDED,
             evidence=_evidence_from_item(evidence_item),
         )
-    return ProviderUsageResult(ProviderUsageDisposition.RETRYABLE)
+
+    return weekly_counter.retry(
+        attempt, exhausted=ProviderUsageResult(ProviderUsageDisposition.RETRYABLE)
+    )
 
 
 def _finalization_from_effect(item: Mapping[str, object]) -> AllowanceFinalization:
@@ -1083,7 +992,7 @@ def _complete_allowance(
     target = table or get_table()
     effect_key = _effect_key(beneficiary, effect)
 
-    for _ in range(4):
+    def attempt() -> FinalizationResult:
         try:
             raw_effect = _strong_get(target, effect_key)
             if raw_effect is None:
@@ -1105,18 +1014,15 @@ def _complete_allowance(
                     "window_end": current_effect["window_end"],
                 }
             )
-            raw_counter = _strong_get(
-                target, _counter_key(beneficiary, str(current_effect["week_identity"]))
-            )
+            if current_effect["week_identity"] != week.identity:
+                return FinalizationResult(FinalizationDisposition.RETRYABLE)
+            counter = _read_counter(target, beneficiary, week)
             evidence_item = _strong_get(
                 target,
                 _evidence_key(beneficiary, str(current_effect["evidence_id"])),
             )
-            if raw_counter is None or evidence_item is None:
+            if counter is None or evidence_item is None:
                 return FinalizationResult(FinalizationDisposition.RETRYABLE)
-            counter = _validated_counter(
-                raw_counter, beneficiary_id=beneficiary, week=week
-            )
             evidence = _evidence_from_item(evidence_item)
         except (
             _AllowanceDependencyFailure,
@@ -1142,8 +1048,8 @@ def _complete_allowance(
                     or evidence.output_tokens > reserved_output
                 )
             )
-            or _stored_count(counter["reserved_input_tokens"], "reserved_input_tokens") < reserved_input
-            or _stored_count(counter["reserved_output_tokens"], "reserved_output_tokens") < reserved_output
+            or counter.count("reserved_input_tokens") < reserved_input
+            or counter.count("reserved_output_tokens") < reserved_output
         ):
             return FinalizationResult(FinalizationDisposition.INVALID_STATE)
 
@@ -1171,24 +1077,13 @@ def _complete_allowance(
         }
         try:
             next_finalized_input = _checked_add(
-                _stored_count(counter["finalized_input_tokens"], "finalized_input_tokens"), finalized_input
+                counter.count("finalized_input_tokens"), finalized_input
             )
             next_finalized_output = _checked_add(
-                _stored_count(counter["finalized_output_tokens"], "finalized_output_tokens"), finalized_output
+                counter.count("finalized_output_tokens"), finalized_output
             )
         except _AllowanceDependencyFailure:
             return FinalizationResult(FinalizationDisposition.RETRYABLE)
-        next_counter = {
-            **counter,
-            "reserved_input_tokens": _stored_count(counter["reserved_input_tokens"], "reserved_input_tokens")
-            - reserved_input,
-            "reserved_output_tokens": _stored_count(counter["reserved_output_tokens"], "reserved_output_tokens")
-            - reserved_output,
-            "finalized_input_tokens": next_finalized_input,
-            "finalized_output_tokens": next_finalized_output,
-            "state_version": _stored_count(counter["state_version"], "state_version") + 1,
-            "updated_at": _timestamp_text(now),
-        }
         operations = [
             account_deletion_repo.active_fence_condition(
                 beneficiary,
@@ -1199,9 +1094,20 @@ def _complete_allowance(
                 expected_state_version=_stored_count(current_effect["state_version"], "state_version"),
                 expected_state="observed",
             ),
-            _put_replace(
-                next_counter,
-                expected_state_version=_stored_count(counter["state_version"], "state_version"),
+            weekly_counter.write(
+                weekly_counter.TOKENS,
+                beneficiary,
+                week,
+                counter,
+                counts={
+                    "reserved_input_tokens": counter.count("reserved_input_tokens")
+                    - reserved_input,
+                    "reserved_output_tokens": counter.count("reserved_output_tokens")
+                    - reserved_output,
+                    "finalized_input_tokens": next_finalized_input,
+                    "finalized_output_tokens": next_finalized_output,
+                },
+                at=now,
             ),
         ]
         try:
@@ -1213,14 +1119,17 @@ def _complete_allowance(
                 return FinalizationResult(FinalizationDisposition.RETRYABLE)
             if raced is not None and raced.get("state") in {"finalized", "restored"}:
                 return _classify_finalization(raced, payload_digest=payload_digest)
-            continue
+            raise weekly_counter.CounterConflict() from None
         return FinalizationResult(
             FinalizationDisposition.RESTORED
             if restore
             else FinalizationDisposition.FINALIZED,
             finalization=_finalization_from_effect(next_effect),
         )
-    return FinalizationResult(FinalizationDisposition.RETRYABLE)
+
+    return weekly_counter.retry(
+        attempt, exhausted=FinalizationResult(FinalizationDisposition.RETRYABLE)
+    )
 
 
 def finalize_allowance(
@@ -1358,15 +1267,8 @@ def get_allowance_counter(
 ) -> AllowanceItem | None:
     """Load one strict weekly counter; malformed persisted numbers fail closed."""
     beneficiary = _required_text(beneficiary_id, "beneficiary_id")
-    target = table or get_table()
-    raw = _strong_get(
-        target, _counter_key(beneficiary, _week_identity(week))
-    )
-    return (
-        _validated_counter(raw, beneficiary_id=beneficiary, week=week)
-        if raw is not None
-        else None
-    )
+    counter = _read_counter(table or get_table(), beneficiary, week)
+    return None if counter is None else counter.item
 
 
 def list_provider_usage_evidence(
@@ -1388,7 +1290,6 @@ def list_provider_usage_evidence(
 
 
 __all__ = [
-    "ALLOWANCE_COUNTER_SCHEMA_VERSION",
     "ALLOWANCE_EFFECT_SCHEMA_VERSION",
     "PROVIDER_USAGE_EVIDENCE_SCHEMA_VERSION",
     "FinalizationDisposition",

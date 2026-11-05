@@ -2,41 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, timezone
 import hashlib
 import struct
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from stoa.db.repositories import allowance_repo
+from stoa.db.repositories.weekly_counter import zurich_week
 from stoa.models.allowance import (
+    LOCKED_BUDGETS,
     MAX_EXACT_COUNT,
     PlanAllowanceBudget,
-    TeacherSupportScope,
-    ZurichWeek,
 )
 from stoa.models.billing import BillingPlanId
-
-
-ZURICH = ZoneInfo("Europe/Zurich")
-_LOCKED_TOKEN_BUDGETS: dict[
-    BillingPlanId, tuple[int, int, int, TeacherSupportScope]
-] = {
-    BillingPlanId.FREE_TRIAL: (50_000, 10_000, 0, TeacherSupportScope.NONE),
-    BillingPlanId.STUDENT: (500_000, 100_000, 0, TeacherSupportScope.NONE),
-    BillingPlanId.TEACHER_SUPPORTED: (
-        1_000_000,
-        200_000,
-        2,
-        TeacherSupportScope.PER_BENEFICIARY,
-    ),
-    BillingPlanId.FAMILY: (
-        1_000_000,
-        200_000,
-        10,
-        TeacherSupportScope.SHARED_FAMILY,
-    ),
-}
 
 
 def _required_text(value: object, field: str) -> str:
@@ -90,26 +68,6 @@ def _provider_digest(kind: str, value: str) -> str:
     )
 
 
-def zurich_week(observed_at: datetime | None = None) -> ZurichWeek:
-    """Resolve the containing Zurich calendar week from local Monday dates."""
-    observed = _aware(
-        observed_at or datetime.now(timezone.utc),
-        "observed_at",
-    )
-    local = observed.astimezone(ZURICH)
-    monday = local.date() - timedelta(days=local.weekday())
-    next_monday = monday + timedelta(days=7)
-    local_start = datetime.combine(monday, time.min, tzinfo=ZURICH)
-    local_end = datetime.combine(next_monday, time.min, tzinfo=ZURICH)
-    iso = monday.isocalendar()
-    return ZurichWeek(
-        isoYear=iso.year,
-        isoWeek=iso.week,
-        windowStart=local_start.astimezone(timezone.utc),
-        windowEnd=local_end.astimezone(timezone.utc),
-    )
-
-
 def week_identity(observed_at: datetime) -> str:
     """The Zurich week `observed_at` falls in, as allowances name it: `2026-W13`."""
     return zurich_week(observed_at).identity
@@ -132,7 +90,7 @@ def plan_allowance_budget(
     version = _exact_count(
         allowance_version, "allowance_version", positive=True
     )
-    input_tokens, output_tokens, cases, scope = _LOCKED_TOKEN_BUDGETS[plan]
+    input_tokens, output_tokens, cases, scope = LOCKED_BUDGETS[plan]
     return PlanAllowanceBudget(
         planId=plan,
         inputTokens=input_tokens,
@@ -434,5 +392,4 @@ __all__ = [
     "restore_user_allowance",
     "week_exhausted",
     "week_identity",
-    "zurich_week",
 ]

@@ -14,7 +14,12 @@ import struct
 from typing import Any
 
 from stoa.db.dynamodb import get_table
-from stoa.db.repositories import account_deletion_repo, parent_link_repo, user_repo
+from stoa.db.repositories import (
+    account_deletion_repo,
+    parent_link_repo,
+    user_repo,
+    weekly_counter,
+)
 from stoa.models.allowance import TeacherSupportScope, ZurichWeek
 from stoa.models.billing import BillingPlanId
 from stoa.services import allowance_service, paid_entitlement_service
@@ -93,7 +98,7 @@ class TeacherSupportRefundResult:
 
 def current_week_identity(observed_at: datetime | None = None) -> str:
     """The Zurich week a case spent at ``observed_at`` would be counted in."""
-    return _week_identity(allowance_service.zurich_week(_aware(observed_at, "observed_at")))
+    return _week_identity(weekly_counter.zurich_week(_aware(observed_at, "observed_at")))
 
 
 @dataclass(frozen=True, slots=True)
@@ -915,7 +920,7 @@ def admit_teacher_support_case(
             case_kind=kind,
             beneficiary_id=beneficiary,
         )
-    week = allowance_service.zurich_week(observed)
+    week = weekly_counter.zurich_week(observed)
     identity = _week_identity(week)
     # Resolved once per attempt, not once per call. The scope carries the
     # versions this admission fences, so a scope read before somebody changed
@@ -1228,7 +1233,7 @@ def get_teacher_support_projection(
         raise ValueError("teacher-support projection is temporarily unavailable") from None
     if scope is None:
         raise ValueError("teacher support is not included in the active plan")
-    week = allowance_service.zurich_week(observed)
+    week = weekly_counter.zurich_week(observed)
     identity = _week_identity(week)
     try:
         item = _strong_get(target, _counter_key(scope.support_scope_id, identity))
@@ -1266,7 +1271,7 @@ def get_student_teacher_support_standing(
     """
     observed = _aware(observed_at, "observed_at")
     target = table or get_table()
-    week = allowance_service.zurich_week(observed)
+    week = weekly_counter.zurich_week(observed)
     try:
         scope = _resolve_scope(beneficiary_id, table=target)
         if scope is None:

@@ -33,7 +33,7 @@ from fakes.ask_question import (
 from fakes.ask_question import patch_store, store_call
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from fakes.bedrock import FakeBedrock
-from stoa.db.repositories import allowance_repo
+from stoa.db.repositories import allowance_repo, weekly_counter
 from stoa.jobs import conversation_generation
 from stoa.services import ai_service, allowance_service
 from stoa.services.ask_question import _admission
@@ -139,7 +139,7 @@ def _failed_minutes_ago(table, key: str, minutes: float) -> None:
 def _counter(table, key: str) -> dict[str, Any]:
     asked = datetime.fromisoformat(_command_row(table, key)["created_at"])
     counter = allowance_repo.get_allowance_counter(
-        beneficiary_id=STUDENT, week=allowance_service.zurich_week(asked), table=table
+        beneficiary_id=STUDENT, week=weekly_counter.zurich_week(asked), table=table
     )
     assert counter is not None
     return counter

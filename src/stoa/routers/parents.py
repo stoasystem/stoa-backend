@@ -26,6 +26,7 @@ from stoa.db.repositories import (
 )
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
+from stoa.models.allowance import ZURICH
 from stoa.models.billing import PurchasablePlanId
 from stoa.models.user import SubscriptionTier
 # Card 007: one switch and one refusal for the whole paid surface; see
@@ -1646,8 +1647,8 @@ async def get_child_usage_summary(
                 "timezone": "Europe/Zurich",
                 "utcStart": start.astimezone(timezone.utc).isoformat(),
                 "utcEnd": end.astimezone(timezone.utc).isoformat(),
-                "localStart": start.astimezone(allowance_service.ZURICH).isoformat(),
-                "localEnd": end.astimezone(allowance_service.ZURICH).isoformat(),
+                "localStart": start.astimezone(ZURICH).isoformat(),
+                "localEnd": end.astimezone(ZURICH).isoformat(),
             },
             "inputRemaining": input_projection["remainingTokens"],
             "outputRemaining": output_projection["remainingTokens"],
