@@ -1,11 +1,9 @@
-import asyncio
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import logging
 import sys
-import threading
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -50,7 +48,6 @@ from stoa.services.attachment_service import (
     complete_upload,
     create_upload_intent,
     extract_message_attachment_context,
-    put_upload_chunk,
     prepare_message_attachments,
     purge_student_attachments,
     release_resource_attachments,
@@ -393,20 +390,23 @@ class _IntentRepository:
     def __init__(self) -> None:
         self.item: dict | None = None
 
-    def create_upload_intent(self, item: dict) -> None:
+    def prepare_staging_issuance(self, item: dict) -> None:
         assert self.item is None
         self.item = item
 
-    def mark_upload_issued(self, upload_id, owner_id, version, **coordinates) -> bool:
+    def record_staging_multipart(
+        self, upload_id, owner_id, version, *, operation_fence, multipart_upload_id
+    ) -> bool:
         assert self.item and self.item["status"] == "issuing"
-        self.item.update(coordinates)
+        assert self.item["operation_fence"] == operation_fence
+        self.item["multipart_upload_id"] = multipart_upload_id
         self.item["status"] = "pending_upload"
         self.item["version"] = version + 1
         return True
 
     def mark_upload_issuance_failed(self, *args, **kwargs) -> bool:
         if self.item:
-            self.item["status"] = "cleanup_pending" if kwargs.get("cleanup_pending") else "invalid"
+            self.item["status"] = "cleanup_pending"
         return True
 
 
@@ -491,242 +491,12 @@ def _pending_upload(owner: str = "student-1", expected_size: int = 3) -> dict:
     })
 
 
-class _ChunkRepository:
-    def __init__(self, item=None):
-        self.item = item or _pending_upload()
-        self.part = None
-
-    def get_upload_intent(self, upload_id):
-        return self.item
-
-    def claim_upload_part(self, upload_id, part_number, checksum, length, owner, now):
-        if self.part and self.part["checksum_sha256"] != checksum:
-            raise attachment_repo.AttachmentRepositoryConflict("chunk_conflict")
-        if not self.part:
-            self.part = {
-                "status": "uploading",
-                "part_number": part_number,
-                "checksum_sha256": checksum,
-                "content_length": length,
-                "lease_owner": owner,
-                "attempt": 1,
-            }
-        return dict(self.part)
-
-    def get_upload_part(self, upload_id, part_number):
-        return dict(self.part) if self.part else None
-
-    def complete_upload_part(self, upload_id, part_number, owner, **provider):
-        assert self.part and self.part["lease_owner"] == owner
-        self.part.update(provider)
-        self.part["status"] = "completed"
-        return True
-
-
-class _ChunkS3:
-    def __init__(self):
-        self.uploads = []
-
-    def upload_part(self, **kwargs):
-        self.uploads.append(kwargs)
-        return {"ETag": "private-etag", "ChecksumSHA256": kwargs["ChecksumSHA256"]}
-
-
-async def _chunks(*values: bytes):
-    for value in values:
-        yield value
-
-
-def test_chunk_claim_precedes_provider_write_and_receipt_is_safe() -> None:
-    repository, s3 = _ChunkRepository(), _ChunkS3()
-    result = asyncio.run(
-        put_upload_chunk(
-            "upload-1",
-            1,
-            _chunks(b"a", b"bc"),
-            _student_actor(),
-            s3=s3,
-            settings=Settings(s3_images_bucket="bucket"),
-            now=ATTACHMENT_TEST_NOW,
-            repository=repository,
-        )
-    )
-    assert result["status"] == "accepted"
-    assert repository.part["status"] == "completed"
-    assert len(s3.uploads) == 1
-    assert all(
-        value not in str(result) for value in ("private-etag", "provider-upload-canary", "bucket")
-    )
-
-
-def test_checksum_collision_is_rejected_before_provider_mutation() -> None:
-    repository, s3 = _ChunkRepository(), _ChunkS3()
-    asyncio.run(
-        put_upload_chunk(
-            "upload-1",
-            1,
-            _chunks(b"abc"),
-            _student_actor(),
-            s3=s3,
-            settings=Settings(s3_images_bucket="bucket"),
-            now=ATTACHMENT_TEST_NOW,
-            repository=repository,
-        )
-    )
-    repository.part["status"] = "uploading"
-    with pytest.raises(AttachmentDecisionError) as error:
-        asyncio.run(
-            put_upload_chunk(
-                "upload-1",
-                1,
-                _chunks(b"xyz"),
-                _student_actor(),
-                s3=s3,
-                settings=Settings(s3_images_bucket="bucket"),
-                now=ATTACHMENT_TEST_NOW,
-                repository=repository,
-            )
-        )
-    assert error.value.code is AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT
-    assert len(s3.uploads) == 1
-
-
-def test_synchronized_same_part_different_bytes_mutates_provider_at_most_once() -> None:
-    entered, release = threading.Event(), threading.Event()
-
-    class BlockingS3(_ChunkS3):
-        def upload_part(self, **kwargs):
-            entered.set()
-            assert release.wait(10)
-            return super().upload_part(**kwargs)
-
-    repository, s3 = _ChunkRepository(), BlockingS3()
-    outcomes: list[dict[str, object] | AttachmentErrorCode] = []
-
-    def worker(value: bytes) -> None:
-        try:
-            outcomes.append(
-                asyncio.run(
-                    put_upload_chunk(
-                        "upload-1",
-                        1,
-                        _chunks(value),
-                        _student_actor(),
-                        s3=s3,
-                        settings=Settings(s3_images_bucket="bucket"),
-                        now=ATTACHMENT_TEST_NOW,
-                        repository=repository,
-                    )
-                )
-            )
-        except AttachmentDecisionError as error:
-            outcomes.append(error.code)
-
-    first = threading.Thread(target=worker, args=(b"abc",))
-    second = None
-    second_started = False
-    first.start()
-    try:
-        assert entered.wait(2)
-        second = threading.Thread(target=worker, args=(b"xyz",))
-        second.start()
-        second_started = True
-        second.join(2)
-    finally:
-        release.set()
-        try:
-            if second_started and second is not None:
-                second.join(5)
-        finally:
-            first.join(5)
-    assert second is not None
-    assert not first.is_alive() and not second.is_alive()
-    assert outcomes.count(AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT) == 1
-    assert [
-        outcome["status"] for outcome in outcomes if isinstance(outcome, dict)
-    ] == ["accepted"]
-    assert len(s3.uploads) == 1
-
-
-def test_provider_success_ledger_failure_replay_adopts_matching_listed_part() -> None:
-    class Repository(_ChunkRepository):
-        def __init__(self):
-            super().__init__()
-            self.fail_completion_once = True
-
-        def claim_upload_part(self, upload_id, part_number, checksum, length, owner, now):
-            if not self.part:
-                return super().claim_upload_part(
-                    upload_id, part_number, checksum, length, owner, now
-                )
-            if self.part["checksum_sha256"] != checksum:
-                raise attachment_repo.AttachmentRepositoryConflict("chunk_conflict")
-            self.part.update(
-                lease_owner=owner,
-                lease_expires_at=now + 120,
-                attempt=2,
-                status="uploading",
-            )
-            return dict(self.part)
-
-        def complete_upload_part(self, upload_id, part_number, owner, **provider):
-            if self.fail_completion_once:
-                self.fail_completion_once = False
-                return False
-            return super().complete_upload_part(upload_id, part_number, owner, **provider)
-
-    class ReconcileS3(_ChunkS3):
-        def upload_part(self, **kwargs):
-            result = super().upload_part(**kwargs)
-            self.provider_part = {
-                "PartNumber": kwargs["PartNumber"],
-                "Size": kwargs["ContentLength"],
-                "ETag": result["ETag"],
-                "ChecksumSHA256": result["ChecksumSHA256"],
-            }
-            return result
-
-        def list_parts(self, **kwargs):
-            return {"Parts": [self.provider_part]}
-
-    repository, s3 = Repository(), ReconcileS3()
-    with pytest.raises(AttachmentDecisionError) as first:
-        asyncio.run(
-            put_upload_chunk(
-                "upload-1",
-                1,
-                _chunks(b"abc"),
-                _student_actor(),
-                s3=s3,
-                settings=Settings(s3_images_bucket="bucket"),
-                now=ATTACHMENT_TEST_NOW,
-                repository=repository,
-            )
-        )
-    assert first.value.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
-    replay = asyncio.run(
-        put_upload_chunk(
-            "upload-1",
-            1,
-            _chunks(b"abc"),
-            _student_actor(),
-            s3=s3,
-            settings=Settings(s3_images_bucket="bucket"),
-            now=ATTACHMENT_TEST_NOW,
-            repository=repository,
-        )
-    )
-    assert replay["status"] == "accepted"
-    assert repository.part["status"] == "completed"
-    assert len(s3.uploads) == 1
-
-
 def test_gateway_completion_uses_only_contiguous_server_etags() -> None:
     data = _image("PNG")
 
-    class Repository(_ChunkRepository):
+    class Repository:
         def __init__(self):
-            super().__init__(_pending_upload(expected_size=len(data)))
+            self.item = _pending_upload(expected_size=len(data))
             self.part = {
                 "status": "completed",
                 "part_number": 1,
@@ -736,20 +506,27 @@ def test_gateway_completion_uses_only_contiguous_server_etags() -> None:
                 "provider_checksum": "c2VydmVyLXByaXZhdGUtY2hlY2tzdW0tdmFsdWU=",
             }
 
+        def get_upload_intent(self, upload_id):
+            return self.item
+
         def list_upload_parts(self, upload_id):
             return [dict(self.part)]
 
-        def begin_upload_assembly(self, upload_id, owner_id, version, now):
+        def claim_staging_assembly(self, upload_id, owner_id, version, now, **fence):
             self.item["status"] = "assembling"
             return True
 
-        def mark_staging_completed(self, upload_id, owner_id, version, **values):
+        def recover_staging_completion(self, upload_id, owner_id, version, **values):
+            values.pop("operation_fence")
             self.item.update(values)
             self.item["status"] = "validating"
             return True
 
-        def mark_validated(self, upload_id, owner_id, version, values):
-            self.item.update(values)
+        def begin_immutable_promotion(self, upload_id, owner_id, version, now, **target):
+            self.item["status"] = "promoting"
+            return True
+
+        def record_immutable_version(self, upload_id, owner_id, version, **values):
             self.item["status"] = "validated"
             self.item["version"] = version + 1
             return True
@@ -761,6 +538,7 @@ def test_gateway_completion_uses_only_contiguous_server_etags() -> None:
         def __init__(self):
             self.complete = None
             self.completions = 0
+            self.promoted = None
 
         def complete_multipart_upload(self, **kwargs):
             self.completions += 1
@@ -774,7 +552,16 @@ def test_gateway_completion_uses_only_contiguous_server_etags() -> None:
 
         def put_object(self, **kwargs):
             assert kwargs["ContentLength"] == len(data)
+            self.promoted = kwargs
             return {"VersionId": "immutable-version", "ETag": "immutable-final-etag"}
+
+        def head_object(self, **kwargs):
+            return {
+                "VersionId": "immutable-version",
+                "ETag": "immutable-final-etag",
+                "ContentLength": len(data),
+                "Metadata": self.promoted["Metadata"],
+            }
 
         def delete_object(self, **kwargs):
             self.deleted = kwargs
@@ -819,11 +606,17 @@ class _GeneratedBody:
 
 class _PromotionRepository:
     def __init__(self) -> None:
+        self.promotion: dict | None = None
         self.validated = None
         self.invalid = None
 
-    def mark_validated(self, upload_id, owner_id, version, attributes):
-        self.validated = dict(attributes)
+    def begin_immutable_promotion(self, upload_id, owner_id, version, now, **target):
+        self.promotion = target
+        return True
+
+    def record_immutable_version(self, upload_id, owner_id, version, **values):
+        assert self.promotion and self.promotion["operation_fence"] == values["operation_fence"]
+        self.validated = {**self.promotion, **values}
         return True
 
     def clear_staging_coordinates(self, *args):
@@ -835,19 +628,34 @@ class _PromotionRepository:
 
 
 class _PromotionS3:
+    """Staging reads return `body`; the promoted object reads back what was put."""
+
     def __init__(self, body: object) -> None:
         self.body = body
         self.get_call = None
         self.put_lengths: list[int] = []
         self.deleted: list[dict[str, object]] = []
+        self.promoted: dict | None = None
 
     def get_object(self, **kwargs):
+        if self.promoted and kwargs["Key"] == self.promoted["Key"]:
+            return {"Body": BytesIO(self.promoted["bytes"])}
         self.get_call = kwargs
         return {"Body": self.body}
 
     def put_object(self, **kwargs):
         self.put_lengths.append(kwargs["ContentLength"])
+        self.promoted = {**kwargs, "bytes": kwargs["Body"].read()}
         return {"VersionId": "immutable-version-exact", "ETag": "immutable-etag-exact"}
+
+    def head_object(self, **kwargs):
+        assert self.promoted and kwargs["Key"] == self.promoted["Key"]
+        return {
+            "VersionId": "immutable-version-exact",
+            "ETag": "immutable-etag-exact",
+            "ContentLength": len(self.promoted["bytes"]),
+            "Metadata": self.promoted["Metadata"],
+        }
 
     def delete_object(self, **kwargs):
         self.deleted.append(kwargs)
@@ -1582,53 +1390,6 @@ def test_repository_coordinate_guards_run_before_fence_removal(
         with pytest.raises(attachment_repo.AttachmentRepositoryConflict) as captured:
             call()
         assert captured.value.category == "invalid_provider_coordinate"
-
-
-@pytest.mark.parametrize("coordinate", MALFORMED_PROVIDER_COORDINATES)
-def test_repository_coordinate_compatibility_aliases_reject_invalid_values(
-    monkeypatch, coordinate: object
-) -> None:
-    monkeypatch.setattr(
-        attachment_repo,
-        "get_upload_intent",
-        lambda *args, **kwargs: {
-            "staging_object_key": "staging-key",
-            "operation_fence": "fence",
-        },
-    )
-
-    def forbidden_transition(*args, **kwargs):
-        raise AssertionError("success transition must not run")
-
-    monkeypatch.setattr(attachment_repo, "_fenced_transition", forbidden_transition)
-    with pytest.raises(attachment_repo.AttachmentRepositoryConflict):
-        attachment_repo.mark_upload_issued(
-            "upload-1",
-            "student-1",
-            1,
-            staging_object_key="staging-key",
-            multipart_upload_id=coordinate,
-        )
-    with pytest.raises(attachment_repo.AttachmentRepositoryConflict):
-        attachment_repo.mark_staging_completed(
-            "upload-1",
-            "student-1",
-            1,
-            staging_version_id=coordinate,
-            staging_etag="etag",
-        )
-
-    monkeypatch.setattr(attachment_repo, "_transition", forbidden_transition)
-    with pytest.raises(attachment_repo.AttachmentRepositoryConflict):
-        attachment_repo.mark_validated(
-            "upload-1",
-            "student-1",
-            1,
-            {
-                "immutable_version_id": coordinate,
-                "immutable_etag": "etag",
-            },
-        )
 
 
 def _message_put(
@@ -2789,7 +2550,7 @@ class _CleanupRepository:
         if (
             not item
             or item["version"] != version
-            or item["status"] in {"consuming", "consumed", "cleanup_complete", "cleanup_blocked"}
+            or item["status"] in {"consumed", "cleanup_complete", "cleanup_blocked"}
             or (
                 item["status"] not in {"invalid", "expired", "cleanup_pending"}
                 and item.get("expires_at", 0) > now_epoch
@@ -2969,7 +2730,6 @@ def test_cleanup_is_bounded_idempotent_and_never_deletes_active_or_durable_uploa
             _cleanup_upload("invalid", "invalid", 2_000_000_000),
             _cleanup_upload("durable", "expired", 1),
             _cleanup_upload("active", "validated", 2_000_000_000),
-            _cleanup_upload("consuming", "consuming", 1),
             _cleanup_upload("consumed", "consumed", 1),
         ],
         durable={"durable"},
@@ -2998,7 +2758,6 @@ def test_cleanup_is_bounded_idempotent_and_never_deletes_active_or_durable_uploa
     assert repeated.deleted == 0
     assert len(s3.deleted) == 2
     assert repository.uploads["active"]["status"] == "validated"
-    assert repository.uploads["consuming"]["status"] == "consuming"
     assert repository.uploads["consumed"]["status"] == "consumed"
 
 

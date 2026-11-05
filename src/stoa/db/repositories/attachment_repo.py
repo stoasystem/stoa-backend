@@ -16,7 +16,7 @@ from typing import Protocol, runtime_checkable
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
 
-from stoa.config import UPLOAD_INTENT_TTL_SECONDS, UPLOAD_ROW_RETENTION_SECONDS
+from stoa.config import UPLOAD_ROW_RETENTION_SECONDS
 from stoa.db.repositories import account_deletion_repo
 from stoa.db.dynamodb import get_table
 
@@ -716,43 +716,19 @@ def record_staging_multipart(
     )
 
 
-# Compatibility alias for callers outside the upload gateway. New code must persist
-# the staging key through prepare_staging_issuance before provider mutation.
-def mark_upload_issued(
-    upload_id: str,
-    owner_id: str,
-    version: int,
-    *,
-    staging_object_key: str,
-    multipart_upload_id: object,
-    table: object | None = None,
-) -> bool:
-    item = get_upload_intent(upload_id, table=table)
-    if not item or item.get("staging_object_key") != staging_object_key:
-        return False
-    return record_staging_multipart(
-        upload_id,
-        owner_id,
-        version,
-        operation_fence=str(item.get("operation_fence") or ""),
-        multipart_upload_id=multipart_upload_id,
-        table=table,
-    )
-
-
 def mark_upload_issuance_failed(
     upload_id: str,
     owner_id: str,
     version: int,
     *,
-    cleanup_pending: bool = False,
     table: object | None = None,
 ) -> bool:
+    """An issuance that failed hands its row to cleanup: a multipart may exist."""
     return _transition(
         upload_id,
         owner_id,
         "issuing",
-        "cleanup_pending" if cleanup_pending else "invalid",
+        "cleanup_pending",
         version,
         None,
         attributes={"validation_failure": "service_unavailable"},
@@ -767,100 +743,6 @@ def get_upload_part(
         Key=upload_part_key(upload_id, part_number), ConsistentRead=True
     )
     return _optional_mapping(response.get("Item"))
-
-
-def claim_upload_part(
-    upload_id: str,
-    part_number: int,
-    checksum_sha256: str,
-    length: int,
-    lease_owner: str,
-    now_epoch: int,
-    *,
-    table: object | None = None,
-) -> dict[str, object]:
-    """Claim before provider mutation; one expired takeover is the only retry fence."""
-    part_number = _require_positive_integer(part_number)
-    checksum_sha256 = _require_canonical_sha256(checksum_sha256)
-    length = _require_positive_integer(length)
-    lease_owner = _require_provider_coordinate(lease_owner)
-    if isinstance(now_epoch, bool) or not isinstance(now_epoch, int) or now_epoch < 0:
-        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
-    target = table or get_table()
-    intent_usable_until = now_epoch + UPLOAD_INTENT_TTL_SECONDS
-    if hasattr(target, "get_item"):
-        intent = get_upload_intent(upload_id, table=target)
-        if intent is None:
-            raise AttachmentRepositoryConflict("conditional_conflict")
-        intent_usable_until = usable_until(intent)
-        if intent_usable_until <= now_epoch:
-            raise AttachmentRepositoryConflict("conditional_conflict")
-    item = {
-        **upload_part_key(upload_id, part_number),
-        "upload_id": upload_id,
-        "part_number": part_number,
-        "status": "uploading",
-        "checksum_sha256": checksum_sha256,
-        "content_length": length,
-        "lease_owner": lease_owner,
-        "lease_expires_at": now_epoch + 120,
-        "expires_at": intent_usable_until + UPLOAD_ROW_RETENTION_SECONDS,
-        "attempt": 1,
-    }
-    try:
-        _put_item(target,
-            Item=item,
-            ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
-        )
-        return item
-    except ClientError as exc:
-        if not _conditional(exc):
-            raise AttachmentRepositoryConflict("dependency_failure") from None
-    current = get_upload_part(upload_id, part_number, table=target)
-    if not current:
-        raise AttachmentRepositoryConflict("dependency_failure")
-    if (
-        current.get("checksum_sha256") != checksum_sha256
-        or _required_integer(current.get("content_length", -1)) != length
-    ):
-        raise AttachmentRepositoryConflict("chunk_conflict")
-    if (
-        current.get("status") == "completed"
-        or _required_integer(current.get("lease_expires_at", 0)) > now_epoch
-    ):
-        return current
-    if _required_integer(current.get("attempt", 1), minimum=1) >= 2:
-        raise AttachmentRepositoryConflict("lease_exhausted")
-    try:
-        response = _update_item(target,
-            Key=upload_part_key(upload_id, part_number),
-            UpdateExpression=("SET lease_owner=:owner, lease_expires_at=:expiry, attempt=:attempt"),
-            ConditionExpression=(
-                "#status=:uploading AND checksum_sha256=:checksum AND "
-                "content_length=:length AND lease_expires_at<=:now AND attempt=:previous"
-            ),
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues={
-                ":uploading": "uploading",
-                ":checksum": checksum_sha256,
-                ":length": length,
-                ":now": now_epoch,
-                ":previous": 1,
-                ":owner": lease_owner,
-                ":expiry": now_epoch + 120,
-                ":attempt": 2,
-            },
-            ReturnValues="ALL_NEW",
-        )
-    except ClientError as exc:
-        if _conditional(exc):
-            return get_upload_part(upload_id, part_number, table=target) or current
-        raise AttachmentRepositoryConflict("dependency_failure") from None
-    return _optional_mapping(response.get("Attributes")) or {
-        **current,
-        "lease_owner": lease_owner,
-        "attempt": 2,
-    }
 
 
 PRESIGNED_PART_OWNER = "presigned"
@@ -1045,29 +927,6 @@ def claim_staging_assembly(
     )
 
 
-def begin_upload_assembly(
-    upload_id: str,
-    owner_id: str,
-    version: int,
-    now_epoch: int,
-    *,
-    table: object | None = None,
-) -> bool:
-    item = get_upload_intent(upload_id, table=table)
-    if not item:
-        return False
-    return claim_staging_assembly(
-        upload_id, owner_id, version, now_epoch,
-        operation_fence=_required_text(item.get("operation_fence") or "legacy"),
-        multipart_upload_id=_required_text(item.get("multipart_upload_id")),
-        ordered_part_count=_required_integer(item.get("part_count", 0)),
-        part_ledger_digest=_required_text(
-            item.get("assembly_ledger_digest") or "legacy"
-        ),
-        table=table,
-    )
-
-
 def recover_staging_completion(
     upload_id: str,
     owner_id: str,
@@ -1137,50 +996,6 @@ def claim_stale_upload_operation(
             return None
         raise AttachmentRepositoryConflict("dependency_failure") from None
     return _optional_mapping(response.get("Attributes"))
-
-
-def mark_staging_completed(
-    upload_id: str,
-    owner_id: str,
-    version: int,
-    *,
-    staging_version_id: object,
-    staging_etag: object,
-    table: object | None = None,
-) -> bool:
-    item = get_upload_intent(upload_id, table=table)
-    if not item:
-        return False
-    return recover_staging_completion(
-        upload_id, owner_id, version,
-        operation_fence=_required_text(item.get("operation_fence")),
-        staging_version_id=staging_version_id,
-        staging_etag=staging_etag,
-        table=table,
-    )
-
-
-def mark_upload_terminal(
-    upload_id: str,
-    owner_id: str,
-    version: int,
-    failure_category: str,
-    *,
-    table: object | None = None,
-) -> bool:
-    item = get_upload_intent(upload_id, table=table)
-    if not item:
-        return False
-    return _transition(
-        upload_id,
-        owner_id,
-        _required_text(item.get("status")),
-        "cleanup_pending",
-        version,
-        None,
-        attributes={"validation_failure": failure_category},
-        table=table,
-    )
 
 
 def get_upload_intent(upload_id: str, *, table: object | None = None) -> dict[str, object] | None:
@@ -2702,43 +2517,6 @@ def build_finalize_deletion_transaction(
     ]
 
 
-def begin_validation(
-    upload_id: str, owner_id: str, version: int, now_epoch: int, *, table: object | None = None
-) -> bool:
-    return _transition(
-        upload_id, owner_id, "pending_upload", "validating", version, now_epoch, table=table
-    )
-
-
-def mark_validated(
-    upload_id: str,
-    owner_id: str,
-    version: int,
-    detected: dict[str, object],
-    *,
-    table: object | None = None,
-) -> bool:
-    detected = {
-        **detected,
-        "immutable_version_id": _require_provider_coordinate(
-            detected.get("immutable_version_id")
-        ),
-        "immutable_etag": _require_provider_coordinate(
-            detected.get("immutable_etag")
-        ),
-    }
-    return _transition(
-        upload_id,
-        owner_id,
-        "validating",
-        "validated",
-        version,
-        None,
-        attributes=detected,
-        table=table,
-    )
-
-
 def begin_immutable_promotion(
     upload_id: str,
     owner_id: str,
@@ -2856,14 +2634,6 @@ def mark_invalid(
         None,
         attributes={"validation_failure": failure_category},
         table=table,
-    )
-
-
-def release_validation(
-    upload_id: str, owner_id: str, version: int, now_epoch: int, *, table: object | None = None
-) -> bool:
-    return _transition(
-        upload_id, owner_id, "validating", "pending_upload", version, now_epoch, table=table
     )
 
 
@@ -3179,9 +2949,3 @@ def _serialize_transactions(
             }
         result.append({operation_name: encoded})
     return result
-
-
-def _translate(exc: ClientError) -> None:
-    raise AttachmentRepositoryConflict(
-        "conditional_conflict" if _conditional(exc) else "dependency_failure"
-    ) from None

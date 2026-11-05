@@ -4499,23 +4499,5 @@
     "method": "PUT",
     "path": "/admin/teacher-support/allowances/{student_id}",
     "sensitive": true
-  },
-  {
-    "authorization": [
-      {
-        "action": "update",
-        "capability": null,
-        "purpose": "self_service",
-        "resource_type": "upload"
-      }
-    ],
-    "classification": "authorized",
-    "family": "files",
-    "identifiers": [
-      "upload_id"
-    ],
-    "method": "PUT",
-    "path": "/files/{upload_id}/chunks/{part_number}",
-    "sensitive": true
   }
 ]

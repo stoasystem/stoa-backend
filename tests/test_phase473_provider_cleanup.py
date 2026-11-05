@@ -446,12 +446,11 @@ def test_part_rows_receive_lifecycle_ttl() -> None:
     parent_expiry = NOW_EPOCH + 600
     table = _PutRecordingTable(intent_expires_at=parent_expiry)
 
-    attachment_repo.claim_upload_part(
+    attachment_repo.pin_upload_part(
         "opaque-upload",
         1,
         "a" * 64,
         3,
-        "lease-owner",
         NOW_EPOCH,
         table=table,
     )
@@ -540,21 +539,20 @@ def test_upload_transition_declares_no_unused_placeholder() -> None:
     assert len(table.updates) == 1
 
 
-def test_part_claim_accepts_the_decimal_a_real_table_returns() -> None:
+def test_part_pin_accepts_the_decimal_a_real_table_returns() -> None:
     """DynamoDB hands back every stored number as Decimal.
 
     Fixtures using int hid this: claiming a part always raised a conditional
-    conflict against a real table, so no chunk could ever be uploaded.
+    conflict against a real table, so no part could ever be uploaded.
     """
     parent_expiry = NOW_EPOCH + 600
     table = _PutRecordingTable(intent_expires_at=Decimal(parent_expiry))
 
-    attachment_repo.claim_upload_part(
+    attachment_repo.pin_upload_part(
         "opaque-upload",
         1,
         "a" * 64,
         3,
-        "lease-owner",
         NOW_EPOCH,
         table=table,
     )

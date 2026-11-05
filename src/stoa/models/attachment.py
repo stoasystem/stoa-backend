@@ -25,14 +25,22 @@ class UploadPurpose(StrEnum):
 
 
 class UploadStatus(StrEnum):
+    """Every state an upload row is written in, in the order an upload moves."""
+
     ISSUING = "issuing"
     PENDING_UPLOAD = "pending_upload"
     ASSEMBLING = "assembling"
     VALIDATING = "validating"
+    PROMOTING = "promoting"
     VALIDATED = "validated"
-    CONSUMING = "consuming"
     CONSUMED = "consumed"
     INVALID = "invalid"
+    CLEANUP_PENDING = "cleanup_pending"
+    CLEANUP_BLOCKED = "cleanup_blocked"
+    CLEANUP_COMPLETE = "cleanup_complete"
+    # Never written: an upload past its usable window keeps its state, and the
+    # sweep reads `expired` only as a cleanup condition. What an upload past
+    # that window is called is settled with the `uploads` package (#252).
     EXPIRED = "expired"
 
 
@@ -86,14 +94,6 @@ class SavedAttachmentPage(_AttachmentModel):
 class SavedAttachmentDeleteResult(_AttachmentModel):
     attachment_id: OpaqueId = Field(alias="attachmentId")
     status: SavedAttachmentDeleteStatus
-
-
-class UploadChunkResponse(_AttachmentModel):
-    upload_id: OpaqueId = Field(alias="uploadId")
-    part_number: int = Field(alias="partNumber", ge=1)
-    size_bytes: int = Field(alias="sizeBytes", gt=0)
-    checksum_sha256: str = Field(alias="checksumSha256", pattern=r"^[0-9a-f]{64}$")
-    status: str = Field(pattern=r"^accepted$")
 
 
 class UploadPartUrlRequest(_AttachmentModel):
