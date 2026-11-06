@@ -13,7 +13,6 @@ import inspect
 import threading
 from typing import Any, Callable
 
-from fastapi import HTTPException
 import pytest
 
 from stoa.db.repositories import account_deletion_repo
@@ -622,7 +621,7 @@ def test_conversation_plan_denial_runs_before_case_message_and_usage_effect(
         lambda **_kwargs: pytest.fail("denied usage effect ran"),
     )
 
-    with pytest.raises(HTTPException) as denied:
+    with pytest.raises(help_requests.HelpRequestViolation) as denied:
         asyncio.run(
             conversations.request_teacher_help(
                 body=conversations.TeacherHelpRequest(
@@ -633,6 +632,7 @@ def test_conversation_plan_denial_runs_before_case_message_and_usage_effect(
             )
         )
 
+    assert denied.value.code == "teacher_support_not_included"
     assert denied.value.status_code == 403
     assert ("CONV#conversation-denied", "HELP") not in table.rows
     assert ("CONV#conversation-denied", "MSG#conversation-denied") not in table.rows
