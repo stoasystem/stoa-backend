@@ -28,6 +28,32 @@ os.environ.setdefault("AWS_SESSION_TOKEN", "testing")
 os.environ.setdefault("AWS_DEFAULT_REGION", "eu-central-2")
 
 
+def _render_rule_violations_like_the_application() -> None:
+    """Give every test's bare `FastAPI()` the handler `stoa.main` installs.
+
+    Most route tests mount one router on an application of their own. A rule
+    violation is rendered by an application-level handler, not by the router,
+    so without it those applications would answer every refusal with a 500.
+    """
+    import fastapi
+
+    from stoa.rule_violation import install_rule_violation_handler
+
+    if getattr(fastapi.FastAPI.__init__, "_renders_rule_violations", False):
+        return
+    original = fastapi.FastAPI.__init__
+
+    def __init__(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        install_rule_violation_handler(self)
+
+    __init__._renders_rule_violations = True  # type: ignore[attr-defined]
+    fastapi.FastAPI.__init__ = __init__  # type: ignore[method-assign]
+
+
+_render_rule_violations_like_the_application()
+
+
 @pytest.fixture
 def stub_memory_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep AI memory personalisation out of message-command tests.

@@ -1,8 +1,7 @@
 """Opaque, owner-bound file upload and saved attachment routes."""
 
-from typing import Never
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 
 from stoa.config import Settings, get_settings
@@ -28,7 +27,6 @@ from stoa.models.attachment import (
 from stoa.security.attachment_errors import (
     AttachmentDecisionError,
     AttachmentErrorCode,
-    log_attachment_failure,
 )
 from stoa.security.authorization import (
     AuthorizationAction,
@@ -96,30 +94,6 @@ _upload_intent_actor_dependency.authorization_specs = (  # type: ignore[attr-def
 )
 
 
-def _raise_safe(error: AttachmentDecisionError, correlation_id: str) -> Never:
-    error.correlation_id = correlation_id
-    log_attachment_failure(error, route="files")
-    headers = {"X-Correlation-ID": correlation_id}
-    if error.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE:
-        headers["Retry-After"] = "30"
-    raise HTTPException(
-        status_code=error.status_code,
-        detail=error.public_body(),
-        headers=headers,
-    ) from error
-
-
-def _raise_security(error: SecurityDecisionError) -> Never:
-    headers = {"X-Correlation-ID": error.correlation_id} if error.correlation_id else None
-    if error.code is SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE:
-        headers = {**(headers or {}), "Retry-After": "30"}
-    raise HTTPException(
-        status_code=error.status_code,
-        detail=error.public_body(),
-        headers=headers,
-    ) from error
-
-
 def _owned_attachment_dependency(action: AuthorizationAction):
     async def resolve(attachment_id: str):
         item = attachment_repo.get_attachment(attachment_id)
@@ -161,11 +135,8 @@ def _owned_attachment_dependency(action: AuthorizationAction):
             )
         except SecurityDecisionError as error:
             if error.code is SecurityErrorCode.RESOURCE_NOT_FOUND:
-                _raise_safe(
-                    AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND),
-                    correlation_id,
-                )
-            _raise_security(error)
+                raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from error
+            raise
 
     dependency.authorization_specs = (  # type: ignore[attr-defined]
         AuthorizationSpec(
@@ -192,12 +163,9 @@ async def list_saved_attachments(
     actor: Actor = Depends(get_actor),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
-    try:
-        return list_owned_attachments(
-            actor, limit=limit, continuation=continuation
-        )
-    except AttachmentDecisionError as error:
-        _raise_safe(error, correlation_id)
+    return list_owned_attachments(
+        actor, limit=limit, continuation=continuation
+    )
 
 
 @router.get("/attachments/{attachment_id}", response_model=SavedAttachmentDetail)
@@ -214,12 +182,9 @@ async def download_saved_attachment(
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
-    try:
-        prepared = prepare_saved_attachment_download(
-            dict(loaded.value), s3=s3, settings=settings
-        )
-    except AttachmentDecisionError as error:
-        _raise_safe(error, correlation_id)
+    prepared = prepare_saved_attachment_download(
+        dict(loaded.value), s3=s3, settings=settings
+    )
     return StreamingResponse(
         prepared.iter_bytes(),
         media_type=prepared.media_type,
@@ -239,12 +204,9 @@ async def remove_saved_attachment(
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
-    try:
-        return delete_saved_attachment(
-            dict(loaded.value), s3=s3, settings=settings
-        )
-    except AttachmentDecisionError as error:
-        _raise_safe(error, correlation_id)
+    return delete_saved_attachment(
+        dict(loaded.value), s3=s3, settings=settings
+    )
 
 
 @router.post("/intents", response_model=UploadIntentResponse)
@@ -255,10 +217,7 @@ async def create_owned_upload_intent(
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
-    try:
-        return uploads.start(body, actor, s3=s3, settings=settings)
-    except AttachmentDecisionError as error:
-        _raise_safe(error, correlation_id)
+    return uploads.start(body, actor, s3=s3, settings=settings)
 
 
 @router.post("/{upload_id}/parts/{part_number}", response_model=UploadPartUrlResponse)
@@ -272,17 +231,14 @@ async def sign_owned_upload_part(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Sign a URL the browser puts one part on, straight to S3 (ADR-004, #136)."""
-    try:
-        return uploads.sign_part(
-            upload_id,
-            part_number,
-            body,
-            actor,
-            signer=signer,
-            settings=settings,
-        )
-    except AttachmentDecisionError as error:
-        _raise_safe(error, correlation_id)
+    return uploads.sign_part(
+        upload_id,
+        part_number,
+        body,
+        actor,
+        signer=signer,
+        settings=settings,
+    )
 
 
 @router.post("/{upload_id}/complete", response_model=CompleteUploadResponse)
@@ -295,14 +251,11 @@ async def complete_owned_upload(
     settings: Settings = Depends(get_settings),
     correlation_id: str = Depends(get_request_correlation_id),
 ):
-    try:
-        return uploads.complete(
-            upload_id,
-            body.part_count,
-            actor,
-            s3=s3,
-            settings=settings,
-            moderation=moderation,
-        )
-    except AttachmentDecisionError as error:
-        _raise_safe(error, correlation_id)
+    return uploads.complete(
+        upload_id,
+        body.part_count,
+        actor,
+        s3=s3,
+        settings=settings,
+        moderation=moderation,
+    )

@@ -10,9 +10,8 @@ Its paths sit under their own prefix rather than `/files`, whose
 `/{upload_id}/...` routes would otherwise answer them.
 """
 
-from typing import Never
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
 from stoa.config import Settings, get_settings
@@ -35,7 +34,6 @@ from stoa.models.upload_code import (
 from stoa.security.attachment_errors import (
     AttachmentDecisionError,
     AttachmentErrorCode,
-    log_attachment_failure,
 )
 from stoa.security.authorization import (
     AuthorizationAction,
@@ -67,21 +65,6 @@ def _live_conversation(conversation_id: str):
     return item
 
 
-def _raise_safe(error: AttachmentDecisionError, correlation_id: str, settings: Settings) -> Never:
-    error.correlation_id = correlation_id
-    log_attachment_failure(error, route="upload_codes")
-    headers = {"X-Correlation-ID": correlation_id}
-    if error.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE:
-        headers["Retry-After"] = "30"
-    if error.code is AttachmentErrorCode.UPLOAD_CODE_RATE_LIMITED:
-        headers["Retry-After"] = str(settings.upload_code_window_seconds)
-    raise HTTPException(
-        status_code=error.status_code,
-        detail=error.public_body(),
-        headers=headers,
-    ) from error
-
-
 def _source_digest(request: Request) -> str:
     try:
         return rate_limit.client_source_digest(request)
@@ -107,12 +90,9 @@ async def issue_upload_code(
     The code is in this response only. It is spent by the first redemption and
     refused from ten minutes on, or once the account enters deletion.
     """
-    try:
-        return upload_code_service.issue_code(
-            authorized.ref.resource_id, actor, settings=settings
-        )
-    except AttachmentDecisionError as error:
-        _raise_safe(error, correlation_id, settings)
+    return upload_code_service.issue_code(
+        authorized.ref.resource_id, actor, settings=settings
+    )
 
 
 @conversation_router.get(
@@ -132,12 +112,9 @@ async def read_upload_code(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Where the phone has got to; `uploadId` to attach once the image has passed."""
-    try:
-        return upload_code_service.code_status(
-            authorized.ref.resource_id, code_id, actor
-        )
-    except AttachmentDecisionError as error:
-        _raise_safe(error, correlation_id, settings)
+    return upload_code_service.code_status(
+        authorized.ref.resource_id, code_id, actor
+    )
 
 
 @conversation_router.get("/{conv_id}/upload-codes/{code_id}/content")
@@ -160,12 +137,9 @@ async def preview_upload_code_photo(
     Whoever scans the QR first holds the code, so the computer shows this photo
     and lets the student choose to send it; it never attaches a ready upload alone.
     """
-    try:
-        prepared = upload_code_service.preview_upload(
-            authorized.ref.resource_id, code_id, actor, s3=s3, settings=settings
-        )
-    except AttachmentDecisionError as error:
-        _raise_safe(error, correlation_id, settings)
+    prepared = upload_code_service.preview_upload(
+        authorized.ref.resource_id, code_id, actor, s3=s3, settings=settings
+    )
     return StreamingResponse(
         prepared.iter_bytes(),
         media_type=prepared.media_type,
@@ -191,10 +165,7 @@ async def issue_unbound_upload_code(
     The upload it will open is reserved here (`uploadId`); the photo goes with
     whichever question the student sends it with, like a file chosen on the computer.
     """
-    try:
-        return upload_code_service.issue_code(None, actor, settings=settings)
-    except AttachmentDecisionError as error:
-        _raise_safe(error, correlation_id, settings)
+    return upload_code_service.issue_code(None, actor, settings=settings)
 
 
 async def _reserved_upload_resolver(upload_id: str):
@@ -225,10 +196,7 @@ async def read_unbound_upload_code(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Where the phone has got with a code made for no conversation, by its upload."""
-    try:
-        return upload_code_service.unbound_code_status(upload_id, actor)
-    except AttachmentDecisionError as error:
-        _raise_safe(error, correlation_id, settings)
+    return upload_code_service.unbound_code_status(upload_id, actor)
 
 
 @files_router.get("/{upload_id}/phone-code/content")
@@ -240,12 +208,9 @@ async def preview_unbound_upload_code_photo(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """The photo the phone put in, once it has passed, for the student to confirm."""
-    try:
-        prepared = upload_code_service.preview_unbound_upload(
-            upload_id, actor, s3=s3, settings=settings
-        )
-    except AttachmentDecisionError as error:
-        _raise_safe(error, correlation_id, settings)
+    prepared = upload_code_service.preview_unbound_upload(
+        upload_id, actor, s3=s3, settings=settings
+    )
     return StreamingResponse(
         prepared.iter_bytes(),
         media_type=prepared.media_type,
@@ -269,12 +234,9 @@ async def redeem_upload_code(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Spend a code on one image upload into the conversation it was made in."""
-    try:
-        return upload_code_service.redeem_code(
-            body, source_digest=_source_digest(request), s3=s3, settings=settings
-        )
-    except AttachmentDecisionError as error:
-        _raise_safe(error, correlation_id, settings)
+    return upload_code_service.redeem_code(
+        body, source_digest=_source_digest(request), s3=s3, settings=settings
+    )
 
 
 @router.post("/parts/{part_number}", response_model=UploadCodePartResponse)
@@ -291,16 +253,13 @@ async def sign_upload_code_part(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Sign the URL the phone puts one part on, straight to S3 (ADR-004)."""
-    try:
-        return upload_code_service.sign_part(
-            part_number,
-            body,
-            source_digest=_source_digest(request),
-            signer=signer,
-            settings=settings,
-        )
-    except AttachmentDecisionError as error:
-        _raise_safe(error, correlation_id, settings)
+    return upload_code_service.sign_part(
+        part_number,
+        body,
+        source_digest=_source_digest(request),
+        signer=signer,
+        settings=settings,
+    )
 
 
 @router.post("/complete", response_model=UploadCodeCompleteResponse)
@@ -317,13 +276,10 @@ async def complete_upload_code(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Finish the upload; the image is moderated before it counts (#138)."""
-    try:
-        return upload_code_service.complete(
-            body,
-            source_digest=_source_digest(request),
-            s3=s3,
-            settings=settings,
-            moderation=moderation,
-        )
-    except AttachmentDecisionError as error:
-        _raise_safe(error, correlation_id, settings)
+    return upload_code_service.complete(
+        body,
+        source_digest=_source_digest(request),
+        s3=s3,
+        settings=settings,
+        moderation=moderation,
+    )

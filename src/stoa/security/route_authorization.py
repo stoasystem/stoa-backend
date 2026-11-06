@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
 from inspect import isawaitable
-from typing import NoReturn
 
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, Query
 
 from stoa.db.repositories import notification_repo, user_repo
 from stoa.db.repositories import practice_repo
@@ -68,15 +67,6 @@ def get_authorization_policy() -> AuthorizationPolicy:
     return AuthorizationPolicy()
 
 
-def _raise_http(error: SecurityDecisionError) -> NoReturn:
-    headers = {"X-Correlation-ID": error.correlation_id} if error.correlation_id else None
-    raise HTTPException(
-        status_code=error.status_code,
-        detail=error.public_body(),
-        headers=headers,
-    ) from error
-
-
 async def _record_or_raise(
     *,
     actor: Actor,
@@ -88,19 +78,16 @@ async def _record_or_raise(
     audit_sink: AuthorizationAuditSink,
     decision_kind: str,
 ) -> PolicyDecision:
-    try:
-        return await record_authorization_decision(
-            actor=actor,
-            resource=resource,
-            action=action,
-            purpose=purpose,
-            decision=decision,
-            correlation_id=correlation_id,
-            audit_sink=audit_sink,
-            decision_kind=decision_kind,
-        )
-    except SecurityDecisionError as error:
-        _raise_http(error)
+    return await record_authorization_decision(
+        actor=actor,
+        resource=resource,
+        action=action,
+        purpose=purpose,
+        decision=decision,
+        correlation_id=correlation_id,
+        audit_sink=audit_sink,
+        decision_kind=decision_kind,
+    )
 
 
 def _purpose_for(actor: Actor, purposes: PurposeMap) -> AuthorizationPurpose:
@@ -164,17 +151,14 @@ def authorized_student_dependency(
         spec = AuthorizationSpec(
             ResourceType.STUDENT, action, _purpose_for(actor, purposes), resolve
         )
-        try:
-            return await authorize_and_resolve(
-                actor=actor,
-                resource_id=target_id,
-                spec=spec,
-                fact_repository=facts,
-                correlation_id=correlation_id,
-                audit_sink=audit_sink,
-            )
-        except SecurityDecisionError as error:
-            _raise_http(error)
+        return await authorize_and_resolve(
+            actor=actor,
+            resource_id=target_id,
+            spec=spec,
+            fact_repository=facts,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
+        )
 
     async def path_dependency(
         student_id: str | None = None,
@@ -242,17 +226,14 @@ def authorized_student_resource_dependency(
         spec = AuthorizationSpec(
             resource_type, action, _purpose_for(actor, purposes), resolve
         )
-        try:
-            return await authorize_and_resolve(
-                actor=actor,
-                resource_id=target_id,
-                spec=spec,
-                fact_repository=facts,
-                correlation_id=correlation_id,
-                audit_sink=audit_sink,
-            )
-        except SecurityDecisionError as error:
-            _raise_http(error)
+        return await authorize_and_resolve(
+            actor=actor,
+            resource_id=target_id,
+            spec=spec,
+            fact_repository=facts,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
+        )
 
     _set_dependency_metadata(dependency, tuple(
         _metadata_spec(resource_type, action, purpose, resolve)
@@ -300,17 +281,14 @@ def authorized_question_dependency(
         spec = AuthorizationSpec(
             ResourceType.QUESTION, action, _purpose_for(actor, purposes), resolve
         )
-        try:
-            return await authorize_and_resolve(
-                actor=actor,
-                resource_id=question_id,
-                spec=spec,
-                fact_repository=facts,
-                correlation_id=correlation_id,
-                audit_sink=audit_sink,
-            )
-        except SecurityDecisionError as error:
-            _raise_http(error)
+        return await authorize_and_resolve(
+            actor=actor,
+            resource_id=question_id,
+            spec=spec,
+            fact_repository=facts,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
+        )
 
     _set_dependency_metadata(dependency, tuple(
         _metadata_spec(ResourceType.QUESTION, action, purpose, resolve)
@@ -351,23 +329,20 @@ def authorized_curriculum_answer_dependency():
         correlation_id: str = Depends(get_request_correlation_id),
         audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
     ) -> AuthorizedResource:
-        try:
-            return await authorize_and_resolve(
-                actor=actor,
-                resource_id=challenge_id,
-                spec=AuthorizationSpec(
-                    ResourceType.CURRICULUM_ANSWER,
-                    AuthorizationAction.READ,
-                    AuthorizationPurpose.CURRICULUM_ANSWER_READ,
-                    resolve,
-                ),
-                fact_repository=facts,
-                correlation_id=correlation_id,
-                audit_sink=audit_sink,
-                policy=policy,
-            )
-        except SecurityDecisionError as error:
-            _raise_http(error)
+        return await authorize_and_resolve(
+            actor=actor,
+            resource_id=challenge_id,
+            spec=AuthorizationSpec(
+                ResourceType.CURRICULUM_ANSWER,
+                AuthorizationAction.READ,
+                AuthorizationPurpose.CURRICULUM_ANSWER_READ,
+                resolve,
+            ),
+            fact_repository=facts,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
+            policy=policy,
+        )
 
     _set_dependency_metadata(dependency, (
         _metadata_spec(
@@ -447,7 +422,7 @@ def student_actor_dependency(
         if not decision.allowed:
             from stoa.security.errors import SecurityErrorCode
 
-            _raise_http(SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id))
+            raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id)
         return actor
 
     _set_dependency_metadata(dependency, (
@@ -478,23 +453,20 @@ def notification_self_dependency(
         correlation_id: str = Depends(get_request_correlation_id),
         audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
     ) -> Actor:
-        try:
-            await authorize_and_resolve(
-                actor=actor,
-                resource_id=actor.user_id,
-                spec=AuthorizationSpec(
-                    resource_type,
-                    action,
-                    AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
-                    resolve,
-                ),
-                fact_repository=get_authorization_fact_repository(),
-                correlation_id=correlation_id,
-                audit_sink=audit_sink,
-            )
-            return actor
-        except SecurityDecisionError as error:
-            _raise_http(error)
+        await authorize_and_resolve(
+            actor=actor,
+            resource_id=actor.user_id,
+            spec=AuthorizationSpec(
+                resource_type,
+                action,
+                AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
+                resolve,
+            ),
+            fact_repository=get_authorization_fact_repository(),
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
+        )
+        return actor
 
     _set_dependency_metadata(dependency, (
         _metadata_spec(
@@ -532,22 +504,19 @@ def authorized_notification_event_dependency(action: AuthorizationAction):
         correlation_id: str = Depends(get_request_correlation_id),
         audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
     ) -> AuthorizedResource:
-        try:
-            return await authorize_and_resolve(
-                actor=actor,
-                resource_id=event_id,
-                spec=AuthorizationSpec(
-                    ResourceType.NOTIFICATION_EVENT,
-                    action,
-                    AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
-                    resolve,
-                ),
-                fact_repository=facts,
-                correlation_id=correlation_id,
-                audit_sink=audit_sink,
-            )
-        except SecurityDecisionError as error:
-            _raise_http(error)
+        return await authorize_and_resolve(
+            actor=actor,
+            resource_id=event_id,
+            spec=AuthorizationSpec(
+                ResourceType.NOTIFICATION_EVENT,
+                action,
+                AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
+                resolve,
+            ),
+            fact_repository=facts,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
+        )
 
     _set_dependency_metadata(dependency, (
         _metadata_spec(
@@ -585,22 +554,19 @@ def authorized_notification_push_token_dependency(action: AuthorizationAction):
                 item,
             )
 
-        try:
-            return await authorize_and_resolve(
-                actor=actor,
-                resource_id=token_reference,
-                spec=AuthorizationSpec(
-                    ResourceType.NOTIFICATION_PUSH_TOKEN,
-                    action,
-                    AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
-                    resolve,
-                ),
-                fact_repository=facts,
-                correlation_id=correlation_id,
-                audit_sink=audit_sink,
-            )
-        except SecurityDecisionError as error:
-            _raise_http(error)
+        return await authorize_and_resolve(
+            actor=actor,
+            resource_id=token_reference,
+            spec=AuthorizationSpec(
+                ResourceType.NOTIFICATION_PUSH_TOKEN,
+                action,
+                AuthorizationPurpose.NOTIFICATION_SELF_SERVICE,
+                resolve,
+            ),
+            fact_repository=facts,
+            correlation_id=correlation_id,
+            audit_sink=audit_sink,
+        )
 
     async def metadata_resolver(resource_id: str):
         return {"resource_id": resource_id}
@@ -661,7 +627,7 @@ def teacher_portal_self_dependency(
         if not decision.allowed:
             from stoa.security.errors import SecurityErrorCode
 
-            _raise_http(SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id))
+            raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id)
         return actor
 
     _set_dependency_metadata(dependency, (
@@ -716,7 +682,7 @@ def teacher_capability_dependency(
         if not decision.allowed:
             from stoa.security.errors import SecurityErrorCode
 
-            _raise_http(SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id))
+            raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id)
         return actor
 
     _set_dependency_metadata(dependency, (
@@ -771,7 +737,7 @@ async def _authorize_teacher_application_reviewer(
     if not decision.allowed:
         from stoa.security.errors import SecurityErrorCode
 
-        _raise_http(SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id))
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id)
     return {
         "sub": actor.user_id,
         "user_id": actor.user_id,
@@ -880,17 +846,14 @@ async def authorize_conversation_resource(
     spec = AuthorizationSpec(
         ResourceType.CONVERSATION, action, _purpose_for(actor, purposes), resolve
     )
-    try:
-        return await authorize_and_resolve(
-            actor=actor,
-            resource_id=conversation_id,
-            spec=spec,
-            fact_repository=facts,
-            correlation_id=correlation_id,
-            audit_sink=audit_sink,
-        )
-    except SecurityDecisionError as error:
-        _raise_http(error)
+    return await authorize_and_resolve(
+        actor=actor,
+        resource_id=conversation_id,
+        spec=spec,
+        fact_repository=facts,
+        correlation_id=correlation_id,
+        audit_sink=audit_sink,
+    )
 
 
 def authorized_conversation_dependency(
@@ -1013,18 +976,16 @@ def authorized_teacher_resource_dependency(
                 resource_type=resource_type,
                 action=action,
             )
-        except SecurityDecisionError as error:
-            _raise_http(error)
+        except SecurityDecisionError:
+            raise
         except Exception as exc:
             from stoa.security.errors import SecurityErrorCode
 
-            _raise_http(
-                SecurityDecisionError(
-                    SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
-                    correlation_id,
-                    internal_detail=type(exc).__name__,
-                )
-            )
+            raise SecurityDecisionError(
+                SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+                correlation_id,
+                internal_detail=type(exc).__name__,
+            ) from exc
 
     async def metadata_resolver(resource_id: str):
         return resolver(resource_id)
@@ -1082,18 +1043,16 @@ def authorized_ai_teacher_draft_dependency(
                 action=action,
                 purpose=teacher_tool_purpose(actor),
             )
-        except SecurityDecisionError as error:
-            _raise_http(error)
+        except SecurityDecisionError:
+            raise
         except Exception as exc:
             from stoa.security.errors import SecurityErrorCode
 
-            _raise_http(
-                SecurityDecisionError(
-                    SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
-                    correlation_id,
-                    internal_detail=type(exc).__name__,
-                )
-            )
+            raise SecurityDecisionError(
+                SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
+                correlation_id,
+                internal_detail=type(exc).__name__,
+            ) from exc
 
     async def metadata_resolver(resource_id: str):
         return resolver(resource_id)

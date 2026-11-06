@@ -1545,8 +1545,7 @@ def register_push_token(
         if same_material and existing.get("user_id") != user_id:
             from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 
-            error = SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND)
-            raise HTTPException(error.status_code, detail=error.public_body()) from error
+            raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND)
     now = now_iso()
     item: dict[str, object] = {
         "entity_type": notification_repo.PUSH_TOKEN_ENTITY,

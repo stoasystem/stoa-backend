@@ -4,7 +4,7 @@ import logging
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Literal, NamedTuple, NoReturn, Protocol, runtime_checkable
+from typing import Any, Literal, NamedTuple, Protocol, runtime_checkable
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -23,7 +23,6 @@ from stoa.models.attachment import AttachmentSummary, ReplyImageReference
 from stoa.security.attachment_errors import (
     AttachmentDecisionError,
     AttachmentErrorCode,
-    log_attachment_failure,
 )
 from stoa.security.authorization import (
     AuthorizationAction,
@@ -158,9 +157,7 @@ async def _current_help_requests(
             )
         except SecurityDecisionError as error:
             if error.code is SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE:
-                raise HTTPException(
-                    status_code=error.status_code, detail=error.public_body()
-                ) from error
+                raise
             continue
         current.append(conv)
     return current
@@ -469,18 +466,12 @@ async def _ai_question_context_dependency(
         return await _authorize_ai_question_context(
             question_id, actor, facts, correlation_id, audit_sink
         )
-    except SecurityDecisionError as error:
-        raise HTTPException(
-            status_code=error.status_code, detail=error.public_body()
-        ) from error
+    except SecurityDecisionError:
+        raise
     except Exception as exc:
-        dependency_error = SecurityDecisionError(
+        raise SecurityDecisionError(
             SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
             internal_detail=type(exc).__name__,
-        )
-        raise HTTPException(
-            status_code=dependency_error.status_code,
-            detail=dependency_error.public_body(),
         ) from exc
 
 
@@ -529,18 +520,12 @@ async def _exercise_context_dependency(
             action=AuthorizationAction.CREATE,
             purpose=teacher_tool_purpose(actor),
         )
-    except SecurityDecisionError as error:
-        raise HTTPException(
-            status_code=error.status_code, detail=error.public_body()
-        ) from error
+    except SecurityDecisionError:
+        raise
     except Exception as exc:
-        dependency_error = SecurityDecisionError(
+        raise SecurityDecisionError(
             SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
             internal_detail=type(exc).__name__,
-        )
-        raise HTTPException(
-            status_code=dependency_error.status_code,
-            detail=dependency_error.public_body(),
         ) from exc
 
 
@@ -585,19 +570,6 @@ _help_list_actor_dependency.authorization_specs = (  # type: ignore[attr-defined
 class _HelpRequestAttachment(NamedTuple):
     help_request: TeacherItem
     attachment: TeacherItem
-
-
-def _raise_attachment(error: AttachmentDecisionError, correlation_id: str) -> NoReturn:
-    error.correlation_id = correlation_id
-    log_attachment_failure(error, route="teachers")
-    headers = {"X-Correlation-ID": correlation_id}
-    if error.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE:
-        headers["Retry-After"] = "30"
-    raise HTTPException(
-        status_code=error.status_code,
-        detail=error.public_body(),
-        headers=headers,
-    ) from error
 
 
 def _sent_in_help_request(
@@ -677,22 +649,13 @@ async def _help_request_attachment_dependency(
             audit_sink=audit_sink,
         )
         return _HelpRequestAttachment(conv, item)
-    except AttachmentDecisionError as error:
-        _raise_attachment(error, correlation_id)
-    except SecurityDecisionError as error:
-        headers = {"X-Correlation-ID": error.correlation_id} if error.correlation_id else None
-        raise HTTPException(
-            status_code=error.status_code, detail=error.public_body(), headers=headers
-        ) from error
+    except (AttachmentDecisionError, SecurityDecisionError):
+        raise
     except Exception as exc:
-        dependency_error = SecurityDecisionError(
+        raise SecurityDecisionError(
             SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
             correlation_id,
             internal_detail=type(exc).__name__,
-        )
-        raise HTTPException(
-            status_code=dependency_error.status_code,
-            detail=dependency_error.public_body(),
         ) from exc
 
 
@@ -944,12 +907,9 @@ async def list_ai_teacher_drafts(
     except HTTPException:
         raise
     except Exception as exc:
-        error = SecurityDecisionError(
+        raise SecurityDecisionError(
             SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
             internal_detail=type(exc).__name__,
-        )
-        raise HTTPException(
-            status_code=error.status_code, detail=error.public_body()
         ) from exc
     items: list[AiTeacherDraftResponse] = []
     for candidate in candidates:
@@ -966,9 +926,7 @@ async def list_ai_teacher_drafts(
             )
         except SecurityDecisionError as error:
             if error.code is SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE:
-                raise HTTPException(
-                    status_code=error.status_code, detail=error.public_body()
-                ) from error
+                raise
             continue
         items.append(
             AiTeacherDraftResponse.model_validate(
@@ -1194,12 +1152,9 @@ async def download_help_request_attachment(
     correlation_id: str = Depends(get_request_correlation_id),
 ):
     """The content of an attachment the student sent in this help request (#140)."""
-    try:
-        prepared = attachment_service.prepare_saved_attachment_download(
-            dict(loaded.attachment), s3=s3, settings=settings
-        )
-    except AttachmentDecisionError as error:
-        _raise_attachment(error, correlation_id)
+    prepared = attachment_service.prepare_saved_attachment_download(
+        dict(loaded.attachment), s3=s3, settings=settings
+    )
     return StreamingResponse(
         prepared.iter_bytes(),
         media_type=prepared.media_type,
@@ -1274,12 +1229,9 @@ async def add_note(
         reply_fields = teacher_reply_service.normalize_teacher_reply(body.content, body.richContent)
     except teacher_reply_service.TeacherReplyValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    try:
-        reply_images = attachment_service.prepare_reply_images(
-            [reference.upload_id for reference in body.attachmentIds or []], actor
-        )
-    except AttachmentDecisionError as error:
-        _raise_attachment(error, correlation_id)
+    reply_images = attachment_service.prepare_reply_images(
+        [reference.upload_id for reference in body.attachmentIds or []], actor
+    )
     if not help_requests.holder_or_offered(conv, teacher_id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_NOT_HELD)
     try:

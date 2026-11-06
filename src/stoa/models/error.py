@@ -1,14 +1,15 @@
 """Error bodies as they are sent, declared so OpenAPI can describe them.
 
-The bodies themselves are built in `stoa.security.errors` and
-`stoa.security.attachment_errors`; these models only name their shape. FastAPI
-wraps an `HTTPException` detail as `{"detail": ...}`, so most response models
-carry that envelope; the sign-in refusals sent as a bare `JSONResponse` do not.
+A rule violation is rendered by `stoa.rule_violation` as
+`{"detail": {code, message, correlationId, ...public fields}}`; every route
+declares that as its default error response (`RuleViolationResponse`). The
+models below name narrower shapes some routes declare per status. A route's own
+`HTTPException` still answers `{"detail": ...}` with whatever it was given.
 """
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.security.attachment_errors import AttachmentErrorCode
 from stoa.security.errors import SecurityErrorCode
@@ -50,16 +51,6 @@ class SecurityErrorResponse(_ErrorModel):
     detail: SecurityErrorBody
 
 
-class SignInUnauthorizedResponse(RootModel[SecurityErrorBody | SecurityErrorResponse]):
-    """401 from sign-in and refresh, which take no bearer token.
-
-    The identity provider's refusal (`invalid_credentials`, `invalid_token`) is
-    sent by `public_auth_error_response` as the security body itself, with no
-    `detail` envelope. A token the provider issued that then fails verification
-    here is refused inside `detail`, like any other route.
-    """
-
-
 class NotFoundResponse(_ErrorModel):
     """404: either a route's own sentence or a hidden or missing resource."""
 
@@ -87,3 +78,24 @@ class FirstMessageRefusalBody(_ErrorModel):
 
 class FirstMessageRefusalResponse(_ErrorModel):
     detail: FirstMessageRefusalBody
+
+
+class RuleViolationBody(_ErrorModel):
+    """Any rule violation: a registered code, its message and the request's id.
+
+    The optional fields are sent only by the codes whose contract declares them.
+    """
+
+    code: str = Field(description="A registered rule violation code; stable, never renamed.")
+    message: str
+    correlation_id: str = Field(alias="correlationId")
+    conversation_id: str | None = Field(default=None, alias="conversationId")
+    retry_at: str | None = Field(default=None, alias="retryAt")
+    retry_after_seconds: int | None = Field(default=None, alias="retryAfterSeconds")
+    action: str | None = None
+
+
+class RuleViolationResponse(_ErrorModel):
+    """The error any route may answer with (#211)."""
+
+    detail: RuleViolationBody

@@ -1,17 +1,14 @@
 """A question's own failure codes, and the contract each is sent under.
 
 The strings are the ones the frontend compares, so they never change. They
-are rendered through `AttachmentDecisionError` and the conversation route's
-`_raise_attachment` until #211 gives errors one home.
+are raised as `AttachmentDecisionError` and rendered, like every rule
+violation, by `stoa.rule_violation`.
 """
 
 from enum import StrEnum
 
-from stoa.security.attachment_errors import (
-    AttachmentClientAction,
-    AttachmentErrorCode,
-    AttachmentErrorContract,
-)
+from stoa.rule_violation import RuleContract, register_codes
+from stoa.security.attachment_errors import AttachmentClientAction, AttachmentErrorCode
 
 
 class AskQuestionErrorCode(StrEnum):
@@ -27,73 +24,79 @@ class AskQuestionErrorCode(StrEnum):
     ALLOWANCE_UNAVAILABLE = "allowance_unavailable"
 
     @property
-    def contract(self) -> AttachmentErrorContract:
+    def contract(self) -> RuleContract:
         return ASK_QUESTION_ERROR_REGISTRY[self]
 
 
-ASK_QUESTION_ERROR_REGISTRY: dict[AskQuestionErrorCode, AttachmentErrorContract] = {
-    AskQuestionErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT: AttachmentErrorContract(
+# A refused first message names the conversation already made (#61).
+_NAMES_CONVERSATION = frozenset({"conversationId"})
+
+ASK_QUESTION_ERROR_REGISTRY: dict[AskQuestionErrorCode, RuleContract] = {
+    AskQuestionErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT: RuleContract(
         409,
         "This message key was already used for a different request.",
-        AttachmentClientAction.SELECT_FILE,
+        action=AttachmentClientAction.SELECT_FILE,
+        public_fields=_NAMES_CONVERSATION,
     ),
-    AskQuestionErrorCode.MESSAGE_IN_PROGRESS: AttachmentErrorContract(
+    AskQuestionErrorCode.MESSAGE_IN_PROGRESS: RuleContract(
         409,
         "This message is still being processed. Try again shortly.",
-        AttachmentClientAction.RETRY_LATER,
+        action=AttachmentClientAction.RETRY_LATER,
         retryable=True,
         idempotent_only=True,
         max_attempts=20,
+        public_fields=_NAMES_CONVERSATION,
     ),
-    AskQuestionErrorCode.MESSAGE_DAILY_LIMIT: AttachmentErrorContract(
+    AskQuestionErrorCode.MESSAGE_DAILY_LIMIT: RuleContract(
         429,
         "Your daily message limit is reached. Try again tomorrow.",
-        AttachmentClientAction.RETRY_LATER,
+        action=AttachmentClientAction.RETRY_LATER,
+        public_fields=_NAMES_CONVERSATION,
     ),
-    AskQuestionErrorCode.MESSAGE_FAILED: AttachmentErrorContract(
+    AskQuestionErrorCode.MESSAGE_FAILED: RuleContract(
         409,
         "This message could not be completed. Send it again.",
-        AttachmentClientAction.RETRY_LATER,
+        action=AttachmentClientAction.RETRY_LATER,
+        public_fields=_NAMES_CONVERSATION,
     ),
-    AskQuestionErrorCode.MESSAGE_COMMAND_EXPIRED: AttachmentErrorContract(
+    AskQuestionErrorCode.MESSAGE_COMMAND_EXPIRED: RuleContract(
         409,
         "This message request expired. Send it again.",
-        AttachmentClientAction.RETRY_LATER,
+        action=AttachmentClientAction.RETRY_LATER,
+        public_fields=_NAMES_CONVERSATION,
     ),
-    AskQuestionErrorCode.MESSAGE_COMMAND_NOT_FOUND: AttachmentErrorContract(
+    AskQuestionErrorCode.MESSAGE_COMMAND_NOT_FOUND: RuleContract(
         409,
         "This message request is unavailable. Send it again.",
-        AttachmentClientAction.RETRY_LATER,
+        action=AttachmentClientAction.RETRY_LATER,
+        public_fields=_NAMES_CONVERSATION,
     ),
-    AskQuestionErrorCode.ALLOWANCE_EXHAUSTED: AttachmentErrorContract(
+    AskQuestionErrorCode.ALLOWANCE_EXHAUSTED: RuleContract(
         429,
         "Weekly AI token allowance is exhausted.",
-        AttachmentClientAction.RETRY_LATER,
+        action=AttachmentClientAction.RETRY_LATER,
+        public_fields=_NAMES_CONVERSATION,
     ),
     # Nothing was paid for: the same message may be sent again.
-    AskQuestionErrorCode.PROVIDER_TOKEN_COUNT_UNAVAILABLE: AttachmentErrorContract(
+    AskQuestionErrorCode.PROVIDER_TOKEN_COUNT_UNAVAILABLE: RuleContract(
         503,
         "Token admission is temporarily unavailable. Retry this message.",
-        AttachmentClientAction.RETRY_LATER,
+        action=AttachmentClientAction.RETRY_LATER,
+        public_fields=_NAMES_CONVERSATION,
     ),
     # The allowance could not be read or settled. The answer, if there is one,
     # is kept: sending the same message again returns it once settling succeeds.
-    AskQuestionErrorCode.ALLOWANCE_UNAVAILABLE: AttachmentErrorContract(
+    AskQuestionErrorCode.ALLOWANCE_UNAVAILABLE: RuleContract(
         503,
         "This answer is safely recoverable while token accounting finishes.",
-        AttachmentClientAction.RETRY_LATER,
+        action=AttachmentClientAction.RETRY_LATER,
+        public_fields=_NAMES_CONVERSATION,
     ),
 }
 
-if set(ASK_QUESTION_ERROR_REGISTRY) != set(AskQuestionErrorCode):
-    missing = set(AskQuestionErrorCode) - set(ASK_QUESTION_ERROR_REGISTRY)
-    extra = set(ASK_QUESTION_ERROR_REGISTRY) - set(AskQuestionErrorCode)
-    raise RuntimeError(f"question error registry is not exhaustive: missing={missing}, extra={extra}")
-
-# Both kinds reach a client through the same `code` field, so a string must
-# name one code only.
-if {code.value for code in AskQuestionErrorCode} & {code.value for code in AttachmentErrorCode}:
-    raise RuntimeError("question and attachment error codes share a string")
+# Registering refuses a string that any other domain's code already names:
+# both reach a client through the same `code` field.
+register_codes("ask_question", AskQuestionErrorCode, ASK_QUESTION_ERROR_REGISTRY)
 
 
 def parse_error_code(value: str) -> AskQuestionErrorCode | AttachmentErrorCode:

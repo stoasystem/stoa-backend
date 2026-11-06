@@ -101,7 +101,9 @@ def _admit(scope: str, source_digest: str, limit: int, settings: Settings) -> No
         window_seconds=settings.upload_code_window_seconds,
         now=_now(),
     ):
-        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_CODE_RATE_LIMITED)
+        raise AttachmentDecisionError(
+            AttachmentErrorCode.UPLOAD_CODE_RATE_LIMITED
+        ).retrying_after(settings.upload_code_window_seconds)
 
 
 def _refuse(source_digest: str, settings: Settings) -> Never:
@@ -134,7 +136,9 @@ def _turn_away_flooding_source(source_digest: str, settings: Settings) -> None:
         now=_now(),
     )
     if count is None or count >= settings.upload_code_refusals_hard_max_per_window:
-        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_CODE_RATE_LIMITED)
+        raise AttachmentDecisionError(
+            AttachmentErrorCode.UPLOAD_CODE_RATE_LIMITED
+        ).retrying_after(settings.upload_code_window_seconds)
 
 
 def _counting_refusals(source_digest: str, settings: Settings, verify: Callable[[], _T]) -> _T:

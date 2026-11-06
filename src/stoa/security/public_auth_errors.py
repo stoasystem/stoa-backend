@@ -9,9 +9,8 @@ import logging
 import secrets
 
 from botocore.exceptions import ClientError
-from fastapi.responses import JSONResponse
 
-from stoa.security.errors import SecurityErrorCode, safe_error_response
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 
 
 logger = logging.getLogger(__name__)
@@ -146,16 +145,17 @@ def normalize_cognito_failure(
     return failure
 
 
-def public_auth_error_response(failure: NormalizedPublicAuthFailure) -> JSONResponse:
+def public_auth_violation(failure: NormalizedPublicAuthFailure) -> SecurityDecisionError:
+    """The refusal a route raises for a provider failure.
+
+    Rendered like every other rule violation, inside `detail` (#272); until
+    then the sign-in routes sent this body flat.
+    """
     if failure.publicly_accepted:
         raise ValueError("accepted provider outcomes cannot be projected as public errors")
-    safe = safe_error_response(
-        failure.code,
-        failure.correlation_id,
-        retry_after_seconds=failure.retry_after_seconds,
+    violation = SecurityDecisionError(
+        failure.code, failure.correlation_id, internal_detail=failure.category
     )
-    return JSONResponse(
-        status_code=safe.status_code,
-        content=safe.body,
-        headers={**safe.headers, "X-Correlation-ID": failure.correlation_id},
-    )
+    if failure.retry_after_seconds is not None:
+        violation.retrying_after(failure.retry_after_seconds)
+    return violation

@@ -81,12 +81,11 @@ class UpdateStudentProfileRequest(BaseModel):
 
 def _invalid_stored_student_response(correlation_id: str, field: str) -> NoReturn:
     logger.warning("student_response_rejected category=invalid_%s", field)
-    error = SecurityDecisionError(
+    raise SecurityDecisionError(
         SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
         correlation_id=correlation_id,
         internal_detail=f"student_profile:{field}",
     )
-    raise HTTPException(status_code=error.status_code, detail=error.public_body()) from error
 
 
 def _required_profile_text(

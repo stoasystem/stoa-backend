@@ -2,24 +2,20 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
-
 from fastapi import Request, Response
 
-from stoa.security.errors import normalize_correlation_id
+from stoa.rule_violation import CORRELATION_HEADER, request_correlation_id
 
-
-CORRELATION_HEADER = "X-Correlation-ID"
+__all__ = ["CORRELATION_HEADER", "get_request_correlation_id"]
 
 
 def get_request_correlation_id(request: Request, response: Response) -> str:
-    """Return one canonical ID per request, never trusting an inbound header."""
-    existing = getattr(request.state, "stoa_correlation_id", None)
-    correlation_id = (
-        normalize_correlation_id(str(existing))
-        if existing
-        else normalize_correlation_id(str(uuid4()))
-    )
-    request.state.stoa_correlation_id = correlation_id
+    """Return the request's one id, minted at the door; an inbound header is never trusted.
+
+    `stoa.rule_violation.CorrelationMiddleware` mints it and sets the response
+    header; setting it here as well keeps a test's bare application, which has
+    no middleware, sending the same id it audited.
+    """
+    correlation_id = request_correlation_id(request)
     response.headers[CORRELATION_HEADER] = correlation_id
     return correlation_id

@@ -36,23 +36,16 @@ async def _record_admin_decision(
     audit_sink: AuthorizationAuditSink,
     decision_kind: str,
 ) -> PolicyDecision:
-    try:
-        return await record_authorization_decision(
-            actor=actor,
-            resource=resource,
-            action=action,
-            purpose=purpose,
-            decision=decision,
-            correlation_id=correlation_id,
-            audit_sink=audit_sink,
-            decision_kind=decision_kind,
-        )
-    except SecurityDecisionError as error:
-        raise HTTPException(
-            error.status_code,
-            detail=error.public_body(),
-            headers={"X-Correlation-ID": str(error.correlation_id)},
-        ) from error
+    return await record_authorization_decision(
+        actor=actor,
+        resource=resource,
+        action=action,
+        purpose=purpose,
+        decision=decision,
+        correlation_id=correlation_id,
+        audit_sink=audit_sink,
+        decision_kind=decision_kind,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -417,11 +410,9 @@ def admin_target_provider(
             except HTTPException:
                 raise
             except _ResolvedTargetNotFound as exc:
-                raise _admin_http_error(
-                        SecurityDecisionError(
-                            SecurityErrorCode.RESOURCE_NOT_FOUND,
-                            context.correlation_id,
-                    )
+                raise SecurityDecisionError(
+                    SecurityErrorCode.RESOURCE_NOT_FOUND,
+                    context.correlation_id,
                 ) from exc
             except (TypeError, ValueError) as exc:
                 error = SecurityDecisionError(
@@ -429,7 +420,7 @@ def admin_target_provider(
                     context.correlation_id,
                     internal_detail=type(exc).__name__,
                 )
-                raise _admin_http_error(error) from exc
+                raise error from exc
             except Exception as exc:
                 status_code = _exception_status(exc)
                 if status_code == 422:
@@ -448,7 +439,7 @@ def admin_target_provider(
                     context.correlation_id,
                     internal_detail=type(exc).__name__,
                 )
-                raise _admin_http_error(error) from exc
+                raise error from exc
             await _authorize_admin_refs(
                 refs=refs,
                 request=context.request,
@@ -626,22 +617,12 @@ async def _target(
 
             job = report_repo.get_recovery_job(str(values["job_id"]))
             if not job:
-                error = SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND, correlation_id)
-                raise HTTPException(
-                    error.status_code,
-                    detail=error.public_body(),
-                    headers={"X-Correlation-ID": correlation_id},
-                )
+                raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND, correlation_id)
             filters_value = job.get("filters")
             if filters_value is None:
                 filters_value = {}
             elif not isinstance(filters_value, Mapping):
-                error = SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND, correlation_id)
-                raise HTTPException(
-                    error.status_code,
-                    detail=error.public_body(),
-                    headers={"X-Correlation-ID": correlation_id},
-                )
+                raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND, correlation_id)
             student_id = filters_value.get("student_id")
             parent_id = filters_value.get("parent_id")
             if isinstance(student_id, str):
@@ -655,30 +636,20 @@ async def _target(
                 str(values["delivery_id"])
             )
             if not delivery:
-                error = SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND, correlation_id)
-                raise HTTPException(
-                    error.status_code,
-                    detail=error.public_body(),
-                    headers={"X-Correlation-ID": correlation_id},
-                )
+                raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND, correlation_id)
             student_id = delivery.get("student_id")
             parent_id = delivery.get("parent_id")
             if isinstance(student_id, str):
                 values.setdefault("student_id", student_id)
             if isinstance(parent_id, str):
                 values.setdefault("parent_id", parent_id)
-    except HTTPException:
+    except (HTTPException, SecurityDecisionError):
         raise
     except Exception as exc:
-        error = SecurityDecisionError(
+        raise SecurityDecisionError(
             SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
             correlation_id,
             internal_detail=type(exc).__name__,
-        )
-        raise HTTPException(
-            error.status_code,
-            detail=error.public_body(),
-            headers={"X-Correlation-ID": correlation_id},
         ) from exc
     selected = [(key, str(values[key])) for key in policy.target_keys if values.get(key)]
     if not selected:
@@ -686,14 +657,6 @@ async def _target(
     resource_id = ":".join(value for _, value in selected)
     student_id = str(values.get("student_id") or values.get("user_id") or values.get("parent_id") or actor.user_id)
     return resource_id, student_id
-
-
-def _admin_http_error(error: SecurityDecisionError) -> HTTPException:
-    return HTTPException(
-        error.status_code,
-        detail=error.public_body(),
-        headers={"X-Correlation-ID": str(error.correlation_id)},
-    )
 
 
 async def _authorize_admin_refs(
@@ -706,9 +669,7 @@ async def _authorize_admin_refs(
     audit_sink: AuthorizationAuditSink,
 ) -> None:
     if not refs:
-        raise _admin_http_error(
-            SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id)
-        )
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id)
     # All decisions are computed first.  No allow evidence can turn a later deny
     # into a partially released command.
     decisions: list[tuple[ResourceRef, PolicyDecision]] = []
@@ -739,7 +700,7 @@ async def _authorize_admin_refs(
             audit_sink=audit_sink,
             decision_kind="admin_target",
         )
-        raise _admin_http_error(SecurityDecisionError(decision.result_code, correlation_id))
+        raise SecurityDecisionError(decision.result_code, correlation_id)
     # Mandatory per-target durable evidence completes before the endpoint body.
     for ref, decision in decisions:
         await _record_admin_decision(
@@ -765,15 +726,10 @@ async def admin_operation(
     try:
         policy = classify_admin_route(request.method, path)
     except KeyError as exc:
-        error = SecurityDecisionError(
+        raise SecurityDecisionError(
             SecurityErrorCode.ACTION_NOT_ALLOWED,
             correlation_id,
             internal_detail=str(exc),
-        )
-        raise HTTPException(
-            error.status_code,
-            detail=error.public_body(),
-            headers={"X-Correlation-ID": correlation_id},
         ) from exc
     provisional_ref = ResourceRef(
         policy.resource_type,
@@ -803,12 +759,7 @@ async def admin_operation(
             audit_sink=audit_sink,
             decision_kind="admin_precheck",
         )
-        error = SecurityDecisionError(decision.result_code, correlation_id)
-        raise HTTPException(
-            error.status_code,
-            detail=error.public_body(),
-            headers={"X-Correlation-ID": correlation_id},
-        ) from error
+        raise SecurityDecisionError(decision.result_code, correlation_id)
     provider = getattr(getattr(route, "endpoint", None), "admin_target_provider", None)
     if provider is not None:
         return {
@@ -827,7 +778,7 @@ async def admin_operation(
         }
     try:
         resource_id, student_id = await _target(request, policy, actor, correlation_id)
-    except HTTPException as exc:
+    except (HTTPException, SecurityDecisionError) as exc:
         await _record_admin_decision(
             actor=actor,
             resource=provisional_ref,
@@ -863,12 +814,7 @@ async def admin_operation(
         decision_kind="admin_capability",
     )
     if not decision.allowed:
-        error = SecurityDecisionError(decision.result_code, correlation_id)
-        raise HTTPException(
-            error.status_code,
-            detail=error.public_body(),
-            headers={"X-Correlation-ID": correlation_id},
-        ) from error
+        raise SecurityDecisionError(decision.result_code, correlation_id)
     return {
         "sub": actor.user_id,
         "user_id": actor.user_id,

@@ -499,8 +499,7 @@ def _parent_account_dependency(action: AuthorizationAction):
 
     async def dependency(actor: Actor = Depends(get_actor)) -> Actor:
         if actor.role is not CanonicalRole.PARENT:
-            error = SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
-            raise HTTPException(status_code=error.status_code, detail=error.public_body())
+            raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
         return actor
 
     dependency.authorization_specs = (  # type: ignore[attr-defined]
@@ -773,17 +772,14 @@ async def _parent_child_read(
         AuthorizationPurpose.PARENT_OVERSIGHT,
         resolve,
     )
-    try:
-        return await authorize_and_resolve(
-            actor=actor,
-            resource_id=child_id,
-            spec=spec,
-            fact_repository=facts,
-            correlation_id=correlation_id,
-            audit_sink=audit_sink,
-        )
-    except SecurityDecisionError as error:
-        raise HTTPException(status_code=error.status_code, detail=error.public_body()) from error
+    return await authorize_and_resolve(
+        actor=actor,
+        resource_id=child_id,
+        spec=spec,
+        fact_repository=facts,
+        correlation_id=correlation_id,
+        audit_sink=audit_sink,
+    )
 
 
 async def _parent_child_metadata_resolver(resource_id: str):
@@ -1188,11 +1184,10 @@ async def list_my_children(
     try:
         children = _list_children_for_parent(actor.user_id)
     except Exception as exc:
-        error = SecurityDecisionError(
+        raise SecurityDecisionError(
             SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
             internal_detail=type(exc).__name__,
-        )
-        raise HTTPException(status_code=error.status_code, detail=error.public_body()) from exc
+        ) from exc
     return ChildListResponse(items=[_child_summary_from_profile(child) for child in children])
 
 

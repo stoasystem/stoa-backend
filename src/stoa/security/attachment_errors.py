@@ -8,8 +8,15 @@ import traceback
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Protocol
-from uuid import uuid4
+from typing import Any
+
+from stoa.rule_violation import (
+    RuleCode,
+    RuleContract,
+    RuleViolation,
+    current_correlation_id,
+    register_codes,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +37,7 @@ class AttachmentErrorCode(StrEnum):
     UPLOAD_CODE_RATE_LIMITED = "upload_code_rate_limited"
 
     @property
-    def contract(self) -> AttachmentErrorContract:
+    def contract(self) -> RuleContract:
         return ATTACHMENT_ERROR_REGISTRY[self]
 
 
@@ -43,99 +50,111 @@ class AttachmentClientAction(StrEnum):
     NEW_UPLOAD_CODE = "new_upload_code"
 
 
-@dataclass(frozen=True, slots=True)
-class AttachmentErrorContract:
-    http_status: int
-    safe_message: str
-    client_action: AttachmentClientAction
-    retryable: bool = False
-    idempotent_only: bool = False
-    max_attempts: int = 0
+# The upload subsystem's contract is the general one (`stoa.rule_violation`),
+# which it was generalised from.
+AttachmentErrorContract = RuleContract
+
+# A refused first message names the conversation already made (#61); its
+# attachments are refused with these codes too.
+_NAMES_CONVERSATION = frozenset({"conversationId"})
 
 
-ATTACHMENT_ERROR_REGISTRY: dict[AttachmentErrorCode, AttachmentErrorContract] = {
-    AttachmentErrorCode.ATTACHMENT_IN_USE: AttachmentErrorContract(
+ATTACHMENT_ERROR_REGISTRY: dict[AttachmentErrorCode, RuleContract] = {
+    AttachmentErrorCode.ATTACHMENT_IN_USE: RuleContract(
         409,
         "Remove this attachment from its conversation or question first.",
         AttachmentClientAction.REMOVE_FROM_RESOURCE,
+        public_fields=_NAMES_CONVERSATION,
     ),
-    AttachmentErrorCode.UPLOAD_NOT_FOUND: AttachmentErrorContract(
-        404, "Select or upload the file again.", AttachmentClientAction.SELECT_FILE
+    AttachmentErrorCode.UPLOAD_NOT_FOUND: RuleContract(
+        404,
+        "Select or upload the file again.",
+        AttachmentClientAction.SELECT_FILE,
+        public_fields=_NAMES_CONVERSATION,
     ),
-    AttachmentErrorCode.UPLOAD_EXPIRED: AttachmentErrorContract(
-        409, "This upload expired. Select the file again.", AttachmentClientAction.SELECT_FILE
+    AttachmentErrorCode.UPLOAD_EXPIRED: RuleContract(
+        409,
+        "This upload expired. Select the file again.",
+        AttachmentClientAction.SELECT_FILE,
+        public_fields=_NAMES_CONVERSATION,
     ),
-    AttachmentErrorCode.UPLOAD_TOO_LARGE: AttachmentErrorContract(
-        422, "This file is too large. Choose a smaller file.", AttachmentClientAction.REDUCE_SIZE
+    AttachmentErrorCode.UPLOAD_TOO_LARGE: RuleContract(
+        422,
+        "This file is too large. Choose a smaller file.",
+        AttachmentClientAction.REDUCE_SIZE,
+        public_fields=_NAMES_CONVERSATION,
     ),
-    AttachmentErrorCode.UPLOAD_TYPE_NOT_SUPPORTED: AttachmentErrorContract(
-        422, "This file type is not supported. Choose another file.", AttachmentClientAction.SELECT_FILE
+    AttachmentErrorCode.UPLOAD_TYPE_NOT_SUPPORTED: RuleContract(
+        422,
+        "This file type is not supported. Choose another file.",
+        AttachmentClientAction.SELECT_FILE,
+        public_fields=_NAMES_CONVERSATION,
     ),
-    AttachmentErrorCode.UPLOAD_CONTENT_MISMATCH: AttachmentErrorContract(
-        422, "This file does not match its type. Select the file again.", AttachmentClientAction.SELECT_FILE
+    AttachmentErrorCode.UPLOAD_CONTENT_MISMATCH: RuleContract(
+        422,
+        "This file does not match its type. Select the file again.",
+        AttachmentClientAction.SELECT_FILE,
+        public_fields=_NAMES_CONVERSATION,
     ),
-    AttachmentErrorCode.UPLOAD_INVALID: AttachmentErrorContract(
-        422, "This file may be damaged. Select another file.", AttachmentClientAction.SELECT_FILE
+    AttachmentErrorCode.UPLOAD_INVALID: RuleContract(
+        422,
+        "This file may be damaged. Select another file.",
+        AttachmentClientAction.SELECT_FILE,
+        public_fields=_NAMES_CONVERSATION,
     ),
     # Image moderation refused it (#138). There is no appeal; the client shows
     # its own copy for this code and offers another image or plain text.
-    AttachmentErrorCode.UPLOAD_CONTENT_BLOCKED: AttachmentErrorContract(
+    AttachmentErrorCode.UPLOAD_CONTENT_BLOCKED: RuleContract(
         422,
         "This image cannot be sent. Choose another image or describe the problem in words.",
         AttachmentClientAction.SELECT_FILE,
+        public_fields=_NAMES_CONVERSATION,
     ),
-    AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT: AttachmentErrorContract(
+    AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT: RuleContract(
         409,
         "This upload chunk conflicts with an earlier chunk. Select the file again.",
         AttachmentClientAction.SELECT_FILE,
+        public_fields=_NAMES_CONVERSATION,
     ),
-    AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED: AttachmentErrorContract(
+    AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED: RuleContract(
         409,
         "Storage is full. Delete attachments or upgrade your plan.",
         AttachmentClientAction.DELETE_OR_UPGRADE,
+        public_fields=_NAMES_CONVERSATION,
     ),
-    AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE: AttachmentErrorContract(
+    AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE: RuleContract(
         503,
         "Uploads are temporarily unavailable. Try again later.",
         AttachmentClientAction.RETRY_LATER,
         retryable=True,
         idempotent_only=True,
         max_attempts=2,
+        retry_after_seconds=30,
+        public_fields=_NAMES_CONVERSATION,
     ),
     # A phone upload code that is wrong, used, expired, or whose account is in
     # deletion (#146). One answer for all of them, so a refusal tells a guesser
     # nothing; the phone page asks for a fresh code from the computer.
-    AttachmentErrorCode.UPLOAD_CODE_INVALID: AttachmentErrorContract(
+    AttachmentErrorCode.UPLOAD_CODE_INVALID: RuleContract(
         404,
         "This code is no longer valid. Show a new code on your computer.",
         AttachmentClientAction.NEW_UPLOAD_CODE,
     ),
-    AttachmentErrorCode.UPLOAD_CODE_RATE_LIMITED: AttachmentErrorContract(
+    AttachmentErrorCode.UPLOAD_CODE_RATE_LIMITED: RuleContract(
         429,
         "Too many attempts. Try again later.",
         AttachmentClientAction.RETRY_LATER,
+        # The configured window (`upload_code_window_seconds`), given by the
+        # raise site; this is its default.
+        retry_after_seconds=600,
     ),
 }
 
-if set(ATTACHMENT_ERROR_REGISTRY) != set(AttachmentErrorCode):
-    missing = set(AttachmentErrorCode) - set(ATTACHMENT_ERROR_REGISTRY)
-    extra = set(ATTACHMENT_ERROR_REGISTRY) - set(AttachmentErrorCode)
-    raise RuntimeError(f"attachment error registry is not exhaustive: missing={missing}, extra={extra}")
+register_codes("attachment", AttachmentErrorCode, ATTACHMENT_ERROR_REGISTRY)
 
-
-class DecisionErrorCode(Protocol):
-    """A code an `AttachmentDecisionError` carries, with the contract it is sent under.
-
-    `AttachmentErrorCode` is one; a question's own failures are
-    `stoa.services.ask_question.AskQuestionErrorCode`, whose contracts that
-    package keeps. Both are rendered here until #211 gives errors one home.
-    """
-
-    @property
-    def value(self) -> str: ...
-
-    @property
-    def contract(self) -> AttachmentErrorContract: ...
+# An `AttachmentDecisionError` carries an `AttachmentErrorCode` or a question's
+# own `stoa.services.ask_question.AskQuestionErrorCode`.
+DecisionErrorCode = RuleCode
 
 
 def safe_attachment_error_body(
@@ -146,11 +165,10 @@ def safe_attachment_error_body(
 ) -> dict[str, str]:
     """Project only stable public fields; correlation IDs originate on the server."""
     contract = code.contract
-    server_correlation_id = correlation_id or str(uuid4())
     return {
         "code": code.value,
         "message": contract.safe_message,
-        "correlationId": server_correlation_id,
+        "correlationId": correlation_id or current_correlation_id(),
     }
 
 
@@ -173,7 +191,7 @@ def in_flight_cause() -> str | None:
 
 
 @dataclass(slots=True)
-class AttachmentDecisionError(Exception):
+class AttachmentDecisionError(RuleViolation):
     code: DecisionErrorCode
     internal_detail: str | None = None
     correlation_id: str | None = None
@@ -186,12 +204,8 @@ class AttachmentDecisionError(Exception):
         if self.internal_detail is None:
             self.internal_detail = in_flight_cause()
 
-    @property
-    def status_code(self) -> int:
-        return self.code.contract.http_status
-
-    def public_body(self) -> dict[str, str]:
-        return safe_attachment_error_body(self.code, correlation_id=self.correlation_id)
+    def log(self, route: str) -> None:
+        log_attachment_failure(self, route)
 
 
 def log_attachment_failure(error: AttachmentDecisionError, route: str) -> None:
