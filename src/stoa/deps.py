@@ -5,7 +5,7 @@ from typing import Any
 
 import boto3
 from botocore.config import Config
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from stoa.config import (
@@ -188,15 +188,12 @@ async def get_verified_token(
     settings: Settings = Depends(get_settings),
     key_provider: JwksKeyProvider = Depends(get_jwks_key_provider),
 ) -> VerifiedAccessToken:
-    try:
-        return await verify_access_token(
-            credentials.credentials,
-            allowed_issuers=settings.allowed_cognito_issuers,
-            allowed_client_ids=settings.allowed_cognito_access_clients,
-            key_provider=key_provider,
-        )
-    except SecurityDecisionError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.public_body()) from exc
+    return await verify_access_token(
+        credentials.credentials,
+        allowed_issuers=settings.allowed_cognito_issuers,
+        allowed_client_ids=settings.allowed_cognito_access_clients,
+        key_provider=key_provider,
+    )
 
 
 @lru_cache(maxsize=1)
@@ -241,13 +238,9 @@ async def get_actor(
     verified: VerifiedAccessToken = Depends(get_verified_token),
     repository: IdentityRepository = Depends(get_identity_repository),
 ) -> Actor:
-    try:
-        actor = await resolve_actor(verified, repository)
-    except SecurityDecisionError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.public_body()) from exc
+    actor = await resolve_actor(verified, repository)
     if actor.must_change_password and not _forced_password_change_exempt(request):
-        error = SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
-        raise HTTPException(status_code=error.status_code, detail=error.public_body())
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
     return actor
 
 
@@ -316,20 +309,14 @@ async def get_deletion_command(
             body=b"",
             now_iso=datetime.now(UTC).isoformat(),
         )
-    except SecurityDecisionError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.public_body()) from exc
+    except SecurityDecisionError:
+        raise
     except account_deletion_repo.AccountDeletionConflict as exc:
-        error = SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
-        raise HTTPException(
-            status_code=error.status_code, detail=error.public_body()
-        ) from exc
+        raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT) from exc
     except Exception as exc:
-        error = SecurityDecisionError(
+        raise SecurityDecisionError(
             SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
             internal_detail=type(exc).__name__,
-        )
-        raise HTTPException(
-            status_code=error.status_code, detail=error.public_body()
         ) from exc
 
 
@@ -360,7 +347,6 @@ def require_role(*roles: str):
 
     async def checker(user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
         if user.get("role") not in canonical_roles:
-            error = SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=error.public_body())
+            raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
         return user
     return checker

@@ -5,7 +5,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from jose import jwt
 from pydantic import ValidationError
@@ -710,10 +710,10 @@ async def test_revoked_session_is_refused_before_the_deletion_command_is_built()
         groups=("students",),
         issued_at=1999,
     )
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(SecurityDecisionError) as refused:
         await get_deletion_command(verified=verified, repository=repository)
     assert refused.value.status_code == 401
-    assert refused.value.detail["code"] == "invalid_token"
+    assert refused.value.code == "invalid_token"
 
 
 def test_unreadable_session_cut_off_fails_closed():

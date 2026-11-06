@@ -12,7 +12,7 @@ import json
 import logging
 from collections.abc import Mapping
 from datetime import datetime, timezone
-from typing import Any, Literal, NamedTuple, NoReturn, cast
+from typing import Any, Literal, NamedTuple, cast
 
 from boto3.dynamodb.conditions import Attr, Key
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -44,7 +44,6 @@ from stoa.models.error import (
 from stoa.security.attachment_errors import (
     AttachmentDecisionError,
     AttachmentErrorCode,
-    log_attachment_failure,
 )
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.security.route_authorization import (
@@ -572,14 +571,11 @@ async def create_conversation(
                 practice_context=practice_context,
                 new_conversation_generation=generation,
             )
-        except AttachmentDecisionError as error:
+        except AttachmentDecisionError as refusal:
             # The daily message limit and the weekly allowance, among others:
-            # the same conversion the message routes make, then the
-            # conversation's id.
-            try:
-                _raise_attachment(error, correlation_id)
-            except HTTPException as refusal:
-                raise _naming_the_conversation(refusal, conv_id) from error
+            # refused as on the message routes, naming the conversation.
+            refusal.with_public(conversationId=conv_id)
+            raise
         except HTTPException as refusal:
             raise _naming_the_conversation(refusal, conv_id) from refusal
         messages = (
@@ -662,12 +658,9 @@ async def get_generation_progress(
     Named by its idempotency key, the message's command is reported too, with
     only the steps its current attempt wrote.
     """
-    try:
-        return ask_question.progress(
-            authorized.ref.resource_id, idempotency_key, authorized.ref.student_id
-        )
-    except AttachmentDecisionError as error:
-        _raise_attachment(error, correlation_id)
+    return ask_question.progress(
+        authorized.ref.resource_id, idempotency_key, authorized.ref.student_id
+    )
 
 
 @router.post(
@@ -691,18 +684,15 @@ async def send_message(
     student_id = authorized.ref.student_id
     conv = _conversation_record(authorized.value)
 
-    try:
-        result = ask_question.submit(
-            message_command["actor"],
-            conv,
-            body,
-            message_command["fingerprint"],
-            conversation_id=conv_id,
-            student_id=student_id,
-            practice_context=message_command["practice_context"],
-        )
-    except AttachmentDecisionError as error:
-        _raise_attachment(error, correlation_id)
+    result = ask_question.submit(
+        message_command["actor"],
+        conv,
+        body,
+        message_command["fingerprint"],
+        conversation_id=conv_id,
+        student_id=student_id,
+        practice_context=message_command["practice_context"],
+    )
     _adopt_question_as_title(conv_id, conv, body.content)
     if isinstance(result, MessageAcceptedResponse):
         return JSONResponse(
@@ -744,18 +734,15 @@ async def stream_message(
     student_id = authorized.ref.student_id
     conv = _conversation_record(authorized.value)
 
-    try:
-        result = ask_question.submit(
-            message_command["actor"],
-            conv,
-            body,
-            message_command["fingerprint"],
-            conversation_id=conv_id,
-            student_id=student_id,
-            practice_context=message_command["practice_context"],
-        )
-    except AttachmentDecisionError as error:
-        _raise_attachment(error, correlation_id)
+    result = ask_question.submit(
+        message_command["actor"],
+        conv,
+        body,
+        message_command["fingerprint"],
+        conversation_id=conv_id,
+        student_id=student_id,
+        practice_context=message_command["practice_context"],
+    )
     # Same as the non-streaming route. Only that one adopted the question, while
     # the client only ever calls this one, so every conversation it opened stayed
     # listed under the subject-and-grade placeholder.
@@ -807,19 +794,6 @@ async def stream_message(
             "X-Accel-Buffering": "no",
         },
     )
-
-
-def _raise_attachment(error: AttachmentDecisionError, correlation_id: str) -> NoReturn:
-    error.correlation_id = correlation_id
-    log_attachment_failure(error, route="conversations")
-    headers = {"X-Correlation-ID": correlation_id}
-    if error.code is AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE:
-        headers["Retry-After"] = "30"
-    raise HTTPException(
-        status_code=error.status_code,
-        detail=error.public_body(),
-        headers=headers,
-    ) from error
 
 
 # ── Teacher-help router (separate prefix: /teacher-help) ──────────────────────

@@ -34,7 +34,11 @@ from stoa.security.admin_authorization import (
     admin_operation,
     admin_target_provider,
 )
-from stoa.security.errors import normalize_correlation_id
+from stoa.security.errors import (
+    SecurityDecisionError,
+    SecurityErrorCode,
+    normalize_correlation_id,
+)
 from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD
 from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
 from stoa.models.question import QuestionStatus
@@ -3473,12 +3477,7 @@ async def transition_parent_binding_status(
     context = user.get("_admin_authorization")
     correlation_id = str(getattr(context, "correlation_id", "") or "")
     if user.get("role") != "admin":
-        return _relationship_status_error(
-            code="action_not_allowed",
-            message="You cannot perform this action.",
-            correlation_id=correlation_id,
-            status_code=403,
-        )
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id)
     if body.status == body.expected_status:
         return _relationship_status_error(
             code="relationship_status_invalid",
@@ -3565,13 +3564,17 @@ def _revoke_parent_link_side(
 def _relationship_status_error(
     *, code: str, message: str, correlation_id: str | None, status_code: int
 ) -> JSONResponse:
+    # Inside `detail`, as every refusal is (#272). The codes become registered
+    # rule violations with the rest of the admin bodies (#275).
     safe_correlation_id = normalize_correlation_id(correlation_id)
     return JSONResponse(
         status_code=status_code,
         content={
-            "code": code,
-            "message": message,
-            "correlationId": safe_correlation_id,
+            "detail": {
+                "code": code,
+                "message": message,
+                "correlationId": safe_correlation_id,
+            }
         },
         headers={"X-Correlation-ID": safe_correlation_id},
     )

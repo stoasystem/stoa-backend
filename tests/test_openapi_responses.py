@@ -11,6 +11,7 @@ from stoa.config import Settings, get_settings
 from stoa.main import app
 from stoa.models import error as error_models
 from stoa.routers import auth
+from stoa.rule_violation import PUBLIC_FIELDS
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.route_inventory import inventory_application
 
@@ -36,10 +37,16 @@ def _detail_variants(schema: dict, body: dict) -> list[dict]:
     return [_resolve(schema, item) for item in detail.get("anyOf", [detail])]
 
 
+_ALWAYS = {"code", "message", "correlationId"}
+
+
 def _is_error_body(node: dict) -> bool:
-    return set(node.get("properties", {})) == {"code", "message", "correlationId"} and set(
-        node.get("required", [])
-    ) == {"code", "message", "correlationId"}
+    """A rule violation's body: the three fields always, and only declared public ones besides."""
+    properties = set(node.get("properties", {}))
+    return (
+        _ALWAYS <= properties <= _ALWAYS | PUBLIC_FIELDS
+        and set(node.get("required", [])) == _ALWAYS
+    )
 
 
 def test_memory_summary_declares_the_fields_the_handler_returns():
@@ -199,8 +206,8 @@ def test_a_route_that_never_answers_401_declares_none():
 
 # ── 401 from the tokenless sign-in operations ─────────────────────────────────
 #
-# These answer a refusal from the identity provider with the security body at the
-# top level (no `detail` envelope), so they cannot share the bearer 401.
+# These take no bearer token, so they declare their own 401: the identity
+# provider's refusal, inside `detail` like every refusal since #272.
 
 
 def _auth_settings() -> Settings:
@@ -260,7 +267,7 @@ def test_sign_in_operations_declare_the_provider_refusal_they_send(monkeypatch, 
     response = _auth_client().post(path, json=payload)
 
     assert response.status_code == 401
-    assert response.json()["code"] == code
+    assert response.json()["detail"]["code"] == code
     _declared_401_model(path).model_validate(response.json())
 
 
@@ -352,3 +359,15 @@ def test_creating_a_conversation_declares_the_identity_refusal_made_before_it(
     union.validate_python(response.json())
     with pytest.raises(ValidationError):
         error_models.FirstMessageRefusalResponse.model_validate(response.json())
+
+
+def test_every_operation_declares_the_shared_rule_violation_response():
+    schema = _schema()
+    for item in inventory_application(app):
+        operation = schema["paths"][item.path][item.method.lower()]
+        assert operation["responses"]["default"]["content"]["application/json"]["schema"] == {
+            "$ref": "#/components/schemas/RuleViolationResponse"
+        }, f"{item.method} {item.path}"
+    (detail,) = _detail_variants(schema, _resolve(schema, {"$ref": "#/components/schemas/RuleViolationResponse"}))
+    assert _is_error_body(detail)
+    assert set(detail["properties"]) == _ALWAYS | PUBLIC_FIELDS

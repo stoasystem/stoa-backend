@@ -10,12 +10,11 @@ import logging
 import sys
 
 from botocore.exceptions import ClientError
-from fastapi import HTTPException
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 import pytest
 
 from stoa.db.repositories import attachment_repo
-from stoa.routers import conversations as conversations_router
-from stoa.routers import files as files_router
 from stoa.security import attachment_errors
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 
@@ -118,35 +117,38 @@ def test_a_failure_the_student_can_act_on_is_not_an_operator_alarm(caplog):
     assert "code=upload_not_found status=404" in record.getMessage()
 
 
-def test_both_doors_tell_before_they_answer():
-    """The guard for the call sites: a router that stops logging is a silent 503.
+def test_the_one_door_tells_before_it_answers():
+    """The guard for the call sites: a door that stops logging is a silent 503.
 
     This is the shape card 127 ran into - the repository and the gateway both
     logged, and the subsystem was still dark, because the route the student
-    actually hit raised past them both.
+    actually hit raised past them both. Since #272 every route leaves by the
+    application's rule violation handler, so that is where it is told.
     """
-    for module, raise_through, route in (
-        (files_router, files_router._raise_safe, "files"),
-        (conversations_router, conversations_router._raise_attachment, "conversations"),
-    ):
-        records = []
-        handler = logging.Handler()
-        handler.emit = records.append
-        log = logging.getLogger(attachment_errors.__name__)
-        log.addHandler(handler)
-        try:
-            error = AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-            with pytest.raises(HTTPException) as raised:
-                raise_through(error, "corr-door")
-        finally:
-            log.removeHandler(handler)
-        assert raised.value.status_code == 503
-        messages = [r.getMessage() for r in records]
-        assert any(
-            f"attachment_failure code=upload_service_unavailable status=503 route={route}" in m
-            and "correlation_id=corr-door" in m
-            for m in messages
-        ), f"{module.__name__} answered 503 without saying why: {messages}"
+    application = FastAPI()
+
+    @application.post("/files/{upload_id}/complete")
+    def complete(upload_id: str):
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
+
+    records = []
+    handler = logging.Handler()
+    handler.emit = records.append
+    log = logging.getLogger(attachment_errors.__name__)
+    log.addHandler(handler)
+    try:
+        response = TestClient(application).post("/files/upload-1/complete")
+    finally:
+        log.removeHandler(handler)
+    assert response.status_code == 503
+    correlation_id = response.headers["X-Correlation-ID"]
+    messages = [r.getMessage() for r in records]
+    assert any(
+        "attachment_failure code=upload_service_unavailable status=503 "
+        "route=/files/{upload_id}/complete" in m
+        and f"correlation_id={correlation_id}" in m
+        for m in messages
+    ), f"answered 503 without saying why: {messages}"
 
 
 def test_a_blanket_handler_still_names_what_it_caught(caplog):

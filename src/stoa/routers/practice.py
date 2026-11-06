@@ -27,7 +27,6 @@ from stoa.security.authorization import (
     ResourceType,
     authorize_and_resolve,
 )
-from stoa.security.errors import SecurityDecisionError
 from stoa.security.identity import Actor
 from stoa.models.practice import (
     PracticeAnswerSubmission,
@@ -135,17 +134,14 @@ async def _authorize_practice_item(
         AuthorizationPurpose.SELF_SERVICE,
         resolve,
     )
-    try:
-        return await authorize_and_resolve(
-            actor=actor,
-            resource_id=item_id,
-            spec=spec,
-            fact_repository=facts,
-            correlation_id=correlation_id,
-            audit_sink=audit_sink,
-        )
-    except SecurityDecisionError as error:
-        raise HTTPException(status_code=error.status_code, detail=error.public_body()) from error
+    return await authorize_and_resolve(
+        actor=actor,
+        resource_id=item_id,
+        spec=spec,
+        fact_repository=facts,
+        correlation_id=correlation_id,
+        audit_sink=audit_sink,
+    )
 
 
 def _practice_item_specs(action: AuthorizationAction, resolver):

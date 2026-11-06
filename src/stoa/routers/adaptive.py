@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -298,8 +298,7 @@ async def _authorize_loaded_resource(
     if purpose is None:
         from stoa.security.errors import SecurityErrorCode
 
-        error = SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
-        raise HTTPException(status_code=error.status_code, detail=error.public_body())
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
 
     async def resolve(_resource_id: str):
         if not value:
@@ -310,17 +309,14 @@ async def _authorize_loaded_resource(
         )
 
     spec = AuthorizationSpec(resource_type, action, purpose, resolve)
-    try:
-        return await authorize_and_resolve(
-            actor=actor,
-            resource_id=resource_id,
-            spec=spec,
-            fact_repository=facts,
-            correlation_id=correlation_id,
-            audit_sink=audit_sink,
-        )
-    except SecurityDecisionError as error:
-        raise HTTPException(status_code=error.status_code, detail=error.public_body()) from error
+    return await authorize_and_resolve(
+        actor=actor,
+        resource_id=resource_id,
+        spec=spec,
+        fact_repository=facts,
+        correlation_id=correlation_id,
+        audit_sink=audit_sink,
+    )
 
 
 def _assignment_dependency(

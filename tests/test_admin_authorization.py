@@ -154,7 +154,7 @@ def test_parent_binding_status_transition_requires_canonical_admin_and_redacts_c
     app.dependency_overrides[get_actor] = lambda: _actor("parent_binding_repairer")
     conflict = TestClient(app).post("/admin/parent-bindings/status", json=payload)
     assert conflict.status_code == 409
-    body = conflict.json()
+    body = conflict.json()["detail"]
     assert set(body) == {"code", "message", "correlationId"}
     assert body["code"] == "relationship_status_conflict"
     assert "parent-private-canary" not in conflict.text

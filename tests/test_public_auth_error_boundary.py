@@ -13,8 +13,14 @@ from stoa.security.errors import SecurityErrorCode
 from stoa.security.public_auth_errors import (
     PublicAuthOperation,
     normalize_cognito_failure,
-    public_auth_error_response,
+    public_auth_violation,
 )
+from stoa.rule_violation import violation_response
+
+
+def public_auth_error_response(failure):
+    """What the route sends for a provider failure: the violation, rendered."""
+    return violation_response(public_auth_violation(failure))
 
 
 def _error(code: str, message: str = "provider-secret-canary") -> ClientError:
@@ -47,9 +53,9 @@ def test_unknown_provider_failure_has_exact_fields_correlation_retry_and_redacti
     assert response.headers["retry-after"] == "15"
     assert response.headers["x-correlation-id"] == "corr-unknown"
     assert response.body == (
-        b'{"code":"identity_provider_unavailable","message":"Try again in a few minutes. '
+        b'{"detail":{"code":"identity_provider_unavailable","message":"Try again in a few minutes. '
         b'If the problem continues, contact support and share the reference shown.",'
-        b'"correlationId":"corr-unknown"}'
+        b'"correlationId":"corr-unknown"}}'
     )
     exposed = response.body.decode().lower()
     assert "secretunknowncode" not in exposed
@@ -160,9 +166,11 @@ def test_every_public_auth_endpoint_redacts_unknown_provider_canary(
 
     assert response.status_code == 503, operation
     assert response.json() == {
-        "code": "identity_provider_unavailable",
-        "message": "Try again in a few minutes. If the problem continues, contact support and share the reference shown.",
-        "correlationId": response.headers["X-Correlation-ID"],
+        "detail": {
+            "code": "identity_provider_unavailable",
+            "message": "Try again in a few minutes. If the problem continues, contact support and share the reference shown.",
+            "correlationId": response.headers["X-Correlation-ID"],
+        }
     }
     assert response.headers["Retry-After"] == "15"
     public_surface = response.content.decode().lower()

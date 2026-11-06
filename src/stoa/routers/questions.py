@@ -6,7 +6,7 @@ learning conversation (`conversations`). Reporting stays, because a teacher
 reports a student's contribution from a help request, whose id is the
 question id (#189, #234).
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 
 from stoa.deps import get_actor
 from stoa.models.moderation import ModerationCaseResponse, ModerationReportRequest
@@ -48,9 +48,4 @@ async def report_question_content(
         )
     except SecurityDecisionError as error:
         # Refused as the authorization above refuses a request it cannot see.
-        refusal = SecurityDecisionError(error.code, correlation_id)
-        raise HTTPException(
-            status_code=refusal.status_code,
-            detail=refusal.public_body(),
-            headers={"X-Correlation-ID": correlation_id},
-        ) from error
+        raise SecurityDecisionError(error.code, correlation_id) from error

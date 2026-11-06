@@ -22,7 +22,7 @@ from decimal import Decimal
 from typing import Any
 
 from botocore.exceptions import ClientError
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from jose import jwt
 import pytest
@@ -34,6 +34,7 @@ from stoa.db.repositories import identity_repo
 from stoa import deps
 from stoa.deps import get_actor, get_identity_repository, get_jwks_key_provider
 from stoa.routers import auth
+from stoa.security.errors import SecurityDecisionError
 from stoa.security.jwks import JwksKeyProvider
 from stoa.security.tokens import VerifiedAccessToken
 
@@ -517,14 +518,14 @@ async def test_closing_the_account_is_refused_once_that_sign_in_was_signed_out(
         deps, "begin_or_replay_deletion", lambda **kwargs: built.append(kwargs["user_id"])
     )
 
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(SecurityDecisionError) as refused:
         await deps.get_deletion_command(
             verified=_deletion_token(keyset.issuer),
             repository=_DeletionRepository(keyset.issuer, revoked=True),
         )
 
     assert refused.value.status_code == 401
-    assert refused.value.detail["code"] == "invalid_token"
+    assert refused.value.code == "invalid_token"
     assert built == [], "the command must not be built for a signed-out sign-in"
 
 

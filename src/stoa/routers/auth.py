@@ -21,7 +21,7 @@ from stoa.deps import (
     security,
 )
 from stoa.jobs.account_deletion import continue_deletion_command
-from stoa.models.error import SecurityErrorBody, SignInUnauthorizedResponse
+from stoa.models.error import SecurityErrorResponse
 from stoa.models.user import PublicRegistrationRole, RegisterRequest
 from stoa.services import (
     account_provisioning_service,
@@ -38,7 +38,7 @@ from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.public_auth_errors import (
     PublicAuthOperation,
     normalize_cognito_failure,
-    public_auth_error_response,
+    public_auth_violation,
 )
 from stoa.security.request_correlation import get_request_correlation_id
 from stoa.services.account_deletion_service import DeletionReceipt
@@ -520,10 +520,10 @@ async def register(body: RegisterRequest):
     response_model=AuthResponse,
     responses={
         status.HTTP_401_UNAUTHORIZED: {
-            "model": SignInUnauthorizedResponse,
+            "model": SecurityErrorResponse,
             "description": (
-                "`invalid_credentials` at the top level for a wrong email or password; "
-                "inside `detail` when the issued token does not verify."
+                "`invalid_credentials` for a wrong email or password; `invalid_token` "
+                "or `token_expired` when the issued token does not verify."
             ),
         }
     },
@@ -547,7 +547,7 @@ async def login(
             ClientId=client_id,
         )
     except ClientError as e:
-        return public_auth_error_response(
+        raise public_auth_violation(
             normalize_cognito_failure(PublicAuthOperation.LOGIN, e, correlation_id)
         )
 
@@ -556,16 +556,13 @@ async def login(
     # exactly as before rather than being handed an empty string to send back.
     refresh_token = resp["AuthenticationResult"].get("RefreshToken")
 
-    try:
-        actor, profile = await public_identity_service.resolve_account_access_token(
-            access_token,
-            allowed_issuers=settings.allowed_cognito_issuers,
-            allowed_client_ids=settings.allowed_cognito_access_clients,
-            key_provider=key_provider,
-            identity_repository=identity_repository,
-        )
-    except SecurityDecisionError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.public_body()) from exc
+    actor, profile = await public_identity_service.resolve_account_access_token(
+        access_token,
+        allowed_issuers=settings.allowed_cognito_issuers,
+        allowed_client_ids=settings.allowed_cognito_access_clients,
+        key_provider=key_provider,
+        identity_repository=identity_repository,
+    )
 
     await _remember_sign_in_refresh_token(
         identity_repository=identity_repository,
@@ -680,7 +677,7 @@ async def resend_email_verification(
                 account_verification_service.resend_limited_fields(_utc_now_iso()),
             )
             state = account_verification_service.public_state(updated or profile)
-            return public_auth_error_response(
+            raise public_auth_violation(
                 normalize_cognito_failure(
                     PublicAuthOperation.VERIFICATION_RESEND, e, correlation_id
                 )
@@ -693,7 +690,7 @@ async def resend_email_verification(
                 accountActivationStatus=public_state["accountActivationStatus"],
                 resendAllowed=False,
             )
-        return public_auth_error_response(
+        raise public_auth_violation(
             normalize_cognito_failure(PublicAuthOperation.VERIFICATION_RESEND, e, correlation_id)
         )
 
@@ -765,7 +762,7 @@ async def confirm_email_verification(
                 command.user_id,
                 account_verification_service.expired_fields(_utc_now_iso()),
             )
-            return public_auth_error_response(
+            raise public_auth_violation(
                 normalize_cognito_failure(
                     PublicAuthOperation.VERIFICATION_CONFIRM, e, correlation_id
                 )
@@ -776,13 +773,13 @@ async def confirm_email_verification(
             "NotAuthorizedException",
             "UserNotFoundException",
         ):
-            return public_auth_error_response(
+            raise public_auth_violation(
                 normalize_cognito_failure(
                     PublicAuthOperation.VERIFICATION_CONFIRM, e, correlation_id
                 )
             )
         elif not already_confirmed:
-            return public_auth_error_response(
+            raise public_auth_violation(
                 normalize_cognito_failure(
                     PublicAuthOperation.VERIFICATION_CONFIRM, e, correlation_id
                 )
@@ -1130,10 +1127,10 @@ async def confirm_password_change(
     response_model=AuthResponse,
     responses={
         status.HTTP_401_UNAUTHORIZED: {
-            "model": SignInUnauthorizedResponse,
+            "model": SecurityErrorResponse,
             "description": (
-                "`invalid_token` at the top level for a refused refresh token; "
-                "inside `detail` when the issued token does not verify."
+                "`invalid_token` for a refused refresh token, or when the issued "
+                "token does not verify."
             ),
         }
     },
@@ -1157,7 +1154,7 @@ async def refresh(
             ClientId=client_id,
         )
     except ClientError as e:
-        return public_auth_error_response(
+        raise public_auth_violation(
             normalize_cognito_failure(PublicAuthOperation.REFRESH, e, correlation_id)
         )
 
@@ -1166,16 +1163,13 @@ async def refresh(
     # REFRESH_TOKEN_AUTH does not reissue one, so the caller keeps the token
     # it sent; echoing it keeps the response the same shape as sign-in's.
     refresh_token = result.get("RefreshToken") or body.refresh_token
-    try:
-        actor, profile = await public_identity_service.resolve_account_access_token(
-            access_token,
-            allowed_issuers=settings.allowed_cognito_issuers,
-            allowed_client_ids=settings.allowed_cognito_access_clients,
-            key_provider=key_provider,
-            identity_repository=identity_repository,
-        )
-    except SecurityDecisionError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.public_body()) from exc
+    actor, profile = await public_identity_service.resolve_account_access_token(
+        access_token,
+        allowed_issuers=settings.allowed_cognito_issuers,
+        allowed_client_ids=settings.allowed_cognito_access_clients,
+        key_provider=key_provider,
+        identity_repository=identity_repository,
+    )
     # The renewed token carries the sign-in's `origin_jti`, so this refreshes
     # custody of the same sign-in rather than opening a second one; a pool that
     # rotates refresh tokens replaces the stored one here and nowhere else.
@@ -1198,8 +1192,8 @@ async def refresh(
     status_code=status.HTTP_204_NO_CONTENT,
     responses={
         status.HTTP_401_UNAUTHORIZED: {
-            "model": SecurityErrorBody,
-            "description": "`invalid_token` at the top level: the provider refused the sign-out.",
+            "model": SecurityErrorResponse,
+            "description": "`invalid_token`: the provider refused the sign-out.",
         }
     },
 )
@@ -1250,12 +1244,9 @@ async def logout(
                     int(datetime.now(UTC).timestamp()) + 1,
                 )
         except Exception as exc:
-            error = SecurityDecisionError(
+            raise SecurityDecisionError(
                 SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
                 internal_detail=type(exc).__name__,
-            )
-            raise HTTPException(
-                status_code=error.status_code, detail=error.public_body()
             ) from exc
 
     cognito = _get_cognito(settings)
@@ -1270,7 +1261,7 @@ async def logout(
         else:
             cognito.global_sign_out(AccessToken=body.access_token)
     except ClientError as e:
-        return public_auth_error_response(
+        raise public_auth_violation(
             normalize_cognito_failure(PublicAuthOperation.LOGOUT, e, correlation_id)
         )
 

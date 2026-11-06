@@ -23,7 +23,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
-from stoa.models.error import UnauthenticatedResponse
+from stoa.models.error import RuleViolationResponse, UnauthenticatedResponse
 from stoa.security.admin_authorization import AdminRoutePolicy, AdminTargetProvider
 from stoa.security.authorization import AuthorizationSpec, ResourceType
 
@@ -590,21 +590,19 @@ def inventory_projection(app: FastAPI) -> list[dict[str, object]]:
     return [item.projection() for item in inventory_application(app)]
 
 
-def _unauthenticated_response(schema: dict[str, Any]) -> dict[str, Any]:
-    """Register the shared 401 body as components and return the response for it."""
-    body = UnauthenticatedResponse.model_json_schema(
-        by_alias=True, ref_template="#/components/schemas/{model}"
-    )
+def _shared_response(
+    schema: dict[str, Any], model: type[BaseModel], description: str
+) -> dict[str, Any]:
+    """Register one shared body as components and return the response for it."""
+    body = model.model_json_schema(by_alias=True, ref_template="#/components/schemas/{model}")
     schemas = schema.setdefault("components", {}).setdefault("schemas", {})
     for name, definition in body.pop("$defs", {}).items():
         schemas.setdefault(name, definition)
-    schemas[UnauthenticatedResponse.__name__] = body
+    schemas[model.__name__] = body
     return {
-        "description": "No usable bearer token",
+        "description": description,
         "content": {
-            "application/json": {
-                "schema": {"$ref": f"#/components/schemas/{UnauthenticatedResponse.__name__}"}
-            }
+            "application/json": {"schema": {"$ref": f"#/components/schemas/{model.__name__}"}}
         },
     }
 
@@ -618,9 +616,17 @@ def install_authorization_openapi(app: FastAPI) -> None:
         schema = get_openapi(
             title=app.title, version=app.version, description=app.description, routes=app.routes
         )
-        unauthenticated = _unauthenticated_response(schema)
+        unauthenticated = _shared_response(
+            schema, UnauthenticatedResponse, "No usable bearer token"
+        )
+        # Any route may refuse with a rule violation (#211); the statuses a
+        # route documents for itself stay as it declared them.
+        rule_violation = _shared_response(
+            schema, RuleViolationResponse, "A rule violation (`stoa.rule_violation`)"
+        )
         for item in inventory_application(app):
             operation = schema["paths"][item.path][item.method.lower()]
+            operation.setdefault("responses", {}).setdefault("default", rule_violation)
             # `security` is set exactly where the bearer scheme is in the
             # dependency tree, which is what answers 401. That is every
             # classification but "public", and one public command

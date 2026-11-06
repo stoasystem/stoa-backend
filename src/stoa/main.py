@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from mangum import Mangum
 
 from stoa.config import settings
+from stoa.rule_violation import CorrelationMiddleware, install_rule_violation_handler
 from stoa.security.errors import redacted_validation_errors
 from stoa.services import locale_service, runtime_budget_service
 from stoa.security.route_inventory import (
@@ -101,6 +102,15 @@ class RequestBudgetMiddleware:
 
 
 app.add_middleware(RequestBudgetMiddleware)
+
+
+# One correlation id per request, on every response (#272). Added after the
+# locale and budget middleware, so it runs outside them and the whole request
+# is served under the id.
+app.add_middleware(CorrelationMiddleware)
+
+# Every rule violation, raised by a route or a dependency, is rendered here.
+install_rule_violation_handler(app)
 
 
 @app.exception_handler(RequestValidationError)
