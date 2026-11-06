@@ -12,10 +12,13 @@ from stoa.rule_violation import (
     current_correlation_id,
     normalize_correlation_id,
     register_codes,
+    render_message,
 )
+from stoa.models.user import REGISTRATION_MESSAGE_PARAMS, registration_message
 
 __all__ = [
     "SECURITY_ERROR_REGISTRY",
+    "SecurityClientAction",
     "SecurityDecisionError",
     "SecurityErrorCode",
     "normalize_correlation_id",
@@ -51,57 +54,64 @@ class SecurityErrorCode(StrEnum):
         return SECURITY_ERROR_REGISTRY[self]
 
 
-_C = SecurityErrorCode
+class SecurityClientAction(StrEnum):
+    """What a client does about a security refusal (was `client_error_actions.py`)."""
 
+    REAUTHENTICATE = "reauthenticate"
+    COMPLETE_PARENT_BINDING = "complete_parent_binding"
+    WAIT_FOR_TEACHER_REVIEW = "wait_for_teacher_review"
+    START_ACCOUNT_RECOVERY = "start_account_recovery"
+    CONTACT_SUPPORT = "contact_support"
+    RETRY_LATER = "retry_later"
+    VERIFY_EMAIL = "verify_email"
+    CORRECT_INPUT = "correct_input"
+    REQUEST_NEW_CODE = "request_new_code"
+
+
+_C = SecurityErrorCode
+_A = SecurityClientAction
+
+
+def _outage(action: SecurityClientAction, retry_after_seconds: int) -> RuleContract:
+    """A temporary outage: an idempotent read may be retried twice, after the wait."""
+    return RuleContract(
+        503,
+        action,
+        retryable=True,
+        idempotent_only=True,
+        max_attempts=2,
+        retry_after_seconds=retry_after_seconds,
+    )
+
+
+# Each code's message is the catalog's `error.<code>`
+# (`stoa.services.message_catalog.errors.security`).
+#
 # Retry-After goes with the two temporary outages: the identity provider's (the
 # sign-in routes have always asked for 15 seconds) and the authorization
-# store's (the upload routes have always asked for 30).
+# store's (the upload routes have always asked for 30). An expired session is
+# refreshed once, automatically. Forbidden and hidden resources carry no action:
+# there is nothing for the client to do.
 SECURITY_ERROR_REGISTRY: dict[SecurityErrorCode, RuleContract] = {
-    _C.AUTHENTICATION_REQUIRED: RuleContract(401, "Please sign in to continue."),
-    _C.INVALID_TOKEN: RuleContract(401, "Your session is not valid. Please sign in again."),
-    _C.TOKEN_EXPIRED: RuleContract(401, "Your session has expired. Please sign in again."),
-    _C.IDENTITY_CONFLICT: RuleContract(
-        409, "Contact support and share the reference shown so we can restore your account."
-    ),
-    _C.PARENT_BINDING_REQUIRED: RuleContract(
-        409, "Complete the parent connection before continuing."
-    ),
-    _C.TEACHER_REVIEW_PENDING: RuleContract(409, "Your teacher application is still under review."),
-    _C.ACTION_NOT_ALLOWED: RuleContract(403, "You cannot perform this action."),
-    _C.RESOURCE_NOT_FOUND: RuleContract(404, "The requested resource was not found."),
-    _C.IDENTITY_PROVIDER_UNAVAILABLE: RuleContract(
-        503,
-        "Try again in a few minutes. If the problem continues, contact support and share the reference shown.",
-        retry_after_seconds=15,
-    ),
-    _C.AUTHORIZATION_TEMPORARILY_UNAVAILABLE: RuleContract(
-        503,
-        "This action is temporarily unavailable. Try again later.",
-        retry_after_seconds=30,
-    ),
-    _C.INVALID_CREDENTIALS: RuleContract(
-        401, "Check your email and password, then try signing in again."
-    ),
-    _C.EMAIL_VERIFICATION_REQUIRED: RuleContract(403, "Verify your email, then sign in again."),
-    _C.ACCOUNT_DISABLED: RuleContract(
-        403, "Contact support and share the reference shown to restore access to your account."
-    ),
-    _C.EMAIL_ALREADY_REGISTERED: RuleContract(
-        409, "This email already has an account. Sign in instead, or reset your password."
-    ),
-    _C.PASSWORD_REQUIREMENTS_NOT_MET: RuleContract(
-        400, "Choose a stronger password that meets the listed requirements, then try again."
-    ),
-    _C.VERIFICATION_CODE_INVALID: RuleContract(400, "Check the verification code and try again."),
-    _C.VERIFICATION_CODE_EXPIRED: RuleContract(
-        400, "Request a new verification code, then try again."
-    ),
-    _C.PASSWORD_RESET_REQUEST_INVALID: RuleContract(
-        400, "Request a new password reset code, then try again."
-    ),
-    _C.AUTH_REQUEST_RATE_LIMITED: RuleContract(
-        429, "Wait a few minutes before trying this action again."
-    ),
+    _C.AUTHENTICATION_REQUIRED: RuleContract(401, _A.REAUTHENTICATE),
+    _C.INVALID_TOKEN: RuleContract(401, _A.REAUTHENTICATE),
+    _C.TOKEN_EXPIRED: RuleContract(401, _A.REAUTHENTICATE, retryable=True, max_attempts=1),
+    _C.IDENTITY_CONFLICT: RuleContract(409, _A.START_ACCOUNT_RECOVERY),
+    _C.PARENT_BINDING_REQUIRED: RuleContract(409, _A.COMPLETE_PARENT_BINDING),
+    _C.TEACHER_REVIEW_PENDING: RuleContract(409, _A.WAIT_FOR_TEACHER_REVIEW),
+    _C.ACTION_NOT_ALLOWED: RuleContract(403),
+    _C.RESOURCE_NOT_FOUND: RuleContract(404),
+    _C.IDENTITY_PROVIDER_UNAVAILABLE: _outage(_A.RETRY_LATER, 15),
+    _C.AUTHORIZATION_TEMPORARILY_UNAVAILABLE: _outage(_A.RETRY_LATER, 30),
+    _C.INVALID_CREDENTIALS: RuleContract(401, _A.CORRECT_INPUT),
+    _C.EMAIL_VERIFICATION_REQUIRED: RuleContract(403, _A.VERIFY_EMAIL),
+    _C.ACCOUNT_DISABLED: RuleContract(403, _A.CONTACT_SUPPORT),
+    _C.EMAIL_ALREADY_REGISTERED: RuleContract(409, _A.REAUTHENTICATE),
+    _C.PASSWORD_REQUIREMENTS_NOT_MET: RuleContract(400, _A.CORRECT_INPUT),
+    _C.VERIFICATION_CODE_INVALID: RuleContract(400, _A.CORRECT_INPUT),
+    _C.VERIFICATION_CODE_EXPIRED: RuleContract(400, _A.REQUEST_NEW_CODE),
+    _C.PASSWORD_RESET_REQUEST_INVALID: RuleContract(400, _A.START_ACCOUNT_RECOVERY),
+    _C.AUTH_REQUEST_RATE_LIMITED: RuleContract(429, _A.RETRY_LATER),
 }
 
 register_codes("security", SecurityErrorCode, SECURITY_ERROR_REGISTRY)
@@ -123,11 +133,12 @@ def safe_error_body(
 ) -> dict[str, object]:
     """Return the complete and only public security-error body.
 
-    The id is the caller's, or the request's own; never one made up here.
+    The id is the caller's, or the request's own; never one made up here. The
+    message is in the request's language.
     """
     return {
         "code": code.value,
-        "message": code.contract.safe_message,
+        "message": render_message(code),
         "correlationId": normalize_correlation_id(correlation_id)
         if correlation_id
         else current_correlation_id(),
@@ -176,6 +187,9 @@ def redacted_validation_errors(errors: list[Any]) -> list[dict[str, Any]]:
     fails validation comes back carrying whatever was sent — including the
     plaintext password on the registration route. Only the field location and
     the message survive, which is all a client needs to point at the field.
+
+    The messages a person is expected to read carry a code, and are rendered
+    from the catalog in the request's language; the rest is pydantic's English.
     """
     safe = []
     for error in errors:
@@ -190,22 +204,20 @@ def redacted_validation_errors(errors: list[Any]) -> list[dict[str, Any]]:
         code = validation_message_code(message)
         if code:
             entry["code"] = code
+            entry["msg"] = render_message(code, **REGISTRATION_MESSAGE_PARAMS[code])
         safe.append(entry)
     return safe
 
 
-# The prose above is English. A client that ships other languages needs
-# something stable to translate from, so the messages it is expected to show a
-# person carry a code beside them.
-_VALIDATION_MESSAGE_CODES: tuple[tuple[str, str], ...] = (
-    ("Age must be a whole number", "age_out_of_range"),
-    ("Parent name and parent email are required", "parent_contact_required"),
-)
+# A client that ships other languages needs something stable to translate
+# from, so the messages it is expected to show a person carry a code. The
+# validator raises the catalog's English sentence, which is how it is found.
+VALIDATION_MESSAGE_CODES: tuple[str, ...] = tuple(REGISTRATION_MESSAGE_PARAMS)
 
 
 def validation_message_code(message: str) -> str | None:
     """A stable code for a message a client is expected to render."""
-    for marker, code in _VALIDATION_MESSAGE_CODES:
-        if marker in message:
+    for code in VALIDATION_MESSAGE_CODES:
+        if registration_message(code) in message:
             return code
     return None

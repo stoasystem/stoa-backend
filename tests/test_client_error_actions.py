@@ -1,95 +1,84 @@
+"""docs/security/client-error-actions.json is the code registry, written out (#273)."""
+
 from __future__ import annotations
 
-import random
+import json
+from pathlib import Path
 
 import pytest
 
-from stoa.security.client_error_actions import (
-    CLIENT_ERROR_ACTIONS,
-    ClientAction,
-    client_error_actions_document,
-    interpret_client_error,
-    render_client_error_actions,
-)
-from stoa.security.errors import SecurityErrorCode, safe_error_response
+from scripts import generate_client_error_actions as generator
+from stoa.rule_violation import catalog_key, registered_codes
+from stoa.security.errors import SecurityClientAction, SecurityErrorCode, safe_error_response
+
+_DOCUMENT = Path("docs/security/client-error-actions.json")
 
 
-def test_client_action_contract_exhaustively_covers_error_enum():
-    assert set(CLIENT_ERROR_ACTIONS) == set(SecurityErrorCode)
-    assert all(len(mapping.http_statuses) == 1 for mapping in CLIENT_ERROR_ACTIONS.values())
-    assert all(mapping.safe_copy and mapping.message_key for mapping in CLIENT_ERROR_ACTIONS.values())
+def test_generated_json_is_current_and_deterministic():
+    rendered = generator.render()
+    assert rendered == generator.render()
+    assert rendered == _DOCUMENT.read_text(encoding="utf-8")
 
 
-def test_client_action_contract_routes_every_conflict_to_recovery():
-    for code, mapping in CLIENT_ERROR_ACTIONS.items():
-        if 409 in mapping.http_statuses:
-            assert mapping.action in {
-                ClientAction.COMPLETE_PARENT_BINDING,
-                ClientAction.WAIT_FOR_TEACHER_REVIEW,
-                ClientAction.START_ACCOUNT_RECOVERY,
-                ClientAction.REAUTHENTICATE,
-            }
+def test_every_registered_code_is_listed_with_its_contract():
+    errors = generator.document()["errors"]
+    registry = registered_codes()
+    assert set(errors) == set(registry)
+    for value, (domain, code) in registry.items():
+        entry = errors[value]
+        contract = code.contract
+        assert entry["domain"] == domain
+        assert entry["http_status"] == contract.http_status
+        assert entry["message_key"] == catalog_key(code) == f"error.{value}"
+        assert entry["retry"]["retryable"] is contract.retryable
+        assert entry["retry"]["retry_after_seconds"] == contract.retry_after_seconds
 
 
-def test_invalid_password_reset_starts_recovery_without_replaying_write():
-    mapping = CLIENT_ERROR_ACTIONS[SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID]
-    decision = interpret_client_error(
-        SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID,
-        method="POST",
-        idempotency_key="must-not-enable-replay",
-    )
-    assert mapping.action is ClientAction.START_ACCOUNT_RECOVERY
-    assert decision.action is ClientAction.START_ACCOUNT_RECOVERY
-    assert decision.automatically_retry is False
-    assert decision.allow_user_resumption is False
+def test_generated_json_names_no_internals_and_no_sentences():
+    rendered = generator.render().lower()
+    for forbidden in ("cognito", "dynamodb", "policy_version", "resource exists", "group"):
+        assert forbidden not in rendered
+    # The message is the catalog's; the contract document carries only its key.
+    assert "sign in" not in rendered
 
 
-def test_client_action_refreshes_expired_token_exactly_once():
-    first = interpret_client_error(SecurityErrorCode.TOKEN_EXPIRED, method="GET")
-    second = interpret_client_error(
-        SecurityErrorCode.TOKEN_EXPIRED, method="GET", refresh_attempts=1
-    )
-    assert first.automatically_retry is True and first.consume_refresh_attempt is True
-    assert second.automatically_retry is False and second.action is ClientAction.REAUTHENTICATE
+def test_every_conflict_is_routed_to_recovery():
+    recovering = {
+        SecurityClientAction.COMPLETE_PARENT_BINDING,
+        SecurityClientAction.WAIT_FOR_TEACHER_REVIEW,
+        SecurityClientAction.START_ACCOUNT_RECOVERY,
+        SecurityClientAction.REAUTHENTICATE,
+    }
+    for code in SecurityErrorCode:
+        if code.contract.http_status == 409:
+            assert code.contract.action in recovering, code
+
+
+def test_expired_session_is_refreshed_once_and_nothing_else_retries_unasked():
+    expired = SecurityErrorCode.TOKEN_EXPIRED.contract
+    assert expired.retryable and expired.max_attempts == 1 and not expired.idempotent_only
+    for code in SecurityErrorCode:
+        contract = code.contract
+        if code is SecurityErrorCode.TOKEN_EXPIRED:
+            continue
+        if contract.retryable:
+            # Only an outage, only an idempotent read, only after the wait.
+            assert contract.http_status == 503, code
+            assert contract.idempotent_only and contract.retry_after_seconds, code
 
 
 @pytest.mark.parametrize(
     "code", [SecurityErrorCode.ACTION_NOT_ALLOWED, SecurityErrorCode.RESOURCE_NOT_FOUND]
 )
-def test_client_action_never_retries_forbidden_or_hidden(code):
-    decision = interpret_client_error(code, method="GET", retry_after="10")
-    assert decision.automatically_retry is False
+def test_forbidden_or_hidden_is_never_retried_and_has_nothing_to_do(code):
+    assert code.contract.retryable is False
+    assert code.contract.action is None
 
 
-def test_client_action_retry_is_bounded_to_idempotent_reads():
-    read = interpret_client_error(
-        SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
-        method="GET",
-        retry_after="20",
-        rng=random.Random(7),
-    )
-    assert read.automatically_retry is True
-    assert read.retry_delay_seconds is not None
-    assert 16 <= read.retry_delay_seconds <= 24
-
-    write = interpret_client_error(
-        SecurityErrorCode.AUTHORIZATION_TEMPORARILY_UNAVAILABLE,
-        method="POST",
-        retry_after="20",
-        idempotency_key="explicit-resume-key",
-    )
-    assert write.automatically_retry is False
-    assert write.allow_user_resumption is True
-
-
-@pytest.mark.parametrize("retry_after", [None, "0", "121", "tomorrow"])
-def test_client_action_rejects_invalid_retry_after(retry_after):
-    decision = interpret_client_error(
-        SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE,
-        method="GET",
-        retry_after=retry_after,
-    )
-    assert decision.automatically_retry is False
+def test_password_reset_refusal_starts_recovery_without_replaying_the_write():
+    contract = SecurityErrorCode.PASSWORD_RESET_REQUEST_INVALID.contract
+    assert contract.action is SecurityClientAction.START_ACCOUNT_RECOVERY
+    assert contract.retryable is False
 
 
 def test_safe_error_retry_header_semantics_and_body_shape():
@@ -100,21 +89,9 @@ def test_safe_error_retry_header_semantics_and_body_shape():
         provider_payload="provider-canary",
     )
     assert response.headers == {"Retry-After": "15"}
-    assert response.body == {
-        "code": "identity_provider_unavailable",
-        "message": "Try again in a few minutes. If the problem continues, contact support and share the reference shown.",
-        "correlationId": "corr-503",
-    }
+    assert set(response.body) == {"code", "message", "correlationId"}
+    assert response.body["code"] == "identity_provider_unavailable"
+    assert response.body["correlationId"] == "corr-503"
+    assert "provider-canary" not in json.dumps(response.body)
     with pytest.raises(ValueError):
         safe_error_response(SecurityErrorCode.ACTION_NOT_ALLOWED, retry_after_seconds=5)
-
-
-def test_client_action_generated_json_is_deterministic_and_safe():
-    expected = render_client_error_actions()
-    assert expected == render_client_error_actions()
-    assert expected == open("docs/security/client-error-actions.json", encoding="utf-8").read()
-    lowered = expected.lower()
-    for forbidden in ("cognito", "dynamodb", "policy_version", "resource exists", "group"):
-        assert forbidden not in lowered
-    ownership = client_error_actions_document()["ownership"]
-    assert "Phase 478" in ownership["rendering"]

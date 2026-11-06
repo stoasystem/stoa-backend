@@ -16,6 +16,7 @@ from stoa.rule_violation import (
     RuleViolation,
     current_correlation_id,
     register_codes,
+    render_message,
 )
 
 logger = logging.getLogger(__name__)
@@ -59,46 +60,41 @@ AttachmentErrorContract = RuleContract
 _NAMES_CONVERSATION = frozenset({"conversationId"})
 
 
+# Each code's message is the catalog's `error.<code>`
+# (`stoa.services.message_catalog.errors.attachment`).
 ATTACHMENT_ERROR_REGISTRY: dict[AttachmentErrorCode, RuleContract] = {
     AttachmentErrorCode.ATTACHMENT_IN_USE: RuleContract(
         409,
-        "Remove this attachment from its conversation or question first.",
         AttachmentClientAction.REMOVE_FROM_RESOURCE,
         public_fields=_NAMES_CONVERSATION,
     ),
     AttachmentErrorCode.UPLOAD_NOT_FOUND: RuleContract(
         404,
-        "Select or upload the file again.",
         AttachmentClientAction.SELECT_FILE,
         public_fields=_NAMES_CONVERSATION,
     ),
     AttachmentErrorCode.UPLOAD_EXPIRED: RuleContract(
         409,
-        "This upload expired. Select the file again.",
         AttachmentClientAction.SELECT_FILE,
         public_fields=_NAMES_CONVERSATION,
     ),
     AttachmentErrorCode.UPLOAD_TOO_LARGE: RuleContract(
         422,
-        "This file is too large. Choose a smaller file.",
         AttachmentClientAction.REDUCE_SIZE,
         public_fields=_NAMES_CONVERSATION,
     ),
     AttachmentErrorCode.UPLOAD_TYPE_NOT_SUPPORTED: RuleContract(
         422,
-        "This file type is not supported. Choose another file.",
         AttachmentClientAction.SELECT_FILE,
         public_fields=_NAMES_CONVERSATION,
     ),
     AttachmentErrorCode.UPLOAD_CONTENT_MISMATCH: RuleContract(
         422,
-        "This file does not match its type. Select the file again.",
         AttachmentClientAction.SELECT_FILE,
         public_fields=_NAMES_CONVERSATION,
     ),
     AttachmentErrorCode.UPLOAD_INVALID: RuleContract(
         422,
-        "This file may be damaged. Select another file.",
         AttachmentClientAction.SELECT_FILE,
         public_fields=_NAMES_CONVERSATION,
     ),
@@ -106,25 +102,21 @@ ATTACHMENT_ERROR_REGISTRY: dict[AttachmentErrorCode, RuleContract] = {
     # its own copy for this code and offers another image or plain text.
     AttachmentErrorCode.UPLOAD_CONTENT_BLOCKED: RuleContract(
         422,
-        "This image cannot be sent. Choose another image or describe the problem in words.",
         AttachmentClientAction.SELECT_FILE,
         public_fields=_NAMES_CONVERSATION,
     ),
     AttachmentErrorCode.UPLOAD_CHUNK_CONFLICT: RuleContract(
         409,
-        "This upload chunk conflicts with an earlier chunk. Select the file again.",
         AttachmentClientAction.SELECT_FILE,
         public_fields=_NAMES_CONVERSATION,
     ),
     AttachmentErrorCode.STORAGE_QUOTA_EXCEEDED: RuleContract(
         409,
-        "Storage is full. Delete attachments or upgrade your plan.",
         AttachmentClientAction.DELETE_OR_UPGRADE,
         public_fields=_NAMES_CONVERSATION,
     ),
     AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE: RuleContract(
         503,
-        "Uploads are temporarily unavailable. Try again later.",
         AttachmentClientAction.RETRY_LATER,
         retryable=True,
         idempotent_only=True,
@@ -137,12 +129,10 @@ ATTACHMENT_ERROR_REGISTRY: dict[AttachmentErrorCode, RuleContract] = {
     # nothing; the phone page asks for a fresh code from the computer.
     AttachmentErrorCode.UPLOAD_CODE_INVALID: RuleContract(
         404,
-        "This code is no longer valid. Show a new code on your computer.",
         AttachmentClientAction.NEW_UPLOAD_CODE,
     ),
     AttachmentErrorCode.UPLOAD_CODE_RATE_LIMITED: RuleContract(
         429,
-        "Too many attempts. Try again later.",
         AttachmentClientAction.RETRY_LATER,
         # The configured window (`upload_code_window_seconds`), given by the
         # raise site; this is its default.
@@ -164,10 +154,9 @@ def safe_attachment_error_body(
     **_ignored_sensitive_detail: Any,
 ) -> dict[str, str]:
     """Project only stable public fields; correlation IDs originate on the server."""
-    contract = code.contract
     return {
         "code": code.value,
-        "message": contract.safe_message,
+        "message": render_message(code),
         "correlationId": correlation_id or current_correlation_id(),
     }
 

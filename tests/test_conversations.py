@@ -14,6 +14,7 @@ from audit_helpers import MemoryAuthorizationAuditSink
 from fakes.dynamodb import FakeTable as _FakeTable
 from fakes.dynamodb import as_stored as _as_stored
 from fakes.learning_session import patch_session_table, seed_conversation, seed_message
+from stoa.rule_violation import render_message
 from stoa.db.repositories import attachment_repo, question_repo, user_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.config import Settings
@@ -1146,8 +1147,9 @@ def test_conversation_dependency_cancellation_stable_error_has_zero_message_ai_e
 
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "upload_service_unavailable"
-    assert response.json()["detail"]["message"] == (
-        "Uploads are temporarily unavailable. Try again later."
+    # No Accept-Language: the catalog's German.
+    assert response.json()["detail"]["message"] == render_message(
+        "upload_service_unavailable", "de"
     )
     assert effects == {}
     assert model.calls == []

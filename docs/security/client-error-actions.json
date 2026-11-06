@@ -2,331 +2,578 @@
   "errors": {
     "account_disabled": {
       "action": "contact_support",
-      "http_statuses": [
-        403
-      ],
-      "message_key": "auth.account_disabled",
+      "domain": "security",
+      "http_status": 403,
+      "message_key": "error.account_disabled",
+      "public_fields": [],
       "retry": {
-        "automatic": false,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 0,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "Contact support and share the reference shown to restore access to your account.",
-      "show_correlation_id": true,
-      "support_guidance": "Share the correlation ID with support."
+        "retry_after_seconds": null,
+        "retryable": false
+      }
     },
     "action_not_allowed": {
-      "action": "none",
-      "http_statuses": [
-        403
-      ],
-      "message_key": "security.action_unavailable",
+      "action": null,
+      "domain": "security",
+      "http_status": 403,
+      "message_key": "error.action_not_allowed",
+      "public_fields": [],
       "retry": {
-        "automatic": false,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 0,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "This action is not available for your account.",
-      "show_correlation_id": false,
-      "support_guidance": "Do not display internal authorization details."
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "allowance_exhausted": {
+      "action": "retry_later",
+      "domain": "ask_question",
+      "http_status": 429,
+      "message_key": "error.allowance_exhausted",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "allowance_unavailable": {
+      "action": "retry_later",
+      "domain": "ask_question",
+      "http_status": 503,
+      "message_key": "error.allowance_unavailable",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "attachment_in_use": {
+      "action": "remove_from_resource",
+      "domain": "attachment",
+      "http_status": 409,
+      "message_key": "error.attachment_in_use",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
     },
     "auth_request_rate_limited": {
       "action": "retry_later",
-      "http_statuses": [
-        429
-      ],
-      "message_key": "auth.request_rate_limited",
+      "domain": "security",
+      "http_status": 429,
+      "message_key": "error.auth_request_rate_limited",
+      "public_fields": [],
       "retry": {
-        "automatic": false,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 0,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "Wait a few minutes before trying this action again.",
-      "show_correlation_id": false,
-      "support_guidance": "Do not display internal authorization details."
+        "retry_after_seconds": null,
+        "retryable": false
+      }
     },
     "authentication_required": {
       "action": "reauthenticate",
-      "http_statuses": [
-        401
-      ],
-      "message_key": "security.sign_in_required",
+      "domain": "security",
+      "http_status": 401,
+      "message_key": "error.authentication_required",
+      "public_fields": [],
       "retry": {
-        "automatic": false,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 0,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "Please sign in to continue.",
-      "show_correlation_id": false,
-      "support_guidance": "Do not display internal authorization details."
+        "retry_after_seconds": null,
+        "retryable": false
+      }
     },
     "authorization_temporarily_unavailable": {
       "action": "retry_later",
-      "http_statuses": [
-        503
-      ],
-      "message_key": "security.action_temporarily_unavailable",
+      "domain": "security",
+      "http_status": 503,
+      "message_key": "error.authorization_temporarily_unavailable",
+      "public_fields": [],
       "retry": {
-        "automatic": true,
-        "idempotent_reads_only": true,
+        "idempotent_only": true,
         "max_attempts": 2,
-        "requires_retry_after": true,
-        "user_resumption_with_idempotency_key": true
-      },
-      "safe_copy": "This action is temporarily unavailable. Try again shortly.",
-      "show_correlation_id": true,
-      "support_guidance": "Share the correlation ID with support."
+        "retry_after_seconds": 30,
+        "retryable": true
+      }
     },
     "email_already_registered": {
       "action": "reauthenticate",
-      "http_statuses": [
-        409
-      ],
-      "message_key": "auth.email_already_registered",
+      "domain": "security",
+      "http_status": 409,
+      "message_key": "error.email_already_registered",
+      "public_fields": [],
       "retry": {
-        "automatic": false,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 0,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "This email already has an account. Sign in instead, or reset your password.",
-      "show_correlation_id": false,
-      "support_guidance": "Do not display internal authorization details."
+        "retry_after_seconds": null,
+        "retryable": false
+      }
     },
     "email_verification_required": {
       "action": "verify_email",
-      "http_statuses": [
-        403
-      ],
-      "message_key": "auth.email_verification_required",
+      "domain": "security",
+      "http_status": 403,
+      "message_key": "error.email_verification_required",
+      "public_fields": [],
       "retry": {
-        "automatic": false,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 0,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "Verify your email, then sign in again.",
-      "show_correlation_id": false,
-      "support_guidance": "Do not display internal authorization details."
+        "retry_after_seconds": null,
+        "retryable": false
+      }
     },
     "identity_conflict": {
       "action": "start_account_recovery",
-      "http_statuses": [
-        409
-      ],
-      "message_key": "security.account_recovery_required",
+      "domain": "security",
+      "http_status": 409,
+      "message_key": "error.identity_conflict",
+      "public_fields": [],
       "retry": {
-        "automatic": false,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 0,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "Contact support and share the reference shown so we can restore your account.",
-      "show_correlation_id": true,
-      "support_guidance": "Share the correlation ID with support."
+        "retry_after_seconds": null,
+        "retryable": false
+      }
     },
     "identity_provider_unavailable": {
       "action": "retry_later",
-      "http_statuses": [
-        503
-      ],
-      "message_key": "security.sign_in_temporarily_unavailable",
+      "domain": "security",
+      "http_status": 503,
+      "message_key": "error.identity_provider_unavailable",
+      "public_fields": [],
       "retry": {
-        "automatic": true,
-        "idempotent_reads_only": true,
+        "idempotent_only": true,
         "max_attempts": 2,
-        "requires_retry_after": true,
-        "user_resumption_with_idempotency_key": true
-      },
-      "safe_copy": "Try again in a few minutes. If the problem continues, contact support and share the reference shown.",
-      "show_correlation_id": true,
-      "support_guidance": "Share the correlation ID with support."
+        "retry_after_seconds": 15,
+        "retryable": true
+      }
     },
     "invalid_credentials": {
       "action": "correct_input",
-      "http_statuses": [
-        401
-      ],
-      "message_key": "auth.invalid_credentials",
+      "domain": "security",
+      "http_status": 401,
+      "message_key": "error.invalid_credentials",
+      "public_fields": [],
       "retry": {
-        "automatic": false,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 0,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "Check your email and password, then try signing in again.",
-      "show_correlation_id": false,
-      "support_guidance": "Do not display internal authorization details."
+        "retry_after_seconds": null,
+        "retryable": false
+      }
     },
     "invalid_token": {
       "action": "reauthenticate",
-      "http_statuses": [
-        401
-      ],
-      "message_key": "security.session_invalid",
+      "domain": "security",
+      "http_status": 401,
+      "message_key": "error.invalid_token",
+      "public_fields": [],
       "retry": {
-        "automatic": false,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 0,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "Your session is no longer valid. Please sign in again.",
-      "show_correlation_id": false,
-      "support_guidance": "Do not display internal authorization details."
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "message_command_expired": {
+      "action": "retry_later",
+      "domain": "ask_question",
+      "http_status": 409,
+      "message_key": "error.message_command_expired",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "message_command_not_found": {
+      "action": "retry_later",
+      "domain": "ask_question",
+      "http_status": 409,
+      "message_key": "error.message_command_not_found",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "message_daily_limit": {
+      "action": "retry_later",
+      "domain": "ask_question",
+      "http_status": 429,
+      "message_key": "error.message_daily_limit",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "message_failed": {
+      "action": "retry_later",
+      "domain": "ask_question",
+      "http_status": 409,
+      "message_key": "error.message_failed",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "message_idempotency_conflict": {
+      "action": "select_file",
+      "domain": "ask_question",
+      "http_status": 409,
+      "message_key": "error.message_idempotency_conflict",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "message_in_progress": {
+      "action": "retry_later",
+      "domain": "ask_question",
+      "http_status": 409,
+      "message_key": "error.message_in_progress",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": true,
+        "max_attempts": 20,
+        "retry_after_seconds": null,
+        "retryable": true
+      }
     },
     "parent_binding_required": {
       "action": "complete_parent_binding",
-      "http_statuses": [
-        409
-      ],
-      "message_key": "security.parent_connection_required",
+      "domain": "security",
+      "http_status": 409,
+      "message_key": "error.parent_binding_required",
+      "public_fields": [],
       "retry": {
-        "automatic": false,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 0,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "Complete the parent connection before continuing.",
-      "show_correlation_id": false,
-      "support_guidance": "Do not display internal authorization details."
+        "retry_after_seconds": null,
+        "retryable": false
+      }
     },
     "password_requirements_not_met": {
       "action": "correct_input",
-      "http_statuses": [
-        400
-      ],
-      "message_key": "auth.password_requirements_not_met",
+      "domain": "security",
+      "http_status": 400,
+      "message_key": "error.password_requirements_not_met",
+      "public_fields": [],
       "retry": {
-        "automatic": false,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 0,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "Choose a stronger password that meets the listed requirements, then try again.",
-      "show_correlation_id": false,
-      "support_guidance": "Do not display internal authorization details."
+        "retry_after_seconds": null,
+        "retryable": false
+      }
     },
     "password_reset_request_invalid": {
       "action": "start_account_recovery",
-      "http_statuses": [
-        400
-      ],
-      "message_key": "auth.password_reset_request_invalid",
+      "domain": "security",
+      "http_status": 400,
+      "message_key": "error.password_reset_request_invalid",
+      "public_fields": [],
       "retry": {
-        "automatic": false,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 0,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "Request a new password reset code, then try again.",
-      "show_correlation_id": false,
-      "support_guidance": "Do not display internal authorization details."
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "provider_token_count_unavailable": {
+      "action": "retry_later",
+      "domain": "ask_question",
+      "http_status": 503,
+      "message_key": "error.provider_token_count_unavailable",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
     },
     "resource_not_found": {
-      "action": "none",
-      "http_statuses": [
-        404
-      ],
-      "message_key": "security.resource_unavailable",
+      "action": null,
+      "domain": "security",
+      "http_status": 404,
+      "message_key": "error.resource_not_found",
+      "public_fields": [],
       "retry": {
-        "automatic": false,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 0,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "The requested item is unavailable.",
-      "show_correlation_id": false,
-      "support_guidance": "Do not display internal authorization details."
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "storage_quota_exceeded": {
+      "action": "delete_or_upgrade",
+      "domain": "attachment",
+      "http_status": 409,
+      "message_key": "error.storage_quota_exceeded",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
     },
     "teacher_review_pending": {
       "action": "wait_for_teacher_review",
-      "http_statuses": [
-        409
-      ],
-      "message_key": "security.teacher_review_pending",
+      "domain": "security",
+      "http_status": 409,
+      "message_key": "error.teacher_review_pending",
+      "public_fields": [],
       "retry": {
-        "automatic": false,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 0,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "Your teacher application is still under review.",
-      "show_correlation_id": false,
-      "support_guidance": "Do not display internal authorization details."
+        "retry_after_seconds": null,
+        "retryable": false
+      }
     },
     "token_expired": {
       "action": "reauthenticate",
-      "http_statuses": [
-        401
-      ],
-      "message_key": "security.session_expired",
+      "domain": "security",
+      "http_status": 401,
+      "message_key": "error.token_expired",
+      "public_fields": [],
       "retry": {
-        "automatic": true,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 1,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "Your session expired. We will try once to restore it.",
-      "show_correlation_id": false,
-      "support_guidance": "Do not display internal authorization details."
+        "retry_after_seconds": null,
+        "retryable": true
+      }
+    },
+    "upload_chunk_conflict": {
+      "action": "select_file",
+      "domain": "attachment",
+      "http_status": 409,
+      "message_key": "error.upload_chunk_conflict",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "upload_code_invalid": {
+      "action": "new_upload_code",
+      "domain": "attachment",
+      "http_status": 404,
+      "message_key": "error.upload_code_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "upload_code_rate_limited": {
+      "action": "retry_later",
+      "domain": "attachment",
+      "http_status": 429,
+      "message_key": "error.upload_code_rate_limited",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": 600,
+        "retryable": false
+      }
+    },
+    "upload_content_blocked": {
+      "action": "select_file",
+      "domain": "attachment",
+      "http_status": 422,
+      "message_key": "error.upload_content_blocked",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "upload_content_mismatch": {
+      "action": "select_file",
+      "domain": "attachment",
+      "http_status": 422,
+      "message_key": "error.upload_content_mismatch",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "upload_expired": {
+      "action": "select_file",
+      "domain": "attachment",
+      "http_status": 409,
+      "message_key": "error.upload_expired",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "upload_invalid": {
+      "action": "select_file",
+      "domain": "attachment",
+      "http_status": 422,
+      "message_key": "error.upload_invalid",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "upload_not_found": {
+      "action": "select_file",
+      "domain": "attachment",
+      "http_status": 404,
+      "message_key": "error.upload_not_found",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "upload_service_unavailable": {
+      "action": "retry_later",
+      "domain": "attachment",
+      "http_status": 503,
+      "message_key": "error.upload_service_unavailable",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": true,
+        "max_attempts": 2,
+        "retry_after_seconds": 30,
+        "retryable": true
+      }
+    },
+    "upload_too_large": {
+      "action": "reduce_size",
+      "domain": "attachment",
+      "http_status": 422,
+      "message_key": "error.upload_too_large",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "upload_type_not_supported": {
+      "action": "select_file",
+      "domain": "attachment",
+      "http_status": 422,
+      "message_key": "error.upload_type_not_supported",
+      "public_fields": [
+        "conversationId"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
     },
     "verification_code_expired": {
       "action": "request_new_code",
-      "http_statuses": [
-        400
-      ],
-      "message_key": "auth.verification_code_expired",
+      "domain": "security",
+      "http_status": 400,
+      "message_key": "error.verification_code_expired",
+      "public_fields": [],
       "retry": {
-        "automatic": false,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 0,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "Request a new verification code, then try again.",
-      "show_correlation_id": false,
-      "support_guidance": "Do not display internal authorization details."
+        "retry_after_seconds": null,
+        "retryable": false
+      }
     },
     "verification_code_invalid": {
       "action": "correct_input",
-      "http_statuses": [
-        400
-      ],
-      "message_key": "auth.verification_code_invalid",
+      "domain": "security",
+      "http_status": 400,
+      "message_key": "error.verification_code_invalid",
+      "public_fields": [],
       "retry": {
-        "automatic": false,
-        "idempotent_reads_only": false,
+        "idempotent_only": false,
         "max_attempts": 0,
-        "requires_retry_after": false,
-        "user_resumption_with_idempotency_key": false
-      },
-      "safe_copy": "Check the verification code and try again.",
-      "show_correlation_id": false,
-      "support_guidance": "Do not display internal authorization details."
+        "retry_after_seconds": null,
+        "retryable": false
+      }
     }
   },
-  "ownership": {
-    "contract": "Phase 472 generates and tests this shared behavior contract.",
-    "rendering": "Phase 478 owns web and mobile rendering and application integration."
-  },
-  "schemaVersion": "472.2"
+  "schemaVersion": "211.2",
+  "source": "Generated from the rule violation code registry (stoa.rule_violation) by scripts/generate_client_error_actions.py; do not edit by hand."
 }

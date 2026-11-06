@@ -7,10 +7,11 @@ used to make from a domain error to an `HTTPException`.
 
 Each domain keeps its own codes (`SecurityErrorCode`, `AttachmentErrorCode`,
 `AskQuestionErrorCode`, ...) and gives each one a `RuleContract`: the HTTP
-status, the message, what a client should do about it, whether and when it may
-retry, and which public fields its body may carry. The domain registers its
-codes here, and no string may name two codes, whichever domains they are in:
-the client reads the code alone.
+status, what a client should do about it, whether and when it may retry, and
+which public fields its body may carry. Its message is not in the contract but
+in the message catalog, under `error.<code>`, in four languages. The domain
+registers its codes here, and no string may name two codes, whichever domains
+they are in: the client reads the code alone.
 
 The body is always `{"detail": {"code", "message", "correlationId", ...}}`,
 with the public fields the contract declares after those three. `params` fill
@@ -18,8 +19,9 @@ the message and never reach the body. `X-Correlation-ID` is always set, and is
 the same id the request carried throughout (`CorrelationMiddleware`); a
 `Retry-After` header is set only when the contract carries a retry time.
 
-The message is still the contract's English sentence. Rendering it from the
-message catalog in the reader's language is #273.
+`message` is rendered in the language the request asked for
+(`Accept-Language`), falling back to the catalog's default, German (#273). A
+client that translates by code ignores it; the English web client shows it.
 """
 
 from __future__ import annotations
@@ -33,6 +35,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol, Self
 from uuid import uuid4
+
+from stoa.services import locale_service, message_catalog
 
 if TYPE_CHECKING:
     from starlette.requests import Request
@@ -54,8 +58,9 @@ _RETRY_AFTER_BOUNDS = (1, 86_400)
 class RuleContract:
     """What a client is told about one code.
 
-    Generalised from the upload subsystem's `AttachmentErrorContract`, whose
-    positional order it keeps: status, message, client action, then retry.
+    Generalised from the upload subsystem's `AttachmentErrorContract`: status,
+    client action, then retry. The message it once carried is the catalog's
+    `error.<code>` (#273); `catalog_key` names it.
 
     `retry_after_seconds` sets the `Retry-After` header; a raise site may give
     a different time for the one instance (`RuleViolation.retrying_after`) but
@@ -64,7 +69,6 @@ class RuleContract:
     """
 
     http_status: int
-    safe_message: str
     action: str | None = None
     retryable: bool = False
     idempotent_only: bool = False
@@ -106,6 +110,14 @@ class RuleCode(Protocol):
 def catalog_key(code: RuleCode | str) -> str:
     """The message catalog key for a code (`error.<code>`)."""
     return f"error.{code if isinstance(code, str) else code.value}"
+
+
+def render_message(
+    code: RuleCode | str, locale: str | None = None, **params: object
+) -> str:
+    """A code's message in `locale`, else the request's language, else German."""
+    resolved = locale or locale_service.request_locale() or locale_service.DEFAULT_LOCALE
+    return message_catalog.text(catalog_key(code), resolved, **params)
 
 
 # ── Code registry ────────────────────────────────────────────────────────────
@@ -311,14 +323,15 @@ class RuleViolation(Exception):
         self.__dict__["_rule_retry_after"] = seconds
         return self
 
-    def message(self) -> str:
-        return self.contract.safe_message
+    def message(self, locale: str | None = None) -> str:
+        """The code's message, filled with `params`, in `locale` or the request's."""
+        return render_message(self.code, locale, **self.params)
 
-    def public_body(self) -> dict[str, object]:
+    def public_body(self, locale: str | None = None) -> dict[str, object]:
         """The `detail` this violation is sent as."""
         body: dict[str, object] = {
             "code": self.code.value,
-            "message": self.message(),
+            "message": self.message(locale),
             "correlationId": normalize_correlation_id(self.correlation_id)
             if self.correlation_id
             else current_correlation_id(),
@@ -337,7 +350,11 @@ class RuleViolation(Exception):
         """Record the violation as it leaves; a domain may say more."""
 
 
-def violation_response(violation: RuleViolation, correlation_id: str | None = None) -> JSONResponse:
+def violation_response(
+    violation: RuleViolation,
+    correlation_id: str | None = None,
+    locale: str | None = None,
+) -> JSONResponse:
     """Render a violation: the one place a rule's refusal becomes HTTP."""
     from starlette.responses import JSONResponse
 
@@ -345,7 +362,7 @@ def violation_response(violation: RuleViolation, correlation_id: str | None = No
         violation.correlation_id = correlation_id
     elif not violation.correlation_id:
         violation.correlation_id = current_correlation_id()
-    body = violation.public_body()
+    body = violation.public_body(locale)
     return JSONResponse(
         status_code=violation.status_code,
         content={"detail": body},
@@ -360,7 +377,18 @@ async def handle_rule_violation(request: Request, exc: Exception) -> JSONRespons
     exc.correlation_id = correlation_id
     route = getattr(request.scope.get("route"), "path", None) or request.url.path
     exc.log(route)
-    return violation_response(exc, correlation_id)
+    return violation_response(exc, correlation_id, _request_locale(request))
+
+
+def _request_locale(request: Request) -> str | None:
+    """The language the request asked for.
+
+    `RequestLocaleMiddleware` binds it for the application; a test's bare app
+    has no such middleware, so the header is read here as well.
+    """
+    return locale_service.locale_from_accept_language(
+        request.headers.get("accept-language")
+    ) or locale_service.request_locale()
 
 
 def install_rule_violation_handler(app) -> None:

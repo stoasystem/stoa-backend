@@ -6,11 +6,13 @@ student reading German was told `No teacher was available` under the heading
 `Mitteilungen`, and a teacher was shown `Teacher help requested.` glued onto
 the front of the student's own German question (#124).
 
-One table, so there is one place to look and one place to add a locale. What
-is **not** here, on purpose:
+One table, so there is one place to look and one place to add a locale. The
+message a rule violation is sent with is here too, under `error.<code>`, one
+file per domain in `errors/` (#211); `stoa.rule_violation` renders it in the
+language the request asked for. What is **not** here, on purpose:
 
-* **Error details** (`HTTPException(detail=...)`). Those are read by clients
-  and logs, not by students; they stay in one language throughout the repo.
+* **Internal error details**: what a log line or an `internal_detail` says.
+  Those are read by operators, not by students, and stay in English.
 * **Content**, as opposed to copy: a student's question, the assistant's
   answer, a knowledge-point title. Those are already in whatever language they
   were written in, and `curriculum_translations` handles the titles.
@@ -27,8 +29,9 @@ from __future__ import annotations
 from typing import Any
 
 from stoa.services import locale_service
+from stoa.services.message_catalog.errors import TEXT as _ERROR_TEXT
 
-TEXT: dict[str, dict[str, str]] = {
+_COPY: dict[str, dict[str, str]] = {
     # ── notifications ────────────────────────────────────────────────────
     "teacher_takeover.question.title": {
         "de": "Eine Lehrperson ist deiner Frage beigetreten",
@@ -437,6 +440,13 @@ TEXT: dict[str, dict[str, str]] = {
         "it": "scuola media (anno non indicato)",
     },
 }
+
+
+_SHARED = set(_COPY) & set(_ERROR_TEXT)
+if _SHARED:
+    raise RuntimeError(f"catalog keys defined twice: {sorted(_SHARED)}")
+
+TEXT: dict[str, dict[str, str]] = {**_COPY, **_ERROR_TEXT}
 
 
 def text(key: str, locale: str, **values: Any) -> str:

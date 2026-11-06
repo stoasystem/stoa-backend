@@ -17,6 +17,7 @@ from stoa.security.authorization import (
     ResourceType,
     operator_capability_decision,
 )
+from stoa.rule_violation import render_message
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode, safe_error_body
 from stoa.security.events import contains_canary, project_security_event
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
@@ -140,10 +141,7 @@ def test_safe_error_contract_has_exact_fields_and_drops_internal_detail():
     assert error.status_code == 503
     assert error.public_body() == {
         "code": "identity_provider_unavailable",
-        "message": (
-            "Try again in a few minutes. If the problem continues, contact support "
-            "and share the reference shown."
-        ),
+        "message": render_message(SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE, "de"),
         "correlationId": "corr-123",
     }
     assert canary not in repr(error.public_body())

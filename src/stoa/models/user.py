@@ -6,6 +6,7 @@ from pydantic import BaseModel, EmailStr, model_validator
 from datetime import date, datetime
 
 from stoa.config import get_settings
+from stoa.services import message_catalog
 
 
 class UserRole(str, Enum):
@@ -42,12 +43,22 @@ MAX_REGISTRATION_AGE = 120
 # Single source of truth for the minor/adult split used by registration rules.
 ADULT_AGE = 18
 
-_AGE_MESSAGE = (
-    f"Age must be a whole number between {MIN_REGISTRATION_AGE} and {MAX_REGISTRATION_AGE}."
-)
-_PARENT_CONTACT_MESSAGE = (
-    f"Parent name and parent email are required for students under {ADULT_AGE}."
-)
+# The two registration refusals a person is shown, with what fills them. The
+# validator raises the English sentence; the 422 handler finds the code by it
+# and renders the catalog's `error.<code>` in the request's language
+# (`stoa.security.errors.redacted_validation_errors`).
+REGISTRATION_MESSAGE_PARAMS: dict[str, dict[str, int]] = {
+    "age_out_of_range": {"min_age": MIN_REGISTRATION_AGE, "max_age": MAX_REGISTRATION_AGE},
+    "parent_contact_required": {"adult_age": ADULT_AGE},
+}
+
+
+def registration_message(code: str, locale: str = "en") -> str:
+    return message_catalog.text(f"error.{code}", locale, **REGISTRATION_MESSAGE_PARAMS[code])
+
+
+_AGE_MESSAGE = registration_message("age_out_of_range")
+_PARENT_CONTACT_MESSAGE = registration_message("parent_contact_required")
 
 
 def normalize_registration_age(raw: Any) -> int:
