@@ -7,14 +7,17 @@ no external reference, no embedded document, no CSS. A figure that strays from
 the allowlist is refused when it is authored, not repaired: a silently cleaned
 drawing could lose the line the answer depends on.
 
-`figure_issues` says what is wrong with one; an empty list means it may be stored
-and shown as written.
+`figure_issues` says what is wrong with one, as `curriculum_issues.Issue`
+codes the console translates (#112); an empty list means it may be stored and
+shown as written.
 """
 
 from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
+
+from stoa.services.curriculum_issues import Issue, IssueCode
 
 #: The longest figure an exercise may carry, in characters.
 MAX_FIGURE_LENGTH = 32_000
@@ -61,33 +64,33 @@ def _refers_out(attr: str, value: str, ids: set[str]) -> bool:
     return local is None or local.group(1) not in ids
 
 
-def figure_issues(svg: object) -> list[str]:
+def figure_issues(svg: object) -> list[Issue]:
     """What keeps this figure from being shown as written; empty when nothing does."""
     if not isinstance(svg, str) or not svg.strip():
-        return ["A figure must be SVG text."]
+        return [Issue.of(IssueCode.FIGURE_NOT_TEXT)]
     if len(svg) > MAX_FIGURE_LENGTH:
-        return [f"A figure is at most {MAX_FIGURE_LENGTH} characters."]
+        return [Issue.of(IssueCode.FIGURE_TOO_LONG, max_length=MAX_FIGURE_LENGTH)]
     if _FORBIDDEN_TEXT.search(svg):
-        return ["A figure may hold no document type, entity, processing instruction or script URL."]
+        return [Issue.of(IssueCode.FIGURE_FORBIDDEN_MARKUP)]
     try:
         root = ET.fromstring(svg)
     except ET.ParseError:
-        return ["A figure must be well-formed SVG."]
-    issues: list[str] = []
+        return [Issue.of(IssueCode.FIGURE_MALFORMED)]
+    issues: list[Issue] = []
     ids = {element.attrib["id"] for element in root.iter() if "id" in element.attrib}
     if _name(root.tag) != (SVG_NAMESPACE, "svg"):
-        issues.append("A figure's root must be an svg element in the SVG namespace.")
+        issues.append(Issue.of(IssueCode.FIGURE_ROOT_NOT_SVG))
     for element in root.iter():
         namespace, tag = _name(element.tag)
         if namespace != SVG_NAMESPACE or tag not in ELEMENTS:
-            issues.append(f"Element '{tag}' is not allowed in a figure.")
+            issues.append(Issue.of(IssueCode.FIGURE_ELEMENT_NOT_ALLOWED, element=tag))
             continue
         for raw_name, value in element.attrib.items():
             attr_namespace, attr = _name(raw_name)
             if attr_namespace or attr not in ATTRIBUTES:
-                issues.append(f"Attribute '{attr}' is not allowed in a figure.")
+                issues.append(Issue.of(IssueCode.FIGURE_ATTRIBUTE_NOT_ALLOWED, attribute=attr))
             elif _refers_out(attr, value, ids):
-                issues.append(f"Attribute '{attr}' may only refer to a marker of the figure itself.")
+                issues.append(Issue.of(IssueCode.FIGURE_REFERENCE_OUTSIDE, attribute=attr))
     return list(dict.fromkeys(issues))
 
 

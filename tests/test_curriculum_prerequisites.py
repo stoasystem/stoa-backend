@@ -10,17 +10,20 @@ names: same topic, same subject. stoasystem/stoa-backend#56.
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import ANY
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
 from actor_helpers import install_actor_overrides
+from rule_violation_helpers import assert_violation
 from fakes.dynamodb import FakeTable
 from scripts import seed_practice
 from stoa.db.repositories import curriculum_ops_repo, practice_repo
 from stoa.routers import admin
 from stoa.services import curriculum_ops_service, curriculum_service
+from stoa.services.curriculum_errors import CurriculumErrorCode
 
 
 def _seed_units() -> list[dict[str, Any]]:
@@ -324,8 +327,8 @@ def test_lesson_draft_requires_a_unit_id(monkeypatch: pytest.MonkeyPatch) -> Non
         "/admin/curriculum/lessons/drafts", json=_draft_payload(unitId=None)
     )
 
-    assert response.status_code == 422
-    assert "unit_id" in response.json()["detail"]["fields"]
+    detail = assert_violation(response, CurriculumErrorCode.VALIDATION_FAILED, fields=ANY)
+    assert "unit_id" in detail["fields"]
 
 
 def test_lesson_draft_refuses_an_unknown_unit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -335,8 +338,8 @@ def test_lesson_draft_refuses_an_unknown_unit(monkeypatch: pytest.MonkeyPatch) -
         "/admin/curriculum/lessons/drafts", json=_draft_payload(unitId="u-missing")
     )
 
-    assert response.status_code == 422
-    assert "unit_id" in response.json()["detail"]["fields"]
+    detail = assert_violation(response, CurriculumErrorCode.VALIDATION_FAILED, fields=ANY)
+    assert "unit_id" in detail["fields"]
 
 
 def test_lesson_draft_refuses_a_topic_the_unit_does_not_have(
@@ -348,8 +351,8 @@ def test_lesson_draft_refuses_a_topic_the_unit_does_not_have(
         "/admin/curriculum/lessons/drafts", json=_draft_payload(topicId="topic-b")
     )
 
-    assert response.status_code == 422
-    assert "topic_id" in response.json()["detail"]["fields"]
+    detail = assert_violation(response, CurriculumErrorCode.VALIDATION_FAILED, fields=ANY)
+    assert "topic_id" in detail["fields"]
 
 
 def test_lesson_draft_refuses_a_subject_the_unit_does_not_have(
@@ -361,8 +364,8 @@ def test_lesson_draft_refuses_a_subject_the_unit_does_not_have(
         "/admin/curriculum/lessons/drafts", json=_draft_payload(subjectId="german")
     )
 
-    assert response.status_code == 422
-    assert "subject_id" in response.json()["detail"]["fields"]
+    detail = assert_violation(response, CurriculumErrorCode.VALIDATION_FAILED, fields=ANY)
+    assert "subject_id" in detail["fields"]
 
 
 def test_lesson_draft_keeps_prerequisites_under_their_own_key(
@@ -390,8 +393,8 @@ def test_lesson_draft_refuses_an_unknown_prerequisite_lesson(
         json=_draft_payload(prerequisiteLessonIds=["lesson-missing"]),
     )
 
-    assert response.status_code == 422
-    assert "prerequisite_lesson_ids" in response.json()["detail"]["fields"]
+    detail = assert_violation(response, CurriculumErrorCode.VALIDATION_FAILED, fields=ANY)
+    assert "prerequisite_lesson_ids" in detail["fields"]
 
 
 def test_lesson_draft_refuses_a_prerequisite_outside_its_unit_and_topic(
@@ -404,8 +407,8 @@ def test_lesson_draft_refuses_a_prerequisite_outside_its_unit_and_topic(
         json=_draft_payload(prerequisiteLessonIds=["lesson-foreign"]),
     )
 
-    assert response.status_code == 422
-    assert "prerequisite_lesson_ids" in response.json()["detail"]["fields"]
+    detail = assert_violation(response, CurriculumErrorCode.VALIDATION_FAILED, fields=ANY)
+    assert "prerequisite_lesson_ids" in detail["fields"]
 
 
 def test_lesson_draft_refuses_a_prerequisite_cycle(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -421,5 +424,5 @@ def test_lesson_draft_refuses_a_prerequisite_cycle(monkeypatch: pytest.MonkeyPat
         ),
     )
 
-    assert response.status_code == 422
-    assert "prerequisite_lesson_ids" in response.json()["detail"]["fields"]
+    detail = assert_violation(response, CurriculumErrorCode.VALIDATION_FAILED, fields=ANY)
+    assert "prerequisite_lesson_ids" in detail["fields"]

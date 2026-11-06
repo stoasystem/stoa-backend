@@ -299,6 +299,19 @@
         "retryable": false
       }
     },
+    "active_assignments_block_archive": {
+      "action": null,
+      "domain": "curriculum",
+      "http_status": 409,
+      "message_key": "error.active_assignments_block_archive",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "ai_draft_not_assignable": {
       "action": null,
       "domain": "adaptive_learning",
@@ -877,6 +890,19 @@
         "retryable": false
       }
     },
+    "curriculum_capability_required": {
+      "action": null,
+      "domain": "curriculum",
+      "http_status": 403,
+      "message_key": "error.curriculum_capability_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "curriculum_lesson_not_found": {
       "action": null,
       "domain": "practice",
@@ -895,6 +921,32 @@
       "domain": "practice",
       "http_status": 400,
       "message_key": "error.curriculum_student_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "curriculum_unit_not_found": {
+      "action": null,
+      "domain": "curriculum",
+      "http_status": 404,
+      "message_key": "error.curriculum_unit_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "curriculum_version_not_found": {
+      "action": null,
+      "domain": "curriculum",
+      "http_status": 404,
+      "message_key": "error.curriculum_version_not_found",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -947,6 +999,19 @@
       "domain": "ai_teacher_tools",
       "http_status": 409,
       "message_key": "error.draft_already_reviewed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "draft_not_editable": {
+      "action": null,
+      "domain": "curriculum",
+      "http_status": 409,
+      "message_key": "error.draft_not_editable",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -1038,6 +1103,19 @@
       "domain": "ai_teacher_tools",
       "http_status": 400,
       "message_key": "error.exercise_count_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "exercise_id_conflict": {
+      "action": null,
+      "domain": "curriculum",
+      "http_status": 409,
+      "message_key": "error.exercise_id_conflict",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -1199,6 +1277,21 @@
       "http_status": 422,
       "message_key": "error.invalid_identity_operation",
       "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "invalid_manifest": {
+      "action": "correct_input",
+      "domain": "curriculum",
+      "http_status": 422,
+      "message_key": "error.invalid_manifest",
+      "public_fields": [
+        "fields"
+      ],
       "retry": {
         "idempotent_only": false,
         "max_attempts": 0,
@@ -1741,6 +1834,45 @@
         "retryable": true
       }
     },
+    "migration_confirmation_mismatch": {
+      "action": null,
+      "domain": "curriculum",
+      "http_status": 409,
+      "message_key": "error.migration_confirmation_mismatch",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "migration_not_found": {
+      "action": null,
+      "domain": "curriculum",
+      "http_status": 404,
+      "message_key": "error.migration_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "migration_not_ready": {
+      "action": null,
+      "domain": "curriculum",
+      "http_status": 409,
+      "message_key": "error.migration_not_ready",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "moderation_case_not_found": {
       "action": null,
       "domain": "moderation",
@@ -1798,6 +1930,45 @@
       "domain": "practice",
       "http_status": 404,
       "message_key": "error.no_topics_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "not_approved": {
+      "action": null,
+      "domain": "curriculum",
+      "http_status": 409,
+      "message_key": "error.not_approved",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "not_in_review": {
+      "action": null,
+      "domain": "curriculum",
+      "http_status": 409,
+      "message_key": "error.not_in_review",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "not_reviewable": {
+      "action": null,
+      "domain": "curriculum",
+      "http_status": 409,
+      "message_key": "error.not_reviewable",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -2484,6 +2655,32 @@
         "retryable": false
       }
     },
+    "rollback_target_not_publishable": {
+      "action": null,
+      "domain": "curriculum",
+      "http_status": 409,
+      "message_key": "error.rollback_target_not_publishable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "stale_pointer": {
+      "action": null,
+      "domain": "curriculum",
+      "http_status": 409,
+      "message_key": "error.stale_pointer",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "star_quiz_already_lit": {
       "action": null,
       "domain": "practice",
@@ -3092,6 +3289,21 @@
       "http_status": 422,
       "message_key": "error.valid_email_required",
       "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "validation_failed": {
+      "action": "correct_input",
+      "domain": "curriculum",
+      "http_status": 422,
+      "message_key": "error.validation_failed",
+      "public_fields": [
+        "fields"
+      ],
       "retry": {
         "idempotent_only": false,
         "max_attempts": 0,

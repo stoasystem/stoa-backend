@@ -3803,6 +3803,17 @@
       },
       "CurriculumValidationIssueResponse": {
         "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
           "field": {
             "title": "Field",
             "type": "string"
@@ -3821,6 +3832,13 @@
           "message": {
             "title": "Message",
             "type": "string"
+          },
+          "params": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Params",
+            "type": "object"
           },
           "severity": {
             "title": "Severity",
@@ -11298,6 +11316,22 @@
             "title": "Correlationid",
             "type": "string"
           },
+          "fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The input fields that broke the rule (`validation_failed`, `invalid_manifest`).",
+            "title": "Fields"
+          },
           "message": {
             "title": "Message",
             "type": "string"
@@ -14230,6 +14264,22 @@
             ],
             "title": "Explanation"
           },
+          "explanationCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanationcode"
+          },
+          "explanationParams": {
+            "additionalProperties": true,
+            "title": "Explanationparams",
+            "type": "object"
+          },
           "ledgerCount": {
             "title": "Ledgercount",
             "type": "integer"
@@ -14351,6 +14401,22 @@
               }
             ],
             "title": "Explanation"
+          },
+          "explanationCode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanationcode"
+          },
+          "explanationParams": {
+            "additionalProperties": true,
+            "title": "Explanationparams",
+            "type": "object"
           },
           "groups": {
             "items": {

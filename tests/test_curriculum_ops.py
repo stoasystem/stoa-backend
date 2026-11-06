@@ -4,7 +4,9 @@ import pytest
 
 from stoa.routers import admin
 from stoa.services import curriculum_ops_service
+from stoa.services.curriculum_errors import CurriculumErrorCode
 from actor_helpers import install_actor_overrides
+from rule_violation_helpers import assert_violation
 
 
 def _app_for_user(user: dict) -> FastAPI:
@@ -258,7 +260,7 @@ def test_curriculum_publish_rejects_unapproved_versions(monkeypatch):
     )
 
     assert published.status_code == 409
-    assert published.json()["detail"] == "not_approved"
+    assert_violation(published, CurriculumErrorCode.NOT_APPROVED)
 
 
 def test_curriculum_publish_uses_compare_and_set_pointer(monkeypatch):
@@ -289,7 +291,7 @@ def test_curriculum_publish_uses_compare_and_set_pointer(monkeypatch):
     )
 
     assert published.status_code == 409
-    assert published.json()["detail"] == "stale_pointer"
+    assert_violation(published, CurriculumErrorCode.STALE_POINTER)
     assert state["pointers"]["lesson-linear-ops"]["published_version_id"] == "different-version"
 
 
@@ -315,7 +317,7 @@ def test_curriculum_archive_refuses_active_assignment_references(monkeypatch):
     )
 
     assert archived.status_code == 409
-    assert archived.json()["detail"] == "active_assignments_block_archive"
+    assert_violation(archived, CurriculumErrorCode.ACTIVE_ASSIGNMENTS_BLOCK_ARCHIVE)
     assert state["versions"][("lesson-linear-ops", version_id)]["state"] == "draft"
     assert state["audits"][-1][1]["operation"] == "archive_refused"
 

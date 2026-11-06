@@ -48,7 +48,7 @@ CORRELATION_HEADER = "X-Correlation-ID"
 
 # The fields a body may carry besides code, message and correlationId. A
 # contract names the ones its code uses; anything else stays off the wire.
-PUBLIC_FIELDS = frozenset({"conversationId", "retryAt", "retryAfterSeconds", "action"})
+PUBLIC_FIELDS = frozenset({"conversationId", "retryAt", "retryAfterSeconds", "action", "fields"})
 
 # Retry-After is a hint to wait: at least a second, at most a day.
 _RETRY_AFTER_BOUNDS = (1, 86_400)

@@ -5,11 +5,12 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from enum import StrEnum
 from typing import Any
 
 from stoa.config import Settings
 from stoa.db.repositories import usage_ledger_repo, user_repo
-from stoa.services import entitlement_service
+from stoa.services import entitlement_service, message_catalog
 
 
 QUESTION_SUBMISSION_ACTION = "question_submission"
@@ -502,6 +503,8 @@ def reconcile_question_usage(
         "drift": counter_count - ledger_count,
         "stale": stale,
         "supportAction": support["supportAction"],
+        "explanationCode": support["explanationCode"],
+        "explanationParams": support["explanationParams"],
         "explanation": support["explanation"],
         "repairMode": "applied" if repaired else ("preview" if not repair else "noop"),
         "repaired": repaired,
@@ -563,6 +566,8 @@ def reconcile_usage_action(
         "drift": counter_count - ledger_count,
         "stale": stale,
         "supportAction": support["supportAction"],
+        "explanationCode": support["explanationCode"],
+        "explanationParams": support["explanationParams"],
         "explanation": support["explanation"],
         "repairMode": "preview" if not repair else "unsupported",
         "repaired": False,
@@ -610,6 +615,8 @@ def build_student_usage_summary(
         "billingState": entitlement.get("billingState"),
         "reconciliation": reconciliation,
         "supportAction": reconciliation["supportAction"],
+        "explanationCode": reconciliation["explanationCode"],
+        "explanationParams": reconciliation["explanationParams"],
         "explanation": reconciliation["explanation"],
         "actions": action_summaries,
         "groups": groups,
@@ -775,6 +782,23 @@ def _reconciliation_is_ok(status: str) -> bool:
     return status in {"matched", "ledger-only", "no-usage"}
 
 
+class ReconciliationExplanation(StrEnum):
+    """Why a counter and the ledger agree or not, as a code a client translates (#114).
+
+    Sent as `explanationCode` with `explanationParams` beside the English
+    `explanation`; the sentences are the catalog's `reconciliation.<code>`.
+    """
+
+    COUNTER_MATCHES_LEDGER = "counter_matches_ledger"
+    NO_USAGE = "no_usage"
+    LEDGER_ONLY = "ledger_only"
+    COUNTER_OVER_LIMIT = "counter_over_limit"
+    COUNTER_STALE = "counter_stale"
+    COUNTER_WITHOUT_LEDGER = "counter_without_ledger"
+    LEDGER_WITHOUT_COUNTER = "ledger_without_counter"
+    COUNT_MISMATCH = "count_mismatch"
+
+
 def _reconciliation_support_state(
     *,
     status: str,
@@ -782,49 +806,33 @@ def _reconciliation_support_state(
     ledger_count: int,
     limit: int | None,
     stale: bool,
-) -> dict[str, str]:
-    limit_text = "unknown" if limit is None else str(limit)
+) -> dict[str, Any]:
+    explained = ReconciliationExplanation
     if status == "matched":
-        return {
-            "supportAction": "none",
-            "explanation": "Counter and usage ledger match for this quota period.",
-        }
-    if status == "no-usage":
-        return {
-            "supportAction": "none",
-            "explanation": "No usage was recorded for this action and quota period.",
-        }
-    if status == "ledger-only":
-        return {
-            "supportAction": "review_if_disputed",
-            "explanation": "This support-visible action is tracked only in the ledger and has no quota counter.",
-        }
-    if status == "over-limit":
-        return {
-            "supportAction": "review_counter_and_entitlement",
-            "explanation": (
-                f"Counter value {counter_count} is above the entitlement limit {limit_text}; "
-                "review quota enforcement and recent retries before changing access."
-            ),
-        }
-    if status == "stale" or stale:
-        return {
-            "supportAction": "review_stale_counter",
-            "explanation": "The counter row appears stale for this quota period; verify TTL behavior before using it for support decisions.",
-        }
-    if status == "ledger-missing":
-        return {
-            "supportAction": "review_counter_without_ledger",
-            "explanation": f"Counter shows {counter_count} consumed but no matching ledger events were found.",
-        }
-    if status == "counter-missing":
-        return {
-            "supportAction": "review_ledger_without_counter",
-            "explanation": f"Ledger shows {ledger_count} consumed but no matching counter row was found.",
-        }
+        action, code, params = "none", explained.COUNTER_MATCHES_LEDGER, {}
+    elif status == "no-usage":
+        action, code, params = "none", explained.NO_USAGE, {}
+    elif status == "ledger-only":
+        action, code, params = "review_if_disputed", explained.LEDGER_ONLY, {}
+    elif status == "over-limit":
+        action, code = "review_counter_and_entitlement", explained.COUNTER_OVER_LIMIT
+        params = {"counter": counter_count, "limit": "unknown" if limit is None else limit}
+    elif status == "stale" or stale:
+        action, code, params = "review_stale_counter", explained.COUNTER_STALE, {}
+    elif status == "ledger-missing":
+        action, code = "review_counter_without_ledger", explained.COUNTER_WITHOUT_LEDGER
+        params = {"counter": counter_count}
+    elif status == "counter-missing":
+        action, code = "review_ledger_without_counter", explained.LEDGER_WITHOUT_COUNTER
+        params = {"ledger": ledger_count}
+    else:
+        action, code = "review_count_mismatch", explained.COUNT_MISMATCH
+        params = {"counter": counter_count, "ledger": ledger_count}
     return {
-        "supportAction": "review_count_mismatch",
-        "explanation": f"Counter value {counter_count} and ledger total {ledger_count} do not match.",
+        "supportAction": action,
+        "explanationCode": code.value,
+        "explanationParams": params,
+        "explanation": message_catalog.text(f"reconciliation.{code.value}", "en", **params),
     }
 
 
@@ -860,6 +868,8 @@ def _build_action_summaries(
                 "remaining": max(limit - consumed, 0) if limit is not None else None,
                 "reconciliation": reconciliation,
                 "supportAction": reconciliation["supportAction"],
+                "explanationCode": reconciliation["explanationCode"],
+                "explanationParams": reconciliation["explanationParams"],
                 "explanation": reconciliation["explanation"],
                 "partial": not _reconciliation_is_ok(reconciliation["status"]),
                 "unreconciled": not _reconciliation_is_ok(reconciliation["status"]),

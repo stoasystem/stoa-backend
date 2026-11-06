@@ -18,6 +18,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from stoa.services import answer_judging, figure_svg
+from stoa.services.curriculum_issues import Issue, IssueCode
 
 #: Locales an exercise can be translated into.
 LOCALES = frozenset({"de", "en", "fr", "it"})
@@ -98,17 +99,17 @@ def _list(value: object) -> list[str]:
     return [_text(item) for item in value if _text(item)] if isinstance(value, list) else []
 
 
-def figure_issues(exercise: Mapping[str, Any], options: list | None) -> list[str]:
+def figure_issues(exercise: Mapping[str, Any], options: list | None) -> list[Issue]:
     """What is wrong with the figure and the option figures of an exercise or of
     one of its translations."""
-    issues: list[str] = []
+    issues: list[Issue] = []
     figure = exercise.get("figure")
     if figure not in (None, ""):
         issues.extend(figure_svg.figure_issues(figure))
     option_figures = exercise.get("option_figures")
     if option_figures not in (None, []):
         if not isinstance(option_figures, list) or options is None or len(option_figures) != len(options):
-            issues.append("Option figures go one per option, empty where an option has none.")
+            issues.append(Issue.of(IssueCode.OPTION_FIGURES_MISMATCH))
         else:
             for item in option_figures:
                 if _text(item):
@@ -116,43 +117,43 @@ def figure_issues(exercise: Mapping[str, Any], options: list | None) -> list[str
     return list(dict.fromkeys(issues))
 
 
-def translation_issues(exercise: Mapping[str, Any], *, max_text: int) -> list[tuple[str, str]]:
-    """What is wrong with an exercise's translations, as (field, message) pairs."""
+def translation_issues(exercise: Mapping[str, Any], *, max_text: int) -> list[tuple[str, Issue]]:
+    """What is wrong with an exercise's translations, as (field, issue) pairs."""
     translations = exercise.get("translations")
     if translations in (None, {}):
         return []
     if not isinstance(translations, Mapping):
-        return [("translations", "Translations must map a locale to its text.")]
-    issues: list[tuple[str, str]] = []
+        return [("translations", Issue.of(IssueCode.TRANSLATIONS_NOT_A_MAP))]
+    issues: list[tuple[str, Issue]] = []
     options = exercise.get("options") if isinstance(exercise.get("options"), list) else None
     stored_key = _text(exercise.get("correct_answer", exercise.get("answer_key")))
     key_index = options.index(stored_key) if options and stored_key in options else None
     for locale, text in translations.items():
         field = f"translations.{locale}"
         if locale not in LOCALES:
-            issues.append((field, f"Unsupported locale '{locale}'."))
+            issues.append((field, Issue.of(IssueCode.TRANSLATION_LOCALE_UNSUPPORTED, language=locale)))
             continue
         if not isinstance(text, Mapping) or not _text(text.get("prompt")):
-            issues.append((field, "A translation needs its prompt."))
+            issues.append((field, Issue.of(IssueCode.TRANSLATION_PROMPT_MISSING)))
             continue
         too_long = [
             name for name in ("prompt", "explanation", "correct_answer")
             if len(_text(text.get(name))) > max_text
         ]
         if too_long:
-            issues.append((field, f"Too long: {', '.join(too_long)}."))
+            issues.append((field, Issue.of(IssueCode.TRANSLATION_TOO_LONG, fields=", ".join(too_long))))
         if options is not None:
             translated = text.get("options")
             if not isinstance(translated, list) or len(translated) != len(options):
-                issues.append((field, "A translation needs one option for each option."))
+                issues.append((field, Issue.of(IssueCode.TRANSLATION_OPTIONS_MISMATCH)))
             elif key_index is not None and _text(text.get("correct_answer")) != _text(translated[key_index]):
-                issues.append((field, "The translated answer must be the translated right option."))
+                issues.append((field, Issue.of(IssueCode.TRANSLATION_ANSWER_NOT_THE_OPTION)))
         elif stored_key and not _text(text.get("correct_answer")):
-            issues.append((field, "A translation needs its answer."))
-        issues.extend((field, message) for message in figure_issues(text, options))
+            issues.append((field, Issue.of(IssueCode.TRANSLATION_ANSWER_MISSING)))
+        issues.extend((field, issue) for issue in figure_issues(text, options))
         accepted = text.get("accepted_answers") or []
         if len(accepted) > answer_judging.MAX_ACCEPTED_ANSWERS or any(
             len(_text(item)) > answer_judging.MAX_ACCEPTED_ANSWER_LENGTH for item in accepted
         ):
-            issues.append((field, "Too many or too long accepted answers."))
+            issues.append((field, Issue.of(IssueCode.ACCEPTED_ANSWERS_OUT_OF_BOUNDS)))
     return issues

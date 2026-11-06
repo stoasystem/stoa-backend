@@ -15,12 +15,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import HTTPException
 import pytest
 
 from fakes.dynamodb import FakeTable
 from scripts import seed_practice
 from stoa.db.repositories import curriculum_ops_repo, practice_repo
+from stoa.rule_violation import RuleViolation
+from stoa.services.curriculum_errors import CurriculumErrorCode
 from stoa.services import (
     answer_judging,
     curriculum_analytics_service,
@@ -220,21 +221,20 @@ def test_an_exercise_id_owned_by_another_lesson_is_refused_before_anything_moves
     assert seeded is not None
     version_id = _approved(_payload(_exercise(1, exerciseId="brueche-l1-c1")))
 
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RuleViolation) as refused:
         curriculum_ops_service.publish(
             LESSON_ID, version_id, OPERATOR, expected_published_version_id=None
         )
 
-    assert refused.value.status_code == 409
-    assert refused.value.detail == "exercise_id_conflict"
+    assert refused.value.code is CurriculumErrorCode.EXERCISE_ID_CONFLICT
     assert practice_repo.get_challenge("brueche-l1-c1") == seeded
     assert "published_version_id" not in (curriculum_ops_repo.get_pointer(LESSON_ID) or {})
     assert ("PRACTICE", f"LESSON#{LESSON_ID}") not in table.rows
 
 
 def test_one_exercise_id_twice_in_a_lesson_does_not_validate(table: FakeTable) -> None:
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RuleViolation) as refused:
         _approved(_payload(_exercise(1), _exercise(2, exerciseId=f"{LESSON_ID}-q01")))
 
-    assert refused.value.status_code == 422
-    assert "exercises[1].exercise_id" in refused.value.detail["fields"]
+    assert refused.value.code is CurriculumErrorCode.VALIDATION_FAILED
+    assert "exercises[1].exercise_id" in refused.value.public["fields"]

@@ -8,10 +8,10 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from fastapi import HTTPException
-
 from stoa.db.repositories import curriculum_ops_repo
+from stoa.rule_violation import RuleViolation
 from stoa.services import curriculum_analytics_service, curriculum_ops_service
+from stoa.services.curriculum_errors import CurriculumErrorCode
 
 
 def dry_run(manifest: dict[str, Any], user: dict[str, Any]) -> dict[str, Any]:
@@ -41,7 +41,7 @@ def apply_migration(
     expected_id = _migration_id(normalized)
     expected_token = _confirmation_token(normalized)
     if migration_id != expected_id or confirmation_token != expected_token:
-        raise HTTPException(status_code=409, detail="migration_confirmation_mismatch")
+        raise RuleViolation(CurriculumErrorCode.MIGRATION_CONFIRMATION_MISMATCH)
 
     existing = curriculum_ops_repo.get_migration_evidence(migration_id)
     manifest_hash = _manifest_hash(normalized)
@@ -52,7 +52,10 @@ def apply_migration(
 
     preview = dry_run(manifest, user)
     if not preview["publishReady"]:
-        raise HTTPException(status_code=409, detail={"code": "migration_not_ready", "summary": preview["summary"]})
+        # The dry run's own response carries the summary; the refusal names the code.
+        raise RuleViolation(
+            CurriculumErrorCode.MIGRATION_NOT_READY, internal_detail=f"summary={preview['summary']}"
+        )
 
     now = _now()
     applied_rows = [_apply_row(row, user, now, migration_id) for row in preview["rows"]]
@@ -77,7 +80,7 @@ def get_migration(migration_id: str, user: dict[str, Any]) -> dict[str, Any]:
     _require_migration_access(user)
     evidence = curriculum_ops_repo.get_migration_evidence(migration_id)
     if not evidence:
-        raise HTTPException(status_code=404, detail="migration_not_found")
+        raise RuleViolation(CurriculumErrorCode.MIGRATION_NOT_FOUND)
     return _evidence_response(evidence)
 
 
@@ -92,7 +95,7 @@ def _require_migration_access(user: dict[str, Any]) -> None:
 def _normalize_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
     lessons = manifest.get("lessons")
     if not isinstance(lessons, list) or not lessons:
-        raise HTTPException(status_code=422, detail={"code": "invalid_manifest", "fields": ["lessons"]})
+        raise RuleViolation(CurriculumErrorCode.INVALID_MANIFEST, fields=["lessons"])
 
     source = manifest.get("source") or {}
     normalized = {
@@ -221,7 +224,7 @@ def _apply_row(row: dict[str, Any], user: dict[str, Any], now: str, migration_id
         try:
             curriculum_ops_repo.assert_exercise_ids_available(version)
         except curriculum_ops_repo.ExerciseIdConflictError as exc:
-            raise HTTPException(status_code=409, detail="exercise_id_conflict") from exc
+            raise RuleViolation(CurriculumErrorCode.EXERCISE_ID_CONFLICT) from exc
         manifest = _publish_manifest(row, version, user, now, migration_id)
         curriculum_ops_repo.put_manifest(manifest)
         try:
@@ -234,7 +237,7 @@ def _apply_row(row: dict[str, Any], user: dict[str, Any], now: str, migration_id
                 updated_at=now,
             )
         except curriculum_ops_repo.StalePointerError as exc:
-            raise HTTPException(status_code=409, detail="stale_pointer") from exc
+            raise RuleViolation(CurriculumErrorCode.STALE_POINTER) from exc
         published = {**version, "state": "published", "published_at": now}
         curriculum_ops_repo.put_published_projection(published, manifest)
         curriculum_ops_repo.put_version(published)
@@ -413,7 +416,9 @@ def _actor_id(user: dict[str, Any]) -> str:
 def _clean_id(value: Any) -> str:
     cleaned = str(value or "").strip()
     if not cleaned:
-        raise HTTPException(status_code=422, detail={"code": "invalid_manifest", "fields": ["publicLessonId"]})
+        raise RuleViolation(
+            CurriculumErrorCode.INVALID_MANIFEST, fields=["publicLessonId"]
+        )
     return cleaned
 
 

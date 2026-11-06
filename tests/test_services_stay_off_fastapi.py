@@ -18,8 +18,6 @@ ROOT = Path(__file__).resolve().parents[1]
 GUARDED = (ROOT / "src" / "stoa" / "services", ROOT / "src" / "stoa" / "db")
 
 ALLOWED = {
-    "src/stoa/services/curriculum_migration_service.py",
-    "src/stoa/services/curriculum_ops_service.py",
     # Stays until payments are unfrozen and Stripe is split out.
     "src/stoa/services/subscription_service.py",
 }
