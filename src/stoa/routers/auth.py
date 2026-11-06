@@ -6,7 +6,7 @@ from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -34,7 +34,9 @@ from stoa.services import (
 from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD
 from stoa.security.tokens import VerifiedAccessToken, verify_access_token
 from stoa.security.route_inventory import explicit_route_classification
+from stoa.rule_violation import RuleViolation
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
+from stoa.services.account_errors import AccountErrorCode, AccountViolation
 from stoa.security.public_auth_errors import (
     PublicAuthOperation,
     normalize_cognito_failure,
@@ -249,7 +251,7 @@ def _public_client_id(settings: Settings) -> str:
 
     cid = settings.cognito_student_client_id
     if not cid:
-        raise HTTPException(status_code=503, detail="Public authentication is unavailable")
+        raise AccountViolation(AccountErrorCode.PUBLIC_AUTHENTICATION_UNAVAILABLE)
     return cid
 
 
@@ -406,12 +408,9 @@ def _approved_public_registration_role(profile: dict) -> str:
         or role not in _PUBLIC_GROUPS
         or profile.get("role") != role
     ):
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "code": "identity_conflict",
-                "message": "This account cannot use public account activation.",
-            },
+        raise SecurityDecisionError(
+            SecurityErrorCode.IDENTITY_CONFLICT,
+            internal_detail="account cannot use public account activation",
         )
     return role
 
@@ -424,34 +423,12 @@ def _is_already_confirmed_provider_error(code: str, message: str) -> bool:
     return code in {"InvalidParameterException", "NotAuthorizedException"} and "CONFIRMED" in message.upper()
 
 
-def _decommissioned(code: str) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_410_GONE,
-        detail={
-            "code": code,
-            "message": "This is no longer available. Ask your STOA administrator.",
-        },
-    )
+def _public_identity_conflict() -> SecurityDecisionError:
+    return SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
 
 
-def _public_identity_conflict() -> HTTPException:
-    return HTTPException(
-        status_code=409,
-        detail={
-            "code": "identity_conflict",
-            "message": "Your account needs recovery before you can continue.",
-        },
-    )
-
-
-def _public_identity_dependency_error() -> HTTPException:
-    return HTTPException(
-        status_code=503,
-        detail={
-            "code": "identity_provider_unavailable",
-            "message": "Sign-in is temporarily unavailable. Try again later.",
-        },
-    )
+def _public_identity_dependency_error() -> SecurityDecisionError:
+    return SecurityDecisionError(SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE)
 
 
 def _auth_response_for_profile(
@@ -505,14 +482,8 @@ async def register(body: RegisterRequest):
     not depend on reaching Cognito.
     """
     if PUBLIC_SELF_REGISTRATION_ENABLED:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail={
-                "code": "public_registration_not_implemented",
-                "message": "Public self-registration is switched on but this build cannot serve it.",
-            },
-        )
-    raise _decommissioned("public_registration_closed")
+        raise AccountViolation(AccountErrorCode.PUBLIC_REGISTRATION_NOT_IMPLEMENTED)
+    raise AccountViolation(AccountErrorCode.PUBLIC_REGISTRATION_CLOSED)
 
 
 @router.post(
@@ -850,14 +821,8 @@ async def forgot_password(body: ForgotPasswordRequest):
     and so the route stays in the authorization inventory.
     """
     if SELF_SERVICE_PASSWORD_RECOVERY_ENABLED:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail={
-                "code": "password_recovery_not_implemented",
-                "message": "Password recovery is switched on but this build cannot serve it.",
-            },
-        )
-    raise _decommissioned("password_recovery_closed")
+        raise AccountViolation(AccountErrorCode.PASSWORD_RECOVERY_NOT_IMPLEMENTED)
+    raise AccountViolation(AccountErrorCode.PASSWORD_RECOVERY_CLOSED)
 
 
 @router.post("/reset-password", response_model=PasswordResetResponse)
@@ -865,14 +830,8 @@ async def forgot_password(body: ForgotPasswordRequest):
 async def reset_password(body: ResetPasswordRequest):
     """Refuse recovery-code password resets; see `forgot_password`."""
     if SELF_SERVICE_PASSWORD_RECOVERY_ENABLED:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail={
-                "code": "password_recovery_not_implemented",
-                "message": "Password recovery is switched on but this build cannot serve it.",
-            },
-        )
-    raise _decommissioned("password_recovery_closed")
+        raise AccountViolation(AccountErrorCode.PASSWORD_RECOVERY_NOT_IMPLEMENTED)
+    raise AccountViolation(AccountErrorCode.PASSWORD_RECOVERY_CLOSED)
 
 
 @router.get("/me", response_model=UserOut)
@@ -927,11 +886,13 @@ async def update_my_locale_preference(
     """Persist the authenticated user's preferred locale."""
     profile = _profile_from_current_user(current_user)
     if not profile or not profile.get("user_id"):
-        raise HTTPException(status_code=404, detail="Profile not found")
+        raise AccountViolation(AccountErrorCode.ACCOUNT_NOT_FOUND)
     try:
         locale = locale_service.normalize_locale(body.preferredLocale)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise AccountViolation(
+            AccountErrorCode.LOCALE_NOT_SUPPORTED, internal_detail=str(exc)
+        ) from exc
 
     updated_at = _utc_now_iso()
     updated = user_repo.update_locale_preference(profile["user_id"], locale, updated_at)
@@ -949,58 +910,28 @@ async def update_my_locale_preference(
     )
 
 
-def _password_change_provider_error(exc: ClientError) -> HTTPException:
-    """Map provider failures onto fixed bodies that carry no provider detail."""
+def _password_change_provider_error(exc: ClientError) -> RuleViolation:
+    """Map provider failures onto fixed codes that carry no provider detail."""
     code = exc.response.get("Error", {}).get("Code")
     if code in {"NotAuthorizedException", "UserNotFoundException", "UserNotConfirmedException"}:
         # 400, not 401: the session is valid, the password in the body is not.
         # A 401 here would read as an expired session and sign the caller out.
-        return HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "password_change_credentials_invalid",
-                "message": "Check the current password and try again.",
-            },
-        )
+        return AccountViolation(AccountErrorCode.PASSWORD_CHANGE_CREDENTIALS_INVALID)
     if code == "InvalidPasswordException":
-        return HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "password_requirements_not_met",
-                "message": "Choose a password that meets the listed requirements.",
-            },
-        )
+        return SecurityDecisionError(SecurityErrorCode.PASSWORD_REQUIREMENTS_NOT_MET)
     if code in {"LimitExceededException", "TooManyRequestsException"}:
-        return HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "code": "auth_request_rate_limited",
-                "message": "Too many attempts. Wait a few minutes before trying again.",
-            },
-        )
-    return HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail={
-            "code": "identity_provider_unavailable",
-            "message": "Try again in a few minutes.",
-        },
-    )
+        return SecurityDecisionError(SecurityErrorCode.AUTH_REQUEST_RATE_LIMITED)
+    return SecurityDecisionError(SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE)
 
 
-def _password_change_verification_failed() -> HTTPException:
-    """One body for every rejected code.
+def _password_change_verification_failed() -> AccountViolation:
+    """One code for every rejected code.
 
     A wrong code, an expired code, a spent code and a code that was never issued
-    all answer with these exact bytes. Telling them apart would say whether a
-    guess was close, which is the whole value of guessing.
+    all answer alike. Telling them apart would say whether a guess was close,
+    which is the whole value of guessing.
     """
-    return HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail={
-            "code": "password_change_verification_failed",
-            "message": "This code cannot be used. Request a new code and try again.",
-        },
-    )
+    return AccountViolation(AccountErrorCode.PASSWORD_CHANGE_VERIFICATION_FAILED)
 
 
 def _clear_forced_password_change(current_user: dict, user_id: str) -> None:
@@ -1026,13 +957,7 @@ def _clear_forced_password_change(current_user: dict, user_id: str) -> None:
         expression_attribute_values={":cleared": False, ":now": _utc_now_iso()},
     )
     if result.disposition is not user_repo.ProfileWriteDisposition.UPDATED:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "code": "password_change_state_not_cleared",
-                "message": "Your password was changed. Sign in again to finish.",
-            },
-        )
+        raise AccountViolation(AccountErrorCode.PASSWORD_CHANGE_STATE_NOT_CLEARED)
 
 
 def _password_change_actor(current_user: dict) -> tuple[str, str]:
@@ -1040,7 +965,7 @@ def _password_change_actor(current_user: dict) -> tuple[str, str]:
     user_id = str(profile.get("user_id") or "").strip()
     email = _norm_email(profile.get("email"))
     if not user_id or not email:
-        raise HTTPException(status_code=404, detail="Profile not found")
+        raise AccountViolation(AccountErrorCode.ACCOUNT_NOT_FOUND)
     return user_id, email
 
 
@@ -1071,23 +996,11 @@ async def request_password_change(
     try:
         issued = password_change_code_service.issue(user_id, email, locale=locale)
     except password_change_code_service.PasswordChangeCodeRateLimited as exc:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "code": "password_change_code_rate_limited",
-                "message": "Too many codes requested. Try again later.",
-            },
-        ) from exc
+        raise AccountViolation(AccountErrorCode.PASSWORD_CHANGE_CODE_RATE_LIMITED) from exc
     except password_change_code_service.PasswordChangeCodeDeliveryFailed as exc:
         # 503, not 500: nothing was spent and any live code still works, so the
         # honest answer is "the mail did not go out, try again".
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "code": "password_change_code_delivery_failed",
-                "message": "The code could not be sent. Try again in a few minutes.",
-            },
-        ) from exc
+        raise AccountViolation(AccountErrorCode.PASSWORD_CHANGE_CODE_DELIVERY_FAILED) from exc
     return PasswordChangeRequestResponse(
         maskedRecipient=issued.masked_recipient,
         expiresAt=issued.expires_at,
@@ -1309,14 +1222,12 @@ def _claim_source_digest(request: Request) -> str:
     return hashlib.sha256(str(source or "unknown").encode("utf-8")).hexdigest()
 
 
-def _invitation_claim_rate_limited() -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        detail={
-            "code": "auth_request_rate_limited",
-            "message": "Too many attempts. Wait a few minutes before trying again.",
-        },
-        headers={"Retry-After": str(INVITATION_CLAIM_WINDOW_SECONDS)},
+def _invitation_claim_rate_limited() -> SecurityDecisionError:
+    # No Retry-After: the code's contract carries no retry time, and the header
+    # is only ever set from a contract (#211).
+    return SecurityDecisionError(
+        SecurityErrorCode.AUTH_REQUEST_RATE_LIMITED,
+        internal_detail="invitation claim window exhausted",
     )
 
 

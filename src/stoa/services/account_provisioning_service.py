@@ -20,8 +20,6 @@ import secrets
 from typing import Any, Callable
 from uuid import uuid4
 
-from fastapi import HTTPException
-
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
     account_deletion_repo,
@@ -34,8 +32,11 @@ from stoa.db.repositories import (
     user_repo,
 )
 from stoa.models.user import DATE_OF_BIRTH_FIELD, normalize_date_of_birth
+from stoa.rule_violation import RuleViolation
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD
 from stoa.services import account_numbering_service
+from stoa.services.account_errors import AccountErrorCode, AccountViolation
 
 
 PROVISIONABLE_ROLES = ("student", "teacher", "parent", "admin")
@@ -82,7 +83,11 @@ RESERVED_PROFILE_FIELDS = frozenset(
 # at all. Everything else `open_account` raises is contention or a dependency that is
 # briefly unavailable, and those are what a resumable command exists to come back to.
 TERMINAL_OPEN_ACCOUNT_CODES = frozenset(
-    {"account_exists", "account_state_invalid", "role_not_provisionable"}
+    {
+        AccountErrorCode.ACCOUNT_EXISTS,
+        AccountErrorCode.ACCOUNT_STATE_INVALID,
+        AccountErrorCode.ROLE_NOT_PROVISIONABLE,
+    }
 )
 
 INITIAL_PASSWORD_LENGTH = 16
@@ -90,10 +95,9 @@ PASSWORD_UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ"
 PASSWORD_LOWER = "abcdefghijkmnopqrstuvwxyz"
 PASSWORD_DIGITS = "23456789"
 
-# One payload for every unusable token. A missing digest and a burned digest must be
-# answered with the same bytes, or the difference tells a caller which tokens existed.
-INVITATION_REJECTION_STATUS = 409
-INVITATION_REJECTION_DETAIL = {"code": "invitation_invalid"}
+# One code for every unusable token. A missing digest and a burned digest must be
+# answered alike, or the difference tells a caller which tokens existed.
+INVITATION_REJECTION_CODE = AccountErrorCode.INVITATION_INVALID
 
 
 def invite_account(
@@ -261,9 +265,7 @@ def claim_invitation(
     subject = ""
     try:
         if role not in PROVISIONABLE_ROLES or not account_id or not address:
-            raise HTTPException(
-                status_code=409, detail={"code": "invitation_state_invalid"}
-            )
+            raise AccountViolation(AccountErrorCode.INVITATION_STATE_INVALID)
         subject = _create_provider_account(provider, email=address, password=password)
         _bind_identity(
             provider,
@@ -323,10 +325,10 @@ def revoke_invitation(
     instant = _instant(now)
     invitation = account_invitation_repo.get_invitation_by_id(str(invitation_id).strip())
     if not invitation:
-        raise HTTPException(status_code=404, detail={"code": "invitation_not_found"})
+        raise AccountViolation(AccountErrorCode.INVITATION_NOT_FOUND)
     digest = str(invitation.get("token_digest") or "")
     if not account_invitation_repo.revoke_invitation(digest, revoked_at=instant.isoformat()):
-        raise HTTPException(status_code=409, detail={"code": "invitation_not_revocable"})
+        raise AccountViolation(AccountErrorCode.INVITATION_NOT_REVOCABLE)
     _audit(
         stream_id=str(invitation.get("account_id") or invitation_id),
         event_type="account_invitation_revoked",
@@ -357,24 +359,24 @@ def reissue_invitation(
     instant = _instant(now)
     previous = account_invitation_repo.get_invitation_by_id(str(invitation_id).strip())
     if not previous:
-        raise HTTPException(status_code=404, detail={"code": "invitation_not_found"})
+        raise AccountViolation(AccountErrorCode.INVITATION_NOT_FOUND)
     status = str(previous.get("status") or "")
     if status == account_invitation_repo.USED_STATUS:
-        raise HTTPException(status_code=409, detail={"code": "invitation_already_used"})
+        raise AccountViolation(AccountErrorCode.INVITATION_ALREADY_USED)
     # A revoked invitation is not a handle on the account any more. Reissuing from one
     # would retire nothing and add a second live token, so the guarantee "reissuing
     # invalidates the previous invitation" would quietly stop holding.
     if status != account_invitation_repo.ISSUED_STATUS:
-        raise HTTPException(status_code=409, detail={"code": "invitation_not_reissuable"})
+        raise AccountViolation(AccountErrorCode.INVITATION_NOT_REISSUABLE)
     account_id = str(previous.get("account_id") or "")
     profile = user_repo.get_user(account_id)
     if not profile or str(profile.get("account_status") or "") != "invited":
-        raise HTTPException(status_code=409, detail={"code": "account_not_invited"})
+        raise AccountViolation(AccountErrorCode.ACCOUNT_NOT_INVITED)
     # The conditional retirement is the guard, not the status read above it: a stale
     # read cannot be allowed to leave the previous token live beside the new one.
     digest = str(previous.get("token_digest") or "")
     if not account_invitation_repo.revoke_invitation(digest, revoked_at=instant.isoformat()):
-        raise HTTPException(status_code=409, detail={"code": "invitation_not_reissuable"})
+        raise AccountViolation(AccountErrorCode.INVITATION_NOT_REISSUABLE)
     # Retirement and replacement are several writes, so a failure anywhere after the
     # first is compensated: the invitation id the administrator was handed is the only
     # one they have, and leaving it revoked with no replacement strands the account.
@@ -461,7 +463,7 @@ def open_account(
         # address or role is somebody else's, and finishing it here would hand the
         # caller an account it never opened.
         if str(profile.get("email") or "") != address or str(profile.get("role") or "") != clean_role:
-            raise HTTPException(status_code=409, detail={"code": "account_state_invalid"})
+            raise AccountViolation(AccountErrorCode.ACCOUNT_STATE_INVALID)
         existing = str(profile.get("account_number") or "").strip()
         if existing:
             return existing
@@ -594,7 +596,7 @@ def _consume_invitation(*, token: str, now: datetime) -> dict[str, Any]:
     if not matched or str(stored.get("status") or "") != account_invitation_repo.ISSUED_STATUS:
         raise _invitation_rejected()
     if expired:
-        raise HTTPException(status_code=409, detail={"code": "invitation_expired"})
+        raise AccountViolation(AccountErrorCode.INVITATION_EXPIRED)
     if not account_invitation_repo.claim_invitation(digest, used_at=now.isoformat()):
         raise _invitation_rejected()
     return {**stored, "used_at": now.isoformat()}
@@ -618,7 +620,7 @@ def _create_account_row(
     # claim row written with the profile below is what actually breaks the tie. Kept
     # because it answers with the right code before an account number is burned.
     if user_repo.get_user_by_email_and_role(email, role):
-        raise HTTPException(status_code=409, detail={"code": "account_exists"})
+        raise AccountViolation(AccountErrorCode.ACCOUNT_EXISTS)
     claim = account_email_claim_repo.claim_operation(
         email=email, role=role, account_id=account_id, created_at=now.isoformat()
     )
@@ -658,7 +660,7 @@ def _create_account_row(
     except account_deletion_repo.AccountDeletionConflict as exc:
         # The pair was taken between the read above and this commit, or the profile
         # row itself already exists. Nothing was written either way.
-        raise HTTPException(status_code=409, detail={"code": "account_exists"}) from exc
+        raise AccountViolation(AccountErrorCode.ACCOUNT_EXISTS) from exc
 
 
 def _attach_account_number(*, account_id: str, role: str, now: datetime) -> str:
@@ -670,22 +672,20 @@ def _attach_account_number(*, account_id: str, role: str, now: datetime) -> str:
     """
     profile = user_repo.get_user(account_id)
     if not profile:
-        raise HTTPException(status_code=409, detail={"code": "account_profile_missing"})
+        raise AccountViolation(AccountErrorCode.ACCOUNT_PROFILE_MISSING)
     if str(profile.get("account_number") or "").strip():
-        raise HTTPException(status_code=409, detail={"code": "account_number_already_assigned"})
+        raise AccountViolation(AccountErrorCode.ACCOUNT_NUMBER_ALREADY_ASSIGNED)
     try:
         account_number = account_numbering_service.allocate_account_number(
             role=role, account_id=account_id, created_at=now
         )
     except account_numbering_service.UnknownAccountRole as exc:
-        raise HTTPException(status_code=422, detail={"code": "role_not_provisionable"}) from exc
+        raise AccountViolation(AccountErrorCode.ROLE_NOT_PROVISIONABLE) from exc
     except (
         account_numbering_service.AccountNumberExhausted,
         account_numbering_service.AccountNumberAllocationFailed,
     ) as exc:
-        raise HTTPException(
-            status_code=503, detail={"code": "account_number_unavailable"}
-        ) from exc
+        raise AccountViolation(AccountErrorCode.ACCOUNT_NUMBER_UNAVAILABLE) from exc
     operation = user_repo.profile_update_operation(
         account_id,
         update_expression=(
@@ -711,9 +711,7 @@ def _attach_account_number(*, account_id: str, role: str, now: datetime) -> str:
             ]
         )
     except account_deletion_repo.AccountDeletionConflict as exc:
-        raise HTTPException(
-            status_code=409, detail={"code": "account_number_already_assigned"}
-        ) from exc
+        raise AccountViolation(AccountErrorCode.ACCOUNT_NUMBER_ALREADY_ASSIGNED) from exc
     return account_number
 
 
@@ -726,7 +724,7 @@ def _record_date_of_birth(*, account_id: str, date_of_birth: str, now: datetime)
     """
     profile = user_repo.get_user(account_id)
     if not profile:
-        raise HTTPException(status_code=409, detail={"code": "account_profile_missing"})
+        raise AccountViolation(AccountErrorCode.ACCOUNT_PROFILE_MISSING)
     if str(profile.get(DATE_OF_BIRTH_FIELD) or "").strip():
         return
     operation = user_repo.profile_update_operation(
@@ -751,9 +749,7 @@ def _record_date_of_birth(*, account_id: str, date_of_birth: str, now: datetime)
             ]
         )
     except account_deletion_repo.AccountDeletionConflict as exc:
-        raise HTTPException(
-            status_code=409, detail={"code": "account_state_invalid"}
-        ) from exc
+        raise AccountViolation(AccountErrorCode.ACCOUNT_STATE_INVALID) from exc
 
 
 def _date_of_birth(value: Any, *, now: datetime) -> str:
@@ -767,9 +763,7 @@ def _date_of_birth(value: Any, *, now: datetime) -> str:
         return normalize_date_of_birth(text, today=now.date())
     except ValueError:
         # Deliberately unchained: the rejected value must not survive in a traceback.
-        raise HTTPException(
-            status_code=422, detail={"code": "date_of_birth_invalid"}
-        ) from None
+        raise AccountViolation(AccountErrorCode.DATE_OF_BIRTH_INVALID) from None
 
 
 def _transition_account_status(
@@ -777,9 +771,9 @@ def _transition_account_status(
 ) -> None:
     profile = user_repo.get_user(account_id)
     if not profile:
-        raise HTTPException(status_code=409, detail={"code": "account_profile_missing"})
+        raise AccountViolation(AccountErrorCode.ACCOUNT_PROFILE_MISSING)
     if str(profile.get("account_status") or "") != expected_status:
-        raise HTTPException(status_code=409, detail={"code": "account_status_unexpected"})
+        raise AccountViolation(AccountErrorCode.ACCOUNT_STATUS_UNEXPECTED)
     operation = user_repo.profile_update_operation(
         account_id,
         update_expression=(
@@ -806,7 +800,7 @@ def _transition_account_status(
             ]
         )
     except account_deletion_repo.AccountDeletionConflict as exc:
-        raise HTTPException(status_code=409, detail={"code": "account_status_unexpected"}) from exc
+        raise AccountViolation(AccountErrorCode.ACCOUNT_STATUS_UNEXPECTED) from exc
 
 
 def _withdraw_replacement(replacement: list[dict[str, Any]], *, now: datetime) -> None:
@@ -969,14 +963,14 @@ def _create_provider_account(provider: Any, *, email: str, password: str) -> str
         provider, "create_teacher_account", None
     )
     if not callable(create):
-        raise HTTPException(status_code=503, detail={"code": "provisioning_unavailable"})
+        raise AccountViolation(AccountErrorCode.PROVISIONING_UNAVAILABLE)
     try:
         subject = create(email=email, password=password)
     except Exception as exc:
         raise _provider_failure(exc) from exc
     subject = str(subject or "").strip()
     if not subject:
-        raise HTTPException(status_code=503, detail={"code": "provisioning_unavailable"})
+        raise AccountViolation(AccountErrorCode.PROVISIONING_UNAVAILABLE)
     return subject
 
 
@@ -1004,34 +998,28 @@ def _bind_identity(
             created_at=now.isoformat(),
             created_by=created_by,
         )
-    except HTTPException:
+    except RuleViolation:
         raise
     except Exception as exc:
-        raise HTTPException(
-            status_code=503, detail={"code": "provisioning_temporarily_unavailable"}
-        ) from exc
+        raise AccountViolation(AccountErrorCode.PROVISIONING_TEMPORARILY_UNAVAILABLE) from exc
 
 
-def _provider_failure(exc: Exception) -> HTTPException:
+def _provider_failure(exc: Exception) -> AccountViolation:
     name = type(exc).__name__
     if "Exists" in name:
-        return HTTPException(status_code=409, detail={"code": "account_exists"})
+        return AccountViolation(AccountErrorCode.ACCOUNT_EXISTS)
     if "PasswordRejected" in name:
-        return HTTPException(status_code=422, detail={"code": "password_rejected"})
-    return HTTPException(
-        status_code=503, detail={"code": "provisioning_temporarily_unavailable"}
-    )
+        return AccountViolation(AccountErrorCode.PASSWORD_REJECTED)
+    return AccountViolation(AccountErrorCode.PROVISIONING_TEMPORARILY_UNAVAILABLE)
 
 
-def _invitation_rejected() -> HTTPException:
-    return HTTPException(
-        status_code=INVITATION_REJECTION_STATUS, detail=dict(INVITATION_REJECTION_DETAIL)
-    )
+def _invitation_rejected() -> AccountViolation:
+    return AccountViolation(INVITATION_REJECTION_CODE)
 
 
 def _require_account_administrator(actor: dict[str, Any]) -> None:
     if actor.get("role") != "admin" or actor.get("account_status") != "active":
-        raise HTTPException(status_code=403, detail={"code": "action_not_allowed"})
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
     required = capability_repo.ADMIN_IDENTITY_MANAGER
     grants = actor.get("current_grants") or []
     from_grants = any(
@@ -1046,7 +1034,7 @@ def _require_account_administrator(actor: dict[str, Any]) -> None:
         projected.get(required) is True or str(projected.get(required)).lower() == "granted"
     )
     if not from_grants and not from_projection:
-        raise HTTPException(status_code=403, detail={"code": "action_not_allowed"})
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
 
 
 def _audit(**event: Any) -> None:
@@ -1059,7 +1047,7 @@ def _audit(**event: Any) -> None:
 def _actor_id(actor: dict[str, Any]) -> str:
     value = str(actor.get("user_id") or actor.get("sub") or "").strip()
     if not value:
-        raise HTTPException(status_code=403, detail={"code": "action_not_allowed"})
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
     return value
 
 
@@ -1070,14 +1058,14 @@ def _new_account_id(role: str) -> str:
 def _role(role: str) -> str:
     clean = str(role or "").strip()
     if clean not in PROVISIONABLE_ROLES:
-        raise HTTPException(status_code=422, detail={"code": "role_not_provisionable"})
+        raise AccountViolation(AccountErrorCode.ROLE_NOT_PROVISIONABLE)
     return clean
 
 
 def _email(value: Any) -> str:
     email = str(value or "").strip().casefold()
     if not email or "@" not in email or len(email) > 320:
-        raise HTTPException(status_code=422, detail={"code": "valid_email_required"})
+        raise AccountViolation(AccountErrorCode.VALID_EMAIL_REQUIRED)
     return email
 
 
@@ -1104,5 +1092,5 @@ def _parse_timestamp(value: Any) -> datetime:
 def _profile_version(item: dict[str, Any], field: str = "version") -> int:
     number = stored_int(item.get(field))
     if number is None or number <= 0:
-        raise HTTPException(status_code=409, detail={"code": "account_state_invalid"})
+        raise AccountViolation(AccountErrorCode.ACCOUNT_STATE_INVALID)
     return number

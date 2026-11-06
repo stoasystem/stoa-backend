@@ -14,6 +14,7 @@ from stoa.security.admin_authorization import admin_operation, classify_admin_ro
 from stoa.security.authorization import ResourceRef, operator_capability_permits, project_support_lookup
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
 from stoa.services import notification_service
+from rule_violation_helpers import assert_violation
 
 
 def _actor(*capabilities: str, scope: str = "global") -> Actor:
@@ -264,14 +265,7 @@ def test_parent_binding_conflict_is_structured_and_does_not_retry_mutation(monke
         },
     )
 
-    assert response.status_code == 409
-    assert response.json() == {
-        "disposition": "conflict",
-        "pair_id": "a" * 64,
-        "preview_id": "b" * 64,
-        "classification": "conflict",
-        "mutated": False,
-    }
+    assert_violation(response, "binding_repair_conflict")
     assert len(calls) == 1
 
 

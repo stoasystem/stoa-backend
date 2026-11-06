@@ -9,8 +9,6 @@ import secrets
 from typing import Any, Callable
 from uuid import uuid4
 
-from fastapi import HTTPException
-
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
     capability_repo,
@@ -23,6 +21,8 @@ from stoa.services import (
     notify_service,
     teacher_identity_provider,
 )
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
+from stoa.services.account_errors import AccountErrorCode, AccountViolation
 
 
 TEACHER_ROLE = "teacher"
@@ -42,16 +42,22 @@ def submit_application(
 ) -> dict[str, Any]:
     """Persist an immutable candidacy version without creating any identity privilege."""
     if FORBIDDEN_APPLICATION_FIELDS.intersection(payload):
-        raise HTTPException(status_code=422, detail={"code": "credential_documents_deferred"})
+        raise AccountViolation(AccountErrorCode.CREDENTIAL_DOCUMENTS_DEFERRED)
     unexpected = set(payload) - ALLOWED_APPLICATION_FIELDS
     if unexpected:
-        raise HTTPException(status_code=422, detail={"code": "application_fields_not_allowed"})
+        raise AccountViolation(AccountErrorCode.APPLICATION_FIELDS_NOT_ALLOWED)
     email = _email(payload.get("email"))
     if payload.get("email_verified") is not True:
-        raise HTTPException(status_code=422, detail={"code": "verified_email_required"})
+        raise AccountViolation(AccountErrorCode.VERIFIED_EMAIL_REQUIRED)
     application_id = str(payload.get("application_id") or f"teacherapp_{uuid4().hex}").strip()
     existing = teacher_application_repo.list_application_versions(application_id)
-    version = max((_positive_version(item.get("version"), "application") for item in existing), default=0) + 1
+    version = max(
+        (
+            _positive_version(item.get("version"), AccountErrorCode.APPLICATION_STATE_INVALID)
+            for item in existing
+        ),
+        default=0,
+    ) + 1
     timestamp = _timestamp(now)
     row = teacher_application_repo.create_application_version(
         {
@@ -89,11 +95,11 @@ def review_application(
 ) -> dict[str, Any]:
     _require_capability(actor, capability_repo.TEACHER_IDENTITY_REVIEWER)
     if decision not in {"approved", "rejected"}:
-        raise HTTPException(status_code=422, detail={"code": "invalid_review_decision"})
+        raise AccountViolation(AccountErrorCode.INVALID_REVIEW_DECISION)
     clean_reason = _bounded(reason, 1000, "reason")
     application = teacher_application_repo.get_application_version(application_id, version)
     if not application:
-        raise HTTPException(status_code=404, detail={"code": "application_version_not_found"})
+        raise AccountViolation(AccountErrorCode.APPLICATION_VERSION_NOT_FOUND)
     timestamp_dt = (now or (lambda: datetime.now(UTC)))()
     timestamp = timestamp_dt.isoformat()
     reviewer_id = _actor_id(actor)
@@ -161,10 +167,10 @@ def reissue_invitation(
     _require_capability(actor, capability_repo.TEACHER_IDENTITY_REVIEWER)
     application = teacher_application_repo.get_application_version(application_id, version)
     if not application:
-        raise HTTPException(status_code=404, detail={"code": "application_version_not_found"})
+        raise AccountViolation(AccountErrorCode.APPLICATION_VERSION_NOT_FOUND)
     review = teacher_application_repo.get_review(application_id, version)
     if not review or review.get("decision") != "approved":
-        raise HTTPException(status_code=409, detail={"code": "application_not_approved"})
+        raise AccountViolation(AccountErrorCode.APPLICATION_NOT_APPROVED)
     timestamp_dt = (now or (lambda: datetime.now(UTC)))()
     return {
         "applicationId": application_id,
@@ -263,7 +269,7 @@ def applications_for_reviewer(
     """List candidacy versions in one review state without exposing statements."""
     _require_capability(actor, capability_repo.TEACHER_IDENTITY_REVIEWER)
     if review_state not in {"pending_review", "approved", "rejected"}:
-        raise HTTPException(status_code=422, detail={"code": "invalid_review_state"})
+        raise AccountViolation(AccountErrorCode.INVALID_REVIEW_STATE)
     items = teacher_application_repo.list_applications_by_review_state(review_state, limit=limit)
     return {
         "reviewState": review_state,
@@ -289,7 +295,7 @@ def application_status(application_id: str) -> dict[str, Any]:
     """
     versions = teacher_application_repo.list_application_versions(application_id)
     if not versions:
-        raise HTTPException(status_code=404, detail={"code": "application_not_found"})
+        raise AccountViolation(AccountErrorCode.APPLICATION_NOT_FOUND)
     latest = max(versions, key=lambda item: int(item.get("version") or 0))
     return {
         "applicationId": application_id,
@@ -313,19 +319,19 @@ def activate_from_invitation(
     digest = _token_digest(token)
     invitation = teacher_application_repo.get_invitation(digest)
     if not invitation:
-        raise HTTPException(status_code=409, detail={"code": "invitation_invalid"})
+        raise AccountViolation(AccountErrorCode.INVITATION_INVALID)
     email = _email(verified_email)
     if not hmac.compare_digest(str(invitation.get("verified_email") or ""), email):
-        raise HTTPException(status_code=409, detail={"code": "invitation_email_mismatch"})
+        raise AccountViolation(AccountErrorCode.INVITATION_EMAIL_MISMATCH)
     instant = (now or (lambda: datetime.now(UTC)))()
     if _invitation_expiry(invitation) <= instant:
-        raise HTTPException(status_code=409, detail={"code": "invitation_expired"})
+        raise AccountViolation(AccountErrorCode.INVITATION_EXPIRED)
 
     command_id = str(invitation.get("command_id") or f"teacheractivate_{digest[:24]}")
     existing = teacher_application_repo.get_activation_command(command_id)
     if invitation.get("status") != "issued":
         if not existing or existing.get("status") not in {"provider_failed", "reconciling"}:
-            raise HTTPException(status_code=409, detail={"code": "invitation_already_used"})
+            raise AccountViolation(AccountErrorCode.INVITATION_ALREADY_USED)
         return _resume_activation(existing, provider=provider, now=instant)
 
     user_id = f"teacher_{sha256(command_id.encode()).hexdigest()[:24]}"
@@ -334,7 +340,8 @@ def activate_from_invitation(
             "command_id": command_id,
             "application_id": invitation["application_id"],
             "application_version": _positive_version(
-                invitation.get("application_version"), "invitation application"
+                invitation.get("application_version"),
+                AccountErrorCode.INVITATION_APPLICATION_STATE_INVALID,
             ),
             "invitation_id": invitation["invitation_id"],
             "verified_email": email,
@@ -353,7 +360,7 @@ def activate_from_invitation(
         consumed_at=instant.isoformat(),
     )
     if not won:
-        raise HTTPException(status_code=409, detail={"code": "invitation_already_used"})
+        raise AccountViolation(AccountErrorCode.INVITATION_ALREADY_USED)
     _audit(
         stream_id=command["application_id"],
         event_type="teacher_invitation_consumed",
@@ -385,10 +392,10 @@ def claim_and_activate(
     digest = _token_digest(token)
     invitation = teacher_application_repo.get_invitation(digest)
     if not invitation:
-        raise HTTPException(status_code=409, detail={"code": "invitation_invalid"})
+        raise AccountViolation(AccountErrorCode.INVITATION_INVALID)
     instant = (now or (lambda: datetime.now(UTC)))()
     if _invitation_expiry(invitation) <= instant:
-        raise HTTPException(status_code=409, detail={"code": "invitation_expired"})
+        raise AccountViolation(AccountErrorCode.INVITATION_EXPIRED)
     if invitation.get("status") != "issued":
         command_id = str(invitation.get("command_id") or "")
         existing = (
@@ -397,20 +404,18 @@ def claim_and_activate(
         if existing and existing.get("status") in {"provider_failed", "reconciling"}:
             # The account was already created by an earlier attempt, so the candidate can
             # finish through the signed-in activation path instead of creating a second one.
-            raise HTTPException(status_code=409, detail={"code": "activation_resume_required"})
-        raise HTTPException(status_code=409, detail={"code": "invitation_already_used"})
+            raise AccountViolation(AccountErrorCode.ACTIVATION_RESUME_REQUIRED)
+        raise AccountViolation(AccountErrorCode.INVITATION_ALREADY_USED)
 
     email = _email(invitation.get("verified_email"))
     try:
         subject = provider.create_teacher_account(email=email, password=password)
     except teacher_identity_provider.TeacherAccountExists as exc:
-        raise HTTPException(status_code=409, detail={"code": "account_exists"}) from exc
+        raise AccountViolation(AccountErrorCode.ACCOUNT_EXISTS) from exc
     except teacher_identity_provider.TeacherAccountPasswordRejected as exc:
-        raise HTTPException(status_code=422, detail={"code": "password_rejected"}) from exc
+        raise AccountViolation(AccountErrorCode.PASSWORD_REJECTED) from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=503, detail={"code": "activation_temporarily_unavailable"}
-        ) from exc
+        raise AccountViolation(AccountErrorCode.ACTIVATION_TEMPORARILY_UNAVAILABLE) from exc
 
     return activate_from_invitation(
         token=token,
@@ -428,7 +433,7 @@ def full_application_for_reviewer(
     _require_capability(actor, capability_repo.TEACHER_IDENTITY_REVIEWER)
     item = teacher_application_repo.get_application_version(application_id, version)
     if not item:
-        raise HTTPException(status_code=404, detail={"code": "application_version_not_found"})
+        raise AccountViolation(AccountErrorCode.APPLICATION_VERSION_NOT_FOUND)
     return {
         **_application_metadata(item),
         "fullName": item.get("full_name"),
@@ -439,7 +444,7 @@ def full_application_for_reviewer(
 
 def _resume_activation(command: dict[str, Any], *, provider: Any, now: datetime) -> dict[str, Any]:
     if command.get("status") == "active":
-        raise HTTPException(status_code=409, detail={"code": "invitation_already_used"})
+        raise AccountViolation(AccountErrorCode.INVITATION_ALREADY_USED)
     user_id = command["user_id"]
     # The review decided who may hold a teacher account; the opening itself is the same
     # one every other role gets, so the number, the birthday, the change-password flag
@@ -454,16 +459,13 @@ def _resume_activation(command: dict[str, Any], *, provider: Any, now: datetime)
             extra_fields={"activation_command_id": command["command_id"]},
             now=lambda: now,
         )
-    except HTTPException as exc:
+    except AccountViolation as exc:
         # A refusal the store will repeat forever is not a step to come back to, and
         # deferring it would leave a resumable command that can never finish. The
         # status code cannot tell the two apart: losing a race for an account number
         # also answers 409, and that one happens *after* the row has landed, so
         # refusing to defer it strands the account half-opened with its address held.
-        detail = exc.detail if isinstance(exc.detail, dict) else {}
-        if str(detail.get("code") or "") in (
-            account_provisioning_service.TERMINAL_OPEN_ACCOUNT_CODES
-        ):
+        if exc.code in account_provisioning_service.TERMINAL_OPEN_ACCOUNT_CODES:
             raise
         raise _defer_activation(command, user_id=user_id, now=now) from exc
 
@@ -493,7 +495,9 @@ def _resume_activation(command: dict[str, Any], *, provider: Any, now: datetime)
     latest = teacher_application_repo.get_activation_command(command["command_id"]) or command
     completed = teacher_application_repo.update_activation_command(
         command["command_id"],
-        expected_version=_positive_version(latest.get("version"), "activation command"),
+        expected_version=_positive_version(
+            latest.get("version"), AccountErrorCode.ACTIVATION_COMMAND_STATE_INVALID
+        ),
         status="active",
         updated_at=now.isoformat(),
         evidence_reference=f"teacher-activation:{command['command_id']}",
@@ -520,12 +524,14 @@ def _resume_activation(command: dict[str, Any], *, provider: Any, now: datetime)
 
 def _defer_activation(
     command: dict[str, Any], *, user_id: str, now: datetime
-) -> HTTPException:
+) -> AccountViolation:
     """Park one activation where a retry can pick it up, and say so once."""
     latest = teacher_application_repo.get_activation_command(command["command_id"]) or command
     teacher_application_repo.update_activation_command(
         command["command_id"],
-        expected_version=_positive_version(latest.get("version"), "activation command"),
+        expected_version=_positive_version(
+            latest.get("version"), AccountErrorCode.ACTIVATION_COMMAND_STATE_INVALID
+        ),
         status="provider_failed",
         updated_at=now.isoformat(),
         evidence_reference=f"teacher-activation:{command['command_id']}",
@@ -540,14 +546,12 @@ def _defer_activation(
         command_id=command["command_id"],
         created_at=now.isoformat(),
     )
-    return HTTPException(
-        status_code=503, detail={"code": "activation_temporarily_unavailable"}
-    )
+    return AccountViolation(AccountErrorCode.ACTIVATION_TEMPORARILY_UNAVAILABLE)
 
 
 def _require_capability(actor: dict[str, Any], required: str) -> None:
     if actor.get("role") != "admin" or actor.get("account_status") != "active":
-        raise HTTPException(status_code=403, detail={"code": "action_not_allowed"})
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
     grants = actor.get("current_grants") or []
     from_current_grants = any(
         isinstance(grant, dict)
@@ -561,7 +565,7 @@ def _require_capability(actor: dict[str, Any], required: str) -> None:
         projected.get(required) is True or str(projected.get(required)).lower() == "granted"
     )
     if not from_current_grants and not from_actor_projection:
-        raise HTTPException(status_code=403, detail={"code": "action_not_allowed"})
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
 
 
 def _audit(**event: Any) -> None:
@@ -584,34 +588,38 @@ def _application_metadata(item: dict[str, Any]) -> dict[str, Any]:
 def _actor_id(actor: dict[str, Any]) -> str:
     value = str(actor.get("user_id") or actor.get("sub") or "").strip()
     if not value:
-        raise HTTPException(status_code=403, detail={"code": "action_not_allowed"})
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
     return value
 
 
 def _token_digest(token: str) -> str:
     clean = str(token or "").strip()
     if not clean:
-        raise HTTPException(status_code=409, detail={"code": "invitation_invalid"})
+        raise AccountViolation(AccountErrorCode.INVITATION_INVALID)
     return sha256(clean.encode("utf-8")).hexdigest()
 
 
 def _email(value: Any) -> str:
     email = str(value or "").strip().casefold()
     if not email or "@" not in email or len(email) > 320:
-        raise HTTPException(status_code=422, detail={"code": "valid_email_required"})
+        raise AccountViolation(AccountErrorCode.VALID_EMAIL_REQUIRED)
     return email
 
 
 def _bounded(value: Any, limit: int, field: str) -> str:
     cleaned = str(value or "").strip()
     if not cleaned or len(cleaned) > limit:
-        raise HTTPException(status_code=422, detail={"code": "invalid_application_field", "field": field})
+        raise AccountViolation(
+            AccountErrorCode.INVALID_APPLICATION_FIELD, params={"field": field}
+        )
     return cleaned
 
 
 def _subjects(value: Any) -> list[str]:
     if not isinstance(value, list) or not 1 <= len(value) <= 20:
-        raise HTTPException(status_code=422, detail={"code": "invalid_application_field", "field": "subjects"})
+        raise AccountViolation(
+            AccountErrorCode.INVALID_APPLICATION_FIELD, params={"field": "subjects"}
+        )
     return [_bounded(item, 80, "subjects") for item in value]
 
 
@@ -635,8 +643,8 @@ def _invitation_expiry(invitation: dict[str, Any]) -> datetime:
     return _parse_timestamp(readable if readable is not None else invitation.get("expires_at"))
 
 
-def _positive_version(value: object, label: str) -> int:
+def _positive_version(value: object, code: AccountErrorCode) -> int:
     number = stored_int(value)
     if number is None or number <= 0:
-        raise HTTPException(status_code=409, detail={"code": f"{label}_state_invalid"})
+        raise AccountViolation(code)
     return number

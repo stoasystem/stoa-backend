@@ -18,6 +18,7 @@ from fakes.dynamodb import FakeTable, as_stored as _as_stored
 from stoa.config import Settings, get_settings
 from stoa.routers import auth
 from stoa.services import locale_service, password_change_code_service as codes
+from rule_violation_helpers import assert_violation
 
 
 SERVICE_SOURCE = Path(codes.__file__).read_text(encoding="utf-8")
@@ -616,8 +617,11 @@ def test_wrong_and_expired_codes_answer_with_identical_bytes(password_change_cli
         json={"currentPassword": "OldPass123", "code": code, "newPassword": "BrandNew123"},
     )
 
-    assert wrong.status_code == expired.status_code == 400
-    assert wrong.content == expired.content
+    assert_violation(wrong, "password_change_verification_failed")
+    # Byte for byte, but for the one per-request value: the correlation id.
+    assert wrong.content.replace(
+        wrong.headers["X-Correlation-ID"].encode("ascii"), b"<id>"
+    ) == expired.content.replace(expired.headers["X-Correlation-ID"].encode("ascii"), b"<id>")
     assert wrong.headers.get("content-type") == expired.headers.get("content-type")
 
 

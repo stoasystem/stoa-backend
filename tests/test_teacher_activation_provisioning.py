@@ -13,7 +13,8 @@ import re
 from typing import Any
 from uuid import uuid4
 
-from fastapi import HTTPException
+from stoa.rule_violation import RuleViolation
+from stoa.services.account_errors import AccountErrorCode, AccountViolation
 import pytest
 
 from test_account_provisioning import FakeAccountTable
@@ -304,9 +305,9 @@ def test_过期判断仍然拦得住过期的令牌(
     """
     token = _approve(delivered)
 
-    with pytest.raises(HTTPException) as expired:
+    with pytest.raises(RuleViolation) as expired:
         _activate(token, at=_moment(3601))
-    assert expired.value.detail == {"code": "invitation_expired"}
+    assert expired.value.code == "invitation_expired"
     assert table.rows.get(("USER#", "PROFILE")) is None
     assert not [key for key in table.rows if key[1] == account_email_claim_repo.CLAIM_SK]
 
@@ -325,9 +326,9 @@ def test_激活仍然认得只写了ISO过期时间的老邀请行(
     table.rows[key]["expires_at"] = _moment(3600).isoformat()
     del table.rows[key]["expires_at_iso"]
 
-    with pytest.raises(HTTPException) as expired:
+    with pytest.raises(RuleViolation) as expired:
         _activate(token, at=_moment(3601))
-    assert expired.value.detail == {"code": "invitation_expired"}
+    assert expired.value.code == "invitation_expired"
 
     activated = _activate(token, at=_moment(60))
     assert activated["status"] == "active"
@@ -366,10 +367,10 @@ def test_管理员先开的教师账号挡住同地址的教师激活(
     )
     token = _approve(delivered)
 
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RuleViolation) as refused:
         _activate(token)
     assert refused.value.status_code == 409
-    assert refused.value.detail == {"code": "account_exists"}
+    assert refused.value.code == "account_exists"
     assert len([key for key in table.rows if key[1] == account_email_claim_repo.CLAIM_SK]) == 1
 
 
@@ -379,7 +380,7 @@ def test_教师激活挡住管理员再开同地址的教师账号(
     """The same refusal in the other direction, which a per-path rule would not give."""
     _activate(_approve(delivered))
 
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RuleViolation) as refused:
         account_provisioning_service.invite_account(
             actor=_admin(),
             role="teacher",
@@ -388,7 +389,7 @@ def test_教师激活挡住管理员再开同地址的教师账号(
             now=lambda: _moment(120),
         )
     assert refused.value.status_code == 409
-    assert refused.value.detail == {"code": "account_exists"}
+    assert refused.value.code == "account_exists"
 
 
 def test_同一地址仍然可以另开一个家长账号(
@@ -426,9 +427,9 @@ def test_令牌仍然只能用一次且不会开出第二个账号(
     token = _approve(delivered)
     activated = _activate(token)
 
-    with pytest.raises(HTTPException) as replay:
+    with pytest.raises(RuleViolation) as replay:
         _activate(token, at=_moment(120))
-    assert replay.value.detail == {"code": "invitation_already_used"}
+    assert replay.value.code == "invitation_already_used"
     assert [str(row["user_id"]) for row in table.profiles()] == [activated["userId"]]
     assert len([key for key in table.rows if key[1] == account_email_claim_repo.CLAIM_SK]) == 1
     assert len([key for key in table.rows if key[0].startswith("ACCOUNT_NUMBER#")]) == 1
@@ -450,7 +451,7 @@ def test_没有审核权限就批不了也开不出账号(
     )
     stranger = {"user_id": "admin-2", "role": "admin", "account_status": "active"}
 
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RuleViolation) as refused:
         teacher_application_service.review_application(
             actor=stranger,
             application_id=application["applicationId"],
@@ -477,7 +478,7 @@ def test_供应商失败后重试续做同一个账号而不是开第二个(
     token = _approve(delivered)
     provider = TeacherProvider(group_failures=1)
 
-    with pytest.raises(HTTPException) as deferred:
+    with pytest.raises(RuleViolation) as deferred:
         _activate(token, provider=provider)
     assert deferred.value.status_code == 503
     parked = table.profiles()
@@ -562,19 +563,17 @@ def test_争用导致的编号失败要能续做而不是把命令钉死(
     def contended(*, account_id: str, role: str, now: datetime) -> str:
         attempts.append(account_id)
         if len(attempts) == 1:
-            raise HTTPException(
-                status_code=409, detail={"code": "account_number_already_assigned"}
-            )
+            raise AccountViolation(AccountErrorCode.ACCOUNT_NUMBER_ALREADY_ASSIGNED)
         return real_attach(account_id=account_id, role=role, now=now)
 
     monkeypatch.setattr(
         account_provisioning_service, "_attach_account_number", contended
     )
 
-    with pytest.raises(HTTPException) as deferred:
+    with pytest.raises(RuleViolation) as deferred:
         _activate(token)
     assert deferred.value.status_code == 503
-    assert deferred.value.detail == {"code": "activation_temporarily_unavailable"}
+    assert deferred.value.code == "activation_temporarily_unavailable"
 
     resumed = teacher_application_service.activate_from_invitation(
         token=token,
@@ -597,15 +596,15 @@ def test_一个地址已经属于别人时激活直接拒绝而不是停在可�
         account_provisioning_service,
         "_attach_account_number",
         lambda **_kwargs: (_ for _ in ()).throw(
-            HTTPException(status_code=409, detail={"code": "account_exists"})
+            AccountViolation(AccountErrorCode.ACCOUNT_EXISTS)
         ),
     )
 
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RuleViolation) as refused:
         _activate(token)
 
     assert refused.value.status_code == 409
-    assert refused.value.detail == {"code": "account_exists"}
+    assert refused.value.code == "account_exists"
 
 
 def test_续做只续做本账号_地址对不上就拒绝(table: TeacherTable) -> None:
@@ -623,7 +622,7 @@ def test_续做只续做本账号_地址对不上就拒绝(table: TeacherTable) 
         now=lambda: MOMENT,
     )
 
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RuleViolation) as refused:
         account_provisioning_service.open_account(
             account_id="shared-id",
             role="teacher",
@@ -633,7 +632,7 @@ def test_续做只续做本账号_地址对不上就拒绝(table: TeacherTable) 
             now=lambda: MOMENT,
         )
 
-    assert refused.value.detail == {"code": "account_state_invalid"}
+    assert refused.value.code == "account_state_invalid"
 
 
 def test_调用方的附加字段改不动身份(table: TeacherTable) -> None:

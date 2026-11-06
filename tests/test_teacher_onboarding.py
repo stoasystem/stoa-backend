@@ -3,7 +3,8 @@
 from datetime import UTC, datetime, timedelta
 
 from botocore.exceptions import ClientError
-from fastapi import HTTPException
+from stoa.rule_violation import RuleViolation
+from stoa.services.account_errors import AccountErrorCode, AccountViolation
 import pytest
 
 from stoa.services import teacher_application_service, teacher_identity_provider
@@ -186,7 +187,7 @@ def _install_teacher_repositories(monkeypatch):
                 row["email"] == email and row["role"] == role for row in profiles.values()
             )
             if taken:
-                raise HTTPException(status_code=409, detail={"code": "account_exists"})
+                raise AccountViolation(AccountErrorCode.ACCOUNT_EXISTS)
             profile = {
                 "user_id": account_id,
                 "role": role,
@@ -206,9 +207,7 @@ def _install_teacher_repositories(monkeypatch):
         del now
         profile = profiles.get(account_id)
         if profile is None or profile["account_status"] != expected_status:
-            raise HTTPException(
-                status_code=409, detail={"code": "account_status_unexpected"}
-            )
+            raise AccountViolation(AccountErrorCode.ACCOUNT_STATUS_UNEXPECTED)
         profile["account_status"] = next_status
 
     monkeypatch.setattr(provisioning, "open_account", open_account)
@@ -338,7 +337,7 @@ def test_activation_is_same_email_single_use_and_fail_closed(monkeypatch):
     assert len(provider.calls) == 1
     assert len(state["bindings"]) == 1
 
-    with pytest.raises(HTTPException) as replay:
+    with pytest.raises(RuleViolation) as replay:
         teacher_application_service.activate_from_invitation(
             token=_delivered_token(state),
             verified_email="candidate@example.test",
@@ -347,7 +346,7 @@ def test_activation_is_same_email_single_use_and_fail_closed(monkeypatch):
             provider=provider,
             now=lambda: now + timedelta(seconds=2),
         )
-    assert replay.value.detail["code"] == "invitation_already_used"
+    assert replay.value.code == "invitation_already_used"
     assert len(provider.calls) == 1
 
 
@@ -377,7 +376,7 @@ def test_invitation_wrong_email_and_expiry_never_create_profile(monkeypatch):
         ("other@example.test", now + timedelta(seconds=1), "invitation_email_mismatch"),
         ("candidate@example.test", now + timedelta(seconds=61), "invitation_expired"),
     ]:
-        with pytest.raises(HTTPException) as denied:
+        with pytest.raises(RuleViolation) as denied:
             teacher_application_service.activate_from_invitation(
                 token=_delivered_token(state),
                 verified_email=email,
@@ -386,7 +385,7 @@ def test_invitation_wrong_email_and_expiry_never_create_profile(monkeypatch):
                 provider=object(),
                 now=lambda instant=instant: instant,
             )
-        assert denied.value.detail["code"] == code
+        assert denied.value.code == code
     assert state["profiles"] == {}
 
 
@@ -430,7 +429,7 @@ def test_provider_failure_keeps_local_teacher_non_active_and_retry_resumes(monke
         subject="subject-teacher-1",
         provider=provider,
     )
-    with pytest.raises(HTTPException) as deferred:
+    with pytest.raises(RuleViolation) as deferred:
         teacher_application_service.activate_from_invitation(
             **activation, now=lambda: now + timedelta(seconds=1)
         )
@@ -559,7 +558,7 @@ def test_claim_is_single_use_and_never_creates_a_second_account(monkeypatch):
         now=lambda: now + timedelta(seconds=1),
     )
 
-    with pytest.raises(HTTPException) as replay:
+    with pytest.raises(RuleViolation) as replay:
         teacher_application_service.claim_and_activate(
             token=token,
             password=_PASSWORD,
@@ -568,7 +567,7 @@ def test_claim_is_single_use_and_never_creates_a_second_account(monkeypatch):
             now=lambda: now + timedelta(seconds=2),
         )
 
-    assert replay.value.detail["code"] == "invitation_already_used"
+    assert replay.value.code == "invitation_already_used"
     assert len(provider.created) == 1
     assert len(state["profiles"]) == 1
 
@@ -582,7 +581,7 @@ def test_claim_fails_closed_on_expired_and_unknown_tokens(monkeypatch):
         (_delivered_token(state), now + timedelta(seconds=61), "invitation_expired"),
         ("unknown-token-value-that-was-never-issued", now + timedelta(seconds=1), "invitation_invalid"),
     ]:
-        with pytest.raises(HTTPException) as denied:
+        with pytest.raises(RuleViolation) as denied:
             teacher_application_service.claim_and_activate(
                 token=token,
                 password=_PASSWORD,
@@ -590,7 +589,7 @@ def test_claim_fails_closed_on_expired_and_unknown_tokens(monkeypatch):
                 provider=provider,
                 now=lambda instant=instant: instant,
             )
-        assert denied.value.detail["code"] == code
+        assert denied.value.code == code
 
     assert provider.created == []
     assert state["profiles"] == {}
@@ -625,7 +624,7 @@ def test_claim_maps_provider_refusals_and_grants_nothing(monkeypatch, error, sta
         def ensure_teacher_identity(self, **_kwargs):
             raise AssertionError("identity must not be granted when account creation failed")
 
-    with pytest.raises(HTTPException) as denied:
+    with pytest.raises(RuleViolation) as denied:
         teacher_application_service.claim_and_activate(
             token=_delivered_token(state),
             password=_PASSWORD,
@@ -635,7 +634,7 @@ def test_claim_maps_provider_refusals_and_grants_nothing(monkeypatch, error, sta
         )
 
     assert denied.value.status_code == status_code
-    assert denied.value.detail["code"] == code
+    assert denied.value.code == code
     assert state["profiles"] == {}
     assert state["bindings"] == {}
 
@@ -670,7 +669,7 @@ def test_public_status_reports_progress_without_submitted_content(monkeypatch):
         assert secret not in body
     assert state["delivered"] == []
 
-    with pytest.raises(HTTPException) as missing:
+    with pytest.raises(RuleViolation) as missing:
         teacher_application_service.application_status("application_does_not_exist")
     assert missing.value.status_code == 404
 
@@ -686,13 +685,13 @@ def test_reviewer_listing_requires_capability_and_withholds_statements(monkeypat
     assert "statement" not in listed["items"][0]
     assert _CANDIDATE["statement"] not in repr(listed)
 
-    with pytest.raises(HTTPException) as denied:
+    with pytest.raises(RuleViolation) as denied:
         teacher_application_service.applications_for_reviewer(_non_reviewer())
     assert denied.value.status_code == 403
 
-    with pytest.raises(HTTPException) as invalid:
+    with pytest.raises(RuleViolation) as invalid:
         teacher_application_service.applications_for_reviewer(_reviewer(), review_state="all")
-    assert invalid.value.detail["code"] == "invalid_review_state"
+    assert invalid.value.code == "invalid_review_state"
 
 
 def test_reissue_delivers_a_fresh_token_without_returning_it(monkeypatch):
@@ -726,7 +725,7 @@ def test_reissue_delivers_a_fresh_token_without_returning_it(monkeypatch):
     # Reissue does not revoke the superseded invitation, so the provider's refusal to
     # create a duplicate address is what keeps a stale token from yielding a second
     # account. Tightening this to an explicit revoke is tracked separately.
-    with pytest.raises(HTTPException) as stale:
+    with pytest.raises(RuleViolation) as stale:
         teacher_application_service.claim_and_activate(
             token=first_token,
             password=_PASSWORD,
@@ -734,7 +733,7 @@ def test_reissue_delivers_a_fresh_token_without_returning_it(monkeypatch):
             provider=provider,
             now=lambda: now + timedelta(seconds=7),
         )
-    assert stale.value.detail["code"] == "account_exists"
+    assert stale.value.code == "account_exists"
     assert len(provider.created) == 1
     assert len(state["profiles"]) == 1
 
@@ -743,16 +742,16 @@ def test_reissue_is_denied_without_capability_or_an_approval(monkeypatch):
     now = datetime(2026, 7, 14, 12, 0, tzinfo=UTC)
     state, application = _submit(monkeypatch, now=now)
 
-    with pytest.raises(HTTPException) as unapproved:
+    with pytest.raises(RuleViolation) as unapproved:
         teacher_application_service.reissue_invitation(
             actor=_reviewer(),
             application_id=application["applicationId"],
             version=application["version"],
             now=lambda: now,
         )
-    assert unapproved.value.detail["code"] == "application_not_approved"
+    assert unapproved.value.code == "application_not_approved"
 
-    with pytest.raises(HTTPException) as denied:
+    with pytest.raises(RuleViolation) as denied:
         teacher_application_service.reissue_invitation(
             actor=_non_reviewer(),
             application_id=application["applicationId"],
