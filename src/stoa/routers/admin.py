@@ -2746,10 +2746,6 @@ def change_account_status(
     return {"userId": user_id, "accountStatus": payload.status, "previousStatus": current}
 
 
-def _parent_link_status(code: str) -> int:
-    return 404 if code == "link_target_not_found" else 409
-
-
 @router.post("/users/parent-links")
 def assign_parent_link(
     body: AdminParentLinkRequest,
@@ -2763,12 +2759,8 @@ def assign_parent_link(
             actor_id=str(user.get("user_id") or user.get("sub") or ""),
             relationship=body.relationship,
         )
-    except parent_link_service.ParentLinkError as exc:
-        raise HTTPException(
-            status_code=_parent_link_status(exc.code), detail={"code": exc.code}
-        ) from exc
     except parent_link_repo.ParentLinkConflict as exc:
-        raise HTTPException(status_code=409, detail={"code": "link_already_exists"}) from exc
+        raise parent_link_service.ParentLinkError("link_already_exists") from exc
     _record_account_admin_event(
         actor=user,
         target_id=body.student_id,

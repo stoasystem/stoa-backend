@@ -1,6 +1,10 @@
 import pytest
 
-from stoa.services.teacher_reply_service import TeacherReplyValidationError, normalize_teacher_reply
+from stoa.services.teacher_reply_service import (
+    TeacherReplyErrorCode,
+    TeacherReplyValidationError,
+    normalize_teacher_reply,
+)
 
 
 def _paragraph(text):
@@ -45,8 +49,9 @@ def test_latex_in_formula_blocks_is_not_html(latex):
 @pytest.mark.parametrize("text", MARKUP)
 def test_markup_is_refused_as_raw_html(text):
     for content, rich_content in ((text, None), (None, _paragraph(text)), (None, _formula(text))):
-        with pytest.raises(TeacherReplyValidationError, match="unsafe raw HTML"):
+        with pytest.raises(TeacherReplyValidationError) as refused:
             normalize_teacher_reply(content, rich_content)
+        assert refused.value.code is TeacherReplyErrorCode.UNSAFE_HTML
 
 
 @pytest.mark.parametrize(
@@ -57,5 +62,34 @@ def test_markup_is_refused_as_raw_html(text):
     ],
 )
 def test_private_marker_checks_are_unchanged(text, reason):
-    with pytest.raises(TeacherReplyValidationError, match=reason):
+    with pytest.raises(TeacherReplyValidationError) as refused:
         normalize_teacher_reply(text, None)
+    assert refused.value.code is TeacherReplyErrorCode.PRIVATE_MARKERS
+    assert reason in refused.value.internal_detail
+
+
+def _blocks(count, text="x"):
+    return {"version": 1, "blocks": [{"type": "paragraph", "text": text}] * count}
+
+
+# The refusals the reply composer tells apart, each by its own code (#274).
+@pytest.mark.parametrize(
+    ("content", "rich_content", "code", "limit"),
+    [
+        (None, _paragraph("x" * 2001), TeacherReplyErrorCode.BLOCK_TOO_LONG, 2000),
+        (None, _formula("x" * 501), TeacherReplyErrorCode.BLOCK_TOO_LONG, 500),
+        (None, _blocks(21), TeacherReplyErrorCode.TOO_MANY_BLOCKS, 20),
+        ("x" * 4001, None, TeacherReplyErrorCode.TOO_LONG, 4000),
+        (None, _blocks(3, "x" * 1500), TeacherReplyErrorCode.TOO_LONG, 4000),
+        ("   ", None, TeacherReplyErrorCode.EMPTY, None),
+        (None, _blocks(0), TeacherReplyErrorCode.EMPTY, None),
+        (None, {"version": 2, "blocks": []}, TeacherReplyErrorCode.MALFORMED, None),
+        (None, {"version": 1, "blocks": [{"type": "table"}]}, TeacherReplyErrorCode.MALFORMED, None),
+    ],
+)
+def test_each_refusal_has_its_own_code(content, rich_content, code, limit):
+    with pytest.raises(TeacherReplyValidationError) as refused:
+        normalize_teacher_reply(content, rich_content)
+    assert refused.value.code is code
+    assert refused.value.status_code == 422
+    assert refused.value.params == ({} if limit is None else {"max": limit})

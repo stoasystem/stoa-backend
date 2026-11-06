@@ -909,14 +909,7 @@ async def request_teacher_help(
             },
         )
 
-    unavailable = HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail={
-            "code": "teacher_support_admission_recoverable",
-            "message": "Teacher support is briefly unavailable. Please try again.",
-            "action": "retry_same_case",
-        },
-    )
+    HelpCode = help_requests.HelpRequestErrorCode
     try:
         outcome = help_requests.ask(
             conversation=conv,
@@ -927,43 +920,28 @@ async def request_teacher_help(
             table=get_table(),
         )
     except (help_requests.HelpRequestUnavailable, account_deletion_repo.AccountDeletionConflict) as exc:
-        raise unavailable from exc
+        # Nothing was admitted: asking again for the same case is safe.
+        raise help_requests.HelpRequestViolation(
+            HelpCode.TEACHER_SUPPORT_ADMISSION_RECOVERABLE, internal_detail=type(exc).__name__
+        ) from exc
 
     Disposition = teacher_support_allowance_service.TeacherSupportAdmissionDisposition
     if outcome.disposition is Disposition.PLAN_DENIED:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": "teacher_support_not_included",
-                # Nobody can buy their way past this while the paid surface is
-                # frozen, and on an assigned account there was never anything to
-                # buy. Pointing at a plan sends the student somewhere that
-                # cannot help them.
-                "message": "Teacher support is not switched on for this account.",
-                "action": "contact_administrator",
-            },
-        )
+        # Nobody can buy their way past this while the paid surface is frozen,
+        # and on an assigned account there was never anything to buy. Pointing
+        # at a plan sends the student somewhere that cannot help them.
+        raise help_requests.HelpRequestViolation(HelpCode.TEACHER_SUPPORT_NOT_INCLUDED)
     if outcome.disposition is Disposition.LIMIT_EXCEEDED:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail={
-                "code": "teacher_support_allowance_exhausted",
-                "message": "The weekly teacher-support allowance is used.",
-                "action": "wait_for_next_week",
-            },
-        )
+        raise help_requests.HelpRequestViolation(HelpCode.TEACHER_SUPPORT_ALLOWANCE_EXHAUSTED)
     if outcome.disposition is Disposition.IDEMPOTENCY_CONFLICT:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Teacher-support case identity conflicts with prior admission",
-        )
+        raise help_requests.HelpRequestViolation(HelpCode.TEACHER_SUPPORT_CASE_CONFLICT)
     if outcome.record is None:
         logger.warning(
             "teacher_help_admission_retryable student=%s conversation=%s",
             student_id,
             body.conversationId,
         )
-        raise unavailable
+        raise help_requests.HelpRequestViolation(HelpCode.TEACHER_SUPPORT_ADMISSION_RECOVERABLE)
 
     record_help_usage(outcome.record)
     return _teacher_help_response(outcome.record, fallback_created_at=now)
@@ -1013,30 +991,9 @@ async def withdraw_teacher_help_request(
     teacher has taken the request it can no longer be withdrawn. Asking again
     in the same conversation is not possible afterwards; a new chat is.
     """
-    conversation_id = authorized.ref.resource_id
-    try:
-        withdrawn = help_requests.withdraw(
-            conversation_id, student_id=authorized.ref.student_id, table=get_table()
-        )
-    except help_requests.HelpRequestEndingRefused as refused:
-        code = refused.code
-        raise HTTPException(
-            status_code=(
-                status.HTTP_404_NOT_FOUND
-                if code == "teacher_help_request_not_found"
-                else status.HTTP_409_CONFLICT
-            ),
-            detail={"code": code},
-        ) from refused
-    except help_requests.HelpRequestEndingUnavailable as unavailable:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "code": "teacher_help_withdrawal_unavailable",
-                "message": "Withdrawing is briefly unavailable. Please try again.",
-                "action": "retry_same_case",
-            },
-        ) from unavailable
+    withdrawn = help_requests.withdraw(
+        authorized.ref.resource_id, student_id=authorized.ref.student_id, table=get_table()
+    )
     return _teacher_help_response(withdrawn, fallback_created_at="")
 
 
@@ -1047,8 +1004,9 @@ async def withdraw_teacher_help_request(
         status.HTTP_404_NOT_FOUND: {
             "model": NotFoundResponse,
             "description": (
-                "The conversation was never escalated to a teacher (a sentence), "
-                "or the caller may not see it (`resource_not_found`)."
+                "The conversation was never escalated to a teacher "
+                "(`teacher_help_not_requested`), or the caller may not see it "
+                "(`resource_not_found`)."
             ),
         }
     },
@@ -1063,16 +1021,9 @@ async def get_teacher_help_status(
     ),
 ):
     """Report where a student's request stands, for the waiting indicator."""
-    try:
-        record = help_requests.get(authorized.ref.resource_id, table=get_table())
-    except help_requests.HelpRequestUnavailable as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="The request could not be read. Please try again.",
-        ) from exc
+    record = help_requests.get(authorized.ref.resource_id, table=get_table())
     if record is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="This conversation was never escalated to a teacher",
+        raise help_requests.HelpRequestViolation(
+            help_requests.HelpRequestErrorCode.TEACHER_HELP_NOT_REQUESTED
         )
     return _teacher_help_response(record, fallback_created_at="")

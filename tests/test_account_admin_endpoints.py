@@ -33,6 +33,7 @@ from stoa.services import (
     account_provisioning_service,
     parent_link_service,
 )
+from rule_violation_helpers import assert_violation
 
 
 INVENTORY_PATH = Path(__file__).resolve().parents[1] / "docs/security/route-authorization-inventory.json"
@@ -1092,8 +1093,7 @@ def test_发起方不能自己确认自己的请求(table: AccountAdminTable) ->
 
     response = client.post("/parents/me/children/requests/student-b/confirm")
 
-    assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "link_confirmation_not_allowed"
+    assert_violation(response, "link_confirmation_not_allowed")
     assert parent_link_service.active_link("parent-a", "student-b") is None
 
 
@@ -1212,8 +1212,7 @@ def test_管理员不能给不存在的学生建关联(table: AccountAdminTable)
         json={"parent_id": "parent-a", "student_id": "ghost"},
     )
 
-    assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "link_target_not_found"
+    assert_violation(response, "link_target_not_found")
 
 
 def test_家长凭学号发起的请求只到pending(table: AccountAdminTable) -> None:
@@ -1256,8 +1255,7 @@ def test_未分配的编号发起请求是404(table: AccountAdminTable) -> None:
         "/parents/me/children/requests", json={"studentNumber": "S26-9999"}
     )
 
-    assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "link_target_not_found"
+    assert_violation(response, "link_target_not_found")
 
 
 def test_自助发起关联挂了频次上限(table: AccountAdminTable) -> None:
@@ -1274,9 +1272,9 @@ def test_自助发起关联挂了频次上限(table: AccountAdminTable) -> None:
 
     assert statuses[:-1] == [404] * parents.PARENT_LINK_REQUEST_MAX_PER_WINDOW
     assert statuses[-1] == 429
-    assert client.post(
-        "/parents/me/children/requests", json={"studentNumber": "S26-9999"}
-    ).json()["detail"]["code"] == "link_request_rate_limited"
+    limited = client.post("/parents/me/children/requests", json={"studentNumber": "S26-9999"})
+    assert_violation(limited, "link_request_rate_limited")
+    assert limited.headers["Retry-After"] == str(parents.PARENT_LINK_REQUEST_WINDOW_SECONDS)
 
 
 def test_频次上限按发起人分桶_不牵连别人(table: AccountAdminTable) -> None:

@@ -44,7 +44,6 @@ from stoa.services import (
 from stoa.routers import conversations as conversation_routes
 from stoa.routers.parents import (
     admit_parent_link_request,
-    parent_link_http_error,
     parent_link_request_conflict,
 )
 from stoa.security.identity import Actor
@@ -749,12 +748,9 @@ async def confirm_my_parent_request(
     ),
 ) -> ParentRequestItem:
     """Only the side that did not ask can turn a request into visibility."""
-    try:
-        link = parent_link_service.confirm_link(
-            parent_id=parent_id, student_id=actor.user_id, actor_id=actor.user_id
-        )
-    except parent_link_service.ParentLinkError as exc:
-        raise parent_link_http_error(exc) from exc
+    link = parent_link_service.confirm_link(
+        parent_id=parent_id, student_id=actor.user_id, actor_id=actor.user_id
+    )
     return _parent_request_item(link)
 
 
@@ -765,12 +761,9 @@ async def reject_my_parent_request(
         student_actor_dependency(ResourceType.PARENT_BINDING, AuthorizationAction.UPDATE)
     ),
 ) -> ParentRequestItem:
-    try:
-        link = parent_link_service.reject_link(
-            parent_id=parent_id, student_id=actor.user_id, actor_id=actor.user_id
-        )
-    except parent_link_service.ParentLinkError as exc:
-        raise parent_link_http_error(exc) from exc
+    link = parent_link_service.reject_link(
+        parent_id=parent_id, student_id=actor.user_id, actor_id=actor.user_id
+    )
     return _parent_request_item(link)
 
 
@@ -789,8 +782,6 @@ async def request_parent_link(
             counterpart_number=body.parentNumber,
             relationship=body.relationship,
         )
-    except parent_link_service.ParentLinkError as exc:
-        raise parent_link_http_error(exc) from exc
     except parent_link_repo.ParentLinkConflict as exc:
         raise parent_link_request_conflict() from exc
     return _parent_request_item(link)

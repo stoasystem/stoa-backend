@@ -33,6 +33,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from enum import StrEnum
 from typing import Any, cast
 
 from boto3.dynamodb.conditions import Attr, Key
@@ -41,6 +42,7 @@ from stoa.config import settings
 from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo, weekly_counter
 from stoa.models.attachment import AttachmentSummary
+from stoa.rule_violation import RuleContract, RuleViolation, register_codes
 from stoa.security.authorization import AuthorizationAction
 from stoa.security.private_telemetry import emit_private_event
 from stoa.services import (
@@ -93,24 +95,129 @@ _QUESTION_STATUS = {
 # ── Errors ───────────────────────────────────────────────────────────────────
 
 
-class HelpRequestConflict(Exception):
+class HelpRequestErrorCode(StrEnum):
+    """Why a help request refused a change; the strings are the client's (#211)."""
+
+    # A teacher's write (`teachers.py`): the frontend's `CONFLICT_CODES`.
+    HELP_REQUEST_NOT_HELD = "help_request_not_held"
+    HELP_REQUEST_CHANGED = "help_request_changed"
+    HELP_REQUEST_UNAVAILABLE = "help_request_unavailable"
+    # The student asking (`conversations.py`).
+    TEACHER_SUPPORT_ADMISSION_RECOVERABLE = "teacher_support_admission_recoverable"
+    TEACHER_SUPPORT_NOT_INCLUDED = "teacher_support_not_included"
+    TEACHER_SUPPORT_ALLOWANCE_EXHAUSTED = "teacher_support_allowance_exhausted"
+    TEACHER_SUPPORT_CASE_CONFLICT = "teacher_support_case_conflict"
+    TEACHER_HELP_NOT_REQUESTED = "teacher_help_not_requested"
+    # Ending one nobody took (withdrawal, expiry).
+    TEACHER_HELP_REQUEST_NOT_FOUND = "teacher_help_request_not_found"
+    TEACHER_HELP_ALREADY_ACCEPTED = "teacher_help_already_accepted"
+    TEACHER_HELP_REQUEST_CLOSED = "teacher_help_request_closed"
+    TEACHER_HELP_REQUEST_NOT_DUE = "teacher_help_request_not_due"
+    TEACHER_HELP_REQUEST_NOT_WITHDRAWABLE = "teacher_help_request_not_withdrawable"
+    TEACHER_HELP_WITHDRAWAL_UNAVAILABLE = "teacher_help_withdrawal_unavailable"
+
+    @property
+    def contract(self) -> RuleContract:
+        return HELP_REQUEST_ERROR_REGISTRY[self]
+
+
+class HelpRequestClientAction(StrEnum):
+    REFRESH_HELP_REQUEST = "refresh_help_request"
+    RETRY_SAME_CASE = "retry_same_case"
+    RETRY_LATER = "retry_later"
+    CONTACT_ADMINISTRATOR = "contact_administrator"
+    WAIT_FOR_NEXT_WEEK = "wait_for_next_week"
+
+
+def _sent_with_action(action: HelpRequestClientAction, status: int, **retry: Any) -> RuleContract:
+    """A code whose body names what to do next, as these bodies always have."""
+    return RuleContract(status, action, public_fields=frozenset({"action"}), **retry)
+
+
+_Code = HelpRequestErrorCode
+_Action = HelpRequestClientAction
+
+# Each code's message is the catalog's `error.<code>`
+# (`stoa.services.message_catalog.errors.help_request`).
+HELP_REQUEST_ERROR_REGISTRY: dict[HelpRequestErrorCode, RuleContract] = {
+    _Code.HELP_REQUEST_NOT_HELD: _sent_with_action(_Action.REFRESH_HELP_REQUEST, 409),
+    _Code.HELP_REQUEST_CHANGED: _sent_with_action(_Action.REFRESH_HELP_REQUEST, 409),
+    _Code.HELP_REQUEST_UNAVAILABLE: RuleContract(
+        503, _Action.RETRY_LATER, retryable=True, max_attempts=1
+    ),
+    _Code.TEACHER_SUPPORT_ADMISSION_RECOVERABLE: _sent_with_action(
+        _Action.RETRY_SAME_CASE, 503, retryable=True, idempotent_only=True, max_attempts=1
+    ),
+    # Nobody can buy their way past this while the paid surface is frozen, and
+    # on an assigned account there was never anything to buy.
+    _Code.TEACHER_SUPPORT_NOT_INCLUDED: _sent_with_action(_Action.CONTACT_ADMINISTRATOR, 403),
+    _Code.TEACHER_SUPPORT_ALLOWANCE_EXHAUSTED: _sent_with_action(_Action.WAIT_FOR_NEXT_WEEK, 429),
+    _Code.TEACHER_SUPPORT_CASE_CONFLICT: RuleContract(409),
+    _Code.TEACHER_HELP_NOT_REQUESTED: RuleContract(404),
+    _Code.TEACHER_HELP_REQUEST_NOT_FOUND: RuleContract(404),
+    _Code.TEACHER_HELP_ALREADY_ACCEPTED: RuleContract(409),
+    _Code.TEACHER_HELP_REQUEST_CLOSED: RuleContract(409),
+    _Code.TEACHER_HELP_REQUEST_NOT_DUE: RuleContract(409),
+    _Code.TEACHER_HELP_REQUEST_NOT_WITHDRAWABLE: RuleContract(409),
+    _Code.TEACHER_HELP_WITHDRAWAL_UNAVAILABLE: _sent_with_action(
+        _Action.RETRY_SAME_CASE, 503, retryable=True, idempotent_only=True, max_attempts=1
+    ),
+}
+
+register_codes("help_request", HelpRequestErrorCode, HELP_REQUEST_ERROR_REGISTRY)
+
+
+class HelpRequestViolation(RuleViolation):
+    """A help request refused a change; a body that names an action carries it."""
+
+    def __init__(
+        self,
+        code: HelpRequestErrorCode | str,
+        *,
+        internal_detail: str | None = None,
+    ) -> None:
+        resolved = HelpRequestErrorCode(code)
+        super().__init__(resolved, internal_detail=internal_detail)
+        if "action" in resolved.contract.public_fields:
+            self.with_public(action=str(resolved.contract.action))
+
+
+class HelpRequestConflict(HelpRequestViolation):
     """The request is not in the state the change was decided on."""
 
+    def __init__(
+        self,
+        detail: str = "",
+        *,
+        code: HelpRequestErrorCode = HelpRequestErrorCode.HELP_REQUEST_CHANGED,
+    ) -> None:
+        super().__init__(code, internal_detail=detail or None)
 
-class HelpRequestEndingRefused(Exception):
+
+class HelpRequestEndingRefused(HelpRequestViolation):
     """The request cannot be ended this way; ``code`` says why, for the response."""
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: HelpRequestErrorCode | str) -> None:
         super().__init__(code)
-        self.code = code
 
 
-class HelpRequestEndingUnavailable(Exception):
+class HelpRequestEndingUnavailable(HelpRequestViolation):
     """Ending the request could not be completed now; trying again is safe."""
 
+    def __init__(self, conversation_id: str = "") -> None:
+        super().__init__(
+            HelpRequestErrorCode.TEACHER_HELP_WITHDRAWAL_UNAVAILABLE,
+            internal_detail=conversation_id or None,
+        )
 
-class HelpRequestUnavailable(Exception):
+
+class HelpRequestUnavailable(HelpRequestViolation):
     """The request could not be read or written now; trying again is safe."""
+
+    def __init__(self, detail: str = "") -> None:
+        super().__init__(
+            HelpRequestErrorCode.HELP_REQUEST_UNAVAILABLE, internal_detail=detail or None
+        )
 
 
 # ── Reading ──────────────────────────────────────────────────────────────────

@@ -6,9 +6,27 @@ file here; `tests/test_error_catalog.py` fails for a registered code without
 a key, a key missing a language, or a translation whose `{params}` differ.
 """
 
-from stoa.services.message_catalog.errors import ask_question, attachment, security, validation
+from stoa.services.message_catalog.errors import (
+    ask_question,
+    attachment,
+    billing,
+    help_request,
+    parent_link,
+    security,
+    teacher_reply,
+    validation,
+)
 
-_DOMAINS = (security, attachment, ask_question, validation)
+_DOMAINS = (
+    security,
+    attachment,
+    ask_question,
+    validation,
+    help_request,
+    teacher_reply,
+    parent_link,
+    billing,
+)
 
 
 def _merge() -> dict[str, dict[str, str]]:

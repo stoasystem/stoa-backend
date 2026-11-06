@@ -24,6 +24,7 @@ from stoa.security.authorization import CurrentAuthorizationFactRepository
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import parent_link_service
+from rule_violation_helpers import assert_violation
 
 
 NOW = "2026-09-19T10:00:00+00:00"
@@ -855,9 +856,13 @@ def test_端到端_点错一次拒绝之后仍有出路(wired_table: FakeLinkTab
     assert rejected.status_code == 200, rejected.text
 
     blocked = parent.post("/parents/me/children/requests", json={"studentNumber": "S26-0001"})
-    assert blocked.status_code == 409, blocked.text
     detail = blocked.json()["detail"]
-    assert detail["code"] == "link_rejected_cooldown"
+    assert_violation(
+        blocked,
+        "link_rejected_cooldown",
+        retryAfterSeconds=detail["retryAfterSeconds"],
+        retryAt=detail["retryAt"],
+    )
     assert detail["retryAfterSeconds"] > 0
     assert detail["retryAt"]
 

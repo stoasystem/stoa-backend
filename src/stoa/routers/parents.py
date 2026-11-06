@@ -10,7 +10,7 @@ from typing import Annotated, Any, Literal, Protocol, cast
 from uuid import uuid4
 
 from boto3.dynamodb.conditions import Attr, Key
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.config import Settings, get_settings
@@ -32,6 +32,7 @@ from stoa.models.user import SubscriptionTier
 # Card 007: one switch and one refusal for the whole paid surface; see
 # `stoa.routers.billing` for why it is frozen and what unfreezing takes.
 from stoa.routers.billing import refuse_if_frozen
+from stoa.rule_violation import RuleViolation
 from stoa.security.authorization import (
     AuthorizationAction,
     AuthorizationPurpose,
@@ -59,6 +60,7 @@ from stoa.services import (
     subscription_service,
     teacher_support_allowance_service,
 )
+from stoa.services.billing_errors import BillingErrorCode
 
 logger = logging.getLogger(__name__)
 
@@ -624,14 +626,12 @@ def get_billing_reconciliation_provider(
     return StripeBillingReconciliationProvider(settings)
 
 
-def _checkout_command_not_found() -> HTTPException:
-    return HTTPException(
-        status_code=404,
-        detail={
-            "code": "checkout_not_found",
-            "message": "Checkout was not found.",
-        },
-    )
+def _checkout_command_not_found() -> RuleViolation:
+    return RuleViolation(BillingErrorCode.CHECKOUT_NOT_FOUND)
+
+
+def _checkout_unavailable() -> RuleViolation:
+    return RuleViolation(BillingErrorCode.CHECKOUT_TEMPORARILY_UNAVAILABLE)
 
 
 def _load_owned_checkout_command(
@@ -647,13 +647,7 @@ def _load_owned_checkout_command(
     except (TypeError, ValueError) as exc:
         raise _checkout_command_not_found() from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "code": "checkout_temporarily_unavailable",
-                "message": "Checkout status is temporarily unavailable.",
-            },
-        ) from exc
+        raise _checkout_unavailable() from exc
     if lookup.disposition is checkout_command_repo.CheckoutCommandDisposition.NOT_FOUND:
         raise _checkout_command_not_found()
     if (
@@ -661,13 +655,7 @@ def _load_owned_checkout_command(
         is not checkout_command_repo.CheckoutCommandDisposition.REPLAYED
         or lookup.command is None
     ):
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "code": "checkout_temporarily_unavailable",
-                "message": "Checkout status is temporarily unavailable.",
-            },
-        )
+        raise _checkout_unavailable()
     return lookup.command
 
 
@@ -1409,13 +1397,7 @@ async def get_my_subscription_billing(
         # Swallowing this silently left the billing page unavailable with
         # nothing anywhere to say why.
         logger.warning("Parent billing projection failed", exc_info=True)
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "code": "billing_projection_temporarily_unavailable",
-                "message": "Billing details are temporarily unavailable.",
-            },
-        ) from exc
+        raise RuleViolation(BillingErrorCode.BILLING_PROJECTION_TEMPORARILY_UNAVAILABLE) from exc
 
 
 @router.get("/me/account-operations", response_model=ParentAccountOperationsResponse)
@@ -1654,12 +1636,8 @@ async def get_child_usage_summary(
             "teacherSupportScope": teacher["supportScope"],
         }
     except (KeyError, TypeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "code": "allowance_projection_temporarily_unavailable",
-                "message": "Allowance details are temporarily unavailable.",
-            },
+        raise RuleViolation(
+            BillingErrorCode.ALLOWANCE_PROJECTION_TEMPORARILY_UNAVAILABLE
         ) from exc
 
 
@@ -1720,50 +1698,19 @@ async def get_child_report_by_week(
 parent_link_service.set_account_number_resolver(account_numbering_service.resolve_account_id)
 
 
-PARENT_LINK_ERROR_STATUS = {
-    "link_target_not_found": 404,
-    "link_initiator_not_allowed": 403,
-    "link_not_pending": 409,
-    "link_confirmation_not_allowed": 403,
-    # Card 008: a link with a minor on either side is refused to self-service and
-    # left to the administrator. It is a refusal to act, not a state conflict.
-    "link_requires_administrator": 403,
-    "link_confirmation_not_applicable": 409,
-    "link_already_active": 409,
-    "link_request_pending": 409,
-    "link_request_expired": 409,
-    "link_rejected_cooldown": 409,
-    "link_request_conflict": 409,
-    "account_number_lookup_unavailable": 503,
-}
-
-
-def parent_link_http_error(error: parent_link_service.ParentLinkError) -> HTTPException:
-    # `link_rejected_cooldown` carries how long is left, which is the only way the
-    # client can say "try again in N days" instead of a bare refusal.
-    detail: dict[str, Any] = {"code": error.code, **(getattr(error, "details", None) or {})}
-    return HTTPException(
-        status_code=PARENT_LINK_ERROR_STATUS.get(error.code, 409),
-        detail=detail,
-    )
-
-
-def parent_link_request_conflict() -> HTTPException:
+def parent_link_request_conflict() -> parent_link_service.ParentLinkError:
     """A concurrent writer took the pair between our read and our write."""
-    return HTTPException(status_code=409, detail={"code": "link_request_conflict"})
+    return parent_link_service.ParentLinkError("link_request_conflict")
 
 
-PARENT_LINK_REQUEST_WINDOW_SECONDS = 86400
-PARENT_LINK_REQUEST_MAX_PER_WINDOW = 5
+PARENT_LINK_REQUEST_WINDOW_SECONDS = parent_link_service.REQUEST_WINDOW_SECONDS
+PARENT_LINK_REQUEST_MAX_PER_WINDOW = parent_link_service.REQUEST_MAX_PER_WINDOW
 PARENT_LINK_REQUEST_QUOTA_ENTITY = "parent_link_request_quota"
 
 
-def parent_link_request_rate_limited() -> HTTPException:
-    return HTTPException(
-        status_code=429,
-        detail={"code": "link_request_rate_limited"},
-        headers={"Retry-After": str(PARENT_LINK_REQUEST_WINDOW_SECONDS)},
-    )
+def parent_link_request_rate_limited() -> parent_link_service.ParentLinkError:
+    """Its contract sends `Retry-After` for the whole window."""
+    return parent_link_service.ParentLinkError("link_request_rate_limited")
 
 
 def admit_parent_link_request(requester_id: str, *, now: datetime | None = None, table=None) -> None:
@@ -1850,12 +1797,9 @@ async def confirm_my_child_link_request(
     actor: Actor = Depends(_parent_account_update),
 ) -> ParentLinkRequestItem:
     """Answer a request the student raised. Only the side that did not ask may confirm."""
-    try:
-        link = parent_link_service.confirm_link(
-            parent_id=actor.user_id, student_id=student_id, actor_id=actor.user_id
-        )
-    except parent_link_service.ParentLinkError as exc:
-        raise parent_link_http_error(exc) from exc
+    link = parent_link_service.confirm_link(
+        parent_id=actor.user_id, student_id=student_id, actor_id=actor.user_id
+    )
     return parent_link_request_item(link)
 
 
@@ -1866,12 +1810,9 @@ async def reject_my_child_link_request(
     student_id: str,
     actor: Actor = Depends(_parent_account_update),
 ) -> ParentLinkRequestItem:
-    try:
-        link = parent_link_service.reject_link(
-            parent_id=actor.user_id, student_id=student_id, actor_id=actor.user_id
-        )
-    except parent_link_service.ParentLinkError as exc:
-        raise parent_link_http_error(exc) from exc
+    link = parent_link_service.reject_link(
+        parent_id=actor.user_id, student_id=student_id, actor_id=actor.user_id
+    )
     return parent_link_request_item(link)
 
 
@@ -1888,8 +1829,6 @@ async def request_child_link(
             counterpart_number=body.studentNumber,
             relationship=body.relationship,
         )
-    except parent_link_service.ParentLinkError as exc:
-        raise parent_link_http_error(exc) from exc
     except parent_link_repo.ParentLinkConflict as exc:
         raise parent_link_request_conflict() from exc
     return parent_link_request_item(link)

@@ -34,6 +34,7 @@ from test_chat_help_waiting_and_withdraw import (
     _student,
     _withdraw,
 )
+from rule_violation_helpers import assert_violation
 
 DAY = 24 * 60 * 60
 
@@ -181,8 +182,7 @@ def test_an_expired_request_cannot_then_be_withdrawn(table, notices) -> None:
     _nobody_available(table)
     _sweep(_after(DAY + 60))
     response = _withdraw(_student())
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "teacher_help_request_closed"
+    assert_violation(response, "teacher_help_request_closed")
     assert _spent(table) == 0
 
 
@@ -251,8 +251,7 @@ def test_an_expiry_landing_during_a_withdrawal_gives_back_one_case(
     _nobody_available(table)
     _before_the_write(monkeypatch, lambda: _sweep(_after(DAY + 60)))
     response = _withdraw(_student())
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "teacher_help_request_closed"
+    assert_violation(response, "teacher_help_request_closed")
     assert _help(table)["escalation_status"] == "expired"
     assert _spent(table) == 0
     assert len(notices) == 1

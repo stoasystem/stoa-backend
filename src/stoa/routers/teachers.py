@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Literal, NamedTuple, Protocol, runtime_checkable
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
@@ -113,17 +113,13 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-_HELP_REQUEST_NOT_HELD = {
-    "code": "help_request_not_held",
-    "message": "Only the teacher who holds or was offered this help request can change it.",
-    "action": "refresh_help_request",
-}
-
-_HELP_REQUEST_CHANGED = {
-    "code": "help_request_changed",
-    "message": "This help request changed. Refresh it and try again.",
-    "action": "refresh_help_request",
-}
+def _refuse_unless_held(conv: dict, teacher_id: str) -> None:
+    """Only the teacher who holds or was offered a request changes it."""
+    if not help_requests.holder_or_offered(conv, teacher_id):
+        raise help_requests.HelpRequestConflict(
+            "teacher neither holds nor was offered the request",
+            code=help_requests.HelpRequestErrorCode.HELP_REQUEST_NOT_HELD,
+        )
 
 
 # Canonical teacher portal, availability, help-request, and AI-tool routes.
@@ -1184,21 +1180,15 @@ async def update_help_request(
     it straight from the offer takes and finishes it at once (#66).
     """
     conv = dict(authorized.value)
-    if not help_requests.holder_or_offered(conv, actor.user_id):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_NOT_HELD)
-    try:
-        written = help_requests.take_or_finish(
-            conv,
-            teacher_id=actor.user_id,
-            target=body.status,
-            now=_now(),
-            resolution_note=body.resolutionNote,
-            table=get_table(),
-        )
-    except help_requests.HelpRequestConflict as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
-        ) from exc
+    _refuse_unless_held(conv, actor.user_id)
+    written = help_requests.take_or_finish(
+        conv,
+        teacher_id=actor.user_id,
+        target=body.status,
+        now=_now(),
+        resolution_note=body.resolutionNote,
+        table=get_table(),
+    )
     view = help_requests.teacher_view(written)
     return _help_request_summary(view, student_name=_get_student_name(view.student_id))
 
@@ -1225,29 +1215,20 @@ async def add_note(
     conv = dict(authorized.value)
     teacher_id = actor.user_id
     teacher_profile = user_repo.get_user(teacher_id)
-    try:
-        reply_fields = teacher_reply_service.normalize_teacher_reply(body.content, body.richContent)
-    except teacher_reply_service.TeacherReplyValidationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    reply_fields = teacher_reply_service.normalize_teacher_reply(body.content, body.richContent)
     reply_images = attachment_service.prepare_reply_images(
         [reference.upload_id for reference in body.attachmentIds or []], actor
     )
-    if not help_requests.holder_or_offered(conv, teacher_id):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_NOT_HELD)
-    try:
-        written = help_requests.reply(
-            conv,
-            teacher_id=teacher_id,
-            author_name=_optional_text((teacher_profile or {}).get("name")),
-            content=reply_fields["teacher_response"],
-            rich=reply_fields["teacher_response_rich"],
-            format=reply_fields["teacher_response_format"],
-            images=reply_images,
-            now=_now(),
-            table=get_table(),
-        )
-    except help_requests.HelpRequestConflict as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=_HELP_REQUEST_CHANGED
-        ) from exc
+    _refuse_unless_held(conv, teacher_id)
+    written = help_requests.reply(
+        conv,
+        teacher_id=teacher_id,
+        author_name=_optional_text((teacher_profile or {}).get("name")),
+        content=reply_fields["teacher_response"],
+        rich=reply_fields["teacher_response_rich"],
+        format=reply_fields["teacher_response_format"],
+        images=reply_images,
+        now=_now(),
+        table=get_table(),
+    )
     return _note_out(written, written.attachments)

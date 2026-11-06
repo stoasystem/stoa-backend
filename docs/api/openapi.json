@@ -33902,7 +33902,7 @@
                 }
               }
             },
-            "description": "The conversation was never escalated to a teacher (a sentence), or the caller may not see it (`resource_not_found`)."
+            "description": "The conversation was never escalated to a teacher (`teacher_help_not_requested`), or the caller may not see it (`resource_not_found`)."
           },
           "422": {
             "content": {
