@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import logging
 from typing import NoReturn, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.db.repositories import (
@@ -32,6 +32,7 @@ from stoa.security.route_authorization import (
     student_actor_dependency,
 )
 from stoa.config import settings
+from stoa.services.account_errors import AccountErrorCode, AccountViolation
 from stoa.services import (
     allowance_service,
     entitlement_service,
@@ -680,7 +681,7 @@ async def list_questions(
         try:
             last_key = json.loads(base64.b64decode(next_token).decode())
         except Exception:
-            raise HTTPException(status_code=400, detail="Invalid next_token")
+            raise AccountViolation(AccountErrorCode.CURSOR_INVALID) from None
 
     result = question_repo.list_questions_by_student(student_id, limit=limit, last_key=last_key)
     items = _question_list_items(_question_rows(result.get("Items", []), correlation_id))

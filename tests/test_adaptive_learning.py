@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 import pytest
 
+from rule_violation_helpers import assert_violation
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import adaptive
 from stoa.security.authorization import (
@@ -637,12 +638,9 @@ def test_assignment_automation_preview_rejects_unsupported_policy_values(monkeyp
         json={"policy": {"deliveryMode": "delivered"}},
     )
 
-    assert bad_source.status_code == 400
-    assert bad_source.json()["detail"] == "Unsupported automation source type: typo_source"
-    assert bad_blank_source.status_code == 400
-    assert bad_blank_source.json()["detail"] == "Blank policy values are not supported"
-    assert bad_delivery.status_code == 400
-    assert bad_delivery.json()["detail"] == "Unsupported value: delivered"
+    assert_violation(bad_source, "automation_source_type_unsupported")
+    assert_violation(bad_blank_source, "policy_value_blank")
+    assert_violation(bad_delivery, "policy_value_unsupported")
 
 
 def test_assignment_automation_execute_creates_assignments_idempotently(monkeypatch):
@@ -908,10 +906,8 @@ def test_assignment_automation_execute_rejects_stale_or_forged_candidates(monkey
         },
     )
 
-    assert stale.status_code == 409
-    assert stale.json()["detail"] == "Automation batch preview is stale"
-    assert forged_response.status_code == 409
-    assert forged_response.json()["detail"] == "Candidate does not match current preview"
+    assert_violation(stale, "batch_preview_stale")
+    assert_violation(forged_response, "candidate_preview_mismatch")
 
 
 def test_assignment_automation_execute_preserves_subject_scope_and_parent_visibility(monkeypatch):

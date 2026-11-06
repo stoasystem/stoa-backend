@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Literal, NamedTuple, Protocol, runtime_checkable
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
@@ -46,6 +46,7 @@ from stoa.security.route_authorization import (
     teacher_portal_self_dependency,
     teacher_tool_purpose,
 )
+from stoa.services.ai_teacher_tools_errors import AiTeacherToolsViolation
 from stoa.services import (
     ai_teacher_tools_service,
     attachment_service,
@@ -900,7 +901,7 @@ async def list_ai_teacher_drafts(
             draft_type=draft_type,
             limit=limit,
         )
-    except HTTPException:
+    except AiTeacherToolsViolation:
         raise
     except Exception as exc:
         raise SecurityDecisionError(

@@ -13,8 +13,6 @@ from urllib import request
 from uuid import uuid4
 
 import boto3
-from fastapi import HTTPException
-
 from stoa.config import settings
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, notification_repo
@@ -25,7 +23,9 @@ from stoa.services import (
     notify_service,
     websocket_service,
 )
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import Actor
+from stoa.services.notification_errors import NotificationErrorCode as _N, NotificationViolation
 
 logger = logging.getLogger(__name__)
 
@@ -713,11 +713,11 @@ def create_event(
     message_params: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     if event_type not in EVENT_TYPES:
-        raise HTTPException(status_code=400, detail="Unsupported notification event type")
+        raise NotificationViolation(_N.NOTIFICATION_EVENT_TYPE_UNSUPPORTED)
     if status not in STATUSES:
-        raise HTTPException(status_code=400, detail="Unsupported notification status")
+        raise NotificationViolation(_N.NOTIFICATION_STATUS_UNSUPPORTED)
     if not recipient_role:
-        raise HTTPException(status_code=400, detail="Notification recipient role is required")
+        raise NotificationViolation(_N.NOTIFICATION_RECIPIENT_ROLE_REQUIRED)
 
     raw_metadata = dict(metadata or {})
     inferred_owner = str(
@@ -764,7 +764,7 @@ def create_event(
             "classification": "global_nonprivate",
         }
     else:
-        raise HTTPException(status_code=409, detail="Notification owner is required")
+        raise NotificationViolation(_N.NOTIFICATION_OWNER_REQUIRED)
 
     category = category_for_event(event_type=event_type, target_type=target_type)
     preferences = get_preferences_for_user(recipient_id) if recipient_id else default_preferences()
@@ -1088,9 +1088,7 @@ def _require_moderation_owner(owner_id: str, privacy_generation: int) -> None:
         or not isinstance(privacy_generation, int)
         or privacy_generation <= 0
     ):
-        raise HTTPException(
-            status_code=409, detail="Moderation notification owner is required"
-        )
+        raise NotificationViolation(_N.NOTIFICATION_OWNER_REQUIRED)
 
 
 def emit_subscription_update(
@@ -1139,7 +1137,7 @@ def list_user_events(
     limit: int = 50,
 ) -> list[dict[str, Any]]:
     if status is not None and status not in STATUSES:
-        raise HTTPException(status_code=400, detail="Unsupported notification status")
+        raise NotificationViolation(_N.NOTIFICATION_STATUS_UNSUPPORTED)
     user_id = _user_id(user)
     role = _user_role(user)
     locale = locale_service.reader_locale(user_id)
@@ -1159,9 +1157,9 @@ def list_admin_events(
     locale: str | None = None,
 ) -> list[dict[str, Any]]:
     if status is not None and status not in STATUSES:
-        raise HTTPException(status_code=400, detail="Unsupported notification status")
+        raise NotificationViolation(_N.NOTIFICATION_STATUS_UNSUPPORTED)
     if event_type is not None and event_type not in EVENT_TYPES:
-        raise HTTPException(status_code=400, detail="Unsupported notification event type")
+        raise NotificationViolation(_N.NOTIFICATION_EVENT_TYPE_UNSUPPORTED)
     items = [
         item for item in notification_repo.list_events(limit=max(limit, 100))
         if (status is None or item.get("status") == status)
@@ -1232,14 +1230,14 @@ def update_preferences(
         dispatch_email = _stored_dispatch_email(stored)
     for category, channel_updates in preferences.items():
         if category not in PREFERENCE_CATEGORIES:
-            raise HTTPException(status_code=400, detail="Unsupported notification preference category")
+            raise NotificationViolation(_N.NOTIFICATION_PREFERENCE_CATEGORY_UNSUPPORTED)
         if not isinstance(channel_updates, dict):
-            raise HTTPException(status_code=400, detail="Notification preference channels must be an object")
+            raise NotificationViolation(_N.NOTIFICATION_PREFERENCE_CHANNELS_INVALID)
         for channel, enabled in channel_updates.items():
             if channel not in PREFERENCE_CHANNELS:
-                raise HTTPException(status_code=400, detail="Unsupported notification preference channel")
+                raise NotificationViolation(_N.NOTIFICATION_PREFERENCE_CHANNEL_UNSUPPORTED)
             if not isinstance(enabled, bool):
-                raise HTTPException(status_code=400, detail="Notification preference value must be boolean")
+                raise NotificationViolation(_N.NOTIFICATION_PREFERENCE_VALUE_INVALID)
             merged[category][channel] = enabled
 
     updated_at = now_iso()
@@ -1360,7 +1358,7 @@ def digest_preview(
     limit: int = 25,
 ) -> dict[str, Any]:
     if category is not None and category not in PREFERENCE_CATEGORIES:
-        raise HTTPException(status_code=400, detail="Unsupported notification preference category")
+        raise NotificationViolation(_N.NOTIFICATION_PREFERENCE_CATEGORY_UNSUPPORTED)
     user_id = _user_id(user)
     role = _user_role(user)
     preferences = get_preferences_for_user(user_id)
@@ -1520,14 +1518,14 @@ def register_push_token(
 ) -> dict[str, Any]:
     normalized_platform = _safe_text(platform).lower()
     if normalized_platform not in PUSH_TOKEN_PLATFORMS:
-        raise HTTPException(status_code=400, detail="Unsupported push token platform")
+        raise NotificationViolation(_N.PUSH_PLATFORM_UNSUPPORTED)
     clean_token = _safe_text(token)
     clean_provider_reference = _safe_text(provider_token_reference)
     if not clean_token and not clean_provider_reference:
-        raise HTTPException(status_code=400, detail="Push token or provider reference is required")
+        raise NotificationViolation(_N.PUSH_TOKEN_REQUIRED)
     user_id = _user_id(user)
     if not user_id:
-        raise HTTPException(status_code=401, detail="Authenticated user is required")
+        raise SecurityDecisionError(SecurityErrorCode.AUTHENTICATION_REQUIRED)
 
     token_hash = _hash_value(clean_token or clean_provider_reference)
     token_reference = f"push-{token_hash[:16]}"
@@ -1543,8 +1541,6 @@ def register_push_token(
             )
         )
         if same_material and existing.get("user_id") != user_id:
-            from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
-
             raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND)
     now = now_iso()
     item: dict[str, object] = {
@@ -1571,14 +1567,14 @@ def register_push_token(
 def revoke_push_token(user: dict[str, Any], token_reference: str) -> dict[str, Any]:
     user_id = str(user.get("sub") or "")
     if not user_id:
-        raise HTTPException(status_code=401, detail="Authenticated user is required")
+        raise SecurityDecisionError(SecurityErrorCode.AUTHENTICATION_REQUIRED)
     updated = notification_repo.update_push_token(
         user_id,
         token_reference,
         {"status": "revoked", "revoked_at": now_iso()},
     )
     if not updated:
-        raise HTTPException(status_code=404, detail="Push token not found")
+        raise NotificationViolation(_N.PUSH_TOKEN_NOT_FOUND)
     return push_token_response(updated)
 
 
@@ -1589,7 +1585,7 @@ def revoke_authorized_push_token(item: Mapping[str, object]) -> dict[str, Any]:
         {"status": "revoked", "revoked_at": now_iso()},
     )
     if not updated:
-        raise HTTPException(status_code=404, detail="Push token not found")
+        raise NotificationViolation(_N.PUSH_TOKEN_NOT_FOUND)
     return push_token_response(updated)
 
 
@@ -1798,12 +1794,12 @@ def digest_item(item: dict[str, Any], *, category: str) -> dict[str, Any]:
 
 def mark_event(event_id: str, user: dict[str, Any], next_status: str) -> dict[str, Any]:
     if next_status not in {"read", "archived"}:
-        raise HTTPException(status_code=400, detail="Unsupported notification transition")
+        raise NotificationViolation(_N.NOTIFICATION_TRANSITION_UNSUPPORTED)
     item = notification_repo.get_event(event_id)
     if not item:
-        raise HTTPException(status_code=404, detail="Notification not found")
+        raise NotificationViolation(_N.NOTIFICATION_NOT_FOUND)
     if not _visible_to_user(item, user_id=str(user.get("sub") or ""), role=str(user.get("role") or "")):
-        raise HTTPException(status_code=403, detail="Notification is not visible to this user")
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
 
     now = now_iso()
     updates: dict[str, Any] = {"status": next_status}
@@ -1814,13 +1810,13 @@ def mark_event(event_id: str, user: dict[str, Any], next_status: str) -> dict[st
         updates["read_at"] = item.get("read_at") or now
     updated = notification_repo.update_event(event_id, updates)
     if not updated:
-        raise HTTPException(status_code=404, detail="Notification not found")
+        raise NotificationViolation(_N.NOTIFICATION_NOT_FOUND)
     return event_response(updated)
 
 
 def mark_authorized_event(item: Mapping[str, object], next_status: str) -> dict[str, Any]:
     if next_status not in {"read", "archived"}:
-        raise HTTPException(status_code=400, detail="Unsupported notification transition")
+        raise NotificationViolation(_N.NOTIFICATION_TRANSITION_UNSUPPORTED)
     event_id = str(item.get("event_id") or "")
     now = now_iso()
     updates: dict[str, Any] = {"status": next_status}
@@ -1831,7 +1827,7 @@ def mark_authorized_event(item: Mapping[str, object], next_status: str) -> dict[
         updates["read_at"] = item.get("read_at") or now
     updated = notification_repo.update_event(event_id, updates)
     if not updated:
-        raise HTTPException(status_code=404, detail="Notification not found")
+        raise NotificationViolation(_N.NOTIFICATION_NOT_FOUND)
     return event_response(updated)
 
 

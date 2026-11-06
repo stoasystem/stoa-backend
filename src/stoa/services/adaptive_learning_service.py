@@ -10,8 +10,6 @@ import json
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from fastapi import HTTPException
-
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
     adaptive_learning_repo,
@@ -26,6 +24,10 @@ from stoa.services import (
     learning_profile_service,
     locale_service,
     usage_ledger_service,
+)
+from stoa.services.adaptive_learning_errors import (
+    AdaptiveLearningErrorCode as _L,
+    AdaptiveLearningViolation,
 )
 
 if TYPE_CHECKING:
@@ -70,7 +72,7 @@ def _question_rows(student_id: str) -> list[dict[str, Any]]:
     response = question_repo.list_questions_by_student(student_id, limit=500)
     raw_items = response.get("Items")
     if not isinstance(raw_items, list) or any(not isinstance(item, Mapping) for item in raw_items):
-        raise HTTPException(status_code=503, detail="Question history is temporarily unavailable")
+        raise AdaptiveLearningViolation(_L.QUESTION_HISTORY_UNAVAILABLE)
     return [dict(item) for item in raw_items]
 
 
@@ -132,7 +134,7 @@ def create_assignment(
     note: str | None = None,
 ) -> dict[str, Any]:
     if status not in CREATABLE_STATUSES:
-        raise HTTPException(status_code=400, detail="Assignment must start as draft, recommended, or assigned")
+        raise AdaptiveLearningViolation(_L.ASSIGNMENT_STATUS_NOT_CREATABLE)
     item = _create_assignment_item(
         student_id=student_id,
         source_type=source_type,
@@ -159,9 +161,9 @@ def execute_assignment_automation_batch(
     subject: str | None = None,
 ) -> dict[str, Any]:
     if not approved:
-        raise HTTPException(status_code=400, detail="Approved batch execution requires approval")
+        raise AdaptiveLearningViolation(_L.BATCH_APPROVAL_REQUIRED)
     if not candidates:
-        raise HTTPException(status_code=400, detail="At least one approved candidate is required")
+        raise AdaptiveLearningViolation(_L.BATCH_CANDIDATES_REQUIRED)
     replay_policy = _automation_policy(policy, student_id=student_id, user=user)
     existing_assignments = adaptive_learning_repo.list_assignments(
         student_id=student_id,
@@ -185,7 +187,7 @@ def execute_assignment_automation_batch(
         )
         if replay:
             return replay
-        raise HTTPException(status_code=409, detail="Automation batch preview is stale")
+        raise AdaptiveLearningViolation(_L.BATCH_PREVIEW_STALE)
     normalized_policy = preview["policy"]
     selected_by_id = {str(candidate.get("candidateId") or ""): candidate for candidate in preview["selected"]}
     assignment_state = _assignment_signal_state(existing_assignments)
@@ -195,7 +197,7 @@ def execute_assignment_automation_batch(
         requested_candidate = _automation_execution_candidate(candidate, normalized_policy)
         preview_candidate = selected_by_id.get(requested_candidate["candidateId"])
         if not preview_candidate:
-            raise HTTPException(status_code=409, detail="Candidate is not selected in current preview")
+            raise AdaptiveLearningViolation(_L.CANDIDATE_NOT_IN_PREVIEW)
         normalized_candidate = _automation_execution_candidate(preview_candidate, normalized_policy)
         _require_candidate_matches_preview(requested_candidate, normalized_candidate)
         normalized_candidate["approved"] = requested_candidate["approved"]
@@ -341,7 +343,7 @@ def list_assignments(
     include_archived: bool = False,
 ) -> dict[str, Any]:
     if status and status not in ASSIGNMENT_STATUSES:
-        raise HTTPException(status_code=400, detail="Unsupported assignment status")
+        raise AdaptiveLearningViolation(_L.ASSIGNMENT_STATUS_UNSUPPORTED)
     items = adaptive_learning_repo.list_assignments(
         student_id=student_id,
         status=status,
@@ -373,7 +375,7 @@ def transition_assignment(
 ) -> dict[str, Any]:
     item = item or _existing_assignment(assignment_id)
     if action not in STUDENT_ACTIONS | {"archive"}:
-        raise HTTPException(status_code=400, detail="Unsupported assignment action")
+        raise AdaptiveLearningViolation(_L.ASSIGNMENT_ACTION_UNSUPPORTED)
     if item.get("pending_sequencing_effect"):
         _apply_pending_assignment_effect(item)
         item = _existing_assignment(assignment_id)
@@ -395,10 +397,10 @@ def transition_assignment(
             )
             side_effect = "started"
         elif previous_status not in {"started", "completed"}:
-            raise HTTPException(status_code=409, detail="Assignment cannot be started from its current state")
+            raise AdaptiveLearningViolation(_L.ASSIGNMENT_NOT_STARTABLE)
     elif action == "complete":
         if previous_status not in {"assigned", "recommended", "started", "completed"}:
-            raise HTTPException(status_code=409, detail="Assignment cannot be completed from its current state")
+            raise AdaptiveLearningViolation(_L.ASSIGNMENT_NOT_COMPLETABLE)
         already_completed = previous_status == "completed"
         attempt_count = _assignment_attempt_count(item) if already_completed else _assignment_attempt_count(item) + 1
         completion_result = item.get("completion_result") if already_completed else (
@@ -425,7 +427,7 @@ def transition_assignment(
             side_effect = "completed"
     elif action == "skip":
         if previous_status in {"completed", "archived"}:
-            raise HTTPException(status_code=409, detail="Completed or archived assignments cannot be skipped")
+            raise AdaptiveLearningViolation(_L.ASSIGNMENT_NOT_SKIPPABLE)
         updates.update(
             {
                 "status": "skipped",
@@ -456,7 +458,7 @@ def transition_assignment(
         )
     updated = adaptive_learning_repo.update_assignment(assignment_id, updates, expected_status=previous_status)
     if not updated:
-        raise HTTPException(status_code=404, detail="Assignment not found")
+        raise AdaptiveLearningViolation(_L.ASSIGNMENT_NOT_FOUND)
     if updated.get("transition_token") == transition_token and side_effect:
         if side_effect == "completed":
             _apply_pending_assignment_effect(updated)
@@ -612,9 +614,9 @@ def _automation_policy(policy: dict[str, Any], *, student_id: str, user: dict[st
     requested_source_types = _string_list(_policy_value(policy, "sourceTypes", "source_types", default=[]), allow_blank=False)
     unsupported_source_types = sorted(set(requested_source_types) - AUTOMATION_SOURCE_TYPES)
     if unsupported_source_types:
-        raise HTTPException(status_code=400, detail=f"Unsupported automation source type: {unsupported_source_types[0]}")
+        raise AdaptiveLearningViolation(_L.AUTOMATION_SOURCE_TYPE_UNSUPPORTED)
     if source_types_provided and not requested_source_types:
-        raise HTTPException(status_code=400, detail="At least one automation source type is required")
+        raise AdaptiveLearningViolation(_L.AUTOMATION_SOURCE_TYPE_REQUIRED)
     source_types = requested_source_types if source_types_provided else ["ai_draft", "curriculum_exercise"]
     if not source_types:
         source_types = ["ai_draft", "curriculum_exercise"]
@@ -773,7 +775,7 @@ def _automation_execution_candidate(candidate: dict[str, Any], policy: dict[str,
     proposed_status = str(candidate.get("proposedStatus") or candidate.get("proposed_status") or policy["deliveryMode"])
     proposed_status = _choice(proposed_status, CREATABLE_STATUSES)
     if proposed_status != policy["deliveryMode"]:
-        raise HTTPException(status_code=400, detail="Candidate proposed status must match policy delivery mode")
+        raise AdaptiveLearningViolation(_L.CANDIDATE_STATUS_MISMATCH)
     return {
         "candidateId": str(candidate.get("candidateId") or candidate.get("candidate_id") or ""),
         "type": candidate.get("type"),
@@ -801,7 +803,7 @@ def _require_candidate_matches_preview(requested: dict[str, Any], preview: dict[
     compared_fields = ("candidateId", "sourceType", "sourceId", "proposedStatus")
     for field in compared_fields:
         if str(requested.get(field) or "") != str(preview.get(field) or ""):
-            raise HTTPException(status_code=409, detail="Candidate does not match current preview")
+            raise AdaptiveLearningViolation(_L.CANDIDATE_PREVIEW_MISMATCH)
 
 
 def _execute_assignment_automation_candidate(
@@ -873,11 +875,12 @@ def _execute_assignment_automation_candidate(
             automation=automation,
         )
         stored, created = _put_assignment_if_absent(item)
-    except HTTPException as exc:
+    except AdaptiveLearningViolation as exc:
+        # The batch's other reasons are English operator notes; this one is too.
         return {
             **base,
             "status": "failed" if exc.status_code >= 500 else "refused",
-            "reason": str(exc.detail),
+            "reason": exc.message("en"),
             "refusalCode": "source_not_assignable",
         }
     if not created:
@@ -1154,7 +1157,7 @@ def _automation_assignment_explanation(candidate: dict[str, Any], policy: dict[s
 
 def _choice(value: str, allowed: set[str]) -> str:
     if value not in allowed:
-        raise HTTPException(status_code=400, detail=f"Unsupported value: {value}")
+        raise AdaptiveLearningViolation(_L.POLICY_VALUE_UNSUPPORTED)
     return value
 
 
@@ -1176,13 +1179,13 @@ def _policy_value(policy: dict[str, Any], *keys: str, default: Any = None) -> An
 def _string_list(value: Any, *, allow_blank: bool = True) -> list[str]:
     if isinstance(value, str):
         if not value.strip() and not allow_blank:
-            raise HTTPException(status_code=400, detail="Blank policy values are not supported")
+            raise AdaptiveLearningViolation(_L.POLICY_VALUE_BLANK)
         return [value] if value else []
     if not value:
         return []
     if isinstance(value, list):
         if not allow_blank and any(not str(item).strip() for item in value):
-            raise HTTPException(status_code=400, detail="Blank policy values are not supported")
+            raise AdaptiveLearningViolation(_L.POLICY_VALUE_BLANK)
         return [str(item) for item in value if item]
     return []
 
@@ -1445,7 +1448,7 @@ def _assignment_source(source_type: str, source_id: str, student_id: str, *, use
     if source_type == "curriculum_exercise":
         exercise = practice_repo.get_challenge(source_id)
         if not exercise:
-            raise HTTPException(status_code=404, detail="Curriculum exercise not found")
+            raise AdaptiveLearningViolation(_L.ASSIGNMENT_SOURCE_NOT_FOUND)
         return {
             "sourceType": "curriculum_exercise",
             "title": exercise.get("title") or exercise.get("prompt") or source_id,
@@ -1460,11 +1463,11 @@ def _assignment_source(source_type: str, source_id: str, student_id: str, *, use
     if source_type == "ai_draft":
         draft = ai_teacher_tools_repo.get_draft(source_id)
         if not draft:
-            raise HTTPException(status_code=404, detail="AI teacher draft not found")
+            raise AdaptiveLearningViolation(_L.ASSIGNMENT_SOURCE_NOT_FOUND)
         if draft.get("draft_type") != "practice_exercise" or draft.get("status") != "accepted":
-            raise HTTPException(status_code=409, detail="Only accepted practice exercise drafts can be assigned")
+            raise AdaptiveLearningViolation(_L.AI_DRAFT_NOT_ASSIGNABLE)
         if str(draft.get("student_id") or "") != student_id:
-            raise HTTPException(status_code=400, detail="Draft does not belong to the requested student")
+            raise AdaptiveLearningViolation(_L.DRAFT_OF_ANOTHER_STUDENT)
         return {
             "sourceType": "ai_draft",
             "title": "Reviewed practice exercise",
@@ -1476,7 +1479,7 @@ def _assignment_source(source_type: str, source_id: str, student_id: str, *, use
             "answerKey": draft.get("answer_key") or [],
             "rationale": "Assigned from teacher-reviewed AI exercise draft.",
         }
-    raise HTTPException(status_code=400, detail="Unsupported assignment source type")
+    raise AdaptiveLearningViolation(_L.ASSIGNMENT_SOURCE_TYPE_UNSUPPORTED)
 
 
 def _record_assignment_progress(item: dict[str, Any], *, correct: bool | None, student_answer: str | None) -> None:
@@ -1851,7 +1854,7 @@ def _can_manage_assignments(user: dict[str, Any]) -> bool:
 def _existing_assignment(assignment_id: str) -> dict[str, Any]:
     item = adaptive_learning_repo.get_assignment(assignment_id)
     if not item:
-        raise HTTPException(status_code=404, detail="Assignment not found")
+        raise AdaptiveLearningViolation(_L.ASSIGNMENT_NOT_FOUND)
     return item
 
 

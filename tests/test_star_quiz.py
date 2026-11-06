@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from rule_violation_helpers import assert_violation
 from fakes.dynamodb import FakeTable
 
 from stoa.db.repositories import practice_repo
@@ -227,8 +228,7 @@ def test_a_lit_star_cannot_be_taken(monkeypatch) -> None:
 
     response = _start(_client())
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "star_quiz_already_lit"
+    assert_violation(response, "star_quiz_already_lit")
 
 
 def test_an_unknown_star_is_not_found(monkeypatch) -> None:
@@ -236,8 +236,7 @@ def test_an_unknown_star_is_not_found(monkeypatch) -> None:
 
     response = _start(_client(), "no-such-star")
 
-    assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "star_quiz_unknown_star"
+    assert_violation(response, "star_quiz_unknown_star")
 
 
 def test_starting_again_hands_back_the_paper_already_open(monkeypatch) -> None:
@@ -330,12 +329,7 @@ def test_a_lost_star_cannot_be_taken_again_for_24_hours(monkeypatch) -> None:
 
     response = _start(client)
 
-    assert response.status_code == 409
-    assert response.json()["detail"] == {
-        "code": "star_quiz_cooling_down",
-        "message": "This quiz can be taken again later.",
-        "retryAt": lost["retryAt"],
-    }
+    assert_violation(response, "star_quiz_cooling_down", retryAt=lost["retryAt"])
 
 
 def test_a_lost_star_can_be_taken_once_the_24_hours_are_over(monkeypatch) -> None:
@@ -398,8 +392,7 @@ def test_an_answer_to_another_exercise_is_refused(monkeypatch) -> None:
 
     response = _answer(client, quiz, right=True, exercise_id=later)
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "star_quiz_out_of_order"
+    assert_violation(response, "star_quiz_out_of_order")
 
 
 def test_another_students_paper_is_not_found(monkeypatch) -> None:
@@ -408,8 +401,7 @@ def test_another_students_paper_is_not_found(monkeypatch) -> None:
 
     response = _answer(_client("student-2"), quiz, right=True)
 
-    assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "star_quiz_not_found"
+    assert_violation(response, "star_quiz_not_found")
 
 
 def test_a_finished_paper_takes_no_new_answer(monkeypatch) -> None:
@@ -420,8 +412,7 @@ def test_a_finished_paper_takes_no_new_answer(monkeypatch) -> None:
 
     response = _answer(client, quiz, right=True, exercise_id="c-9" if "c-9" not in asked else "c-8")
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "star_quiz_finished"
+    assert_violation(response, "star_quiz_finished")
 
 
 def test_an_expired_paper_takes_no_answer(monkeypatch) -> None:
@@ -433,8 +424,7 @@ def test_an_expired_paper_takes_no_answer(monkeypatch) -> None:
 
     response = _answer(client, quiz, right=True)
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "star_quiz_expired"
+    assert_violation(response, "star_quiz_expired")
 
 
 # ── the lesson quiz is not this ──────────────────────────────────────────────

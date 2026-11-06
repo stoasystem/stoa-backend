@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from stoa.config import settings
@@ -27,6 +27,7 @@ from stoa.security.authorization import (
     ResourceType,
     authorize_and_resolve,
 )
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import Actor
 from stoa.models.practice import (
     PracticeAnswerSubmission,
@@ -61,6 +62,7 @@ from stoa.services import (
 )
 from stoa.services import practice_projection_service, review_service
 from stoa.services.curriculum_translations import translated_title
+from stoa.services.practice_errors import PracticeErrorCode as _P, PracticeViolation
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -385,18 +387,18 @@ def _actor_projection(actor: Actor) -> dict[str, object]:
 def _enforce_curriculum_preview_access(user: Actor, include_preview: bool, rollout_state: str | None) -> None:
     preview_requested = include_preview or (rollout_state is not None and rollout_state.lower() != "active")
     if preview_requested and not curriculum_service.can_preview(_actor_projection(user)):
-        raise HTTPException(status_code=403, detail="Curriculum preview content requires teacher or admin access")
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
 
 
 def _resolve_curriculum_student_id(user: dict, requested_student_id: str | None) -> str:
     role = str(user.get("role", "")).lower()
     if role == "student":
         if requested_student_id and requested_student_id != user.get("sub"):
-            raise HTTPException(status_code=403, detail="Students can only view their own curriculum progress")
+            raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
         return user["sub"]
     if role in {"admin", "teacher"} and requested_student_id:
         return requested_student_id
-    raise HTTPException(status_code=400, detail="studentId is required for teacher/admin curriculum progress")
+    raise PracticeViolation(_P.CURRICULUM_STUDENT_REQUIRED)
 
 
 # ── Endpoints ───────────────────────────────────────────────────────────────
@@ -493,7 +495,7 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
     if not recommended_raw:
         recommended_raw = all_lessons[0] if all_lessons else None
     if not recommended_raw:
-        raise HTTPException(status_code=404, detail="No lessons available")
+        raise PracticeViolation(_P.NO_LESSONS_AVAILABLE)
 
     challenges: list[Mapping[str, Any]] = [
         practice_projection_service.build_challenge_preview(c, locale)
@@ -588,7 +590,7 @@ async def get_curriculum_lesson(
         locale=_actor_locale(user),
     )
     if not lesson:
-        raise HTTPException(status_code=404, detail="Curriculum lesson not found")
+        raise PracticeViolation(_P.CURRICULUM_LESSON_NOT_FOUND)
     return lesson
 
 
@@ -683,10 +685,7 @@ async def get_knowledge_map(
             view=view,
         )
     except knowledge_map_service.UnknownSubject:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="subjectId does not name a subject in the curriculum",
-        ) from None
+        raise PracticeViolation(_P.SUBJECT_UNKNOWN) from None
 
 
 @router.get("/knowledge-map/stars")
@@ -712,10 +711,7 @@ async def get_knowledge_map_neighbourhood(
             locale=_actor_locale(actor),
         )
     except knowledge_map_service.UnknownSubject:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="subjectId does not name a subject in the curriculum",
-        ) from None
+        raise PracticeViolation(_P.SUBJECT_UNKNOWN) from None
 
 
 class LitAcknowledgement(BaseModel):
@@ -760,10 +756,6 @@ class StarQuizAnswer(BaseModel):
 
     exercise_id: str = Field(alias="exerciseId", min_length=1, max_length=200)
     answer: object
-
-
-def _star_quiz_error(status_code: int, code: str, message: str, **extra: Any) -> HTTPException:
-    return HTTPException(status_code=status_code, detail={"code": code, "message": message, **extra})
 
 
 def _star_quiz_view(
@@ -835,19 +827,14 @@ async def start_star_quiz(
     )
     judged = states.get(unit_id)
     if judged is None or judged.lesson_count == 0:
-        raise _star_quiz_error(404, "star_quiz_unknown_star", "There is no such knowledge point.")
+        raise PracticeViolation(_P.STAR_QUIZ_UNKNOWN_STAR)
     if judged.state is knowledge_mastery_service.LearningState.LIT:
-        raise _star_quiz_error(409, "star_quiz_already_lit", "This knowledge point is lit already.")
+        raise PracticeViolation(_P.STAR_QUIZ_ALREADY_LIT)
 
     now = datetime.now(timezone.utc)
     retry = _star_quiz_retry_at(student_id, unit_id, now)
     if retry:
-        raise _star_quiz_error(
-            409,
-            "star_quiz_cooling_down",
-            "This quiz can be taken again later.",
-            retryAt=retry,
-        )
+        raise PracticeViolation(_P.STAR_QUIZ_COOLING_DOWN, retryAt=retry)
 
     for session in practice_repo.list_star_quizzes(student_id):
         if (
@@ -863,9 +850,7 @@ async def start_star_quiz(
         knowledge_mastery_service.star_quiz_exercises(unit_id, catalog=catalog, indexed=indexed)
     )
     if not paper:
-        raise _star_quiz_error(
-            409, "star_quiz_unavailable", "This knowledge point has no exercise to ask."
-        )
+        raise PracticeViolation(_P.STAR_QUIZ_UNAVAILABLE)
     expires = now + star_quiz_service.SESSION_TTL
     session = practice_repo.put_star_quiz(
         student_id,
@@ -941,7 +926,6 @@ async def answer_star_quiz(
     quiz_id: str,
     body: StarQuizAnswer,
     actor: Actor = Depends(_practice_update),
-    correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Judge one answer of a star quiz (#165).
 
@@ -956,40 +940,29 @@ async def answer_star_quiz(
     student_id = actor.user_id
     session = practice_repo.get_star_quiz(student_id, quiz_id)
     if not session or str(session.get("unit_id") or "") != unit_id:
-        raise _star_quiz_error(404, "star_quiz_not_found", "This quiz is not open.")
+        raise PracticeViolation(_P.STAR_QUIZ_NOT_FOUND)
 
     replayed = _replayed_star_quiz_answer(session, body.exercise_id, locale)
     if replayed is not None:
         return replayed
     if str(session.get("status") or "") != star_quiz_service.IN_PROGRESS:
-        raise _star_quiz_error(409, "star_quiz_finished", "This quiz is already over.")
+        raise PracticeViolation(_P.STAR_QUIZ_FINISHED)
     now = datetime.now(timezone.utc)
     if _as_int(session.get("expires_at")) <= int(now.timestamp()):
-        raise _star_quiz_error(409, "star_quiz_expired", "This quiz has expired. Start a new one.")
+        raise PracticeViolation(_P.STAR_QUIZ_EXPIRED)
 
     paper = [str(item) for item in session.get("paper") or []]
     answers = [dict(answer) for answer in session.get("answers") or []]
     asking = paper[len(answers)] if len(answers) < len(paper) else None
     if body.exercise_id != asking:
-        raise _star_quiz_error(
-            409, "star_quiz_out_of_order", "This is not the exercise the quiz is asking now."
-        )
+        raise PracticeViolation(_P.STAR_QUIZ_OUT_OF_ORDER)
     challenge = practice_repo.get_challenge(asking)
     if not challenge:
-        raise _star_quiz_error(
-            409, "star_quiz_unavailable", "This quiz asked an exercise that is no longer available."
-        )
+        raise PracticeViolation(_P.STAR_QUIZ_UNAVAILABLE)
     try:
         student_answer = practice_projection_service.normalize_submitted_answer(body.answer)
     except ValueError as error:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "code": "practice_answer_invalid",
-                "message": "Your answer is not supported or is too large.",
-                "correlationId": correlation_id,
-            },
-        ) from error
+        raise PracticeViolation(_P.PRACTICE_ANSWER_INVALID) from error
 
     correct = answer_judging.judge_challenge(
         student_answer, exercise_localization.localized(challenge, locale)
@@ -1007,9 +980,7 @@ async def answer_star_quiz(
         replayed = _replayed_star_quiz_answer(current, asking, locale)
         if replayed is not None:
             return replayed
-        raise _star_quiz_error(
-            409, "star_quiz_out_of_order", "This is not the exercise the quiz is asking now."
-        ) from None
+        raise PracticeViolation(_P.STAR_QUIZ_OUT_OF_ORDER) from None
 
     retry = None
     if outcome.status == star_quiz_service.FAILED:
@@ -1049,7 +1020,7 @@ async def get_roadmap(
     locale = _actor_locale(actor)
     topic = practice_repo.get_topic(topic_id)
     if not topic or not practice_repo.same_subject(topic.get("subject_id", ""), subject_id):
-        raise HTTPException(status_code=404, detail="Topic not found")
+        raise PracticeViolation(_P.TOPIC_NOT_FOUND)
 
     user_id = actor.user_id
     progress = practice_repo.get_progress(user_id, subject_id)
@@ -1131,7 +1102,7 @@ async def get_path(
         topics = practice_repo.get_topics(subject_id)
 
     if not topics:
-        raise HTTPException(status_code=404, detail="No topics found")
+        raise PracticeViolation(_P.NO_TOPICS_FOUND)
 
     user_id = actor.user_id
     progress = practice_repo.get_progress(user_id, subject_id)
@@ -1205,13 +1176,6 @@ async def get_lesson(
     return practice_projection_service.build_lesson_preview(lesson, challenges, st, locale=locale)
 
 
-def _quiz_conflict(code: str, message: str, **extra: Any) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_409_CONFLICT,
-        detail={"code": code, "message": message, **extra},
-    )
-
-
 def _spend_quiz_credential(student_id: str, lesson_id: str, credential: str) -> None:
     """Take one credential out of circulation, or refuse the completion."""
     stored = practice_repo.get_quiz_credential(student_id, credential)
@@ -1221,21 +1185,12 @@ def _spend_quiz_credential(student_id: str, lesson_id: str, credential: str) -> 
     if stored and not str(stored.get("quiz_id") or ""):
         stored = None
     if not stored or str(stored.get("lesson_id") or "") != lesson_id:
-        raise _quiz_conflict(
-            "lesson_quiz_credential_invalid",
-            "This quiz credential cannot complete this lesson.",
-        )
+        raise PracticeViolation(_P.LESSON_QUIZ_CREDENTIAL_INVALID)
     if _as_int(stored.get("expires_at")) <= int(datetime.now(timezone.utc).timestamp()):
         practice_repo.consume_quiz_credential(student_id, credential, lesson_id=lesson_id)
-        raise _quiz_conflict(
-            "lesson_quiz_credential_expired",
-            "This quiz credential has expired. Take the quiz again.",
-        )
+        raise PracticeViolation(_P.LESSON_QUIZ_CREDENTIAL_EXPIRED)
     if not practice_repo.consume_quiz_credential(student_id, credential, lesson_id=lesson_id):
-        raise _quiz_conflict(
-            "lesson_quiz_credential_invalid",
-            "This quiz credential cannot complete this lesson.",
-        )
+        raise PracticeViolation(_P.LESSON_QUIZ_CREDENTIAL_INVALID)
 
 
 def _quiz_exercise_preview(challenge_id: str, locale: str) -> dict[str, Any] | None:
@@ -1306,10 +1261,7 @@ async def start_lesson_quiz(
         answered_right=practice_repo.challenges_answered_right(actor.user_id, lesson_id),
     )
     if not queue:
-        raise _quiz_conflict(
-            "lesson_quiz_unavailable",
-            "This lesson has no exercise a quiz could ask.",
-        )
+        raise PracticeViolation(_P.LESSON_QUIZ_UNAVAILABLE)
 
     now = datetime.now(timezone.utc)
     expires = now + timedelta(seconds=lesson_quiz_service.QUIZ_SESSION_TTL_SECONDS)
@@ -1354,7 +1306,6 @@ async def answer_lesson_quiz(
     body: PracticeAnswerSubmission,
     actor: Actor = Depends(_practice_update),
     authorized_lesson: AuthorizedResource = Depends(_authorized_lesson_update),
-    correlation_id: str = Depends(get_request_correlation_id),
 ):
     """Judge one quiz answer. No hint, no Ask, no skip - and no second slip.
 
@@ -1365,21 +1316,15 @@ async def answer_lesson_quiz(
     """
     session = practice_repo.get_quiz_session(actor.user_id, quiz_id)
     if not session or str(session.get("lesson_id") or "") != lesson_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": "lesson_quiz_not_found",
-                "message": "This quiz is not open.",
-            },
-        )
+        raise PracticeViolation(_P.LESSON_QUIZ_NOT_FOUND)
     if str(session.get("status") or "") != lesson_quiz_service.IN_PROGRESS:
-        raise _quiz_conflict("lesson_quiz_finished", "This quiz is already over.")
+        raise PracticeViolation(_P.LESSON_QUIZ_FINISHED)
     if _as_int(session.get("expires_at")) <= int(datetime.now(timezone.utc).timestamp()):
-        raise _quiz_conflict("lesson_quiz_expired", "This quiz has expired. Start a new one.")
+        raise PracticeViolation(_P.LESSON_QUIZ_EXPIRED)
 
     queue = [str(item) for item in (session.get("queue") or [])]
     if not queue:
-        raise _quiz_conflict("lesson_quiz_finished", "This quiz is already over.")
+        raise PracticeViolation(_P.LESSON_QUIZ_FINISHED)
     # An exercise the catalog lists but cannot resolve used to end here with
     # the queue untouched, so every retry and every new paper asked the same
     # unanswerable question: the quiz and `complete` were both shut, with no
@@ -1400,22 +1345,12 @@ async def answer_lesson_quiz(
             mistakes=_as_int(session.get("mistakes")),
             status=lesson_quiz_service.FAILED,
         )
-        raise _quiz_conflict(
-            "lesson_quiz_unavailable",
-            "This quiz asked an exercise that is no longer available.",
-        )
+        raise PracticeViolation(_P.LESSON_QUIZ_UNAVAILABLE)
 
     try:
         student_answer = practice_projection_service.normalize_submitted_answer(body.answer)
     except ValueError as error:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "code": "practice_answer_invalid",
-                "message": "Your answer is not supported or is too large.",
-                "correlationId": correlation_id,
-            },
-        ) from error
+        raise PracticeViolation(_P.PRACTICE_ANSWER_INVALID) from error
 
     correct = answer_judging.judge_challenge(
         student_answer, exercise_localization.localized(challenge, _actor_locale(actor))
@@ -1483,8 +1418,8 @@ async def answer_lesson_quiz(
         status.HTTP_409_CONFLICT: {
             "description": (
                 "`lesson_exercises_unanswered`: an exercise of the lesson "
-                "has never been answered right and no quiz credential was sent, "
-                "`unansweredCount` says how many; `lesson_quiz_credential_invalid`: the "
+                "has never been answered right and no quiz credential was sent "
+                "(the message says how many); `lesson_quiz_credential_invalid`: the "
                 "credential is unknown, already spent, or belongs to another student or "
                 "lesson; `lesson_quiz_credential_expired`: the credential is past its "
                 "expiry."
@@ -1512,13 +1447,8 @@ async def complete_lesson(
         # mark any lesson complete. A lesson without exercises has nothing to answer.
         unanswered = practice_repo.unanswered_challenge_ids(actor.user_id, lesson_id)
         if unanswered:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "code": "lesson_exercises_unanswered",
-                    "message": "Answer every exercise of this lesson right before completing it.",
-                    "unansweredCount": len(unanswered),
-                },
+            raise PracticeViolation(
+                _P.LESSON_EXERCISES_UNANSWERED, params={"count": len(unanswered)}
             )
 
     progress_row = practice_repo.mark_lesson_completed(actor.user_id, lesson)
@@ -1578,7 +1508,6 @@ async def submit_answer(
     body: PracticeAnswerSubmission,
     actor: Actor = Depends(_practice_update),
     authorized_challenge: AuthorizedResource = Depends(_authorized_challenge_update),
-    correlation_id: str = Depends(get_request_correlation_id),
 ):
     challenge = dict(authorized_challenge.value)
 
@@ -1587,14 +1516,7 @@ async def submit_answer(
             body.answer
         )
     except ValueError as error:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "code": "practice_answer_invalid",
-                "message": "Your answer is not supported or is too large.",
-                "correlationId": correlation_id,
-            },
-        ) from error
+        raise PracticeViolation(_P.PRACTICE_ANSWER_INVALID) from error
     # Shown and judged in the reader's language; the stored row stays as it is,
     # since its version is what the attempt records.
     shown = exercise_localization.localized(challenge, _actor_locale(actor))
@@ -1639,14 +1561,7 @@ async def submit_answer(
         )
     except Exception as error:  # noqa: BLE001
         logger.warning("Practice attempt persistence failed")
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "code": "practice_attempt_unavailable",
-                "message": "Your answer could not be recorded. Please try again.",
-                "correlationId": correlation_id,
-            },
-        ) from error
+        raise PracticeViolation(_P.PRACTICE_ATTEMPT_UNAVAILABLE) from error
 
     curriculum_analytics_service.record_practice_attempt(
         student_id=actor.user_id,
@@ -1689,7 +1604,7 @@ async def get_attempt_result(
     try:
         return practice_projection_service.build_attempt_result(attempt)
     except (KeyError, TypeError, ValueError):
-        raise HTTPException(status_code=404, detail="Practice attempt not found")
+        raise PracticeViolation(_P.PRACTICE_ATTEMPT_NOT_FOUND)
 
 
 @router.get("/mistakes", response_model=PracticeMistakesResponse)

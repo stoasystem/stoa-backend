@@ -8,10 +8,9 @@ import threading
 from collections.abc import Mapping
 from typing import TypeGuard
 
-from fastapi import HTTPException
-
 from stoa.db.repositories import account_deletion_repo
 from stoa.services import rate_limit
+from stoa.services.rate_limit_errors import RateLimitErrorCode, RateLimitViolation
 from dynamodb_expression_assertions import (
     assert_expression_placeholders_closed,
 )
@@ -214,8 +213,9 @@ def test_repeating_429_requests_leave_counter_exactly_at_limit(monkeypatch) -> N
             rate_limit.check_and_record_hint(
                 "student-1", "challenge-1", operation_id, limit=2
             )
-        except HTTPException as error:
-            assert error.status_code == 429
+        except RateLimitViolation as error:
+            assert error.code is RateLimitErrorCode.HINT_DAILY_LIMIT
+            assert error.params == {"limit": 2}
         else:  # pragma: no cover - failure branch
             raise AssertionError("a full counter must reject the operation")
 
@@ -369,12 +369,8 @@ def test_hint_adapter_projects_changed_payload_as_structured_conflict(monkeypatc
         rate_limit.check_and_record_hint(
             "student-1", "challenge-2", "same-public-key", limit=2
         )
-    except HTTPException as error:
-        assert error.status_code == 409
-        assert error.detail == {
-            "code": "rate_operation_conflict",
-            "message": "This idempotency key was already used for another request.",
-        }
+    except RateLimitViolation as error:
+        assert error.code is RateLimitErrorCode.RATE_OPERATION_CONFLICT
     else:  # pragma: no cover - failure branch
         raise AssertionError("changed payload must conflict")
 
@@ -398,13 +394,11 @@ def test_dependency_error_never_exposes_storage_coordinates_or_expressions(
         rate_limit.check_and_record_hint(
             "student-1", "challenge-1", "dependency-failure", limit=2
         )
-    except HTTPException as error:
+    except RateLimitViolation as error:
+        assert error.code is RateLimitErrorCode.RATE_LIMIT_UNAVAILABLE
         assert error.status_code == 503
-        assert error.detail == {
-            "code": "rate_limit_unavailable",
-            "message": "Usage admission is temporarily unavailable. Please try again.",
-        }
-        assert error.headers == {"Retry-After": "30"}
+        assert error.headers() == {"Retry-After": "30"}
+        assert "USAGE#" not in error.message() and "USAGE#" not in str(error)
     else:  # pragma: no cover - failure branch
         raise AssertionError("dependency failure must fail closed")
 

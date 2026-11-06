@@ -10,11 +10,10 @@ import hashlib
 import struct
 from typing import Any, Mapping
 
-from fastapi import HTTPException, status
-
 from stoa.config import settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
+from stoa.services.rate_limit_errors import RateLimitErrorCode, RateLimitViolation
 
 
 _RATE_KINDS = frozenset({"chat", "hint"})
@@ -661,26 +660,16 @@ def _counter_receipt_or_raise(result: RateAdmissionResult, label: str) -> dict[s
     }:
         return result.counter_receipt()
     if result.disposition is RateAdmissionDisposition.LIMIT_EXCEEDED:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Daily {label} limit ({result.limit}) reached. Try again tomorrow.",
+        raise RateLimitViolation(
+            _LIMIT_CODES[label], params={"limit": result.limit}
         )
     if result.disposition is RateAdmissionDisposition.IDEMPOTENCY_CONFLICT:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "code": "rate_operation_conflict",
-                "message": "This idempotency key was already used for another request.",
-            },
-        )
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail={
-            "code": "rate_limit_unavailable",
-            "message": "Usage admission is temporarily unavailable. Please try again.",
-        },
-        headers={"Retry-After": "30"},
-    )
+        raise RateLimitViolation(RateLimitErrorCode.RATE_OPERATION_CONFLICT)
+    raise RateLimitViolation(RateLimitErrorCode.RATE_LIMIT_UNAVAILABLE)
+
+
+# The daily limit each counted kind is refused with.
+_LIMIT_CODES = {"hint": RateLimitErrorCode.HINT_DAILY_LIMIT}
 
 
 def check_and_record_hint(

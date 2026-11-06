@@ -9,6 +9,7 @@ cases, so most scan pages leave a filter nothing to keep.
 from __future__ import annotations
 
 import pytest
+from rule_violation_helpers import assert_violation
 from fakes.dynamodb import FakeTable
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -196,5 +197,4 @@ def test_a_cursor_the_list_did_not_hand_out_is_refused(table, client, cursor) ->
 
     response = client.get(f"/admin/moderation/cases?cursor={cursor}")
 
-    assert response.status_code == 422
-    assert response.json()["detail"] == {"code": "cursor_invalid"}
+    assert_violation(response, "cursor_invalid")

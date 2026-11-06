@@ -299,6 +299,32 @@
         "retryable": false
       }
     },
+    "ai_draft_not_assignable": {
+      "action": null,
+      "domain": "adaptive_learning",
+      "http_status": 409,
+      "message_key": "error.ai_draft_not_assignable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "ai_draft_not_found": {
+      "action": null,
+      "domain": "ai_teacher_tools",
+      "http_status": 404,
+      "message_key": "error.ai_draft_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "allowance_exhausted": {
       "action": "retry_later",
       "domain": "ask_question",
@@ -420,6 +446,123 @@
         "retryable": false
       }
     },
+    "assignment_action_unsupported": {
+      "action": "correct_input",
+      "domain": "adaptive_learning",
+      "http_status": 400,
+      "message_key": "error.assignment_action_unsupported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "assignment_not_completable": {
+      "action": null,
+      "domain": "adaptive_learning",
+      "http_status": 409,
+      "message_key": "error.assignment_not_completable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "assignment_not_found": {
+      "action": null,
+      "domain": "adaptive_learning",
+      "http_status": 404,
+      "message_key": "error.assignment_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "assignment_not_skippable": {
+      "action": null,
+      "domain": "adaptive_learning",
+      "http_status": 409,
+      "message_key": "error.assignment_not_skippable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "assignment_not_startable": {
+      "action": null,
+      "domain": "adaptive_learning",
+      "http_status": 409,
+      "message_key": "error.assignment_not_startable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "assignment_source_not_found": {
+      "action": null,
+      "domain": "adaptive_learning",
+      "http_status": 404,
+      "message_key": "error.assignment_source_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "assignment_source_type_unsupported": {
+      "action": "correct_input",
+      "domain": "adaptive_learning",
+      "http_status": 400,
+      "message_key": "error.assignment_source_type_unsupported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "assignment_status_not_creatable": {
+      "action": "correct_input",
+      "domain": "adaptive_learning",
+      "http_status": 400,
+      "message_key": "error.assignment_status_not_creatable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "assignment_status_unsupported": {
+      "action": "correct_input",
+      "domain": "adaptive_learning",
+      "http_status": 400,
+      "message_key": "error.assignment_status_unsupported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "attachment_in_use": {
       "action": "remove_from_resource",
       "domain": "attachment",
@@ -472,6 +615,71 @@
         "max_attempts": 2,
         "retry_after_seconds": 30,
         "retryable": true
+      }
+    },
+    "automation_source_type_required": {
+      "action": "correct_input",
+      "domain": "adaptive_learning",
+      "http_status": 400,
+      "message_key": "error.automation_source_type_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "automation_source_type_unsupported": {
+      "action": "correct_input",
+      "domain": "adaptive_learning",
+      "http_status": 400,
+      "message_key": "error.automation_source_type_unsupported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "batch_approval_required": {
+      "action": "correct_input",
+      "domain": "adaptive_learning",
+      "http_status": 400,
+      "message_key": "error.batch_approval_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "batch_candidates_required": {
+      "action": "correct_input",
+      "domain": "adaptive_learning",
+      "http_status": 400,
+      "message_key": "error.batch_candidates_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "batch_preview_stale": {
+      "action": null,
+      "domain": "adaptive_learning",
+      "http_status": 409,
+      "message_key": "error.batch_preview_stale",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
       }
     },
     "billing_projection_temporarily_unavailable": {
@@ -539,6 +747,45 @@
         "retryable": false
       }
     },
+    "candidate_not_in_preview": {
+      "action": null,
+      "domain": "adaptive_learning",
+      "http_status": 409,
+      "message_key": "error.candidate_not_in_preview",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "candidate_preview_mismatch": {
+      "action": null,
+      "domain": "adaptive_learning",
+      "http_status": 409,
+      "message_key": "error.candidate_preview_mismatch",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "candidate_status_mismatch": {
+      "action": "correct_input",
+      "domain": "adaptive_learning",
+      "http_status": 400,
+      "message_key": "error.candidate_status_mismatch",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "capability_regrant_required": {
       "action": null,
       "domain": "account",
@@ -557,6 +804,32 @@
       "domain": "account",
       "http_status": 409,
       "message_key": "error.capability_self_grant_forbidden",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "case_image_not_found": {
+      "action": null,
+      "domain": "moderation",
+      "http_status": 404,
+      "message_key": "error.case_image_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "case_image_unavailable": {
+      "action": "retry_later",
+      "domain": "moderation",
+      "http_status": 503,
+      "message_key": "error.case_image_unavailable",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -604,6 +877,32 @@
         "retryable": false
       }
     },
+    "curriculum_lesson_not_found": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 404,
+      "message_key": "error.curriculum_lesson_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "curriculum_student_required": {
+      "action": "correct_input",
+      "domain": "practice",
+      "http_status": 400,
+      "message_key": "error.curriculum_student_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "cursor_invalid": {
       "action": "correct_input",
       "domain": "account",
@@ -630,6 +929,84 @@
         "retryable": false
       }
     },
+    "draft_already_archived": {
+      "action": null,
+      "domain": "ai_teacher_tools",
+      "http_status": 409,
+      "message_key": "error.draft_already_archived",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "draft_already_reviewed": {
+      "action": null,
+      "domain": "ai_teacher_tools",
+      "http_status": 409,
+      "message_key": "error.draft_already_reviewed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "draft_of_another_student": {
+      "action": "correct_input",
+      "domain": "adaptive_learning",
+      "http_status": 400,
+      "message_key": "error.draft_of_another_student",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "draft_option_unsupported": {
+      "action": "correct_input",
+      "domain": "ai_teacher_tools",
+      "http_status": 400,
+      "message_key": "error.draft_option_unsupported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "draft_question_unavailable": {
+      "action": null,
+      "domain": "ai_teacher_tools",
+      "http_status": 409,
+      "message_key": "error.draft_question_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "draft_type_unsupported": {
+      "action": "correct_input",
+      "domain": "ai_teacher_tools",
+      "http_status": 400,
+      "message_key": "error.draft_type_unsupported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "email_already_registered": {
       "action": "reauthenticate",
       "domain": "security",
@@ -648,6 +1025,19 @@
       "domain": "security",
       "http_status": 403,
       "message_key": "error.email_verification_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "exercise_count_invalid": {
+      "action": "correct_input",
+      "domain": "ai_teacher_tools",
+      "http_status": 400,
+      "message_key": "error.exercise_count_invalid",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -699,6 +1089,19 @@
         "retryable": true
       }
     },
+    "hint_daily_limit": {
+      "action": "retry_later",
+      "domain": "rate_limit",
+      "http_status": 429,
+      "message_key": "error.hint_daily_limit",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "identity_change_temporarily_unavailable": {
       "action": "retry_later",
       "domain": "account",
@@ -743,6 +1146,19 @@
       "domain": "account",
       "http_status": 409,
       "message_key": "error.identity_restore_not_allowed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "image_case_not_reportable": {
+      "action": null,
+      "domain": "moderation",
+      "http_status": 400,
+      "message_key": "error.image_case_not_reportable",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -951,6 +1367,97 @@
       "domain": "account",
       "http_status": 409,
       "message_key": "error.invitation_state_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "lesson_exercises_unanswered": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 409,
+      "message_key": "error.lesson_exercises_unanswered",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "lesson_quiz_credential_expired": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 409,
+      "message_key": "error.lesson_quiz_credential_expired",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "lesson_quiz_credential_invalid": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 409,
+      "message_key": "error.lesson_quiz_credential_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "lesson_quiz_expired": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 409,
+      "message_key": "error.lesson_quiz_expired",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "lesson_quiz_finished": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 409,
+      "message_key": "error.lesson_quiz_finished",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "lesson_quiz_not_found": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 404,
+      "message_key": "error.lesson_quiz_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "lesson_quiz_unavailable": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 409,
+      "message_key": "error.lesson_quiz_unavailable",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -1234,6 +1741,214 @@
         "retryable": true
       }
     },
+    "moderation_case_not_found": {
+      "action": null,
+      "domain": "moderation",
+      "http_status": 404,
+      "message_key": "error.moderation_case_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "no_ai_answer_to_report": {
+      "action": null,
+      "domain": "moderation",
+      "http_status": 400,
+      "message_key": "error.no_ai_answer_to_report",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "no_lessons_available": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 404,
+      "message_key": "error.no_lessons_available",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "no_teacher_reply_to_report": {
+      "action": null,
+      "domain": "moderation",
+      "http_status": 400,
+      "message_key": "error.no_teacher_reply_to_report",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "no_topics_found": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 404,
+      "message_key": "error.no_topics_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "notification_event_id_required": {
+      "action": "correct_input",
+      "domain": "notification",
+      "http_status": 400,
+      "message_key": "error.notification_event_id_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "notification_event_type_unsupported": {
+      "action": "correct_input",
+      "domain": "notification",
+      "http_status": 400,
+      "message_key": "error.notification_event_type_unsupported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "notification_not_found": {
+      "action": null,
+      "domain": "notification",
+      "http_status": 404,
+      "message_key": "error.notification_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "notification_owner_required": {
+      "action": null,
+      "domain": "notification",
+      "http_status": 409,
+      "message_key": "error.notification_owner_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "notification_preference_category_unsupported": {
+      "action": "correct_input",
+      "domain": "notification",
+      "http_status": 400,
+      "message_key": "error.notification_preference_category_unsupported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "notification_preference_channel_unsupported": {
+      "action": "correct_input",
+      "domain": "notification",
+      "http_status": 400,
+      "message_key": "error.notification_preference_channel_unsupported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "notification_preference_channels_invalid": {
+      "action": "correct_input",
+      "domain": "notification",
+      "http_status": 400,
+      "message_key": "error.notification_preference_channels_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "notification_preference_value_invalid": {
+      "action": "correct_input",
+      "domain": "notification",
+      "http_status": 400,
+      "message_key": "error.notification_preference_value_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "notification_recipient_role_required": {
+      "action": "correct_input",
+      "domain": "notification",
+      "http_status": 400,
+      "message_key": "error.notification_recipient_role_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "notification_status_unsupported": {
+      "action": "correct_input",
+      "domain": "notification",
+      "http_status": 400,
+      "message_key": "error.notification_status_unsupported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "notification_transition_unsupported": {
+      "action": "correct_input",
+      "domain": "notification",
+      "http_status": 400,
+      "message_key": "error.notification_transition_unsupported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "page_token_invalid": {
       "action": "correct_input",
       "domain": "account",
@@ -1390,6 +2105,71 @@
         "retryable": false
       }
     },
+    "policy_value_blank": {
+      "action": "correct_input",
+      "domain": "adaptive_learning",
+      "http_status": 400,
+      "message_key": "error.policy_value_blank",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "policy_value_unsupported": {
+      "action": "correct_input",
+      "domain": "adaptive_learning",
+      "http_status": 400,
+      "message_key": "error.policy_value_unsupported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "practice_answer_invalid": {
+      "action": "correct_input",
+      "domain": "practice",
+      "http_status": 422,
+      "message_key": "error.practice_answer_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "practice_attempt_not_found": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 404,
+      "message_key": "error.practice_attempt_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "practice_attempt_unavailable": {
+      "action": "retry_later",
+      "domain": "practice",
+      "http_status": 503,
+      "message_key": "error.practice_attempt_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 2,
+        "retry_after_seconds": null,
+        "retryable": true
+      }
+    },
     "privileged_identity_not_found": {
       "action": null,
       "domain": "account",
@@ -1483,6 +2263,110 @@
         "retryable": false
       }
     },
+    "push_platform_unsupported": {
+      "action": "correct_input",
+      "domain": "notification",
+      "http_status": 400,
+      "message_key": "error.push_platform_unsupported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "push_token_not_found": {
+      "action": null,
+      "domain": "notification",
+      "http_status": 404,
+      "message_key": "error.push_token_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "push_token_required": {
+      "action": "correct_input",
+      "domain": "notification",
+      "http_status": 400,
+      "message_key": "error.push_token_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "question_history_unavailable": {
+      "action": "retry_later",
+      "domain": "adaptive_learning",
+      "http_status": 503,
+      "message_key": "error.question_history_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": true,
+        "max_attempts": 2,
+        "retry_after_seconds": null,
+        "retryable": true
+      }
+    },
+    "question_not_writable": {
+      "action": null,
+      "domain": "moderation",
+      "http_status": 409,
+      "message_key": "error.question_not_writable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "question_of_another_student": {
+      "action": "correct_input",
+      "domain": "ai_teacher_tools",
+      "http_status": 400,
+      "message_key": "error.question_of_another_student",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "rate_limit_unavailable": {
+      "action": "retry_later",
+      "domain": "rate_limit",
+      "http_status": 503,
+      "message_key": "error.rate_limit_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": true,
+        "max_attempts": 2,
+        "retry_after_seconds": 30,
+        "retryable": true
+      }
+    },
+    "rate_operation_conflict": {
+      "action": null,
+      "domain": "rate_limit",
+      "http_status": 409,
+      "message_key": "error.rate_operation_conflict",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "recovery_job_not_found": {
       "action": null,
       "domain": "account",
@@ -1548,6 +2432,19 @@
         "retryable": false
       }
     },
+    "reported_message_not_found": {
+      "action": null,
+      "domain": "moderation",
+      "http_status": 404,
+      "message_key": "error.reported_message_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "required_field": {
       "action": "correct_input",
       "domain": "account",
@@ -1587,6 +2484,112 @@
         "retryable": false
       }
     },
+    "star_quiz_already_lit": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 409,
+      "message_key": "error.star_quiz_already_lit",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "star_quiz_cooling_down": {
+      "action": "retry_later",
+      "domain": "practice",
+      "http_status": 409,
+      "message_key": "error.star_quiz_cooling_down",
+      "public_fields": [
+        "retryAt"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "star_quiz_expired": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 409,
+      "message_key": "error.star_quiz_expired",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "star_quiz_finished": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 409,
+      "message_key": "error.star_quiz_finished",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "star_quiz_not_found": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 404,
+      "message_key": "error.star_quiz_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "star_quiz_out_of_order": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 409,
+      "message_key": "error.star_quiz_out_of_order",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "star_quiz_unavailable": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 409,
+      "message_key": "error.star_quiz_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "star_quiz_unknown_star": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 404,
+      "message_key": "error.star_quiz_unknown_star",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "storage_quota_exceeded": {
       "action": "delete_or_upgrade",
       "domain": "attachment",
@@ -1595,6 +2598,32 @@
       "public_fields": [
         "conversationId"
       ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "subject_unknown": {
+      "action": "correct_input",
+      "domain": "practice",
+      "http_status": 422,
+      "message_key": "error.subject_unknown",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "subject_unsupported": {
+      "action": "correct_input",
+      "domain": "ai_teacher_tools",
+      "http_status": 400,
+      "message_key": "error.subject_unsupported",
+      "public_fields": [],
       "retry": {
         "idempotent_only": false,
         "max_attempts": 0,
@@ -1870,6 +2899,32 @@
         "retryable": true
       }
     },
+    "topic_not_found": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 404,
+      "message_key": "error.topic_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "topic_required": {
+      "action": "correct_input",
+      "domain": "ai_teacher_tools",
+      "http_status": 400,
+      "message_key": "error.topic_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "upload_chunk_conflict": {
       "action": "select_file",
       "domain": "attachment",
@@ -2075,6 +3130,45 @@
       "domain": "account",
       "http_status": 422,
       "message_key": "error.verified_email_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "websocket_channel_required": {
+      "action": "correct_input",
+      "domain": "notification",
+      "http_status": 400,
+      "message_key": "error.websocket_channel_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "websocket_connection_id_required": {
+      "action": "correct_input",
+      "domain": "notification",
+      "http_status": 400,
+      "message_key": "error.websocket_connection_id_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "websocket_connection_not_found": {
+      "action": null,
+      "domain": "notification",
+      "http_status": 404,
+      "message_key": "error.websocket_connection_not_found",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
