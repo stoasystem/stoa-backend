@@ -60,18 +60,6 @@ CLEANUP_RECONCILIATION_MAX_ITEMS = 10_000
 
 # Attached to a conversation message, these go to the model as images.
 MESSAGE_IMAGE_TYPES = frozenset({"image/jpeg", "image/png"})
-def _require_active_account_fence_for_repository(
-    repository: Any, owner_id: str, generation: int | None = None
-) -> dict[str, Any]:
-    """Use the real fence in production and an explicit hook in repository fakes."""
-    hook = getattr(repository, "require_active_account_fence", None)
-    if callable(hook):
-        return hook(owner_id, generation)
-    if repository is attachment_repo:
-        return account_deletion_repo.require_active_account_fence(owner_id, generation)
-    # Inherited narrow unit fakes predate the account lifecycle boundary. They
-    # cannot perform provider effects outside tests and receive generation one.
-    return {"status": "active", "generation": generation or 1}
 
 
 class RetentionDisposition(StrEnum):
@@ -1024,7 +1012,7 @@ def bind_message_attachments(
         prepared, actor.user_id, effective_plan, repository=repository
     )
     try:
-        account_fence = _require_active_account_fence_for_repository(repository, actor.user_id)
+        account_fence = account_deletion_repo.require_active_account_fence(actor.user_id)
         generation = int(account_fence["generation"])
         repository.transact(
             repository.build_message_attachment_transaction(
