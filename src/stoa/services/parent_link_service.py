@@ -9,10 +9,12 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from typing import Any, Final
 
 from stoa.db.repositories import parent_link_repo, user_repo
 from stoa.models import user as user_model
+from stoa.rule_violation import RuleContract, RuleViolation, register_codes
 
 
 STATUS_PENDING: Final = parent_link_repo.STATUS_PENDING
@@ -40,13 +42,79 @@ AccountNumberResolver = Callable[[str], str | None]
 _account_number_resolver: AccountNumberResolver | None = None
 
 
-class ParentLinkError(Exception):
-    """A link request the caller is not allowed to make, carrying a stable code."""
+class ParentLinkErrorCode(StrEnum):
+    """Why a link was refused; the strings are the client's (#211)."""
 
-    def __init__(self, code: str, **details: Any) -> None:
-        super().__init__(code)
-        self.code = code
-        self.details: dict[str, Any] = details
+    LINK_TARGET_NOT_FOUND = "link_target_not_found"
+    LINK_INITIATOR_NOT_ALLOWED = "link_initiator_not_allowed"
+    LINK_NOT_PENDING = "link_not_pending"
+    LINK_CONFIRMATION_NOT_ALLOWED = "link_confirmation_not_allowed"
+    LINK_REQUIRES_ADMINISTRATOR = "link_requires_administrator"
+    LINK_CONFIRMATION_NOT_APPLICABLE = "link_confirmation_not_applicable"
+    LINK_ALREADY_ACTIVE = "link_already_active"
+    LINK_REQUEST_PENDING = "link_request_pending"
+    LINK_REQUEST_EXPIRED = "link_request_expired"
+    LINK_REJECTED_COOLDOWN = "link_rejected_cooldown"
+    # A concurrent writer took the pair between the read and the write: on a
+    # request, and on an administrator's assignment.
+    LINK_REQUEST_CONFLICT = "link_request_conflict"
+    LINK_ALREADY_EXISTS = "link_already_exists"
+    LINK_REQUEST_RATE_LIMITED = "link_request_rate_limited"
+    ACCOUNT_NUMBER_LOOKUP_UNAVAILABLE = "account_number_lookup_unavailable"
+
+    @property
+    def contract(self) -> RuleContract:
+        return PARENT_LINK_ERROR_REGISTRY[self]
+
+
+# How many link requests one account may make inside one window.
+REQUEST_WINDOW_SECONDS: Final = 86400
+REQUEST_MAX_PER_WINDOW: Final = 5
+
+_Code = ParentLinkErrorCode
+
+# Each code's message is the catalog's `error.<code>`
+# (`stoa.services.message_catalog.errors.parent_link`).
+PARENT_LINK_ERROR_REGISTRY: dict[ParentLinkErrorCode, RuleContract] = {
+    _Code.LINK_TARGET_NOT_FOUND: RuleContract(404),
+    _Code.LINK_INITIATOR_NOT_ALLOWED: RuleContract(403),
+    _Code.LINK_NOT_PENDING: RuleContract(409),
+    _Code.LINK_CONFIRMATION_NOT_ALLOWED: RuleContract(403),
+    # Card 008: a link with a minor on either side is refused to self-service and
+    # left to the administrator. It is a refusal to act, not a state conflict.
+    _Code.LINK_REQUIRES_ADMINISTRATOR: RuleContract(403),
+    _Code.LINK_CONFIRMATION_NOT_APPLICABLE: RuleContract(409),
+    _Code.LINK_ALREADY_ACTIVE: RuleContract(409),
+    _Code.LINK_REQUEST_PENDING: RuleContract(409),
+    _Code.LINK_REQUEST_EXPIRED: RuleContract(409),
+    # How long is left is the only way the client can say "try again in N days"
+    # instead of a bare refusal.
+    _Code.LINK_REJECTED_COOLDOWN: RuleContract(
+        409, public_fields=frozenset({"retryAfterSeconds", "retryAt"})
+    ),
+    _Code.LINK_REQUEST_CONFLICT: RuleContract(409),
+    _Code.LINK_ALREADY_EXISTS: RuleContract(409),
+    _Code.LINK_REQUEST_RATE_LIMITED: RuleContract(
+        429, "retry_later", retryable=True, retry_after_seconds=REQUEST_WINDOW_SECONDS
+    ),
+    _Code.ACCOUNT_NUMBER_LOOKUP_UNAVAILABLE: RuleContract(503, "retry_later", retryable=True),
+}
+
+register_codes("parent_link", ParentLinkErrorCode, PARENT_LINK_ERROR_REGISTRY)
+
+
+class ParentLinkError(RuleViolation):
+    """A link request the caller is not allowed to make, carrying a stable code.
+
+    ``details`` are the code's public fields (`retryAfterSeconds`, `retryAt`).
+    """
+
+    def __init__(self, code: ParentLinkErrorCode | str, **details: Any) -> None:
+        super().__init__(ParentLinkErrorCode(code), **details)
+
+    @property
+    def details(self) -> dict[str, object]:
+        return self.public
 
 
 def set_account_number_resolver(resolver: AccountNumberResolver | None) -> None:

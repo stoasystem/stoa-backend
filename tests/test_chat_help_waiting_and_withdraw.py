@@ -34,6 +34,7 @@ from test_chat_help_request_lifecycle import (
     _dispatch_to,
     _help,
 )
+from rule_violation_helpers import assert_violation
 
 
 @pytest.fixture
@@ -293,8 +294,7 @@ def test_a_request_a_teacher_has_taken_cannot_be_withdrawn(table) -> None:
 
     response = _withdraw(_student())
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "teacher_help_already_accepted"
+    assert_violation(response, "teacher_help_already_accepted")
     assert _help(table)["escalation_status"] == "in_progress"
     assert _spent(table) == 1
 

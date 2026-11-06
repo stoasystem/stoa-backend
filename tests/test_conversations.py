@@ -50,6 +50,7 @@ from fakes.ask_question import _events as _sse_events
 from fakes.ask_question import bucket as bucket  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from rule_violation_helpers import assert_violation
 
 
 @pytest.fixture(autouse=True)
@@ -151,7 +152,7 @@ def test_teacher_help_status_is_absent_before_any_escalation(monkeypatch):
         "/teacher-help/conversations/conv-1/request"
     )
 
-    assert response.status_code == 404
+    assert_violation(response, "teacher_help_not_requested")
 
 
 def test_conversation_teacher_help_records_support_visible_usage(monkeypatch):
@@ -284,13 +285,48 @@ def test_teacher_help_retryable_admission_stays_out_of_student_words(monkeypatch
         json={"conversationId": "conv-1"},
     )
 
-    assert response.status_code == 503
+    detail = assert_violation(
+        response, "teacher_support_admission_recoverable", action="retry_same_case"
+    )
     # The refusal came from the admission, and nothing was written for it.
     assert len(admissions) == 1
     assert ("CONV#conv-1", "HELP") not in table.rows
-    detail = response.json()["detail"]
-    assert detail["code"] == "teacher_support_admission_recoverable"
     assert "admission" not in detail["message"].lower()
+
+
+@pytest.mark.parametrize(
+    ("disposition", "code", "public"),
+    [
+        ("PLAN_DENIED", "teacher_support_not_included", {"action": "contact_administrator"}),
+        ("LIMIT_EXCEEDED", "teacher_support_allowance_exhausted", {"action": "wait_for_next_week"}),
+        ("IDEMPOTENCY_CONFLICT", "teacher_support_case_conflict", {}),
+    ],
+)
+def test_a_refused_teacher_help_admission_names_its_code(monkeypatch, disposition, code, public):
+    allowance = conversations.teacher_support_allowance_service
+    monkeypatch.setattr(
+        allowance,
+        "admit_teacher_support_case",
+        lambda **kwargs: allowance.TeacherSupportAdmissionResult(
+            allowance.TeacherSupportAdmissionDisposition[disposition]
+        ),
+    )
+    table = _escalation_table()
+    monkeypatch.setattr(conversations, "get_table", lambda: table)
+    patch_session_table(monkeypatch, table)
+    monkeypatch.setattr(
+        learning_session,
+        "read",
+        lambda conv_id: dict(table.rows[(f"CONV#{conv_id}", "CONV")]),
+    )
+
+    response = _client(conversations.teacher_help_router, "/teacher-help").post(
+        "/teacher-help/request",
+        json={"conversationId": "conv-1"},
+    )
+
+    assert_violation(response, code, **public)
+    assert ("CONV#conv-1", "HELP") not in table.rows
 
 
 def test_conversation_list_and_create_derive_owner_from_actor(table, monkeypatch):

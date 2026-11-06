@@ -22,6 +22,7 @@ from actor_helpers import install_actor_overrides
 from stoa.db.repositories import account_deletion_repo
 from stoa.routers import teachers
 from stoa.services import help_requests
+from rule_violation_helpers import assert_violation
 
 TEACHER = "teacher-66"
 OTHER_TEACHER = "teacher-66-other"
@@ -474,9 +475,8 @@ def test_a_teacher_assigned_to_the_student_cannot_write_a_request_they_do_not_ho
         client.patch(f"/teachers/me/help-requests/{REQUEST}", json={"status": "resolved"}),
         client.post(f"/teachers/me/help-requests/{REQUEST}/notes", json={"content": "Hi"}),
     ):
-        assert attempt.status_code == 409, attempt.text
         # Refused because they do not hold it, not because the request moved.
-        assert attempt.json()["detail"]["code"] == "help_request_not_held"
+        assert_violation(attempt, "help_request_not_held", action="refresh_help_request")
 
     assert _unchanged(table, before)
     assert set(table.rows) == rows_before
@@ -915,4 +915,21 @@ def test_opening_a_request_writes_nothing(table):
     assert response.status_code == 200, response.text
     assert response.json()["firstTeacherActionAt"] is None
     assert {operation: table.calls[operation] for operation in writes} == writes
+    assert _unchanged(table, before)
+
+
+def test_a_refused_reply_says_why_by_code(table):
+    # The reply composer reads the reason from the code, not a sentence (#274).
+    _dispatch_to(table, TEACHER)
+    before = (dict(_conv(table)), dict(_help(table)))
+
+    assert_violation(_reply(_client(), "<script>alert(1)</script>"), "teacher_reply_unsafe_html")
+    too_long = _client().post(
+        f"/teachers/me/help-requests/{REQUEST}/notes",
+        json={"content": "x" * 4001},
+        headers={"Accept-Language": "en"},
+    )
+
+    detail = assert_violation(too_long, "teacher_reply_too_long")
+    assert detail["message"] == "The reply is longer than 4000 characters. Please shorten it."
     assert _unchanged(table, before)

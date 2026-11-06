@@ -49,6 +49,7 @@ from test_chat_help_request_lifecycle import (
     _teacher_rows,
 )
 from test_chat_help_request_lifecycle import table as table  # noqa: F401 - the fixture
+from rule_violation_helpers import assert_violation
 
 BUCKET = "images-bucket-145"
 PURPOSE = "help_reply_image"
@@ -540,8 +541,7 @@ def test_a_holders_reply_lands_only_while_they_still_hold_the_request(
 
     refused = _reply(teacher, upload_id)
 
-    assert refused.status_code == 409
-    assert refused.json()["detail"]["code"] == "help_request_changed"
+    assert_violation(refused, "help_request_changed", action="refresh_help_request")
     assert _written_replies(table) == []
     assert _upload_status(table, upload_id) == "validated"
 

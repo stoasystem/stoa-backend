@@ -13,6 +13,19 @@
         "retryable": false
       }
     },
+    "account_number_lookup_unavailable": {
+      "action": "retry_later",
+      "domain": "parent_link",
+      "http_status": 503,
+      "message_key": "error.account_number_lookup_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": true
+      }
+    },
     "action_not_allowed": {
       "action": null,
       "domain": "security",
@@ -39,6 +52,19 @@
         "max_attempts": 0,
         "retry_after_seconds": null,
         "retryable": false
+      }
+    },
+    "allowance_projection_temporarily_unavailable": {
+      "action": "retry_later",
+      "domain": "billing",
+      "http_status": 503,
+      "message_key": "error.allowance_projection_temporarily_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 1,
+        "retry_after_seconds": null,
+        "retryable": true
       }
     },
     "allowance_unavailable": {
@@ -110,6 +136,45 @@
         "retryable": true
       }
     },
+    "billing_projection_temporarily_unavailable": {
+      "action": "retry_later",
+      "domain": "billing",
+      "http_status": 503,
+      "message_key": "error.billing_projection_temporarily_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 1,
+        "retry_after_seconds": null,
+        "retryable": true
+      }
+    },
+    "checkout_not_found": {
+      "action": null,
+      "domain": "billing",
+      "http_status": 404,
+      "message_key": "error.checkout_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "checkout_temporarily_unavailable": {
+      "action": "retry_later",
+      "domain": "billing",
+      "http_status": 503,
+      "message_key": "error.checkout_temporarily_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 1,
+        "retry_after_seconds": null,
+        "retryable": true
+      }
+    },
     "email_already_registered": {
       "action": "reauthenticate",
       "domain": "security",
@@ -134,6 +199,49 @@
         "max_attempts": 0,
         "retry_after_seconds": null,
         "retryable": false
+      }
+    },
+    "help_request_changed": {
+      "action": "refresh_help_request",
+      "domain": "help_request",
+      "http_status": 409,
+      "message_key": "error.help_request_changed",
+      "public_fields": [
+        "action"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "help_request_not_held": {
+      "action": "refresh_help_request",
+      "domain": "help_request",
+      "http_status": 409,
+      "message_key": "error.help_request_not_held",
+      "public_fields": [
+        "action"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "help_request_unavailable": {
+      "action": "retry_later",
+      "domain": "help_request",
+      "http_status": 503,
+      "message_key": "error.help_request_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 1,
+        "retry_after_seconds": null,
+        "retryable": true
       }
     },
     "identity_conflict": {
@@ -180,6 +288,178 @@
       "domain": "security",
       "http_status": 401,
       "message_key": "error.invalid_token",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "link_already_active": {
+      "action": null,
+      "domain": "parent_link",
+      "http_status": 409,
+      "message_key": "error.link_already_active",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "link_already_exists": {
+      "action": null,
+      "domain": "parent_link",
+      "http_status": 409,
+      "message_key": "error.link_already_exists",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "link_confirmation_not_allowed": {
+      "action": null,
+      "domain": "parent_link",
+      "http_status": 403,
+      "message_key": "error.link_confirmation_not_allowed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "link_confirmation_not_applicable": {
+      "action": null,
+      "domain": "parent_link",
+      "http_status": 409,
+      "message_key": "error.link_confirmation_not_applicable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "link_initiator_not_allowed": {
+      "action": null,
+      "domain": "parent_link",
+      "http_status": 403,
+      "message_key": "error.link_initiator_not_allowed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "link_not_pending": {
+      "action": null,
+      "domain": "parent_link",
+      "http_status": 409,
+      "message_key": "error.link_not_pending",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "link_rejected_cooldown": {
+      "action": null,
+      "domain": "parent_link",
+      "http_status": 409,
+      "message_key": "error.link_rejected_cooldown",
+      "public_fields": [
+        "retryAfterSeconds",
+        "retryAt"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "link_request_conflict": {
+      "action": null,
+      "domain": "parent_link",
+      "http_status": 409,
+      "message_key": "error.link_request_conflict",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "link_request_expired": {
+      "action": null,
+      "domain": "parent_link",
+      "http_status": 409,
+      "message_key": "error.link_request_expired",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "link_request_pending": {
+      "action": null,
+      "domain": "parent_link",
+      "http_status": 409,
+      "message_key": "error.link_request_pending",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "link_request_rate_limited": {
+      "action": "retry_later",
+      "domain": "parent_link",
+      "http_status": 429,
+      "message_key": "error.link_request_rate_limited",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": 86400,
+        "retryable": true
+      }
+    },
+    "link_requires_administrator": {
+      "action": null,
+      "domain": "parent_link",
+      "http_status": 403,
+      "message_key": "error.link_requires_administrator",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "link_target_not_found": {
+      "action": null,
+      "domain": "parent_link",
+      "http_status": 404,
+      "message_key": "error.link_target_not_found",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -360,12 +640,254 @@
         "retryable": false
       }
     },
+    "teacher_help_already_accepted": {
+      "action": null,
+      "domain": "help_request",
+      "http_status": 409,
+      "message_key": "error.teacher_help_already_accepted",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "teacher_help_not_requested": {
+      "action": null,
+      "domain": "help_request",
+      "http_status": 404,
+      "message_key": "error.teacher_help_not_requested",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "teacher_help_request_closed": {
+      "action": null,
+      "domain": "help_request",
+      "http_status": 409,
+      "message_key": "error.teacher_help_request_closed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "teacher_help_request_not_due": {
+      "action": null,
+      "domain": "help_request",
+      "http_status": 409,
+      "message_key": "error.teacher_help_request_not_due",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "teacher_help_request_not_found": {
+      "action": null,
+      "domain": "help_request",
+      "http_status": 404,
+      "message_key": "error.teacher_help_request_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "teacher_help_request_not_withdrawable": {
+      "action": null,
+      "domain": "help_request",
+      "http_status": 409,
+      "message_key": "error.teacher_help_request_not_withdrawable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "teacher_help_withdrawal_unavailable": {
+      "action": "retry_same_case",
+      "domain": "help_request",
+      "http_status": 503,
+      "message_key": "error.teacher_help_withdrawal_unavailable",
+      "public_fields": [
+        "action"
+      ],
+      "retry": {
+        "idempotent_only": true,
+        "max_attempts": 1,
+        "retry_after_seconds": null,
+        "retryable": true
+      }
+    },
+    "teacher_reply_block_too_long": {
+      "action": "edit_reply",
+      "domain": "teacher_reply",
+      "http_status": 422,
+      "message_key": "error.teacher_reply_block_too_long",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "teacher_reply_empty": {
+      "action": "edit_reply",
+      "domain": "teacher_reply",
+      "http_status": 422,
+      "message_key": "error.teacher_reply_empty",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "teacher_reply_malformed": {
+      "action": "edit_reply",
+      "domain": "teacher_reply",
+      "http_status": 422,
+      "message_key": "error.teacher_reply_malformed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "teacher_reply_private_markers": {
+      "action": "edit_reply",
+      "domain": "teacher_reply",
+      "http_status": 422,
+      "message_key": "error.teacher_reply_private_markers",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "teacher_reply_too_long": {
+      "action": "edit_reply",
+      "domain": "teacher_reply",
+      "http_status": 422,
+      "message_key": "error.teacher_reply_too_long",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "teacher_reply_too_many_blocks": {
+      "action": "edit_reply",
+      "domain": "teacher_reply",
+      "http_status": 422,
+      "message_key": "error.teacher_reply_too_many_blocks",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "teacher_reply_unsafe_html": {
+      "action": "edit_reply",
+      "domain": "teacher_reply",
+      "http_status": 422,
+      "message_key": "error.teacher_reply_unsafe_html",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "teacher_review_pending": {
       "action": "wait_for_teacher_review",
       "domain": "security",
       "http_status": 409,
       "message_key": "error.teacher_review_pending",
       "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "teacher_support_admission_recoverable": {
+      "action": "retry_same_case",
+      "domain": "help_request",
+      "http_status": 503,
+      "message_key": "error.teacher_support_admission_recoverable",
+      "public_fields": [
+        "action"
+      ],
+      "retry": {
+        "idempotent_only": true,
+        "max_attempts": 1,
+        "retry_after_seconds": null,
+        "retryable": true
+      }
+    },
+    "teacher_support_allowance_exhausted": {
+      "action": "wait_for_next_week",
+      "domain": "help_request",
+      "http_status": 429,
+      "message_key": "error.teacher_support_allowance_exhausted",
+      "public_fields": [
+        "action"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "teacher_support_case_conflict": {
+      "action": null,
+      "domain": "help_request",
+      "http_status": 409,
+      "message_key": "error.teacher_support_case_conflict",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "teacher_support_not_included": {
+      "action": "contact_administrator",
+      "domain": "help_request",
+      "http_status": 403,
+      "message_key": "error.teacher_support_not_included",
+      "public_fields": [
+        "action"
+      ],
       "retry": {
         "idempotent_only": false,
         "max_attempts": 0,

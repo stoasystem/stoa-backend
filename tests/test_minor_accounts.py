@@ -37,6 +37,7 @@ from stoa.security.authorization import CurrentAuthorizationFactRepository
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import account_provisioning_service, parent_link_service
+from rule_violation_helpers import assert_violation
 
 
 NOW = "2026-09-20T10:00:00+00:00"
@@ -526,8 +527,7 @@ def test_未成年学生在接口上确认关联收到_403(
         "/students/me/parent-requests/parent-a/confirm"
     )
 
-    assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "link_requires_administrator"
+    assert_violation(response, "link_requires_administrator")
     assert world.status("parent-a", "student-b") == "pending"
 
 

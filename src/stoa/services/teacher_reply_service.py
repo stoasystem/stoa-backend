@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
+from enum import StrEnum
 from typing import Any
 
 from stoa.models.question import ENDED_WITHOUT_TEACHER
+from stoa.rule_violation import RuleContract, RuleViolation, register_codes
 
 REPLY_FORMAT = "stoa_teacher_reply_v1"
 FIRST_REPLY_TARGET_SECONDS = 30 * 60
@@ -45,23 +47,72 @@ _SECRET_MARKERS = (
 )
 
 
-class TeacherReplyValidationError(ValueError):
-    """Raised when a teacher reply cannot be safely stored."""
+# Each limit is also the teacher reply composer's (stoa-frontend `REPLY_LIMITS`).
+MAX_BLOCKS = 20
+MAX_TEXT_BLOCK = 2000
+MAX_FORMULA = 500
+MAX_REPLY = 4000
+
+
+class TeacherReplyErrorCode(StrEnum):
+    """Why a teacher's reply was not taken (#211).
+
+    One code per refusal the reply composer tells apart (stoa-frontend
+    `REFUSAL_CODES`), so it no longer reads the reason out of an English
+    sentence.
+    """
+
+    UNSAFE_HTML = "teacher_reply_unsafe_html"
+    PRIVATE_MARKERS = "teacher_reply_private_markers"
+    BLOCK_TOO_LONG = "teacher_reply_block_too_long"
+    TOO_MANY_BLOCKS = "teacher_reply_too_many_blocks"
+    TOO_LONG = "teacher_reply_too_long"
+    EMPTY = "teacher_reply_empty"
+    MALFORMED = "teacher_reply_malformed"
+
+    @property
+    def contract(self) -> RuleContract:
+        return TEACHER_REPLY_ERROR_REGISTRY[self]
+
+
+# Every refusal is the reply's own content: the teacher edits it and sends again.
+_EDIT_REPLY = RuleContract(422, "edit_reply")
+
+# Each code's message is the catalog's `error.<code>`
+# (`stoa.services.message_catalog.errors.teacher_reply`).
+TEACHER_REPLY_ERROR_REGISTRY: dict[TeacherReplyErrorCode, RuleContract] = {
+    code: _EDIT_REPLY for code in TeacherReplyErrorCode
+}
+
+register_codes("teacher_reply", TeacherReplyErrorCode, TEACHER_REPLY_ERROR_REGISTRY)
+
+
+class TeacherReplyValidationError(RuleViolation):
+    """Raised when a teacher reply cannot be safely stored; ``code`` says why."""
+
+    def __init__(self, code: TeacherReplyErrorCode, detail: str, **params: object) -> None:
+        super().__init__(code, internal_detail=detail, params=params or None)
 
 
 def normalize_teacher_reply(content: str | None, rich_content: dict[str, Any] | None) -> dict[str, Any]:
     """Normalize a plain or rich teacher reply into safe storage fields."""
     if rich_content is None:
-        text = _sanitize_text(content or "", max_length=4000, field="content")
+        text = _sanitize_text(content or "", max_length=MAX_REPLY, field="content")
         normalized = {"version": 1, "blocks": [{"type": "paragraph", "text": text}]}
         fallback = text
     else:
         normalized = _normalize_rich_content(rich_content)
         fallback = _plain_text_fallback(normalized)
         if not fallback:
-            raise TeacherReplyValidationError("teacher reply fallback is empty")
-        if len(fallback) > 4000:
-            raise TeacherReplyValidationError("teacher reply fallback exceeds 4000 characters")
+            raise TeacherReplyValidationError(
+                TeacherReplyErrorCode.EMPTY, "teacher reply fallback is empty"
+            )
+        if len(fallback) > MAX_REPLY:
+            raise TeacherReplyValidationError(
+                TeacherReplyErrorCode.TOO_LONG,
+                f"teacher reply fallback exceeds {MAX_REPLY} characters",
+                max=MAX_REPLY,
+            )
 
     return {
         "teacher_response": fallback,
@@ -129,33 +180,48 @@ def aggregate_teacher_sla(questions: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _normalize_rich_content(payload: dict[str, Any]) -> dict[str, Any]:
+    malformed = TeacherReplyErrorCode.MALFORMED
     if not isinstance(payload, dict):
-        raise TeacherReplyValidationError("rich_content must be an object")
+        raise TeacherReplyValidationError(malformed, "rich_content must be an object")
     if payload.get("version") != 1:
-        raise TeacherReplyValidationError("rich_content version must be 1")
+        raise TeacherReplyValidationError(malformed, "rich_content version must be 1")
     blocks = payload.get("blocks")
-    if not isinstance(blocks, list) or not 1 <= len(blocks) <= 20:
-        raise TeacherReplyValidationError("rich_content blocks must contain 1 to 20 blocks")
+    if not isinstance(blocks, list):
+        raise TeacherReplyValidationError(malformed, "rich_content blocks must be a list")
+    if not blocks:
+        raise TeacherReplyValidationError(
+            TeacherReplyErrorCode.EMPTY, "rich_content blocks must contain 1 to 20 blocks"
+        )
+    if len(blocks) > MAX_BLOCKS:
+        raise TeacherReplyValidationError(
+            TeacherReplyErrorCode.TOO_MANY_BLOCKS,
+            f"rich_content blocks must contain 1 to {MAX_BLOCKS} blocks",
+            max=MAX_BLOCKS,
+        )
 
     normalized_blocks = []
     for block in blocks:
         if not isinstance(block, dict):
-            raise TeacherReplyValidationError("rich_content block must be an object")
+            raise TeacherReplyValidationError(malformed, "rich_content block must be an object")
         block_type = block.get("type")
         if block_type not in _ALLOWED_BLOCK_TYPES:
-            raise TeacherReplyValidationError("unsupported rich_content block type")
+            raise TeacherReplyValidationError(malformed, "unsupported rich_content block type")
         if block_type == "formula":
             normalized_blocks.append(
                 {
                     "type": "formula",
-                    "latex": _sanitize_text(str(block.get("latex") or ""), max_length=500, field="latex"),
+                    "latex": _sanitize_text(
+                        str(block.get("latex") or ""), max_length=MAX_FORMULA, field="latex"
+                    ),
                 }
             )
         else:
             normalized_blocks.append(
                 {
                     "type": block_type,
-                    "text": _sanitize_text(str(block.get("text") or ""), max_length=2000, field="text"),
+                    "text": _sanitize_text(
+                        str(block.get("text") or ""), max_length=MAX_TEXT_BLOCK, field="text"
+                    ),
                 }
             )
     return {"version": 1, "blocks": normalized_blocks}
@@ -164,9 +230,17 @@ def _normalize_rich_content(payload: dict[str, Any]) -> dict[str, Any]:
 def _sanitize_text(value: str, *, max_length: int, field: str) -> str:
     text = value.strip()
     if not text:
-        raise TeacherReplyValidationError(f"{field} is required")
+        raise TeacherReplyValidationError(TeacherReplyErrorCode.EMPTY, f"{field} is required")
     if len(text) > max_length:
-        raise TeacherReplyValidationError(f"{field} exceeds {max_length} characters")
+        # A plain reply is one block, but its limit is the whole reply's.
+        code = (
+            TeacherReplyErrorCode.TOO_LONG
+            if field == "content"
+            else TeacherReplyErrorCode.BLOCK_TOO_LONG
+        )
+        raise TeacherReplyValidationError(
+            code, f"{field} exceeds {max_length} characters", max=max_length
+        )
     _assert_no_private_or_unsafe_markers(text)
     return text
 
@@ -215,12 +289,18 @@ def _has_tag_with_event_handler(text: str) -> bool:
 def _assert_no_private_or_unsafe_markers(text: str) -> None:
     lowered = text.lower()
     if _TAG_PATTERN.search(text) or _has_tag_with_event_handler(lowered):
-        raise TeacherReplyValidationError("teacher reply contains unsafe raw HTML")
+        raise TeacherReplyValidationError(
+            TeacherReplyErrorCode.UNSAFE_HTML, "teacher reply contains unsafe raw HTML"
+        )
     if _AWS_ACCESS_KEY_PATTERN.search(text):
-        raise TeacherReplyValidationError("teacher reply contains private credentials")
+        raise TeacherReplyValidationError(
+            TeacherReplyErrorCode.PRIVATE_MARKERS, "teacher reply contains private credentials"
+        )
     for marker in _SECRET_MARKERS:
         if marker in lowered:
-            raise TeacherReplyValidationError("teacher reply contains private markers")
+            raise TeacherReplyValidationError(
+                TeacherReplyErrorCode.PRIVATE_MARKERS, "teacher reply contains private markers"
+            )
 
 
 def _plain_text_fallback(payload: dict[str, Any]) -> str:

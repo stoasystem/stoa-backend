@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
+from rule_violation_helpers import assert_violation
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import checkout_command_repo
 from stoa.main import app as main_app
@@ -241,8 +242,9 @@ def test_parent_foreign_and_random_references_are_concealed_before_recheck(monke
     real = client.get(f"/parents/me/subscription/checkout/{CHECKOUT_REF}")
     random = client.get(f"/parents/me/subscription/checkout/{OTHER_REF}")
 
-    assert real.status_code == random.status_code == 404
-    assert real.json() == random.json()
+    # The same refusal, told apart only by each request's own correlation id.
+    first, second = (assert_violation(response, "checkout_not_found") for response in (real, random))
+    assert {**first, "correlationId": None} == {**second, "correlationId": None}
     assert reconcile_calls == []
     assert provider.find_calls == provider.retrieve_calls == []
     assert lookup_calls == [(CHECKOUT_REF, PARENT_ID), (OTHER_REF, PARENT_ID)]
