@@ -5,6 +5,7 @@ import random
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from rule_violation_helpers import assert_violation
 from fakes.dynamodb import FakeTable
 
 from stoa.deps import get_actor
@@ -230,8 +231,7 @@ def test_completing_without_a_credential_still_needs_every_exercise_right(monkey
 
     response = _client().post("/practice/lessons/lesson-1/complete")
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "lesson_exercises_unanswered"
+    assert_violation(response, "lesson_exercises_unanswered")
     assert writes == []
 
 
@@ -355,8 +355,7 @@ def test_another_students_quiz_cannot_be_answered(monkeypatch):
         json={"answer": "answer-0"},
     )
 
-    assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "lesson_quiz_not_found"
+    assert_violation(response, "lesson_quiz_not_found")
 
 
 def test_an_expired_quiz_cannot_be_answered(monkeypatch):
@@ -371,8 +370,7 @@ def test_an_expired_quiz_cannot_be_answered(monkeypatch):
         json={"answer": "answer-0"},
     )
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "lesson_quiz_expired"
+    assert_violation(response, "lesson_quiz_expired")
 
 
 # ── The credential ──────────────────────────────────────────────────────────
@@ -409,8 +407,7 @@ def test_a_quiz_credential_is_refused_the_second_time(monkeypatch):
         "/practice/lessons/lesson-1/complete", json={"quizCredential": credential}
     )
 
-    assert again.status_code == 409
-    assert again.json()["detail"]["code"] == "lesson_quiz_credential_invalid"
+    assert_violation(again, "lesson_quiz_credential_invalid")
     assert writes == [("student-1", "lesson-1")]
 
 
@@ -425,8 +422,7 @@ def test_an_expired_quiz_credential_is_refused(monkeypatch):
         "/practice/lessons/lesson-1/complete", json={"quizCredential": body["credential"]}
     )
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "lesson_quiz_credential_expired"
+    assert_violation(response, "lesson_quiz_credential_expired")
     assert writes == []
 
 
@@ -440,8 +436,7 @@ def test_another_students_quiz_credential_completes_nothing(monkeypatch):
         "/practice/lessons/lesson-1/complete", json={"quizCredential": credential}
     )
 
-    assert stolen.status_code == 409
-    assert stolen.json()["detail"]["code"] == "lesson_quiz_credential_invalid"
+    assert_violation(stolen, "lesson_quiz_credential_invalid")
     assert writes == []
     # The theft did not spend it either: its owner can still use it.
     assert ("QUIZ#student-1", f"CREDENTIAL#{credential}") in table.rows
@@ -468,8 +463,7 @@ def test_a_quiz_credential_does_not_complete_a_different_lesson(monkeypatch):
         "/practice/lessons/lesson-2/complete", json={"quizCredential": body["credential"]}
     )
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "lesson_quiz_credential_invalid"
+    assert_violation(response, "lesson_quiz_credential_invalid")
     assert writes == []
 
 
@@ -482,8 +476,7 @@ def test_an_unknown_quiz_credential_is_refused_even_with_every_exercise_right(mo
         "/practice/lessons/lesson-1/complete", json={"quizCredential": "not-a-credential"}
     )
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "lesson_quiz_credential_invalid"
+    assert_violation(response, "lesson_quiz_credential_invalid")
     assert writes == []
 
 
@@ -542,10 +535,9 @@ def test_a_paper_of_nothing_but_unresolvable_exercises_ends_instead_of_hanging(m
     first = client.post(f"/practice/lessons/lesson-1/quiz/{quiz_id}/answer", json={"answer": "a"})
     again = client.post(f"/practice/lessons/lesson-1/quiz/{quiz_id}/answer", json={"answer": "a"})
 
-    assert first.status_code == 409
-    assert first.json()["detail"]["code"] == "lesson_quiz_unavailable"
+    assert_violation(first, "lesson_quiz_unavailable")
     # Over, rather than open for ever on a question nobody can answer.
-    assert again.json()["detail"]["code"] == "lesson_quiz_finished"
+    assert_violation(again, "lesson_quiz_finished")
 
 
 def test_a_credential_that_names_no_quiz_completes_nothing(monkeypatch):
@@ -575,8 +567,7 @@ def test_a_credential_that_names_no_quiz_completes_nothing(monkeypatch):
 
     done = client.post("/practice/lessons/lesson-1/complete", json={"quizCredential": nameless})
 
-    assert done.status_code == 409
-    assert done.json()["detail"]["code"] == "lesson_quiz_credential_invalid"
+    assert_violation(done, "lesson_quiz_credential_invalid")
 
 
 def test_answering_in_a_quiz_leaves_a_trace_in_the_ledger(monkeypatch):

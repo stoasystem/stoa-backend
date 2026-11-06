@@ -14,8 +14,6 @@ import logging
 from typing import Any
 from uuid import uuid4
 
-from fastapi import HTTPException
-
 from stoa.config import Settings
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import moderation_repo
@@ -31,6 +29,8 @@ from stoa.models.moderation import (
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.services import help_requests, learning_session, notification_service
+from stoa.services.moderation_errors import ModerationErrorCode as _M, ModerationViolation
+from stoa.services.account_errors import AccountErrorCode, AccountViolation
 
 
 logger = logging.getLogger(__name__)
@@ -80,7 +80,7 @@ def create_case(
         or privacy_generation is None
         or privacy_generation <= 0
     ):
-        raise HTTPException(status_code=409, detail="Question is not writable")
+        raise ModerationViolation(_M.QUESTION_NOT_WRITABLE)
 
     created_at = now_iso()
     case_id = f"mod-{uuid4().hex}"
@@ -269,7 +269,7 @@ def read_case_image(case_id: str, *, s3: Any, settings: Settings) -> tuple[bytes
     """The refused image of an `image_upload` case, exactly as it was stored."""
     item = moderation_repo.get_case(case_id)
     if not item or not _holds_image(item):
-        raise HTTPException(status_code=404, detail="Moderation case image not found")
+        raise ModerationViolation(_M.CASE_IMAGE_NOT_FOUND)
     context = item["image_context"]
     size = int(context["size_bytes"])
     try:
@@ -291,12 +291,10 @@ def read_case_image(case_id: str, *, s3: Any, settings: Settings) -> tuple[bytes
             case_id,
             type(exc).__name__,
         )
-        raise HTTPException(
-            status_code=503, detail="Moderation case image is unavailable"
-        ) from None
+        raise ModerationViolation(_M.CASE_IMAGE_UNAVAILABLE) from None
     if len(data) != size or hashlib.sha256(data).hexdigest() != item.get("image_sha256"):
         logger.error("moderation_case_image_mismatch case_id=%s", case_id)
-        raise HTTPException(status_code=503, detail="Moderation case image is unavailable")
+        raise ModerationViolation(_M.CASE_IMAGE_UNAVAILABLE)
     return data, str(context["media_type"])
 
 
@@ -481,20 +479,20 @@ def _case_cursor_position(cursor: str) -> tuple[str, str]:
     try:
         decoded = json.loads(base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8"))
     except (ValueError, UnicodeError) as exc:
-        raise HTTPException(status_code=422, detail={"code": "cursor_invalid"}) from exc
+        raise AccountViolation(AccountErrorCode.CURSOR_INVALID) from exc
     if (
         not isinstance(decoded, list)
         or len(decoded) != 2
         or not all(isinstance(part, str) for part in decoded)
     ):
-        raise HTTPException(status_code=422, detail={"code": "cursor_invalid"})
+        raise AccountViolation(AccountErrorCode.CURSOR_INVALID)
     return (decoded[0], decoded[1])
 
 
 def get_case(case_id: str, *, include_events: bool = True) -> dict[str, Any]:
     item = moderation_repo.get_case(case_id)
     if not item:
-        raise HTTPException(status_code=404, detail="Moderation case not found")
+        raise ModerationViolation(_M.MODERATION_CASE_NOT_FOUND)
     if include_events:
         events = moderation_repo.list_case_events(case_id)
         item = dict(item)
@@ -589,21 +587,21 @@ def add_note(case_id: str, body: ModerationCaseNoteRequest, user: dict[str, Any]
 def _require_report_access(request: Mapping[str, Any], user: dict[str, Any]) -> None:
     role = user.get("role")
     if role == "student" and request.get("student_id") != user.get("sub"):
-        raise HTTPException(status_code=403, detail="Not your question")
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
     if role == "teacher" and not _teacher_holds(request, str(user.get("sub") or "")):
         # The teacher policy also admits a teacher assigned to the student, who
         # may read the request but not act on it (#73). Reporting is acting on
         # it, so they are refused as a teacher who cannot see it is (#186).
         raise SecurityDecisionError(SecurityErrorCode.RESOURCE_NOT_FOUND)
     if role not in {"student", "teacher", "admin"}:
-        raise HTTPException(status_code=403, detail="Role is not permitted to report content")
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
 
 
 def _validate_surface(surface: str) -> None:
     # A help request's answers are messages in its conversation (#185);
     # `_reported_message` finds the one reported.
     if surface == ModerationSurface.IMAGE_UPLOAD.value:
-        raise HTTPException(status_code=400, detail="Image cases are opened by moderation only")
+        raise ModerationViolation(_M.IMAGE_CASE_NOT_REPORTABLE)
 
 
 def _teacher_holds(request: Mapping[str, Any], teacher_id: str) -> bool:
@@ -651,15 +649,12 @@ def _reported_message(
     if message_id:
         named = [message for message in said if message.id == message_id]
         if not named:
-            raise HTTPException(status_code=404, detail="Message not found")
+            raise ModerationViolation(_M.REPORTED_MESSAGE_NOT_FOUND)
         return named[0]
     if not said:
-        detail = (
-            "Question has no AI answer to report"
-            if role == "assistant"
-            else "Question has no teacher reply to report"
+        raise ModerationViolation(
+            _M.NO_AI_ANSWER_TO_REPORT if role == "assistant" else _M.NO_TEACHER_REPLY_TO_REPORT
         )
-        raise HTTPException(status_code=400, detail=detail)
     # Message ids are random, so the keys do not run in the order of sending.
     return max(said, key=lambda message: message.created_at)
 

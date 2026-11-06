@@ -31312,7 +31312,7 @@
             "description": "No usable bearer token"
           },
           "409": {
-            "description": "`lesson_exercises_unanswered`: an exercise of the lesson has never been answered right and no quiz credential was sent, `unansweredCount` says how many; `lesson_quiz_credential_invalid`: the credential is unknown, already spent, or belongs to another student or lesson; `lesson_quiz_credential_expired`: the credential is past its expiry."
+            "description": "`lesson_exercises_unanswered`: an exercise of the lesson has never been answered right and no quiz credential was sent (the message says how many); `lesson_quiz_credential_invalid`: the credential is unknown, already spent, or belongs to another student or lesson; `lesson_quiz_credential_expired`: the credential is past its expiry."
           },
           "422": {
             "content": {

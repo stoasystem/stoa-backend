@@ -8,11 +8,17 @@ a key, a key missing a language, or a translation whose `{params}` differ.
 
 from stoa.services.message_catalog.errors import (
     account,
+    adaptive_learning,
+    ai_teacher_tools,
     ask_question,
     attachment,
     billing,
     help_request,
+    moderation,
+    notification,
     parent_link,
+    practice,
+    rate_limit,
     security,
     teacher_reply,
     validation,
@@ -28,6 +34,12 @@ _DOMAINS = (
     parent_link,
     billing,
     account,
+    practice,
+    adaptive_learning,
+    ai_teacher_tools,
+    moderation,
+    notification,
+    rate_limit,
 )
 
 

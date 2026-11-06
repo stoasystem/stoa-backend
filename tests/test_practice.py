@@ -3,6 +3,9 @@ import logging
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from rule_violation_helpers import assert_violation
+from stoa.rule_violation import render_message
+from stoa.services.practice_errors import PracticeErrorCode
 from stoa.deps import get_actor
 from stoa.routers import practice
 from stoa.security.authorization import AuthorizationFacts
@@ -255,8 +258,7 @@ def test_attempt_write_failure_returns_no_answer_or_provider_detail(monkeypatch,
             "/practice/challenges/challenge-1/answer", json={"answer": "x = 4"}
         )
 
-    assert response.status_code == 503
-    assert response.json()["detail"]["code"] == "practice_attempt_unavailable"
+    assert_violation(response, "practice_attempt_unavailable")
     assert "x = 5" not in response.text
     assert "CANARY" not in response.text
     assert "CANARY" not in caplog.text
@@ -477,9 +479,11 @@ def test_a_lesson_with_an_exercise_never_answered_right_cannot_be_completed(monk
 
     response = _client().post("/practice/lessons/lesson-1/complete")
 
-    assert response.status_code == 409
-    assert response.json()["detail"]["code"] == "lesson_exercises_unanswered"
-    assert response.json()["detail"]["unansweredCount"] == 1
+    assert_violation(response, "lesson_exercises_unanswered")
+    # How many are left is told in the message, not as a field of its own.
+    assert response.json()["detail"]["message"] == render_message(
+        PracticeErrorCode.LESSON_EXERCISES_UNANSWERED, count=1
+    )
     assert writes == []
 
 

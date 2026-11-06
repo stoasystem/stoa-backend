@@ -1,6 +1,6 @@
 import hashlib
 
-from fastapi import HTTPException
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 
 from stoa.config import Settings
 from stoa.services import notification_service, websocket_service
@@ -153,8 +153,8 @@ def test_connection_lifecycle_and_subscription_authorization(monkeypatch):
 
     try:
         websocket_service.subscribe_connection("conn-1", user, ["role:admin"])
-    except HTTPException as exc:
-        assert exc.status_code == 403
+    except SecurityDecisionError as exc:
+        assert exc.code is SecurityErrorCode.ACTION_NOT_ALLOWED
     else:
         raise AssertionError("unauthorized subscription should fail")
 

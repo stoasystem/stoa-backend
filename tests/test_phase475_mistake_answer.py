@@ -11,6 +11,7 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
+from rule_violation_helpers import assert_violation
 from stoa.db.repositories import practice_repo
 from stoa.routers import practice
 from stoa.services import practice_projection_service
@@ -177,8 +178,7 @@ def test_route_rejects_unsupported_answer_before_attempt_write_and_redacts_value
             json={"answer": {"raw-secret": "must-not-echo"}},
         )
 
-    assert response.status_code == 422
-    assert response.json()["detail"]["code"] == "practice_answer_invalid"
+    assert_violation(response, "practice_answer_invalid")
     assert writes == []
     assert "raw-secret" not in response.text
     assert "must-not-echo" not in response.text

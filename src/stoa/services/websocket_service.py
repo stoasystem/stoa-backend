@@ -10,10 +10,10 @@ from urllib.parse import urlparse
 
 import boto3
 from botocore.exceptions import ClientError
-from fastapi import HTTPException
-
 from stoa.config import settings
 from stoa.db.repositories import notification_repo, websocket_repo
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
+from stoa.services.notification_errors import NotificationErrorCode as _N, NotificationViolation
 
 
 PostConnection = Callable[[dict[str, Any], dict[str, Any]], None]
@@ -43,7 +43,7 @@ def register_connection(
     endpoint_url: str | None = None,
 ) -> dict[str, Any]:
     if not connection_id:
-        raise HTTPException(status_code=400, detail="WebSocket connection id is required")
+        raise NotificationViolation(_N.WEBSOCKET_CONNECTION_ID_REQUIRED)
     user_id = _user_id(user)
     role = _role(user)
     channels = _authorize_channels(
@@ -187,7 +187,7 @@ def fanout_notification_event(
 ) -> dict[str, Any]:
     event_id = str(item.get("event_id") or "")
     if not event_id:
-        raise HTTPException(status_code=400, detail="Notification event id is required")
+        raise NotificationViolation(_N.NOTIFICATION_EVENT_ID_REQUIRED)
 
     # Imported lazily to avoid the notification-service/WebSocket module cycle.
     from stoa.services import notification_service
@@ -336,38 +336,38 @@ def _authorize_channels(user: dict[str, Any], channels: list[str]) -> list[str]:
     allowed = default_channels_for_user(user)
     requested = {str(channel) for channel in channels if str(channel).strip()}
     if not requested:
-        raise HTTPException(status_code=400, detail="At least one subscription channel is required")
+        raise NotificationViolation(_N.WEBSOCKET_CHANNEL_REQUIRED)
     unauthorized = sorted(requested - allowed)
     if unauthorized:
-        raise HTTPException(status_code=403, detail="WebSocket subscription is not permitted")
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
     return sorted(requested)
 
 
 def _owned_connection(connection_id: str, user: dict[str, Any]) -> dict[str, Any]:
     item = _existing(connection_id)
     if str(item.get("user_id") or "") != _user_id(user):
-        raise HTTPException(status_code=403, detail="WebSocket connection is not owned by this user")
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
     return item
 
 
 def _existing(connection_id: str) -> dict[str, Any]:
     item = websocket_repo.get_connection(connection_id)
     if not item:
-        raise HTTPException(status_code=404, detail="WebSocket connection not found")
+        raise NotificationViolation(_N.WEBSOCKET_CONNECTION_NOT_FOUND)
     return item
 
 
 def _user_id(user: dict[str, Any]) -> str:
     user_id = str(user.get("sub") or user.get("username") or "")
     if not user_id:
-        raise HTTPException(status_code=401, detail="Authenticated WebSocket user is required")
+        raise SecurityDecisionError(SecurityErrorCode.AUTHENTICATION_REQUIRED)
     return user_id
 
 
 def _role(user: dict[str, Any]) -> str:
     role = str(user.get("role") or "")
     if not role:
-        raise HTTPException(status_code=403, detail="Authenticated WebSocket role is required")
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
     return role
 
 

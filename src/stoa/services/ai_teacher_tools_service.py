@@ -6,12 +6,11 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from fastapi import HTTPException
-
 from stoa.db.repositories import ai_teacher_tools_repo
 from stoa.security.authorization import AuthorizedResource
 from stoa.security.identity import Actor
 from stoa.services import learning_profile_service
+from stoa.services.ai_teacher_tools_errors import AiTeacherToolsErrorCode as _A, AiTeacherToolsViolation
 
 
 PROMPT_VERSION = "stoa_ai_teacher_tools_v1"
@@ -54,7 +53,7 @@ def create_exercise_draft(
     request = dict(authorized_context.value) if question_id else None
     evidence = [request] if request else []
     if request and str(request.get("student_id") or "") != student_id:
-        raise HTTPException(status_code=400, detail="Question does not belong to the requested student")
+        raise AiTeacherToolsViolation(_A.QUESTION_OF_ANOTHER_STUDENT)
     source_context = _source_context(evidence, student_id=student_id)
     created_at = now_iso()
     draft_id = f"aitool-{uuid4().hex}"
@@ -124,9 +123,9 @@ def review_draft(
     draft_id = authorized.ref.resource_id
     action = _require_choice(action, {"accept", "reject", "archive"}, "action")
     if item.get("status") == "archived":
-        raise HTTPException(status_code=409, detail="Draft is already archived")
+        raise AiTeacherToolsViolation(_A.DRAFT_ALREADY_ARCHIVED)
     if action in {"accept", "reject"} and item.get("status") in TERMINAL_REVIEW_STATUSES:
-        raise HTTPException(status_code=409, detail="Draft already has a terminal review state")
+        raise AiTeacherToolsViolation(_A.DRAFT_ALREADY_REVIEWED)
     status = {"accept": "accepted", "reject": "rejected", "archive": "archived"}[action]
     now = now_iso()
     updated = ai_teacher_tools_repo.update_draft(
@@ -142,7 +141,7 @@ def review_draft(
         existing=item,
     )
     if not updated:
-        raise HTTPException(status_code=404, detail="Draft not found")
+        raise AiTeacherToolsViolation(_A.AI_DRAFT_NOT_FOUND)
     return draft_response(updated)
 
 
@@ -154,14 +153,14 @@ def regenerate_draft(
     if item.get("draft_type") == "teacher_summary":
         request = authorized.facts.teacher.request if authorized.facts.teacher else None
         if not request:
-            raise HTTPException(status_code=409, detail="Draft question context is unavailable")
+            raise AiTeacherToolsViolation(_A.DRAFT_QUESTION_UNAVAILABLE)
         regenerated = _store_summary_draft(
             request=dict(request), actor=actor, previous_draft_id=draft_id
         )
     elif item.get("draft_type") == "practice_exercise":
         regenerated = _regenerate_exercise_draft(item, actor)
     else:
-        raise HTTPException(status_code=400, detail="Unsupported draft type")
+        raise AiTeacherToolsViolation(_A.DRAFT_TYPE_UNSUPPORTED)
     return draft_response(regenerated)
 
 
@@ -344,7 +343,7 @@ def _normalize_subject(subject: str) -> str:
     try:
         return learning_profile_service.normalize_subject(subject)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise AiTeacherToolsViolation(_A.SUBJECT_UNSUPPORTED) from exc
 
 
 def _safe_subject(subject: Any) -> str:
@@ -362,7 +361,7 @@ def _normalize_topics(topic_ids: list[str]) -> list[str]:
     ]
     normalized = list(dict.fromkeys(normalized))
     if not normalized:
-        raise HTTPException(status_code=400, detail="At least one topic_id is required")
+        raise AiTeacherToolsViolation(_A.TOPIC_REQUIRED)
     return normalized[:5]
 
 
@@ -370,16 +369,16 @@ def _require_count(count: int) -> int:
     try:
         value = int(count)
     except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail="exercise_count must be numeric") from exc
+        raise AiTeacherToolsViolation(_A.EXERCISE_COUNT_INVALID, params={"max": MAX_EXERCISE_COUNT}) from exc
     if value < 1 or value > MAX_EXERCISE_COUNT:
-        raise HTTPException(status_code=400, detail=f"exercise_count must be between 1 and {MAX_EXERCISE_COUNT}")
+        raise AiTeacherToolsViolation(_A.EXERCISE_COUNT_INVALID, params={"max": MAX_EXERCISE_COUNT})
     return value
 
 
 def _require_choice(value: str, choices: set[str], field: str) -> str:
     normalized = str(value or "").strip().lower()
     if normalized not in choices:
-        raise HTTPException(status_code=400, detail=f"Unsupported {field}: {value}")
+        raise AiTeacherToolsViolation(_A.DRAFT_OPTION_UNSUPPORTED, params={"field": field})
     return normalized
 
 
