@@ -7,8 +7,6 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from fastapi import HTTPException
-
 from stoa.db.repositories import curriculum_ops_repo, practice_repo
 from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
 from stoa.services import (
@@ -17,6 +15,9 @@ from stoa.services import (
     curriculum_translations,
     exercise_localization,
 )
+from stoa.rule_violation import RuleViolation
+from stoa.services.curriculum_errors import CurriculumErrorCode
+from stoa.services.curriculum_issues import Issue, IssueCode
 
 
 AUTHOR_CAPABILITY = "curriculum_author"
@@ -165,7 +166,7 @@ def patch_lesson_draft(
 ) -> dict[str, Any]:
     _require_capability(user, AUTHOR_CAPABILITY)
     version = _existing_version(public_id, version_id)
-    _require_state(version, REVIEWABLE_STATES, "draft_not_editable")
+    _require_state(version, REVIEWABLE_STATES, CurriculumErrorCode.DRAFT_NOT_EDITABLE)
 
     updated = deepcopy(version)
     updated["lesson"] = _patch_lesson(public_id, updated.get("lesson") or {}, payload)
@@ -241,7 +242,7 @@ def audit_lesson(public_id: str, user: dict[str, Any], limit: int = 50) -> dict[
 def submit_review(public_id: str, version_id: str, user: dict[str, Any]) -> dict[str, Any]:
     _require_capability(user, AUTHOR_CAPABILITY)
     version = _existing_version(public_id, version_id)
-    _require_state(version, REVIEWABLE_STATES, "not_reviewable")
+    _require_state(version, REVIEWABLE_STATES, CurriculumErrorCode.NOT_REVIEWABLE)
     _validate_publish_ready(version["lesson"], version.get("exercises") or [], level="review")
     updated = _with_state(version, "in_review", user, review_state="pending")
     curriculum_ops_repo.put_version(updated)
@@ -252,7 +253,7 @@ def submit_review(public_id: str, version_id: str, user: dict[str, Any]) -> dict
 def approve(public_id: str, version_id: str, user: dict[str, Any]) -> dict[str, Any]:
     _require_capability(user, REVIEWER_CAPABILITY)
     version = _existing_version(public_id, version_id)
-    _require_state(version, {"in_review"}, "not_in_review")
+    _require_state(version, {"in_review"}, CurriculumErrorCode.NOT_IN_REVIEW)
     _validate_publish_ready(version["lesson"], version.get("exercises") or [], level="publish")
     updated = _with_state(version, "approved", user, review_state="approved")
     curriculum_ops_repo.put_version(updated)
@@ -268,7 +269,7 @@ def request_changes(
 ) -> dict[str, Any]:
     _require_capability(user, REVIEWER_CAPABILITY)
     version = _existing_version(public_id, version_id)
-    _require_state(version, {"in_review"}, "not_in_review")
+    _require_state(version, {"in_review"}, CurriculumErrorCode.NOT_IN_REVIEW)
     updated = _with_state(version, "changes_requested", user, review_state="changes_requested")
     updated["review_note"] = reason
     curriculum_ops_repo.put_version(updated)
@@ -286,7 +287,7 @@ def publish(
 ) -> dict[str, Any]:
     _require_capability(user, PUBLISHER_CAPABILITY)
     version = _existing_version(public_id, version_id)
-    _require_state(version, PUBLISHABLE_STATES, "not_approved")
+    _require_state(version, PUBLISHABLE_STATES, CurriculumErrorCode.NOT_APPROVED)
     _validate_publish_ready(version["lesson"], version.get("exercises") or [], level="publish")
     pointer = curriculum_ops_repo.get_pointer(public_id) or {}
     if pointer.get("published_version_id") == version_id:
@@ -308,7 +309,7 @@ def publish(
             version_id,
             "exercise_id_conflict",
         )
-        raise HTTPException(status_code=409, detail="exercise_id_conflict") from exc
+        raise RuleViolation(CurriculumErrorCode.EXERCISE_ID_CONFLICT) from exc
 
     now = _now()
     manifest = _manifest(public_id, version, pointer, user, now, reason)
@@ -324,7 +325,7 @@ def publish(
         )
     except curriculum_ops_repo.StalePointerError as exc:
         _audit(public_id, user, "publish_refused", version["state"], version["state"], version_id, "stale_pointer")
-        raise HTTPException(status_code=409, detail="stale_pointer") from exc
+        raise RuleViolation(CurriculumErrorCode.STALE_POINTER) from exc
 
     curriculum_ops_repo.put_published_projection(version, manifest)
     updated = _with_state(version, "published", user)
@@ -351,11 +352,11 @@ def rollback(
 ) -> dict[str, Any]:
     _require_capability(user, PUBLISHER_CAPABILITY)
     version = _existing_version(public_id, version_id)
-    _require_state(version, ROLLBACK_STATES, "rollback_target_not_publishable")
+    _require_state(version, ROLLBACK_STATES, CurriculumErrorCode.ROLLBACK_TARGET_NOT_PUBLISHABLE)
     try:
         curriculum_ops_repo.assert_exercise_ids_available(version)
     except curriculum_ops_repo.ExerciseIdConflictError as exc:
-        raise HTTPException(status_code=409, detail="exercise_id_conflict") from exc
+        raise RuleViolation(CurriculumErrorCode.EXERCISE_ID_CONFLICT) from exc
     pointer = curriculum_ops_repo.get_pointer(public_id) or {}
     now = _now()
     manifest = _manifest(public_id, version, pointer, user, now, reason, operation="rollback")
@@ -370,7 +371,7 @@ def rollback(
             updated_at=now,
         )
     except curriculum_ops_repo.StalePointerError as exc:
-        raise HTTPException(status_code=409, detail="stale_pointer") from exc
+        raise RuleViolation(CurriculumErrorCode.STALE_POINTER) from exc
     curriculum_ops_repo.put_published_projection(version, manifest)
     curriculum_analytics_service.record_publish_event(version, operation="publish")
     published_version_id = pointer.get("published_version_id")
@@ -398,7 +399,7 @@ def archive(public_id: str, version_id: str, user: dict[str, Any], *, reason: st
             version_id,
             "active_assignments_block_archive",
         )
-        raise HTTPException(status_code=409, detail="active_assignments_block_archive")
+        raise RuleViolation(CurriculumErrorCode.ACTIVE_ASSIGNMENTS_BLOCK_ARCHIVE)
     updated = _with_state(version, "archived", user)
     updated["archive_reason"] = reason
     curriculum_ops_repo.put_version(updated)
@@ -410,7 +411,7 @@ def archive(public_id: str, version_id: str, user: dict[str, Any], *, reason: st
 def _existing_version(public_id: str, version_id: str) -> dict[str, Any]:
     version = curriculum_ops_repo.get_version(public_id, version_id)
     if not version:
-        raise HTTPException(status_code=404, detail="curriculum_version_not_found")
+        raise RuleViolation(CurriculumErrorCode.CURRICULUM_VERSION_NOT_FOUND)
     return version
 
 
@@ -560,7 +561,7 @@ def _validate_publish_ready(
     issues = _validation_issues(lesson, exercises, level=level)
     blocking = [issue["field"] for issue in issues if issue["severity"] == "blocking"]
     if blocking:
-        raise HTTPException(status_code=422, detail={"code": "validation_failed", "fields": blocking})
+        raise _validation_failed(blocking)
 
 
 def _with_state(
@@ -579,20 +580,17 @@ def _with_state(
     return updated
 
 
-def _require_state(version: dict[str, Any], allowed: set[str], detail: str) -> None:
+def _require_state(version: dict[str, Any], allowed: set[str], refusal: CurriculumErrorCode) -> None:
     if version.get("state") not in allowed:
-        raise HTTPException(status_code=409, detail=detail)
+        raise RuleViolation(refusal, internal_detail=f"state={version.get('state')}")
 
 
 def _require_capability(user: dict[str, Any], *allowed: str) -> None:
     granted = curriculum_capabilities(user)
     if not granted.intersection(allowed):
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "code": "curriculum_capability_required",
-                "required": list(allowed),
-            },
+        raise RuleViolation(
+            CurriculumErrorCode.CURRICULUM_CAPABILITY_REQUIRED,
+            internal_detail=f"required one of {sorted(allowed)}",
         )
 
 
@@ -719,11 +717,11 @@ def _validation_issues(
     issues = []
     for key in ["lesson_id", "title", "objective", "subject_id", "topic_id", "grade_level"]:
         if not lesson.get(key):
-            issues.append(_validation_issue(key, "Required lesson field is missing."))
+            issues.append(_validation_issue(key, Issue.of(IssueCode.LESSON_FIELD_MISSING)))
     issues.extend(_attribution_issues(lesson))
     issues.extend(_lesson_prerequisite_issues(lesson))
     if level in {"review", "publish"} and not exercises:
-        issues.append(_validation_issue("exercises", "At least one exercise is required."))
+        issues.append(_validation_issue("exercises", Issue.of(IssueCode.EXERCISE_REQUIRED)))
     seen_exercise_ids: set[object] = set()
     for index, exercise in enumerate(exercises):
         exercise_id = exercise.get("exercise_id")
@@ -731,7 +729,7 @@ def _validation_issues(
             issues.append(
                 _validation_issue(
                     f"exercises[{index}].exercise_id",
-                    "Exercise id is used more than once in this lesson.",
+                    Issue.of(IssueCode.EXERCISE_ID_REPEATED),
                 )
             )
         seen_exercise_ids.add(exercise_id)
@@ -742,22 +740,22 @@ def _validation_issues(
                     issues.append(
                         _validation_issue(
                             f"exercises[{index - 1}].{key}",
-                            "Required exercise field is missing.",
+                            Issue.of(IssueCode.EXERCISE_FIELD_MISSING),
                         )
                     )
     for index, exercise in enumerate(exercises):
         issues.extend(
-            _validation_issue(f"exercises[{index}].{field}", message)
-            for field, message in _choice_issues(exercise)
+            _validation_issue(f"exercises[{index}].{field}", issue)
+            for field, issue in _choice_issues(exercise)
         )
         options = exercise.get("options") if isinstance(exercise.get("options"), list) else None
         issues.extend(
-            _validation_issue(f"exercises[{index}].figure", message)
-            for message in exercise_localization.figure_issues(exercise, options)
+            _validation_issue(f"exercises[{index}].figure", issue)
+            for issue in exercise_localization.figure_issues(exercise, options)
         )
         issues.extend(
-            _validation_issue(f"exercises[{index}].{field}", message)
-            for field, message in exercise_localization.translation_issues(
+            _validation_issue(f"exercises[{index}].{field}", issue)
+            for field, issue in exercise_localization.translation_issues(
                 exercise, max_text=MAX_EXERCISE_TEXT
             )
         )
@@ -765,18 +763,18 @@ def _validation_issues(
     return issues
 
 
-def _choice_issues(exercise: dict[str, Any]) -> list[tuple[str, str]]:
+def _choice_issues(exercise: dict[str, Any]) -> list[tuple[str, Issue]]:
     """A choice exercise offers at least two different options, one of them its key."""
     options = exercise.get("options")
     if exercise.get("type") != "multiple_choice":
-        return [("options", "Only a multiple-choice exercise has options.")] if options else []
+        return [("options", Issue.of(IssueCode.OPTIONS_WITHOUT_CHOICE))] if options else []
     if not isinstance(options, list) or len(options) < 2:
-        return [("options", "A multiple-choice exercise needs at least two options.")]
+        return [("options", Issue.of(IssueCode.TOO_FEW_OPTIONS))]
     if len({answer_judging.normalize_answer(option) for option in options}) != len(options):
-        return [("options", "Two options read the same.")]
+        return [("options", Issue.of(IssueCode.OPTIONS_READ_THE_SAME))]
     key = str(exercise.get("answer_key") or "")
     if key and key not in options:
-        return [("answer_key", "The answer must be one of the options.")]
+        return [("answer_key", Issue.of(IssueCode.ANSWER_NOT_AN_OPTION))]
     return []
 
 
@@ -784,15 +782,15 @@ def _attribution_issues(lesson: dict[str, Any]) -> list[dict[str, Any]]:
     """A lesson belongs to the unit it names, and inherits that unit's topic and subject."""
     unit_id = str(lesson.get("unit_id") or "").strip()
     if not unit_id:
-        return [_validation_issue("unit_id", "A lesson must name the unit it belongs to.")]
+        return [_validation_issue("unit_id", Issue.of(IssueCode.UNIT_MISSING))]
     unit = curriculum_ops_repo.get_practice_unit(unit_id)
     if unit is None:
-        return [_validation_issue("unit_id", "The named unit does not exist.")]
+        return [_validation_issue("unit_id", Issue.of(IssueCode.UNIT_UNKNOWN))]
     issues = []
     if str(unit.get("topic_id") or "") != str(lesson.get("topic_id") or ""):
-        issues.append(_validation_issue("topic_id", "The topic must be the unit's topic."))
+        issues.append(_validation_issue("topic_id", Issue.of(IssueCode.TOPIC_NOT_THE_UNITS)))
     if not practice_repo.same_subject(unit.get("subject_id", ""), lesson.get("subject_id", "")):
-        issues.append(_validation_issue("subject_id", "The subject must be the unit's subject."))
+        issues.append(_validation_issue("subject_id", Issue.of(IssueCode.SUBJECT_NOT_THE_UNITS)))
     return issues
 
 
@@ -806,12 +804,12 @@ def _lesson_prerequisite_issues(lesson: dict[str, Any]) -> list[dict[str, Any]]:
     for reference in references:
         related = known.get(reference)
         if reference == lesson_id or related is None:
-            reason = "Every prerequisite must be another existing lesson."
+            reason = IssueCode.PREREQUISITE_UNKNOWN
             break
         if str(related.get("unit_id") or "") != str(lesson.get("unit_id") or "") and str(
             related.get("topic_id") or ""
         ) != str(lesson.get("topic_id") or ""):
-            reason = "A prerequisite must share this lesson's unit or topic."
+            reason = IssueCode.PREREQUISITE_UNRELATED
             break
     if reason is None:
         graph = {
@@ -820,10 +818,10 @@ def _lesson_prerequisite_issues(lesson: dict[str, Any]) -> list[dict[str, Any]]:
         }
         graph[lesson_id] = references
         if _closes_a_cycle(graph, lesson_id):
-            reason = "Prerequisites must not close a cycle."
+            reason = IssueCode.PREREQUISITE_CYCLE
     if reason is None:
         return []
-    return [_validation_issue("prerequisite_lesson_ids", reason)]
+    return [_validation_issue("prerequisite_lesson_ids", Issue.of(reason))]
 
 
 def _closes_a_cycle(graph: dict[str, list[str]], start: str) -> bool:
@@ -851,7 +849,7 @@ def patch_unit_prerequisites(
     unit_id = _clean_id(unit_id)
     unit = curriculum_ops_repo.get_practice_unit(unit_id)
     if unit is None:
-        raise HTTPException(status_code=404, detail="curriculum_unit_not_found")
+        raise RuleViolation(CurriculumErrorCode.CURRICULUM_UNIT_NOT_FOUND)
     references = _normalized_ids(
         payload.get("prerequisite_unit_ids") or payload.get("prerequisiteUnitIds")
     )
@@ -892,10 +890,7 @@ def _validate_unit_prerequisites(
         graph[unit_id] = references
         valid = not _closes_a_cycle(graph, unit_id)
     if not valid:
-        raise HTTPException(
-            status_code=422,
-            detail={"code": "validation_failed", "fields": ["prerequisite_unit_ids"]},
-        )
+        raise _validation_failed(["prerequisite_unit_ids"])
 
 
 def _unit_response(unit: dict[str, Any]) -> dict[str, Any]:
@@ -925,7 +920,7 @@ def _skill_issues(
     for index, exercise in enumerate(exercises):
         raw = exercise.get("skills") or []
         if not isinstance(raw, list | tuple):
-            issues.append(_validation_issue(f"exercises[{index}].skills", "Skills must be a list."))
+            issues.append(_validation_issue(f"exercises[{index}].skills", Issue.of(IssueCode.SKILLS_NOT_A_LIST)))
             continue
         for skill in raw:
             owner = curriculum_translations.skill_unit_id(str(skill))
@@ -933,14 +928,16 @@ def _skill_issues(
                 issues.append(
                     _validation_issue(
                         f"exercises[{index}].skills",
-                        f"Unknown skill '{skill}'.",
+                        Issue.of(IssueCode.SKILL_UNKNOWN, skill=skill),
                     )
                 )
             elif unit_id and owner != unit_id:
                 issues.append(
                     _validation_issue(
                         f"exercises[{index}].skills",
-                        f"Skill '{skill}' belongs to unit '{owner}', not '{unit_id}'.",
+                        Issue.of(
+                            IssueCode.SKILL_IN_ANOTHER_UNIT, skill=skill, unit=owner, lesson_unit=unit_id
+                        ),
                     )
                 )
     return issues
@@ -949,15 +946,26 @@ def _skill_issues(
 def _validate_skills(lesson: dict[str, Any], exercises: list[dict[str, Any]]) -> None:
     issues = _skill_issues(lesson, exercises)
     if issues:
-        fields = list(dict.fromkeys(issue["field"] for issue in issues))
-        raise HTTPException(status_code=422, detail={"code": "validation_failed", "fields": fields})
+        raise _validation_failed(list(dict.fromkeys(issue["field"] for issue in issues)))
 
 
-def _validation_issue(field: str, message: str) -> dict[str, Any]:
+def _validation_failed(fields: list[str]) -> RuleViolation:
+    """The draft has a blocking issue in `fields`; the validation report says what (#112)."""
+    return RuleViolation(CurriculumErrorCode.VALIDATION_FAILED, fields=fields)
+
+
+def _validation_issue(field: str, issue: Issue) -> dict[str, Any]:
+    """One line of the validation report: the field, the problem's code and its sentence.
+
+    The console translates by `code` and `params` (#112); `message` is the
+    English sentence for a client that does not know the code.
+    """
     return {
         "severity": "blocking",
         "field": field,
-        "message": message,
+        "code": issue.code.value,
+        "params": issue.values,
+        "message": issue.message(),
         "hint": "Provide this field before submitting or publishing the draft.",
     }
 
@@ -1113,7 +1121,7 @@ def _actor_id(user: dict[str, Any]) -> str:
 def _clean_id(value: Any) -> str:
     cleaned = str(value or "").strip()
     if not cleaned:
-        raise HTTPException(status_code=422, detail={"code": "validation_failed", "fields": ["id"]})
+        raise _validation_failed(["id"])
     return cleaned
 
 

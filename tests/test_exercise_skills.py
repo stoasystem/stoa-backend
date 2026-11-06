@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 from unittest import mock
+from unittest.mock import ANY
 
 import pytest
 from fakes.dynamodb import FakeTable
@@ -18,11 +19,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
+from rule_violation_helpers import assert_violation
 from scripts import backfill_exercise_skills as backfill
 from scripts import seed_practice
 from stoa.db.repositories import practice_repo
 from stoa.routers import admin
 from stoa.services import curriculum_ops_service, curriculum_service, curriculum_translations
+from stoa.services.curriculum_errors import CurriculumErrorCode
 from stoa.services import knowledge_mastery_service as mastery
 
 
@@ -208,9 +211,7 @@ def test_a_draft_patched_with_an_unknown_skill_is_refused(monkeypatch) -> None:
 
     response = _patch(client, version_id, ["brueche-telepathie"])
 
-    assert response.status_code == 422
-    assert response.json()["detail"]["code"] == "validation_failed"
-    assert response.json()["detail"]["fields"] == ["exercises[0].skills"]
+    assert_violation(response, CurriculumErrorCode.VALIDATION_FAILED, fields=["exercises[0].skills"])
 
 
 def test_a_draft_without_a_unit_cannot_be_made_at_all(monkeypatch) -> None:
@@ -228,8 +229,8 @@ def test_a_draft_without_a_unit_cannot_be_made_at_all(monkeypatch) -> None:
 
     created = client.post("/admin/curriculum/lessons/drafts", json=payload)
 
-    assert created.status_code == 422
-    assert "unit_id" in created.json()["detail"]["fields"]
+    detail = assert_violation(created, CurriculumErrorCode.VALIDATION_FAILED, fields=ANY)
+    assert "unit_id" in detail["fields"]
 
 
 def test_a_skill_in_no_vocabulary_at_all_is_refused_by_name(monkeypatch) -> None:
@@ -245,8 +246,7 @@ def test_a_skill_in_no_vocabulary_at_all_is_refused_by_name(monkeypatch) -> None
 
     response = _patch(client, version_id, ["brueche-telepathie"])
 
-    assert response.status_code == 422
-    assert response.json()["detail"]["fields"] == ["exercises[0].skills"]
+    assert_violation(response, CurriculumErrorCode.VALIDATION_FAILED, fields=["exercises[0].skills"])
 
 
 def test_a_draft_patched_with_a_skill_of_another_unit_is_refused(monkeypatch) -> None:
@@ -262,8 +262,7 @@ def test_a_draft_patched_with_a_skill_of_another_unit_is_refused(monkeypatch) ->
 
     response = _patch(client, version_id, ["brueche-multiplizieren"])
 
-    assert response.status_code == 422
-    assert response.json()["detail"]["fields"] == ["exercises[0].skills"]
+    assert_violation(response, CurriculumErrorCode.VALIDATION_FAILED, fields=["exercises[0].skills"])
 
 
 def test_validation_preview_reports_the_stray_skill_rather_than_hiding_it(monkeypatch) -> None:

@@ -93,6 +93,10 @@ class RuleViolationBody(_ErrorModel):
     retry_at: str | None = Field(default=None, alias="retryAt")
     retry_after_seconds: int | None = Field(default=None, alias="retryAfterSeconds")
     action: str | None = None
+    fields: list[str] | None = Field(
+        default=None,
+        description="The input fields that broke the rule (`validation_failed`, `invalid_manifest`).",
+    )
 
 
 class RuleViolationResponse(_ErrorModel):

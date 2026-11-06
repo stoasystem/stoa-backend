@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from stoa.services import curriculum_ops_service, exercise_localization, figure_svg, practice_projection_service
+from stoa.services.curriculum_issues import Issue, IssueCode
 
 SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 60">{body}</svg>'
 TRIANGLE = SVG.format(
@@ -31,20 +32,28 @@ def test_a_diagram_passes() -> None:
 @pytest.mark.parametrize(
     ("svg", "problem"),
     [
-        (SVG.format(body="<script>alert(1)</script>"), "Element 'script'"),
-        (SVG.format(body='<rect width="1" height="1" onclick="steal()"/>'), "Attribute 'onclick'"),
-        (SVG.format(body='<foreignObject><p>x</p></foreignObject>'), "Element 'foreignObject'"),
-        (SVG.format(body='<image href="https://example.com/x.png"/>'), "Element 'image'"),
-        (SVG.format(body='<rect fill="url(https://example.com/x)"/>'), "only refer to a marker"),
-        (SVG.format(body='<rect style="fill:red"/>'), "Attribute 'style'"),
-        ('<!DOCTYPE svg [<!ENTITY x "y">]><svg xmlns="http://www.w3.org/2000/svg"/>', "document type"),
-        ('<svg><rect/></svg>', "SVG namespace"),
-        ("<svg", "well-formed"),
-        ("x" * (figure_svg.MAX_FIGURE_LENGTH + 1), "at most"),
+        (SVG.format(body="<script>alert(1)</script>"),
+         Issue.of(IssueCode.FIGURE_ELEMENT_NOT_ALLOWED, element="script")),
+        (SVG.format(body='<rect width="1" height="1" onclick="steal()"/>'),
+         Issue.of(IssueCode.FIGURE_ATTRIBUTE_NOT_ALLOWED, attribute="onclick")),
+        (SVG.format(body='<foreignObject><p>x</p></foreignObject>'),
+         Issue.of(IssueCode.FIGURE_ELEMENT_NOT_ALLOWED, element="foreignObject")),
+        (SVG.format(body='<image href="https://example.com/x.png"/>'),
+         Issue.of(IssueCode.FIGURE_ELEMENT_NOT_ALLOWED, element="image")),
+        (SVG.format(body='<rect fill="url(https://example.com/x)"/>'),
+         Issue.of(IssueCode.FIGURE_REFERENCE_OUTSIDE, attribute="fill")),
+        (SVG.format(body='<rect style="fill:red"/>'),
+         Issue.of(IssueCode.FIGURE_ATTRIBUTE_NOT_ALLOWED, attribute="style")),
+        ('<!DOCTYPE svg [<!ENTITY x "y">]><svg xmlns="http://www.w3.org/2000/svg"/>',
+         Issue.of(IssueCode.FIGURE_FORBIDDEN_MARKUP)),
+        ('<svg><rect/></svg>', Issue.of(IssueCode.FIGURE_ROOT_NOT_SVG)),
+        ("<svg", Issue.of(IssueCode.FIGURE_MALFORMED)),
+        ("x" * (figure_svg.MAX_FIGURE_LENGTH + 1),
+         Issue.of(IssueCode.FIGURE_TOO_LONG, max_length=figure_svg.MAX_FIGURE_LENGTH)),
     ],
 )
-def test_anything_beyond_a_diagram_is_refused(svg: str, problem: str) -> None:
-    assert any(problem in message for message in figure_svg.figure_issues(svg))
+def test_anything_beyond_a_diagram_is_refused(svg: str, problem: Issue) -> None:
+    assert problem in figure_svg.figure_issues(svg)
 
 
 @pytest.mark.parametrize(
@@ -64,7 +73,9 @@ def test_anything_beyond_a_diagram_is_refused(svg: str, problem: str) -> None:
 )
 def test_a_reference_out_of_the_figure_is_refused(attribute: str) -> None:
     svg = TRIANGLE.replace("</svg>", f'<rect width="1" height="1" {attribute}/></svg>')
-    assert any("only refer to a marker" in message for message in figure_svg.figure_issues(svg))
+    assert any(
+        issue.code is IssueCode.FIGURE_REFERENCE_OUTSIDE for issue in figure_svg.figure_issues(svg)
+    )
 
 
 def test_a_backslash_in_a_name_is_just_text() -> None:
@@ -89,8 +100,9 @@ def test_authoring_carries_figures_and_refuses_a_bad_one() -> None:
     assert exercise_localization.translation_issues(good, max_text=2000) == []
 
     bad = _exercise(figure=SVG.format(body="<script/>"), optionFigures=[TRIANGLE])
-    messages = exercise_localization.figure_issues(bad, bad["options"])
-    assert any("script" in m for m in messages) and any("one per option" in m for m in messages)
+    issues = exercise_localization.figure_issues(bad, bad["options"])
+    assert Issue.of(IssueCode.FIGURE_ELEMENT_NOT_ALLOWED, element="script") in issues
+    assert Issue.of(IssueCode.OPTION_FIGURES_MISMATCH) in issues
 
 
 def test_a_student_sees_the_figure_of_their_language() -> None:

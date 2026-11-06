@@ -705,6 +705,10 @@ class UsageSummaryResponse(BaseModel):
     billingState: str | None = None
     reconciliation: dict[str, Any] = Field(default_factory=dict)
     supportAction: str | None = None
+    # A client translates `explanationCode` (+ `explanationParams`); `explanation`
+    # is its English sentence (#114).
+    explanationCode: str | None = None
+    explanationParams: dict[str, Any] = Field(default_factory=dict)
     explanation: str | None = None
     actions: list[dict[str, Any]] = Field(default_factory=list)
     groups: list[dict[str, Any]] = Field(default_factory=list)
@@ -731,6 +735,10 @@ class UsageReconciliationResponse(BaseModel):
     drift: int = 0
     stale: bool = False
     supportAction: str | None = None
+    # A client translates `explanationCode` (+ `explanationParams`); `explanation`
+    # is its English sentence (#114).
+    explanationCode: str | None = None
+    explanationParams: dict[str, Any] = Field(default_factory=dict)
     explanation: str | None = None
     repairMode: str
     repaired: bool
@@ -992,6 +1000,10 @@ class CurriculumReviewNoteRequest(BaseModel):
 class CurriculumValidationIssueResponse(BaseModel):
     severity: str
     field: str
+    # What is wrong, as a code the console translates with `params` (#112);
+    # `message` is its English sentence.
+    code: str | None = None
+    params: dict[str, str] = Field(default_factory=dict)
     message: str
     hint: str | None = None
 

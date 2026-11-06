@@ -9,7 +9,10 @@ the front of the student's own German question (#124).
 One table, so there is one place to look and one place to add a locale. The
 message a rule violation is sent with is here too, under `error.<code>`, one
 file per domain in `errors/` (#211); `stoa.rule_violation` renders it in the
-language the request asked for. What is **not** here, on purpose:
+language the request asked for. So are the codes of two reports a client
+translates: the curriculum validation report (`curriculum_issue.<code>`,
+#112) and the usage reconciliation (`reconciliation.<code>`, #114). What is
+**not** here, on purpose:
 
 * **Internal error details**: what a log line or an `internal_detail` says.
   Those are read by operators, not by students, and stay in English.
@@ -29,7 +32,9 @@ from __future__ import annotations
 from typing import Any
 
 from stoa.services import locale_service
+from stoa.services.message_catalog.curriculum_issues import TEXT as _ISSUE_TEXT
 from stoa.services.message_catalog.errors import TEXT as _ERROR_TEXT
+from stoa.services.message_catalog.usage_reconciliation import TEXT as _RECONCILIATION_TEXT
 
 _COPY: dict[str, dict[str, str]] = {
     # ── notifications ────────────────────────────────────────────────────
@@ -442,11 +447,17 @@ _COPY: dict[str, dict[str, str]] = {
 }
 
 
-_SHARED = set(_COPY) & set(_ERROR_TEXT)
-if _SHARED:
-    raise RuntimeError(f"catalog keys defined twice: {sorted(_SHARED)}")
+def _merged(*tables: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
+    merged: dict[str, dict[str, str]] = {}
+    for table in tables:
+        shared = set(merged) & set(table)
+        if shared:
+            raise RuntimeError(f"catalog keys defined twice: {sorted(shared)}")
+        merged.update(table)
+    return merged
 
-TEXT: dict[str, dict[str, str]] = {**_COPY, **_ERROR_TEXT}
+
+TEXT: dict[str, dict[str, str]] = _merged(_COPY, _ERROR_TEXT, _ISSUE_TEXT, _RECONCILIATION_TEXT)
 
 
 def text(key: str, locale: str, **values: Any) -> str:

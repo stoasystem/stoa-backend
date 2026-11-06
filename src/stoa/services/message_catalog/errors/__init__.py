@@ -13,6 +13,7 @@ from stoa.services.message_catalog.errors import (
     ask_question,
     attachment,
     billing,
+    curriculum,
     help_request,
     moderation,
     notification,
@@ -40,6 +41,7 @@ _DOMAINS = (
     moderation,
     notification,
     rate_limit,
+    curriculum,
 )
 
 

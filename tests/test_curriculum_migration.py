@@ -4,6 +4,8 @@ from fastapi.testclient import TestClient
 from stoa.routers import admin
 from actor_helpers import install_actor_overrides
 from stoa.services import curriculum_migration_service, curriculum_ops_service
+from stoa.services.curriculum_errors import CurriculumErrorCode
+from rule_violation_helpers import assert_violation
 
 
 def _app_for_user(user: dict) -> FastAPI:
@@ -248,8 +250,7 @@ def test_curriculum_migration_apply_requires_confirmation_token(monkeypatch):
         json={"manifest": manifest, "confirmationToken": "wrong-token"},
     )
 
-    assert response.status_code == 409
-    assert response.json()["detail"] == "migration_confirmation_mismatch"
+    assert_violation(response, CurriculumErrorCode.MIGRATION_CONFIRMATION_MISMATCH)
     assert state["versions"] == {}
 
 
