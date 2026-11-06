@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from botocore.exceptions import ClientError
-from fastapi import HTTPException
+from stoa.rule_violation import RuleViolation
 
 import pytest
 
@@ -557,7 +557,7 @@ def test_routine_admin_lifecycle_requires_manager_and_revokes_locally_first(monk
         "account_status": "active",
         "capabilities": {},
     }
-    with pytest.raises(HTTPException) as denied:
+    with pytest.raises(RuleViolation) as denied:
         privileged_identity_service.provision_admin(
             actor=no_capability,
             command_id="command-1",

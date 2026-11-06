@@ -12,7 +12,9 @@ from datetime import UTC, datetime
 import traceback
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
+
+from stoa.rule_violation import RuleViolation
 from fastapi.testclient import TestClient
 import pytest
 
@@ -182,11 +184,11 @@ def test_生日不进邀请行也不进审计流(table: FakeAccountTable) -> Non
 def test_生日不合法按代码拒绝且原值不进错误也不进栈(
     table: FakeAccountTable, bad: str
 ) -> None:
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RuleViolation) as refused:
         _invite(date_of_birth=bad)
 
     assert refused.value.status_code == 422
-    assert refused.value.detail == {"code": "date_of_birth_invalid"}
+    assert refused.value.code == "date_of_birth_invalid"
     rendered = "".join(
         traceback.format_exception(
             type(refused.value), refused.value, refused.value.__traceback__
@@ -199,7 +201,7 @@ def test_认领时的生日在令牌被烧掉之前就被拒(table: FakeAccountT
     """A malformed field must not cost the invitee their single-use token."""
     issued = _invite()
 
-    with pytest.raises(HTTPException):
+    with pytest.raises(RuleViolation):
         _claim(token=issued["activationToken"], date_of_birth="nonsense")
 
     _claim(token=issued["activationToken"], date_of_birth=ADULT)
@@ -589,7 +591,7 @@ def test_写生日时的冲突不会把账号推进去也不会烧掉令牌(tabl
 
     table.transact_account_deletion = refuse_the_birthday
 
-    with pytest.raises(HTTPException) as refusal:
+    with pytest.raises(RuleViolation) as refusal:
         _claim(token=issued["activationToken"], date_of_birth=MINOR)
 
     assert refusal.value.status_code == 409

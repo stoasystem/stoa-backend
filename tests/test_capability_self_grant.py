@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import HTTPException
+from stoa.rule_violation import RuleViolation
 import pytest
 
 from stoa.db.repositories import capability_repo
@@ -67,15 +67,15 @@ def _grant(actor: dict[str, Any], target_id: str) -> dict[str, Any]:
 
 
 def test_a_self_grant_is_refused_and_writes_no_grant(stores: dict[str, list[Any]]) -> None:
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RuleViolation) as refused:
         _grant(MANAGER, "admin-1")
     assert refused.value.status_code == 409
-    assert refused.value.detail == {"code": "capability_self_grant_forbidden"}
+    assert refused.value.code == "capability_self_grant_forbidden"
     assert stores["grants"] == []
 
 
 def test_the_refusal_is_recorded_before_it_is_returned(stores: dict[str, list[Any]]) -> None:
-    with pytest.raises(HTTPException):
+    with pytest.raises(RuleViolation):
         _grant(MANAGER, "admin-1")
     [(stream_id, event)] = stores["audits"]
     assert stream_id == "admin-1"
@@ -99,18 +99,18 @@ def test_an_actor_known_only_by_its_subject_is_still_refused(
 ) -> None:
     actor = {key: value for key, value in MANAGER.items() if key != "user_id"}
     actor["sub"] = "admin-1"
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RuleViolation) as refused:
         _grant(actor, "admin-1")
-    assert refused.value.detail == {"code": "capability_self_grant_forbidden"}
+    assert refused.value.code == "capability_self_grant_forbidden"
     assert stores["grants"] == []
 
 
 def test_a_target_padded_with_whitespace_is_the_same_identity(
     stores: dict[str, list[Any]],
 ) -> None:
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RuleViolation) as refused:
         _grant(MANAGER, " admin-1 ")
-    assert refused.value.detail == {"code": "capability_self_grant_forbidden"}
+    assert refused.value.code == "capability_self_grant_forbidden"
     assert stores["grants"] == []
 
 
@@ -131,7 +131,7 @@ def test_a_caller_without_the_manager_capability_is_refused_first(
     # Not a manager: the ordinary 403, and no self-grant record for a command
     # this caller could never have issued at all.
     actor = {**MANAGER, "capabilities": {}}
-    with pytest.raises(HTTPException) as refused:
+    with pytest.raises(RuleViolation) as refused:
         _grant(actor, "admin-1")
     assert refused.value.status_code == 403
     assert stores["audits"] == []

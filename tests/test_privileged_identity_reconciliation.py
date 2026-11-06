@@ -790,7 +790,7 @@ def test_stale_reconciliation_action_cannot_revoke_later_regrant(monkeypatch):
 
 
 def test_restore_is_mutation_free_and_regrant_requires_manager_new_command(monkeypatch):
-    from fastapi import HTTPException
+    from stoa.rule_violation import RuleViolation
     from stoa.db.repositories import capability_repo
     from stoa.services import privileged_identity_service
 
@@ -803,12 +803,12 @@ def test_restore_is_mutation_free_and_regrant_requires_manager_new_command(monke
         SimpleNamespace(side_effect=AssertionError("restore repository mutation must not exist")),
         raising=False,
     )
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RuleViolation) as exc_info:
         privileged_identity_service.restore_capability(
             actor=actor, target_id="admin-1", reason="restore", grant_id="old",
         )
     assert exc_info.value.status_code == 409
-    assert exc_info.value.detail["code"] == "capability_regrant_required"
+    assert exc_info.value.code == "capability_regrant_required"
 
 
 @pytest.mark.parametrize(

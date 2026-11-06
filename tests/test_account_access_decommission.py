@@ -11,17 +11,10 @@ import pytest
 
 from stoa.config import Settings, get_settings
 from stoa.routers import auth
+from rule_violation_helpers import assert_violation
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-
-_DECOMMISSIONED_BODY = {
-    "detail": {
-        "code": "",
-        "message": "This is no longer available. Ask your STOA administrator.",
-    }
-}
-
 
 def _settings() -> Settings:
     return Settings(
@@ -123,14 +116,7 @@ def test_public_registration_is_refused_without_touching_the_provider(monkeypatc
         },
     )
 
-    assert response.status_code == 410
-    assert response.json() == {
-        **_DECOMMISSIONED_BODY,
-        "detail": {
-            **_DECOMMISSIONED_BODY["detail"],
-            "code": "public_registration_closed",
-        },
-    }
+    assert_violation(response, "public_registration_closed")
     assert provider.calls == []
 
 
@@ -155,8 +141,7 @@ def test_password_recovery_is_refused_without_touching_the_provider(
 
     response = client.post(path, json=payload)
 
-    assert response.status_code == 410
-    assert response.json()["detail"]["code"] == "password_recovery_closed"
+    assert_violation(response, "password_recovery_closed")
     assert provider.calls == []
 
 

@@ -13,6 +13,97 @@
         "retryable": false
       }
     },
+    "account_email_missing": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.account_email_missing",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_exists": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.account_exists",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_last_active_admin": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.account_last_active_admin",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_not_a_student": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.account_not_a_student",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_not_found": {
+      "action": null,
+      "domain": "account",
+      "http_status": 404,
+      "message_key": "error.account_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_not_invited": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.account_not_invited",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_number_already_assigned": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.account_number_already_assigned",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "account_number_lookup_unavailable": {
       "action": "retry_later",
       "domain": "parent_link",
@@ -26,11 +117,180 @@
         "retryable": true
       }
     },
+    "account_number_unavailable": {
+      "action": "retry_later",
+      "domain": "account",
+      "http_status": 503,
+      "message_key": "error.account_number_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_password_reset_conflict": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.account_password_reset_conflict",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_peer_admin_password_reset_forbidden": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.account_peer_admin_password_reset_forbidden",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_profile_missing": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.account_profile_missing",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_self_deactivation_forbidden": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.account_self_deactivation_forbidden",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_state_invalid": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.account_state_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_status_transition_conflict": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.account_status_transition_conflict",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_status_transition_invalid": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.account_status_transition_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_status_unchanged": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.account_status_unchanged",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_status_unexpected": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.account_status_unexpected",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "action_not_allowed": {
       "action": null,
       "domain": "security",
       "http_status": 403,
       "message_key": "error.action_not_allowed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "activation_command_state_invalid": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.activation_command_state_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "activation_resume_required": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.activation_resume_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "activation_temporarily_unavailable": {
+      "action": "retry_later",
+      "domain": "account",
+      "http_status": 503,
+      "message_key": "error.activation_temporarily_unavailable",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -75,6 +335,84 @@
       "public_fields": [
         "conversationId"
       ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "allowance_version_conflict": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.allowance_version_conflict",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "application_fields_not_allowed": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.application_fields_not_allowed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "application_not_approved": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.application_not_approved",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "application_not_found": {
+      "action": null,
+      "domain": "account",
+      "http_status": 404,
+      "message_key": "error.application_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "application_state_invalid": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.application_state_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "application_version_not_found": {
+      "action": null,
+      "domain": "account",
+      "http_status": 404,
+      "message_key": "error.application_version_not_found",
+      "public_fields": [],
       "retry": {
         "idempotent_only": false,
         "max_attempts": 0,
@@ -149,6 +487,84 @@
         "retryable": true
       }
     },
+    "binding_repair_conflict": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.binding_repair_conflict",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "binding_repair_invalid": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.binding_repair_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "binding_repair_preview_changed": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.binding_repair_preview_changed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "binding_repair_temporarily_unavailable": {
+      "action": "retry_later",
+      "domain": "account",
+      "http_status": 503,
+      "message_key": "error.binding_repair_temporarily_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "capability_regrant_required": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.capability_regrant_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "capability_self_grant_forbidden": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.capability_self_grant_forbidden",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "checkout_not_found": {
       "action": null,
       "domain": "billing",
@@ -173,6 +589,45 @@
         "max_attempts": 1,
         "retry_after_seconds": null,
         "retryable": true
+      }
+    },
+    "credential_documents_deferred": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.credential_documents_deferred",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "cursor_invalid": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.cursor_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "date_of_birth_invalid": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.date_of_birth_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
       }
     },
     "email_already_registered": {
@@ -244,6 +699,19 @@
         "retryable": true
       }
     },
+    "identity_change_temporarily_unavailable": {
+      "action": "retry_later",
+      "domain": "account",
+      "http_status": 503,
+      "message_key": "error.identity_change_temporarily_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "identity_conflict": {
       "action": "start_account_recovery",
       "domain": "security",
@@ -270,6 +738,32 @@
         "retryable": true
       }
     },
+    "identity_restore_not_allowed": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.identity_restore_not_allowed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "invalid_application_field": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.invalid_application_field",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "invalid_credentials": {
       "action": "correct_input",
       "domain": "security",
@@ -283,11 +777,180 @@
         "retryable": false
       }
     },
+    "invalid_identity_operation": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.invalid_identity_operation",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "invalid_privileged_identity_command": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.invalid_privileged_identity_command",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "invalid_review_decision": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.invalid_review_decision",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "invalid_review_state": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.invalid_review_state",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "invalid_token": {
       "action": "reauthenticate",
       "domain": "security",
       "http_status": 401,
       "message_key": "error.invalid_token",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "invitation_already_used": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.invitation_already_used",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "invitation_application_state_invalid": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.invitation_application_state_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "invitation_email_mismatch": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.invitation_email_mismatch",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "invitation_expired": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.invitation_expired",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "invitation_invalid": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.invitation_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "invitation_not_found": {
+      "action": null,
+      "domain": "account",
+      "http_status": 404,
+      "message_key": "error.invitation_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "invitation_not_reissuable": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.invitation_not_reissuable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "invitation_not_revocable": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.invitation_not_revocable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "invitation_state_invalid": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.invitation_state_invalid",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -468,6 +1131,19 @@
         "retryable": false
       }
     },
+    "locale_not_supported": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 400,
+      "message_key": "error.locale_not_supported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "message_command_expired": {
       "action": "retry_later",
       "domain": "ask_question",
@@ -558,11 +1234,128 @@
         "retryable": true
       }
     },
+    "page_token_invalid": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 400,
+      "message_key": "error.page_token_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "parent_binding_required": {
       "action": "complete_parent_binding",
       "domain": "security",
       "http_status": 409,
       "message_key": "error.parent_binding_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "password_change_code_delivery_failed": {
+      "action": "retry_later",
+      "domain": "account",
+      "http_status": 503,
+      "message_key": "error.password_change_code_delivery_failed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "password_change_code_rate_limited": {
+      "action": "retry_later",
+      "domain": "account",
+      "http_status": 429,
+      "message_key": "error.password_change_code_rate_limited",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "password_change_credentials_invalid": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 400,
+      "message_key": "error.password_change_credentials_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "password_change_state_not_cleared": {
+      "action": "reauthenticate",
+      "domain": "account",
+      "http_status": 503,
+      "message_key": "error.password_change_state_not_cleared",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "password_change_verification_failed": {
+      "action": "request_new_code",
+      "domain": "account",
+      "http_status": 400,
+      "message_key": "error.password_change_verification_failed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "password_recovery_closed": {
+      "action": "contact_support",
+      "domain": "account",
+      "http_status": 410,
+      "message_key": "error.password_recovery_closed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "password_recovery_not_implemented": {
+      "action": null,
+      "domain": "account",
+      "http_status": 501,
+      "message_key": "error.password_recovery_not_implemented",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "password_rejected": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.password_rejected",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -597,6 +1390,19 @@
         "retryable": false
       }
     },
+    "privileged_identity_not_found": {
+      "action": null,
+      "domain": "account",
+      "http_status": 404,
+      "message_key": "error.privileged_identity_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "provider_token_count_unavailable": {
       "action": "retry_later",
       "domain": "ask_question",
@@ -612,11 +1418,167 @@
         "retryable": false
       }
     },
+    "provisioning_temporarily_unavailable": {
+      "action": "retry_later",
+      "domain": "account",
+      "http_status": 503,
+      "message_key": "error.provisioning_temporarily_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "provisioning_unavailable": {
+      "action": "retry_later",
+      "domain": "account",
+      "http_status": 503,
+      "message_key": "error.provisioning_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "public_authentication_unavailable": {
+      "action": "retry_later",
+      "domain": "account",
+      "http_status": 503,
+      "message_key": "error.public_authentication_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "public_registration_closed": {
+      "action": "contact_support",
+      "domain": "account",
+      "http_status": 410,
+      "message_key": "error.public_registration_closed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "public_registration_not_implemented": {
+      "action": null,
+      "domain": "account",
+      "http_status": 501,
+      "message_key": "error.public_registration_not_implemented",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "recovery_job_not_found": {
+      "action": null,
+      "domain": "account",
+      "http_status": 404,
+      "message_key": "error.recovery_job_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "relationship_status_conflict": {
+      "action": null,
+      "domain": "account",
+      "http_status": 409,
+      "message_key": "error.relationship_status_conflict",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "relationship_status_invalid": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.relationship_status_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "relationship_status_temporarily_unavailable": {
+      "action": "retry_later",
+      "domain": "account",
+      "http_status": 503,
+      "message_key": "error.relationship_status_temporarily_unavailable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "report_not_found": {
+      "action": null,
+      "domain": "account",
+      "http_status": 404,
+      "message_key": "error.report_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "required_field": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.required_field",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "resource_not_found": {
       "action": null,
       "domain": "security",
       "http_status": 404,
       "message_key": "error.resource_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "role_not_provisionable": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.role_not_provisionable",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -1069,6 +2031,19 @@
         "retryable": false
       }
     },
+    "valid_email_required": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.valid_email_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "verification_code_expired": {
       "action": "request_new_code",
       "domain": "security",
@@ -1087,6 +2062,19 @@
       "domain": "security",
       "http_status": 400,
       "message_key": "error.verification_code_invalid",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "verified_email_required": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.verified_email_required",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,

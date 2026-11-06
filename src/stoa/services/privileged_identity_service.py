@@ -7,8 +7,6 @@ from hashlib import sha256
 from typing import Any, Callable
 from uuid import uuid4
 
-from fastapi import HTTPException
-
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
     capability_repo,
@@ -17,6 +15,8 @@ from stoa.db.repositories import (
     security_audit_repo,
     user_repo,
 )
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
+from stoa.services.account_errors import AccountErrorCode, AccountViolation
 
 
 def provision_admin(
@@ -69,7 +69,7 @@ def change_admin_status(
 ) -> dict[str, Any]:
     _require_manager(actor)
     if operation not in {"suspend", "revoke", "restore"}:
-        raise HTTPException(status_code=422, detail={"code": "invalid_identity_operation"})
+        raise AccountViolation(AccountErrorCode.INVALID_IDENTITY_OPERATION)
     timestamp = _now(now)
     command, created = privileged_identity_repo.create_command(
         {
@@ -93,11 +93,11 @@ def change_admin_status(
         return _restore_admin(command, provider, user_pool_id=user_pool_id, now=timestamp)
     expected_version = stored_int(command.get("version"))
     if expected_version is None or expected_version < 1:
-        raise HTTPException(status_code=409, detail={"code": "invalid_privileged_identity_command"})
+        raise AccountViolation(AccountErrorCode.INVALID_PRIVILEGED_IDENTITY_COMMAND)
 
     profile = user_repo.get_user(target_id)
     if not profile or profile.get("role") != "admin":
-        raise HTTPException(status_code=404, detail={"code": "privileged_identity_not_found"})
+        raise AccountViolation(AccountErrorCode.PRIVILEGED_IDENTITY_NOT_FOUND)
     # Deny first. Provider removal/sign-out is defense in depth and cannot delay revocation.
     user_repo.put_user({**profile, "account_status": terminal, "updated_at": timestamp})
     provider_complete = True
@@ -155,13 +155,7 @@ def restore_capability(
 ) -> dict[str, Any]:
     _require_manager(actor)
     del target_id, reason, grant
-    raise HTTPException(
-        status_code=409,
-        detail={
-            "code": "capability_regrant_required",
-            "message": "Issue a new approved capability grant command.",
-        },
-    )
+    raise AccountViolation(AccountErrorCode.CAPABILITY_REGRANT_REQUIRED)
 
 
 def _reconcile_admin(
@@ -194,7 +188,7 @@ def _reconcile_admin(
         )
     except Exception as exc:
         _mark_provider_failed(command, now)
-        raise HTTPException(status_code=503, detail={"code": "identity_change_temporarily_unavailable"}) from exc
+        raise AccountViolation(AccountErrorCode.IDENTITY_CHANGE_TEMPORARILY_UNAVAILABLE) from exc
     user_repo.put_user({**pending, "account_status": "active"})
     updated = privileged_identity_repo.update_command(
         command["command_id"],
@@ -210,14 +204,14 @@ def _reconcile_admin(
 def _restore_admin(command: dict[str, Any], provider: Any, *, user_pool_id: str, now: str) -> dict[str, Any]:
     profile = user_repo.get_user(command["target_id"])
     if not profile or profile.get("role") != "admin" or profile.get("account_status") == "deleted":
-        raise HTTPException(status_code=409, detail={"code": "identity_restore_not_allowed"})
+        raise AccountViolation(AccountErrorCode.IDENTITY_RESTORE_NOT_ALLOWED)
     try:
         provider.admin_add_user_to_group(
             UserPoolId=user_pool_id, Username=command["subject"], GroupName="admins"
         )
     except Exception as exc:
         _mark_provider_failed(command, now)
-        raise HTTPException(status_code=503, detail={"code": "identity_change_temporarily_unavailable"}) from exc
+        raise AccountViolation(AccountErrorCode.IDENTITY_CHANGE_TEMPORARILY_UNAVAILABLE) from exc
     user_repo.put_user({**profile, "account_status": "active", "updated_at": now})
     updated = privileged_identity_repo.update_command(
         command["command_id"],
@@ -273,12 +267,12 @@ def _refuse_self_grant(actor: dict[str, Any], target_id: str, grant: dict[str, A
             "created_at": _now(None),
         },
     )
-    raise HTTPException(status_code=409, detail={"code": "capability_self_grant_forbidden"})
+    raise AccountViolation(AccountErrorCode.CAPABILITY_SELF_GRANT_FORBIDDEN)
 
 
 def _require_manager(actor: dict[str, Any]) -> None:
     if actor.get("role") != "admin" or actor.get("account_status") != "active":
-        raise HTTPException(status_code=403, detail={"code": "action_not_allowed"})
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
     projected = actor.get("capabilities")
     allowed = isinstance(projected, dict) and (
         projected.get(capability_repo.ADMIN_IDENTITY_MANAGER) is True
@@ -293,7 +287,7 @@ def _require_manager(actor: dict[str, Any]) -> None:
         for grant in grants
     )
     if not allowed:
-        raise HTTPException(status_code=403, detail={"code": "action_not_allowed"})
+        raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED)
 
 
 def _audit(command: dict[str, Any], *, status: str, timestamp: str, provider_complete: bool) -> None:
@@ -368,14 +362,14 @@ def _actor_id(actor: dict[str, Any]) -> str:
 def _required(value: Any, name: str) -> str:
     cleaned = str(value or "").strip()
     if not cleaned:
-        raise HTTPException(status_code=422, detail={"code": "required_field", "field": name})
+        raise AccountViolation(AccountErrorCode.REQUIRED_FIELD, params={"field": name})
     return cleaned
 
 
 def _email(value: Any) -> str:
     cleaned = _required(value, "target_email").casefold()
     if "@" not in cleaned or len(cleaned) > 320:
-        raise HTTPException(status_code=422, detail={"code": "valid_email_required"})
+        raise AccountViolation(AccountErrorCode.VALID_EMAIL_REQUIRED)
     return cleaned
 
 

@@ -11,7 +11,7 @@ import boto3
 from boto3.dynamodb.conditions import Attr, Key
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
-from starlette.responses import JSONResponse, Response
+from starlette.responses import Response
 
 from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
@@ -34,11 +34,7 @@ from stoa.security.admin_authorization import (
     admin_operation,
     admin_target_provider,
 )
-from stoa.security.errors import (
-    SecurityDecisionError,
-    SecurityErrorCode,
-    normalize_correlation_id,
-)
+from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD
 from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
 from stoa.models.question import QuestionStatus
@@ -53,6 +49,9 @@ from stoa.models.moderation import (
 )
 from stoa.models import user as user_model
 from stoa.models.user import SubscriptionTier
+from stoa.rule_violation import RuleViolation
+from stoa.services.account_errors import AccountErrorCode, AccountViolation
+from stoa.services.billing_errors import BillingErrorCode
 from stoa.services import (
     account_provisioning_service,
     answer_judging,
@@ -283,7 +282,7 @@ async def read_teacher_support_allowance(
     # not an account made "look it up, then change it" contradict itself.
     profile = _account_profile_or_404(student_id)
     if str(profile.get("role") or "") != "student":
-        raise HTTPException(status_code=409, detail={"code": "account_not_a_student"})
+        raise AccountViolation(AccountErrorCode.ACCOUNT_NOT_A_STUDENT)
     assigned = teacher_support_allowance_service.read_assigned_weekly_cases(
         student_id, table=get_table()
     )
@@ -311,7 +310,7 @@ async def set_teacher_support_allowance(
     """
     profile = _account_profile_or_404(student_id)
     if str(profile.get("role") or "") != "student":
-        raise HTTPException(status_code=409, detail={"code": "account_not_a_student"})
+        raise AccountViolation(AccountErrorCode.ACCOUNT_NOT_A_STUDENT)
 
     written = teacher_support_allowance_service.set_assigned_weekly_cases(
         student_id,
@@ -325,7 +324,7 @@ async def set_teacher_support_allowance(
     ):
         # A concurrent administrator got there first. Their figure stands; this
         # one is refused rather than silently overwriting it.
-        raise HTTPException(status_code=409, detail={"code": "allowance_version_conflict"})
+        raise AccountViolation(AccountErrorCode.ALLOWANCE_VERSION_CONFLICT)
     next_version = written.state_version
 
     _record_account_admin_event(
@@ -2200,9 +2199,9 @@ async def list_users(
         try:
             decoded = json.loads(base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8"))
         except (ValueError, UnicodeDecodeError) as exc:
-            raise HTTPException(status_code=422, detail={"code": "cursor_invalid"}) from exc
+            raise AccountViolation(AccountErrorCode.CURSOR_INVALID) from exc
         if not isinstance(decoded, dict):
-            raise HTTPException(status_code=422, detail={"code": "cursor_invalid"})
+            raise AccountViolation(AccountErrorCode.CURSOR_INVALID)
         scan_kwargs["ExclusiveStartKey"] = decoded
 
     items: list[dict[str, object]] = []
@@ -2271,7 +2270,7 @@ async def update_user(
     """Update a user's subscription tier or active status."""
     profile = user_repo.get_user(user_id)
     if not profile:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise AccountViolation(AccountErrorCode.ACCOUNT_NOT_FOUND)
 
     update_parts = []
     attr_values: dict = {}
@@ -2400,14 +2399,14 @@ def _account_change_evidence(
 def _account_profile_or_404(user_id: str) -> dict[str, Any]:
     profile = user_repo.get_user(user_id)
     if not profile:
-        raise HTTPException(status_code=404, detail={"code": "account_not_found"})
+        raise AccountViolation(AccountErrorCode.ACCOUNT_NOT_FOUND)
     return dict(profile)
 
 
 def _account_email_or_409(profile: Mapping[str, object]) -> str:
     email = str(profile.get("email") or "").strip()
     if not email:
-        raise HTTPException(status_code=409, detail={"code": "account_email_missing"})
+        raise AccountViolation(AccountErrorCode.ACCOUNT_EMAIL_MISSING)
     return email
 
 
@@ -2442,7 +2441,7 @@ def _another_active_admin_exists(target_id: str) -> bool:
 
 
 def _refuse_status_change(
-    *, actor: Mapping[str, object], target_id: str, reason_code: str
+    *, actor: Mapping[str, object], target_id: str, reason_code: AccountErrorCode
 ) -> None:
     """A refused command is still a command somebody issued, so it is recorded."""
     _record_account_admin_event(
@@ -2453,7 +2452,7 @@ def _refuse_status_change(
         reason_code=reason_code,
         evidence_reference=f"account_status_denied:{reason_code}",
     )
-    raise HTTPException(status_code=409, detail={"code": reason_code})
+    raise AccountViolation(reason_code)
 
 
 def _guard_admin_console_survives(
@@ -2469,19 +2468,19 @@ def _guard_admin_console_survives(
     actor_id = str(actor.get("user_id") or actor.get("sub") or "")
     if actor_id and actor_id == target_id:
         _refuse_status_change(
-            actor=actor, target_id=target_id, reason_code="account_self_deactivation_forbidden"
+            actor=actor, target_id=target_id, reason_code=AccountErrorCode.ACCOUNT_SELF_DEACTIVATION_FORBIDDEN
         )
     if str(profile.get("role") or "") != "admin":
         return
     if _another_active_admin_exists(target_id):
         return
     _refuse_status_change(
-        actor=actor, target_id=target_id, reason_code="account_last_active_admin"
+        actor=actor, target_id=target_id, reason_code=AccountErrorCode.ACCOUNT_LAST_ACTIVE_ADMIN
     )
 
 
 def _refuse_password_reset(
-    *, actor: Mapping[str, object], target_id: str, reason_code: str
+    *, actor: Mapping[str, object], target_id: str, reason_code: AccountErrorCode
 ) -> None:
     """A refused reset is still a command somebody issued, so it is recorded."""
     _record_account_admin_event(
@@ -2492,7 +2491,7 @@ def _refuse_password_reset(
         reason_code=reason_code,
         evidence_reference=f"account_password_reset_denied:{reason_code}",
     )
-    raise HTTPException(status_code=409, detail={"code": reason_code})
+    raise AccountViolation(reason_code)
 
 
 def _guard_peer_admin_credentials(
@@ -2526,7 +2525,7 @@ def _guard_peer_admin_credentials(
     _refuse_password_reset(
         actor=actor,
         target_id=target_id,
-        reason_code="account_peer_admin_password_reset_forbidden",
+        reason_code=AccountErrorCode.ACCOUNT_PEER_ADMIN_PASSWORD_RESET_FORBIDDEN,
     )
 
 
@@ -2631,9 +2630,7 @@ def _require_password_change_at_next_sign_in(
             ]
         )
     except account_deletion_repo.AccountDeletionConflict as exc:
-        raise HTTPException(
-            status_code=409, detail={"code": "account_password_reset_conflict"}
-        ) from exc
+        raise AccountViolation(AccountErrorCode.ACCOUNT_PASSWORD_RESET_CONFLICT) from exc
 
 
 @router.post("/users/{user_id}/password-reset")
@@ -2670,9 +2667,7 @@ def reset_account_password(
             Permanent=True,
         )
     except Exception as exc:
-        raise HTTPException(
-            status_code=503, detail={"code": "identity_provider_unavailable"}
-        ) from exc
+        raise SecurityDecisionError(SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE) from exc
     _record_account_admin_event(
         actor=user,
         target_id=user_id,
@@ -2700,9 +2695,9 @@ def change_account_status(
     if payload.status != ACCOUNT_STATUS_ACTIVE:
         _guard_admin_console_survives(actor=user, target_id=user_id, profile=profile)
     if payload.status == current:
-        raise HTTPException(status_code=409, detail={"code": "account_status_unchanged"})
+        raise AccountViolation(AccountErrorCode.ACCOUNT_STATUS_UNCHANGED)
     if payload.status not in ACCOUNT_STATUS_TRANSITIONS.get(current, ()):
-        raise HTTPException(status_code=409, detail={"code": "account_status_transition_invalid"})
+        raise AccountViolation(AccountErrorCode.ACCOUNT_STATUS_TRANSITION_INVALID)
     now = _now_iso()
     operation = user_repo.profile_update_operation(
         user_id,
@@ -2732,9 +2727,7 @@ def change_account_status(
             ]
         )
     except account_deletion_repo.AccountDeletionConflict as exc:
-        raise HTTPException(
-            status_code=409, detail={"code": "account_status_transition_conflict"}
-        ) from exc
+        raise AccountViolation(AccountErrorCode.ACCOUNT_STATUS_TRANSITION_CONFLICT) from exc
     _record_account_admin_event(
         actor=user,
         target_id=user_id,
@@ -2823,41 +2816,17 @@ def _load_admin_checkout_command(
             parent_id=parent_id,
         )
     except (TypeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "code": "checkout_not_found",
-                "message": "Checkout was not found.",
-            },
-        ) from exc
+        raise RuleViolation(BillingErrorCode.CHECKOUT_NOT_FOUND) from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "code": "checkout_temporarily_unavailable",
-                "message": "Checkout status is temporarily unavailable.",
-            },
-        ) from exc
+        raise RuleViolation(BillingErrorCode.CHECKOUT_TEMPORARILY_UNAVAILABLE) from exc
     if lookup.disposition is checkout_command_repo.CheckoutCommandDisposition.NOT_FOUND:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "code": "checkout_not_found",
-                "message": "Checkout was not found.",
-            },
-        )
+        raise RuleViolation(BillingErrorCode.CHECKOUT_NOT_FOUND)
     if (
         lookup.disposition
         is not checkout_command_repo.CheckoutCommandDisposition.REPLAYED
         or lookup.command is None
     ):
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "code": "checkout_temporarily_unavailable",
-                "message": "Checkout status is temporarily unavailable.",
-            },
-        )
+        raise RuleViolation(BillingErrorCode.CHECKOUT_TEMPORARILY_UNAVAILABLE)
     return lookup.command
 
 
@@ -2922,13 +2891,7 @@ def _reconcile_admin_checkout(
         result.disposition
         is billing_reconciliation_service.BillingReconciliationDisposition.NOT_FOUND
     ):
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "code": "checkout_not_found",
-                "message": "Checkout was not found.",
-            },
-        )
+        raise RuleViolation(BillingErrorCode.CHECKOUT_NOT_FOUND)
     return result
 
 
@@ -2970,13 +2933,7 @@ async def get_billing_checkout_support(
                 ),
             )
         except (KeyError, TypeError, ValueError) as exc:
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "code": "billing_projection_temporarily_unavailable",
-                    "message": "Billing details are temporarily unavailable.",
-                },
-            ) from exc
+            raise RuleViolation(BillingErrorCode.BILLING_PROJECTION_TEMPORARILY_UNAVAILABLE) from exc
     return _admin_checkout_projection(
         checkout_ref,
         command=command,
@@ -3183,7 +3140,7 @@ async def get_account_verification_support(
     """Return bounded email verification state for account support."""
     profile = user_repo.get_user(user_id)
     if not profile:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise AccountViolation(AccountErrorCode.ACCOUNT_NOT_FOUND)
     return AccountVerificationSupportResponse(**account_verification_service.support_summary(profile))
 
 
@@ -3206,7 +3163,7 @@ async def get_parent_account_operations(
         )
     except ValueError as exc:
         if str(exc) == "parent_not_found":
-            raise HTTPException(status_code=404, detail="Parent not found") from exc
+            raise AccountViolation(AccountErrorCode.ACCOUNT_NOT_FOUND) from exc
         raise
 
 
@@ -3443,19 +3400,30 @@ async def repair_parent_binding(
         actor=str(user.get("sub") or user.get("username") or "admin"),
         created_at=now,
     )
-    response = _binding_repair_apply_response(result)
-    status_code = {
-        user_repo.ParentBindingRepairApplyDisposition.SKIPPED_CHANGED: 409,
-        user_repo.ParentBindingRepairApplyDisposition.CONFLICT: 409,
-        user_repo.ParentBindingRepairApplyDisposition.SKIPPED_INVALID: 422,
-        user_repo.ParentBindingRepairApplyDisposition.RETRYABLE: 503,
-    }.get(result.disposition)
-    if status_code is not None:
-        return JSONResponse(
-            status_code=status_code,
-            content=response.model_dump(mode="json"),
+    refusal = _BINDING_REPAIR_REFUSALS.get(result.disposition)
+    if refusal is not None:
+        raise AccountViolation(
+            refusal,
+            internal_detail=f"pair={result.preview.pair_id} mutated={result.mutated}",
         )
-    return response
+    return _binding_repair_apply_response(result)
+
+
+# A repair that did not apply is refused like any other command, by code.
+_BINDING_REPAIR_REFUSALS = {
+    user_repo.ParentBindingRepairApplyDisposition.SKIPPED_CHANGED: (
+        AccountErrorCode.BINDING_REPAIR_PREVIEW_CHANGED
+    ),
+    user_repo.ParentBindingRepairApplyDisposition.CONFLICT: (
+        AccountErrorCode.BINDING_REPAIR_CONFLICT
+    ),
+    user_repo.ParentBindingRepairApplyDisposition.SKIPPED_INVALID: (
+        AccountErrorCode.BINDING_REPAIR_INVALID
+    ),
+    user_repo.ParentBindingRepairApplyDisposition.RETRYABLE: (
+        AccountErrorCode.BINDING_REPAIR_TEMPORARILY_UNAVAILABLE
+    ),
+}
 @router.post(
     "/parent-bindings/status",
     response_model=ParentBindingStatusTransitionResponse,
@@ -3471,12 +3439,7 @@ async def transition_parent_binding_status(
     if user.get("role") != "admin":
         raise SecurityDecisionError(SecurityErrorCode.ACTION_NOT_ALLOWED, correlation_id)
     if body.status == body.expected_status:
-        return _relationship_status_error(
-            code="relationship_status_invalid",
-            message="Choose a different relationship status.",
-            correlation_id=correlation_id,
-            status_code=422,
-        )
+        raise AccountViolation(AccountErrorCode.RELATIONSHIP_STATUS_INVALID)
     result = user_repo.transition_parent_student_relationship_status(
         parent_id=body.parent_id,
         student_id=body.student_id,
@@ -3489,19 +3452,9 @@ async def transition_parent_binding_status(
         updated_at=_now_iso(),
     )
     if result.disposition is user_repo.ParentBindingStatusDisposition.CONFLICT:
-        return _relationship_status_error(
-            code="relationship_status_conflict",
-            message="The relationship changed. Refresh and retry.",
-            correlation_id=correlation_id,
-            status_code=409,
-        )
+        raise AccountViolation(AccountErrorCode.RELATIONSHIP_STATUS_CONFLICT)
     if result.disposition is user_repo.ParentBindingStatusDisposition.RETRYABLE:
-        return _relationship_status_error(
-            code="relationship_status_temporarily_unavailable",
-            message="The relationship update is temporarily unavailable. Try again later.",
-            correlation_id=correlation_id,
-            status_code=503,
-        )
+        raise AccountViolation(AccountErrorCode.RELATIONSHIP_STATUS_TEMPORARILY_UNAVAILABLE)
     assert result.status is not None and result.version is not None
     # Visibility is the union of the legacy binding and the parent-link table, so
     # revoking only the legacy row would leave an administrator believing access was
@@ -3511,12 +3464,7 @@ async def transition_parent_binding_status(
         student_id=body.student_id,
         actor=user,
     ):
-        return _relationship_status_error(
-            code="relationship_status_conflict",
-            message="The relationship changed. Refresh and retry.",
-            correlation_id=correlation_id,
-            status_code=409,
-        )
+        raise AccountViolation(AccountErrorCode.RELATIONSHIP_STATUS_CONFLICT)
     return ParentBindingStatusTransitionResponse(
         disposition=result.disposition,
         status=result.status,
@@ -3553,27 +3501,6 @@ def _revoke_parent_link_side(
 
 
 
-def _relationship_status_error(
-    *, code: str, message: str, correlation_id: str | None, status_code: int
-) -> JSONResponse:
-    # Inside `detail`, as every refusal is (#272). The codes become registered
-    # rule violations with the rest of the admin bodies (#275).
-    safe_correlation_id = normalize_correlation_id(correlation_id)
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "detail": {
-                "code": code,
-                "message": message,
-                "correlationId": safe_correlation_id,
-            }
-        },
-        headers={"X-Correlation-ID": safe_correlation_id},
-    )
-
-
-
-
 @router.get("/reports/ops", response_model=ReportOperationListResponse)
 async def list_report_operations(
     limit: int = Query(default=50, ge=1, le=100),
@@ -3588,7 +3515,7 @@ async def list_report_operations(
     try:
         last_key = report_repo.decode_admin_page_token(next_token)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
+        raise AccountViolation(AccountErrorCode.PAGE_TOKEN_INVALID) from exc
 
     result = report_repo.list_reports_for_admin(
         status=status,
@@ -3904,7 +3831,7 @@ async def list_recovery_jobs(
     try:
         last_key = report_repo.decode_recovery_job_page_token(next_token)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
+        raise AccountViolation(AccountErrorCode.PAGE_TOKEN_INVALID) from exc
     result = report_repo.list_recovery_jobs(limit=limit, last_key=last_key)
     items = [_recovery_job_response(item) for item in _admin_items(result)]
     return RecoveryJobListResponse(
@@ -3922,7 +3849,7 @@ async def get_recovery_job(
     """Get one async report recovery job."""
     job = report_repo.get_recovery_job(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Recovery job not found")
+        raise AccountViolation(AccountErrorCode.RECOVERY_JOB_NOT_FOUND)
     return _recovery_job_response(job)
 
 
@@ -3935,11 +3862,11 @@ async def list_recovery_job_results(
 ):
     """List metadata-only target results for one async recovery job."""
     if not report_repo.get_recovery_job(job_id):
-        raise HTTPException(status_code=404, detail="Recovery job not found")
+        raise AccountViolation(AccountErrorCode.RECOVERY_JOB_NOT_FOUND)
     try:
         last_key = report_repo.decode_recovery_job_target_page_token(next_token, job_id)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
+        raise AccountViolation(AccountErrorCode.PAGE_TOKEN_INVALID) from exc
     result = report_repo.list_recovery_job_targets(job_id, limit=limit, last_key=last_key)
     items = [_recovery_job_target_response(item) for item in _admin_items(result)]
     return RecoveryJobTargetsResponse(
@@ -4083,7 +4010,7 @@ async def list_report_audit_events(
     try:
         last_key = report_repo.decode_audit_page_token(next_token, f"REPORT#{report_id}")
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
+        raise AccountViolation(AccountErrorCode.PAGE_TOKEN_INVALID) from exc
 
     result = report_repo.list_report_audit_events(report_id, limit=limit, last_key=last_key)
     items = [_report_audit_event_response(item) for item in _admin_items(result)]
@@ -4109,7 +4036,7 @@ async def list_recovery_job_audit_events(
     try:
         last_key = report_repo.decode_audit_page_token(next_token, f"REPORT_RECOVERY_JOB#{job_id}")
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid pagination token") from exc
+        raise AccountViolation(AccountErrorCode.PAGE_TOKEN_INVALID) from exc
 
     result = report_repo.list_recovery_job_audit_events(job_id, limit=limit, last_key=last_key)
     items = [_report_audit_event_response(item) for item in _admin_items(result)]
@@ -4124,7 +4051,7 @@ async def list_recovery_job_audit_events(
 def _get_report_or_404(parent_id: str, student_id: str, week_start: str) -> dict:
     report = report_repo.get_report_for_child_by_week(parent_id, student_id, week_start)
     if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+        raise AccountViolation(AccountErrorCode.REPORT_NOT_FOUND)
     return report
 
 

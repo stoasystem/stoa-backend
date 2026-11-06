@@ -7,6 +7,7 @@ a key, a key missing a language, or a translation whose `{params}` differ.
 """
 
 from stoa.services.message_catalog.errors import (
+    account,
     ask_question,
     attachment,
     billing,
@@ -26,6 +27,7 @@ _DOMAINS = (
     teacher_reply,
     parent_link,
     billing,
+    account,
 )
 
 

@@ -6,6 +6,7 @@ from stoa.config import Settings, get_settings
 from stoa.deps import get_current_user
 from stoa.routers import auth
 from stoa.services import locale_service
+from rule_violation_helpers import assert_violation
 
 
 def _settings() -> Settings:
@@ -167,8 +168,7 @@ def test_update_locale_preference_rejects_unsupported_locale(monkeypatch):
 
     response = _client().patch("/auth/me/preferences/locale", json={"preferredLocale": "es"})
 
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Unsupported locale"
+    assert_violation(response, "locale_not_supported")
 
 
 # ── Accept-Language is negotiated by weight (#20) ───────────────────────────

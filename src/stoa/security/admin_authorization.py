@@ -10,6 +10,7 @@ from typing import Literal, ParamSpec, Protocol, TypeVar, runtime_checkable
 from fastapi import Depends, HTTPException, Request
 
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
+from stoa.rule_violation import RuleViolation
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.security.authorization import (
     AuthorizationAction,
@@ -407,7 +408,7 @@ def admin_target_provider(
                     context.policy,
                     context.actor,
                 )
-            except HTTPException:
+            except RuleViolation:
                 raise
             except _ResolvedTargetNotFound as exc:
                 raise SecurityDecisionError(
@@ -643,7 +644,7 @@ async def _target(
                 values.setdefault("student_id", student_id)
             if isinstance(parent_id, str):
                 values.setdefault("parent_id", parent_id)
-    except (HTTPException, SecurityDecisionError):
+    except SecurityDecisionError:
         raise
     except Exception as exc:
         raise SecurityDecisionError(
@@ -778,7 +779,7 @@ async def admin_operation(
         }
     try:
         resource_id, student_id = await _target(request, policy, actor, correlation_id)
-    except (HTTPException, SecurityDecisionError) as exc:
+    except SecurityDecisionError as exc:
         await _record_admin_decision(
             actor=actor,
             resource=provisional_ref,

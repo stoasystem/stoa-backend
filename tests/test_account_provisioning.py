@@ -16,7 +16,7 @@ import time
 from typing import Any
 from uuid import uuid4
 
-from fastapi import HTTPException
+from stoa.rule_violation import RuleViolation
 import pytest
 from botocore.exceptions import ClientError
 from fakes.dynamodb import FakeTable
@@ -290,10 +290,10 @@ def _claim(
     )
 
 
-def _rejection(exc_info: pytest.ExceptionInfo[HTTPException]) -> bytes:
+def _rejection(exc_info: pytest.ExceptionInfo[RuleViolation]) -> bytes:
     error = exc_info.value
     return json.dumps(
-        {"status": error.status_code, "detail": error.detail}, sort_keys=True
+        {"status": error.status_code, "code": str(error.code), "params": dict(error.params)}, sort_keys=True
     ).encode("utf-8")
 
 
@@ -338,19 +338,19 @@ def test_同一令牌第二次认领被拒(table: FakeAccountTable) -> None:
     first = _claim(token=issued["activationToken"])
     assert first["status"] == "active"
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RuleViolation) as exc_info:
         _claim(token=issued["activationToken"], at=_moment(120))
     assert exc_info.value.status_code == 409
-    assert exc_info.value.detail == {"code": "invitation_invalid"}
+    assert exc_info.value.code == "invitation_invalid"
 
 
 def test_过期令牌给出明确原因而不是崩溃(table: FakeAccountTable) -> None:
     issued = _invite(table, expiry=60)
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RuleViolation) as exc_info:
         _claim(token=issued["activationToken"], at=_moment(3600))
     assert exc_info.value.status_code == 409
-    assert exc_info.value.detail == {"code": "invitation_expired"}
+    assert exc_info.value.code == "invitation_expired"
 
 
 def test_不存在的令牌与已使用的令牌响应逐字节相同且访问序列相同(
@@ -362,12 +362,12 @@ def test_不存在的令牌与已使用的令牌响应逐字节相同且访问�
     missing_token = secrets.token_urlsafe(32)
 
     table.access.clear()
-    with pytest.raises(HTTPException) as used_error:
+    with pytest.raises(RuleViolation) as used_error:
         _claim(token=used_token, at=_moment(120))
     used_access = list(table.access)
 
     table.access.clear()
-    with pytest.raises(HTTPException) as missing_error:
+    with pytest.raises(RuleViolation) as missing_error:
         _claim(token=missing_token, at=_moment(120))
     missing_access = list(table.access)
 
@@ -385,7 +385,7 @@ def test_不存在的令牌与已使用的令牌耗时不可区分(table: FakeAc
         start = time.perf_counter()
         try:
             _claim(token=token, at=_moment(120))
-        except HTTPException:
+        except RuleViolation:
             pass
         return time.perf_counter() - start
 
@@ -405,9 +405,9 @@ def test_撤销的令牌与不存在的令牌响应相同(table: FakeAccountTabl
         actor=_admin(), invitation_id=issued["invitationId"], now=lambda: _moment(30)
     )
 
-    with pytest.raises(HTTPException) as revoked_error:
+    with pytest.raises(RuleViolation) as revoked_error:
         _claim(token=issued["activationToken"], at=_moment(60))
-    with pytest.raises(HTTPException) as missing_error:
+    with pytest.raises(RuleViolation) as missing_error:
         _claim(token=secrets.token_urlsafe(32), at=_moment(60))
     assert _rejection(revoked_error) == _rejection(missing_error)
 
@@ -439,12 +439,12 @@ def test_重复接线同一账号被拒且不会拿到第二个编号(table: Fak
     issued = _invite(table)
     account_id = issued["userId"]
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RuleViolation) as exc_info:
         account_provisioning_service._attach_account_number(
             account_id=account_id, role="student", now=_moment(10)
         )
     assert exc_info.value.status_code == 409
-    assert exc_info.value.detail == {"code": "account_number_already_assigned"}
+    assert exc_info.value.code == "account_number_already_assigned"
 
     claims = [
         row
@@ -472,7 +472,7 @@ def test_条件写本身拦住第二个编号_即使调用方读到旧快照(
     stale.pop("account_number")
     monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(stale))
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RuleViolation) as exc_info:
         account_provisioning_service._attach_account_number(
             account_id=account_id, role="student", now=_moment(10)
         )
@@ -555,9 +555,9 @@ def test_重发邀请换新令牌但沿用同一账号与编号(table: FakeAccou
     assert reissued["accountNumber"] == issued["accountNumber"]
     assert reissued["activationToken"] != issued["activationToken"]
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RuleViolation) as exc_info:
         _claim(token=issued["activationToken"], at=_moment(60))
-    assert exc_info.value.detail == {"code": "invitation_invalid"}
+    assert exc_info.value.code == "invitation_invalid"
     assert _claim(token=reissued["activationToken"], at=_moment(60))["status"] == "active"
 
 
@@ -569,12 +569,12 @@ def test_非管理员不能发邀请也不能分配账号(table: FakeAccountTabl
         {"user_id": "parent-1", "role": "parent", "account_status": "active"},
         {"user_id": "admin-2", "role": "admin", "account_status": "active"},
     ):
-        with pytest.raises(HTTPException) as invite_error:
+        with pytest.raises(RuleViolation) as invite_error:
             account_provisioning_service.invite_account(
                 actor=actor, role="student", email="x@example.ch", now=_moment
             )
         assert invite_error.value.status_code == 403
-        with pytest.raises(HTTPException) as assign_error:
+        with pytest.raises(RuleViolation) as assign_error:
             account_provisioning_service.assign_account(
                 actor=actor,
                 role="student",
@@ -644,7 +644,7 @@ def test_并发两次认领同一令牌只有一个能建号(monkeypatch: pytest
     def attempt() -> None:
         try:
             outcomes.append(_claim(token=issued["activationToken"], provider=provider))
-        except HTTPException as error:
+        except RuleViolation as error:
             outcomes.append(error)
 
     threads = [threading.Thread(target=attempt) for _ in range(2)]
@@ -654,10 +654,10 @@ def test_并发两次认领同一令牌只有一个能建号(monkeypatch: pytest
         thread.join(timeout=10)
 
     accepted = [item for item in outcomes if isinstance(item, dict)]
-    rejected = [item for item in outcomes if isinstance(item, HTTPException)]
+    rejected = [item for item in outcomes if isinstance(item, RuleViolation)]
     assert len(accepted) == 1
     assert len(rejected) == 1
-    assert rejected[0].detail == {"code": "invitation_invalid"}
+    assert rejected[0].code == "invitation_invalid"
     assert len(provider.created) == 1
 
 
@@ -669,7 +669,7 @@ def test_并发两次认领同一令牌只有一个能建号(monkeypatch: pytest
 
 def test_分配途中provider失败后同一邮箱仍可重新分配(table: FakeAccountTable) -> None:
     """A provider outage costs a number, never the address."""
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RuleViolation) as exc_info:
         account_provisioning_service.assign_account(
             actor=_admin(),
             role="student",
@@ -705,7 +705,7 @@ def test_认领途中绑组失败后同一令牌仍可再次认领(table: FakeAc
     issued = _invite(table)
     provider = RecordingProvider(group_failures=1)
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RuleViolation) as exc_info:
         _claim(token=issued["activationToken"], provider=provider)
     assert exc_info.value.status_code == 503
 
@@ -744,10 +744,10 @@ def test_邀请途中编号分配失败不留下无法重开的账号(
     table: FakeAccountTable, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _numbering_fails_once(monkeypatch)
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RuleViolation) as exc_info:
         _invite(table, email="wedge@example.ch")
     assert exc_info.value.status_code == 503
-    assert exc_info.value.detail == {"code": "account_number_unavailable"}
+    assert exc_info.value.code == "account_number_unavailable"
     assert [row["email"] for row in table.profiles()] != ["wedge@example.ch"]
 
     reopened = _invite(table, email="wedge@example.ch", at=_moment(10))
@@ -760,7 +760,7 @@ def test_半途失败的账号无法被继续推进(
 ) -> None:
     """The parked row is terminal: it cannot be talked back into an active account."""
     _numbering_fails_once(monkeypatch)
-    with pytest.raises(HTTPException):
+    with pytest.raises(RuleViolation):
         _invite(table, email="parked@example.ch")
 
     parked = [
@@ -772,7 +772,7 @@ def test_半途失败的账号无法被继续推进(
     assert len(parked) == 1
     # The released address carries no `@`, so it can never collide with a real one.
     assert "@" not in str(parked[0]["email"])
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RuleViolation) as exc_info:
         account_provisioning_service._transition_account_status(
             account_id=str(parked[0]["user_id"]),
             expected_status="invited",
@@ -949,7 +949,7 @@ def test_计时闸本身能识别出一个人造预言机(
         start = time.perf_counter()
         try:
             _claim(token=token, at=_moment(120))
-        except HTTPException:
+        except RuleViolation:
             pass
         return time.perf_counter() - start
 
@@ -973,12 +973,12 @@ def test_拿已作废的邀请id重发被拒绝(table: FakeAccountTable) -> None
         actor=_admin(), invitation_id=issued["invitationId"], now=lambda: _moment(30)
     )
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RuleViolation) as exc_info:
         account_provisioning_service.reissue_invitation(
             actor=_admin(), invitation_id=issued["invitationId"], now=lambda: _moment(60)
         )
     assert exc_info.value.status_code == 409
-    assert exc_info.value.detail == {"code": "invitation_not_reissuable"}
+    assert exc_info.value.code == "invitation_not_reissuable"
 
 
 def test_invitation_reissue_recovers_after_transient_replacement_write_failure(
@@ -1021,7 +1021,7 @@ def test_invitation_reissue_recovers_after_transient_replacement_write_failure(
     ]
     assert len(live) == 1
     assert live[0]["invitation_id"] == reissued["invitationId"]
-    with pytest.raises(HTTPException):
+    with pytest.raises(RuleViolation):
         _claim(token=issued["activationToken"], at=_moment(90))
     assert _claim(token=reissued["activationToken"], at=_moment(90))["status"] == "active"
 
@@ -1089,7 +1089,7 @@ def test_任何时刻一个账号最多一个issued邀请(table: FakeAccountTabl
     second = account_provisioning_service.reissue_invitation(
         actor=_admin(), invitation_id=first["invitationId"], now=lambda: _moment(60)
     )
-    with pytest.raises(HTTPException):
+    with pytest.raises(RuleViolation):
         account_provisioning_service.reissue_invitation(
             actor=_admin(), invitation_id=issued["invitationId"], now=lambda: _moment(90)
         )
@@ -1106,10 +1106,10 @@ def test_任何时刻一个账号最多一个issued邀请(table: FakeAccountTabl
 def test_邮箱大小写不同视为同一账号(table: FakeAccountTable) -> None:
     _invite(table, email="case@example.ch")
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RuleViolation) as exc_info:
         _invite(table, email="Case@Example.CH", at=_moment(10))
     assert exc_info.value.status_code == 409
-    assert exc_info.value.detail == {"code": "account_exists"}
+    assert exc_info.value.code == "account_exists"
     assert len(table.profiles()) == 1
 
 
@@ -1136,7 +1136,7 @@ def test_归还令牌只认本次烧掉的那一行(table: FakeAccountTable) -> 
 
     burned = _invite(table, email="burned@example.ch", at=_moment(10))
     provider = RecordingProvider(group_failures=1)
-    with pytest.raises(HTTPException):
+    with pytest.raises(RuleViolation):
         _claim(token=burned["activationToken"], provider=provider)
     burned_digest = sha256(burned["activationToken"].encode("utf-8")).hexdigest()
     # The claim already returned this one; a replayed restore finds it at version 1.
@@ -1240,7 +1240,7 @@ def test_并发两次同一邮箱同一角色只有一个能建号(monkeypatch: 
     def attempt() -> None:
         try:
             outcomes.append(_invite(fake, email="twin@example.ch", role="student"))
-        except HTTPException as error:
+        except RuleViolation as error:
             outcomes.append(error)
 
     threads = [threading.Thread(target=attempt) for _ in range(2)]
@@ -1250,10 +1250,10 @@ def test_并发两次同一邮箱同一角色只有一个能建号(monkeypatch: 
         thread.join(timeout=10)
 
     accepted = [item for item in outcomes if isinstance(item, dict)]
-    rejected = [item for item in outcomes if isinstance(item, HTTPException)]
+    rejected = [item for item in outcomes if isinstance(item, RuleViolation)]
     assert len(accepted) == 1
     assert len(rejected) == 1
-    assert rejected[0].detail == {"code": "account_exists"}
+    assert rejected[0].code == "account_exists"
     # The pre-read refused neither of them: both were told the address was free, which
     # is exactly the state the conditional claim underneath has to survive.
     assert pre_reads == [None, None]
@@ -1280,10 +1280,10 @@ def test_同一邮箱不同角色各开一个账号(table: FakeAccountTable) -> 
         "EMAIL#both@example.ch#teacher",
     ]
     # Weaker on the pair is not weaker on the duplicate it was always there to refuse.
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RuleViolation) as exc_info:
         _invite(table, role="teacher", email="both@example.ch", at=_moment(20))
     assert exc_info.value.status_code == 409
-    assert exc_info.value.detail == {"code": "account_exists"}
+    assert exc_info.value.code == "account_exists"
 
 
 def test_占位行与profile行是同一次提交(table: FakeAccountTable) -> None:
@@ -1299,10 +1299,10 @@ def test_占位行与profile行是同一次提交(table: FakeAccountTable) -> No
     # only thing left that can refuse this opening.
     assert user_repo.get_user_by_email_and_role("taken@example.ch", "student") is None
 
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RuleViolation) as exc_info:
         _invite(table, email="taken@example.ch")
     assert exc_info.value.status_code == 409
-    assert exc_info.value.detail == {"code": "account_exists"}
+    assert exc_info.value.code == "account_exists"
     assert table.profiles() == []
     assert [key for key in table.rows if key[1] == "ACCOUNT_FENCE"] == []
     assert [str(row["PK"]) for row in table.claims()] == [str(taken["PK"])]
@@ -1423,7 +1423,7 @@ def test_认领失败不会把地址还给别人(table: FakeAccountTable) -> Non
     accounts let through, which is the one direction this key may not move.
     """
     issued = _invite(table, email="held@example.ch")
-    with pytest.raises(HTTPException):
+    with pytest.raises(RuleViolation):
         _claim(
             token=issued["activationToken"],
             provider=RecordingProvider(group_failures=1),
@@ -1432,9 +1432,9 @@ def test_认领失败不会把地址还给别人(table: FakeAccountTable) -> Non
     assert [str(row["PK"]) for row in table.claims()] == [
         "EMAIL#held@example.ch#student"
     ]
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(RuleViolation) as exc_info:
         _invite(table, email="held@example.ch", at=_moment(30))
-    assert exc_info.value.detail == {"code": "account_exists"}
+    assert exc_info.value.code == "account_exists"
 
 
 def test_大小写不同的邮箱落在同一个占位行(table: FakeAccountTable) -> None:

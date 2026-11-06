@@ -18,6 +18,7 @@ from stoa.services import (
     subscription_service,
 )
 from actor_helpers import install_actor_overrides
+from rule_violation_helpers import assert_violation
 
 
 @pytest.fixture(autouse=True)
@@ -598,8 +599,7 @@ def test_admin_account_operations_returns_404_for_missing_parent(monkeypatch):
 
     response = client.get("/admin/account-operations/parents/missing-parent")
 
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Parent not found"
+    assert_violation(response, "account_not_found")
 
 
 def test_parent_can_view_plan_options(monkeypatch):

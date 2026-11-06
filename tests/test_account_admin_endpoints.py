@@ -431,9 +431,15 @@ def test_不存在的令牌与已用过的令牌在路由层逐字节相同(tabl
         json={"token": "z" * len(issued["activationToken"]), "password": "Startpass1"},
     )
 
-    assert spent.status_code == never_issued.status_code == 409
-    assert spent.content == never_issued.content
-    assert json.loads(spent.content) == {"detail": {"code": "invitation_invalid"}}
+    assert_violation(spent, "invitation_invalid")
+    assert _without_correlation_id(spent) == _without_correlation_id(never_issued)
+
+
+def _without_correlation_id(response) -> bytes:
+    """The body's bytes, with the one per-request value taken out."""
+    return response.content.replace(
+        response.headers["X-Correlation-ID"].encode("ascii"), b"<correlation-id>"
+    )
 
 
 def test_路由层没有自己的令牌拒绝分支(table: AccountAdminTable) -> None:
@@ -480,8 +486,7 @@ def test_过期令牌与未知令牌仍然是两条服务层自己的答案(tabl
         json={"token": issued["activationToken"], "password": "Startpass1"},
     )
 
-    assert response.status_code == 409
-    assert response.json() == {"detail": {"code": "invitation_expired"}}
+    assert_violation(response, "invitation_expired")
 
 
 # ---------------------------------------------------------------------------
