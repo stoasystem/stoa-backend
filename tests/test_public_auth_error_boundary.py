@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from botocore.exceptions import ClientError
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -8,14 +10,13 @@ from types import SimpleNamespace
 
 from stoa.config import Settings, get_settings
 from stoa.routers import auth
-from stoa.security.client_error_actions import CLIENT_ERROR_ACTIONS
 from stoa.security.errors import SecurityErrorCode
 from stoa.security.public_auth_errors import (
     PublicAuthOperation,
     normalize_cognito_failure,
     public_auth_violation,
 )
-from stoa.rule_violation import violation_response
+from stoa.rule_violation import registered_codes, render_message, violation_response
 
 
 def public_auth_error_response(failure):
@@ -42,7 +43,7 @@ def _error(code: str, message: str = "provider-secret-canary") -> ClientError:
 def test_mapping_is_operation_aware_and_exhaustive(operation, provider_code, expected):
     failure = normalize_cognito_failure(operation, _error(provider_code), "corr-known")
     assert failure.code is expected
-    assert failure.code in CLIENT_ERROR_ACTIONS
+    assert failure.code.value in registered_codes()
 
 
 @pytest.mark.parametrize("operation", list(PublicAuthOperation))
@@ -52,11 +53,14 @@ def test_unknown_provider_failure_has_exact_fields_correlation_retry_and_redacti
     assert response.status_code == 503
     assert response.headers["retry-after"] == "15"
     assert response.headers["x-correlation-id"] == "corr-unknown"
-    assert response.body == (
-        b'{"detail":{"code":"identity_provider_unavailable","message":"Try again in a few minutes. '
-        b'If the problem continues, contact support and share the reference shown.",'
-        b'"correlationId":"corr-unknown"}}'
-    )
+    # Rendered outside a request: the catalog's default language.
+    assert json.loads(response.body) == {
+        "detail": {
+            "code": "identity_provider_unavailable",
+            "message": render_message(SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE, "de"),
+            "correlationId": "corr-unknown",
+        }
+    }
     exposed = response.body.decode().lower()
     assert "secretunknowncode" not in exposed
     assert "provider-secret-canary" not in exposed
@@ -75,7 +79,7 @@ def test_rate_limit_is_bounded_without_automatic_write_replay():
     response = public_auth_error_response(failure)
     assert response.status_code == 429
     assert "retry-after" not in response.headers
-    assert CLIENT_ERROR_ACTIONS[failure.code].retry.automatic is False
+    assert failure.code.contract.retryable is False
 
 
 @pytest.mark.parametrize(
@@ -168,7 +172,7 @@ def test_every_public_auth_endpoint_redacts_unknown_provider_canary(
     assert response.json() == {
         "detail": {
             "code": "identity_provider_unavailable",
-            "message": "Try again in a few minutes. If the problem continues, contact support and share the reference shown.",
+            "message": render_message(SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE, "de"),
             "correlationId": response.headers["X-Correlation-ID"],
         }
     }
@@ -197,8 +201,7 @@ def test_generated_user_copy_is_actionable_and_provider_free():
         SecurityErrorCode.INVALID_TOKEN,
     }
     for code in public_auth_codes:
-        action = CLIENT_ERROR_ACTIONS[code]
-        copy = action.safe_copy.lower()
+        copy = render_message(code, "en").lower()
         assert any(
             instruction in copy
             for instruction in ("sign in", "verify", "complete", "contact support", "try", "wait", "choose", "check", "request")

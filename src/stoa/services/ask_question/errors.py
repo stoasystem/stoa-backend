@@ -31,16 +31,16 @@ class AskQuestionErrorCode(StrEnum):
 # A refused first message names the conversation already made (#61).
 _NAMES_CONVERSATION = frozenset({"conversationId"})
 
+# Each code's message is the catalog's `error.<code>`
+# (`stoa.services.message_catalog.errors.ask_question`).
 ASK_QUESTION_ERROR_REGISTRY: dict[AskQuestionErrorCode, RuleContract] = {
     AskQuestionErrorCode.MESSAGE_IDEMPOTENCY_CONFLICT: RuleContract(
         409,
-        "This message key was already used for a different request.",
         action=AttachmentClientAction.SELECT_FILE,
         public_fields=_NAMES_CONVERSATION,
     ),
     AskQuestionErrorCode.MESSAGE_IN_PROGRESS: RuleContract(
         409,
-        "This message is still being processed. Try again shortly.",
         action=AttachmentClientAction.RETRY_LATER,
         retryable=True,
         idempotent_only=True,
@@ -49,38 +49,32 @@ ASK_QUESTION_ERROR_REGISTRY: dict[AskQuestionErrorCode, RuleContract] = {
     ),
     AskQuestionErrorCode.MESSAGE_DAILY_LIMIT: RuleContract(
         429,
-        "Your daily message limit is reached. Try again tomorrow.",
         action=AttachmentClientAction.RETRY_LATER,
         public_fields=_NAMES_CONVERSATION,
     ),
     AskQuestionErrorCode.MESSAGE_FAILED: RuleContract(
         409,
-        "This message could not be completed. Send it again.",
         action=AttachmentClientAction.RETRY_LATER,
         public_fields=_NAMES_CONVERSATION,
     ),
     AskQuestionErrorCode.MESSAGE_COMMAND_EXPIRED: RuleContract(
         409,
-        "This message request expired. Send it again.",
         action=AttachmentClientAction.RETRY_LATER,
         public_fields=_NAMES_CONVERSATION,
     ),
     AskQuestionErrorCode.MESSAGE_COMMAND_NOT_FOUND: RuleContract(
         409,
-        "This message request is unavailable. Send it again.",
         action=AttachmentClientAction.RETRY_LATER,
         public_fields=_NAMES_CONVERSATION,
     ),
     AskQuestionErrorCode.ALLOWANCE_EXHAUSTED: RuleContract(
         429,
-        "Weekly AI token allowance is exhausted.",
         action=AttachmentClientAction.RETRY_LATER,
         public_fields=_NAMES_CONVERSATION,
     ),
     # Nothing was paid for: the same message may be sent again.
     AskQuestionErrorCode.PROVIDER_TOKEN_COUNT_UNAVAILABLE: RuleContract(
         503,
-        "Token admission is temporarily unavailable. Retry this message.",
         action=AttachmentClientAction.RETRY_LATER,
         public_fields=_NAMES_CONVERSATION,
     ),
@@ -88,7 +82,6 @@ ASK_QUESTION_ERROR_REGISTRY: dict[AskQuestionErrorCode, RuleContract] = {
     # is kept: sending the same message again returns it once settling succeeds.
     AskQuestionErrorCode.ALLOWANCE_UNAVAILABLE: RuleContract(
         503,
-        "This answer is safely recoverable while token accounting finishes.",
         action=AttachmentClientAction.RETRY_LATER,
         public_fields=_NAMES_CONVERSATION,
     ),

@@ -17,6 +17,7 @@ from stoa.db.repositories import attachment_repo
 from stoa.deps import get_actor, get_s3_client
 from stoa.models import attachment as attachment_models
 from stoa.routers import files
+from stoa.rule_violation import render_message
 from stoa.security import attachment_errors
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import attachment_service
@@ -333,7 +334,8 @@ def test_delete_referenced_attachment_uses_stable_actionable_in_use_contract() -
     assert code is not None
     contract = attachment_errors.ATTACHMENT_ERROR_REGISTRY[code]
     assert contract.http_status == 409
-    assert "conversation" in contract.safe_message.lower() or "question" in contract.safe_message.lower()
+    message = render_message(code, "en").lower()
+    assert "conversation" in message or "question" in message
     repository = _OwnerRepository([_saved_attachment(ref_count=1)])
     with pytest.raises(attachment_errors.AttachmentDecisionError) as captured:
         attachment_service.delete_saved_attachment(
@@ -501,7 +503,9 @@ def test_referenced_delete_route_returns_friendly_stable_in_use_action(monkeypat
         "get_attachment",
         lambda _attachment_id, **_kwargs: _saved_attachment(ref_count=1),
     )
-    response = _client(monkeypatch).delete("/files/attachments/attachment-1")
+    response = _client(monkeypatch).delete(
+        "/files/attachments/attachment-1", headers={"Accept-Language": "en"}
+    )
     assert response.status_code == 409
     assert response.json()["detail"]["code"] == "attachment_in_use"
     assert "conversation" in response.json()["detail"]["message"].lower()
