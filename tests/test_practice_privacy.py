@@ -491,7 +491,7 @@ def test_anonymous_actor_cannot_use_privileged_answer_route(monkeypatch):
             ),
             "active",
         ),
-        ("teacher", _answer_assignment(), "disabled"),
+        ("teacher", _answer_assignment(), "suspended"),
         ("student", None, "active"),
         ("parent", None, "active"),
     ],
