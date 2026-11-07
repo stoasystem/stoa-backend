@@ -30025,6 +30025,7 @@
     },
     "/practice/challenges/{challenge_id}/answer": {
       "post": {
+        "description": "Judge a practice answer in the reader's language and record it (`answer_recording`).",
         "operationId": "submit_answer_practice_challenges__challenge_id__answer_post",
         "parameters": [
           {

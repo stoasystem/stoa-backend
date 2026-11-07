@@ -8,6 +8,7 @@ from stoa.rule_violation import render_message
 from stoa.services.practice_errors import PracticeErrorCode
 from stoa.deps import get_actor
 from stoa.routers import practice
+from stoa.services import answer_recording
 from stoa.security.authorization import AuthorizationFacts
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.route_authorization import get_authorization_fact_repository
@@ -208,7 +209,7 @@ def _install_answer_dependencies(monkeypatch, challenge: dict | None = None) -> 
         "record_practice_attempt",
         lambda **_kwargs: None,
     )
-    monkeypatch.setattr(practice, "_record_practice_usage", lambda **_kwargs: None)
+    monkeypatch.setattr(answer_recording, "record_practice_usage", lambda **_kwargs: None)
     return item
 
 

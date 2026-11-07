@@ -367,6 +367,22 @@ _COPY: dict[str, dict[str, str]] = {
         "fr": "Général",
         "it": "Generale",
     },
+    # ── what a student is told after a practice answer (#128) ───────────
+    #
+    # Only for an exercise that brings no feedback of its own; an exercise's
+    # own feedback is content, in `translations` where it has been translated.
+    "practice.feedback.correct": {
+        "de": "Richtig!",
+        "en": "Correct!",
+        "fr": "Exact !",
+        "it": "Giusto!",
+    },
+    "practice.feedback.incorrect": {
+        "de": "Nicht ganz. Prüfe deinen Rechenweg und versuche es nochmal.",
+        "en": "Not quite. Check your working and try again.",
+        "fr": "Pas tout à fait. Vérifie ton raisonnement et réessaie.",
+        "it": "Non proprio. Controlla il tuo procedimento e riprova.",
+    },
     # ── year groups, named for the assistant in the answer's language ────
     #
     # `learning_profile_service.GRADE_LEVEL_CODES` is the set; these are the

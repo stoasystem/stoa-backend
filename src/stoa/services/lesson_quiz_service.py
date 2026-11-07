@@ -12,9 +12,6 @@ from __future__ import annotations
 import random
 import secrets
 from collections.abc import Collection, Sequence
-from typing import Any
-
-from stoa.services import answer_judging
 
 #: Wrong answers a quiz forgives; the next one loses it.
 QUIZ_MAX_MISTAKES = 1
@@ -90,11 +87,6 @@ def quiz_lost(mistakes: int) -> bool:
 
 def hearts_left(mistakes: int) -> int:
     return max(QUIZ_HEARTS - mistakes, 0)
-
-
-def judge_answer(submitted: Any, correct_answer: Any) -> bool:
-    """Compare an answer with a bare key; `answer_judging` holds the rules."""
-    return answer_judging.judge(submitted, correct_answer)
 
 
 def new_token() -> str:

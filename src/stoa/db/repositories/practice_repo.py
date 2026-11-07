@@ -35,6 +35,9 @@ _POINTER_FIELDS = {
     "challenge_content_hash",
 }
 _MAX_CHALLENGE_PAGES = 1000
+#: The shape of a stored submitted answer: a string, or a flat list of strings,
+#: bounded in size (`practice_projection_service.normalize_submitted_answer`).
+SUBMITTED_ANSWER_SCHEMA_VERSION = 1
 
 PRACTICE_PRIVATE_ROW_REGISTRY = frozenset(
     {"progress", "attempt", "legacy_mistake", "usage", "quiz_session", "quiz_credential"}
@@ -608,7 +611,7 @@ def mark_lesson_completed(
 def put_attempt(
     student_id: str,
     challenge_id: str,
-    submitted_answer: Any,
+    submitted_answer: str | list[str],
     correct: bool,
     *,
     subject_id: str = "",
@@ -638,13 +641,11 @@ def put_attempt(
     an answer nobody saved is worse than one marked as unchecked, and it is
     excluded from the reads that decide whether a lesson may be completed and
     whether a knowledge point lights (#93).
-    """
-    from stoa.services.practice_projection_service import (
-        PRACTICE_SUBMITTED_ANSWER_SCHEMA_VERSION,
-        normalize_submitted_answer,
-    )
 
-    normalized_answer = normalize_submitted_answer(submitted_answer)
+    `submitted_answer` is stored as given: the caller normalizes it first
+    (`practice_projection_service.normalize_submitted_answer`), and its shape
+    is the one `SUBMITTED_ANSWER_SCHEMA_VERSION` names.
+    """
     table = get_table()
     generation = _write_generation(student_id, account_fence_generation, table)
     attempt_key = attempt_id or str(uuid.uuid4())
@@ -659,9 +660,9 @@ def put_attempt(
         "topic_id": topic_id,
         "lesson_id": lesson_id,
         "unit_id": unit_id,
-        "student_answer": normalized_answer,
-        "submitted_answer": normalized_answer,
-        "submitted_answer_schema_version": PRACTICE_SUBMITTED_ANSWER_SCHEMA_VERSION,
+        "student_answer": submitted_answer,
+        "submitted_answer": submitted_answer,
+        "submitted_answer_schema_version": SUBMITTED_ANSWER_SCHEMA_VERSION,
         "correct": bool(correct),
         "created_at": created_at or datetime.now(timezone.utc).isoformat(),
     }
@@ -787,7 +788,7 @@ def record_attempt(
     lesson_id: str = "",
     topic_id: str = "",
     attempt_id: str | None = None,
-    student_answer: Any = "",
+    student_answer: str | list[str] = "",
     self_reported: bool = False,
 ) -> dict:
     """Compatibility wrapper for callers migrating to the all-attempt contract."""

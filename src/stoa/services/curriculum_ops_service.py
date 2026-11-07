@@ -524,6 +524,13 @@ def _exercise_payloads(public_id: str, exercises: list[dict[str, Any]]) -> list[
         else:
             item.pop("option_figures", None)
         translations = exercise_localization.normalize_translations(exercise.get("translations"))
+        for text in translations.values():
+            # A translated feedback is held to the stored one's length.
+            for field in ("correct_feedback", "incorrect_feedback"):
+                if field in text:
+                    text[field] = text[field][:MAX_FEEDBACK_LENGTH]
+                    if not text[field]:
+                        del text[field]
         if translations:
             item["translations"] = translations
         else:

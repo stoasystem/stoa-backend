@@ -16,6 +16,7 @@ from stoa.security.authorization import AuthorizationFacts
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import (
+    answer_recording,
     knowledge_map_service,
     knowledge_mastery_service,
     star_quiz_service,
@@ -154,6 +155,7 @@ def _world(monkeypatch, *, completed=(), right=()) -> _World:
         lambda **kwargs: reviews.append((kwargs["challenge"]["challenge_id"], kwargs["correct"])),
     )
     monkeypatch.setattr(practice, "_record_practice_usage", lambda **_k: None)
+    monkeypatch.setattr(answer_recording, "record_practice_usage", lambda **_k: None)
     return _World(table, reviews, done)
 
 

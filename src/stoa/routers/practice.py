@@ -48,13 +48,12 @@ from stoa.security.route_authorization import (
     student_actor_dependency,
 )
 from stoa.services import (
-    answer_judging,
+    answer_recording,
     knowledge_map_service,
     knowledge_mastery_service,
     curriculum_analytics_service,
     curriculum_service,
     entitlement_service,
-    exercise_localization,
     lesson_quiz_service,
     locale_service,
     star_quiz_service,
@@ -325,11 +324,6 @@ def _optional_string_field(
 ) -> str | None:
     value = item.get(field)
     return value if isinstance(value, str) else None
-
-
-def _list_field(item: Mapping[str, object], field: str) -> list[Any] | None:
-    value = item.get(field)
-    return value if isinstance(value, list) else None
 
 
 def _hint_limit_for_student(student_id: str) -> int:
@@ -974,13 +968,10 @@ async def answer_star_quiz(
     if not challenge:
         raise PracticeViolation(_P.STAR_QUIZ_UNAVAILABLE)
     try:
-        student_answer = practice_projection_service.normalize_submitted_answer(body.answer)
-    except ValueError as error:
+        judgement = answer_recording.judge(challenge, body.answer, locale=locale)
+    except answer_recording.AnswerInvalid as error:
         raise PracticeViolation(_P.PRACTICE_ANSWER_INVALID) from error
-
-    correct = answer_judging.judge_challenge(
-        student_answer, exercise_localization.localized(challenge, locale)
-    )
+    correct = judgement.correct
     answers.append({"exerciseId": asking, "correct": correct, "answeredAt": now.isoformat()})
     outcome = star_quiz_service.after_answer(
         paper=paper, answers=[bool(answer["correct"]) for answer in answers]
@@ -1010,12 +1001,11 @@ async def answer_star_quiz(
     elif outcome.status == star_quiz_service.PASSED:
         _light_by_star_quiz(student_id, unit_id, quiz_id, answers, now)
 
-    _record_practice_usage(
-        student_id=student_id,
-        action=usage_ledger_service.PRACTICE_QUIZ_ANSWER_ACTION,
+    answer_recording.record_quiz_answer(
+        student_id,
+        judgement,
         resource_id=f"{quiz_id}:{len(answers)}",
-        metadata={"quizId": quiz_id, "unitId": unit_id, "correct": correct, "status": outcome.status},
-        account_fence_generation=None,
+        metadata={"quizId": quiz_id, "unitId": unit_id, "status": outcome.status},
     )
 
     view = _star_quiz_view({**session, "answers": answers}, answers=answers, locale=locale)
@@ -1356,13 +1346,10 @@ async def answer_lesson_quiz(
         raise PracticeViolation(_P.LESSON_QUIZ_UNAVAILABLE)
 
     try:
-        student_answer = practice_projection_service.normalize_submitted_answer(body.answer)
-    except ValueError as error:
+        judgement = answer_recording.judge(challenge, body.answer, locale=_actor_locale(actor))
+    except answer_recording.AnswerInvalid as error:
         raise PracticeViolation(_P.PRACTICE_ANSWER_INVALID) from error
-
-    correct = answer_judging.judge_challenge(
-        student_answer, exercise_localization.localized(challenge, _actor_locale(actor))
-    )
+    correct = judgement.correct
     mistakes = _as_int(session.get("mistakes"))
     asked, queue = queue[0], queue[1:]
     if not correct:
@@ -1384,12 +1371,11 @@ async def answer_lesson_quiz(
     # left no trace, so a reader's quizzes were invisible to the ledger a
     # parent's and a teacher's reports are built from, and nothing counted
     # how often a paper was taken (independent audit of #92).
-    _record_practice_usage(
-        student_id=actor.user_id,
-        action=usage_ledger_service.PRACTICE_QUIZ_ANSWER_ACTION,
+    answer_recording.record_quiz_answer(
+        actor.user_id,
+        judgement,
         resource_id=lesson_id,
-        metadata={"quizId": quiz_id, "correct": correct, "status": quiz_status},
-        account_fence_generation=None,
+        metadata={"quizId": quiz_id, "status": quiz_status},
     )
 
     view = _quiz_view(
@@ -1495,17 +1481,6 @@ async def complete_lesson(
     }
 
 
-def _next_challenge_id(challenge_id: str, lesson_id: str) -> str | None:
-    challenge_ids = [
-        challenge["challenge_id"] for challenge in practice_repo.get_challenges(lesson_id)
-    ]
-    try:
-        index = challenge_ids.index(challenge_id)
-    except ValueError:
-        return None
-    return challenge_ids[index + 1] if index + 1 < len(challenge_ids) else None
-
-
 @router.post(
     "/challenges/{challenge_id}/answer",
     response_model=PracticeAttemptResult,
@@ -1516,87 +1491,18 @@ async def submit_answer(
     actor: Actor = Depends(_practice_update),
     authorized_challenge: AuthorizedResource = Depends(_authorized_challenge_update),
 ):
-    challenge = dict(authorized_challenge.value)
-
+    """Judge a practice answer in the reader's language and record it (`answer_recording`)."""
     try:
-        student_answer = practice_projection_service.normalize_submitted_answer(
-            body.answer
-        )
-    except ValueError as error:
-        raise PracticeViolation(_P.PRACTICE_ANSWER_INVALID) from error
-    # Shown and judged in the reader's language; the stored row stays as it is,
-    # since its version is what the attempt records.
-    shown = exercise_localization.localized(challenge, _actor_locale(actor))
-    correct = answer_judging.judge_challenge(student_answer, shown)
-
-    versioned_challenge = practice_repo.version_challenge(challenge)
-    lesson_id = str(versioned_challenge.get("lesson_id") or "")
-    next_challenge_id = _next_challenge_id(challenge_id, lesson_id)
-    correct_feedback, incorrect_feedback = practice_projection_service.answer_feedback(
-        versioned_challenge
-    )
-    feedback = correct_feedback if correct else incorrect_feedback
-    created_at = datetime.now(timezone.utc).isoformat()
-
-    try:
-        recorded_attempt = practice_repo.put_attempt(
+        return answer_recording.answer_practice(
             actor.user_id,
-            challenge_id,
-            student_answer,
-            correct,
-            subject_id=_string_field(challenge, "subject_id"),
-            topic_id=_string_field(challenge, "topic_id"),
-            lesson_id=lesson_id,
-            unit_id=_string_field(challenge, "unit_id"),
-            challenge_version=versioned_challenge["challenge_version"],
-            challenge_content_hash=versioned_challenge["challenge_content_hash"],
-            standard_answer=str(
-                shown.get("correct_answer", shown.get("answer_key")) or ""
-            ),
-            explanation=str(shown.get("explanation") or ""),
-            correct_feedback=correct_feedback,
-            incorrect_feedback=incorrect_feedback,
-            feedback=feedback,
-            next_challenge_id=next_challenge_id,
-            prompt=str(shown.get("prompt") or ""),
-            options=_list_field(shown, "options"),
-            challenge_type=str(challenge.get("type") or ""),
-            created_at=created_at,
+            dict(authorized_challenge.value),
+            body.answer,
+            locale=_actor_locale(actor),
         )
-        result: PracticeAttemptResult = (
-            practice_projection_service.build_attempt_result(recorded_attempt)
-        )
-    except Exception as error:  # noqa: BLE001
-        logger.warning("Practice attempt persistence failed")
+    except answer_recording.AnswerInvalid as error:
+        raise PracticeViolation(_P.PRACTICE_ANSWER_INVALID) from error
+    except answer_recording.ReceiptUnavailable as error:
         raise PracticeViolation(_P.PRACTICE_ATTEMPT_UNAVAILABLE) from error
-
-    curriculum_analytics_service.record_practice_attempt(
-        student_id=actor.user_id,
-        challenge=challenge,
-        correct=correct,
-    )
-
-    review_service.record_answer(
-        student_id=actor.user_id,
-        challenge=challenge,
-        correct=correct,
-        answered_at=datetime.fromisoformat(created_at),
-    )
-
-    user_id = actor.user_id
-    _record_practice_usage(
-        student_id=user_id,
-        action=usage_ledger_service.PRACTICE_ANSWER_ACTION,
-        resource_id=challenge_id,
-        metadata={"status": "submitted"},
-        account_fence_generation=(
-            int(recorded_attempt["account_fence_generation"])
-            if type(recorded_attempt.get("account_fence_generation")) is int
-            else None
-        ),
-    )
-
-    return result
 
 
 @router.get(
@@ -1687,33 +1593,5 @@ async def get_hint(
     )
 
 
-
-
-def _record_practice_usage(
-    *,
-    student_id: str,
-    action: str,
-    resource_id: str,
-    metadata: dict[str, Any],
-    usage_counter: dict | None = None,
-    account_fence_generation: int | None = None,
-) -> None:
-    try:
-        usage_ledger_service.record_usage_event(
-            student_id=student_id,
-            action=action,
-            quota_period=(usage_counter or {}).get("quotaPeriod") or usage_ledger_service.today_period(),
-            idempotency_key=usage_ledger_service.build_usage_idempotency_key(
-                action=action,
-                resource_id=resource_id,
-                qualifier=student_id,
-            ),
-            counter_key=(usage_counter or {}).get("counterKey"),
-            counter_value=(usage_counter or {}).get("counterValue"),
-            request_correlation_id=None,
-            created_at=datetime.now(timezone.utc).isoformat(),
-            metadata=metadata,
-            account_fence_generation=account_fence_generation,
-        )
-    except Exception:  # noqa: BLE001
-        logger.warning("Practice usage ledger write failed", exc_info=True)
+#: A hint and a finished lesson leave the same kind of usage event an answer does.
+_record_practice_usage = answer_recording.record_practice_usage
