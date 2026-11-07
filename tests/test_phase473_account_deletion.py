@@ -115,7 +115,8 @@ class _AccountTable:
 def test_account_status_and_registry_are_closed_before_later_branches() -> None:
     repository, service, _job = _deletion_modules()
 
-    assert AccountStatus.DELETION_PENDING.value == "deletion_pending"
+    # Deletion is the account fence's lifecycle, not a profile status (#289).
+    assert "deletion_pending" not in {status.value for status in AccountStatus}
     assert repository.account_fence_key(STUDENT_ID) == {
         "PK": f"USER#{STUDENT_ID}",
         "SK": "ACCOUNT_FENCE",

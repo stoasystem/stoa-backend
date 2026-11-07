@@ -601,8 +601,9 @@ def test_管理员不能重置另一个管理员的密码(table: AccountAdminTab
 def test_多一个active管理员也挡得住(table: AccountAdminTable) -> None:
     """The judgement is about whose credential this is, not about console survival.
 
-    `_guard_admin_console_survives` would let this through - two other administrators
-    stay active - so a rule copied from the status endpoint would not refuse here.
+    The lifecycle's last-administrator guard would let this through - two other
+    administrators stay active - so a rule copied from the status endpoint would not
+    refuse here.
     """
     _seed_profile(table, "admin-1", "admin")
     _seed_profile(table, "admin-2", "admin")
@@ -661,45 +662,38 @@ def test_重置非管理员账号不受这条判据影响(table: AccountAdminTab
 # ---------------------------------------------------------------------------
 
 
-def test_停用与启用往返且每次都留痕(table: AccountAdminTable) -> None:
+def _change_status(client: TestClient, user_id: str, status: str) -> Any:
+    return client.post(
+        f"/admin/users/{user_id}/status", json={"status": status, "reason": "support ticket"}
+    )
+
+
+# The route only maps the command onto `account_lifecycle.transition`; the table,
+# the guards and the audit row are pinned in tests/test_account_lifecycle.py. Here
+# the answer is the status code and the code, nothing else.
+
+
+def test_停用与启用往返(table: AccountAdminTable) -> None:
     _seed_profile(table, "student-9", "student")
     client = TestClient(_app(_admin_user()))
 
-    suspended = client.post(
-        "/admin/users/student-9/status", json={"status": "suspended", "reason": "abuse report"}
-    )
+    suspended = _change_status(client, "student-9", "suspended")
     assert suspended.status_code == 200, suspended.text
-    assert table.rows[("USER#student-9", "PROFILE")]["account_status"] == "suspended"
-    assert table.rows[("USER#student-9", "PROFILE")]["is_active"] is False
+    assert suspended.json()["previousStatus"] == "active"
 
-    restored = client.post(
-        "/admin/users/student-9/status", json={"status": "active", "reason": "cleared"}
-    )
+    restored = _change_status(client, "student-9", "active")
     assert restored.status_code == 200, restored.text
-    assert table.rows[("USER#student-9", "PROFILE")]["account_status"] == "active"
-
-    events = [
-        row for row in table.audit_events() if row["event_type"] == "account_status_changed"
-    ]
-    assert len(events) == 2
-    assert {row["evidence_reference"] for row in events} == {
-        "account_status:active->suspended",
-        "account_status:suspended->active",
-    }
+    assert restored.json()["accountStatus"] == "active"
 
 
 def test_归档是终态且没有物理删除的路径(table: AccountAdminTable) -> None:
     _seed_profile(table, "student-9", "student")
     client = TestClient(_app(_admin_user()))
-    client.post("/admin/users/student-9/status", json={"status": "archived", "reason": "left"})
+    assert _change_status(client, "student-9", "archived").status_code == 200
 
-    revive = client.post(
-        "/admin/users/student-9/status", json={"status": "active", "reason": "back"}
-    )
+    revive = _change_status(client, "student-9", "active")
 
-    assert revive.status_code == 409
-    assert revive.json()["detail"]["code"] == "account_status_transition_invalid"
-    assert ("USER#student-9", "PROFILE") in table.rows
+    assert_violation(revive, "account_status_transition_invalid")
     assert not any(
         route.methods == {"DELETE"} and "/admin/users/{user_id}" == route.path
         for route in admin.router.routes
@@ -711,54 +705,65 @@ def test_被邀请的账号不能被管理员直接激活(table: AccountAdminTab
     _seed_profile(table, "student-9", "student", status="invited")
     client = TestClient(_app(_admin_user()))
 
-    response = client.post(
-        "/admin/users/student-9/status", json={"status": "active", "reason": "shortcut"}
-    )
+    response = _change_status(client, "student-9", "active")
 
-    assert response.status_code == 409
-    assert table.rows[("USER#student-9", "PROFILE")]["account_status"] == "invited"
+    assert_violation(response, "account_status_transition_invalid")
 
 
-def test_并发状态切换只有一个赢(table: AccountAdminTable) -> None:
+def test_状态切到原状态是409(table: AccountAdminTable) -> None:
+    _seed_profile(table, "student-9", "student", status="suspended")
+    client = TestClient(_app(_admin_user()))
+
+    response = _change_status(client, "student-9", "suspended")
+
+    assert_violation(response, "account_status_unchanged")
+
+
+def test_没有状态的旧行不再当作active放行(table: AccountAdminTable) -> None:
+    _seed_profile(table, "student-9", "student")
+    del table.rows[("USER#student-9", "PROFILE")]["account_status"]
+    client = TestClient(_app(_admin_user()))
+
+    response = _change_status(client, "student-9", "suspended")
+
+    assert_violation(response, "account_status_unexpected")
+
+
+def test_改不存在的账号是404(table: AccountAdminTable) -> None:
+    client = TestClient(_app(_admin_user()))
+
+    response = _change_status(client, "student-404", "suspended")
+
+    assert_violation(response, "account_not_found")
+
+
+def test_重复的停用第二次是409(table: AccountAdminTable) -> None:
     _seed_profile(table, "student-9", "student")
     client = TestClient(_app(_admin_user()))
-    body = {"status": "suspended", "reason": "abuse"}
 
-    first = client.post("/admin/users/student-9/status", json=body)
-    second = client.post("/admin/users/student-9/status", json=body)
+    first = _change_status(client, "student-9", "suspended")
+    second = _change_status(client, "student-9", "suspended")
 
     assert first.status_code == 200
-    assert second.status_code == 409
-
-
-# ---------------------------------------------------------------------------
-# Card 002-D / B7: the administrators protect each other
-# ---------------------------------------------------------------------------
+    assert_violation(second, "account_status_unchanged")
 
 
 def test_只剩一个active管理员时停用自己是409(table: AccountAdminTable) -> None:
     _seed_profile(table, "admin-1", "admin")
     client = TestClient(_app(_admin_user()))
 
-    response = client.post(
-        "/admin/users/admin-1/status", json={"status": "suspended", "reason": "oops"}
-    )
+    response = _change_status(client, "admin-1", "suspended")
 
-    assert response.status_code == 409, response.text
-    assert response.json()["detail"]["code"] == "account_self_deactivation_forbidden"
-    assert table.rows[("USER#admin-1", "PROFILE")]["account_status"] == "active"
+    assert_violation(response, "account_self_deactivation_forbidden")
 
 
 def test_自己归档自己同样被挡(table: AccountAdminTable) -> None:
     _seed_profile(table, "admin-1", "admin")
     client = TestClient(_app(_admin_user()))
 
-    response = client.post(
-        "/admin/users/admin-1/status", json={"status": "archived", "reason": "leaving"}
-    )
+    response = _change_status(client, "admin-1", "archived")
 
-    assert response.status_code == 409, response.text
-    assert response.json()["detail"]["code"] == "account_self_deactivation_forbidden"
+    assert_violation(response, "account_self_deactivation_forbidden")
 
 
 def test_停用最后一个active管理员是409(table: AccountAdminTable) -> None:
@@ -767,13 +772,9 @@ def test_停用最后一个active管理员是409(table: AccountAdminTable) -> No
     _seed_profile(table, "admin-2", "admin")
     client = TestClient(_app(_admin_user()))
 
-    response = client.post(
-        "/admin/users/admin-2/status", json={"status": "suspended", "reason": "lockout"}
-    )
+    response = _change_status(client, "admin-2", "suspended")
 
-    assert response.status_code == 409, response.text
-    assert response.json()["detail"]["code"] == "account_last_active_admin"
-    assert table.rows[("USER#admin-2", "PROFILE")]["account_status"] == "active"
+    assert_violation(response, "account_last_active_admin")
 
 
 def test_还有两个active管理员时可以停用其中一个(table: AccountAdminTable) -> None:
@@ -782,12 +783,9 @@ def test_还有两个active管理员时可以停用其中一个(table: AccountAd
     _seed_profile(table, "admin-2", "admin")
     client = TestClient(_app(_admin_user()))
 
-    response = client.post(
-        "/admin/users/admin-2/status", json={"status": "suspended", "reason": "rotation"}
-    )
+    response = _change_status(client, "admin-2", "suspended")
 
     assert response.status_code == 200, response.text
-    assert table.rows[("USER#admin-2", "PROFILE")]["account_status"] == "suspended"
 
 
 def test_最后一个管理员的判据不牵连普通账号(table: AccountAdminTable) -> None:
@@ -795,33 +793,9 @@ def test_最后一个管理员的判据不牵连普通账号(table: AccountAdmin
     _seed_profile(table, "student-9", "student")
     client = TestClient(_app(_admin_user()))
 
-    response = client.post(
-        "/admin/users/student-9/status", json={"status": "suspended", "reason": "abuse"}
-    )
+    response = _change_status(client, "student-9", "suspended")
 
     assert response.status_code == 200, response.text
-
-
-def test_被挡下的停用也留痕(table: AccountAdminTable) -> None:
-    _seed_profile(table, "admin-1", "admin", status="suspended")
-    _seed_profile(table, "admin-2", "admin")
-    client = TestClient(_app(_admin_user()))
-
-    client.post("/admin/users/admin-2/status", json={"status": "suspended", "reason": "lockout"})
-
-    denied = [
-        row
-        for row in table.audit_events()
-        if row["event_type"] == "account_status_change_denied"
-    ]
-    assert len(denied) == 1
-    assert denied[0]["actor_id"] == "admin-1"
-    assert denied[0]["target_id"] == "admin-2"
-    assert denied[0]["action"] == "change_account_status"
-    assert denied[0]["reason_code"] == "account_last_active_admin"
-    assert not [
-        row for row in table.audit_events() if row["event_type"] == "account_status_changed"
-    ]
 
 
 # ---------------------------------------------------------------------------

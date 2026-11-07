@@ -15,13 +15,16 @@ from stoa.db.repositories import (
     identity_repo,
     security_audit_repo,
     teacher_application_repo,
+    user_repo,
 )
 from stoa.services import (
+    account_lifecycle,
     account_provisioning_service,
     notify_service,
     teacher_identity_provider,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
+from stoa.security.identity import AccountStatus
 from stoa.services.account_errors import AccountErrorCode, AccountViolation
 
 
@@ -486,11 +489,18 @@ def _resume_activation(command: dict[str, Any], *, provider: Any, now: datetime)
     except Exception as exc:
         raise _defer_activation(command, user_id=user_id, now=now) from exc
 
-    account_provisioning_service.transition_account_status(
-        account_id=user_id,
-        expected_status="pending_review",
-        next_status="active",
-        now=lambda: now,
+    opened = user_repo.get_user(user_id)
+    if not opened:
+        raise AccountViolation(AccountErrorCode.ACCOUNT_PROFILE_MISSING)
+    account_lifecycle.transition(
+        opened,
+        AccountStatus.PENDING_REVIEW,
+        AccountStatus.ACTIVE,
+        account_lifecycle.LifecycleActor(
+            account_lifecycle.Trigger.TEACHER_APPROVAL, user_id=user_id, role=TEACHER_ROLE
+        ),
+        f"teacher_application:{command['application_id']}",
+        now=now,
     )
     latest = teacher_application_repo.get_activation_command(command["command_id"]) or command
     completed = teacher_application_repo.update_activation_command(

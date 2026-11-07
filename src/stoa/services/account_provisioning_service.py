@@ -34,8 +34,9 @@ from stoa.db.repositories import (
 from stoa.models.user import DATE_OF_BIRTH_FIELD, normalize_date_of_birth
 from stoa.rule_violation import RuleViolation
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
-from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD
-from stoa.services import account_numbering_service
+from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD, AccountStatus
+from stoa.services import account_lifecycle, account_numbering_service
+from stoa.services.account_lifecycle import LifecycleActor, Trigger
 from stoa.services.account_errors import AccountErrorCode, AccountViolation
 
 
@@ -55,7 +56,7 @@ MAX_INVITATION_SECONDS = 1209600
 # Terminal parking state for an opening that failed part-way. The row keeps the number
 # it burned - numbers are never recycled - but gives the address back, so the same
 # person can be opened again instead of being locked out by a half-written attempt.
-FAILED_ACCOUNT_STATUS = "provisioning_failed"
+FAILED_ACCOUNT_STATUS = AccountStatus.PROVISIONING_FAILED.value
 
 # Fields the account row owns. A caller passing extra profile fields cannot rewrite
 # the address, the role or the identity the claim row was taken for.
@@ -283,10 +284,15 @@ def claim_invitation(
             _record_date_of_birth(
                 account_id=account_id, date_of_birth=birthday, now=instant
             )
-        _transition_account_status(
-            account_id=account_id,
-            expected_status="invited",
-            next_status="active",
+        claimed = user_repo.get_user(account_id)
+        if not claimed:
+            raise AccountViolation(AccountErrorCode.ACCOUNT_PROFILE_MISSING)
+        account_lifecycle.transition(
+            claimed,
+            AccountStatus.INVITED,
+            AccountStatus.ACTIVE,
+            LifecycleActor(Trigger.INVITATION_CLAIM, user_id=account_id, role=role),
+            "invitation_claimed",
             now=instant,
         )
     except Exception:
@@ -468,22 +474,6 @@ def open_account(
         if existing:
             return existing
     return _attach_account_number(account_id=account_id, role=clean_role, now=instant)
-
-
-def transition_account_status(
-    *,
-    account_id: str,
-    expected_status: str,
-    next_status: str,
-    now: Callable[[], datetime] | None = None,
-) -> None:
-    """Move one account row between two states, refusing a stale expectation."""
-    _transition_account_status(
-        account_id=account_id,
-        expected_status=expected_status,
-        next_status=next_status,
-        now=_instant(now),
-    )
 
 
 def generate_initial_password() -> str:
@@ -766,43 +756,6 @@ def _date_of_birth(value: Any, *, now: datetime) -> str:
         raise AccountViolation(AccountErrorCode.DATE_OF_BIRTH_INVALID) from None
 
 
-def _transition_account_status(
-    *, account_id: str, expected_status: str, next_status: str, now: datetime
-) -> None:
-    profile = user_repo.get_user(account_id)
-    if not profile:
-        raise AccountViolation(AccountErrorCode.ACCOUNT_PROFILE_MISSING)
-    if str(profile.get("account_status") or "") != expected_status:
-        raise AccountViolation(AccountErrorCode.ACCOUNT_STATUS_UNEXPECTED)
-    operation = user_repo.profile_update_operation(
-        account_id,
-        update_expression=(
-            "SET #account_status = :next_status, activated_at = :activated_at, "
-            "updated_at = :activated_at"
-        ),
-        expression_attribute_names={"#account_status": "account_status"},
-        expression_attribute_values={
-            ":next_status": next_status,
-            ":expected_status": expected_status,
-            ":activated_at": now.isoformat(),
-        },
-        expected_version=_profile_version(profile),
-        additional_condition_expression="#account_status = :expected_status",
-    )
-    try:
-        fence = account_deletion_repo.require_active_account_fence(account_id)
-        account_deletion_repo.transact(
-            [
-                account_deletion_repo.active_fence_condition(
-                    account_id, _profile_version(fence, field="generation")
-                ),
-                operation,
-            ]
-        )
-    except account_deletion_repo.AccountDeletionConflict as exc:
-        raise AccountViolation(AccountErrorCode.ACCOUNT_STATUS_UNEXPECTED) from exc
-
-
 def _withdraw_replacement(replacement: list[dict[str, Any]], *, now: datetime) -> None:
     """Retire a replacement that was written but never handed to anyone.
 
@@ -874,34 +827,20 @@ def _release_failed_account(*, account_id: str, now: datetime) -> None:
         profile = user_repo.get_user(account_id)
         if not profile:
             return
-        operation = user_repo.profile_update_operation(
-            account_id,
-            update_expression=(
-                "SET #account_status = :failed, #email = :released_email, "
-                "provisioning_failed_at = :now, updated_at = :now"
-            ),
-            expression_attribute_names={
-                "#account_status": "account_status",
-                "#email": "email",
-            },
-            expression_attribute_values={
-                ":failed": FAILED_ACCOUNT_STATUS,
-                ":released_email": f"{FAILED_ACCOUNT_STATUS}:{account_id}",
-                ":now": now.isoformat(),
-            },
-            expected_version=_profile_version(profile),
-        )
-        fence = account_deletion_repo.require_active_account_fence(account_id)
-        operations = [
-            account_deletion_repo.active_fence_condition(
-                account_id, _profile_version(fence, field="generation")
-            ),
-            operation,
-        ]
         released = _claim_release_operation(profile, account_id=account_id)
-        if released:
-            operations.append(released)
-        account_deletion_repo.transact(operations)
+        account_lifecycle.transition(
+            profile,
+            account_lifecycle.status_of(profile),
+            AccountStatus.PROVISIONING_FAILED,
+            LifecycleActor.system(),
+            "opening_failed",
+            now=now,
+            fields={
+                "email": f"{FAILED_ACCOUNT_STATUS}:{account_id}",
+                "provisioning_failed_at": now.isoformat(),
+            },
+            also=[released] if released else [],
+        )
     except Exception:
         return
 

@@ -11581,6 +11581,10 @@
           "invalid_credentials",
           "email_verification_required",
           "account_disabled",
+          "account_invitation_unclaimed",
+          "account_review_pending",
+          "account_archived",
+          "account_provisioning_failed",
           "email_already_registered",
           "password_requirements_not_met",
           "verification_code_invalid",
@@ -14665,17 +14669,6 @@
               }
             ],
             "title": "Grade"
-          },
-          "is_active": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Is Active"
           },
           "name": {
             "anyOf": [

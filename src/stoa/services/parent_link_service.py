@@ -445,7 +445,7 @@ def reject_link(
     )
 
 
-def _is_active(link: Mapping[str, Any] | None, parent_id: str, student_id: str) -> bool:
+def _link_is_live(link: Mapping[str, Any] | None, parent_id: str, student_id: str) -> bool:
     """The single status filter guarding parent visibility."""
     if not link:
         return False
@@ -470,9 +470,9 @@ def active_link(
         return None
     forward = parent_link_repo.get_parent_side_link(parent_id, student_id, table=table)
     reverse = parent_link_repo.get_student_side_link(student_id, parent_id, table=table)
-    if not _is_active(forward, parent_id, student_id):
+    if not _link_is_live(forward, parent_id, student_id):
         return None
-    if not _is_active(reverse, parent_id, student_id):
+    if not _link_is_live(reverse, parent_id, student_id):
         return None
     assert forward is not None
     if not _usable_account(
@@ -504,7 +504,7 @@ def active_children(parent_id: str) -> list[LinkItem]:
     children: list[LinkItem] = []
     for link in parent_link_repo.list_links_for_parent(parent_id):
         student_id = str(link.get("student_id") or "")
-        if not _is_active(link, parent_id, student_id):
+        if not _link_is_live(link, parent_id, student_id):
             continue
         confirmed = active_link(parent_id, student_id)
         if confirmed is not None:

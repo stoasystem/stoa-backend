@@ -42,6 +42,10 @@ class SecurityErrorCode(StrEnum):
     INVALID_CREDENTIALS = "invalid_credentials"
     EMAIL_VERIFICATION_REQUIRED = "email_verification_required"
     ACCOUNT_DISABLED = "account_disabled"
+    ACCOUNT_INVITATION_UNCLAIMED = "account_invitation_unclaimed"
+    ACCOUNT_REVIEW_PENDING = "account_review_pending"
+    ACCOUNT_ARCHIVED = "account_archived"
+    ACCOUNT_PROVISIONING_FAILED = "account_provisioning_failed"
     EMAIL_ALREADY_REGISTERED = "email_already_registered"
     PASSWORD_REQUIREMENTS_NOT_MET = "password_requirements_not_met"
     VERIFICATION_CODE_INVALID = "verification_code_invalid"
@@ -106,6 +110,10 @@ SECURITY_ERROR_REGISTRY: dict[SecurityErrorCode, RuleContract] = {
     _C.INVALID_CREDENTIALS: RuleContract(401, _A.CORRECT_INPUT),
     _C.EMAIL_VERIFICATION_REQUIRED: RuleContract(403, _A.VERIFY_EMAIL),
     _C.ACCOUNT_DISABLED: RuleContract(403, _A.CONTACT_SUPPORT),
+    _C.ACCOUNT_INVITATION_UNCLAIMED: RuleContract(403),
+    _C.ACCOUNT_REVIEW_PENDING: RuleContract(409),
+    _C.ACCOUNT_ARCHIVED: RuleContract(403, _A.CONTACT_SUPPORT),
+    _C.ACCOUNT_PROVISIONING_FAILED: RuleContract(409, _A.CONTACT_SUPPORT),
     _C.EMAIL_ALREADY_REGISTERED: RuleContract(409, _A.REAUTHENTICATE),
     _C.PASSWORD_REQUIREMENTS_NOT_MET: RuleContract(400, _A.CORRECT_INPUT),
     _C.VERIFICATION_CODE_INVALID: RuleContract(400, _A.CORRECT_INPUT),

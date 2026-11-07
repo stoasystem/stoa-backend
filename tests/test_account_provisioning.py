@@ -31,8 +31,10 @@ from stoa.db.repositories import (
     security_audit_repo,
     user_repo,
 )
+from stoa.security.identity import AccountStatus
 from stoa.services import (
     account_deletion_service,
+    account_lifecycle,
     account_numbering_service,
     account_provisioning_service,
 )
@@ -773,10 +775,13 @@ def test_半途失败的账号无法被继续推进(
     # The released address carries no `@`, so it can never collide with a real one.
     assert "@" not in str(parked[0]["email"])
     with pytest.raises(RuleViolation) as exc_info:
-        account_provisioning_service._transition_account_status(
-            account_id=str(parked[0]["user_id"]),
-            expected_status="invited",
-            next_status="active",
+        account_lifecycle.transition(
+            parked[0],
+            AccountStatus.INVITED,
+            AccountStatus.ACTIVE,
+            account_lifecycle.LifecycleActor(
+                account_lifecycle.Trigger.INVITATION_CLAIM, user_id=str(parked[0]["user_id"])
+            ),
             now=_moment(30),
         )
     assert exc_info.value.status_code == 409
@@ -1398,12 +1403,13 @@ def test_邀请写下之后才失败_同一邮箱同角色仍可重开(
         str(row["email"]) for row in table.invitations() if "email" in row
     ] == ["late@example.ch"]
     assert table.claims() == []
-    # Parking the profile and giving the claim back is one commit, so the pair can
-    # never be half-released.
+    # Parking the profile, giving the claim back and recording the move are one
+    # commit, so the pair can never be half-released.
     release = committed[-1]
     assert {str(next(iter(operation))) for operation in release} == {
         "ConditionCheck",
         "Update",
+        "Put",
         "Delete",
     }
 
@@ -1533,9 +1539,7 @@ def test_释放占位行的条件不接受别人的账号(table: FakeAccountTabl
 # Written out by hand from a sweep of the services, so a path that quietly starts
 # opening accounts cannot join the list by being added to it.
 PROFILE_WRITERS_WITHOUT_A_CLAIM = {
-    ("privileged_identity_service.py", "change_admin_status"),
     ("privileged_identity_service.py", "_reconcile_admin"),
-    ("privileged_identity_service.py", "_restore_admin"),
     ("public_identity_service.py", "start_or_resume_public_registration"),
     ("public_identity_service.py", "_resume_public_registration"),
 }
@@ -1544,7 +1548,7 @@ PROFILE_WRITERS_WITHOUT_A_CLAIM = {
 def test_还有哪些路径在不取占位行的情况下建号() -> None:
     """`put_user` writes under attribute_not_exists, so every caller opens an account.
 
-    Only the provisioning path takes the claim; these five open a profile carrying an
+    Only the provisioning path takes the claim; these three open a profile carrying an
     address without one, and for those addresses uniqueness is still a read of an
     eventually consistent index. Teacher activation was the sixth and is gone from the
     list: card 010 moved its opening onto `open_account`, so it takes the claim like

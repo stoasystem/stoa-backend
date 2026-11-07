@@ -78,15 +78,21 @@ class CanonicalRole(StrEnum):
 
 
 class AccountStatus(StrEnum):
-    ACTIVE = "active"
+    """Every value something writes to a profile's `account_status`, and no other.
+
+    Who may move an account from one to another is
+    `stoa.services.account_lifecycle`; a value here that nothing writes is a
+    status a reader has to handle for no reason, so none is kept.
+    """
+
+    INVITED = "invited"
     PENDING_VERIFICATION = "pending_verification"
     PENDING_REVIEW = "pending_review"
+    ACTIVE = "active"
     SUSPENDED = "suspended"
-    SUSPENDED_PENDING_REVIEW = "suspended_pending_review"
     REVOKED = "revoked"
-    DISABLED = "disabled"
-    DELETION_PENDING = "deletion_pending"
-    DELETED = "deleted"
+    ARCHIVED = "archived"
+    PROVISIONING_FAILED = "provisioning_failed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,6 +209,27 @@ def _active_grant(record: Mapping[str, object]) -> CapabilityGrant | None:
     )
 
 
+# An account the store knows but that may not act yet, or any more, is told which
+# of those it is: the client has something different to say for each. A value
+# outside `AccountStatus` is not one of these and stays an identity conflict.
+_INACTIVE_ACCOUNT_CODES: dict[AccountStatus, SecurityErrorCode] = {
+    AccountStatus.INVITED: SecurityErrorCode.ACCOUNT_INVITATION_UNCLAIMED,
+    AccountStatus.PENDING_VERIFICATION: SecurityErrorCode.EMAIL_VERIFICATION_REQUIRED,
+    AccountStatus.PENDING_REVIEW: SecurityErrorCode.ACCOUNT_REVIEW_PENDING,
+    AccountStatus.SUSPENDED: SecurityErrorCode.ACCOUNT_DISABLED,
+    AccountStatus.REVOKED: SecurityErrorCode.ACCOUNT_DISABLED,
+    AccountStatus.ARCHIVED: SecurityErrorCode.ACCOUNT_ARCHIVED,
+    AccountStatus.PROVISIONING_FAILED: SecurityErrorCode.ACCOUNT_PROVISIONING_FAILED,
+}
+
+
+def inactive_account_code(status: AccountStatus, role: CanonicalRole) -> SecurityErrorCode:
+    """The refusal for a known account in `status`, which is anything but active."""
+    if status is AccountStatus.PENDING_REVIEW and role is CanonicalRole.TEACHER:
+        return SecurityErrorCode.TEACHER_REVIEW_PENDING
+    return _INACTIVE_ACCOUNT_CODES[status]
+
+
 async def resolve_actor(
     token: VerifiedAccessToken,
     repository: IdentityRepository,
@@ -246,8 +273,10 @@ async def resolve_actor(
             )
         except ValueError as exc:
             raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT) from exc
-        if recognized[0] is not local_role or account_status is not AccountStatus.ACTIVE:
+        if recognized[0] is not local_role:
             raise SecurityDecisionError(SecurityErrorCode.IDENTITY_CONFLICT)
+        if account_status is not AccountStatus.ACTIVE:
+            raise SecurityDecisionError(inactive_account_code(account_status, local_role))
 
         raw_grants = await repository.get_current_grants(user_id)
         narrowed_grants = (_active_grant(grant) for grant in raw_grants)

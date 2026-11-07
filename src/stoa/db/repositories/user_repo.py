@@ -277,6 +277,51 @@ def _profiles_by_email(email: str) -> list[UserItem]:
         query_kwargs["ExclusiveStartKey"] = last_key
 
 
+# One census page is one scan call; the answer short-circuits on the first other
+# active administrator, so the usual table never reaches the second page.
+ADMIN_CENSUS_PAGE_SIZE = 200
+ADMIN_CENSUS_MAX_PAGES = 25
+
+
+def find_other_active_admin(user_id: str) -> str | None:
+    """The id of some administrator other than `user_id` that is still active.
+
+    A read, so it is only a candidate: whoever acts on the answer has to restate it
+    as `active_admin_condition` in the same commit. A census that ran out of pages
+    is not evidence that anyone else is active, so it answers None.
+    """
+    table = get_table()
+    scan_kwargs: dict[str, object] = {
+        "FilterExpression": "#entity = :profile AND #role = :role",
+        "ExpressionAttributeNames": {"#entity": "SK", "#role": "role"},
+        "ExpressionAttributeValues": {":profile": "PROFILE", ":role": "admin"},
+        "Limit": ADMIN_CENSUS_PAGE_SIZE,
+    }
+    for _page in range(ADMIN_CENSUS_MAX_PAGES):
+        result = _scan(table, **scan_kwargs)
+        for row in _items(result.get("Items", [])):
+            other = str(row.get("user_id") or "")
+            if other and other != user_id and row.get("account_status") == "active":
+                return other
+        cursor = result.get("LastEvaluatedKey")
+        if not cursor:
+            return None
+        scan_kwargs["ExclusiveStartKey"] = cursor
+    return None
+
+
+def active_admin_condition(user_id: str) -> TransactionOperation:
+    """Holds while `user_id` is still an active administrator, at commit time."""
+    return {
+        "ConditionCheck": {
+            "Key": {"PK": f"USER#{user_id}", "SK": "PROFILE"},
+            "ConditionExpression": "#role = :admin AND #account_status = :active",
+            "ExpressionAttributeNames": {"#role": "role", "#account_status": "account_status"},
+            "ExpressionAttributeValues": {":admin": "admin", ":active": "active"},
+        }
+    }
+
+
 def get_user_by_email(email: str) -> UserItem | None:
     profiles = _profiles_by_email(email)
     return profiles[0] if profiles else None
