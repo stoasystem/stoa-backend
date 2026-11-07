@@ -27,6 +27,7 @@ class PracticeErrorCode(StrEnum):
     LESSON_QUIZ_FINISHED = "lesson_quiz_finished"
     LESSON_QUIZ_EXPIRED = "lesson_quiz_expired"
     LESSON_QUIZ_UNAVAILABLE = "lesson_quiz_unavailable"
+    LESSON_QUIZ_OUT_OF_ORDER = "lesson_quiz_out_of_order"
     LESSON_QUIZ_CREDENTIAL_INVALID = "lesson_quiz_credential_invalid"
     LESSON_QUIZ_CREDENTIAL_EXPIRED = "lesson_quiz_credential_expired"
     LESSON_EXERCISES_UNANSWERED = "lesson_exercises_unanswered"
@@ -68,6 +69,7 @@ PRACTICE_ERROR_REGISTRY: dict[PracticeErrorCode, RuleContract] = {
     _C.LESSON_QUIZ_FINISHED: _CONFLICT,
     _C.LESSON_QUIZ_EXPIRED: _CONFLICT,
     _C.LESSON_QUIZ_UNAVAILABLE: _CONFLICT,
+    _C.LESSON_QUIZ_OUT_OF_ORDER: _CONFLICT,
     _C.LESSON_QUIZ_CREDENTIAL_INVALID: _CONFLICT,
     _C.LESSON_QUIZ_CREDENTIAL_EXPIRED: _CONFLICT,
     # `{count}` exercises are still to be answered right.

@@ -123,6 +123,20 @@ class PracticeAnswerSubmission(_PracticeContract):
     answer: object
 
 
+class QuizAnswerSubmission(_PracticeContract):
+    """One answer to a lesson quiz, naming the exercise it answers (#213, #113).
+
+    `exerciseId` is optional until every client sends it (stoa-frontend#589):
+    without it the answer is to the exercise the quiz asks now, and a retry
+    after a lost response is judged again rather than recognised.
+    """
+
+    answer: object
+    exercise_id: str | None = Field(
+        default=None, alias="exerciseId", min_length=1, max_length=200
+    )
+
+
 class PracticeHintResponse(_PracticeContract):
     challenge_id: NonEmptyText = Field(alias="challengeId")
     hint_available: bool = Field(alias="hintAvailable")
