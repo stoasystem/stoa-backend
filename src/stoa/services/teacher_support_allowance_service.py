@@ -117,10 +117,8 @@ class _ResolvedScope:
     support_scope_id: str
     limit: int
     grant: dict[str, object]
-    # Which table authorizes the pair *now*, not which one the grant recorded.
-    relationship_source: str = paid_entitlement_service.RELATIONSHIP_SOURCE_BINDING
-    forward_relationship_version: int | None = None
-    reverse_relationship_version: int | None = None
+    # What authorizes the pair now: a current link, or an assigned allowance.
+    relationship_source: str = paid_entitlement_service.RELATIONSHIP_SOURCE_LINK
     support_source: str = SUPPORT_SOURCE_PAID_GRANT
     # Only an assigned scope carries this: the paid path reads it off the grant.
     student_profile_version: int | None = None
@@ -241,29 +239,22 @@ def _case_key(case_kind: str, support_case_id: str) -> dict[str, str]:
 
 
 def _granting_parent(
-    student: Mapping[str, object],
     beneficiary: str,
     *,
     table: object,
-) -> tuple[
-    str | None,
-    dict[str, object] | None,
-    paid_entitlement_service.RelationshipAuthority | None,
-]:
-    """The first authorizing parent that actually holds a grant, and its authority."""
-    for parent_id, authority in paid_entitlement_service.authorizing_parents(
-        beneficiary, student=student
-    ):
+) -> tuple[str | None, dict[str, object] | None]:
+    """The first current parent of this student that actually holds a grant."""
+    for verdict in paid_entitlement_service.beneficiary_parents(beneficiary):
         grant = _mapping(
             paid_entitlement_service.get_active_beneficiary_grant(
-                parent_id,
+                verdict.parent_id,
                 beneficiary,
                 table=table,
             )
         )
         if grant is not None:
-            return parent_id, grant, authority
-    return None, None, None
+            return verdict.parent_id, grant
+    return None, None
 
 
 def _resolve_scope(
@@ -488,15 +479,11 @@ def _resolve_paid_scope(
     table: object,
 ) -> _ResolvedScope | None:
     try:
-        parent_id, grant, authority = _granting_parent(student, beneficiary, table=table)
+        parent_id, grant = _granting_parent(beneficiary, table=table)
     except Exception:
         raise _DependencyFailure("paid grant resolution is unavailable") from None
-    if parent_id is None or grant is None or authority is None:
+    if parent_id is None or grant is None:
         return None
-    relationship = _live_relationship(parent_id, beneficiary, grant, student, authority)
-    if relationship is None:
-        return None
-    source, forward_version, reverse_version = relationship
     try:
         plan_id = BillingPlanId(_required_text(grant.get("plan_id"), "plan_id"))
         plan_version = _positive_integer(grant.get("plan_version"), "plan_version")
@@ -558,52 +545,8 @@ def _resolve_paid_scope(
         support_scope_id=support_scope_id,
         limit=budget.teacher_support_cases,
         grant=grant,
-        relationship_source=source,
-        forward_relationship_version=forward_version,
-        reverse_relationship_version=reverse_version,
+        relationship_source=paid_entitlement_service.RELATIONSHIP_SOURCE_LINK,
     )
-
-
-def _live_relationship(
-    parent_id: str,
-    beneficiary: str,
-    grant: Mapping[str, object],
-    student: Mapping[str, object],
-    authority: paid_entitlement_service.RelationshipAuthority,
-) -> tuple[str, int | None, int | None] | None:
-    """Fence the table that authorizes this pair now, not the one the grant recorded.
-
-    The scope is resolved from the live tables; taking the conditions from a
-    stale `relationship_source` instead would fence rows that can never match
-    again, and the caller would retry until it gave up — a permanent 503 for a
-    family whose relationship is still perfectly valid on the other table.
-    """
-    source = authority.source
-    if source == paid_entitlement_service.RELATIONSHIP_SOURCE_LINK:
-        return source, None, None
-    if paid_entitlement_service.relationship_evidence(grant) == source:
-        try:
-            return (
-                source,
-                _positive_integer(
-                    grant.get("forward_relationship_version"),
-                    "forward_relationship_version",
-                ),
-                _positive_integer(
-                    grant.get("reverse_relationship_version"),
-                    "reverse_relationship_version",
-                ),
-            )
-        except ValueError:
-            return None
-    # The grant was written against the link table, which no longer authorizes
-    # this pair; the binding rows carry the versions it never recorded.
-    versions = paid_entitlement_service.binding_relationship_versions(
-        parent_id, beneficiary, student
-    )
-    if versions is None:
-        return None
-    return source, versions[0], versions[1]
 
 
 def _grant_condition_operations(scope: _ResolvedScope) -> tuple[AdmissionOperation, ...]:
@@ -730,16 +673,13 @@ def _assigned_condition_operations(
 def _student_profile_condition(
     scope: _ResolvedScope, student_profile_version: int
 ) -> AdmissionOperation:
-    """A link relationship is not mirrored onto the profile, so only a binding asserts it."""
+    """The relationship is not mirrored onto the profile; the link rows carry it."""
     expression = "#role=:student_role AND #status=:active AND #version=:version"
     values: dict[str, object] = {
         ":student_role": "student",
         ":active": "active",
         ":version": student_profile_version,
     }
-    if scope.relationship_source == paid_entitlement_service.RELATIONSHIP_SOURCE_BINDING:
-        expression += " AND parent_id=:parent_id AND parent_binding_status=:active"
-        values[":parent_id"] = scope.parent_id
     return {
         "ConditionCheck": {
             "Key": {"PK": f"USER#{scope.beneficiary_id}", "SK": "PROFILE"},
@@ -755,46 +695,17 @@ def _student_profile_condition(
 
 
 def _relationship_conditions(scope: _ResolvedScope) -> tuple[AdmissionOperation, ...]:
-    """Fence the two rows of whichever table authorized the grant."""
+    """Fence both rows of the link that authorizes the grant: still active."""
     if scope.support_source == SUPPORT_SOURCE_ASSIGNED:
         return ()
-    if scope.relationship_source == paid_entitlement_service.RELATIONSHIP_SOURCE_LINK:
-        return (
-            _link_condition(
-                key=parent_link_repo.parent_side_key(
-                    scope.parent_id, scope.beneficiary_id
-                ),
-                scope=scope,
-            ),
-            _link_condition(
-                key=parent_link_repo.student_side_key(
-                    scope.beneficiary_id, scope.parent_id
-                ),
-                scope=scope,
-            ),
-        )
     return (
-        _relationship_condition(
-            key={
-                "PK": f"USER#{scope.parent_id}",
-                "SK": f"CHILD#{scope.beneficiary_id}",
-            },
+        _link_condition(
+            key=parent_link_repo.parent_side_key(scope.parent_id, scope.beneficiary_id),
             scope=scope,
-            version=_positive_integer(
-                scope.forward_relationship_version,
-                "forward_relationship_version",
-            ),
         ),
-        _relationship_condition(
-            key={
-                "PK": f"USER#{scope.beneficiary_id}",
-                "SK": f"PARENT#{scope.parent_id}",
-            },
+        _link_condition(
+            key=parent_link_repo.student_side_key(scope.beneficiary_id, scope.parent_id),
             scope=scope,
-            version=_positive_integer(
-                scope.reverse_relationship_version,
-                "reverse_relationship_version",
-            ),
         ),
     )
 
@@ -825,35 +736,6 @@ def _link_condition(
                 ":student_id": scope.beneficiary_id,
                 ":relationship": paid_entitlement_service.BENEFICIARY_RELATIONSHIP,
                 ":active": parent_link_repo.STATUS_ACTIVE,
-            },
-        }
-    }
-
-
-def _relationship_condition(
-    *,
-    key: dict[str, str],
-    scope: _ResolvedScope,
-    version: int,
-) -> AdmissionOperation:
-    return {
-        "ConditionCheck": {
-            "Key": key,
-            "ConditionExpression": (
-                "parent_id=:parent_id AND student_id=:student_id "
-                "AND relationship=:relationship AND #status=:active "
-                "AND #version=:version"
-            ),
-            "ExpressionAttributeNames": {
-                "#status": "status",
-                "#version": "version",
-            },
-            "ExpressionAttributeValues": {
-                ":parent_id": scope.parent_id,
-                ":student_id": scope.beneficiary_id,
-                ":relationship": paid_entitlement_service.BENEFICIARY_RELATIONSHIP,
-                ":active": "active",
-                ":version": version,
             },
         }
     }

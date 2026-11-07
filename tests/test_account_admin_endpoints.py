@@ -31,6 +31,7 @@ from stoa.security.route_inventory import explicit_route_classification, invento
 from stoa.services import (
     account_numbering_service,
     account_provisioning_service,
+    current_relationship,
     parent_link_service,
 )
 from rule_violation_helpers import assert_violation
@@ -1089,7 +1090,7 @@ def test_学生确认家长发起的请求后关联生效(table: AccountAdminTab
 
     assert [item["parentId"] for item in listed.json()["items"]] == ["parent-a"]
     assert confirmed.status_code == 200, confirmed.text
-    assert parent_link_service.active_link("parent-a", "student-b") is not None
+    assert current_relationship.judge("parent-a", "student-b").is_current
 
 
 def test_发起方不能自己确认自己的请求(table: AccountAdminTable) -> None:
@@ -1099,7 +1100,7 @@ def test_发起方不能自己确认自己的请求(table: AccountAdminTable) ->
     response = client.post("/parents/me/children/requests/student-b/confirm")
 
     assert_violation(response, "link_confirmation_not_allowed")
-    assert parent_link_service.active_link("parent-a", "student-b") is None
+    assert not current_relationship.judge("parent-a", "student-b").is_current
 
 
 def test_家长确认学生发起的请求后关联生效(table: AccountAdminTable) -> None:
@@ -1111,7 +1112,7 @@ def test_家长确认学生发起的请求后关联生效(table: AccountAdminTab
 
     assert [item["studentId"] for item in listed.json()["items"]] == ["student-b"]
     assert confirmed.status_code == 200, confirmed.text
-    assert parent_link_service.active_link("parent-a", "student-b") is not None
+    assert current_relationship.judge("parent-a", "student-b").is_current
 
 
 def test_拒绝后关联不生效(table: AccountAdminTable) -> None:
@@ -1121,7 +1122,7 @@ def test_拒绝后关联不生效(table: AccountAdminTable) -> None:
     rejected = client.post("/students/me/parent-requests/parent-a/reject")
 
     assert rejected.status_code == 200, rejected.text
-    assert parent_link_service.active_link("parent-a", "student-b") is None
+    assert not current_relationship.judge("parent-a", "student-b").is_current
 
 
 def test_待确认请求不出现在别人的列表里(table: AccountAdminTable) -> None:
@@ -1178,7 +1179,7 @@ def test_管理员吊销旧绑定时新表的关联一并关闭(
     )
 
     assert response.status_code == 200, response.text
-    assert parent_link_service.active_link("parent-a", "student-b") is None
+    assert not current_relationship.judge("parent-a", "student-b").is_current
     assert any(
         row["event_type"] == "parent_link_revoked" for row in table.audit_events()
     )
@@ -1200,7 +1201,7 @@ def test_管理员分配的关联直接生效且留痕(table: AccountAdminTable)
     )
 
     assert response.status_code == 200, response.text
-    assert parent_link_service.active_link("parent-a", "student-b") is not None
+    assert current_relationship.judge("parent-a", "student-b").is_current
     event = [row for row in table.audit_events() if row["event_type"] == "parent_link_assigned"]
     assert len(event) == 1
     assert event[0]["actor_id"] == "admin-1"
@@ -1234,7 +1235,7 @@ def test_家长凭学号发起的请求只到pending(table: AccountAdminTable) -
 
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "pending"
-    assert parent_link_service.active_link("parent-a", "student-b") is None
+    assert not current_relationship.judge("parent-a", "student-b").is_current
 
 
 def test_学生凭家长号发起的请求只到pending(table: AccountAdminTable) -> None:
@@ -1249,7 +1250,7 @@ def test_学生凭家长号发起的请求只到pending(table: AccountAdminTable
 
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "pending"
-    assert parent_link_service.active_link("parent-a", "student-b") is None
+    assert not current_relationship.judge("parent-a", "student-b").is_current
 
 
 def test_未分配的编号发起请求是404(table: AccountAdminTable) -> None:

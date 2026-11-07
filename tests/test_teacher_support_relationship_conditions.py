@@ -1,24 +1,25 @@
-"""#34 / #85: the admission fences the relationship rows the profile check skips.
+"""#34 / #85 / #287: the admission fences the link rows the scope was resolved from.
 
-`paid_entitlement_service.relationship_authority` believes a student profile's
-`parent_id` and `parent_binding_status` without reading the two binding rows.
-That is only sound because the teacher-support admission transaction asserts
-those rows itself. These tests hold the transaction to that.
+The paid scope is resolved from a current link (`current_relationship.judge`),
+read outside the admission transaction. The transaction asserts both link rows
+itself, so a relationship closed between the read and the write refuses the
+admission. These tests hold the transaction to that.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from stoa.models.allowance import TeacherSupportScope
 from stoa.models.billing import BillingPlanId
-from stoa.services import paid_entitlement_service
 from stoa.services import teacher_support_allowance_service as allowance
 
+# Reached through the allowance module: importing `paid_entitlement_service`
+# first closes an import cycle back through `teacher_support_allowance_service`.
+paid_entitlement_service = allowance.paid_entitlement_service
 
-def _scope(source: str, **overrides: Any) -> allowance._ResolvedScope:
+
+def _scope(**overrides: Any) -> allowance._ResolvedScope:
     values: dict[str, Any] = {
         "beneficiary_id": "student-1",
         "parent_id": "parent-1",
@@ -37,9 +38,6 @@ def _scope(source: str, **overrides: Any) -> allowance._ResolvedScope:
             "parent_profile_version": 4,
             "student_profile_version": 5,
         },
-        "relationship_source": source,
-        "forward_relationship_version": 7,
-        "reverse_relationship_version": 8,
     }
     values.update(overrides)
     return allowance._ResolvedScope(**values)
@@ -54,43 +52,32 @@ def _checks(scope: allowance._ResolvedScope) -> dict[tuple[str, str], dict[str, 
     return checks
 
 
-def test_a_binding_admission_fences_both_binding_rows_at_their_versions() -> None:
-    checks = _checks(_scope(paid_entitlement_service.RELATIONSHIP_SOURCE_BINDING))
-    forward = checks[("USER#parent-1", "CHILD#student-1")]
-    reverse = checks[("USER#student-1", "PARENT#parent-1")]
-    for body, version in ((forward, 7), (reverse, 8)):
+def test_a_paid_admission_fences_both_link_rows_as_active_child_links() -> None:
+    scope = _scope()
+    assert scope.relationship_source == paid_entitlement_service.RELATIONSHIP_SOURCE_LINK
+    checks = _checks(scope)
+    forward = checks[("PARENT#parent-1", "CHILD#student-1")]
+    reverse = checks[("STUDENT#student-1", "PARENT#parent-1")]
+    for body in (forward, reverse):
         values = body["ExpressionAttributeValues"]
+        assert values[":entity_type"] == "parent_student_link"
         assert values[":parent_id"] == "parent-1"
         assert values[":student_id"] == "student-1"
         assert values[":relationship"] == paid_entitlement_service.BENEFICIARY_RELATIONSHIP
         assert values[":active"] == "active"
-        assert values[":version"] == version
-        for clause in ("parent_id=:parent_id", "student_id=:student_id", "#status=:active",
-                       "#version=:version"):
+        for clause in ("#entity_type=:entity_type", "parent_id=:parent_id",
+                       "student_id=:student_id", "relationship=:relationship",
+                       "#status=:active"):
             assert clause in body["ConditionExpression"]
 
 
-def test_a_binding_admission_also_fences_the_profile_claim() -> None:
-    checks = _checks(_scope(paid_entitlement_service.RELATIONSHIP_SOURCE_BINDING))
-    profile = checks[("USER#student-1", "PROFILE")]
-    assert "parent_id=:parent_id" in profile["ConditionExpression"]
-    assert "parent_binding_status=:active" in profile["ConditionExpression"]
-    assert profile["ExpressionAttributeValues"][":parent_id"] == "parent-1"
-
-
-def test_a_link_admission_fences_both_link_rows_instead() -> None:
-    checks = _checks(_scope(paid_entitlement_service.RELATIONSHIP_SOURCE_LINK))
-    assert ("PARENT#parent-1", "CHILD#student-1") in checks
-    assert ("STUDENT#student-1", "PARENT#parent-1") in checks
+def test_a_paid_admission_fences_neither_binding_rows_nor_the_profile_pointer() -> None:
+    checks = _checks(_scope())
+    # The retired binding rows grant nothing, so nothing asserts them.
     assert ("USER#parent-1", "CHILD#student-1") not in checks
+    assert ("USER#student-1", "PARENT#parent-1") not in checks
     profile = checks[("USER#student-1", "PROFILE")]
     # A link is not mirrored onto the profile, so the profile is not asked to claim it.
+    assert "parent_id" not in profile["ConditionExpression"]
     assert "parent_binding_status" not in profile["ConditionExpression"]
-
-
-def test_a_binding_admission_without_recorded_versions_is_refused() -> None:
-    scope = _scope(
-        paid_entitlement_service.RELATIONSHIP_SOURCE_BINDING, forward_relationship_version=None
-    )
-    with pytest.raises(ValueError):
-        allowance._grant_condition_operations(scope)
+    assert ":parent_id" not in profile["ExpressionAttributeValues"]

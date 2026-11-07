@@ -35,6 +35,7 @@ from stoa.config import settings
 from stoa.services.account_errors import AccountErrorCode, AccountViolation
 from stoa.services import (
     allowance_service,
+    current_relationship,
     entitlement_service,
     help_requests,
     learning_profile_service,
@@ -135,8 +136,9 @@ def _optional_profile_text(
 
 
 def _guardian_status(profile: Mapping[str, object]) -> str:
-    """Report whether a guardian account is linked, not the guardian's details."""
-    if profile.get("parent_binding_status") == "active" and profile.get("parent_id"):
+    """Report whether a guardian is currently linked, not the guardian's details."""
+    student_id = profile.get("user_id")
+    if isinstance(student_id, str) and current_relationship.parents_of(student_id):
         return "linked"
     return "not_linked"
 

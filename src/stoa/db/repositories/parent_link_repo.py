@@ -373,6 +373,83 @@ def reclaim_link(
     )
 
 
+def _as_read(side: Mapping[str, Any] | None) -> tuple[str, dict[str, Any]]:
+    """The condition that holds only while a side is still what was read."""
+    if side is None:
+        return "attribute_not_exists(PK)", {}
+    status = _required(side.get("status"), "status")
+    stamp = side.get("link_updated_at")
+    if not isinstance(stamp, str) or not stamp:
+        return (
+            "attribute_exists(PK) AND #status = :expected_status"
+            " AND attribute_not_exists(link_updated_at)",
+            {":expected_status": status},
+        )
+    return (
+        "attribute_exists(PK) AND #status = :expected_status"
+        " AND link_updated_at = :expected_link_updated_at",
+        {":expected_status": status, ":expected_link_updated_at": stamp},
+    )
+
+
+def close_link(
+    *,
+    parent_id: str,
+    student_id: str,
+    parent_side: Mapping[str, Any] | None,
+    student_side: Mapping[str, Any] | None,
+    updated_by: str,
+    link_updated_at: str,
+    table: Any | None = None,
+) -> LinkItem:
+    """Close both sides of a link in one transaction, each as it was read.
+
+    The participants' account fences are deliberately not asserted: closing is
+    how an administrator ends a relationship whose account is already being
+    deleted or disabled, and a fence that refused it would leave that grant
+    standing. A side that was missing is written closed too, so the pair ends
+    agreeing. Either side having moved since it was read refuses the whole
+    write with `ParentLinkConflict`.
+    """
+    parent_id = _required(parent_id, "parent_id")
+    student_id = _required(student_id, "student_id")
+    stored = parent_side or student_side
+    if stored is None:
+        raise ParentLinkConflict("parent link is not stored")
+    link_updated_at = _required(link_updated_at, "link_updated_at")
+    if link_updated_at in {
+        side.get("link_updated_at") for side in (parent_side, student_side) if side
+    }:
+        # The stamp is the version; a close that reuses it lets a racer's read stand.
+        raise ValueError("close must advance link_updated_at")
+    body = _link_body(
+        parent_id=parent_id,
+        student_id=student_id,
+        relationship=str(stored.get("relationship") or "child"),
+        status=STATUS_REJECTED,
+        initiator_role=str(stored.get("initiator_role") or INITIATOR_ADMIN),
+        created_by=str(stored.get("created_by") or updated_by),
+        linked_at=str(stored.get("linked_at") or link_updated_at),
+        updated_by=_required(updated_by, "updated_by"),
+        link_updated_at=link_updated_at,
+    )
+    forward, reverse = _both_sides(body)
+    operations: list[dict[str, Any]] = []
+    for item, side in ((forward, parent_side), (reverse, student_side)):
+        condition, values = _as_read(side)
+        operation: dict[str, Any] = {"Item": item, "ConditionExpression": condition}
+        if values:
+            operation["ExpressionAttributeNames"] = {"#status": "status"}
+            operation["ExpressionAttributeValues"] = values
+        operations.append({"Put": operation})
+    target = table or get_table()
+    try:
+        account_deletion_repo.transact(operations, table=target)
+    except account_deletion_repo.AccountDeletionConflict as exc:
+        raise ParentLinkConflict("parent link close refused") from exc
+    return dict(body)
+
+
 def link_fields(item: Mapping[str, Any]) -> dict[str, Any]:
     """Project a stored row down to the link contract, dropping table keys."""
     return {field: item.get(field) for field in _LINK_FIELDS}

@@ -43,6 +43,7 @@ from stoa.models.user import SubscriptionTier
 from stoa.services import (
     allowance_service,
     billing_reconciliation_service,
+    current_relationship,
     entitlement_service,
     notification_service,
     paid_entitlement_service,
@@ -312,23 +313,13 @@ def _require_checkout_beneficiaries(
         )
     for student_id in beneficiary_ids:
         student = user_repo.get_user(student_id)
-        forward = user_repo.get_parent_student_binding(parent_id, student_id)
-        reverse = user_repo.get_student_parent_binding(student_id, parent_id)
-        expected = {
-            "parent_id": parent_id,
-            "student_id": student_id,
-            "relationship": "child",
-            "status": "active",
-        }
         if (
             student is None
             or student.get("user_id") != student_id
             or student.get("role") != "student"
             or student.get("account_status") != "active"
-            or forward is None
-            or reverse is None
-            or any(forward.get(field) != value for field, value in expected.items())
-            or any(reverse.get(field) != value for field, value in expected.items())
+            or paid_entitlement_service.relationship_authority(parent_id, student_id)
+            is None
         ):
             raise _checkout_http_error(
                 status_code=409,
@@ -970,24 +961,15 @@ def get_parent_active_billing_grants(
     *,
     table: object | None = None,
 ) -> list[dict[str, object]]:
-    """Return only current exact grants for this parent's strict bindings."""
+    """Return only current exact grants for this parent's current children."""
     parent = _billing_required_text(parent_id, "parent_id")
     _require_parent(parent)
     try:
-        bindings = user_repo.list_parent_student_bindings(parent)
+        children = current_relationship.children_of(parent)
     except Exception:
         raise ValueError("billing projection is temporarily unavailable") from None
     target = table or get_table()
-    beneficiary_ids = sorted(
-        {
-            str(binding["student_id"])
-            for binding in bindings
-            if isinstance(binding, Mapping)
-            and binding.get("parent_id") == parent
-            and isinstance(binding.get("student_id"), str)
-            and binding.get("status") == "active"
-        }
-    )
+    beneficiary_ids = sorted({verdict.student_id for verdict in children})
     grants: list[dict[str, object]] = []
     for beneficiary_id in beneficiary_ids:
         grant = paid_entitlement_service.get_active_beneficiary_grant(

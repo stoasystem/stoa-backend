@@ -112,10 +112,10 @@ def _fenced_report_recovery_compat(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def current_relationships(monkeypatch):
-    """A resend now revalidates the recipient, so these tests need the stores.
+def current_relationships(monkeypatch, link_rows):
+    """A resend now revalidates the recipient, so these tests need the link rows.
 
-    Removing a pair from `bindings` is how a test says the relationship ended.
+    Unlinking a pair is how a test says the relationship ended.
     """
     from stoa.db.repositories import user_repo
 
@@ -130,17 +130,8 @@ def current_relationships(monkeypatch):
         ("parent-3", "student-3"),
         ("parent-fail", "student-failed"),
     )
-    bindings = {
-        (parent_id, student_id): {
-            "entity_type": "parent_student_binding",
-            "parent_id": parent_id,
-            "student_id": student_id,
-            "relationship": "child",
-            "status": "active",
-            "version": 1,
-        }
-        for parent_id, student_id in pairs
-    }
+    for parent_id, student_id in pairs:
+        link_rows.link(parent_id, student_id)
     monkeypatch.setattr(
         user_repo,
         "get_user",
@@ -152,21 +143,7 @@ def current_relationships(monkeypatch):
             "name": user_id,
         },
     )
-    monkeypatch.setattr(
-        user_repo,
-        "get_parent_student_binding",
-        lambda parent_id, student_id: dict(bindings[(parent_id, student_id)])
-        if (parent_id, student_id) in bindings
-        else None,
-    )
-    monkeypatch.setattr(
-        user_repo,
-        "get_student_parent_binding",
-        lambda student_id, parent_id: dict(bindings[(parent_id, student_id)])
-        if (parent_id, student_id) in bindings
-        else None,
-    )
-    return bindings
+    return link_rows
 
 
 @pytest.fixture(autouse=True)

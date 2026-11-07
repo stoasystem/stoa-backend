@@ -11,6 +11,7 @@ import pytest
 from stoa.db.repositories import account_deletion_repo, user_repo
 from stoa.routers import admin, auth
 from stoa.security.authorization import ParentAuthorizationFacts
+from stoa.services import current_relationship
 
 
 RELATIONSHIP_STATUSES = (
@@ -524,9 +525,10 @@ def test_conflicting_parent_is_preserved_and_authorization_remains_denied(monkey
     assert conflict.disposition is user_repo.ParentBindingDisposition.CONFLICT
     assert table.items == before
     assert len(table.transactions) == 1
+    # Authorization asks the relationship judge, which reads link rows only:
+    # the binding rows written above grant the conflicting parent nothing.
     assert not ParentAuthorizationFacts(
-        forward=None,
-        reverse=None,
+        verdict=current_relationship.judge("parent-2", "student-1", table=table),
         parent_account={
             "user_id": "parent-2",
             "role": "parent",

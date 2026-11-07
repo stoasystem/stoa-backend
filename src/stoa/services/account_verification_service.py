@@ -4,6 +4,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from stoa.services import current_relationship
+
 
 EMAIL_VERIFICATION_POLICY = "cognito_sign_up_confirm_sign_up"
 LOGIN_CODE_POLICY = "deferred_cognito_custom_auth_required"
@@ -215,7 +217,20 @@ def support_summary(profile: dict[str, Any]) -> dict[str, Any]:
         "userId": profile.get("user_id", ""),
         "email": profile.get("email", ""),
         "role": profile.get("role", ""),
-        "parentBindingStatus": profile.get("parent_binding_status")
-        or profile.get("child_binding_status"),
+        "parentBindingStatus": _relationship_status(profile),
         **state,
     }
+
+
+def _relationship_status(profile: dict[str, Any]) -> str | None:
+    """`active` when the judge holds a current relationship for this account."""
+    user_id = str(profile.get("user_id") or "")
+    role = profile.get("role")
+    if not user_id or role not in {"parent", "student"}:
+        return None
+    current = (
+        current_relationship.children_of(user_id)
+        if role == "parent"
+        else current_relationship.parents_of(user_id)
+    )
+    return "active" if current else None

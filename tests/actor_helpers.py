@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from audit_helpers import MemoryAuthorizationAuditSink
+from fakes.links import LINKED_AT
 from stoa.deps import get_actor, get_authorization_audit_sink, get_current_user
 from stoa.security.authorization import (
     AuthorizationFacts,
@@ -14,6 +15,7 @@ from stoa.security.identity import (
     CapabilityGrant,
 )
 from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.services.current_relationship import SOURCE_LINK, Standing, Verdict
 
 
 def actor_from_user(user: dict) -> Actor:
@@ -99,17 +101,17 @@ def install_actor_overrides(app: FastAPI, user: dict) -> Actor:
                 "account_status": "active",
             }
             if current_actor.role is CanonicalRole.PARENT and user.get("bound", True):
-                row = {
-                    "parent_id": current_actor.user_id,
-                    "student_id": resource.student_id,
-                    "relationship": "child",
-                    "status": "active",
-                    "version": 1,
-                }
                 return AuthorizationFacts(
                     parent=ParentAuthorizationFacts(
-                        row,
-                        dict(row),
+                        Verdict(
+                            Standing.CURRENT,
+                            current_actor.user_id,
+                            resource.student_id,
+                            relationship="child",
+                            status="active",
+                            source=SOURCE_LINK,
+                            version=LINKED_AT,
+                        ),
                         {
                             "user_id": current_actor.user_id,
                             "role": "parent",

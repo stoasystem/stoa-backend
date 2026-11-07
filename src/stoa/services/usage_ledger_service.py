@@ -639,24 +639,6 @@ def build_student_usage_summary(
     }
 
 
-def list_parent_usage_summaries(
-    *,
-    parent_id: str,
-    settings: Settings,
-    day: str | None = None,
-) -> list[dict[str, Any]]:
-    """Return usage summaries for every active child binding."""
-    summaries: list[dict[str, Any]] = []
-    for binding in user_repo.list_parent_student_bindings(parent_id):
-        if str(binding.get("status") or "active") != "active":
-            continue
-        student_id = str(binding.get("student_id") or "")
-        if not student_id:
-            continue
-        summaries.append(build_student_usage_summary(student_id=student_id, settings=settings, day=day))
-    return summaries
-
-
 def list_usage_events(
     *,
     student_id: str,

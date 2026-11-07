@@ -1,13 +1,13 @@
-"""Parent-student relationships: who may link, who must confirm, who may read.
+"""Parent-student links: who may ask for one, who must confirm, who may assign.
 
 A link is data visibility. A self-service request therefore only ever reaches
-`pending`, and `pending` grants nothing until the other side confirms.
+`pending`, and `pending` grants nothing until the other side confirms. Whether
+a link holds right now is not decided here: `current_relationship` judges it.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any, Final
@@ -15,6 +15,7 @@ from typing import Any, Final
 from stoa.db.repositories import parent_link_repo, user_repo
 from stoa.models import user as user_model
 from stoa.rule_violation import RuleContract, RuleViolation, register_codes
+from stoa.services import current_relationship
 
 
 STATUS_PENDING: Final = parent_link_repo.STATUS_PENDING
@@ -188,21 +189,10 @@ def _settled_pair(parent_id: str, student_id: str) -> LinkItem | None:
 
 def _account(user_id: str, role: str) -> Mapping[str, Any]:
     profile = user_repo.get_user(user_id)
-    if not _usable_account(profile, user_id, role):
+    if not current_relationship.usable_account(profile, user_id, role):
         raise ParentLinkError("link_target_not_found")
     assert profile is not None
     return profile
-
-
-def _usable_account(profile: Mapping[str, Any] | None, user_id: str, role: str) -> bool:
-    if not profile:
-        return False
-    status = profile.get("account_status") or profile.get("status")
-    return (
-        profile.get("user_id") == user_id
-        and profile.get("role") == role
-        and status == "active"
-    )
 
 
 def _refuse_self_service_when_minor(
@@ -445,73 +435,6 @@ def reject_link(
     )
 
 
-def _is_active(link: Mapping[str, Any] | None, parent_id: str, student_id: str) -> bool:
-    """The single status filter guarding parent visibility."""
-    if not link:
-        return False
-    return (
-        link.get("status") == STATUS_ACTIVE
-        and link.get("parent_id") == parent_id
-        and link.get("student_id") == student_id
-    )
-
-
-def active_link(
-    parent_id: str, student_id: str, *, table: object | None = None
-) -> LinkItem | None:
-    """Return the link only when both directions are active and both accounts are usable.
-
-    Every read here takes the table it is given. This function taking the
-    ambient one instead is how `pytest` came to send reads to the live table:
-    the module-level binding in `parent_link_repo` could not be reached from
-    anywhere a test was stubbing, so nothing a test did could stop it.
-    """
-    if not parent_id or not student_id:
-        return None
-    forward = parent_link_repo.get_parent_side_link(parent_id, student_id, table=table)
-    reverse = parent_link_repo.get_student_side_link(student_id, parent_id, table=table)
-    if not _is_active(forward, parent_id, student_id):
-        return None
-    if not _is_active(reverse, parent_id, student_id):
-        return None
-    assert forward is not None
-    if not _usable_account(
-        user_repo.get_user(parent_id, table=table), parent_id, ROLE_PARENT
-    ):
-        return None
-    if not _usable_account(
-        user_repo.get_user(student_id, table=table), student_id, ROLE_STUDENT
-    ):
-        return None
-    return parent_link_repo.link_fields(forward)
-
-
-def known_link(parent_id: str, student_id: str) -> LinkItem | None:
-    """Return the link in whatever status it holds, for parties that already know it exists."""
-    if not parent_id or not student_id:
-        return None
-    forward = parent_link_repo.get_parent_side_link(parent_id, student_id)
-    reverse = parent_link_repo.get_student_side_link(student_id, parent_id)
-    if forward is None or reverse is None:
-        return None
-    if forward.get("parent_id") != parent_id or forward.get("student_id") != student_id:
-        return None
-    return parent_link_repo.link_fields(forward)
-
-
-def active_children(parent_id: str) -> list[LinkItem]:
-    """Active children only; a pending request must never reach a parent's list."""
-    children: list[LinkItem] = []
-    for link in parent_link_repo.list_links_for_parent(parent_id):
-        student_id = str(link.get("student_id") or "")
-        if not _is_active(link, parent_id, student_id):
-            continue
-        confirmed = active_link(parent_id, student_id)
-        if confirmed is not None:
-            children.append(confirmed)
-    return children
-
-
 def _live_pending(link: Mapping[str, Any], at: datetime | None) -> bool:
     return link.get("status") == STATUS_PENDING and not _pending_expired(link, at)
 
@@ -532,142 +455,3 @@ def pending_requests_for_student(student_id: str, *, now: str | None = None) -> 
         for link in parent_link_repo.list_links_for_student(student_id)
         if _live_pending(link, at)
     ]
-
-
-# --- The one judge of "is this relationship valid right now" -----------------
-#
-# Two key spaces hold parent-student relationships: the new bidirectional
-# `parent_student_link` rows and the legacy `parent_student_binding` rows. A
-# student profile's `parent_id` is a third thing and is not one of them: it is a
-# projection of a binding that may since have been revoked or deleted, so
-# holding that identifier is not a grant. Every read path that shows one party
-# the other's private data asks the functions below and nothing else.
-
-RELATIONSHIP_SOURCE_LINK: Final = parent_link_repo.ENTITY_TYPE
-RELATIONSHIP_SOURCE_BINDING: Final = "parent_student_binding"
-
-
-def _relationship(
-    row: Mapping[str, Any], source: str, parent_id: str, student_id: str
-) -> LinkItem:
-    return {
-        "parent_id": parent_id,
-        "student_id": student_id,
-        "relationship": row.get("relationship") or "child",
-        "status": STATUS_ACTIVE,
-        "source": source,
-    }
-
-
-def _active_legacy_binding(parent_id: str, student_id: str) -> LinkItem | None:
-    """The legacy binding, only when both rows agree and both accounts are usable.
-
-    Judged by the authorization engine's own rule, so the two cannot drift apart
-    (#34): this used to restate it field by field. The rule is taken in its
-    parts, in the order that stops earliest - rows, then the parent's account,
-    then the student's - so a pair refused on its rows or its parent never
-    reads the next profile, and a failure reading it cannot turn that refusal
-    into an error (#85).
-    """
-    from stoa.security.authorization import ParentAuthorizationFacts, active_account
-    from stoa.security.identity import CanonicalRole
-
-    forward = user_repo.get_parent_student_binding(parent_id, student_id)
-    reverse = user_repo.get_student_parent_binding(student_id, parent_id)
-    rows = ParentAuthorizationFacts(forward=forward, reverse=reverse)
-    if not rows.rows_match(parent_id, student_id):
-        return None
-    if not active_account(user_repo.get_user(parent_id), parent_id, CanonicalRole.PARENT):
-        return None
-    if not active_account(user_repo.get_user(student_id), student_id, CanonicalRole.STUDENT):
-        return None
-    assert forward is not None
-    return dict(forward)
-
-
-def current_relationship(parent_id: str, student_id: str) -> LinkItem | None:
-    """Whether this parent may read this student's private data right now."""
-    if not parent_id or not student_id:
-        return None
-    link = active_link(parent_id, student_id)
-    if link is not None:
-        return _relationship(link, RELATIONSHIP_SOURCE_LINK, parent_id, student_id)
-    binding = _active_legacy_binding(parent_id, student_id)
-    if binding is None:
-        return None
-    return _relationship(binding, RELATIONSHIP_SOURCE_BINDING, parent_id, student_id)
-
-
-RECIPIENT_RELATIONSHIP_REVOKED: Final = "relationship_revoked"
-RECIPIENT_MISSING: Final = "recipient_missing"
-
-
-@dataclass(frozen=True)
-class ParentRecipient:
-    """Where a parent's copy of a child's report may go right now.
-
-    Exactly one of `email` and `refusal` is set. The two refusals are kept
-    apart because they call for different people: a relationship that ended
-    is correct as it is, a current parent with no address needs fixing.
-    """
-
-    email: str | None = None
-    refusal: str | None = None
-
-
-def current_parent_recipient(parent_id: str, student_id: str) -> ParentRecipient:
-    """Judge the relationship now and read the parent's address from their profile.
-
-    Called at the moment of sending, never earlier: anything stored alongside
-    the report says who was entitled when it was written, not who is now.
-    """
-    if current_relationship(parent_id, student_id) is None:
-        return ParentRecipient(refusal=RECIPIENT_RELATIONSHIP_REVOKED)
-    parent = user_repo.get_user(parent_id) or {}
-    email = str(parent.get("email") or "").strip()
-    if not email:
-        return ParentRecipient(refusal=RECIPIENT_MISSING)
-    return ParentRecipient(email=email)
-
-
-def _current_from_candidates(pairs: list[tuple[str, str]]) -> list[LinkItem]:
-    relationships: list[LinkItem] = []
-    seen: set[tuple[str, str]] = set()
-    for parent_id, student_id in pairs:
-        if not parent_id or not student_id or (parent_id, student_id) in seen:
-            continue
-        seen.add((parent_id, student_id))
-        relationship = current_relationship(parent_id, student_id)
-        if relationship is not None:
-            relationships.append(relationship)
-    return relationships
-
-
-def current_children(parent_id: str) -> list[LinkItem]:
-    """Every student this parent may currently see, from both key spaces."""
-    if not parent_id:
-        return []
-    candidates = [
-        (parent_id, str(link.get("student_id") or ""))
-        for link in parent_link_repo.list_links_for_parent(parent_id)
-    ]
-    candidates.extend(
-        (parent_id, str(binding.get("student_id") or ""))
-        for binding in user_repo.list_parent_student_bindings(parent_id)
-    )
-    return _current_from_candidates(candidates)
-
-
-def current_parents(student_id: str) -> list[LinkItem]:
-    """Every parent who may currently see this student, from both key spaces."""
-    if not student_id:
-        return []
-    candidates = [
-        (str(link.get("parent_id") or ""), student_id)
-        for link in parent_link_repo.list_links_for_student(student_id)
-    ]
-    candidates.extend(
-        (str(binding.get("parent_id") or ""), student_id)
-        for binding in user_repo.list_student_parent_bindings(student_id)
-    )
-    return _current_from_candidates(candidates)

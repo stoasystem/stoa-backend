@@ -23,6 +23,7 @@ from stoa.security.errors import (
 )
 from stoa.security.events import SecurityEvent, project_security_event
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
+from stoa.services.current_relationship import Standing, Verdict
 
 
 POLICY_VERSION = "472.v1"
@@ -122,33 +123,33 @@ class ResourceRef:
 
 @dataclass(frozen=True, slots=True)
 class ParentAuthorizationFacts:
-    forward: Mapping[str, object] | None = None
-    reverse: Mapping[str, object] | None = None
+    """The relationship judge's verdict on this pair, and the two accounts it names.
+
+    `current_relationship` is the only judge of the relationship (#208); the
+    accounts are carried so the policy still refuses on an account it can see
+    is not usable, whoever built the facts.
+    """
+
+    verdict: Verdict | None = None
     parent_account: Mapping[str, object] | None = None
     student_account: Mapping[str, object] | None = None
 
     def matches(self, parent_id: str, student_id: str) -> bool:
         return (
-            self.rows_match(parent_id, student_id)
+            self.verdict is not None
+            and self.verdict.is_current
+            and self.verdict.about(parent_id, student_id)
             and active_account(self.parent_account, parent_id, CanonicalRole.PARENT)
             and active_account(self.student_account, student_id, CanonicalRole.STUDENT)
         )
 
-    def rows_match(self, parent_id: str, student_id: str) -> bool:
-        """The relationship rows alone: both active, agreeing, and about this pair.
-
-        Split out so a reader that has not loaded the accounts yet can stop
-        before loading them, as `parent_link_service` does (#85).
-        """
-        rows = (self.forward, self.reverse)
-        if any(not row or row.get("status") != "active" for row in rows):
-            return False
-        forward, reverse = rows
-        assert forward is not None and reverse is not None
-        coordinates = ("parent_id", "student_id", "relationship", "version")
-        if any(forward.get(key) != reverse.get(key) for key in coordinates):
-            return False
-        return forward.get("parent_id") == parent_id and forward.get("student_id") == student_id
+    def known_to(self, parent_id: str, student_id: str) -> bool:
+        """The parent is a party to this pair, current or not: refuse, do not hide."""
+        return (
+            self.verdict is not None
+            and self.verdict.is_known
+            and self.verdict.about(parent_id, student_id)
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -478,62 +479,6 @@ class AuthorizationFactRepository(Protocol):
     ) -> AuthorizationFacts: ...
 
 
-# A status only this projection uses: a link whose parent side says active but
-# which `active_link` did not confirm. No row is ever stored with it.
-UNCONFIRMED_LINK_STATUS = "unconfirmed"
-
-
-def _parent_link_facts(parent_id: str, student_id: str) -> ParentAuthorizationFacts | None:
-    """Project a many-to-many parent link onto the legacy binding fact contract.
-
-    `active_link` is the only status judgement: it demands both stored directions
-    be active and both accounts usable.  A link in any other status is still
-    reported, without `active`, so a party that already knows the relationship
-    keeps getting a refusal instead of an existence-hiding 404.
-    """
-    from stoa.db.repositories import user_repo
-    from stoa.services import parent_link_service
-
-    try:
-        confirmed = parent_link_service.active_link(parent_id, student_id)
-        link = confirmed or parent_link_service.known_link(parent_id, student_id)
-    except Exception:
-        # Reached only after the legacy binding has already failed to match, so
-        # the decision this feeds is a refusal whichever way it goes. A store
-        # that cannot answer must not turn that refusal into a 503: reporting no
-        # link is exactly the answer this path gave before a second table
-        # existed. The cost is that a misconfigured store looks like an absence
-        # of links rather than an error, so anything that makes these rows
-        # unreadable has to be caught by the store's own alarms, not here.
-        return None
-    if link is None:
-        return None
-    # `known_link` reports the parent side's status. When `active_link` did not
-    # confirm the pair - the two sides disagree, or an account is not usable -
-    # that side can still say active, and copying it here made the projection
-    # match (#85). No writer leaves the sides disagreeing today, so this was
-    # latent. An unconfirmed link is still reported, so a party that knows it
-    # keeps the refusal rather than a 404, but never as active.
-    status = str(link.get("status") or "pending")
-    if confirmed is not None:
-        status = "active"
-    elif status == "active":
-        status = UNCONFIRMED_LINK_STATUS
-    row = {
-        "parent_id": parent_id,
-        "student_id": student_id,
-        "relationship": link.get("relationship") or "child",
-        "status": status,
-        "version": 1,
-    }
-    return ParentAuthorizationFacts(
-        row,
-        dict(row),
-        user_repo.get_user(parent_id),
-        user_repo.get_user(student_id),
-    )
-
-
 class CurrentAuthorizationFactRepository:
     """Fresh local fact loader; it intentionally keeps no cross-request cache."""
 
@@ -547,25 +492,15 @@ class CurrentAuthorizationFactRepository:
     ) -> AuthorizationFacts:
         if actor.role is CanonicalRole.PARENT:
             from stoa.db.repositories import user_repo
+            from stoa.services import current_relationship
 
-            parent_facts = ParentAuthorizationFacts(
-                forward=user_repo.get_parent_student_binding(
-                    actor.user_id, resource.student_id
-                ),
-                reverse=user_repo.get_student_parent_binding(
-                    resource.student_id, actor.user_id
-                ),
-                parent_account=user_repo.get_user(actor.user_id),
-                student_account=user_repo.get_user(resource.student_id),
+            return AuthorizationFacts(
+                parent=ParentAuthorizationFacts(
+                    verdict=current_relationship.judge(actor.user_id, resource.student_id),
+                    parent_account=user_repo.get_user(actor.user_id),
+                    student_account=user_repo.get_user(resource.student_id),
+                )
             )
-            # The legacy binding holds one parent per student, so a second parent
-            # only ever exists in the link table.  Both key spaces feed the one
-            # decision path; neither may be the only place authorization looks.
-            if not parent_facts.matches(actor.user_id, resource.student_id):
-                linked = _parent_link_facts(actor.user_id, resource.student_id)
-                if linked is not None:
-                    parent_facts = linked
-            return AuthorizationFacts(parent=parent_facts)
         if actor.role is CanonicalRole.TEACHER:
             from stoa.db.repositories import question_repo, user_repo
 
@@ -912,13 +847,7 @@ def _relationship_known_to_actor(actor: Actor, resource: AuthorizedResource) -> 
     if actor.role is CanonicalRole.ADMIN:
         return True
     if actor.role is CanonicalRole.PARENT and resource.facts.parent:
-        rows = (resource.facts.parent.forward, resource.facts.parent.reverse)
-        return any(
-            row
-            and row.get("parent_id") == actor.user_id
-            and row.get("student_id") == resource.ref.student_id
-            for row in rows
-        )
+        return resource.facts.parent.known_to(actor.user_id, resource.ref.student_id)
     if actor.role is CanonicalRole.TEACHER and resource.facts.teacher:
         facts = resource.facts.teacher
         request = facts.request or {}
@@ -1129,19 +1058,16 @@ def evaluate_matrix_case(
 
 
 def _matrix_parent_facts(relation: str, student_id: str) -> ParentAuthorizationFacts | None:
-    if relation not in {"active_bidirectional_binding", "revoked_binding", "one_sided_binding"}:
+    standing = {
+        "active_bidirectional_binding": Standing.CURRENT,
+        "revoked_binding": Standing.KNOWN,
+        # One stored side is not a relationship the judge knows.
+        "one_sided_binding": Standing.UNKNOWN,
+    }.get(relation)
+    if standing is None:
         return None
-    status = "revoked" if relation == "revoked_binding" else "active"
-    row = {
-        "parent_id": "parent-1",
-        "student_id": student_id,
-        "relationship": "child",
-        "version": 1,
-        "status": status,
-    }
     return ParentAuthorizationFacts(
-        row,
-        None if relation == "one_sided_binding" else dict(row),
+        Verdict(standing, "parent-1", student_id, relationship="child"),
         {"user_id": "parent-1", "role": "parent", "account_status": "active"},
         {"user_id": student_id, "role": "student", "account_status": "active"},
     )

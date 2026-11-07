@@ -41,9 +41,11 @@ more than one scan however the fixture was written - see the scan counts below.
 def _seed(table: CountingTable) -> None:
     """Parent profiles first, so a full page is parents and nothing else.
 
-    That is the expensive shape and therefore the one worth holding: a parent row
-    costs a link query plus a read per child, a student row costs a link query
-    plus a read per parent.
+    That is the expensive shape and therefore the one worth holding. Both sides
+    now ask the relationship judge, so a parent row and a student row cost the
+    same: a link query, then per counterpart the two link rows, the two profiles
+    and the counterpart's account number. (A student row used to skip the judge
+    and cost one read per parent; no student reaches the pages pinned here.)
     """
     for index in range(PARENTS):
         parent_id = f"parent-{index}"
@@ -73,12 +75,15 @@ def _seed(table: CountingTable) -> None:
                 "account_number": f"S26-{index:04d}{child}",
                 "created_at": "2026-01-01T00:00:00+00:00",
             })
+            # A current link as the link writer stores it: both sides active and
+            # agreeing on the relationship and the write that last touched them.
             link = {
-                "entity_type": "parent_student_binding",
+                "entity_type": parent_link_repo.ENTITY_TYPE,
                 "parent_id": parent_id,
                 "student_id": student_id,
-                "relationship": "parent",
+                "relationship": "child",
                 "status": parent_link_repo.STATUS_ACTIVE,
+                "link_updated_at": "2026-01-01T00:00:00+00:00",
             }
             table.seed({
                 "PK": f"PARENT#{parent_id}",
@@ -119,9 +124,9 @@ def test_一页两百个家长账号要打三千两百次数据库(table: Counti
     """The measured cost of the largest page this route accepts.
 
     Seven scans + one link query per row + five reads per link: the two link rows,
-    the two profiles `active_link` checks, and the counterpart profile read a second
-    time for its account number. The parent's own profile is read once per child
-    although the scan already returned it.
+    the two profiles the relationship judge checks, and the counterpart profile read
+    a second time for its account number. The parent's own profile is read once per
+    child although the scan already returned it. 200 parents x 3 links x 5 = 3000.
     """
     response = _client().get("/admin/users?limit=200")
 

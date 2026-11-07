@@ -24,6 +24,7 @@ from stoa.security.identity import (
 )
 from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import adaptive_learning_service
+from stoa.services.current_relationship import SOURCE_LINK, Standing, Verdict
 from audit_helpers import MemoryAuthorizationAuditSink
 from fakes.dynamodb import as_stored as _as_stored
 
@@ -66,17 +67,16 @@ def _app(user: dict) -> TestClient:
                 "account_status": "active",
             }
             if current_actor.role is CanonicalRole.PARENT:
-                row = {
-                    "parent_id": current_actor.user_id,
-                    "student_id": resource.student_id,
-                    "relationship": "child",
-                    "status": "active",
-                    "version": 1,
-                }
                 return AuthorizationFacts(
                     parent=ParentAuthorizationFacts(
-                        row,
-                        dict(row),
+                        Verdict(
+                            Standing.CURRENT,
+                            current_actor.user_id,
+                            resource.student_id,
+                            relationship="child",
+                            status="active",
+                            source=SOURCE_LINK,
+                        ),
                         {
                             "user_id": current_actor.user_id,
                             "role": "parent",

@@ -5,11 +5,11 @@ from typing import Any
 
 from stoa import config
 from stoa.config import Settings
-from stoa.db.repositories import parent_link_repo, user_repo
+from stoa.db.repositories import user_repo
 from stoa.services import (
     account_verification_service,
+    current_relationship,
     entitlement_service,
-    parent_link_service,
     subscription_service,
     usage_ledger_service,
 )
@@ -70,33 +70,23 @@ def _current_child_operation_rows(
     settings: Settings,
     day: str | None,
 ) -> list[dict[str, Any]]:
-    """The parent-visible set: only relationships that are valid right now.
+    """The parent-visible set: only relationships that are current right now.
 
-    The admin detail below keeps the wider enumeration on purpose - support
-    repairs a revoked or half-stored relationship by seeing it - and that route
-    is authorized as an administrator, not as a party to the relationship.
+    The admin detail below shows every relationship the parent's side stores,
+    current or not, on purpose - support has to see a relationship that is no
+    longer current to close it - and that route is authorized as an
+    administrator, not as a party to the relationship.
     """
-    rows: list[dict[str, Any]] = []
-    for relationship in parent_link_service.current_children(parent_id):
-        student_id = str(relationship.get("student_id") or "")
-        if not student_id:
-            continue
-        rows.append(
-            _child_operation_row(
-                parent_id,
-                student_id,
-                {
-                    "parent_id": parent_id,
-                    "student_id": student_id,
-                    "status": "active",
-                    "relationship": relationship.get("relationship") or "child",
-                    "source": relationship.get("source"),
-                },
-                settings=settings,
-                day=day,
-            )
+    return [
+        _child_operation_row(
+            parent_id,
+            verdict.student_id,
+            _relationship_row(verdict),
+            settings=settings,
+            day=day,
         )
-    return rows
+        for verdict in current_relationship.children_of(parent_id)
+    ]
 
 
 def _child_operation_rows(
@@ -105,57 +95,29 @@ def _child_operation_rows(
     settings: Settings,
     day: str | None,
 ) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for binding in user_repo.list_parent_student_bindings(parent_id):
-        student_id = str(binding.get("student_id") or "")
-        if not student_id or student_id in seen:
-            continue
-        seen.add(student_id)
-        rows.append(_child_operation_row(parent_id, student_id, binding, settings=settings, day=day))
-    for child in user_repo.list_children_by_parent_scan(parent_id):
-        student_id = str(child.get("user_id") or child.get("id") or "")
-        if not student_id or student_id in seen:
-            continue
-        seen.add(student_id)
-        rows.append(
-            _child_operation_row(
-                parent_id,
-                student_id,
-                {
-                    "parent_id": parent_id,
-                    "student_id": student_id,
-                    "status": child.get("parent_binding_status") or "profile_parent_link",
-                    "relationship": child.get("relationship") or "child",
-                    "source": "student_profile_parent_id",
-                },
-                settings=settings,
-                day=day,
-                child_profile=child,
-            )
+    return [
+        _child_operation_row(
+            parent_id,
+            verdict.student_id,
+            _relationship_row(verdict),
+            settings=settings,
+            day=day,
         )
-    for link in parent_link_repo.list_links_for_parent(parent_id):
-        student_id = str(link.get("student_id") or "")
-        if not student_id or student_id in seen:
-            continue
-        seen.add(student_id)
-        rows.append(
-            _child_operation_row(
-                parent_id,
-                student_id,
-                {
-                    "parent_id": parent_id,
-                    "student_id": student_id,
-                    "status": link.get("status") or "missing",
-                    "relationship": link.get("relationship") or "child",
-                    "source": "parent_student_link",
-                    "updated_at": link.get("link_updated_at") or link.get("linked_at"),
-                },
-                settings=settings,
-                day=day,
-            )
-        )
-    return rows
+        for verdict in current_relationship.known_children_of(parent_id)
+    ]
+
+
+def _relationship_row(verdict: current_relationship.Verdict) -> dict[str, Any]:
+    return {
+        "parent_id": verdict.parent_id,
+        "student_id": verdict.student_id,
+        # What the rows store. A pair whose rows say active but whose account is
+        # not usable shows as active here; the account's own state says why.
+        "status": "active" if verdict.is_current else verdict.status or "missing",
+        "relationship": verdict.relationship or "child",
+        "source": verdict.source,
+        "updated_at": verdict.version,
+    }
 
 
 def _child_operation_row(
@@ -269,7 +231,7 @@ def _support_state(
         warnings.append("no_linked_children")
     for child in children:
         binding_status = str((child.get("binding") or {}).get("status") or "")
-        if binding_status not in {"active", "profile_parent_link"}:
+        if binding_status != "active":
             warnings.append(f"child_binding_{binding_status}")
         child_verification = (child.get("profile") or {}).get("verification") or {}
         if child_verification.get("emailVerificationRequired"):

@@ -401,7 +401,7 @@ def _prove_old_nonpayable(
     return recorded.command
 
 
-def _install_active_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+def _install_active_scope(monkeypatch: pytest.MonkeyPatch, link_rows: Any) -> None:
     profiles = {
         PARENT_ID: {
             "user_id": PARENT_ID,
@@ -419,30 +419,8 @@ def _install_active_scope(monkeypatch: pytest.MonkeyPatch) -> None:
         "get_user",
         lambda user_id, **_kwargs: profiles.get(user_id),
     )
-    binding = {
-        "parent_id": PARENT_ID,
-        "student_id": STUDENT_ID,
-        "relationship": "child",
-        "status": "active",
-    }
-    monkeypatch.setattr(
-        subscription_service.user_repo,
-        "get_parent_student_binding",
-        lambda parent_id, student_id: (
-            dict(binding)
-            if (parent_id, student_id) == (PARENT_ID, STUDENT_ID)
-            else None
-        ),
-    )
-    monkeypatch.setattr(
-        subscription_service.user_repo,
-        "get_student_parent_binding",
-        lambda student_id, parent_id: (
-            dict(binding)
-            if (parent_id, student_id) == (PARENT_ID, STUDENT_ID)
-            else None
-        ),
-    )
+    # The relationship the checkout rests on: a current child link (#287).
+    link_rows.link(PARENT_ID, STUDENT_ID)
 
 
 def _confirm(settings: Settings | None = None) -> dict[str, Any]:
@@ -567,8 +545,9 @@ def test_provider_retrieve_and_expire_use_only_the_bound_test_session(
 
 def test_open_session_is_expired_proven_and_superseded_before_new_create(
     monkeypatch: pytest.MonkeyPatch,
+    link_rows: Any,
 ) -> None:
-    _install_active_scope(monkeypatch)
+    _install_active_scope(monkeypatch, link_rows)
     harness = SupersessionHarness()
     harness.install(monkeypatch)
     provider_statuses = iter(("open", "expired"))
@@ -632,8 +611,9 @@ def test_open_session_is_expired_proven_and_superseded_before_new_create(
 
 def test_already_expired_session_skips_expire_and_preserves_prior_access(
     monkeypatch: pytest.MonkeyPatch,
+    link_rows: Any,
 ) -> None:
-    _install_active_scope(monkeypatch)
+    _install_active_scope(monkeypatch, link_rows)
     harness = SupersessionHarness()
     harness.install(monkeypatch)
     prior_access = {
@@ -676,9 +656,10 @@ def test_already_expired_session_skips_expire_and_preserves_prior_access(
 @pytest.mark.parametrize("provider_outcome", ["complete", "timeout"])
 def test_complete_or_unknown_session_retains_old_guard_and_never_creates(
     monkeypatch: pytest.MonkeyPatch,
+    link_rows: Any,
     provider_outcome: str,
 ) -> None:
-    _install_active_scope(monkeypatch)
+    _install_active_scope(monkeypatch, link_rows)
     harness = SupersessionHarness()
     harness.install(monkeypatch)
 
@@ -720,8 +701,9 @@ def test_complete_or_unknown_session_retains_old_guard_and_never_creates(
 
 def test_cross_owner_reference_is_concealed_before_provider_access(
     monkeypatch: pytest.MonkeyPatch,
+    link_rows: Any,
 ) -> None:
-    _install_active_scope(monkeypatch)
+    _install_active_scope(monkeypatch, link_rows)
     harness = SupersessionHarness()
     harness.install(monkeypatch)
     monkeypatch.setattr(
@@ -746,8 +728,9 @@ def test_cross_owner_reference_is_concealed_before_provider_access(
 
 def test_two_concurrent_confirmations_converge_on_one_new_command_and_session(
     monkeypatch: pytest.MonkeyPatch,
+    link_rows: Any,
 ) -> None:
-    _install_active_scope(monkeypatch)
+    _install_active_scope(monkeypatch, link_rows)
     harness = SupersessionHarness()
     harness.install(monkeypatch)
     expire_calls = 0

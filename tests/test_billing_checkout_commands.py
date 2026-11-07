@@ -76,43 +76,17 @@ def _profiles() -> dict[str, dict[str, object]]:
     }
 
 
-def _install_active_binding(monkeypatch, *, student_id: str = STUDENT_ID) -> None:
+def _install_active_link(
+    monkeypatch, link_rows, *, student_id: str = STUDENT_ID
+) -> None:
+    """Both accounts, and a current child link between them (#287)."""
     profiles = _profiles()
     monkeypatch.setattr(
         subscription_service.user_repo,
         "get_user",
         lambda user_id, **_kwargs: profiles.get(user_id),
     )
-    monkeypatch.setattr(
-        subscription_service.user_repo,
-        "get_parent_student_binding",
-        lambda parent_id, requested_student_id: (
-            {
-                "entity_type": "parent_student_binding",
-                "parent_id": parent_id,
-                "student_id": requested_student_id,
-                "relationship": "child",
-                "status": "active",
-            }
-            if parent_id == PARENT_ID and requested_student_id == student_id
-            else None
-        ),
-    )
-    monkeypatch.setattr(
-        subscription_service.user_repo,
-        "get_student_parent_binding",
-        lambda requested_student_id, parent_id: (
-            {
-                "entity_type": "parent_student_binding",
-                "parent_id": parent_id,
-                "student_id": requested_student_id,
-                "relationship": "child",
-                "status": "active",
-            }
-            if parent_id == PARENT_ID and requested_student_id == student_id
-            else None
-        ),
-    )
+    link_rows.link(PARENT_ID, student_id)
 
 
 class CommandHarness:
@@ -297,8 +271,8 @@ def _create(
     )
 
 
-def test_command_and_provider_intent_are_durable_before_stripe_and_attach(monkeypatch):
-    _install_active_binding(monkeypatch)
+def test_command_and_provider_intent_are_durable_before_stripe_and_attach(monkeypatch, link_rows):
+    _install_active_link(monkeypatch, link_rows)
     harness = CommandHarness()
     harness.install(monkeypatch)
     provider_calls: list[dict[str, object]] = []
@@ -334,8 +308,8 @@ def test_command_and_provider_intent_are_durable_before_stripe_and_attach(monkey
     }
 
 
-def test_timeout_retries_identical_stripe_request_and_replays_one_session(monkeypatch):
-    _install_active_binding(monkeypatch)
+def test_timeout_retries_identical_stripe_request_and_replays_one_session(monkeypatch, link_rows):
+    _install_active_link(monkeypatch, link_rows)
     harness = CommandHarness()
     harness.install(monkeypatch)
     calls: list[dict[str, object]] = []
@@ -362,8 +336,8 @@ def test_timeout_retries_identical_stripe_request_and_replays_one_session(monkey
     assert harness.unknown_calls == 0
 
 
-def test_concurrent_duplicate_clicks_share_one_provider_session(monkeypatch):
-    _install_active_binding(monkeypatch)
+def test_concurrent_duplicate_clicks_share_one_provider_session(monkeypatch, link_rows):
+    _install_active_link(monkeypatch, link_rows)
     harness = CommandHarness()
     harness.install(monkeypatch)
     provider_count = 0
@@ -391,8 +365,8 @@ def test_concurrent_duplicate_clicks_share_one_provider_session(monkeypatch):
     assert harness.attach_calls == 1
 
 
-def test_same_key_payload_change_and_different_open_key_are_conflicts(monkeypatch):
-    _install_active_binding(monkeypatch)
+def test_same_key_payload_change_and_different_open_key_are_conflicts(monkeypatch, link_rows):
+    _install_active_link(monkeypatch, link_rows)
     harness = CommandHarness()
     harness.install(monkeypatch)
     monkeypatch.setattr(
@@ -417,10 +391,12 @@ def test_same_key_payload_change_and_different_open_key_are_conflicts(monkeypatc
         ("inactive_student", "checkout_beneficiary_invalid"),
         ("missing_forward", "checkout_beneficiary_invalid"),
         ("wrong_reverse_parent", "checkout_beneficiary_invalid"),
+        ("legacy_binding_only", "checkout_beneficiary_invalid"),
     ],
 )
 def test_invalid_inactive_or_unbound_beneficiary_never_reaches_provider(
     monkeypatch,
+    link_rows,
     mutation,
     expected_code,
 ):
@@ -432,32 +408,38 @@ def test_invalid_inactive_or_unbound_beneficiary_never_reaches_provider(
         "get_user",
         lambda user_id, **_kwargs: profiles.get(user_id),
     )
-    monkeypatch.setattr(
-        subscription_service.user_repo,
-        "get_parent_student_binding",
-        lambda parent_id, student_id: (
-            None
-            if mutation == "missing_forward"
-            else {
+    if mutation == "legacy_binding_only":
+        # The retired binding rows, and no link: they buy the student nothing.
+        monkeypatch.setattr(
+            subscription_service.user_repo,
+            "get_parent_student_binding",
+            lambda parent_id, student_id: {
                 "entity_type": "parent_student_binding",
                 "parent_id": parent_id,
                 "student_id": student_id,
                 "relationship": "child",
                 "status": "active",
-            }
-        ),
-    )
-    monkeypatch.setattr(
-        subscription_service.user_repo,
-        "get_student_parent_binding",
-        lambda student_id, parent_id: {
-            "entity_type": "parent_student_binding",
-            "parent_id": "different-parent" if mutation == "wrong_reverse_parent" else parent_id,
-            "student_id": student_id,
-            "relationship": "child",
-            "status": "active",
-        },
-    )
+            },
+        )
+        monkeypatch.setattr(
+            subscription_service.user_repo,
+            "get_student_parent_binding",
+            lambda student_id, parent_id: {
+                "entity_type": "parent_student_binding",
+                "parent_id": parent_id,
+                "student_id": student_id,
+                "relationship": "child",
+                "status": "active",
+            },
+        )
+    else:
+        link_rows.link(PARENT_ID, STUDENT_ID)
+    if mutation == "missing_forward":
+        link_rows.table.rows.pop((f"PARENT#{PARENT_ID}", f"CHILD#{STUDENT_ID}"))
+    if mutation == "wrong_reverse_parent":
+        reverse = link_rows.side(f"STUDENT#{STUDENT_ID}", f"PARENT#{PARENT_ID}")
+        assert reverse is not None
+        reverse["parent_id"] = "different-parent"
     provider_calls = 0
 
     def provider(**kwargs):
@@ -478,8 +460,8 @@ def test_invalid_inactive_or_unbound_beneficiary_never_reaches_provider(
     assert provider_calls == 0
 
 
-def test_cardinality_and_sandbox_configuration_fail_before_provider(monkeypatch):
-    _install_active_binding(monkeypatch)
+def test_cardinality_and_sandbox_configuration_fail_before_provider(monkeypatch, link_rows):
+    _install_active_link(monkeypatch, link_rows)
     provider_calls = 0
 
     def provider(**kwargs):
@@ -512,8 +494,8 @@ def test_cardinality_and_sandbox_configuration_fail_before_provider(monkeypatch)
     assert provider_calls == 0
 
 
-def test_live_provider_object_is_never_attached(monkeypatch):
-    _install_active_binding(monkeypatch)
+def test_live_provider_object_is_never_attached(monkeypatch, link_rows):
+    _install_active_link(monkeypatch, link_rows)
     harness = CommandHarness()
     harness.install(monkeypatch)
     monkeypatch.setattr(

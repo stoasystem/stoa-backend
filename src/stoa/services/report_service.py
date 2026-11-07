@@ -22,7 +22,7 @@ from stoa.db.repositories import (
     report_repo,
     user_repo,
 )
-from stoa.services import notify_service, parent_link_service, report_artifact_service
+from stoa.services import current_relationship, notify_service, report_artifact_service
 
 logger = logging.getLogger(__name__)
 
@@ -396,7 +396,7 @@ def store_and_send_weekly_report(
     # The payload was judged before the AI call and the artifact writes; the
     # relationship can end, or the address change, in between. Judge again at
     # the last moment, and send to the address the parent has now.
-    recipient = parent_link_service.current_parent_recipient(
+    recipient = current_relationship.current_parent_recipient(
         str(report_item["parent_id"]),
         str(report_item["student_id"]),
     )
@@ -450,10 +450,10 @@ def store_and_send_weekly_report(
 
 
 _WITHHELD_MESSAGES = {
-    parent_link_service.RECIPIENT_RELATIONSHIP_REVOKED: (
+    current_relationship.RECIPIENT_RELATIONSHIP_REVOKED: (
         "Parent is no longer linked to the student"
     ),
-    parent_link_service.RECIPIENT_MISSING: "Parent has no email address",
+    current_relationship.RECIPIENT_MISSING: "Parent has no email address",
 }
 
 
@@ -671,10 +671,9 @@ def _get_linked_student_profile(parent_id: str, student_id: str) -> dict[str, An
     """A report is private data, so the relationship is judged, not matched.
 
     The profile scan this replaced accepted any student carrying the parent's
-    identifier, including one whose binding had been revoked, and it could not
-    see a `parent_student_link` at all.
+    identifier, including one whose relationship had been revoked.
     """
-    if parent_link_service.current_relationship(parent_id, student_id) is None:
+    if not current_relationship.judge(parent_id, student_id).is_current:
         raise ValueError("student is not linked to parent")
     student = user_repo.get_user(student_id)
     if not student:

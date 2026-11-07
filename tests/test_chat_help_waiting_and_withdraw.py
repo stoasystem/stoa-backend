@@ -427,7 +427,7 @@ def test_an_offer_made_by_a_sweep_meanwhile_is_withdrawn_with_the_request(
 def test_a_parent_cannot_withdraw_their_childs_request(table) -> None:
     from stoa.routers import conversations
     from stoa.security.route_authorization import get_authorization_fact_repository
-    from stoa.services import parent_link_service
+    from stoa.services import current_relationship, parent_link_service
 
     parent = "parent-of-student-66"
     table.seed(
@@ -443,7 +443,7 @@ def test_a_parent_cannot_withdraw_their_childs_request(table) -> None:
     )
     # A real, active link: the refusal is about the route, not a missing relationship.
     parent_link_service.assign_link(parent_id=parent, student_id=STUDENT, actor_id="admin-1")
-    assert parent_link_service.active_link(parent, STUDENT) is not None
+    assert current_relationship.judge(parent, STUDENT).is_current
 
     app = FastAPI()
     app.include_router(conversations.teacher_help_router, prefix="/teacher-help")

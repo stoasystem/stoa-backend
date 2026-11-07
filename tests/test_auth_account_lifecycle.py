@@ -779,20 +779,32 @@ def test_login_code_policy_is_deferred_without_tokens():
     assert "accessToken" not in confirm.json()
 
 
-def test_admin_can_inspect_account_verification_status(monkeypatch):
+def _verification_profile(user_id, **extra):
+    role = "parent" if user_id.startswith("parent") else "student"
+    return {
+        "user_id": user_id,
+        "role": role,
+        "account_status": "active",
+        "email": f"{role}@example.com",
+        "email_verification_status": "expired_verification",
+        "email_verification_required": True,
+        "email_verification_policy": "cognito_sign_up_confirm_sign_up",
+        "email_verification_resend_count": 2,
+        **extra,
+    }
+
+
+def test_admin_can_inspect_account_verification_status(monkeypatch, link_rows):
+    # The profile pointer is not a relationship (#287): with no link stored,
+    # the summary reports none however the profile describes itself.
     monkeypatch.setattr(
         admin.user_repo,
         "get_user",
-        lambda user_id, **_kwargs: {
-            "user_id": user_id,
-            "role": "student",
-            "email": "student@example.com",
-            "email_verification_status": "expired_verification",
-            "email_verification_required": True,
-            "email_verification_policy": "cognito_sign_up_confirm_sign_up",
-            "email_verification_resend_count": 2,
-            "parent_binding_status": "active_pending_verification",
-        },
+        lambda user_id, **_kwargs: _verification_profile(
+            user_id,
+            parent_id="parent-1",
+            parent_binding_status="active_pending_verification",
+        ),
     )
 
     response = _admin_client().get("/admin/account-verification/student-1")
@@ -803,9 +815,26 @@ def test_admin_can_inspect_account_verification_status(monkeypatch):
     assert body["emailVerificationStatus"] == "expired_verification"
     assert body["accountActivationStatus"] == "pending_email_verification"
     assert body["emailVerificationPolicy"] == "cognito_sign_up_confirm_sign_up"
-    assert body["parentBindingStatus"] == "active_pending_verification"
+    assert body["parentBindingStatus"] is None
     assert body["supportRecoveryState"] == "expired_code"
     assert body["supportAction"] == "resend_verification_code"
+
+
+def test_admin_verification_status_reports_a_current_link_as_active(monkeypatch, link_rows):
+    link_rows.link("parent-1", "student-1")
+    monkeypatch.setattr(
+        admin.user_repo,
+        "get_user",
+        lambda user_id, **_kwargs: _verification_profile(user_id),
+    )
+
+    student = _admin_client().get("/admin/account-verification/student-1")
+    parent = _admin_client().get("/admin/account-verification/parent-1")
+
+    assert student.status_code == 200
+    assert student.json()["parentBindingStatus"] == "active"
+    assert parent.status_code == 200
+    assert parent.json()["parentBindingStatus"] == "active"
 
 
 def test_admin_can_inspect_and_repair_parent_binding(monkeypatch):

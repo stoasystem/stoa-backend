@@ -23,7 +23,7 @@ from stoa.routers import parents, students
 from stoa.security.authorization import CurrentAuthorizationFactRepository
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.route_authorization import get_authorization_fact_repository
-from stoa.services import parent_link_service
+from stoa.services import current_relationship, parent_link_service
 from rule_violation_helpers import assert_violation
 
 
@@ -178,13 +178,6 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeLinkTable:
         fake.seed_account_fence(user_id)
     monkeypatch.setattr(parent_link_repo, "get_table", lambda: fake)
     monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(ACCOUNTS.get(user_id)))
-    monkeypatch.setattr(user_repo, "list_parent_student_bindings", lambda _parent_id: [])
-    monkeypatch.setattr(
-        user_repo, "get_parent_student_binding", lambda _parent_id, _student_id: None
-    )
-    monkeypatch.setattr(
-        user_repo, "get_student_parent_binding", lambda _student_id, _parent_id: None
-    )
     return fake
 
 
@@ -237,7 +230,7 @@ def test_self_service_request_stops_at_pending(table: FakeLinkTable) -> None:
     assert link["status"] == "pending"
     assert table.items[("PARENT#parent-a", "CHILD#student-b")]["status"] == "pending"
     assert table.items[("STUDENT#student-b", "PARENT#parent-a")]["status"] == "pending"
-    assert parent_link_service.active_link("parent-a", "student-b") is None
+    assert not current_relationship.judge("parent-a", "student-b").is_current
 
 
 def test_many_to_many_in_both_directions(table: FakeLinkTable) -> None:
@@ -250,7 +243,7 @@ def test_many_to_many_in_both_directions(table: FakeLinkTable) -> None:
             parent_id=parent_id, student_id=student_id, actor_id="admin-1", now=NOW
         )
 
-    children = {link["student_id"] for link in parent_link_service.active_children("parent-a")}
+    children = {verdict.student_id for verdict in current_relationship.children_of("parent-a")}
     assert children == {"student-b", "student-c"}
     parents_of_b = {
         link["parent_id"]
@@ -269,12 +262,12 @@ def test_only_the_counterpart_can_confirm(table: FakeLinkTable) -> None:
             parent_id="parent-a", student_id="student-b", actor_id="parent-a", now=NOW
         )
     assert refused.value.code == "link_confirmation_not_allowed"
-    assert parent_link_service.active_link("parent-a", "student-b") is None
+    assert not current_relationship.judge("parent-a", "student-b").is_current
 
     parent_link_service.confirm_link(
         parent_id="parent-a", student_id="student-b", actor_id="student-b", now=NOW
     )
-    assert parent_link_service.active_link("parent-a", "student-b") is not None
+    assert current_relationship.judge("parent-a", "student-b").is_current
 
 
 def test_rejected_request_never_becomes_visible(table: FakeLinkTable) -> None:
@@ -286,8 +279,8 @@ def test_rejected_request_never_becomes_visible(table: FakeLinkTable) -> None:
     )
 
     assert table.items[("PARENT#parent-a", "CHILD#student-b")]["status"] == "rejected"
-    assert parent_link_service.active_link("parent-a", "student-b") is None
-    assert parent_link_service.active_children("parent-a") == []
+    assert not current_relationship.judge("parent-a", "student-b").is_current
+    assert current_relationship.children_of("parent-a") == []
 
 
 def test_pending_link_denies_the_child_data_route(
@@ -481,7 +474,7 @@ def test_只有单侧行时可见性不成立(table: FakeLinkTable, quiet_learni
     )
     del table.items[("STUDENT#student-b", "PARENT#parent-a")]
 
-    assert parent_link_service.active_link("parent-a", "student-b") is None
+    assert not current_relationship.judge("parent-a", "student-b").is_current
 
     client = TestClient(_parent_app("parent-a"))
     response = client.get("/parents/me/children/student-b/learning-profile")
@@ -548,7 +541,7 @@ def test_发起方自己不能确认哪怕_initiator_role_被写反(table: FakeL
             parent_id="parent-a", student_id="student-b", actor_id="parent-a", now=NOW
         )
 
-    assert parent_link_service.active_link("parent-a", "student-b") is None
+    assert not current_relationship.judge("parent-a", "student-b").is_current
 
 
 # ---------------------------------------------------------------------------
@@ -598,7 +591,7 @@ def test_被拒满七天后重新发起成立且只到_pending(table: FakeLinkTa
     assert table.items[("PARENT#parent-a", "CHILD#student-b")]["status"] == "pending"
     assert table.items[("STUDENT#student-b", "PARENT#parent-a")]["status"] == "pending"
     # 冷却期结束不等于关联成立：重新发起的仍然要对方确认。
-    assert parent_link_service.active_link("parent-a", "student-b") is None
+    assert not current_relationship.judge("parent-a", "student-b").is_current
 
 
 def test_未满十四天的_pending_仍然占着这一对(table: FakeLinkTable) -> None:
@@ -643,7 +636,7 @@ def test_过期的_pending_不能再被确认(table: FakeLinkTable) -> None:
         )
 
     assert refused.value.code == "link_request_expired"
-    assert parent_link_service.active_link("parent-a", "student-b") is None
+    assert not current_relationship.judge("parent-a", "student-b").is_current
 
 
 def test_过期的_pending_不再出现在待办列表里(table: FakeLinkTable) -> None:
@@ -665,7 +658,7 @@ def test_管理员分配不被拒绝挡住也不受冷却期约束(table: FakeLi
 
     assert link["status"] == "active"
     assert link["initiator_role"] == "admin"
-    assert parent_link_service.active_link("parent-a", "student-b") is not None
+    assert current_relationship.judge("parent-a", "student-b").is_current
     assert table.items[("STUDENT#student-b", "PARENT#parent-a")]["status"] == "active"
 
 
@@ -702,14 +695,14 @@ def test_已成立的关联不会因为时间流逝而失效(table: FakeLinkTabl
         parent_id="parent-a", student_id="student-b", actor_id="student-b", now=_at(1)
     )
 
-    assert parent_link_service.active_link("parent-a", "student-b") is not None
-    assert parent_link_service.active_children("parent-a") != []
+    assert current_relationship.judge("parent-a", "student-b").is_current
+    assert current_relationship.children_of("parent-a") != []
     with pytest.raises(parent_link_service.ParentLinkError) as refused:
         parent_link_service.request_link(
             requester_id="parent-a", counterpart_id="student-b", now=_at(3650)
         )
     assert refused.value.code == "link_already_active"
-    assert parent_link_service.active_link("parent-a", "student-b") is not None
+    assert current_relationship.judge("parent-a", "student-b").is_current
 
 
 def test_两个请求同时抢一个空键位只有一个成功(table: FakeLinkTable) -> None:

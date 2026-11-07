@@ -2,14 +2,13 @@
 
 from datetime import date, datetime, timedelta, timezone
 import logging
-from collections.abc import Mapping
-from typing import Any, Protocol, cast
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo, report_repo
 from stoa.services import (
-    parent_link_service,
+    current_relationship,
     report_artifact_service,
     report_recovery_job_service,
     report_service,
@@ -19,10 +18,6 @@ logger = logging.getLogger(__name__)
 
 ZURICH_TZ = ZoneInfo("Europe/Zurich")
 SKIPPED_STATUSES = {"generated", "email_sent", "email_failed"}
-
-
-class _ScanTable(Protocol):
-    def scan(self, **kwargs: object) -> Mapping[str, object]: ...
 
 
 def _increment_count(counts: dict[str, object], field: str) -> None:
@@ -36,17 +31,6 @@ def _positive_fence_generation(value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         raise RuntimeError("weekly report account fence generation is invalid")
     return value
-
-
-def _dynamodb_item(value: object) -> Mapping[str, object] | None:
-    if not isinstance(value, Mapping) or not all(isinstance(key, str) for key in value):
-        return None
-    return value
-
-
-def _dynamodb_key(value: object) -> dict[str, object] | None:
-    item = _dynamodb_item(value)
-    return dict(item) if item is not None else None
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
@@ -164,71 +148,15 @@ def eligible_parent_student_pairs() -> list[dict[str, str]]:
     return [
         pair
         for pair in discover_linked_parent_student_pairs()
-        if parent_link_service.current_relationship(pair["parent_id"], pair["student_id"])
-        is not None
+        if current_relationship.judge(pair["parent_id"], pair["student_id"]).is_current
     ]
 
 
 def discover_linked_parent_student_pairs() -> list[dict[str, str]]:
-    """Gather candidate pairs from both relationship tables and legacy profiles.
+    """Candidate pairs from the link rows; `eligible_parent_student_pairs` judges them."""
+    return [
+        {"parent_id": parent_id, "student_id": student_id}
+        for parent_id, student_id in current_relationship.candidate_pairs(table=get_table())
+    ]
 
-    This is candidate gathering, not authorization: the profile scan below finds
-    a stale `parent_id` too. `eligible_parent_student_pairs` is what the job
-    runs on.
-    """
-    table = cast(_ScanTable, get_table())
-    scan_kwargs: dict[str, Any] = {
-        "FilterExpression": "#role = :role AND attribute_exists(#pid)",
-        "ExpressionAttributeNames": {"#role": "role", "#pid": "parent_id"},
-        "ExpressionAttributeValues": {":role": "student"},
-    }
-    pairs_by_key: dict[tuple[str, str], dict[str, str]] = {}
-    # Both relationship key spaces are scanned in one pass. The forward row of
-    # either is PK=<owner>/SK=CHILD#<student>, so the SK filter below still
-    # takes each pair exactly once.
-    binding_scan_kwargs: dict[str, Any] = {
-        "FilterExpression": "#entity IN (:binding, :link) AND #status = :status",
-        "ExpressionAttributeNames": {"#entity": "entity_type", "#status": "status"},
-        "ExpressionAttributeValues": {
-            ":binding": "parent_student_binding",
-            ":link": "parent_student_link",
-            ":status": "active",
-        },
-    }
-    while True:
-        result = table.scan(**binding_scan_kwargs)
-        raw_items = result.get("Items", [])
-        if not isinstance(raw_items, list):
-            break
-        for raw_item in raw_items:
-            item = _dynamodb_item(raw_item)
-            if item is None:
-                continue
-            if not str(item.get("SK", "")).startswith("CHILD#"):
-                continue
-            parent_id = item.get("parent_id")
-            student_id = item.get("student_id")
-            if isinstance(parent_id, str) and isinstance(student_id, str):
-                pairs_by_key[(parent_id, student_id)] = {"parent_id": parent_id, "student_id": student_id}
-        last_key = _dynamodb_key(result.get("LastEvaluatedKey"))
-        if last_key is None:
-            break
-        binding_scan_kwargs["ExclusiveStartKey"] = last_key
 
-    while True:
-        result = table.scan(**scan_kwargs)
-        raw_items = result.get("Items", [])
-        if not isinstance(raw_items, list):
-            return list(pairs_by_key.values())
-        for raw_item in raw_items:
-            item = _dynamodb_item(raw_item)
-            if item is None:
-                continue
-            parent_id = item.get("parent_id")
-            student_id = item.get("user_id") or item.get("id")
-            if isinstance(parent_id, str) and isinstance(student_id, str):
-                pairs_by_key.setdefault((parent_id, student_id), {"parent_id": parent_id, "student_id": student_id})
-        last_key = _dynamodb_key(result.get("LastEvaluatedKey"))
-        if last_key is None:
-            return list(pairs_by_key.values())
-        scan_kwargs["ExclusiveStartKey"] = last_key

@@ -60,18 +60,12 @@ def accounts() -> dict[str, dict[str, Any]]:
 def table(
     monkeypatch: pytest.MonkeyPatch, accounts: dict[str, dict[str, Any]]
 ) -> FakeLinkTable:
-    """Link table only: the legacy binding key space stays deliberately empty."""
+    """Link table only: the relationship judge reads nothing else."""
     fake = FakeLinkTable()
     for user_id in accounts:
         fake.seed_account_fence(user_id)
     monkeypatch.setattr(parent_link_repo, "get_table", lambda: fake)
     monkeypatch.setattr(user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(accounts.get(user_id)))
-    monkeypatch.setattr(
-        user_repo, "get_parent_student_binding", lambda _parent_id, _student_id: None
-    )
-    monkeypatch.setattr(
-        user_repo, "get_student_parent_binding", lambda _student_id, _parent_id: None
-    )
     monkeypatch.setattr(question_repo, "list_by_student", lambda *_a, **_k: {"Items": []})
     # The student summary also counts resolved chat help requests (#77).
     monkeypatch.setattr(
@@ -225,44 +219,50 @@ def test_a_second_parent_reaches_the_same_child(
     assert _client("parent-b").get(ADAPTIVE_PROGRESS).status_code == 200
 
 
-def test_链接表读不出来时是拒绝而不是500(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A3 让「旧表没匹配上」这条路多出两次读，读失败不能变成 503。
+def test_链接表读不出来时不会被当成没有链接(monkeypatch: pytest.MonkeyPatch) -> None:
+    """裁判读不出链接行时抛错，而不是答「不认识这一对」。
 
-    这条路只在旧绑定已经不匹配之后才走到，所以结论本来就是拒绝；
-    读不出来时报「没有链接」，正是第二张表存在之前这条路给的答案。
+    旧的兜底在旧绑定没匹配上之后才走到，所以吞掉错误等于拒绝；现在链接表是
+    唯一的来源，把读不出来报成「没有链接」会把故障伪装成事实，
+    所以这里必须让错误冒出来，由路由授权把它变成 503（见下一条）。
     """
-    from stoa.security import authorization
-    from stoa.services import parent_link_service
+    from stoa.services import current_relationship
 
     def 炸(*_args, **_kwargs):
         raise RuntimeError("parent link table is unreachable")
 
-    monkeypatch.setattr(parent_link_service, "active_link", 炸)
+    monkeypatch.setattr(parent_link_repo, "get_parent_side_link", 炸)
 
-    assert authorization._parent_link_facts("parent-a", "student-b") is None
+    with pytest.raises(RuntimeError):
+        current_relationship.judge("parent-a", "student-b")
 
 
-def test_链接表连不上时四条受影响的路由都不返回500(monkeypatch: pytest.MonkeyPatch) -> None:
-    """CI 里这四条曾因新表读不出来而 503，本地有凭据所以没复现。
+@pytest.mark.parametrize("path", CROSS_ROUTER_ROUTES)
+def test_链接表连不上时受影响的路由回503而不是500(
+    table: FakeLinkTable, monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    """CI 里这些路由曾因新表读不出来而出错，本地有凭据所以没复现。
 
     夹具打的是 `parent_link_repo.get_table` —— 那是新表唯一的取表点，
     而它用的是模块级绑定，别处打 `stoa.db.dynamodb.get_table` 的桩都够不着它。
+    读不出来是授权暂时不可用：既不放行，也不是 500。
     """
-    from stoa.db.repositories import parent_link_repo
+    from stoa.services import current_relationship
+
+    _assign(table)
 
     def 炸():
         raise RuntimeError("no credentials for the parent link table")
 
     monkeypatch.setattr(parent_link_repo, "get_table", 炸)
 
-    from stoa.security import authorization
+    response = _client().get(path)
 
-    assert authorization._parent_link_facts("parent-a", "student-b") is None
-
-    from stoa.services import parent_link_service
+    assert response.status_code == 503, response.text
+    assert response.json()["detail"]["code"] == "authorization_temporarily_unavailable"
 
     with pytest.raises(RuntimeError):
-        parent_link_service.active_children("parent-a")
+        current_relationship.children_of("parent-a")
 
 
 def test_传进来的表才是它读的那张表(monkeypatch):
@@ -277,17 +277,19 @@ def test_传进来的表才是它读的那张表(monkeypatch):
     """
     from stoa.db.dynamodb import get_table as ambient_get_table
     from stoa.db.repositories import parent_link_repo, user_repo
-    from stoa.services import parent_link_service
+    from stoa.services import current_relationship
 
     reads: list[tuple[str, str]] = []
     rows = {
         ("PARENT#p1", "CHILD#s1"): {
             "PK": "PARENT#p1", "SK": "CHILD#s1", "parent_id": "p1",
             "student_id": "s1", "status": "active", "relationship": "child",
+            "link_updated_at": "2026-09-19T10:00:00+00:00",
         },
         ("STUDENT#s1", "PARENT#p1"): {
             "PK": "STUDENT#s1", "SK": "PARENT#p1", "parent_id": "p1",
             "student_id": "s1", "status": "active", "relationship": "child",
+            "link_updated_at": "2026-09-19T10:00:00+00:00",
         },
         ("USER#p1", "PROFILE"): {
             "user_id": "p1", "role": "parent", "account_status": "active",
@@ -309,9 +311,9 @@ def test_传进来的表才是它读的那张表(monkeypatch):
     monkeypatch.setattr(parent_link_repo, "get_table", _refuse)
     monkeypatch.setattr(user_repo, "get_table", _refuse)
 
-    link = parent_link_service.active_link("p1", "s1", table=_Injected())
+    verdict = current_relationship.judge("p1", "s1", table=_Injected())
 
-    assert link is not None
+    assert verdict.is_current
     assert ("USER#p1", "PROFILE") in reads and ("USER#s1", "PROFILE") in reads
     assert ("PARENT#p1", "CHILD#s1") in reads
     assert callable(ambient_get_table)

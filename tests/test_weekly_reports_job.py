@@ -32,28 +32,16 @@ def _active_report_owner(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def current_relationships(monkeypatch):
-    """The relationship stores the weekly job now judges every pair against.
+def current_relationships(monkeypatch, link_rows):
+    """The link rows the weekly job now judges every pair against.
 
     Seeded with the pairs these tests drive; a test that is about revocation
-    removes its pair from `bindings` rather than stubbing the judge itself.
+    unlinks its pair rather than stubbing the judge itself.
     """
     from stoa.db.repositories import user_repo
 
-    bindings: dict[tuple[str, str], dict] = {}
-
-    def link(parent_id: str, student_id: str) -> None:
-        bindings[(parent_id, student_id)] = {
-            "entity_type": "parent_student_binding",
-            "parent_id": parent_id,
-            "student_id": student_id,
-            "relationship": "child",
-            "status": "active",
-            "version": 1,
-        }
-
     for pair in (("parent-1", "student-1"), ("parent-2", "student-2")):
-        link(*pair)
+        link_rows.link(*pair)
 
     monkeypatch.setattr(
         user_repo,
@@ -66,21 +54,7 @@ def current_relationships(monkeypatch):
             "name": user_id,
         },
     )
-    monkeypatch.setattr(
-        user_repo,
-        "get_parent_student_binding",
-        lambda parent_id, student_id: dict(bindings[(parent_id, student_id)])
-        if (parent_id, student_id) in bindings
-        else None,
-    )
-    monkeypatch.setattr(
-        user_repo,
-        "get_student_parent_binding",
-        lambda student_id, parent_id: dict(bindings[(parent_id, student_id)])
-        if (parent_id, student_id) in bindings
-        else None,
-    )
-    return bindings
+    return link_rows
 
 
 class FakeTable:
@@ -184,18 +158,30 @@ def test_handler_rejects_unknown_report_recovery_job(monkeypatch):
     assert result == {"status": "failed", "detail": "Unsupported report recovery job"}
 
 
+def _parent_side_link(parent_id, student_id):
+    return {
+        "PK": f"PARENT#{parent_id}",
+        "SK": f"CHILD#{student_id}",
+        "entity_type": "parent_student_link",
+        "parent_id": parent_id,
+        "student_id": student_id,
+        "status": "active",
+    }
+
+
 def test_discover_linked_parent_student_pairs_pages(monkeypatch):
+    # A filtered scan can return an empty page that still has a next one.
     table = FakeTable(
         [
-            {"Items": []},
+            {"Items": [], "LastEvaluatedKey": {"PK": "PARENT#parent-0", "SK": "CHILD#student-0"}},
             {
                 "Items": [
-                    {"user_id": "student-1", "parent_id": "parent-1", "role": "student"},
-                    {"user_id": "missing-parent", "role": "student"},
+                    _parent_side_link("parent-1", "student-1"),
+                    {**_parent_side_link("parent-x", "student-x"), "student_id": None},
                 ],
-                "LastEvaluatedKey": {"PK": "USER#student-1"},
+                "LastEvaluatedKey": {"PK": "PARENT#parent-1", "SK": "CHILD#student-1"},
             },
-            {"Items": [{"id": "student-2", "parent_id": "parent-2", "role": "student"}]},
+            {"Items": [_parent_side_link("parent-2", "student-2")]},
         ]
     )
     monkeypatch.setattr(weekly_reports, "get_table", lambda: table)
@@ -206,36 +192,50 @@ def test_discover_linked_parent_student_pairs_pages(monkeypatch):
         {"parent_id": "parent-1", "student_id": "student-1"},
         {"parent_id": "parent-2", "student_id": "student-2"},
     ]
-    assert table.calls[2]["ExclusiveStartKey"] == {"PK": "USER#student-1"}
+    assert "ExclusiveStartKey" not in table.calls[0]
+    assert table.calls[1]["ExclusiveStartKey"] == {
+        "PK": "PARENT#parent-0",
+        "SK": "CHILD#student-0",
+    }
+    assert table.calls[2]["ExclusiveStartKey"] == {
+        "PK": "PARENT#parent-1",
+        "SK": "CHILD#student-1",
+    }
 
 
-def test_discover_linked_parent_student_pairs_prefers_formal_bindings(monkeypatch):
-    table = FakeTable(
-        [
-            {
-                "Items": [
-                    {
-                        "PK": "USER#parent-1",
-                        "SK": "CHILD#student-1",
-                        "entity_type": "parent_student_binding",
-                        "parent_id": "parent-1",
-                        "student_id": "student-1",
-                        "status": "active",
-                    },
-                    {
-                        "PK": "USER#student-1",
-                        "SK": "PARENT#parent-1",
-                        "entity_type": "parent_student_binding",
-                        "parent_id": "parent-1",
-                        "student_id": "student-1",
-                        "status": "active",
-                    },
-                ],
-            },
-            {"Items": [{"user_id": "student-1", "parent_id": "parent-1", "role": "student"}]},
-        ]
+def test_discover_linked_parent_student_pairs_ignores_binding_rows_and_profile_pointers(
+    monkeypatch, link_rows
+):
+    # The retired relationship shapes, each claiming parent-9/student-9, and
+    # one link: only the link is a candidate.
+    link_rows.table.seed(
+        {
+            "PK": "USER#parent-9",
+            "SK": "CHILD#student-9",
+            "entity_type": "parent_student_binding",
+            "parent_id": "parent-9",
+            "student_id": "student-9",
+            "status": "active",
+        },
+        {
+            "PK": "USER#student-9",
+            "SK": "PARENT#parent-9",
+            "entity_type": "parent_student_binding",
+            "parent_id": "parent-9",
+            "student_id": "student-9",
+            "status": "active",
+        },
+        {
+            "PK": "USER#student-9",
+            "SK": "PROFILE",
+            "user_id": "student-9",
+            "role": "student",
+            "parent_id": "parent-9",
+            "parent_binding_status": "active",
+        },
     )
-    monkeypatch.setattr(weekly_reports, "get_table", lambda: table)
+    link_rows.unlink("parent-2", "student-2")
+    monkeypatch.setattr(weekly_reports, "get_table", lambda: link_rows.table)
 
     pairs = weekly_reports.discover_linked_parent_student_pairs()
 

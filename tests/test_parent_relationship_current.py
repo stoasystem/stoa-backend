@@ -1,10 +1,10 @@
 """One judge, five outlets: a parent-student relationship is judged, never inferred.
 
-Issues #2, #3, #4, #8, #15 were five readings of the same defect - two key spaces
-hold relationships (`parent_student_binding` and `parent_student_link`), a
-student profile's `parent_id` holds neither, and every read path decided for
-itself which of the three to believe. `parent_link_service.current_relationship`
-is now the only answer, and each test below pairs its refusal with the positive
+Issues #2, #3, #4, #8, #15 were five readings of the same defect - every read
+path decided for itself whether to believe the legacy binding rows, the link
+rows or a student profile's `parent_id`. Since #208 only the link rows are a
+relationship, `current_relationship` is the only judge of them, and the legacy
+shape grants nothing. Each test below pairs its refusal with the positive
 case, so a change that refuses everything cannot pass.
 """
 
@@ -25,16 +25,19 @@ from stoa.jobs import weekly_reports
 from stoa.services import (
     account_deletion_service,
     account_operations_service,
+    current_relationship,
     entitlement_service,
     parent_link_service,
     report_recovery_service,
     report_service,
 )
+from stoa.services.current_relationship import Standing
 
 from test_parent_student_links import FakeLinkTable, _parent_app
 
 
 NOW = "2026-09-19T10:00:00+00:00"
+LATER = "2026-09-20T10:00:00+00:00"
 PARENT = "parent-1"
 STUDENT = "student-1"
 
@@ -67,77 +70,55 @@ def _binding(parent_id: str, student_id: str, status: str = "active") -> dict[st
 
 
 class RelationshipWorld:
-    """The two relationship key spaces plus the profiles behind them."""
+    """The link rows, the retired legacy shape, and the profiles behind them."""
 
     def __init__(self) -> None:
         self.table = FakeLinkTable()
         self.profiles: dict[str, dict[str, Any]] = {}
-        self.bindings: dict[tuple[str, str], dict[str, Any]] = {}
 
     def account(self, user_id: str, role: str, **kwargs: Any) -> str:
         self.profiles[user_id] = _profile(user_id, role, **kwargs)
         self.table.seed_account_fence(user_id)
         return user_id
 
-    def bind(self, parent_id: str, student_id: str, status: str = "active") -> None:
-        """A legacy binding, in both formal rows and the profile projection."""
-        self.bindings[(parent_id, student_id)] = _binding(parent_id, student_id, status)
-        self.profiles[student_id]["parent_id"] = parent_id
-        self.profiles[student_id]["relationship"] = "child"
-        self.profiles[student_id]["parent_binding_status"] = status
-
-    def revoke_binding(self, parent_id: str, student_id: str) -> None:
-        """What revocation does: the rows go to `revoked`, the projection follows."""
-        self.bind(parent_id, student_id, status="revoked")
-
-    def strand_profile_only(self, parent_id: str, student_id: str) -> None:
-        """The binding rows are gone; only the profile still names the parent."""
-        self.bindings.pop((parent_id, student_id), None)
-        self.profiles[student_id]["parent_id"] = parent_id
-        self.profiles[student_id]["parent_binding_status"] = "active"
-
     def link(self, parent_id: str, student_id: str) -> None:
         parent_link_service.assign_link(
             parent_id=parent_id, student_id=student_id, actor_id="admin-1", now=NOW
         )
 
+    def revoke(self, parent_id: str, student_id: str) -> None:
+        """Close the link both ways, as the administrator's revoke does."""
+        current_relationship.revoke(parent_id, student_id, actor_id="admin-1", now=LATER)
+
+    def legacy_bind(self, parent_id: str, student_id: str, status: str = "active") -> None:
+        """The retired shape: both binding rows and the profile projection (#208).
+
+        Stored where a reader could find them, so a reader that still looked
+        would be caught granting on them.
+        """
+        for pk, sk in (
+            (f"USER#{parent_id}", f"CHILD#{student_id}"),
+            (f"USER#{student_id}", f"PARENT#{parent_id}"),
+        ):
+            self.table.items[(pk, sk)] = {
+                "PK": pk,
+                "SK": sk,
+                **_binding(parent_id, student_id, status),
+            }
+        self.strand_profile_only(parent_id, student_id, status=status)
+
+    def strand_profile_only(
+        self, parent_id: str, student_id: str, *, status: str = "active"
+    ) -> None:
+        """Only the student's profile still names the parent."""
+        self.profiles[student_id]["parent_id"] = parent_id
+        self.profiles[student_id]["relationship"] = "child"
+        self.profiles[student_id]["parent_binding_status"] = status
+
     def install(self, monkeypatch: pytest.MonkeyPatch) -> RelationshipWorld:
         monkeypatch.setattr(parent_link_repo, "get_table", lambda: self.table)
         monkeypatch.setattr(
             user_repo, "get_user", lambda user_id, **_k: deepcopy(self.profiles.get(user_id))
-        )
-        monkeypatch.setattr(
-            user_repo,
-            "get_parent_student_binding",
-            lambda parent_id, student_id: deepcopy(self.bindings.get((parent_id, student_id))),
-        )
-        monkeypatch.setattr(
-            user_repo,
-            "get_student_parent_binding",
-            lambda student_id, parent_id: deepcopy(self.bindings.get((parent_id, student_id))),
-        )
-        monkeypatch.setattr(
-            user_repo,
-            "list_parent_student_bindings",
-            lambda parent_id: [
-                deepcopy(row) for (pid, _sid), row in self.bindings.items() if pid == parent_id
-            ],
-        )
-        monkeypatch.setattr(
-            user_repo,
-            "list_student_parent_bindings",
-            lambda student_id: [
-                deepcopy(row) for (_pid, sid), row in self.bindings.items() if sid == student_id
-            ],
-        )
-        monkeypatch.setattr(
-            user_repo,
-            "list_children_by_parent_scan",
-            lambda parent_id: [
-                deepcopy(profile)
-                for profile in self.profiles.values()
-                if profile.get("role") == "student" and profile.get("parent_id") == parent_id
-            ],
         )
         return self
 
@@ -155,28 +136,26 @@ def world(monkeypatch: pytest.MonkeyPatch) -> RelationshipWorld:
 # ---------------------------------------------------------------------------
 
 
-def test_an_active_legacy_binding_is_a_current_relationship(world: RelationshipWorld) -> None:
-    world.bind(PARENT, STUDENT)
+def test_legacy_binding_rows_alone_are_not_a_relationship(world: RelationshipWorld) -> None:
+    world.legacy_bind(PARENT, STUDENT)
 
-    relationship = parent_link_service.current_relationship(PARENT, STUDENT)
-
-    assert relationship is not None
-    assert relationship["source"] == "parent_student_binding"
+    assert current_relationship.judge(PARENT, STUDENT).standing is Standing.UNKNOWN
 
 
-def test_an_active_new_link_is_a_current_relationship(world: RelationshipWorld) -> None:
+def test_an_active_link_is_a_current_relationship(world: RelationshipWorld) -> None:
     world.link(PARENT, STUDENT)
 
-    relationship = parent_link_service.current_relationship(PARENT, STUDENT)
+    verdict = current_relationship.judge(PARENT, STUDENT)
 
-    assert relationship is not None
-    assert relationship["source"] == "parent_student_link"
+    assert verdict.is_current
+    assert verdict.source == "parent_student_link"
 
 
-def test_a_revoked_binding_is_not_a_current_relationship(world: RelationshipWorld) -> None:
-    world.revoke_binding(PARENT, STUDENT)
+def test_a_revoked_link_is_known_but_not_current(world: RelationshipWorld) -> None:
+    world.link(PARENT, STUDENT)
+    world.revoke(PARENT, STUDENT)
 
-    assert parent_link_service.current_relationship(PARENT, STUDENT) is None
+    assert current_relationship.judge(PARENT, STUDENT).standing is Standing.KNOWN
 
 
 def test_a_profile_parent_id_alone_is_not_a_current_relationship(
@@ -185,26 +164,20 @@ def test_a_profile_parent_id_alone_is_not_a_current_relationship(
     world.strand_profile_only(PARENT, STUDENT)
 
     assert world.profiles[STUDENT]["parent_id"] == PARENT
-    assert parent_link_service.current_relationship(PARENT, STUDENT) is None
+    assert current_relationship.judge(PARENT, STUDENT).standing is Standing.UNKNOWN
 
 
-def test_one_sided_binding_rows_are_not_a_current_relationship(
-    world: RelationshipWorld, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    world.bind(PARENT, STUDENT)
-    monkeypatch.setattr(user_repo, "get_student_parent_binding", lambda _s, _p: None)
-
-    assert parent_link_service.current_relationship(PARENT, STUDENT) is None
-
-
-def test_current_children_gathers_both_key_spaces(world: RelationshipWorld) -> None:
+def test_children_of_holds_only_current_links(world: RelationshipWorld) -> None:
     world.account("student-2", "student")
-    world.bind(PARENT, STUDENT)
-    world.link(PARENT, "student-2")
     world.account("student-3", "student")
-    world.revoke_binding(PARENT, "student-3")
+    world.account("student-4", "student")
+    world.link(PARENT, STUDENT)
+    world.link(PARENT, "student-2")
+    world.link(PARENT, "student-3")
+    world.revoke(PARENT, "student-3")
+    world.legacy_bind(PARENT, "student-4")
 
-    seen = {row["student_id"] for row in parent_link_service.current_children(PARENT)}
+    seen = {verdict.student_id for verdict in current_relationship.children_of(PARENT)}
 
     assert seen == {STUDENT, "student-2"}
 
@@ -248,7 +221,7 @@ def test_a_current_parent_still_reads_the_child_through_account_operations(
     world: RelationshipWorld,
 ) -> None:
     """Negative control: the fix must not take the working case away."""
-    world.bind(PARENT, STUDENT)
+    world.link(PARENT, STUDENT)
 
     children = _operations_children()
 
@@ -257,19 +230,11 @@ def test_a_current_parent_still_reads_the_child_through_account_operations(
 
 
 @pytest.mark.usefixtures("account_operations")
-def test_a_new_link_child_is_read_through_account_operations(
-    world: RelationshipWorld,
-) -> None:
-    world.link(PARENT, STUDENT)
-
-    assert [child["studentId"] for child in _operations_children()] == [STUDENT]
-
-
-@pytest.mark.usefixtures("account_operations")
 def test_revoked_parent_cannot_read_child_via_account_operations(
     world: RelationshipWorld,
 ) -> None:
-    world.revoke_binding(PARENT, STUDENT)
+    world.link(PARENT, STUDENT)
+    world.revoke(PARENT, STUDENT)
 
     children = _operations_children()
 
@@ -278,10 +243,10 @@ def test_revoked_parent_cannot_read_child_via_account_operations(
 
 
 @pytest.mark.usefixtures("account_operations")
-def test_profile_parent_id_alone_does_not_authorize_operations(
+def test_the_legacy_shape_alone_does_not_authorize_operations(
     world: RelationshipWorld,
 ) -> None:
-    world.strand_profile_only(PARENT, STUDENT)
+    world.legacy_bind(PARENT, STUDENT)
 
     assert _operations_children() == []
 
@@ -313,17 +278,6 @@ def test_a_current_parent_still_gets_a_weekly_report_payload(
     world: RelationshipWorld,
 ) -> None:
     """Negative control for the two refusals below."""
-    world.bind(PARENT, STUDENT)
-
-    payload = report_service.build_weekly_learning_payload(PARENT, STUDENT, "2026-06-01")
-
-    assert payload["student"]["id"] == STUDENT
-
-
-@pytest.mark.usefixtures("quiet_report_sources")
-def test_new_admin_assigned_link_can_resolve_student_for_report(
-    world: RelationshipWorld,
-) -> None:
     world.link(PARENT, STUDENT)
 
     payload = report_service.build_weekly_learning_payload(PARENT, STUDENT, "2026-06-01")
@@ -335,17 +289,18 @@ def test_new_admin_assigned_link_can_resolve_student_for_report(
 def test_revoked_parent_is_rejected_before_weekly_report_payload(
     world: RelationshipWorld,
 ) -> None:
-    world.revoke_binding(PARENT, STUDENT)
+    world.link(PARENT, STUDENT)
+    world.revoke(PARENT, STUDENT)
 
     with pytest.raises(ValueError, match="student is not linked"):
         report_service.build_weekly_learning_payload(PARENT, STUDENT, "2026-06-01")
 
 
 @pytest.mark.usefixtures("quiet_report_sources")
-def test_stale_profile_parent_id_is_rejected_before_weekly_report_payload(
+def test_the_legacy_shape_is_rejected_before_weekly_report_payload(
     world: RelationshipWorld,
 ) -> None:
-    world.strand_profile_only(PARENT, STUDENT)
+    world.legacy_bind(PARENT, STUDENT)
 
     with pytest.raises(ValueError, match="student is not linked"):
         report_service.build_weekly_learning_payload(PARENT, STUDENT, "2026-06-01")
@@ -378,18 +333,26 @@ def test_new_admin_assigned_link_is_discovered_for_weekly_reports(
     ]
 
 
-def test_a_stale_profile_pair_is_dropped_before_the_weekly_job_runs(
+def test_the_legacy_shape_is_never_discovered_for_weekly_reports(
     world: RelationshipWorld, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    world.strand_profile_only(PARENT, STUDENT)
-    rows = [deepcopy(world.profiles[STUDENT]) | {"role": "student"}]
+    world.legacy_bind(PARENT, STUDENT)
+    rows = [dict(item) for item in world.table.items.values()]
+    rows.append(deepcopy(world.profiles[STUDENT]))
     monkeypatch.setattr(weekly_reports, "get_table", lambda: _discovery_table(rows))
 
-    # Discovery still finds it; only the judge drops it.
-    assert weekly_reports.discover_linked_parent_student_pairs() == [
-        {"parent_id": PARENT, "student_id": STUDENT}
-    ]
+    assert weekly_reports.discover_linked_parent_student_pairs() == []
     assert weekly_reports.eligible_parent_student_pairs() == []
+
+
+_real_fence = account_deletion_repo.require_active_account_fence
+
+
+def _report_fence(owner: str, **kwargs: Any) -> dict[str, Any]:
+    """The report owner's fence is stubbed; a link write passes its table and sees the real one."""
+    if kwargs:
+        return _real_fence(owner, **kwargs)
+    return {"status": "active", "generation": 7}
 
 
 @pytest.fixture
@@ -412,7 +375,7 @@ def weekly_job_attempts(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]
     monkeypatch.setattr(
         weekly_reports.account_deletion_repo,
         "require_active_account_fence",
-        lambda _owner: {"status": "active", "generation": 7},
+        _report_fence,
     )
     monkeypatch.setattr(weekly_reports.report_repo, "try_claim_report_generation", lambda _c: False)
     return attempts
@@ -424,17 +387,18 @@ def test_the_weekly_job_does_not_run_on_a_revoked_pair(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     world.account("student-2", "student")
-    world.bind(PARENT, "student-2")
-    world.revoke_binding(PARENT, STUDENT)
+    world.link(PARENT, "student-2")
+    world.link(PARENT, STUDENT)
     rows = [
-        _binding(PARENT, STUDENT, "active") | {"PK": f"USER#{PARENT}", "SK": f"CHILD#{STUDENT}"},
-        _binding(PARENT, "student-2") | {"PK": f"USER#{PARENT}", "SK": "CHILD#student-2"},
+        dict(item) for item in world.table.items.values() if item["PK"].startswith("PARENT#")
     ]
+    # Revoked after the scan read its rows: still discovered, so what keeps the
+    # job off it is the job's own judgement.
+    world.revoke(PARENT, STUDENT)
     monkeypatch.setattr(weekly_reports, "get_table", lambda: _discovery_table(rows))
 
     weekly_reports.run_weekly_report_job({"week_start": "2026-06-01"})
 
-    # The revoked pair is still discoverable, so this is the job's own filter.
     assert weekly_job_attempts == [(PARENT, "student-2")]
 
 
@@ -469,7 +433,7 @@ def resend_doubles(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
     monkeypatch.setattr(
         report_recovery_service.account_deletion_repo,
         "require_active_account_fence",
-        lambda _owner: {"status": "active", "generation": 7},
+        _report_fence,
     )
     monkeypatch.setattr(
         report_recovery_service.notify_service,
@@ -491,7 +455,7 @@ def test_a_current_parent_still_receives_a_resend(
     world: RelationshipWorld, resend_doubles: list[tuple[str, str]]
 ) -> None:
     """Negative control, and the proof that the recipient is resolved again."""
-    world.bind(PARENT, STUDENT)
+    world.link(PARENT, STUDENT)
 
     result = report_recovery_service.resend_report_email(_failed_report(), operator="admin-1")
 
@@ -502,7 +466,8 @@ def test_a_current_parent_still_receives_a_resend(
 def test_report_recovery_does_not_send_to_a_revoked_parent(
     world: RelationshipWorld, resend_doubles: list[tuple[str, str]]
 ) -> None:
-    world.revoke_binding(PARENT, STUDENT)
+    world.link(PARENT, STUDENT)
+    world.revoke(PARENT, STUDENT)
 
     with pytest.raises(report_recovery_service.ReportRecoveryError) as refused:
         report_recovery_service.resend_report_email(_failed_report(), operator="admin-1")
@@ -511,10 +476,10 @@ def test_report_recovery_does_not_send_to_a_revoked_parent(
     assert resend_doubles == []
 
 
-def test_report_recovery_does_not_send_to_a_stale_profile_parent(
+def test_report_recovery_does_not_send_on_the_legacy_shape(
     world: RelationshipWorld, resend_doubles: list[tuple[str, str]]
 ) -> None:
-    world.strand_profile_only(PARENT, STUDENT)
+    world.legacy_bind(PARENT, STUDENT)
 
     with pytest.raises(report_recovery_service.ReportRecoveryError):
         report_recovery_service.resend_report_email(_failed_report(), operator="admin-1")
@@ -533,7 +498,7 @@ def test_link_assignment_succeeds_while_both_fences_are_active(
     """Negative control: closing this must not close every assignment."""
     world.link(PARENT, STUDENT)
 
-    assert parent_link_service.active_link(PARENT, STUDENT) is not None
+    assert current_relationship.judge(PARENT, STUDENT).is_current
 
 
 @pytest.mark.parametrize("deleting", [PARENT, STUDENT], ids=["parent", "student"])
@@ -743,7 +708,7 @@ def test_a_current_parent_still_receives_the_generated_report(
     world: RelationshipWorld, delivery: _GenerationDelivery
 ) -> None:
     """Negative control for the refusals below."""
-    world.bind(PARENT, STUDENT)
+    world.link(PARENT, STUDENT)
 
     stored = _generate_and_store(world)
 
@@ -753,24 +718,12 @@ def test_a_current_parent_still_receives_the_generated_report(
 
 
 @pytest.mark.usefixtures("quiet_report_sources")
-def test_a_new_link_parent_receives_the_generated_report(
+def test_a_parent_revoked_after_the_payload_does_not_receive_the_report(
     world: RelationshipWorld, delivery: _GenerationDelivery
 ) -> None:
     world.link(PARENT, STUDENT)
 
-    stored = _generate_and_store(world)
-
-    assert delivery.sent == [f"{PARENT}@stoa.test"]
-    assert stored["email_status"] == "sent"
-
-
-@pytest.mark.usefixtures("quiet_report_sources")
-def test_a_parent_revoked_after_the_payload_does_not_receive_the_report(
-    world: RelationshipWorld, delivery: _GenerationDelivery
-) -> None:
-    world.bind(PARENT, STUDENT)
-
-    stored = _generate_and_store(world, lambda: world.revoke_binding(PARENT, STUDENT))
+    stored = _generate_and_store(world, lambda: world.revoke(PARENT, STUDENT))
 
     assert delivery.sent == []
     assert stored["status"] == "email_failed"
@@ -784,7 +737,7 @@ def test_a_parent_revoked_after_the_payload_does_not_receive_the_report(
 def test_a_parent_whose_account_closes_after_the_payload_does_not_receive_the_report(
     world: RelationshipWorld, delivery: _GenerationDelivery
 ) -> None:
-    world.bind(PARENT, STUDENT)
+    world.link(PARENT, STUDENT)
 
     def close_parent() -> None:
         world.profiles[PARENT]["account_status"] = "deletion_pending"
@@ -799,7 +752,7 @@ def test_a_parent_whose_account_closes_after_the_payload_does_not_receive_the_re
 def test_the_generated_report_goes_to_the_parents_current_address(
     world: RelationshipWorld, delivery: _GenerationDelivery
 ) -> None:
-    world.bind(PARENT, STUDENT)
+    world.link(PARENT, STUDENT)
 
     def change_address() -> None:
         world.profiles[PARENT]["email"] = "new-address@stoa.test"
@@ -814,7 +767,7 @@ def test_the_generated_report_goes_to_the_parents_current_address(
 def test_a_parent_without_an_address_is_not_sent_the_generated_report(
     world: RelationshipWorld, delivery: _GenerationDelivery
 ) -> None:
-    world.bind(PARENT, STUDENT)
+    world.link(PARENT, STUDENT)
 
     def drop_address() -> None:
         world.profiles[PARENT]["email"] = "  "
@@ -827,23 +780,23 @@ def test_a_parent_without_an_address_is_not_sent_the_generated_report(
 
 
 def test_the_recipient_judge_tells_its_three_answers_apart(world: RelationshipWorld) -> None:
-    assert parent_link_service.current_parent_recipient(PARENT, STUDENT) == (
-        parent_link_service.ParentRecipient(refusal="relationship_revoked")
+    assert current_relationship.current_parent_recipient(PARENT, STUDENT) == (
+        current_relationship.ParentRecipient(refusal="relationship_revoked")
     )
-    world.bind(PARENT, STUDENT)
-    assert parent_link_service.current_parent_recipient(PARENT, STUDENT) == (
-        parent_link_service.ParentRecipient(email=f"{PARENT}@stoa.test")
+    world.link(PARENT, STUDENT)
+    assert current_relationship.current_parent_recipient(PARENT, STUDENT) == (
+        current_relationship.ParentRecipient(email=f"{PARENT}@stoa.test")
     )
     world.profiles[PARENT].pop("email")
-    assert parent_link_service.current_parent_recipient(PARENT, STUDENT) == (
-        parent_link_service.ParentRecipient(refusal="recipient_missing")
+    assert current_relationship.current_parent_recipient(PARENT, STUDENT) == (
+        current_relationship.ParentRecipient(refusal="recipient_missing")
     )
 
 
 def test_a_resend_to_a_current_parent_without_an_address_is_refused_as_such(
     world: RelationshipWorld, resend_doubles: list[tuple[str, str]]
 ) -> None:
-    world.bind(PARENT, STUDENT)
+    world.link(PARENT, STUDENT)
     world.profiles[PARENT]["email"] = ""
 
     with pytest.raises(report_recovery_service.ReportRecoveryError) as refused:
@@ -857,7 +810,7 @@ def test_a_resend_to_a_current_parent_without_an_address_is_refused_as_such(
 def test_a_resend_does_not_need_the_archived_address(
     world: RelationshipWorld, resend_doubles: list[tuple[str, str]]
 ) -> None:
-    world.bind(PARENT, STUDENT)
+    world.link(PARENT, STUDENT)
     report = _failed_report()
     report.pop("parent_email")
 
@@ -892,30 +845,21 @@ def entitlement_list(monkeypatch: pytest.MonkeyPatch):
     return listed
 
 
-def test_a_reverse_revoked_legacy_binding_leaves_the_entitlement_list(
-    world: RelationshipWorld, monkeypatch: pytest.MonkeyPatch, entitlement_list
+def test_a_revoked_link_leaves_the_entitlement_list(
+    world: RelationshipWorld, entitlement_list
 ) -> None:
-    """The forward row still says active; the reverse row has been revoked."""
-    world.bind(PARENT, STUDENT)
-    revoked_reverse = {**world.bindings[(PARENT, STUDENT)], "status": "revoked"}
-    monkeypatch.setattr(
-        user_repo,
-        "get_student_parent_binding",
-        lambda student_id, parent_id: (
-            deepcopy(revoked_reverse) if (parent_id, student_id) == (PARENT, STUDENT) else None
-        ),
-    )
+    world.link(PARENT, STUDENT)
+    world.revoke(PARENT, STUDENT)
 
-    assert parent_link_service.current_relationship(PARENT, STUDENT) is None
     assert entitlement_list() == []
 
 
-def test_a_current_legacy_binding_is_on_the_entitlement_list(
+def test_the_legacy_shape_is_not_on_the_entitlement_list(
     world: RelationshipWorld, entitlement_list
 ) -> None:
-    world.bind(PARENT, STUDENT)
+    world.legacy_bind(PARENT, STUDENT)
 
-    assert entitlement_list() == [STUDENT]
+    assert entitlement_list() == []
 
 
 def test_a_current_new_link_is_on_the_entitlement_list(

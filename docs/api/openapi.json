@@ -23935,7 +23935,7 @@
     },
     "/admin/users": {
       "get": {
-        "description": "One page of accounts, grouped by role, with their confirmed parent links.\n\nCard 002 #7: the links are resolved one account at a time, so the cost of a\npage is the page size times the links behind it, not the page size. Measured\non a full page of parents with three children each: 3201 DynamoDB round trips,\nagainst a 29 second API Gateway ceiling. The number is pinned by\ntests/test_admin_user_list_read_amplification.py so it cannot grow unnoticed;\nbatching it down needs `parent_link_service.active_link`, not this file.",
+        "description": "One page of accounts, grouped by role, with their confirmed parent links.\n\nCard 002 #7: the links are resolved one account at a time, so the cost of a\npage is the page size times the links behind it, not the page size. Measured\non a full page of parents with three children each: 3201 DynamoDB round trips,\nagainst a 29 second API Gateway ceiling. The number is pinned by\ntests/test_admin_user_list_read_amplification.py so it cannot grow unnoticed;\nbatching it down needs `current_relationship.judge`, not this file.",
         "operationId": "list_users_admin_users_get",
         "parameters": [
           {

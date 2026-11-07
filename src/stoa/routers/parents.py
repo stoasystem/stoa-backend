@@ -39,7 +39,6 @@ from stoa.security.authorization import (
     AuthorizationSpec,
     AuthorizedResource,
     CurrentAuthorizationFactRepository,
-    ParentAuthorizationFacts,
     ResourceRef,
     ResourceType,
     authorize_and_resolve,
@@ -53,6 +52,7 @@ from stoa.services import (
     account_operations_service,
     allowance_service,
     billing_reconciliation_service,
+    current_relationship,
     learning_profile_service,
     locale_service,
     message_catalog,
@@ -785,45 +785,13 @@ _parent_child_read.authorization_specs = (  # type: ignore[attr-defined]
 
 
 def _list_children_for_parent(parent_user_id: str) -> list[dict[str, Any]]:
+    """The students this parent is currently in a relationship with, per the judge."""
     children: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    parent = user_repo.get_user(parent_user_id)
-    for binding in user_repo.list_parent_student_bindings(parent_user_id):
-        student_id = binding.get("student_id")
-        if not student_id:
-            continue
-        reverse = user_repo.get_student_parent_binding(str(student_id), parent_user_id)
-        profile = user_repo.get_user(str(student_id))
+    for verdict in current_relationship.children_of(parent_user_id):
+        profile = user_repo.get_user(verdict.student_id)
         if profile is None:
             continue
-        facts = ParentAuthorizationFacts(binding, reverse, parent, profile)
-        if facts.matches(parent_user_id, str(student_id)):
-            seen.add(str(student_id))
-            children.append(
-                {
-                    **profile,
-                    "relationship": binding.get(
-                        "relationship", profile.get("relationship", "child")
-                    ),
-                }
-            )
-    # The legacy bindings above are already in hand, so a link store that cannot
-    # answer costs this list the children only the new table knows about — it does
-    # not cost the caller the whole page. Listing what can be read beats answering
-    # 503 with an answer sitting right there.
-    try:
-        links = parent_link_service.active_children(parent_user_id)
-    except Exception:
-        links = []
-    for link in links:
-        student_id = str(link.get("student_id") or "")
-        if not student_id or student_id in seen:
-            continue
-        profile = user_repo.get_user(student_id)
-        if profile is None:
-            continue
-        seen.add(student_id)
-        children.append({**profile, "relationship": link.get("relationship") or "child"})
+        children.append({**profile, "relationship": verdict.relationship or "child"})
     return children
 
 

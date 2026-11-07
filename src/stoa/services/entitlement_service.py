@@ -12,9 +12,9 @@ from stoa.db.repositories import user_repo
 from stoa.models.user import SubscriptionTier
 from stoa.services import (
     attachment_service,
+    current_relationship,
     free_trial_service,
     paid_entitlement_service,
-    parent_link_service,
 )
 
 
@@ -63,7 +63,7 @@ def resolve_student_entitlement(
     student_profile = student_profile if student_profile is not None else user_repo.get_user(student_id)
     student_profile = student_profile or {}
     student_tier = _normalize_tier(student_profile.get("subscription_tier"))
-    parent_id, binding, paid_grant = _relationship_of_record(student_id, student_profile)
+    parent_id, binding, paid_grant = _relationship_of_record(student_id)
     parent_profile = user_repo.get_user(parent_id) if parent_id else None
     billing = _get_billing_item(parent_id) if parent_id else None
     rollout = _get_payment_rollout_item() if parent_id else None
@@ -156,12 +156,10 @@ def _viewer_projection(
 def _active_child_ids(parent_id: str) -> list[str]:
     """The children this parent may see now, judged by the one relationship rule.
 
-    Reading the forward binding row's status alone kept a child whose reverse
-    row had been revoked, which `current_relationship` already refuses.
+    Reading one stored row's status alone kept a child whose other side had
+    been revoked, which the judge refuses.
     """
-    return [
-        str(link["student_id"]) for link in parent_link_service.current_children(parent_id)
-    ]
+    return [verdict.student_id for verdict in current_relationship.children_of(parent_id)]
 
 
 def _billing_decision(
@@ -297,50 +295,39 @@ def _decision(
 
 
 def _relationship_of_record(
-    student_id: str, student_profile: dict[str, Any]
+    student_id: str,
 ) -> tuple[str | None, dict[str, Any] | None, dict[str, object] | None]:
-    """The parent of record, the row that proves it, and that parent's paid grant.
+    """The parent of record, the relationship that proves it, and that parent's grant.
 
-    The verdict comes from the one shared judge in `paid_entitlement_service`,
-    so this resolver and the teacher-support admission cannot name different
-    parents for the same student. A student may hold several active links, so
-    prefer the parent that actually carries a paid grant and fall back to a
-    deterministic first.
+    The candidates are the relationship judge's current parents, through the
+    one billing filter in `paid_entitlement_service`, so this resolver and the
+    teacher-support admission cannot name different parents for the same
+    student. A student may have several, so prefer the parent that actually
+    carries a paid grant and fall back to a deterministic first.
     """
-    candidates = paid_entitlement_service.authorizing_parents(
-        student_id, student=student_profile
-    )
+    candidates = paid_entitlement_service.beneficiary_parents(student_id)
     if not candidates:
         return None, None, None
     table = get_table()
-    for parent_id, authority in candidates:
+    for verdict in candidates:
         grant = paid_entitlement_service.get_active_beneficiary_grant(
-            parent_id, student_id, table=table
+            verdict.parent_id, student_id, table=table
         )
         if grant is not None:
-            return parent_id, _authority_row(parent_id, student_id, authority), grant
-    parent_id, authority = candidates[0]
-    return parent_id, _authority_row(parent_id, student_id, authority), None
+            return verdict.parent_id, _relationship_row(verdict), grant
+    first = candidates[0]
+    return first.parent_id, _relationship_row(first), None
 
 
-def _authority_row(
-    parent_id: str,
-    student_id: str,
-    authority: paid_entitlement_service.RelationshipAuthority,
-) -> dict[str, Any] | None:
-    """The row behind the verdict: the link itself, or the legacy forward binding row."""
-    if authority.link is not None:
-        return dict(authority.link)
-    return _active_parent_binding(parent_id, student_id)
-
-
-def _active_parent_binding(parent_id: str | None, student_id: str) -> dict[str, Any] | None:
-    if not parent_id:
-        return None
-    binding = user_repo.get_parent_student_binding(parent_id, student_id)
-    if binding and str(binding.get("status") or "active") == "active":
-        return binding
-    return None
+def _relationship_row(verdict: current_relationship.Verdict) -> dict[str, Any]:
+    """What the entitlement shows about the relationship behind it."""
+    return {
+        "parent_id": verdict.parent_id,
+        "student_id": verdict.student_id,
+        "relationship": verdict.relationship,
+        "status": "active",
+        "source": verdict.source,
+    }
 
 
 def _get_billing_item(parent_id: str | None) -> dict[str, Any] | None:

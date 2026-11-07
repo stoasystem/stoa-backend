@@ -9,7 +9,8 @@ from fastapi.testclient import TestClient
 from botocore.exceptions import ClientError
 
 from stoa.config import Settings, get_settings
-from stoa.db.repositories import billing_fact_repo, checkout_command_repo
+from fakes.links import LinkRows
+from stoa.db.repositories import billing_fact_repo, checkout_command_repo, parent_link_repo
 from stoa.routers import admin, billing, parents
 from stoa.services import (
     account_operations_service,
@@ -217,8 +218,6 @@ def _profiles():
             "role": "student",
             "account_status": "active",
             "subscription_tier": "free_trial",
-            "parent_id": "parent-1",
-            "parent_binding_status": "active",
             "version": 1,
         },
         "admin-1": {
@@ -273,21 +272,8 @@ def _install_fakes(monkeypatch):
             "generation": 1,
         }
 
-    def get_user(user_id):
+    def get_user(user_id, **_kwargs):
         return profiles.get(user_id)
-
-    def list_parent_student_bindings(parent_id):
-        return [
-            dict(item)
-            for (pk, sk), item in table.items.items()
-            if pk == f"USER#{parent_id}" and sk.startswith("CHILD#")
-        ]
-
-    def get_parent_student_binding(parent_id, student_id):
-        return table.items.get((f"USER#{parent_id}", f"CHILD#{student_id}"))
-
-    def get_student_parent_binding(student_id, parent_id):
-        return table.items.get((f"USER#{student_id}", f"PARENT#{parent_id}"))
 
     def update_item(
         Key,
@@ -334,59 +320,14 @@ def _install_fakes(monkeypatch):
     monkeypatch.setattr(billing_reconciliation_service, "get_table", lambda: table)
     monkeypatch.setattr(subscription_service, "_stripe_sdk_available", lambda: False)
     monkeypatch.setattr(subscription_service.user_repo, "get_user", get_user)
-    monkeypatch.setattr(
-        subscription_service.user_repo,
-        "get_parent_student_binding",
-        get_parent_student_binding,
-    )
-    monkeypatch.setattr(
-        subscription_service.user_repo,
-        "get_student_parent_binding",
-        get_student_parent_binding,
-    )
     monkeypatch.setattr(entitlement_service, "get_table", lambda: table)
     monkeypatch.setattr(entitlement_service.user_repo, "get_user", get_user)
-    monkeypatch.setattr(
-        entitlement_service.user_repo,
-        "list_parent_student_bindings",
-        list_parent_student_bindings,
-    )
-    monkeypatch.setattr(
-        entitlement_service.user_repo,
-        "get_parent_student_binding",
-        get_parent_student_binding,
-    )
     monkeypatch.setattr(parents.user_repo, "get_user", get_user)
     monkeypatch.setattr(account_operations_service.user_repo, "get_user", get_user)
-    monkeypatch.setattr(
-        account_operations_service.user_repo,
-        "list_children_by_parent_scan",
-        lambda parent_id: [],
-    )
-    table.put_item(
-        Item={
-            "PK": "USER#parent-1",
-            "SK": "CHILD#student-1",
-            "entity_type": "parent_student_binding",
-            "parent_id": "parent-1",
-            "student_id": "student-1",
-            "status": "active",
-            "relationship": "child",
-            "version": 1,
-        }
-    )
-    table.put_item(
-        Item={
-            "PK": "USER#student-1",
-            "SK": "PARENT#parent-1",
-            "entity_type": "parent_student_binding",
-            "parent_id": "parent-1",
-            "student_id": "student-1",
-            "status": "active",
-            "relationship": "child",
-            "version": 1,
-        }
-    )
+    # The relationship every billing reader asks about: a current child link.
+    links = LinkRows()
+    monkeypatch.setattr(parent_link_repo, "get_table", lambda: links.table)
+    links.link("parent-1", "student-1")
 
     sessions: dict[str, dict[str, object]] = {}
 
@@ -570,7 +511,11 @@ def test_admin_account_operations_surfaces_attention_state(monkeypatch):
             "email_verification_required": True,
         }
     )
-    table.items[("USER#parent-1", "CHILD#student-1")]["status"] = "active_pending_verification"
+    # A link the parent asked for and the student has not yet confirmed: the
+    # admin view still shows it, so support can see why the child has no access.
+    LinkRows(parent_link_repo.get_table()).set_status(
+        "parent-1", "student-1", parent_link_repo.STATUS_PENDING
+    )
     client = TestClient(_app_for_user({"sub": "admin-1", "role": "admin"}))
 
     response = client.get("/admin/account-operations/parents/parent-1?day=2026-07-03")
@@ -584,12 +529,12 @@ def test_admin_account_operations_surfaces_attention_state(monkeypatch):
     assert body["parent"]["verification"]["resendAllowed"] is True
     assert body["parent"]["verification"]["supportRecoveryState"] == "resend_available"
     assert body["parent"]["verification"]["supportAction"] == "resend_verification_code"
-    assert body["children"][0]["binding"]["status"] == "active_pending_verification"
+    assert body["children"][0]["binding"]["status"] == "pending"
     assert body["children"][0]["profile"]["verification"]["supportRecoveryState"] == "expired_code"
     assert body["children"][0]["profile"]["verification"]["supportAction"] == "resend_verification_code"
     assert "parent_email_unverified" in body["supportState"]["blockers"]
     assert "child_email_unverified" in body["supportState"]["warnings"]
-    assert "child_binding_active_pending_verification" in body["supportState"]["warnings"]
+    assert "child_binding_pending" in body["supportState"]["warnings"]
 
 
 def test_admin_account_operations_returns_404_for_missing_parent(monkeypatch):
