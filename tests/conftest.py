@@ -132,6 +132,21 @@ def _default_parent_link_table(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(parent_link_repo, "get_table", _EmptyParentLinkTable)
 
 
+@pytest.fixture
+def link_rows(monkeypatch: pytest.MonkeyPatch):
+    """Link rows the relationship judge reads, served as the link table (#208).
+
+    `link_rows.link(parent, student)` makes a current relationship as far as the
+    rows go; the judge still asks `user_repo.get_user` about both accounts.
+    """
+    from fakes.links import LinkRows
+    from stoa.db.repositories import parent_link_repo
+
+    rows = LinkRows()
+    monkeypatch.setattr(parent_link_repo, "get_table", lambda: rows.table)
+    return rows
+
+
 class _EmptyAskedKnowledgeTable:
     """A table holding no Ask knowledge-point records."""
 

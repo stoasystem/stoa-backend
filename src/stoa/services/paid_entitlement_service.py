@@ -19,15 +19,13 @@ from stoa.db.repositories import (
     user_repo,
 )
 from stoa.models.billing import BillingPlanId
-from stoa.services import attachment_service, parent_link_service
+from stoa.services import attachment_service, current_relationship
 
 
 GRANT_SCHEMA_VERSION = "paid_beneficiary_grant.v1"
-# Which table authorizes a parent-student pair. The profile binding stays the
-# first authority; the many-to-many link rows only answer for pairs it does not
-# know, and each source gets its own transaction conditions.
-RELATIONSHIP_SOURCE_BINDING = "profile_binding"
-RELATIONSHIP_SOURCE_LINK = "parent_student_link"
+# Where the relationship behind a grant comes from: always a link, judged by
+# `current_relationship` (#208). Stamped on every grant it writes.
+RELATIONSHIP_SOURCE_LINK = current_relationship.SOURCE_LINK
 # Only a child link pays for a beneficiary; `relationship` is caller-supplied text.
 BENEFICIARY_RELATIONSHIP = "child"
 TRANSITION_SCHEMA_VERSION = "paid_transition.v1"
@@ -94,9 +92,6 @@ class _RelationshipProof:
     parent_fence_generation: int
     student_profile_version: int
     student_fence_generation: int
-    forward_version: int | None
-    reverse_version: int | None
-    source: str = RELATIONSHIP_SOURCE_BINDING
 
 
 def _required_text(value: object, field: str, *, maximum: int = 200) -> str:
@@ -712,7 +707,6 @@ def _profile_condition(
     *,
     role: str,
     version: int,
-    parent_id: str | None = None,
 ) -> dict[str, Any]:
     names = {
         "#user_id": "user_id",
@@ -730,56 +724,12 @@ def _profile_condition(
         "#user_id=:user_id AND #role=:role "
         "AND #account_status=:active AND #version=:version"
     )
-    if parent_id is not None:
-        names.update(
-            {
-                "#parent_id": "parent_id",
-                "#parent_binding_status": "parent_binding_status",
-            }
-        )
-        values[":parent_id"] = parent_id
-        expression += (
-            " AND #parent_id=:parent_id AND #parent_binding_status=:active"
-        )
     return {
         "ConditionCheck": {
             "Key": {"PK": f"USER#{user_id}", "SK": "PROFILE"},
             "ConditionExpression": expression,
             "ExpressionAttributeNames": names,
             "ExpressionAttributeValues": values,
-        }
-    }
-
-
-def _relationship_condition(
-    *,
-    key: dict[str, str],
-    parent_id: str,
-    student_id: str,
-    version: int,
-) -> dict[str, Any]:
-    return {
-        "ConditionCheck": {
-            "Key": key,
-            "ConditionExpression": (
-                "#parent_id=:parent_id AND #student_id=:student_id "
-                "AND #relationship=:relationship AND #status=:active "
-                "AND #version=:version"
-            ),
-            "ExpressionAttributeNames": {
-                "#parent_id": "parent_id",
-                "#student_id": "student_id",
-                "#relationship": "relationship",
-                "#status": "status",
-                "#version": "version",
-            },
-            "ExpressionAttributeValues": {
-                ":parent_id": parent_id,
-                ":student_id": student_id,
-                ":relationship": BENEFICIARY_RELATIONSHIP,
-                ":active": "active",
-                ":version": version,
-            },
         }
     }
 
@@ -792,11 +742,10 @@ def _link_condition(
 ) -> dict[str, Any]:
     """Fence one many-to-many link row.
 
-    The link rows carry no `version`, and they do not need one: every status
-    change goes through `parent_link_repo.transition_link`, which refuses a
-    same-status transition, so any change to this relationship necessarily
-    moves `status` off `active`. `relationship` is asserted for the same reason
-    the legacy rows assert it: only a child link pays for a beneficiary.
+    The condition does not assert the rows' version: every status change
+    refuses a same-status transition, so any change to this relationship
+    necessarily moves `status` off `active`. `relationship` is asserted because
+    only a child link pays for a beneficiary.
     """
     return {
         "ConditionCheck": {
@@ -824,133 +773,38 @@ def _link_condition(
     }
 
 
-@dataclass(frozen=True, slots=True)
-class RelationshipAuthority:
-    """Which table authorizes one parent-student pair right now."""
-
-    source: str
-    link: dict[str, object] | None = None
-
-
-def _profile_claims_binding(student: Mapping[str, object], parent_id: str) -> bool:
-    """The one profile predicate. A missing `parent_binding_status` is not active."""
-    return (
-        student.get("parent_id") == parent_id
-        and student.get("parent_binding_status") == "active"
-    )
-
-
 def relationship_authority(
-    parent_id: str,
-    student_id: str,
-    *,
-    student: Mapping[str, object],
-) -> RelationshipAuthority | None:
-    """Name the table that authorizes this pair right now: profile binding, then link.
+    parent_id: str, student_id: str
+) -> current_relationship.Verdict | None:
+    """The judge's current verdict on this pair, when it is one a grant can rest on.
 
-    Every downstream reader goes through here, so entitlement, allowance and
-    grant writing cannot disagree about one pair.
-
-    For a profile binding the two binding rows are deliberately not read here
-    (#34). What stands behind the profile's word:
-
-    - The teacher-support admission asserts, in its transaction, both binding
-      rows (at the versions the grant recorded, or the live ones when the grant
-      recorded the link table), the profile's `parent_id` and
-      `parent_binding_status`, the parent profile, and both account fences.
-    - Writing a grant reads and checks both rows.
-
-    The one exception is `entitlement_service._relationship_of_record`, which
-    no transaction fences. It takes this verdict as the parent of record, reads
-    only the forward binding row, and from them picks the grant, the billing
-    row and tier it reports, and the binding status it shows. A stale profile
-    cannot create a grant there, but it can make that read show a parent whose
-    binding has ended, and an existing grant of that parent. #34 accepted this
-    only because payments are frozen and no grant exists: when payments are
-    unfrozen, that reader has to judge the pair as the admission does.
+    Every billing reader goes through here, so entitlement, allowance and grant
+    writing cannot disagree about one pair: a current relationship, and a child
+    one, since only a child link pays for a beneficiary.
     """
     if not parent_id or not student_id:
         return None
-    if _profile_claims_binding(student, parent_id):
-        return RelationshipAuthority(source=RELATIONSHIP_SOURCE_BINDING)
-    link = parent_link_service.active_link(parent_id, student_id)
-    if link is None or link.get("relationship") != BENEFICIARY_RELATIONSHIP:
+    verdict = current_relationship.judge(parent_id, student_id)
+    if not verdict.is_current or verdict.relationship != BENEFICIARY_RELATIONSHIP:
         return None
-    return RelationshipAuthority(source=RELATIONSHIP_SOURCE_LINK, link=dict(link))
+    return verdict
 
 
-def authorizing_parents(
-    student_id: str,
-    *,
-    student: Mapping[str, object],
-) -> list[tuple[str, RelationshipAuthority]]:
-    """Every parent that authorizes this student now, the profile binding first.
+def beneficiary_parents(student_id: str) -> list[current_relationship.Verdict]:
+    """Every parent whose relationship with this student can carry a grant now.
 
-    A profile binding answers alone: a student the legacy table still claims
-    never reaches the link table, in any of the three services.
+    Ordered by parent id, so readers that take the first one agree.
     """
-    candidates: list[tuple[str, RelationshipAuthority]] = []
-    claimed = str(student.get("parent_id") or "")
-    if claimed:
-        authority = relationship_authority(claimed, student_id, student=student)
-        if authority is not None:
-            candidates.append((claimed, authority))
-    if candidates:
-        return candidates
-    for parent_id in sorted(
-        {
-            str(link.get("parent_id") or "")
-            for link in parent_link_repo.list_links_for_student(student_id)
-            if link.get("parent_id")
-        }
-    ):
-        authority = relationship_authority(parent_id, student_id, student=student)
-        if authority is not None:
-            candidates.append((parent_id, authority))
-    return candidates
-
-
-def _binding_relationship_rows(
-    parent_id: str,
-    student_id: str,
-    student: Mapping[str, object],
-) -> tuple[dict[str, object], dict[str, object]]:
-    """Return the two legacy rows that prove a claimed profile binding.
-
-    A claim whose rows are missing or contradict each other is a refusal, never
-    a fall-through to the link table.
-    """
-    if not _profile_claims_binding(student, parent_id):
-        raise PaidGrantConflict("profile binding does not claim this beneficiary")
-    forward = _mapping(user_repo.get_parent_student_binding(parent_id, student_id))
-    reverse = _mapping(user_repo.get_student_parent_binding(student_id, parent_id))
-    if forward is None or reverse is None:
-        raise PaidGrantConflict("beneficiary relationship rows are missing")
-    for row in (forward, reverse):
-        if (
-            row.get("parent_id") != parent_id
-            or row.get("student_id") != student_id
-            or row.get("relationship") != BENEFICIARY_RELATIONSHIP
-            or row.get("status") != "active"
-        ):
-            raise PaidGrantConflict("beneficiary relationship is not bidirectional")
-    return forward, reverse
-
-
-def binding_relationship_versions(
-    parent_id: str,
-    student_id: str,
-    student: Mapping[str, object],
-) -> tuple[int, int] | None:
-    """The live binding versions, for a grant that recorded the other table."""
-    try:
-        forward, reverse = _binding_relationship_rows(parent_id, student_id, student)
-        return (
-            _positive_integer(forward.get("version"), "forward version"),
-            _positive_integer(reverse.get("version"), "reverse version"),
-        )
-    except (PaidGrantConflict, ValueError):
-        return None
+    if not student_id:
+        return []
+    return sorted(
+        (
+            verdict
+            for verdict in current_relationship.parents_of(student_id)
+            if verdict.relationship == BENEFICIARY_RELATIONSHIP
+        ),
+        key=lambda verdict: verdict.parent_id,
+    )
 
 
 def _relationship_proof(
@@ -972,23 +826,11 @@ def _relationship_proof(
         or student.get("account_status") != "active"
     ):
         raise PaidGrantConflict("beneficiary relationship is not active")
-    authority = relationship_authority(parent_id, student_id, student=student)
-    if authority is None:
+    if relationship_authority(parent_id, student_id) is None:
         raise PaidGrantConflict("beneficiary relationship is not active")
     try:
         parent_version = _positive_integer(parent.get("version"), "parent profile version")
         student_version = _positive_integer(student.get("version"), "student profile version")
-        if authority.source == RELATIONSHIP_SOURCE_LINK:
-            source = RELATIONSHIP_SOURCE_LINK
-            forward_version: int | None = None
-            reverse_version: int | None = None
-        else:
-            forward, reverse = _binding_relationship_rows(
-                parent_id, student_id, student
-            )
-            source = RELATIONSHIP_SOURCE_BINDING
-            forward_version = _positive_integer(forward.get("version"), "forward version")
-            reverse_version = _positive_integer(reverse.get("version"), "reverse version")
         parent_fence = account_deletion_repo.require_active_account_fence(
             parent_id, table=table
         )
@@ -1008,16 +850,7 @@ def _relationship_proof(
         parent_fence_generation=parent_generation,
         student_profile_version=student_version,
         student_fence_generation=student_generation,
-        forward_version=forward_version,
-        reverse_version=reverse_version,
-        source=source,
     )
-
-
-def relationship_evidence(proof_item: Mapping[str, object]) -> str:
-    """Name the table that authorized a stored grant; absent means the legacy binding."""
-    source = proof_item.get("relationship_source")
-    return source if source == RELATIONSHIP_SOURCE_LINK else RELATIONSHIP_SOURCE_BINDING
 
 
 def _with_relationship_evidence(
@@ -1026,18 +859,15 @@ def _with_relationship_evidence(
     """Stamp the grant with the proof the admission path has to re-assert later."""
     merged: dict[str, object] = {
         **item,
-        "relationship_source": proof.source,
+        "relationship_source": RELATIONSHIP_SOURCE_LINK,
         "parent_profile_version": proof.parent_profile_version,
         "parent_account_fence_generation": proof.parent_fence_generation,
         "student_profile_version": proof.student_profile_version,
         "student_account_fence_generation": proof.student_fence_generation,
     }
-    if proof.source == RELATIONSHIP_SOURCE_BINDING:
-        merged["forward_relationship_version"] = proof.forward_version
-        merged["reverse_relationship_version"] = proof.reverse_version
-    else:
-        merged.pop("forward_relationship_version", None)
-        merged.pop("reverse_relationship_version", None)
+    # Written by the legacy binding, which no longer exists (#208).
+    merged.pop("forward_relationship_version", None)
+    merged.pop("reverse_relationship_version", None)
     return merged
 
 
@@ -1062,51 +892,27 @@ def _proof_operations(
                 ),
             )
         )
-    if proof.source == RELATIONSHIP_SOURCE_LINK:
-        # A link relationship is not mirrored onto the student profile, so the
-        # profile condition must not assert it; the two link rows carry it.
-        operations.extend(
-            (
-                _profile_condition(
-                    student_id,
-                    role="student",
-                    version=proof.student_profile_version,
-                ),
-                _link_condition(
-                    key=parent_link_repo.parent_side_key(parent_id, student_id),
-                    parent_id=parent_id,
-                    student_id=student_id,
-                ),
-                _link_condition(
-                    key=parent_link_repo.student_side_key(student_id, parent_id),
-                    parent_id=parent_id,
-                    student_id=student_id,
-                ),
-            )
+    # The relationship is not mirrored onto the student profile, so the profile
+    # condition does not assert it; the two link rows carry it.
+    operations.extend(
+        (
+            _profile_condition(
+                student_id,
+                role="student",
+                version=proof.student_profile_version,
+            ),
+            _link_condition(
+                key=parent_link_repo.parent_side_key(parent_id, student_id),
+                parent_id=parent_id,
+                student_id=student_id,
+            ),
+            _link_condition(
+                key=parent_link_repo.student_side_key(student_id, parent_id),
+                parent_id=parent_id,
+                student_id=student_id,
+            ),
         )
-    else:
-        operations.extend(
-            (
-                _profile_condition(
-                    student_id,
-                    role="student",
-                    version=proof.student_profile_version,
-                    parent_id=parent_id,
-                ),
-                _relationship_condition(
-                    key={"PK": f"USER#{parent_id}", "SK": f"CHILD#{student_id}"},
-                    parent_id=parent_id,
-                    student_id=student_id,
-                    version=proof.forward_version,
-                ),
-                _relationship_condition(
-                    key={"PK": f"USER#{student_id}", "SK": f"PARENT#{parent_id}"},
-                    parent_id=parent_id,
-                    student_id=student_id,
-                    version=proof.reverse_version,
-                ),
-            )
-        )
+    )
     operations.append(
         account_deletion_repo.active_fence_condition(
             student_id, proof.student_fence_generation
@@ -1435,9 +1241,7 @@ def apply_paid_upgrade(
 
 __all__ = [
     "BENEFICIARY_RELATIONSHIP",
-    "RELATIONSHIP_SOURCE_BINDING",
     "RELATIONSHIP_SOURCE_LINK",
-    "RelationshipAuthority",
     "PaidGrantBuild",
     "PaidGrantConflict",
     "PaidGrantDisposition",
@@ -1449,11 +1253,9 @@ __all__ = [
     "build_paid_activation_operations",
     "clear_renewal_grace",
     "commit_paid_activation",
-    "authorizing_parents",
-    "binding_relationship_versions",
+    "beneficiary_parents",
     "get_active_beneficiary_grant",
     "relationship_authority",
-    "relationship_evidence",
     "schedule_period_end_transition",
     "start_renewal_grace",
     "validate_beneficiary_selection",

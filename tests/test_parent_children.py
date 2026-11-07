@@ -11,6 +11,7 @@ from stoa.routers import parents
 from stoa.security.authorization import AuthorizationFacts, ParentAuthorizationFacts
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.services.current_relationship import SOURCE_LINK, Standing, Verdict
 
 
 def _settings() -> Settings:
@@ -42,17 +43,16 @@ def _app_for_user(user: dict) -> FastAPI:
                 raise TimeoutError("authorization canary")
             if current_actor.role is not CanonicalRole.PARENT or not user.get("bound", True):
                 return AuthorizationFacts()
-            row = {
-                "parent_id": current_actor.user_id,
-                "student_id": resource.student_id,
-                "relationship": "child",
-                "status": "active",
-                "version": 1,
-            }
             return AuthorizationFacts(
                 parent=ParentAuthorizationFacts(
-                    row,
-                    dict(row),
+                    Verdict(
+                        Standing.CURRENT,
+                        current_actor.user_id,
+                        resource.student_id,
+                        relationship="child",
+                        status="active",
+                        source=SOURCE_LINK,
+                    ),
                     {
                         "user_id": current_actor.user_id,
                         "role": "parent",
@@ -75,37 +75,12 @@ def _app_for_user(user: dict) -> FastAPI:
 
 
 @pytest.fixture(autouse=True)
-def _no_formal_bindings(monkeypatch):
-    # One active, bidirectional parent-local -> child-1 binding, read through
-    # the same user_repo calls the route authorization makes.
-    row = {
-        "parent_id": "parent-local",
-        "student_id": "child-1",
-        "relationship": "child",
-        "status": "active",
-        "version": 1,
-    }
-    monkeypatch.setattr(
-        parents.user_repo,
-        "list_parent_student_bindings",
-        lambda parent_id: [dict(row)] if parent_id == "parent-local" else [],
-    )
-    monkeypatch.setattr(
-        parents.user_repo,
-        "get_parent_student_binding",
-        lambda parent_id, student_id: dict(row)
-        if (parent_id, student_id) == ("parent-local", "child-1")
-        else None,
-    )
-    monkeypatch.setattr(
-        parents.user_repo,
-        "get_student_parent_binding",
-        lambda student_id, parent_id: dict(row)
-        if (parent_id, student_id) == ("parent-local", "child-1")
-        else None,
-    )
+def _current_link(monkeypatch, link_rows):
+    # One current parent-local -> child-1 link, read by the relationship judge
+    # the children list asks.
+    link_rows.link("parent-local", "child-1")
 
-    def get_user(user_id):
+    def get_user(user_id, **_kwargs):
         if user_id == "parent-local":
             return {
                 "user_id": user_id,
@@ -121,6 +96,7 @@ def _no_formal_bindings(monkeypatch):
         }
 
     monkeypatch.setattr(parents.user_repo, "get_user", get_user)
+    return link_rows
 
 
 def _child_profile() -> dict:
@@ -188,24 +164,7 @@ def _generated_report(student_id: str = "child-1", status: str = "email_sent") -
     return report
 
 
-def test_parent_children_list_requires_matching_active_bidirectional_binding(monkeypatch):
-    forward = {
-        "parent_id": "parent-local",
-        "student_id": "child-1",
-        "relationship": "child",
-        "status": "active",
-        "version": 2,
-    }
-    reverse = dict(forward)
-    monkeypatch.setattr(
-        parents.user_repo, "list_parent_student_bindings", lambda _parent_id: [forward]
-    )
-    monkeypatch.setattr(
-        parents.user_repo,
-        "get_student_parent_binding",
-        lambda _student_id, _parent_id: reverse,
-    )
-
+def test_parent_children_list_requires_matching_active_bidirectional_binding(link_rows):
     response = TestClient(
         _app_for_user({"sub": "parent-local", "role": "parent"})
     ).get("/parents/me/children")
@@ -213,7 +172,8 @@ def test_parent_children_list_requires_matching_active_bidirectional_binding(mon
     assert response.status_code == 200
     assert [item["id"] for item in response.json()["items"]] == ["child-1"]
 
-    reverse["version"] = 1
+    # The student's side records a different write than the parent's side.
+    link_rows.link("parent-local", "child-1", student_side_stamp="2026-10-01T09:00:00+00:00")
     denied = TestClient(
         _app_for_user({"sub": "parent-local", "role": "parent"})
     ).get("/parents/me/children")
@@ -221,10 +181,8 @@ def test_parent_children_list_requires_matching_active_bidirectional_binding(mon
     assert denied.json() == {"items": []}
 
 
-def test_parent_children_list_ignores_legacy_profile_parent_id(monkeypatch):
-    monkeypatch.setattr(
-        parents.user_repo, "list_parent_student_bindings", lambda _parent_id: []
-    )
+def test_parent_children_list_ignores_legacy_profile_parent_id(monkeypatch, link_rows):
+    link_rows.unlink("parent-local", "child-1")
     monkeypatch.setattr(
         parents.user_repo,
         "get_user",

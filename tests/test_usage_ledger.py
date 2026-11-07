@@ -262,60 +262,6 @@ def test_reconciliation_explains_over_limit_counter(monkeypatch):
     assert summary["unreconciled"] is True
 
 
-def test_parent_usage_summaries_use_active_child_bindings(monkeypatch):
-    table = FakeTable()
-    profiles = {
-        "student-1": {
-            "user_id": "student-1",
-            "role": "student",
-            "subscription_tier": "free_trial",
-            "parent_id": "parent-1",
-            "parent_binding_status": "active",
-        }
-    }
-    monkeypatch.setattr(usage_ledger_repo, "get_table", lambda: table)
-    monkeypatch.setattr(usage_ledger_service.user_repo, "get_user", lambda user_id, **_kwargs: profiles.get(user_id))
-    monkeypatch.setattr(
-        usage_ledger_service.user_repo,
-        "list_parent_student_bindings",
-        lambda parent_id: [
-            {"parent_id": parent_id, "student_id": "student-1", "status": "active"},
-            {"parent_id": parent_id, "student_id": "student-2", "status": "inactive"},
-        ],
-    )
-    monkeypatch.setattr(
-        usage_ledger_service.entitlement_service,
-        "resolve_student_entitlement",
-        lambda student_id, settings, student_profile=None: {
-            "studentId": student_id,
-            "parentId": "parent-1",
-            "effectivePlan": "student",
-            "source": "provider_billing",
-            "billingState": "active",
-            "limits": {"dailyAiQuestionLimit": 30},
-        },
-    )
-    table.seed({
-        "PK": "USAGE#student-1",
-        "SK": "QUESTION#2026-07-03",
-        "count": 3,
-    })
-
-    summaries = usage_ledger_service.list_parent_usage_summaries(
-        parent_id="parent-1",
-        settings=_settings(),
-        day="2026-07-03",
-    )
-
-    assert len(summaries) == 1
-    assert summaries[0]["studentId"] == "student-1"
-    assert summaries[0]["consumed"] == 3
-    assert summaries[0]["limit"] == 30
-    assert summaries[0]["remaining"] == 27
-    assert summaries[0]["reconciliation"]["status"] == "ledger-missing"
-    assert summaries[0]["supportAction"] == "review_counter_without_ledger"
-
-
 def test_student_usage_summary_includes_multi_action_groups(monkeypatch):
     table = FakeTable()
     # The ledger writes this summary reads are lifecycle transactions fenced on
@@ -410,29 +356,20 @@ def test_non_question_reconciliation_is_read_only(monkeypatch):
     assert result["repairMode"] == "unsupported"
 
 
-def test_parent_child_usage_endpoint_is_privacy_safe(monkeypatch):
+def test_parent_child_usage_endpoint_is_privacy_safe(monkeypatch, link_rows):
     app = FastAPI()
     app.include_router(parents.router, prefix="/parents")
     from actor_helpers import install_actor_overrides
 
     install_actor_overrides(app, {"sub": "parent-1", "role": "parent"})
+    link_rows.link("parent-1", "student-1")
     monkeypatch.setattr(
         parents.user_repo,
         "get_user",
         lambda user_id, **_kwargs: {
             "user_id": user_id,
             "role": "parent" if user_id == "parent-1" else "student",
-            "parent_id": "parent-1",
-            "parent_binding_status": "active",
-        },
-    )
-    monkeypatch.setattr(
-        parents.user_repo,
-        "get_parent_student_binding",
-        lambda parent_id, student_id: {
-            "parent_id": parent_id,
-            "student_id": student_id,
-            "status": "active",
+            "account_status": "active",
         },
     )
     monkeypatch.setattr(

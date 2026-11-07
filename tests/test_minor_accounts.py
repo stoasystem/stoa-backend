@@ -38,7 +38,11 @@ from stoa.routers import students
 from stoa.security.authorization import CurrentAuthorizationFactRepository
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.route_authorization import get_authorization_fact_repository
-from stoa.services import account_provisioning_service, parent_link_service
+from stoa.services import (
+    account_provisioning_service,
+    current_relationship,
+    parent_link_service,
+)
 from rule_violation_helpers import assert_violation
 
 
@@ -260,13 +264,6 @@ def world(monkeypatch: pytest.MonkeyPatch) -> LinkWorld:
     monkeypatch.setattr(
         user_repo, "get_user", lambda user_id, **_kwargs: deepcopy(built.accounts.get(user_id))
     )
-    monkeypatch.setattr(user_repo, "list_parent_student_bindings", lambda _p: [])
-    monkeypatch.setattr(
-        user_repo, "get_parent_student_binding", lambda _p, _s: None
-    )
-    monkeypatch.setattr(
-        user_repo, "get_student_parent_binding", lambda _s, _p: None
-    )
     return built
 
 
@@ -336,7 +333,7 @@ def test_未成年学生确认一条_pending_被拒(world: LinkWorld) -> None:
 
     assert code == "link_requires_administrator"
     assert world.status("parent-a", "student-b") == "pending"
-    assert parent_link_service.active_link("parent-a", "student-b") is None
+    assert not current_relationship.judge("parent-a", "student-b").is_current
 
 
 def test_未成年学生仍然可以拒绝一条_pending(world: LinkWorld) -> None:
@@ -361,7 +358,7 @@ def test_管理员分配对未成年照常成立(world: LinkWorld) -> None:
     )
 
     assert world.status("parent-a", "student-b") == "active"
-    assert parent_link_service.active_link("parent-a", "student-b") is not None
+    assert current_relationship.judge("parent-a", "student-b").is_current
 
 
 def test_成年学生的自助发起与确认照常成立(world: LinkWorld) -> None:
@@ -379,7 +376,7 @@ def test_成年学生的自助发起与确认照常成立(world: LinkWorld) -> N
     )
 
     assert world.status("parent-a", "student-b") == "active"
-    assert parent_link_service.active_link("parent-a", "student-b") is not None
+    assert current_relationship.judge("parent-a", "student-b").is_current
 
 
 def test_生日恰好使人今天成年按成年处理(world: LinkWorld) -> None:

@@ -56,6 +56,7 @@ from stoa.services.billing_errors import BillingErrorCode
 from stoa.services import (
     account_provisioning_service,
     answer_judging,
+    current_relationship,
     teacher_support_allowance_service,
     locale_service,
     notify_service,
@@ -2038,21 +2039,18 @@ def _account_number_of(user_id: str) -> str:
 
 
 def _linked_counterparts(profile: Mapping[str, object]) -> list[dict[str, str]]:
-    """Confirmed links only; a pending request must never read as a binding."""
+    """Current relationships only, as the judge sees them; a pending request is not one."""
     role = str(profile.get("role") or "")
     user_id = str(profile.get("user_id") or "")
     if not user_id:
         return []
     if role == "parent":
-        pairs = [
-            (str(link.get("student_id") or ""), link)
-            for link in parent_link_service.active_children(user_id)
+        counterparts = [
+            verdict.student_id for verdict in current_relationship.children_of(user_id)
         ]
     elif role == "student":
-        pairs = [
-            (str(link.get("parent_id") or ""), link)
-            for link in parent_link_repo.list_links_for_student(user_id)
-            if link.get("status") == parent_link_repo.STATUS_ACTIVE
+        counterparts = [
+            verdict.parent_id for verdict in current_relationship.parents_of(user_id)
         ]
     else:
         return []
@@ -2060,9 +2058,9 @@ def _linked_counterparts(profile: Mapping[str, object]) -> list[dict[str, str]]:
         {
             "userId": counterpart_id,
             "accountNumber": _account_number_of(counterpart_id),
-            "status": str(link.get("status") or ""),
+            "status": parent_link_repo.STATUS_ACTIVE,
         }
-        for counterpart_id, link in pairs
+        for counterpart_id in counterparts
         if counterpart_id
     ]
 
@@ -2195,7 +2193,7 @@ async def list_users(
     on a full page of parents with three children each: 3201 DynamoDB round trips,
     against a 29 second API Gateway ceiling. The number is pinned by
     tests/test_admin_user_list_read_amplification.py so it cannot grow unnoticed;
-    batching it down needs `parent_link_service.active_link`, not this file.
+    batching it down needs `current_relationship.judge`, not this file.
     """
     table = get_table()
 
@@ -3494,20 +3492,18 @@ async def transition_parent_binding_status(
 def _revoke_parent_link_side(
     *, parent_id: str, student_id: str, actor: Mapping[str, object]
 ) -> bool:
-    """Retire an active parent-link pair, reporting whether visibility is now closed."""
-    if parent_link_service.active_link(parent_id, student_id) is None:
-        return True
+    """Retire an open parent-link pair, reporting whether visibility is now closed."""
     try:
-        parent_link_repo.transition_link(
-            parent_id=parent_id,
-            student_id=student_id,
-            expected_status=parent_link_repo.STATUS_ACTIVE,
-            next_status=parent_link_repo.STATUS_REJECTED,
-            updated_by=str(actor.get("user_id") or actor.get("sub") or "admin"),
-            link_updated_at=_now_iso(),
+        closed = current_relationship.revoke(
+            parent_id,
+            student_id,
+            actor_id=str(actor.get("user_id") or actor.get("sub") or "admin"),
+            now=_now_iso(),
         )
     except parent_link_repo.ParentLinkConflict:
         return False
+    if closed is None:
+        return True
     _record_account_admin_event(
         actor=actor,
         target_id=student_id,

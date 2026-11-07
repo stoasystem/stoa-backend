@@ -168,8 +168,6 @@ def test_student_profile_uses_canonical_actor_user_id_without_email_fallback(mon
 
 def test_sec_002_other_student_and_unrelated_parent_are_hidden(monkeypatch):
     _profiles(monkeypatch)
-    monkeypatch.setattr(route_authorization.user_repo, "get_parent_student_binding", lambda *_: None)
-    monkeypatch.setattr(route_authorization.user_repo, "get_student_parent_binding", lambda *_: None)
     other = _client(_actor(CanonicalRole.STUDENT, "student-2")).get(
         "/students/student-1/summary"
     )
@@ -180,22 +178,30 @@ def test_sec_002_other_student_and_unrelated_parent_are_hidden(monkeypatch):
     assert other.json()["detail"]["code"] == parent.json()["detail"]["code"] == "resource_not_found"
 
 
-def test_active_bidirectional_parent_can_read_summary(monkeypatch):
+def test_active_bidirectional_parent_can_read_summary(monkeypatch, link_rows):
     _profiles(monkeypatch)
-    row = {
-        "parent_id": "parent-1",
-        "student_id": "student-1",
-        "relationship": "child",
-        "version": 2,
-        "status": "active",
-    }
-    monkeypatch.setattr(route_authorization.user_repo, "get_parent_student_binding", lambda *_: row)
-    monkeypatch.setattr(route_authorization.user_repo, "get_student_parent_binding", lambda *_: dict(row))
+    link_rows.link("parent-1", "student-1")
     response = _client(_actor(CanonicalRole.PARENT, "parent-1")).get(
         "/students/student-1/summary"
     )
     assert response.status_code == 200
     assert response.json()["student_id"] == "student-1"
+
+
+def test_guardian_status_is_linked_only_by_a_current_link(monkeypatch, link_rows):
+    profiles = _profiles(monkeypatch)
+    client = _client(_actor(CanonicalRole.STUDENT, "student-1"))
+
+    link_rows.link("parent-1", "student-1")
+    assert client.get("/students/me/profile").json()["guardianStatus"] == "linked"
+
+    link_rows.set_status("parent-1", "student-1", "rejected")
+    assert client.get("/students/me/profile").json()["guardianStatus"] == "not_linked"
+
+    # The legacy profile pointer alone links nobody.
+    link_rows.unlink("parent-1", "student-1")
+    profiles["student-1"].update(parent_id="parent-1", parent_binding_status="active")
+    assert client.get("/students/me/profile").json()["guardianStatus"] == "not_linked"
 
 
 def test_scoped_teacher_and_exact_admin_content_capability_positive_controls(monkeypatch):

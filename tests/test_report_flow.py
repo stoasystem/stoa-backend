@@ -37,37 +37,21 @@ def _fenced_report_provider_compat(monkeypatch):
 
 
 class FakeDataTable:
-    def __init__(self):
+    def __init__(self, candidates):
         self.scans = []
         self.queries = []
-        self.student = {
-            "user_id": "student-1",
-            "parent_id": "parent-1",
-            "role": "student",
-            "email": "student@example.com",
-            "name": "Student One",
-            "grade": "6",
-        }
+        self.candidates = candidates
 
     def scan(self, **kwargs):
+        # The job's one discovery scan: active parent-side link rows.
         self.scans.append(kwargs)
         names = kwargs["ExpressionAttributeNames"]
         values = kwargs["ExpressionAttributeValues"]
-        if names.get("#entity") == "entity_type":
-            # Both relationship key spaces are gathered in the one scan.
-            assert values[":binding"] == "parent_student_binding"
-            assert values[":link"] == "parent_student_link"
-            assert values[":status"] == "active"
-            return {"Items": []}
-        assert names["#role"] == "role"
-        assert values[":role"] == "student"
-        if "#pid" in names:
-            assert names["#pid"] == "parent_id"
-            if ":pid" in values:
-                assert values[":pid"] == "parent-1"
-            else:
-                assert "attribute_exists(#pid)" in str(kwargs["FilterExpression"])
-        return {"Items": [self.student]}
+        assert names["#entity"] == "entity_type"
+        assert values[":link"] == "parent_student_link"
+        assert values[":active"] == "active"
+        assert values[":child"] == "CHILD#"
+        return {"Items": list(self.candidates)}
 
     def query(self, **kwargs):
         self.queries.append(kwargs)
@@ -147,11 +131,14 @@ class RecordingSESClient:
             raise self.error
 
 
-def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monkeypatch):
+def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monkeypatch, link_rows):
     events = []
     reports_by_id = {}
     question_last_keys = []
-    data_table = FakeDataTable()
+    # The relationship the flow rides on: the job finds it by scanning the
+    # parent's side, and the job and the generator both judge it.
+    link_rows.link("parent-1", "student-1")
+    data_table = FakeDataTable([link_rows.side("PARENT#parent-1", "CHILD#student-1")])
     s3 = RecordingS3Client(events)
     ses = RecordingSESClient(events)
 
@@ -169,32 +156,6 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
             "account_status": "active",
         },
     )
-    # The legacy relationship the flow rides on, in both formal rows: the job
-    # and the generator now judge the relationship instead of matching a
-    # profile's parent_id.
-    binding = {
-        "entity_type": "parent_student_binding",
-        "parent_id": "parent-1",
-        "student_id": "student-1",
-        "relationship": "child",
-        "status": "active",
-        "version": 1,
-    }
-    monkeypatch.setattr(
-        report_service.user_repo,
-        "get_parent_student_binding",
-        lambda parent_id, student_id: dict(binding)
-        if (parent_id, student_id) == ("parent-1", "student-1")
-        else None,
-    )
-    monkeypatch.setattr(
-        report_service.user_repo,
-        "get_student_parent_binding",
-        lambda student_id, parent_id: dict(binding)
-        if (parent_id, student_id) == ("parent-1", "student-1")
-        else None,
-    )
-
     question_pages = [
         {
             "Items": [
@@ -315,10 +276,10 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
         "failed": 0,
     }
     assert question_last_keys == [None, {"PK": "QUESTION#q1"}]
-    # Two discovery scans. The third used to be report generation re-scanning
-    # every student carrying this parent's identifier; it now reads the
-    # relationship rows instead.
-    assert len(data_table.scans) == 2
+    # One discovery scan, of the link rows. Report generation no longer
+    # re-scans every student carrying this parent's identifier; it judges the
+    # relationship instead.
+    assert len(data_table.scans) == 1
     # One page of conversations, one read of their help requests.
     assert len(data_table.queries) == 2
     assert [event[0] for event in events] == [

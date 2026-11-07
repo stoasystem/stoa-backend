@@ -2,7 +2,12 @@
 
 The gate these tests defend is not the read-side judgement but the condition
 writes: a link that is revoked between the pre-read and the commit has to cancel
-the transaction, exactly as a revoked profile binding always did.
+the transaction.
+
+Since #287 the link is the only relationship billing reads. The retired binding
+rows (`USER#<p>/CHILD#<s>`, `USER#<s>/PARENT#<p>`) and a student profile's
+`parent_id` / `parent_binding_status` are still planted here, but only to show
+that they buy nothing and are never fenced.
 """
 
 # These read `_resolve_paid_scope`, not `_resolve_scope`. What each one holds is
@@ -54,6 +59,9 @@ def _assigned_scope(table: Any):
 
 PARENT = "parent-1"
 STUDENT = "student-1"
+# What a grant minted through the retired binding recorded as its source. Such a
+# grant may still be stored; the source it names no longer decides anything.
+LEGACY_BINDING_SOURCE = "profile_binding"
 DIGEST = "a" * 64
 NOW_TEXT = "2026-03-25T12:00:00+00:00"
 NOW = datetime(2026, 3, 25, 12, tzinfo=timezone.utc)
@@ -198,7 +206,7 @@ def _grant_item(
         "student_profile_version": 21,
         "student_account_fence_generation": 6,
     }
-    if source == paid_entitlement_service.RELATIONSHIP_SOURCE_BINDING:
+    if source == LEGACY_BINDING_SOURCE:
         grant["forward_relationship_version"] = 8
         grant["reverse_relationship_version"] = 8
     return grant
@@ -253,7 +261,10 @@ def table(monkeypatch: pytest.MonkeyPatch) -> ConditionalTable:
 
 
 def _bind_legacy(fake: ConditionalTable) -> None:
-    """Reproduce the pre-002 shape: profile fields plus two versioned binding rows."""
+    """Plant the retired shape: profile fields plus two versioned binding rows.
+
+    Nothing reads it any more (#287); tests plant it to show exactly that.
+    """
     profile = fake.items[(f"USER#{STUDENT}", "PROFILE")]
     fake.put({**profile, "parent_id": PARENT, "parent_binding_status": "active"})
     for key in ((f"USER#{PARENT}", f"CHILD#{STUDENT}"), (f"USER#{STUDENT}", f"PARENT#{PARENT}")):
@@ -373,7 +384,7 @@ def test_link_only_student_enters_the_paid_entitlement_pool(
     assert resolved["bindingStatus"] == "active"
 
 
-def test_parent_child_entitlement_list_unions_bindings_and_links(
+def test_parent_child_entitlement_list_reads_links_not_bindings(
     table: ConditionalTable,
 ) -> None:
     _link_active(table)
@@ -410,8 +421,8 @@ def test_parent_child_entitlement_list_unions_bindings_and_links(
         PARENT, settings=_settings()
     )
 
-    # `current_children` judges links before bindings.
-    assert [item["studentId"] for item in listed] == [STUDENT, "student-legacy"]
+    # Only the linked child: an active binding row pair is not a relationship.
+    assert [item["studentId"] for item in listed] == [STUDENT]
 
 
 def test_link_only_student_occupies_the_teacher_support_allowance(
@@ -499,47 +510,36 @@ def test_link_revoked_after_the_preread_cancels_the_paid_admission_only(
                    "teacher_support_counter", "teacher_support_admission"})
 
 
-# --- 3. negative control: the legacy binding is untouched ------------------
+# --- 3. the legacy binding alone buys nothing (#287) -----------------------
 
 
-def test_legacy_binding_keeps_its_versioned_conditions(table: ConditionalTable) -> None:
+def test_legacy_binding_alone_is_not_a_paid_relationship(table: ConditionalTable) -> None:
     _bind_legacy(table)
+    table.put(_grant_item(source=LEGACY_BINDING_SOURCE))
 
-    built = _build(table)
-
-    grant = built.grant_items[0]
-    assert (
-        grant["relationship_source"]
-        == paid_entitlement_service.RELATIONSHIP_SOURCE_BINDING
+    with pytest.raises(paid_entitlement_service.PaidGrantConflict):
+        _build(table)
+    assert paid_entitlement_service.relationship_authority(PARENT, STUDENT) is None
+    assert paid_entitlement_service.beneficiary_parents(STUDENT) == []
+    assert _paid_scope(table) is None
+    resolved = entitlement_service.resolve_student_entitlement(
+        STUDENT, settings=_settings()
     )
-    assert grant["forward_relationship_version"] == 8
-    assert grant["reverse_relationship_version"] == 8
-    targets = [
-        (op["ConditionCheck"]["Key"]["PK"], op["ConditionCheck"]["Key"]["SK"])
-        for op in built.grant_operations
-    ]
-    assert (f"USER#{PARENT}", f"CHILD#{STUDENT}") in targets
-    assert (f"USER#{STUDENT}", f"PARENT#{PARENT}") in targets
-    assert (f"PARENT#{PARENT}", f"CHILD#{STUDENT}") not in targets
-    student_profile_check = next(
-        op["ConditionCheck"]
-        for op in built.grant_operations
-        if op["ConditionCheck"]["Key"] == {"PK": f"USER#{STUDENT}", "SK": "PROFILE"}
-    )
-    assert student_profile_check["ExpressionAttributeValues"][":parent_id"] == PARENT
-    for operation in built.grant_operations:
-        assert_expression_placeholders_closed(operation)
-    account_deletion_repo.transact(list(built.grant_operations), table=table)
+    assert resolved["parentId"] is None
+    assert resolved["source"] != "paid_beneficiary_grant"
 
 
-def test_grant_stored_before_this_card_keeps_the_legacy_conditions(
+def test_grant_stored_before_this_card_admits_through_the_link_conditions(
     table: ConditionalTable,
 ) -> None:
-    """Grants written before card 003 carry no `relationship_source` at all."""
+    """Grants written before card 003 carry no `relationship_source` at all.
+
+    The relationship is judged now, from the link, whatever the grant recorded;
+    the binding rows planted beside it are neither read nor fenced.
+    """
     _bind_legacy(table)
-    legacy_grant = _grant_item(
-        source=paid_entitlement_service.RELATIONSHIP_SOURCE_BINDING
-    )
+    _link_active(table)
+    legacy_grant = _grant_item(source=LEGACY_BINDING_SOURCE)
     del legacy_grant["relationship_source"]
     table.put(legacy_grant)
     captured: list[tuple[dict[str, Any], ...]] = []
@@ -561,21 +561,12 @@ def test_grant_stored_before_this_card_keeps_the_legacy_conditions(
         for op in captured[0]
         if "ConditionCheck" in op
     ]
-    assert (f"USER#{PARENT}", f"CHILD#{STUDENT}") in targets
-    assert (f"PARENT#{PARENT}", f"CHILD#{STUDENT}") not in targets
-
-
-def test_legacy_binding_version_bump_still_cancels_the_transaction(
-    table: ConditionalTable,
-) -> None:
-    _bind_legacy(table)
-    built = _build(table)
-
-    forward = table.items[(f"USER#{PARENT}", f"CHILD#{STUDENT}")]
-    table.put({**forward, "version": 9})
-
-    with pytest.raises(account_deletion_repo.AccountDeletionConflict):
-        account_deletion_repo.transact(list(built.grant_operations), table=table)
+    # The paid grant was spent, not the student's own assigned figure.
+    assert (f"PAID_GRANT#{PARENT}", f"BENEFICIARY#{STUDENT}") in targets
+    assert (f"PARENT#{PARENT}", f"CHILD#{STUDENT}") in targets
+    assert (f"STUDENT#{STUDENT}", f"PARENT#{PARENT}") in targets
+    assert (f"USER#{PARENT}", f"CHILD#{STUDENT}") not in targets
+    assert (f"USER#{STUDENT}", f"PARENT#{PARENT}") not in targets
 
 
 # --- 4. and 5. pending and half links do not count -------------------------
@@ -627,7 +618,6 @@ def test_rejected_link_is_not_a_paid_relationship(table: ConditionalTable) -> No
 
 # --- 6. card 003 audit follow-up -------------------------------------------
 
-BINDING = paid_entitlement_service.RELATIONSHIP_SOURCE_BINDING
 LINK = paid_entitlement_service.RELATIONSHIP_SOURCE_LINK
 OTHER_PARENT = "parent-zzz"
 FIRST_PARENT = "parent-aaa"
@@ -744,7 +734,7 @@ def test_a_stale_binding_source_admits_through_the_live_link(
     """Audit A2: grant says `profile_binding`, the binding is gone, the link is live."""
     _bind_legacy(table)
     _link_active(table)
-    table.put(_grant_item(source=BINDING))
+    table.put(_grant_item(source=LEGACY_BINDING_SOURCE))
     _revoke_legacy_binding(table)
 
     result = _admit(table, "question-stale-binding")
@@ -752,43 +742,32 @@ def test_a_stale_binding_source_admits_through_the_live_link(
     assert result.disposition.value == "admitted"
 
 
-def test_a_stale_link_source_admits_through_the_live_binding(
+def test_a_revoked_link_is_not_revived_by_a_live_binding(
     table: ConditionalTable,
 ) -> None:
-    """The mirror image: grant says `parent_student_link`, only the binding survives."""
+    """The mirror image used to admit through the binding; since #287 it grants nothing."""
     _link_active(table)
     table.put(_grant_item(source=LINK))
     _revoke_link()
     _bind_legacy(table)
-    forward = table.items[(f"USER#{PARENT}", f"CHILD#{STUDENT}")]
-    table.put({**forward, "version": 12})
-    reverse = table.items[(f"USER#{STUDENT}", f"PARENT#{PARENT}")]
-    table.put({**reverse, "version": 12})
-    captured: list[tuple[dict[str, Any], ...]] = []
 
-    result = teacher_support_allowance_service.admit_teacher_support_case(
-        support_case_id="question-stale-link",
-        case_kind="question",
-        beneficiary_id=STUDENT,
-        observed_at=NOW,
-        persist_case=lambda operations: (
-            captured.append(operations) or _persist(table, operations)
-        ),
-        table=table,
+    assert _paid_scope(table) is None
+    with pytest.raises(paid_entitlement_service.PaidGrantConflict):
+        _build(table)
+    resolved = entitlement_service.resolve_student_entitlement(
+        STUDENT, settings=_settings()
     )
+    assert resolved["parentId"] is None
 
+    result = _admit(table, "question-stale-link")
+
+    # The student's own assigned figure, never the revoked parent's grant.
     assert result.disposition.value == "admitted"
-    versions = [
-        op["ConditionCheck"]["ExpressionAttributeValues"].get(":version")
-        for op in captured[0]
-        if "ConditionCheck" in op
-        and op["ConditionCheck"]["Key"]["SK"].startswith(("CHILD#", "PARENT#"))
-    ]
-    # The live row versions, not the ones the link-sourced grant never stored.
-    assert versions == [12, 12]
+    assert result.admission is not None
+    assert result.admission.support_scope_id == _assigned_scope(table).support_scope_id
 
 
-def test_a_relationship_that_died_on_both_tables_is_denied_not_retried(
+def test_a_relationship_that_died_is_denied_not_retried(
     table: ConditionalTable,
 ) -> None:
     """A dead relationship is a clean terminal denial, never a permanent 503.
@@ -798,9 +777,9 @@ def test_a_relationship_that_died_on_both_tables_is_denied_not_retried(
     answer - what must not happen is the dead relationship being retried until
     the caller gives up, which is a 503 for a student who did nothing wrong.
     """
-    _bind_legacy(table)
-    table.put(_grant_item(source=BINDING))
-    _revoke_legacy_binding(table)
+    _link_active(table)
+    table.put(_grant_item(source=LINK))
+    _revoke_link()
 
     assert (
         _paid_scope(table)
@@ -825,23 +804,28 @@ def test_a_relationship_that_died_on_both_tables_is_denied_not_retried(
 # --- B1: one judge, one answer per cell ------------------------------------
 
 # profile claim x binding rows x link -> one verdict, read the same way by all
-# three services. `authority` is the shared judge; `scope` is whether the paid
-# relationship is alive for teacher support and entitlement alike; `write` is
-# what minting a *new* grant does, which additionally needs the two binding
-# rows to be readable and bidirectional.
+# three services. Since #287 only the link decides: whatever the profile claims
+# and the binding rows say, the paid relationship is alive exactly when a child
+# link is current, and then every service names the link as its source.
 _RELATIONSHIP_CELLS = (
-    ("binding claimed, rows active, no link", "active", "active", None, BINDING, BINDING, BINDING),
-    ("binding claimed, rows active, link active", "active", "active", "active", BINDING, BINDING, BINDING),
-    ("binding claimed, rows missing, link active", "active", None, "active", BINDING, None, "refused"),
-    ("binding claimed, rows not bidirectional", "active", "contradicting", "active", BINDING, None, "refused"),
-    ("binding revoked, rows revoked, link active", "revoked", "revoked", "active", LINK, LINK, LINK),
-    ("binding revoked, rows revoked, no link", "revoked", "revoked", None, None, None, "refused"),
-    ("binding status absent, rows active, link active", "absent", "active", "active", LINK, LINK, LINK),
-    ("binding status absent, rows active, no link", "absent", "active", None, None, None, "refused"),
-    ("no claim, link active", None, None, "active", LINK, LINK, LINK),
-    ("no claim, link pending", None, None, "pending", None, None, "refused"),
-    ("no claim, link is not a child link", None, None, "neighbour", None, None, "refused"),
-    ("no claim, no link", None, None, None, None, None, "refused"),
+    ("binding claimed, rows active, no link", "active", "active", None, False),
+    ("binding claimed, rows active, link active", "active", "active", "active", True),
+    ("binding claimed, rows missing, link active", "active", None, "active", True),
+    (
+        "binding claimed, rows not bidirectional, link active",
+        "active",
+        "contradicting",
+        "active",
+        True,
+    ),
+    ("binding revoked, rows revoked, link active", "revoked", "revoked", "active", True),
+    ("binding revoked, rows revoked, no link", "revoked", "revoked", None, False),
+    ("binding status absent, rows active, link active", "absent", "active", "active", True),
+    ("binding status absent, rows active, no link", "absent", "active", None, False),
+    ("no claim, link active", None, None, "active", True),
+    ("no claim, link pending", None, None, "pending", False),
+    ("no claim, link is not a child link", None, None, "neighbour", False),
+    ("no claim, no link", None, None, None, False),
 )
 
 
@@ -886,7 +870,7 @@ def _apply_cell(
 
 
 @pytest.mark.parametrize(
-    ("name", "claim", "rows", "link", "authority_source", "scope_source", "write"),
+    ("name", "claim", "rows", "link", "alive"),
     _RELATIONSHIP_CELLS,
     ids=[cell[0] for cell in _RELATIONSHIP_CELLS],
 )
@@ -896,49 +880,34 @@ def test_every_service_reads_the_same_relationship_cell(
     claim: str | None,
     rows: str | None,
     link: str | None,
-    authority_source: str | None,
-    scope_source: str | None,
-    write: str,
+    alive: bool,
 ) -> None:
     """Audit B1: three services used three different predicates for one fact."""
     _apply_cell(table, claim=claim, rows=rows, link=link)
-    table.put(_grant_item(source=authority_source or BINDING))
-    profile = _student_profile(table)
+    table.put(_grant_item(source=LINK))
+    expected_source = LINK if alive else None
 
-    authority = paid_entitlement_service.relationship_authority(
-        PARENT, STUDENT, student=profile
-    )
+    authority = paid_entitlement_service.relationship_authority(PARENT, STUDENT)
     scope = _paid_scope(table)
     resolved = entitlement_service.resolve_student_entitlement(
         STUDENT, settings=_settings()
     )
 
-    assert (authority.source if authority is not None else None) == authority_source, name
-    assert (scope.relationship_source if scope is not None else None) == scope_source, name
-    assert resolved["parentId"] == (PARENT if authority_source else None), name
+    assert (authority.source if authority is not None else None) == expected_source, name
+    assert (scope.relationship_source if scope is not None else None) == expected_source, name
+    assert resolved["parentId"] == (PARENT if alive else None), name
     # The two consumer services never disagree about whether the paid
     # relationship is alive, nor about which parent runs it.
-    paid_alive = scope is not None
-    assert (resolved["source"] == "paid_beneficiary_grant") is paid_alive, name
-    assert (resolved["effectivePlan"] == "teacher_supported") is paid_alive, name
-    if paid_alive:
+    assert (resolved["source"] == "paid_beneficiary_grant") is alive, name
+    assert (resolved["effectivePlan"] == "teacher_supported") is alive, name
+    if scope is not None:
         assert scope.parent_id == resolved["parentId"], name
 
-    if write == "refused":
+    if alive:
+        assert _build(table).grant_items[0]["relationship_source"] == LINK, name
+    else:
         with pytest.raises(paid_entitlement_service.PaidGrantConflict):
             _build(table)
-    else:
-        assert _build(table).grant_items[0]["relationship_source"] == write, name
-
-
-def test_a_contradicting_binding_never_falls_through_to_the_link(
-    table: ConditionalTable,
-) -> None:
-    """A half-broken legacy binding is a refusal; softening it would mint a link grant."""
-    _apply_cell(table, claim="active", rows="contradicting", link="active")
-
-    with pytest.raises(paid_entitlement_service.PaidGrantConflict):
-        _build(table)
 
 
 # --- B2: which parent is picked, and which one is charged ------------------
@@ -1057,39 +1026,39 @@ def test_the_link_conditions_fence_the_relationship_field(
         account_deletion_repo.transact(list(built.grant_operations), table=table)
 
 
-# --- B5: a profile-bound student never reaches a link parent ---------------
+# --- B5: a profile-bound student reaches its paying link parent ------------
 
 
-def test_a_profile_bound_student_never_reaches_a_paying_link_parent(
+def test_a_legacy_bound_student_reaches_the_paying_link_parent(
     table: ConditionalTable,
 ) -> None:
-    """Pinned as-is: the legacy binding answers alone, so the link payer is invisible."""
+    """Used to be pinned the other way: the legacy binding answered alone and hid
+    the link payer. Since #287 the binding is not a relationship, so the only
+    parent is the linked one, and it is the one that pays."""
     _bind_legacy(table)
     _put_parent(table, OTHER_PARENT)
     _link_active_for(table, OTHER_PARENT)
     table.put(_grant_item(source=LINK, parent_id=OTHER_PARENT))
 
     assert [
-        parent_id
-        for parent_id, _ in paid_entitlement_service.authorizing_parents(
-            STUDENT, student=_student_profile(table)
-        )
-    ] == [PARENT]
-    assert (
-        _paid_scope(table) is None
-    )
+        verdict.parent_id
+        for verdict in paid_entitlement_service.beneficiary_parents(STUDENT)
+    ] == [OTHER_PARENT]
+    scope = _paid_scope(table)
+    assert scope is not None
+    assert scope.parent_id == OTHER_PARENT
     assert (
         entitlement_service.resolve_student_entitlement(STUDENT, settings=_settings())[
             "parentId"
         ]
-        == PARENT
+        == OTHER_PARENT
     )
 
 
 # --- B6: a link grant carries no binding versions, upgrades included -------
 
 
-def test_a_link_grant_carries_no_binding_versions_and_a_binding_grant_does(
+def test_a_link_grant_carries_no_binding_versions(
     table: ConditionalTable,
 ) -> None:
     _link_active(table)
@@ -1099,22 +1068,13 @@ def test_a_link_grant_carries_no_binding_versions_and_a_binding_grant_does(
     assert "forward_relationship_version" not in link_grant
     assert "reverse_relationship_version" not in link_grant
 
-    table.items.pop((f"PARENT#{PARENT}", f"CHILD#{STUDENT}"))
-    table.items.pop((f"STUDENT#{STUDENT}", f"PARENT#{PARENT}"))
-    _bind_legacy(table)
-
-    binding_grant = _build(table).grant_items[0]
-
-    assert binding_grant["forward_relationship_version"] == 8
-    assert binding_grant["reverse_relationship_version"] == 8
-
 
 def test_an_upgrade_onto_a_link_relationship_drops_the_binding_versions(
     table: ConditionalTable,
 ) -> None:
     """The upgrade rewrites a stored grant, so the stale versions must be popped."""
     _link_active(table)
-    table.put(_grant_item(source=BINDING, plan_id=BillingPlanId.STUDENT))
+    table.put(_grant_item(source=LEGACY_BINDING_SOURCE, plan_id=BillingPlanId.STUDENT))
 
     result = paid_entitlement_service.apply_paid_upgrade(
         parent_id=PARENT,

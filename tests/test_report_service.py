@@ -3,18 +3,20 @@ from datetime import date, datetime, timezone
 
 import pytest
 
+from fakes.links import LinkRows
 from stoa.config import Settings
+from stoa.db.repositories import parent_link_repo
 from stoa.services import report_service
 
 
 @pytest.fixture(autouse=True)
 def _fenced_report_provider_compat(monkeypatch):
     # Delivery judges the recipient again; the judge has its own tests in
-    # test_parent_relationship_current.py, so here the parent is simply current.
+    # test_current_relationship.py, so here the parent is simply current.
     monkeypatch.setattr(
-        report_service.parent_link_service,
+        report_service.current_relationship,
         "current_parent_recipient",
-        lambda _parent_id, _student_id: report_service.parent_link_service.ParentRecipient(
+        lambda _parent_id, _student_id: report_service.current_relationship.ParentRecipient(
             email="parent@example.com"
         ),
     )
@@ -120,24 +122,18 @@ def patch_sources(monkeypatch, *, children=None, questions=None, progress=None, 
         "get_table",
         lambda: FakeTable(children=children, conversations=conversations),
     )
-    # `children` now seeds the legacy relationship rows the judge reads, not a
-    # profile scan: a child listed with a non-active `parent_binding_status`
-    # stays unlinked, which is the point of the defect these cover.
+    # `children` seeds the link rows the judge reads, not a profile scan: a
+    # child listed with a non-active `parent_binding_status` stays unlinked,
+    # which is the point of the defect these cover.
+    links = LinkRows()
+    monkeypatch.setattr(parent_link_repo, "get_table", lambda: links.table)
     students = {}
-    bindings = {}
     for child in children or []:
         student_id = child.get("user_id") or child.get("id")
         students[student_id] = {**child, "role": "student", "account_status": "active"}
         parent_id = child.get("parent_id")
         if parent_id and (child.get("parent_binding_status") or "active") == "active":
-            bindings[(parent_id, student_id)] = {
-                "entity_type": "parent_student_binding",
-                "parent_id": parent_id,
-                "student_id": student_id,
-                "relationship": "child",
-                "status": "active",
-                "version": 1,
-            }
+            links.link(parent_id, student_id)
 
     def _get_user(user_id, **_kwargs):
         if user_id in students:
@@ -151,20 +147,6 @@ def patch_sources(monkeypatch, *, children=None, questions=None, progress=None, 
         }
 
     monkeypatch.setattr(report_service.user_repo, "get_user", _get_user)
-    monkeypatch.setattr(
-        report_service.user_repo,
-        "get_parent_student_binding",
-        lambda parent_id, student_id: dict(bindings[(parent_id, student_id)])
-        if (parent_id, student_id) in bindings
-        else None,
-    )
-    monkeypatch.setattr(
-        report_service.user_repo,
-        "get_student_parent_binding",
-        lambda student_id, parent_id: dict(bindings[(parent_id, student_id)])
-        if (parent_id, student_id) in bindings
-        else None,
-    )
     monkeypatch.setattr(
         report_service.question_repo,
         "list_by_student",

@@ -9,6 +9,7 @@ import pytest
 
 from stoa.db.repositories import account_deletion_repo, user_repo
 from stoa.security.authorization import ParentAuthorizationFacts
+from stoa.services import current_relationship
 
 
 class _RepairTable:
@@ -465,9 +466,10 @@ def test_different_parent_conflict_is_report_only_and_remains_unauthorized(monke
     assert result.disposition is user_repo.ParentBindingRepairApplyDisposition.CONFLICT
     assert table.items == before
     assert table.transactions == []
+    # Authorization asks the relationship judge, which reads link rows only:
+    # the binding rows and profile pointer in this table grant nothing.
     assert not ParentAuthorizationFacts(
-        forward=None,
-        reverse=None,
+        verdict=current_relationship.judge("parent-1", "student-1", table=table),
         parent_account=table.items[("USER#parent-1", "PROFILE")],
         student_account=table.items[("USER#student-1", "PROFILE")],
     ).matches("parent-1", "student-1")

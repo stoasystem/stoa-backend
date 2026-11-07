@@ -17,8 +17,8 @@ from uuid import uuid4
 from stoa.db.repositories import account_deletion_repo, report_repo
 from stoa.rule_violation import render_message
 from stoa.services import (
+    current_relationship,
     notify_service,
-    parent_link_service,
     report_artifact_service,
     report_service,
 )
@@ -51,7 +51,7 @@ class ReportRecoveryResult:
     artifacts: dict[str, bool] | None = None
 
 
-def _current_recipient(report: dict) -> parent_link_service.ParentRecipient:
+def _current_recipient(report: dict) -> current_relationship.ParentRecipient:
     """Who may receive this stored report now, judged from the relationship today.
 
     The archived `parent_email` says who was entitled when the artifact was
@@ -59,7 +59,7 @@ def _current_recipient(report: dict) -> parent_link_service.ParentRecipient:
     relationship must still be current, and the address comes from that parent's
     profile rather than from the report.
     """
-    return parent_link_service.current_parent_recipient(
+    return current_relationship.current_parent_recipient(
         str(report.get("parent_id") or ""),
         str(report.get("student_id") or ""),
     )
@@ -89,7 +89,7 @@ def resend_report_email(
         )
 
     recipient = _current_recipient(report)
-    if recipient.refusal == parent_link_service.RECIPIENT_RELATIONSHIP_REVOKED:
+    if recipient.refusal == current_relationship.RECIPIENT_RELATIONSHIP_REVOKED:
         raise _refused(
             report,
             "resend_email",

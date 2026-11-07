@@ -24,6 +24,7 @@ from stoa.security.authorization import (
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
+from stoa.services.current_relationship import Standing, Verdict
 
 
 MATRIX = [
@@ -87,50 +88,59 @@ def _actor(role: CanonicalRole, user_id: str) -> Actor:
     )
 
 
-def _parent_resource(facts: ParentAuthorizationFacts) -> AuthorizedResource:
+def _parent_resource(
+    facts: ParentAuthorizationFacts, *, relationship_known: bool = True
+) -> AuthorizedResource:
     ref = ResourceRef(
         ResourceType.ADAPTIVE_PROFILE,
         "adaptive-1",
         "student-1",
-        relationship_known=True,
+        relationship_known=relationship_known,
     )
     return AuthorizedResource(ref, {"profile_id": "adaptive-1"}, AuthorizationFacts(parent=facts))
 
 
+def _verdict(standing: Standing, parent_id: str = "parent-1") -> Verdict:
+    return Verdict(
+        standing,
+        parent_id,
+        "student-1",
+        relationship="child",
+        source="parent_student_link",
+        version="2026-11-01T09:00:00+00:00",
+    )
+
+
 @pytest.mark.parametrize(
-    ("mutation", "allowed"),
+    ("mutation", "allowed", "result"),
     [
-        (None, True),
-        ("legacy_only", False),
-        ("pending", False),
-        ("revoked", False),
-        ("asymmetric", False),
-        ("stale_version", False),
-        ("inactive_parent", False),
-        ("inactive_student", False),
+        (None, True, SecurityErrorCode.ACTION_NOT_ALLOWED),
+        # The judge's other two answers: known refuses, unknown hides.
+        ("known", False, SecurityErrorCode.ACTION_NOT_ALLOWED),
+        ("unknown", False, SecurityErrorCode.RESOURCE_NOT_FOUND),
+        ("no_verdict", False, SecurityErrorCode.RESOURCE_NOT_FOUND),
+        # A profile pointer is not a relationship; the judge never reads it.
+        ("profile_pointer_only", False, SecurityErrorCode.RESOURCE_NOT_FOUND),
+        ("other_pair", False, SecurityErrorCode.RESOURCE_NOT_FOUND),
+        ("inactive_parent", False, SecurityErrorCode.ACTION_NOT_ALLOWED),
+        ("inactive_student", False, SecurityErrorCode.ACTION_NOT_ALLOWED),
     ],
 )
-def test_parent_requires_matching_active_bidirectional_current_facts(mutation, allowed):
-    row = {
-        "parent_id": "parent-1",
-        "student_id": "student-1",
-        "relationship": "child",
-        "status": "active",
-        "version": 4,
-    }
-    forward = dict(row)
-    reverse = dict(row)
+def test_parent_oversight_follows_the_relationship_judges_verdict(mutation, allowed, result):
+    verdict: Verdict | None = _verdict(Standing.CURRENT)
     parent = {"user_id": "parent-1", "role": "parent", "account_status": "active"}
     student = {"user_id": "student-1", "role": "student", "account_status": "active"}
-    if mutation == "legacy_only":
-        forward = reverse = None
-        student["parent_id"] = "parent-1"
-    elif mutation in {"pending", "revoked"}:
-        forward["status"] = reverse["status"] = mutation
-    elif mutation == "asymmetric":
-        reverse = None
-    elif mutation == "stale_version":
-        reverse["version"] = 3
+    if mutation == "known":
+        verdict = _verdict(Standing.KNOWN)
+    elif mutation == "unknown":
+        verdict = _verdict(Standing.UNKNOWN)
+    elif mutation == "no_verdict":
+        verdict = None
+    elif mutation == "profile_pointer_only":
+        verdict = _verdict(Standing.UNKNOWN)
+        student.update(parent_id="parent-1", parent_binding_status="active")
+    elif mutation == "other_pair":
+        verdict = _verdict(Standing.CURRENT, parent_id="parent-2")
     elif mutation == "inactive_parent":
         parent["account_status"] = "suspended"
     elif mutation == "inactive_student":
@@ -138,11 +148,14 @@ def test_parent_requires_matching_active_bidirectional_current_facts(mutation, a
 
     decision = AuthorizationPolicy().evaluate(
         _actor(CanonicalRole.PARENT, "parent-1"),
-        _parent_resource(ParentAuthorizationFacts(forward, reverse, parent, student)),
+        _parent_resource(
+            ParentAuthorizationFacts(verdict, parent, student), relationship_known=False
+        ),
         AuthorizationAction.READ,
         AuthorizationPurpose.PARENT_OVERSIGHT,
     )
     assert decision.allowed is allowed
+    assert decision.result_code is result
 
 
 @pytest.mark.asyncio

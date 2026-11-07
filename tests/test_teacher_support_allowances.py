@@ -15,7 +15,7 @@ from typing import Any, Callable
 
 import pytest
 
-from stoa.db.repositories import account_deletion_repo
+from stoa.db.repositories import account_deletion_repo, parent_link_repo
 from stoa.routers import conversations, teachers
 from stoa.security.authorization import AuthorizedResource, ResourceRef, ResourceType
 from stoa.services import (
@@ -139,25 +139,42 @@ def _grant(
         "parent_account_fence_generation": 4,
         "student_profile_version": 5,
         "student_account_fence_generation": 6,
-        "forward_relationship_version": 8,
-        "reverse_relationship_version": 8,
     }
 
 
+class _GrantsByBeneficiary(dict):
+    """Grants by beneficiary; storing one also links its parent to the beneficiary.
+
+    A grant only pays while the relationship it rests on is current, and the
+    judge reads that from the link rows, so every grant a test stores comes with
+    the link it needs.
+    """
+
+    def __init__(self, links: Any) -> None:
+        super().__init__()
+        self._links = links
+
+    def __setitem__(self, student_id: str, grant: dict[str, object]) -> None:
+        previous = self.get(student_id)
+        if previous is not None:
+            self._links.unlink(str(previous["parent_id"]), student_id)
+        super().__setitem__(student_id, grant)
+        self._links.link(str(grant["parent_id"]), student_id)
+
+
 @pytest.fixture
-def grants(monkeypatch: pytest.MonkeyPatch) -> dict[str, dict[str, object]]:
-    values: dict[str, dict[str, object]] = {}
-    monkeypatch.setattr(
-        teacher_support_allowance_service.user_repo,
-        "get_user",
-        lambda student_id, **_kwargs: {
-            "user_id": student_id,
-            "role": "student",
+def grants(monkeypatch: pytest.MonkeyPatch, link_rows: Any) -> dict[str, dict[str, object]]:
+    values = _GrantsByBeneficiary(link_rows)
+
+    def get_user(user_id: str, **_kwargs: object) -> dict[str, object]:
+        parents = {str(grant.get("parent_id")) for grant in values.values()}
+        return {
+            "user_id": user_id,
+            "role": "parent" if user_id in parents else "student",
             "account_status": "active",
-            "parent_id": values.get(student_id, {}).get("parent_id"),
-            "parent_binding_status": "active",
-        },
-    )
+        }
+
+    monkeypatch.setattr(teacher_support_allowance_service.user_repo, "get_user", get_user)
     monkeypatch.setattr(
         teacher_support_allowance_service.paid_entitlement_service,
         "get_active_beneficiary_grant",
@@ -179,7 +196,8 @@ def seed_fenced_rows(table: AtomicSupportTable, beneficiary_id: str) -> None:
     dropped a fence altogether stayed green.
     """
     profile = teacher_support_allowance_service.user_repo.get_user(beneficiary_id) or {}
-    parent_id = str(profile.get("parent_id") or "")
+    parents = paid_entitlement_service.beneficiary_parents(beneficiary_id)
+    parent_id = parents[0].parent_id if parents else ""
     grant = (
         teacher_support_allowance_service.paid_entitlement_service.get_active_beneficiary_grant(
             parent_id, beneficiary_id
@@ -220,24 +238,13 @@ def seed_fenced_rows(table: AtomicSupportTable, beneficiary_id: str) -> None:
         "status": "active",
         "generation": Decimal(str(grant.get("parent_account_fence_generation") or 1)),
     })
-    relationship = {
-        "parent_id": parent_id,
-        "student_id": beneficiary_id,
-        "relationship": paid_entitlement_service.BENEFICIARY_RELATIONSHIP,
-        "status": "active",
-    }
-    put({
-        "PK": f"USER#{parent_id}",
-        "SK": f"CHILD#{beneficiary_id}",
-        **relationship,
-        "version": Decimal(str(grant.get("forward_relationship_version") or 1)),
-    })
-    put({
-        "PK": f"USER#{beneficiary_id}",
-        "SK": f"PARENT#{parent_id}",
-        **relationship,
-        "version": Decimal(str(grant.get("reverse_relationship_version") or 1)),
-    })
+    # Both link rows, as the judge read them: the admission fences them active.
+    for side in (
+        parent_link_repo.get_parent_side_link(parent_id, beneficiary_id),
+        parent_link_repo.get_student_side_link(beneficiary_id, parent_id),
+    ):
+        assert side is not None
+        put(deepcopy(dict(side)))
 
 
 def _case_committer(

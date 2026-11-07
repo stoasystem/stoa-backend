@@ -65,6 +65,7 @@ def _command(beneficiary_ids: tuple[str, ...]) -> dict[str, object]:
 
 def _install_active_relationships(
     monkeypatch: pytest.MonkeyPatch,
+    link_rows: Any,
     beneficiary_ids: tuple[str, ...],
     *,
     inactive: frozenset[str] = frozenset(),
@@ -84,9 +85,11 @@ def _install_active_relationships(
             "role": "student",
             "account_status": "inactive" if student_id in inactive else "active",
             "version": 20 + index,
-            "parent_id": "other-parent" if student_id in foreign_parent else "parent-1",
-            "parent_binding_status": "active",
         }
+        # A foreign student is linked to another parent, not to this one.
+        link_rows.link(
+            "other-parent" if student_id in foreign_parent else "parent-1", student_id
+        )
 
     monkeypatch.setattr(
         paid_entitlement_service.user_repo,
@@ -94,38 +97,6 @@ def _install_active_relationships(
         lambda user_id, **_kwargs: deepcopy(profiles.get(user_id)),
     )
 
-    def forward(parent_id: str, student_id: str) -> dict[str, object] | None:
-        if student_id not in profiles:
-            return None
-        return {
-            "parent_id": "other-parent" if student_id in foreign_parent else parent_id,
-            "student_id": student_id,
-            "relationship": "child",
-            "status": "active",
-            "version": 30 + beneficiary_ids.index(student_id),
-        }
-
-    def reverse(student_id: str, parent_id: str) -> dict[str, object] | None:
-        if student_id not in profiles:
-            return None
-        return {
-            "parent_id": "other-parent" if student_id in foreign_parent else parent_id,
-            "student_id": student_id,
-            "relationship": "child",
-            "status": "active",
-            "version": 40 + beneficiary_ids.index(student_id),
-        }
-
-    monkeypatch.setattr(
-        paid_entitlement_service.user_repo,
-        "get_parent_student_binding",
-        forward,
-    )
-    monkeypatch.setattr(
-        paid_entitlement_service.user_repo,
-        "get_student_parent_binding",
-        reverse,
-    )
     monkeypatch.setattr(
         paid_entitlement_service.account_deletion_repo,
         "require_active_account_fence",
@@ -175,9 +146,10 @@ def test_validate_beneficiary_selection_rejects_zero_four_duplicate_and_malforme
 
 def test_build_paid_activation_operations_binds_three_exact_current_relationships(
     monkeypatch: pytest.MonkeyPatch,
+    link_rows: Any,
 ) -> None:
     selected = ("student-3", "student-1", "student-2")
-    _install_active_relationships(monkeypatch, selected)
+    _install_active_relationships(monkeypatch, link_rows, selected)
 
     built = paid_entitlement_service.build_paid_activation_operations(
         _activation_request(),
@@ -211,9 +183,15 @@ def test_build_paid_activation_operations_binds_three_exact_current_relationship
     }
     assert ("USER#parent-1", "PROFILE") in condition_targets
     for student_id in selected:
-        assert ("USER#parent-1", f"CHILD#{student_id}") in condition_targets
-        assert (f"USER#{student_id}", "PARENT#parent-1") in condition_targets
+        assert ("PARENT#parent-1", f"CHILD#{student_id}") in condition_targets
+        assert (f"STUDENT#{student_id}", "PARENT#parent-1") in condition_targets
         assert (f"USER#{student_id}", "PROFILE") in condition_targets
+        # The retired binding rows grant nothing, so nothing fences them.
+        assert ("USER#parent-1", f"CHILD#{student_id}") not in condition_targets
+        assert (f"USER#{student_id}", "PARENT#parent-1") not in condition_targets
+    assert all(
+        item["relationship_source"] == "parent_student_link" for item in built.grant_items
+    )
 
 
 @pytest.mark.parametrize(
@@ -225,12 +203,14 @@ def test_build_paid_activation_operations_binds_three_exact_current_relationship
 )
 def test_build_paid_activation_operations_rejects_inactive_unbound_and_cross_parent(
     monkeypatch: pytest.MonkeyPatch,
+    link_rows: Any,
     inactive: frozenset[str],
     foreign: frozenset[str],
 ) -> None:
     selected = ("student-1",)
     _install_active_relationships(
         monkeypatch,
+        link_rows,
         selected,
         inactive=inactive,
         foreign_parent=foreign,
@@ -247,11 +227,12 @@ def test_build_paid_activation_operations_rejects_inactive_unbound_and_cross_par
         )
 
 
-def test_atomic_activation_receives_grant_rows_and_binding_conditions(
+def test_atomic_activation_receives_grant_rows_and_link_conditions(
     monkeypatch: pytest.MonkeyPatch,
+    link_rows: Any,
 ) -> None:
     selected = ("student-1",)
-    _install_active_relationships(monkeypatch, selected)
+    _install_active_relationships(monkeypatch, link_rows, selected)
     request = _activation_request(plan=BillingPlanId.STUDENT)
     command = _command(selected)
     command["plan_id"] = BillingPlanId.STUDENT.value
@@ -307,11 +288,12 @@ def test_atomic_activation_receives_grant_rows_and_binding_conditions(
     assert captured["table"].__class__ is _ReadTable
 
 
-def test_binding_race_cancels_command_billing_grants_and_versions(
+def test_relationship_race_cancels_command_billing_grants_and_versions(
     monkeypatch: pytest.MonkeyPatch,
+    link_rows: Any,
 ) -> None:
     selected = ("student-1",)
-    _install_active_relationships(monkeypatch, selected)
+    _install_active_relationships(monkeypatch, link_rows, selected)
     request = _activation_request(plan=BillingPlanId.STUDENT)
     command = _command(selected)
     command["plan_id"] = BillingPlanId.STUDENT.value
@@ -390,8 +372,9 @@ def test_binding_race_cancels_command_billing_grants_and_versions(
 
 def test_active_grant_lookup_is_exact_owner_scoped_and_future_child_is_not_granted(
     monkeypatch: pytest.MonkeyPatch,
+    link_rows: Any,
 ) -> None:
-    _install_active_relationships(monkeypatch, ("student-1", "student-new"))
+    _install_active_relationships(monkeypatch, link_rows, ("student-1", "student-new"))
     table = _ReadTable(
         {
             ("PAID_GRANT#parent-1", "BENEFICIARY#student-1"): {
@@ -441,30 +424,27 @@ def test_active_grant_lookup_is_exact_owner_scoped_and_future_child_is_not_grant
 
 def test_entitlement_resolver_uses_exact_grant_not_parent_plan_inference(
     monkeypatch: pytest.MonkeyPatch,
+    link_rows: Any,
 ) -> None:
     settings = Settings()
     parent = {
         "user_id": "parent-1",
         "role": "parent",
+        "account_status": "active",
         "subscription_tier": BillingPlanId.FAMILY.value,
     }
     student = {
         "user_id": "student-1",
         "role": "student",
+        "account_status": "active",
         "subscription_tier": BillingPlanId.FREE_TRIAL.value,
-        "parent_id": "parent-1",
-        "parent_binding_status": "active",
     }
     monkeypatch.setattr(
         entitlement_service.user_repo,
         "get_user",
         lambda user_id, **_kwargs: parent if user_id == "parent-1" else student,
     )
-    monkeypatch.setattr(
-        entitlement_service,
-        "_active_parent_binding",
-        lambda *_args: {"status": "active"},
-    )
+    link_rows.link("parent-1", "student-1")
     monkeypatch.setattr(
         entitlement_service,
         "_get_billing_item",
@@ -509,9 +489,10 @@ def test_entitlement_resolver_uses_exact_grant_not_parent_plan_inference(
 
 def test_upgrade_publishes_higher_versions_without_counter_or_storage_mutation(
     monkeypatch: pytest.MonkeyPatch,
+    link_rows: Any,
 ) -> None:
     selected = ("student-1",)
-    _install_active_relationships(monkeypatch, selected)
+    _install_active_relationships(monkeypatch, link_rows, selected)
     grant = {
         "PK": "PAID_GRANT#parent-1",
         "SK": "BENEFICIARY#student-1",
@@ -592,9 +573,10 @@ def test_upgrade_publishes_higher_versions_without_counter_or_storage_mutation(
 
 def test_duplicate_upgrade_replays_one_grant_and_one_allowance_version(
     monkeypatch: pytest.MonkeyPatch,
+    link_rows: Any,
 ) -> None:
     selected = ("student-1",)
-    _install_active_relationships(monkeypatch, selected)
+    _install_active_relationships(monkeypatch, link_rows, selected)
     upgraded = {
         "PK": "PAID_GRANT#parent-1",
         "SK": "BENEFICIARY#student-1",
