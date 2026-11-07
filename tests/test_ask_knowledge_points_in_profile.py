@@ -121,7 +121,7 @@ def world(table, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(user_repo, name, lambda *_a, **_k: [])
     monkeypatch.setattr(user_repo, "list_children_by_parent_scan", lambda *_a, **_k: [])
     # No practice at all: every star keeps the state the map was drawn with.
-    for name in ("get_mistakes", "get_progress"):
+    for name in ("list_attempts", "get_progress"):
         monkeypatch.setattr(practice_repo, name, lambda *_a, **_k: [])
     parent_link_service.assign_link(
         parent_id=PARENT, student_id=STUDENT, actor_id="admin-1", now=NOW

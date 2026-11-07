@@ -1,9 +1,12 @@
+from datetime import datetime, timezone
+
 import pytest
 from botocore.exceptions import ClientError
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
+from fakes import student_evidence as fake_evidence
 from stoa.config import Settings
 from stoa.db.repositories import report_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
@@ -864,28 +867,28 @@ def test_parent_child_summary_aggregates_real_data(monkeypatch):
             ]
         },
     )
-    monkeypatch.setattr(
-        parents.practice_repo,
-        "get_progress",
-        lambda child_id: [
-            {
-                "lesson_id": "lesson-1",
-                "lesson_title": "Fractions",
-                "subject_id": "math",
-                "status": "completed",
-                "completed_at": "2026-06-02T09:00:00+00:00",
-            },
-            {
-                "lesson_id": "lesson-2",
-                "status": "in_progress",
-                "completed_at": "2026-06-02T09:30:00+00:00",
-            },
-        ],
-    )
-    monkeypatch.setattr(
-        parents.practice_repo,
-        "get_mistakes",
-        lambda child_id: [{"challenge_id": "m-1", "topic_id": "geometry", "created_at": "2026-06-02T08:30:00+00:00"}],
+    asked = fake_evidence.install(
+        monkeypatch,
+        fake_evidence.evidence(
+            "child-1",
+            progress=[
+                {
+                    "lesson_id": "lesson-1",
+                    "lesson_title": "Fractions",
+                    "subject_id": "math",
+                    "status": "completed",
+                    "completed_at": "2026-06-02T09:00:00+00:00",
+                },
+                {
+                    "lesson_id": "lesson-2",
+                    "status": "in_progress",
+                    "completed_at": "2026-06-02T09:30:00+00:00",
+                },
+            ],
+            attempts=[
+                {"challenge_id": "m-1", "topic_id": "geometry", "created_at": "2026-06-02T08:30:00+00:00"}
+            ],
+        ),
     )
     monkeypatch.setattr(
         parents,
@@ -902,6 +905,11 @@ def test_parent_child_summary_aggregates_real_data(monkeypatch):
     )
     monkeypatch.setattr(parents, "_latest_report_for_child", lambda parent_id, child_id: _report())
     monkeypatch.setattr(parents, "_is_current_week", lambda value: str(value).startswith("2026-06-02"))
+    monkeypatch.setattr(
+        parents,
+        "_current_week",
+        lambda: (datetime(2026, 6, 2, tzinfo=timezone.utc), datetime(2026, 6, 3, tzinfo=timezone.utc)),
+    )
 
     client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
     response = client.get("/parents/me/children/child-1/summary")
@@ -915,12 +923,13 @@ def test_parent_child_summary_aggregates_real_data(monkeypatch):
     assert data["practiceLessonsCompletedThisWeek"] == 1
     assert data["weakTopics"][:3] == ["fractions", "geometry", "algebra"]
     assert [item["id"] for item in data["recentActivity"][:2]] == ["conv-1", "q-2"]
+    # One evidence value serves the week, the weak topics and the activity.
+    assert asked == ["child-1"]
 
 
 def test_parent_child_summary_empty_state(monkeypatch):
     monkeypatch.setattr(parents.question_repo, "list_by_student", lambda child_id, limit=20, last_key=None: {"Items": []})
-    monkeypatch.setattr(parents.practice_repo, "get_progress", lambda child_id: [])
-    monkeypatch.setattr(parents.practice_repo, "get_mistakes", lambda child_id: [])
+    fake_evidence.install(monkeypatch)
     monkeypatch.setattr(parents, "_list_conversations_for_child", lambda child_id: [])
     monkeypatch.setattr(parents, "_latest_report_for_child", lambda parent_id, child_id: None)
 
@@ -945,8 +954,7 @@ def test_parent_child_summary_rejects_unlinked_before_data_reads(monkeypatch):
         raise AssertionError("child data reader should not run")
 
     monkeypatch.setattr(parents.question_repo, "list_by_student", fail)
-    monkeypatch.setattr(parents.practice_repo, "get_progress", fail)
-    monkeypatch.setattr(parents.practice_repo, "get_mistakes", fail)
+    monkeypatch.setattr(parents.student_evidence, "for_student", fail)
     monkeypatch.setattr(parents, "_list_conversations_for_child", fail)
     monkeypatch.setattr(parents, "_latest_report_for_child", fail)
 
@@ -986,15 +994,17 @@ def test_parent_child_history_returns_newest_first_with_limit(monkeypatch):
             ]
         },
     )
-    monkeypatch.setattr(
-        parents.practice_repo,
-        "get_progress",
-        lambda child_id: [{"lesson_id": "lesson-1", "status": "completed", "completed_at": "2026-06-02T09:00:00+00:00"}],
-    )
-    monkeypatch.setattr(
-        parents.practice_repo,
-        "get_mistakes",
-        lambda child_id: [{"challenge_id": "m-1", "topic_id": "geometry", "created_at": "2026-06-02T08:30:00+00:00"}],
+    fake_evidence.install(
+        monkeypatch,
+        fake_evidence.evidence(
+            "child-1",
+            progress=[
+                {"lesson_id": "lesson-1", "status": "completed", "completed_at": "2026-06-02T09:00:00+00:00"}
+            ],
+            attempts=[
+                {"challenge_id": "m-1", "topic_id": "geometry", "created_at": "2026-06-02T08:30:00+00:00"}
+            ],
+        ),
     )
     monkeypatch.setattr(
         parents,
@@ -1010,10 +1020,42 @@ def test_parent_child_history_returns_newest_first_with_limit(monkeypatch):
     assert [item["id"] for item in response.json()["items"]] == ["conv-1", "q-1"]
 
 
+def test_parent_child_history_names_finished_lessons_and_wrong_answers(monkeypatch):
+    monkeypatch.setattr(parents.question_repo, "list_by_student", lambda *_a, **_k: {"Items": []})
+    fake_evidence.install(
+        monkeypatch,
+        fake_evidence.evidence(
+            "child-1",
+            progress=[
+                {"lesson_id": "lesson-1", "lesson_title": "Fractions", "subject_id": "math",
+                 "status": "completed", "completed_at": "2026-06-02T09:00:00+00:00"}
+            ],
+            attempts=[
+                {"challenge_id": "m-1", "lesson_id": "lesson-2", "topic_id": "geometry",
+                 "subject_id": "math", "created_at": "2026-06-02T08:30:00+00:00"},
+                {"challenge_id": "right-1", "correct": True, "created_at": "2026-06-02T10:30:00+00:00"},
+            ],
+        ),
+    )
+    monkeypatch.setattr(parents, "_list_conversations_for_child", lambda child_id: [])
+    monkeypatch.setattr(parents.report_repo, "list_reports_for_parent", lambda *_a, **_k: {"Items": []})
+
+    client = TestClient(_app_for_user({"sub": "cognito-sub", "role": "parent"}))
+    response = client.get("/parents/me/children/child-1/history")
+
+    assert response.status_code == 200
+    assert [
+        (item["id"], item["type"], item["summary"], item["subject"])
+        for item in response.json()["items"]
+    ] == [
+        ("lesson-1", "practice", "Fractions", "math"),
+        ("lesson-2", "practice_mistake", "geometry", "math"),
+    ]
+
+
 def test_parent_child_history_empty_state(monkeypatch):
     monkeypatch.setattr(parents.question_repo, "list_by_student", lambda child_id, limit=20, last_key=None: {"Items": []})
-    monkeypatch.setattr(parents.practice_repo, "get_progress", lambda child_id: [])
-    monkeypatch.setattr(parents.practice_repo, "get_mistakes", lambda child_id: [])
+    fake_evidence.install(monkeypatch)
     monkeypatch.setattr(parents, "_list_conversations_for_child", lambda child_id: [])
     monkeypatch.setattr(parents.report_repo, "list_reports_for_parent", lambda parent_id, limit=25, last_key=None: {"Items": []})
 
@@ -1030,8 +1072,7 @@ def test_parent_child_history_rejects_unlinked_before_data_reads(monkeypatch):
         raise AssertionError("history source should not run")
 
     monkeypatch.setattr(parents.question_repo, "list_by_student", fail)
-    monkeypatch.setattr(parents.practice_repo, "get_progress", fail)
-    monkeypatch.setattr(parents.practice_repo, "get_mistakes", fail)
+    monkeypatch.setattr(parents.student_evidence, "for_student", fail)
     monkeypatch.setattr(parents, "_list_conversations_for_child", fail)
     monkeypatch.setattr(parents.report_repo, "list_reports_for_parent", fail)
 

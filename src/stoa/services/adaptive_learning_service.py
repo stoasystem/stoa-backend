@@ -24,6 +24,7 @@ from stoa.services import (
     learning_profile_service,
     locale_service,
     practice_projection_service,
+    student_evidence,
     usage_ledger_service,
 )
 from stoa.services.adaptive_learning_errors import (
@@ -86,7 +87,10 @@ def get_memory_summary(
 ) -> dict[str, Any]:
     normalized_subject = _safe_subject(subject) if subject else None
     questions = _question_rows(student_id)
-    mistakes = practice_repo.get_mistakes(student_id)
+    # One evidence value for the whole summary: every snapshot's lessons come
+    # out of one read of the student's progress, not one read per snapshot.
+    evidence = student_evidence.for_student(student_id)
+    mistakes = list(evidence.mistakes)
     asked = asked_knowledge_repo.list_for_student(student_id)
     profile = learning_profile_service.build_learning_profile(
         student_id=student_id,
@@ -95,7 +99,7 @@ def get_memory_summary(
         asked=asked,
     )
     snapshots = _build_memory_snapshots(
-        student_id=student_id,
+        student=evidence,
         questions=questions,
         mistakes=mistakes,
         subject=normalized_subject,
@@ -1329,12 +1333,13 @@ def _sequencing_summary_explanation(recommendations: list[dict[str, Any]], statu
 
 def _build_memory_snapshots(
     *,
-    student_id: str,
+    student: student_evidence.StudentEvidence,
     questions: list[dict[str, Any]],
     mistakes: list[dict[str, Any]],
     subject: str | None,
     asked: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
+    student_id = student.student_id
     now = now_iso()
     topic_counts: Counter[tuple[str, str]] = Counter()
     evidence: dict[tuple[str, str], list[str]] = {}
@@ -1402,7 +1407,7 @@ def _build_memory_snapshots(
                 "struggling_concepts": [topic_id] if not mastered else [],
                 "preferred_explanation_style": "step_by_step",
                 "recent_questions": evidence.get((subject_id, topic_id), [])[:5],
-                "recent_curriculum_progress": _progress_for_topic(student_id, subject_id, topic_id),
+                "recent_curriculum_progress": _progress_for_topic(student, subject_id, topic_id),
                 "recent_exercise_attempts": _mistake_attempts_for_topic(mistakes, subject_id, topic_id),
                 "teacher_notes": [],
                 "recommended_next_steps": _recommended_steps(subject_id, topic_id, mastered),
@@ -1861,15 +1866,12 @@ def _existing_assignment(assignment_id: str) -> dict[str, Any]:
     return item
 
 
-def _progress_for_topic(student_id: str, subject: str, topic_id: str) -> list[dict[str, Any]]:
+def _progress_for_topic(
+    evidence: student_evidence.StudentEvidence, subject: str, topic_id: str
+) -> list[dict[str, Any]]:
     return [
-        {
-            "lessonId": item.get("lesson_id"),
-            "status": item.get("status"),
-            "completedAt": item.get("completed_at"),
-        }
-        for item in practice_repo.get_progress(student_id, subject)
-        if item.get("topic_id") == topic_id
+        {"lessonId": item.lesson_id, "status": "completed", "completedAt": item.completed_at}
+        for item in evidence.completions_in(subject, topic_id=topic_id)
     ][:5]
 
 
