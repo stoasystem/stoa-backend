@@ -4,7 +4,7 @@ import re
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Annotated, Any, Literal, Protocol, cast
 from uuid import uuid4
@@ -19,7 +19,6 @@ from stoa.db.repositories import (
     asked_knowledge_repo,
     checkout_command_repo,
     parent_link_repo,
-    practice_repo,
     question_repo,
     report_repo,
     user_repo,
@@ -57,6 +56,7 @@ from stoa.services import (
     locale_service,
     message_catalog,
     parent_link_service,
+    student_evidence,
     subscription_service,
     teacher_support_allowance_service,
 )
@@ -845,6 +845,12 @@ def _utc_week_start(now: datetime | None = None) -> date:
     return (current - timedelta(days=current.weekday())).date()
 
 
+def _current_week() -> tuple[datetime, datetime]:
+    """This UTC week, Monday 00:00 to the next, as `[start, end)`."""
+    start = datetime.combine(_utc_week_start(), time.min, tzinfo=timezone.utc)
+    return start, start + timedelta(days=7)
+
+
 def _is_current_week(value: Any) -> bool:
     parsed = _parse_iso_datetime(value)
     if parsed is None:
@@ -931,26 +937,33 @@ def _history_event_from_activity(activity: ParentChildActivity) -> ParentChildHi
     return ParentChildHistoryEvent(**activity.model_dump())
 
 
-def _practice_activity(item: dict[str, Any], event_type: str) -> ParentChildActivity | None:
-    created_at = _response_text(
-        item.get("completed_at")
-        or item.get("created_at")
-        or item.get("updated_at")
-        or item.get("createdAt")
+def _lesson_activity(lesson: student_evidence.Completion) -> ParentChildActivity | None:
+    if not _parse_iso_datetime(lesson.completed_at):
+        return None
+    return ParentChildActivity(
+        id=lesson.lesson_id,
+        type="practice",
+        title=message_catalog.text(
+            "activity.practice_lesson_completed", locale_service.resolve_locale(None)
+        ),
+        summary=lesson.title or lesson.topic_id or lesson.subject_id,
+        subject=lesson.subject_id or None,
+        createdAt=lesson.completed_at,
     )
+
+
+def _mistake_activity(item: Mapping[str, Any]) -> ParentChildActivity | None:
+    created_at = _response_text(item.get("created_at") or item.get("createdAt"))
     if created_at is None or not _parse_iso_datetime(created_at):
         return None
-    title = message_catalog.text(
-        "activity.practice_lesson_completed"
-        if event_type == "practice"
-        else "activity.practice_mistake_logged",
-        locale_service.resolve_locale(None),
-    )
     return ParentChildActivity(
-        id=_response_text(item.get("lesson_id") or item.get("challenge_id")) or f"{event_type}-{created_at}",
-        type=event_type,
-        title=title,
-        summary=_response_text(item.get("lesson_title") or item.get("topic_id") or item.get("subject_id")) or "",
+        id=_response_text(item.get("lesson_id") or item.get("challenge_id"))
+        or f"practice_mistake-{created_at}",
+        type="practice_mistake",
+        title=message_catalog.text(
+            "activity.practice_mistake_logged", locale_service.resolve_locale(None)
+        ),
+        summary=_response_text(item.get("topic_id") or item.get("subject_id")) or "",
         subject=_response_text(item.get("subject_id")),
         createdAt=created_at,
     )
@@ -1013,16 +1026,20 @@ def _question_history_events(child_id: str, limit: int = 100) -> list[ParentChil
     ]
 
 
-def _practice_history_events(child_id: str) -> list[ParentChildActivity]:
-    activities: list[ParentChildActivity] = []
-    for progress in practice_repo.get_progress(child_id):
-        activity = _practice_activity(progress, "practice")
-        if activity:
-            activities.append(activity)
-    for mistake in practice_repo.get_mistakes(child_id):
-        activity = _practice_activity(mistake, "practice_mistake")
-        if activity:
-            activities.append(activity)
+def _practice_history_events(
+    evidence: student_evidence.StudentEvidence,
+) -> list[ParentChildActivity]:
+    """The lessons the child finished and the answers they got wrong."""
+    activities = [
+        activity
+        for lesson in evidence.completions
+        if (activity := _lesson_activity(lesson)) is not None
+    ]
+    activities.extend(
+        activity
+        for mistake in evidence.mistakes
+        if (activity := _mistake_activity(mistake)) is not None
+    )
     return activities
 
 
@@ -1436,17 +1453,12 @@ async def get_child_summary(
         for row in _response_items(question_repo.list_questions_by_student(child_id, limit=500))
         if question_repo.is_question_record(row)
     ]
-    progress = practice_repo.get_progress(child_id)
-    mistakes = practice_repo.get_mistakes(child_id)
+    evidence = student_evidence.for_student(child_id)
     conversations = _list_conversations_for_child(child_id)
     latest_report = _latest_report_for_child(actor.user_id, child_id)
 
     current_week_questions = [item for item in questions if _is_current_week(item.get("created_at"))]
-    current_week_progress = [
-        item
-        for item in progress
-        if item.get("status") == "completed" and _is_current_week(item.get("completed_at"))
-    ]
+    current_week_lessons = evidence.completions_between(*_current_week())
     ai_resolved = sum(1 for item in current_week_questions if item.get("status") == "ai_answered")
     teacher_help = sum(
         1
@@ -1467,7 +1479,7 @@ async def get_child_summary(
     # What Ask questions named, by name only (#143).
     for record in asked_knowledge_repo.list_for_student(child_id):
         weak_topics_counter.update(_response_string_list(record.get("knowledge_points", [])))
-    for mistake in mistakes:
+    for mistake in evidence.mistakes:
         for key in ("topic_id", "subject_id"):
             value = _response_text(mistake.get(key))
             if value:
@@ -1479,7 +1491,7 @@ async def get_child_summary(
 
     activities = []
     activities.extend(_question_history_events(child_id, limit=20))
-    activities.extend(_practice_history_events(child_id))
+    activities.extend(_practice_history_events(evidence))
     activities.extend(_conversation_history_events(child_id))
     if latest_report and (report_activity := _report_activity(latest_report)):
         activities.append(report_activity)
@@ -1494,7 +1506,7 @@ async def get_child_summary(
         questionsAskedThisWeek=len(current_week_questions),
         aiResolvedThisWeek=ai_resolved,
         teacherHelpRequestsThisWeek=teacher_help,
-        practiceLessonsCompletedThisWeek=len(current_week_progress),
+        practiceLessonsCompletedThisWeek=len(current_week_lessons),
         weakTopics=[
             topic
             for topic, _ in sorted(weak_topics_counter.items(), key=lambda item: (-item[1], item[0]))
@@ -1516,7 +1528,7 @@ async def get_child_learning_profile(
         for row in _response_items(question_repo.list_questions_by_student(child_id, limit=500))
         if question_repo.is_question_record(row)
     ]
-    mistakes = practice_repo.get_mistakes(child_id)
+    mistakes = list(student_evidence.for_student(child_id).mistakes)
     return learning_profile_service.build_learning_profile(
         student_id=child_id,
         questions=questions,
@@ -1620,7 +1632,7 @@ async def get_child_history(
 
     activities = []
     activities.extend(_question_history_events(child_id, limit=100))
-    activities.extend(_practice_history_events(child_id))
+    activities.extend(_practice_history_events(student_evidence.for_student(child_id)))
     activities.extend(_conversation_history_events(child_id))
     activities.extend(_report_history_events(actor.user_id, child_id))
 

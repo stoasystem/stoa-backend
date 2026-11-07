@@ -707,20 +707,6 @@ def get_attempt(student_id: str, attempt_id: str) -> dict | None:
     return _optional_item(response.get("Item"))
 
 
-def list_student_attempts(student_id: str, *, correct: bool | None = None) -> list[dict]:
-    table = get_table()
-    response = _query(
-        table,
-        KeyConditionExpression=(
-            Key("PK").eq(f"ATTEMPTS#{student_id}") & Key("SK").begins_with("ATTEMPT#")
-        ),
-    )
-    items = _response_items(response.get("Items", []))
-    if correct is not None:
-        items = [item for item in items if bool(item.get("correct")) is correct]
-    return items
-
-
 def list_attempts(student_id: str) -> list[dict]:
     """Every answer this student has given, from every page, strongly consistent.
 
@@ -803,10 +789,6 @@ def record_attempt(
         attempt_id=attempt_id,
         self_reported=self_reported,
     )
-
-
-def get_mistakes(user_id: str) -> list[dict]:
-    return list_student_attempts(user_id, correct=False)
 
 
 def scan_practice_private_rows(

@@ -26,6 +26,7 @@ from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import adaptive_learning_service
 from stoa.services.current_relationship import SOURCE_LINK, Standing, Verdict
 from audit_helpers import MemoryAuthorizationAuditSink
+from fakes import student_evidence as fake_evidence
 from fakes.dynamodb import as_stored as _as_stored
 
 
@@ -142,12 +143,7 @@ def _canonical_student_profiles(monkeypatch):
         }
 
     monkeypatch.setattr(adaptive.user_repo, "get_user", profile)
-    monkeypatch.setattr(adaptive_learning_service.practice_repo, "get_mistakes", lambda _id: [])
-    monkeypatch.setattr(
-        adaptive_learning_service.practice_repo,
-        "get_progress",
-        lambda _id, _subject=None: [],
-    )
+    fake_evidence.install(monkeypatch)
 
 
 ASSIGNMENT_GENERATION = 3
@@ -305,31 +301,31 @@ def test_assignment_generation_and_transition_record_usage_ledger(monkeypatch):
     assert assignment_id in assignments
     assert "private prompt" not in str(ledger_calls)
     assert "private answer" not in str(ledger_calls)
+    # Every student reads as this one wrong answer and this one finished lesson.
     monkeypatch.setattr(
-        adaptive_learning_service.practice_repo,
-        "get_mistakes",
-        lambda student_id: [
-            {
-                "challenge_id": "challenge-1",
-                "subject_id": "math",
-                "topic_id": "linear-equations",
-                "lesson_id": "lesson-1",
-                "created_at": "2026-06-09T11:00:00+00:00",
-            }
-        ],
-    )
-    monkeypatch.setattr(
-        adaptive_learning_service.practice_repo,
-        "get_progress",
-        lambda student_id, subject_id=None: [
-            {
-                "lesson_id": "lesson-1",
-                "subject_id": "math",
-                "topic_id": "linear-equations",
-                "status": "completed",
-                "completed_at": "2026-06-09T12:00:00+00:00",
-            }
-        ],
+        adaptive_learning_service.student_evidence,
+        "for_student",
+        lambda student_id, **_kwargs: fake_evidence.evidence(
+            student_id,
+            attempts=[
+                {
+                    "challenge_id": "challenge-1",
+                    "subject_id": "math",
+                    "topic_id": "linear-equations",
+                    "lesson_id": "lesson-1",
+                    "created_at": "2026-06-09T11:00:00+00:00",
+                }
+            ],
+            progress=[
+                {
+                    "lesson_id": "lesson-1",
+                    "subject_id": "math",
+                    "topic_id": "linear-equations",
+                    "status": "completed",
+                    "completed_at": "2026-06-09T12:00:00+00:00",
+                }
+            ],
+        ),
     )
 
 
@@ -768,8 +764,7 @@ def test_assignment_automation_execute_returns_partial_batch_results(monkeypatch
             ]
         },
     )
-    monkeypatch.setattr(adaptive_learning_service.practice_repo, "get_mistakes", lambda student_id: [])
-    monkeypatch.setattr(adaptive_learning_service.practice_repo, "get_progress", lambda student_id, subject_id=None: [])
+    fake_evidence.install(monkeypatch)
     monkeypatch.setattr(adaptive_learning_service.curriculum_service, "list_exercises", lambda **kwargs: {"items": [], "count": 0})
     monkeypatch.setattr(
         adaptive_learning_service.ai_teacher_tools_repo,
@@ -942,8 +937,7 @@ def test_assignment_automation_execute_preserves_subject_scope_and_parent_visibi
             ]
         },
     )
-    monkeypatch.setattr(adaptive_learning_service.practice_repo, "get_mistakes", lambda student_id: [])
-    monkeypatch.setattr(adaptive_learning_service.practice_repo, "get_progress", lambda student_id, subject_id=None: [])
+    fake_evidence.install(monkeypatch)
     monkeypatch.setattr(adaptive_learning_service.curriculum_service, "list_exercises", lambda **kwargs: {"items": [], "count": 0})
     monkeypatch.setattr(
         adaptive_learning_service.ai_teacher_tools_repo,

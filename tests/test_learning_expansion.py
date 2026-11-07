@@ -11,6 +11,7 @@ from stoa.routers import parents, students
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import ai_service, ask_answer, learning_profile_service
 from actor_helpers import install_actor_overrides
+from fakes import student_evidence as fake_evidence
 
 
 def _settings() -> Settings:
@@ -140,10 +141,14 @@ def test_learning_profile_aggregates_subject_activity_and_topic_seeds(monkeypatc
         "list_by_student",
         lambda student_id, limit=500, **_kwargs: {"Items": questions_for_student},
     )
-    monkeypatch.setattr(
-        students.practice_repo,
-        "get_mistakes",
-        lambda student_id: [{"subject_id": "physics", "topic_id": "forces", "created_at": "2026-06-08T10:00:00+00:00"}],
+    fake_evidence.install(
+        monkeypatch,
+        fake_evidence.evidence(
+            "student-1",
+            attempts=[
+                {"subject_id": "physics", "topic_id": "forces", "created_at": "2026-06-08T10:00:00+00:00"}
+            ],
+        ),
     )
     monkeypatch.setattr(
         user_repo,
@@ -198,7 +203,7 @@ def test_parent_child_learning_profile_requires_owned_child(monkeypatch):
             ]
         },
     )
-    monkeypatch.setattr(parents.practice_repo, "get_mistakes", lambda student_id: [])
+    fake_evidence.install(monkeypatch)
 
     response = _parents_client({"sub": "parent-claims", "role": "parent"}).get(
         "/parents/me/children/child-1/learning-profile"

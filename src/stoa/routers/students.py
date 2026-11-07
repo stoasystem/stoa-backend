@@ -42,6 +42,7 @@ from stoa.services import (
     locale_service,
     message_catalog,
     parent_link_service,
+    student_evidence,
 )
 from stoa.routers import conversations as conversation_routes
 from stoa.routers.parents import (
@@ -324,39 +325,27 @@ def _lesson_titles() -> dict[str, str]:
 
 
 def _practice_history_items(student_id: str) -> list[LearningHistoryItem]:
+    """The lessons this student finished, from their evidence (#214)."""
     items = []
     titles = _lesson_titles()
     locale = locale_service.resolve_locale(None)
-    for row in practice_repo.get_progress(student_id):
-        if not isinstance(row, Mapping):
+    for lesson in student_evidence.for_student(student_id).completions:
+        if not lesson.completed_at:
             continue
-        created_at = (
-            _history_text(row.get("completed_at"))
-            or _history_text(row.get("updated_at"))
-            or _history_text(row.get("created_at"))
-        )
-        if not created_at:
-            continue
-        lesson_id = _history_text(row.get("lesson_id"))
-        subject_id = _history_text(row.get("subject_id"))
-        stored_title = (
-            _history_text(row.get("lesson_title"))
-            or titles.get(lesson_id, "")
-            or _history_text(row.get("topic_id"))
-        )
+        stored_title = lesson.title or titles.get(lesson.lesson_id, "") or lesson.topic_id
         items.append(
             LearningHistoryItem(
-                id=lesson_id or f"practice-{created_at}",
+                id=lesson.lesson_id,
                 subject=(
-                    translated_title(subject_id, subject_id, locale)
-                    if subject_id
+                    translated_title(lesson.subject_id, lesson.subject_id, locale)
+                    if lesson.subject_id
                     else "Practice"
                 ),
                 title=message_catalog.text("activity.practice_path_lesson", locale),
                 # The lesson name is curriculum content, so it gets the same
                 # title translation the roadmap and the lesson header use.
-                summary=translated_title(lesson_id, stored_title, locale),
-                createdAt=created_at,
+                summary=translated_title(lesson.lesson_id, stored_title, locale),
+                createdAt=lesson.completed_at,
                 sourceLabel=message_catalog.text("activity.source.practice_path", locale),
                 kind="practice_lesson",
                 source="practice_path",
@@ -655,7 +644,7 @@ async def get_learning_profile(
         question_repo.list_questions_by_student(student_id, limit=500).get("Items", []),
         correlation_id,
     )
-    mistakes = practice_repo.get_mistakes(student_id)
+    mistakes = list(student_evidence.for_student(student_id).mistakes)
     return learning_profile_service.build_learning_profile(
         student_id=student_id,
         questions=questions,

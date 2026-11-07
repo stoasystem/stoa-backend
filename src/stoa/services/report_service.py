@@ -17,12 +17,16 @@ from stoa.db.dynamodb import get_table
 from stoa.db.repositories import (
     account_deletion_repo,
     asked_knowledge_repo,
-    practice_repo,
     question_repo,
     report_repo,
     user_repo,
 )
-from stoa.services import current_relationship, notify_service, report_artifact_service
+from stoa.services import (
+    current_relationship,
+    notify_service,
+    report_artifact_service,
+    student_evidence,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -116,8 +120,7 @@ def build_weekly_learning_payload(
     student = _get_linked_student_profile(parent_id, student_id)
 
     questions = _list_all_questions(student_id)
-    progress = practice_repo.get_progress(student_id)
-    mistakes = practice_repo.get_mistakes(student_id)
+    evidence = student_evidence.for_student(student_id)
     conversations = _list_conversations_for_student(student_id)
     # What Ask questions named that week (#143), read from its first day on.
     weekly_asked = [
@@ -129,15 +132,12 @@ def build_weekly_learning_payload(
     weekly_questions = [
         item for item in questions if _is_in_window(item.get("created_at") or item.get("createdAt"), start, end)
     ]
-    weekly_progress = [
-        item
-        for item in progress
-        if item.get("status") == "completed"
-        and _is_in_window(item.get("completed_at") or item.get("updated_at"), start, end)
-    ]
-    weekly_mistakes = [
-        item for item in mistakes if _is_in_window(item.get("created_at") or item.get("createdAt"), start, end)
-    ]
+    window = (
+        datetime.combine(start, time.min, tzinfo=timezone.utc),
+        datetime.combine(end, time.min, tzinfo=timezone.utc),
+    )
+    weekly_progress = evidence.completions_between(*window)
+    weekly_mistakes = list(evidence.mistakes_between(*window))
     weekly_conversations = [
         item
         for item in conversations
@@ -793,15 +793,14 @@ def _question_activity(question: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _practice_activity(progress: dict[str, Any]) -> dict[str, Any]:
-    created_at = progress.get("completed_at") or progress.get("updated_at")
+def _practice_activity(lesson: student_evidence.Completion) -> dict[str, Any]:
     return {
-        "id": progress.get("lesson_id") or f"practice-{created_at}",
+        "id": lesson.lesson_id,
         "type": "practice",
         "title": "Practice lesson completed",
-        "summary": progress.get("lesson_title") or progress.get("topic_id") or progress.get("subject_id") or "",
-        "subject": progress.get("subject_id"),
-        "createdAt": created_at,
+        "summary": lesson.title or lesson.topic_id or lesson.subject_id,
+        "subject": lesson.subject_id or None,
+        "createdAt": lesson.completed_at,
     }
 
 

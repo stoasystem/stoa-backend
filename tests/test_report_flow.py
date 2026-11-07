@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 
 import pytest
 
+from fakes import student_evidence as fake_evidence
+
 from stoa.jobs import weekly_reports
 from stoa.services import notify_service, report_service
 
@@ -196,29 +198,28 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
 
     monkeypatch.setattr(report_service.question_repo, "list_by_student", list_questions)
     monkeypatch.setattr(
-        report_service.practice_repo,
-        "get_progress",
-        lambda student_id: [
-            {
-                "lesson_id": "lesson-1",
-                "status": "completed",
-                "subject_id": "math",
-                "topic_id": "fractions",
-                "completed_at": "2026-06-04T08:00:00Z",
-            }
-        ],
-    )
-    monkeypatch.setattr(
-        report_service.practice_repo,
-        "get_mistakes",
-        lambda student_id: [
-            {
-                "challenge_id": "challenge-1",
-                "subject_id": "math",
-                "topic_id": "fractions",
-                "created_at": "2026-06-05T08:00:00Z",
-            }
-        ],
+        report_service.student_evidence,
+        "for_student",
+        lambda student_id, **_kwargs: fake_evidence.evidence(
+            student_id,
+            progress=[
+                {
+                    "lesson_id": "lesson-1",
+                    "status": "completed",
+                    "subject_id": "math",
+                    "topic_id": "fractions",
+                    "completed_at": "2026-06-04T08:00:00Z",
+                }
+            ],
+            attempts=[
+                {
+                    "challenge_id": "challenge-1",
+                    "subject_id": "math",
+                    "topic_id": "fractions",
+                    "created_at": "2026-06-05T08:00:00Z",
+                }
+            ],
+        ),
     )
 
     monkeypatch.setattr(
