@@ -1546,6 +1546,19 @@
         "retryable": false
       }
     },
+    "lesson_quiz_out_of_order": {
+      "action": null,
+      "domain": "practice",
+      "http_status": 409,
+      "message_key": "error.lesson_quiz_out_of_order",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "lesson_quiz_unavailable": {
       "action": null,
       "domain": "practice",

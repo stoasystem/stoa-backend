@@ -77,6 +77,12 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Ce quiz n'a pas d'exercice à poser pour le moment.",
         "it": "Al momento questo quiz non ha esercizi da proporre.",
     },
+    "error.lesson_quiz_out_of_order": {
+        "de": "Diese Aufgabe stellt das Quiz gerade nicht.",
+        "en": "This is not the exercise the quiz is asking now.",
+        "fr": "Ce n'est pas l'exercice que le quiz pose maintenant.",
+        "it": "Questo non è l'esercizio che il quiz sta proponendo ora.",
+    },
     "error.lesson_quiz_credential_invalid": {
         "de": "Mit diesem Quiz-Nachweis kann diese Lektion nicht abgeschlossen werden.",
         "en": "This quiz credential cannot complete this lesson.",

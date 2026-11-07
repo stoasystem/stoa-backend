@@ -17,6 +17,7 @@ PRIVATE_LEARNING_ACTIONS = frozenset(
         "hint_request",
         "practice_teacher_help_request",
         "practice_answer",
+        "practice_quiz_answer",
         "practice_lesson_completion",
         "assignment_started",
         "assignment_completed",

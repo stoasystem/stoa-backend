@@ -53,6 +53,16 @@ def test_source_registry_closes_learning_rows_writers_and_private_fields() -> No
         | set(_contract(curriculum_analytics_repo, "CURRICULUM_SIGNAL_PRIVATE_FIELDS"))
     )
     assert {"progress", "attempt", "legacy_mistake", "usage"} <= set(practice_rows)
+    assert {"quiz_paper", "quiz_credential", "star_quiz_cooldown", "star_quiz_pass"} <= set(
+        practice_rows
+    )
+    assert {
+        "put_quiz_paper",
+        "update_quiz_paper",
+        "put_quiz_credential",
+        "put_star_quiz_cooldown",
+        "put_star_quiz_pass",
+    } <= writers
     assert {"assignment", "learning_memory"} <= set(adaptive_rows)
     assert {"ai_teacher_draft"} <= set(draft_rows)
     assert {
@@ -373,3 +383,26 @@ def test_learning_row_updates_keep_the_generation_the_row_carries(
         for operations in transactions:
             check = operations[0]["ConditionCheck"]
             assert check["ExpressionAttributeValues"][":generation"] == GENERATION + 1
+
+
+def test_every_quiz_writer_is_registered() -> None:
+    """Every function that writes a row of the student's `QUIZ#` partition (#213)."""
+    import inspect
+
+    writers = {
+        name
+        for name, function in inspect.getmembers(practice_repo, inspect.isfunction)
+        if function.__module__ == practice_repo.__name__
+        and not name.startswith("_")
+        and "quiz_partition(" in (source := inspect.getsource(function))
+        and ("_quiz_write(" in source or "build_practice_write_transaction(" in source)
+    }
+
+    assert writers == {
+        "put_quiz_paper",
+        "update_quiz_paper",
+        "put_quiz_credential",
+        "put_star_quiz_cooldown",
+        "put_star_quiz_pass",
+    }
+    assert writers <= practice_repo.PRACTICE_WRITER_REGISTRY

@@ -6,7 +6,6 @@ Student progress is stored under PK=PROGRESS#{user_id}.
 """
 import logging
 from collections.abc import Mapping
-from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -32,6 +31,7 @@ from stoa.security.identity import Actor
 from stoa.models.practice import (
     PracticeAnswerSubmission,
     PracticeAttemptResult,
+    QuizAnswerSubmission,
     PracticeMistakesResponse,
     ReviewDueResponse,
     ReviewSummaryResponse,
@@ -50,13 +50,11 @@ from stoa.security.route_authorization import (
 from stoa.services import (
     answer_recording,
     knowledge_map_service,
-    knowledge_mastery_service,
     curriculum_analytics_service,
     curriculum_service,
     entitlement_service,
-    lesson_quiz_service,
     locale_service,
-    star_quiz_service,
+    quiz,
     student_evidence,
     usage_ledger_service,
 )
@@ -758,6 +756,40 @@ async def acknowledge_lit_knowledge_points(
     return knowledge_map_service.acknowledge_lit(actor.user_id, body.unit_ids)
 
 
+# ── The two quizzes, one module (`stoa.services.quiz`, #213) ────────────────
+
+#: What each refusal of the quiz module is called, per kind.
+_LESSON_QUIZ_REFUSALS: dict[quiz.Reason, _P] = {
+    quiz.Reason.UNKNOWN: _P.LESSON_QUIZ_NOT_FOUND,
+    quiz.Reason.FINISHED: _P.LESSON_QUIZ_FINISHED,
+    quiz.Reason.EXPIRED: _P.LESSON_QUIZ_EXPIRED,
+    quiz.Reason.GONE: _P.LESSON_QUIZ_UNAVAILABLE,
+    quiz.Reason.OUT_OF_ORDER: _P.LESSON_QUIZ_OUT_OF_ORDER,
+    quiz.Reason.ANSWER_INVALID: _P.PRACTICE_ANSWER_INVALID,
+    quiz.Reason.NOTHING_TO_ASK: _P.LESSON_QUIZ_UNAVAILABLE,
+    quiz.Reason.CREDENTIAL_INVALID: _P.LESSON_QUIZ_CREDENTIAL_INVALID,
+    quiz.Reason.CREDENTIAL_EXPIRED: _P.LESSON_QUIZ_CREDENTIAL_EXPIRED,
+}
+_STAR_QUIZ_REFUSALS: dict[quiz.Reason, _P] = {
+    quiz.Reason.UNKNOWN: _P.STAR_QUIZ_NOT_FOUND,
+    quiz.Reason.FINISHED: _P.STAR_QUIZ_FINISHED,
+    quiz.Reason.EXPIRED: _P.STAR_QUIZ_EXPIRED,
+    quiz.Reason.GONE: _P.STAR_QUIZ_UNAVAILABLE,
+    quiz.Reason.OUT_OF_ORDER: _P.STAR_QUIZ_OUT_OF_ORDER,
+    quiz.Reason.ANSWER_INVALID: _P.PRACTICE_ANSWER_INVALID,
+    quiz.Reason.NOTHING_TO_ASK: _P.STAR_QUIZ_UNAVAILABLE,
+    quiz.Reason.NO_SUCH_STAR: _P.STAR_QUIZ_UNKNOWN_STAR,
+    quiz.Reason.ALREADY_LIT: _P.STAR_QUIZ_ALREADY_LIT,
+    quiz.Reason.COOLING_DOWN: _P.STAR_QUIZ_COOLING_DOWN,
+}
+
+
+def _quiz_refusal(codes: Mapping[quiz.Reason, _P], refused: quiz.Refused) -> PracticeViolation:
+    if refused.retry_at:
+        return PracticeViolation(codes[refused.reason], retryAt=refused.retry_at)
+    return PracticeViolation(codes[refused.reason])
+
+
 # ── Star quiz: one paper that lights a whole knowledge point (#165) ─────────
 
 
@@ -773,32 +805,6 @@ class StarQuizAnswer(BaseModel):
 
     exercise_id: str = Field(alias="exerciseId", min_length=1, max_length=200)
     answer: object
-
-
-def _star_quiz_view(
-    session: Mapping[str, Any], *, answers: list[dict[str, Any]], locale: str
-) -> dict[str, Any]:
-    paper = [str(item) for item in session.get("paper") or []]
-    outcome = star_quiz_service.after_answer(
-        paper=paper, answers=[bool(answer.get("correct")) for answer in answers]
-    )
-    exercise = (
-        _quiz_exercise_preview(outcome.remaining[0], locale)
-        if outcome.status == star_quiz_service.IN_PROGRESS
-        else None
-    )
-    return {
-        "quizId": str(session.get("quiz_id") or ""),
-        "unitId": str(session.get("unit_id") or ""),
-        "status": outcome.status,
-        "total": len(paper),
-        "answered": len(answers),
-        "mistakes": outcome.mistakes,
-        "mistakesAllowed": star_quiz_service.MAX_MISTAKES,
-        "expiresAt": str(session.get("expires_at_iso") or ""),
-        "exercise": exercise,
-        "retryAt": None,
-    }
 
 
 @router.post(
@@ -829,88 +835,10 @@ async def start_star_quiz(
     open for this star is handed back rather than replaced, so leaving and
     coming back does not draw a fresh set of exercises.
     """
-    locale = _actor_locale(actor)
-    student_id = actor.user_id
-    now = datetime.now(timezone.utc)
-    evidence = student_evidence.for_student(student_id, locale=locale, now=now)
-    states = knowledge_mastery_service.unit_states(evidence)
-    judged = states.get(unit_id)
-    if judged is None or judged.lesson_count == 0:
-        raise PracticeViolation(_P.STAR_QUIZ_UNKNOWN_STAR)
-    if judged.state is knowledge_mastery_service.LearningState.LIT:
-        raise PracticeViolation(_P.STAR_QUIZ_ALREADY_LIT)
-
-    retry = evidence.star_quiz_retry_at.get(unit_id)
-    if retry:
-        raise PracticeViolation(_P.STAR_QUIZ_COOLING_DOWN, retryAt=retry)
-
-    for session in practice_repo.list_star_quizzes(student_id):
-        if (
-            str(session.get("unit_id") or "") == unit_id
-            and str(session.get("status") or "") == star_quiz_service.IN_PROGRESS
-            and _as_int(session.get("expires_at")) > int(now.timestamp())
-        ):
-            return _star_quiz_view(
-                session, answers=list(session.get("answers") or []), locale=locale
-            )
-
-    paper = star_quiz_service.compose(
-        knowledge_mastery_service.star_quiz_exercises(unit_id, evidence)
-    )
-    if not paper:
-        raise PracticeViolation(_P.STAR_QUIZ_UNAVAILABLE)
-    expires = now + star_quiz_service.SESSION_TTL
-    session = practice_repo.put_star_quiz(
-        student_id,
-        quiz_id=star_quiz_service.new_quiz_id(),
-        unit_id=unit_id,
-        paper=paper,
-        expires_at=int(expires.timestamp()),
-        expires_at_iso=expires.isoformat(),
-        created_at=now.isoformat(),
-    )
-    return _star_quiz_view(session, answers=[], locale=locale)
-
-
-def _replayed_star_quiz_answer(
-    session: Mapping[str, Any], exercise_id: str, locale: str
-) -> dict[str, Any] | None:
-    answers = [dict(answer) for answer in session.get("answers") or []]
-    for answer in answers:
-        if str(answer.get("exerciseId") or "") == exercise_id:
-            view = _star_quiz_view(session, answers=answers, locale=locale)
-            view["correct"] = bool(answer.get("correct"))
-            view["retryAt"] = session.get("retry_at")
-            return view
-    return None
-
-
-def _light_by_star_quiz(
-    student_id: str, unit_id: str, quiz_id: str, answers: list[dict[str, Any]], now: datetime
-) -> None:
-    """What passing does: the star lit for good, and every answer scheduled for review."""
-    practice_repo.put_star_quiz_pass(
-        student_id, unit_id=unit_id, quiz_id=quiz_id, passed_at=now.isoformat()
-    )
     try:
-        practice_repo.record_lit_unit(
-            student_id,
-            unit_id,
-            lit_at=now.isoformat(),
-            source=knowledge_mastery_service.LitSource.QUIZ.value,
-        )
-    except Exception:  # noqa: BLE001
-        # Lit once before, by its lessons: that lighting keeps its moment.
-        logger.info("Star quiz lighting already recorded", extra={"unit_id": unit_id})
-    for answer in answers:
-        challenge = practice_repo.get_challenge(str(answer.get("exerciseId") or ""))
-        if challenge:
-            review_service.record_answer(
-                student_id=student_id,
-                challenge=challenge,
-                correct=bool(answer.get("correct")),
-                answered_at=datetime.fromisoformat(str(answer.get("answeredAt"))),
-            )
+        return quiz.start_star_quiz(actor.user_id, unit_id, locale=_actor_locale(actor))
+    except quiz.Refused as refused:
+        raise _quiz_refusal(_STAR_QUIZ_REFUSALS, refused) from None
 
 
 @router.post(
@@ -944,75 +872,18 @@ async def answer_star_quiz(
     when the star can be taken again (`retryAt`, 24 hours on): no evidence,
     no review card. The lessons are not touched either way.
     """
-    locale = _actor_locale(actor)
-    student_id = actor.user_id
-    session = practice_repo.get_star_quiz(student_id, quiz_id)
-    if not session or str(session.get("unit_id") or "") != unit_id:
-        raise PracticeViolation(_P.STAR_QUIZ_NOT_FOUND)
-
-    replayed = _replayed_star_quiz_answer(session, body.exercise_id, locale)
-    if replayed is not None:
-        return replayed
-    if str(session.get("status") or "") != star_quiz_service.IN_PROGRESS:
-        raise PracticeViolation(_P.STAR_QUIZ_FINISHED)
-    now = datetime.now(timezone.utc)
-    if _as_int(session.get("expires_at")) <= int(now.timestamp()):
-        raise PracticeViolation(_P.STAR_QUIZ_EXPIRED)
-
-    paper = [str(item) for item in session.get("paper") or []]
-    answers = [dict(answer) for answer in session.get("answers") or []]
-    asking = paper[len(answers)] if len(answers) < len(paper) else None
-    if body.exercise_id != asking:
-        raise PracticeViolation(_P.STAR_QUIZ_OUT_OF_ORDER)
-    challenge = practice_repo.get_challenge(asking)
-    if not challenge:
-        raise PracticeViolation(_P.STAR_QUIZ_UNAVAILABLE)
     try:
-        judgement = answer_recording.judge(challenge, body.answer, locale=locale)
-    except answer_recording.AnswerInvalid as error:
-        raise PracticeViolation(_P.PRACTICE_ANSWER_INVALID) from error
-    correct = judgement.correct
-    answers.append({"exerciseId": asking, "correct": correct, "answeredAt": now.isoformat()})
-    outcome = star_quiz_service.after_answer(
-        paper=paper, answers=[bool(answer["correct"]) for answer in answers]
-    )
-    try:
-        practice_repo.record_star_quiz_answer(
-            student_id, quiz_id, answers=answers, status=outcome.status
+        return quiz.answer(
+            quiz.STAR,
+            actor.user_id,
+            quiz_id,
+            scope_id=unit_id,
+            exercise_id=body.exercise_id,
+            raw_answer=body.answer,
+            locale=_actor_locale(actor),
         )
-    except practice_repo.StarQuizAnswerConflict:
-        current = practice_repo.get_star_quiz(student_id, quiz_id) or session
-        replayed = _replayed_star_quiz_answer(current, asking, locale)
-        if replayed is not None:
-            return replayed
-        raise PracticeViolation(_P.STAR_QUIZ_OUT_OF_ORDER) from None
-
-    retry = None
-    if outcome.status == star_quiz_service.FAILED:
-        retry_moment = star_quiz_service.retry_at(now)
-        retry = retry_moment.isoformat()
-        practice_repo.put_star_quiz_cooldown(
-            student_id,
-            unit_id=unit_id,
-            quiz_id=quiz_id,
-            retry_at=retry,
-            expires_at=int(retry_moment.timestamp()),
-        )
-    elif outcome.status == star_quiz_service.PASSED:
-        _light_by_star_quiz(student_id, unit_id, quiz_id, answers, now)
-
-    answer_recording.record_quiz_answer(
-        student_id,
-        judgement,
-        resource_id=f"{quiz_id}:{len(answers)}",
-        metadata={"quizId": quiz_id, "unitId": unit_id, "status": outcome.status},
-    )
-
-    view = _star_quiz_view({**session, "answers": answers}, answers=answers, locale=locale)
-    view["correct"] = correct
-    view["retryAt"] = retry
-    return view
-
+    except quiz.Refused as refused:
+        raise _quiz_refusal(_STAR_QUIZ_REFUSALS, refused) from None
 
 @router.get("/{subject_id}/{topic_id}/roadmap")
 async def get_roadmap(
@@ -1174,56 +1045,6 @@ async def get_lesson(
     return practice_projection_service.build_lesson_preview(lesson, challenges, st, locale=locale)
 
 
-def _spend_quiz_credential(student_id: str, lesson_id: str, credential: str) -> None:
-    """Take one credential out of circulation, or refuse the completion."""
-    stored = practice_repo.get_quiz_credential(student_id, credential)
-    # The quiz it was issued for has to be the one it names: without this the
-    # field is decoration, and a credential is a bearer token for a lesson
-    # rather than for the paper that earned it.
-    if stored and not str(stored.get("quiz_id") or ""):
-        stored = None
-    if not stored or str(stored.get("lesson_id") or "") != lesson_id:
-        raise PracticeViolation(_P.LESSON_QUIZ_CREDENTIAL_INVALID)
-    if _as_int(stored.get("expires_at")) <= int(datetime.now(timezone.utc).timestamp()):
-        practice_repo.consume_quiz_credential(student_id, credential, lesson_id=lesson_id)
-        raise PracticeViolation(_P.LESSON_QUIZ_CREDENTIAL_EXPIRED)
-    if not practice_repo.consume_quiz_credential(student_id, credential, lesson_id=lesson_id):
-        raise PracticeViolation(_P.LESSON_QUIZ_CREDENTIAL_INVALID)
-
-
-def _quiz_exercise_preview(challenge_id: str, locale: str) -> dict[str, Any] | None:
-    challenge = practice_repo.get_challenge(challenge_id)
-    if not challenge:
-        return None
-    return practice_projection_service.build_challenge_preview(challenge, locale)
-
-
-def _quiz_view(
-    session: Mapping[str, Any],
-    *,
-    queue: list[str],
-    mistakes: int,
-    quiz_status: str,
-    locale: str,
-) -> dict[str, Any]:
-    exercise = (
-        _quiz_exercise_preview(queue[0], locale)
-        if queue and quiz_status == lesson_quiz_service.IN_PROGRESS
-        else None
-    )
-    return {
-        "quizId": str(session.get("quiz_id") or ""),
-        "lessonId": str(session.get("lesson_id") or ""),
-        "kind": str(session.get("kind") or lesson_quiz_service.SKIP_QUIZ),
-        "status": quiz_status,
-        "heartsLeft": lesson_quiz_service.hearts_left(mistakes),
-        "mistakesAllowed": lesson_quiz_service.QUIZ_MAX_MISTAKES,
-        "remaining": len(queue),
-        "expiresAt": str(session.get("expires_at_iso") or ""),
-        "exercise": exercise,
-    }
-
-
 @router.post(
     "/lessons/{lesson_id}/quiz",
     responses={
@@ -1247,40 +1068,15 @@ async def start_lesson_quiz(
     what the quiz asks and how many mistakes are left are facts the client
     cannot restate. Nothing in the answer-free projection carries the answer.
     """
-    kind = body.kind if body else lesson_quiz_service.SKIP_QUIZ
-    exercise_ids = [
-        str(challenge.get("challenge_id"))
-        for challenge in practice_repo.get_challenges(lesson_id)
-        if challenge.get("challenge_id")
-    ]
-    queue = lesson_quiz_service.compose_quiz(
-        kind,
-        exercise_ids=exercise_ids,
-        answered_right=practice_repo.challenges_answered_right(actor.user_id, lesson_id),
-    )
-    if not queue:
-        raise PracticeViolation(_P.LESSON_QUIZ_UNAVAILABLE)
-
-    now = datetime.now(timezone.utc)
-    expires = now + timedelta(seconds=lesson_quiz_service.QUIZ_SESSION_TTL_SECONDS)
-    quiz_id = lesson_quiz_service.new_token()
-    session = practice_repo.put_quiz_session(
-        actor.user_id,
-        quiz_id=quiz_id,
-        lesson_id=lesson_id,
-        kind=kind,
-        queue=queue,
-        expires_at=int(expires.timestamp()),
-        expires_at_iso=expires.isoformat(),
-        created_at=now.isoformat(),
-    )
-    return _quiz_view(
-        session,
-        queue=queue,
-        mistakes=0,
-        quiz_status=lesson_quiz_service.IN_PROGRESS,
-        locale=_actor_locale(actor),
-    )
+    try:
+        return quiz.start_lesson_quiz(
+            actor.user_id,
+            lesson_id,
+            kind=body.kind if body else quiz.rules.SKIP_QUIZ,
+            locale=_actor_locale(actor),
+        )
+    except quiz.Refused as refused:
+        raise _quiz_refusal(_LESSON_QUIZ_REFUSALS, refused) from None
 
 
 @router.post(
@@ -1293,7 +1089,8 @@ async def start_lesson_quiz(
             "description": (
                 "`lesson_quiz_expired`: the quiz is past its expiry; "
                 "`lesson_quiz_finished`: it was already passed or lost; "
-                "`lesson_quiz_unavailable`: the exercise it asked is gone."
+                "`lesson_quiz_out_of_order`: `exerciseId` is not the exercise the quiz "
+                "is asking now; `lesson_quiz_unavailable`: the exercise it asked is gone."
             )
         },
     },
@@ -1301,110 +1098,32 @@ async def start_lesson_quiz(
 async def answer_lesson_quiz(
     lesson_id: str,
     quiz_id: str,
-    body: PracticeAnswerSubmission,
+    body: QuizAnswerSubmission,
     actor: Actor = Depends(_practice_update),
     authorized_lesson: AuthorizedResource = Depends(_authorized_lesson_update),
 ):
     """Judge one quiz answer. No hint, no Ask, no skip - and no second slip.
 
     A wrong answer costs a heart and sends the exercise to the back of the
-    queue; the second one loses the quiz. Quiz answers are not recorded as
-    attempts: passing completes the lesson and nothing more, so a knowledge
-    point still lights only on exercises answered right in the ordinary way (#9).
+    queue; the second one loses the quiz. `exerciseId` names the exercise
+    answered: sent again for an exercise already answered, it gets the first
+    result back. Without it the answer is to the exercise asked now (#113).
+    Quiz answers are not recorded as attempts: passing completes the lesson
+    and nothing more, so a knowledge point still lights only on exercises
+    answered right in the ordinary way (#9).
     """
-    session = practice_repo.get_quiz_session(actor.user_id, quiz_id)
-    if not session or str(session.get("lesson_id") or "") != lesson_id:
-        raise PracticeViolation(_P.LESSON_QUIZ_NOT_FOUND)
-    if str(session.get("status") or "") != lesson_quiz_service.IN_PROGRESS:
-        raise PracticeViolation(_P.LESSON_QUIZ_FINISHED)
-    if _as_int(session.get("expires_at")) <= int(datetime.now(timezone.utc).timestamp()):
-        raise PracticeViolation(_P.LESSON_QUIZ_EXPIRED)
-
-    queue = [str(item) for item in (session.get("queue") or [])]
-    if not queue:
-        raise PracticeViolation(_P.LESSON_QUIZ_FINISHED)
-    # An exercise the catalog lists but cannot resolve used to end here with
-    # the queue untouched, so every retry and every new paper asked the same
-    # unanswerable question: the quiz and `complete` were both shut, with no
-    # way out. It is dropped from the paper instead, and the quiz goes on
-    # with what is left (independent audit of #92).
-    challenge = None
-    while queue:
-        challenge = practice_repo.get_challenge(queue[0])
-        if challenge:
-            break
-        dropped, queue = queue[0], queue[1:]
-        logger.warning("Quiz dropped an exercise it could not resolve", extra={"challenge_id": dropped})
-    if not challenge:
-        practice_repo.update_quiz_session(
+    try:
+        return quiz.answer(
+            quiz.LESSON,
             actor.user_id,
             quiz_id,
-            queue=[],
-            mistakes=_as_int(session.get("mistakes")),
-            status=lesson_quiz_service.FAILED,
+            scope_id=lesson_id,
+            exercise_id=body.exercise_id,
+            raw_answer=body.answer,
+            locale=_actor_locale(actor),
         )
-        raise PracticeViolation(_P.LESSON_QUIZ_UNAVAILABLE)
-
-    try:
-        judgement = answer_recording.judge(challenge, body.answer, locale=_actor_locale(actor))
-    except answer_recording.AnswerInvalid as error:
-        raise PracticeViolation(_P.PRACTICE_ANSWER_INVALID) from error
-    correct = judgement.correct
-    mistakes = _as_int(session.get("mistakes"))
-    asked, queue = queue[0], queue[1:]
-    if not correct:
-        mistakes += 1
-        queue = [*queue, asked]
-
-    if lesson_quiz_service.quiz_lost(mistakes):
-        quiz_status, queue = lesson_quiz_service.FAILED, []
-    elif not queue:
-        quiz_status = lesson_quiz_service.PASSED
-    else:
-        quiz_status = lesson_quiz_service.IN_PROGRESS
-
-    practice_repo.update_quiz_session(
-        actor.user_id, quiz_id, queue=queue, mistakes=mistakes, status=quiz_status
-    )
-
-    # Answering in a quiz is practice too. It was the one answering route that
-    # left no trace, so a reader's quizzes were invisible to the ledger a
-    # parent's and a teacher's reports are built from, and nothing counted
-    # how often a paper was taken (independent audit of #92).
-    answer_recording.record_quiz_answer(
-        actor.user_id,
-        judgement,
-        resource_id=lesson_id,
-        metadata={"quizId": quiz_id, "status": quiz_status},
-    )
-
-    view = _quiz_view(
-        session,
-        queue=queue,
-        mistakes=mistakes,
-        quiz_status=quiz_status,
-        locale=_actor_locale(actor),
-    )
-    view["correct"] = correct
-    view["credential"] = None
-    view["credentialExpiresAt"] = None
-    if quiz_status == lesson_quiz_service.PASSED:
-        expires = datetime.now(timezone.utc) + timedelta(
-            seconds=lesson_quiz_service.QUIZ_CREDENTIAL_TTL_SECONDS
-        )
-        credential = lesson_quiz_service.new_token()
-        practice_repo.put_quiz_credential(
-            actor.user_id,
-            credential_id=credential,
-            lesson_id=lesson_id,
-            quiz_id=quiz_id,
-            expires_at=int(expires.timestamp()),
-            expires_at_iso=expires.isoformat(),
-        )
-        view["credential"] = credential
-        view["credentialExpiresAt"] = expires.isoformat()
-    return view
-
+    except quiz.Refused as refused:
+        raise _quiz_refusal(_LESSON_QUIZ_REFUSALS, refused) from None
 
 @router.post(
     "/lessons/{lesson_id}/complete",
@@ -1434,7 +1153,10 @@ async def complete_lesson(
         # Either road to completion, never both: a client that presents a
         # credential is judged on that credential, so a forged one cannot be
         # waved through by exercises that happened to be answered anyway.
-        _spend_quiz_credential(actor.user_id, lesson_id, credential)
+        try:
+            quiz.spend_credential(actor.user_id, lesson_id, credential)
+        except quiz.Refused as refused:
+            raise _quiz_refusal(_LESSON_QUIZ_REFUSALS, refused) from None
     else:
         # A lesson is complete once every exercise in it has been answered right at
         # least once (#83). The frontend held to this alone; any client could
