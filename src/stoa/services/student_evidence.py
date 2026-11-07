@@ -41,13 +41,32 @@ from stoa.services import (
     curriculum_service,
     knowledge_mastery_service,
     practice_projection_service,
-    star_quiz_service,
 )
 
 logger = logging.getLogger(__name__)
 
 #: The streak and "today" are counted in Zurich days.
 ZURICH = ZoneInfo("Europe/Zurich")
+
+
+def _cooling_down(retry: str, now: datetime) -> bool:
+    """Whether a star lost at some point still cannot be taken at `now`."""
+    if not retry:
+        return False
+    try:
+        moment = datetime.fromisoformat(retry)
+    except ValueError:
+        return False
+    return now < moment
+
+
+def _retry_times(rows: Sequence[Mapping[str, object]], now: datetime) -> dict[str, str]:
+    """Per unit, when a lost star can be taken again; only the ones not yet open."""
+    return {
+        str(row.get("unit_id") or ""): str(row.get("retry_at") or "")
+        for row in rows
+        if row.get("unit_id") and _cooling_down(str(row.get("retry_at") or ""), now)
+    }
 
 
 # ── the half every student shares ──────────────────────────────────────────
@@ -584,7 +603,7 @@ class StudentEvidence:
                 for row in rows
                 if str(row.get("SK") or "").startswith(practice_repo.STAR_QUIZ_COOLDOWN_PREFIX)
             ]
-            return star_quiz_service.retry_times(cooldowns, self.now)
+            return _retry_times(cooldowns, self.now)
 
         return self._once("star_quiz_retry_at", build)
 

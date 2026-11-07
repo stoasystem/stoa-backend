@@ -40,17 +40,31 @@ _MAX_CHALLENGE_PAGES = 1000
 SUBMITTED_ANSWER_SCHEMA_VERSION = 1
 
 PRACTICE_PRIVATE_ROW_REGISTRY = frozenset(
-    {"progress", "attempt", "legacy_mistake", "usage", "quiz_session", "quiz_credential"}
+    {
+        "progress",
+        "attempt",
+        "legacy_mistake",
+        "usage",
+        "quiz_paper",
+        "quiz_credential",
+        "star_quiz_cooldown",
+        "star_quiz_pass",
+    }
 )
+#: Every writer of a practice row. The quiz ones are all of `QUIZ#{student}`:
+#: the paper (`put_quiz_paper`, `update_quiz_paper`), the lesson quiz's
+#: credential, and what a star quiz decided (cooldown, pass).
 PRACTICE_WRITER_REGISTRY = frozenset(
     {
         "mark_lesson_completed",
         "put_attempt",
         "record_attempt",
         "usage_counter",
-        "put_quiz_session",
-        "update_quiz_session",
+        "put_quiz_paper",
+        "update_quiz_paper",
         "put_quiz_credential",
+        "put_star_quiz_cooldown",
+        "put_star_quiz_pass",
     }
 )
 PRACTICE_PRIVATE_FIELDS = frozenset(
@@ -1155,16 +1169,20 @@ def acknowledge_lit_units(
     return confirmed
 
 
-# ── Lesson quiz sessions and completion credentials (#92) ───────────────────
+# ── Quiz papers and lesson-quiz credentials (#92, #165, #213) ───────────────
 
-QUIZ_SESSION_PREFIX = "SESSION#"
+QUIZ_PAPER_PREFIX = "PAPER#"
 QUIZ_CREDENTIAL_PREFIX = "CREDENTIAL#"
-QUIZ_SESSION_ENTITY = "practice_quiz_session"
+QUIZ_PAPER_ENTITY = "practice_quiz_paper"
 QUIZ_CREDENTIAL_ENTITY = "practice_quiz_credential"
 
 
+class QuizPaperConflict(Exception):
+    """Another write to the same paper was recorded first."""
+
+
 def quiz_partition(student_id: str) -> str:
-    """One partition per student for everything a lesson quiz writes.
+    """One partition per student for everything a quiz writes.
 
     The key is built from the authenticated student alone, so a quiz id or a
     credential issued to somebody else addresses a row that is not in this
@@ -1192,31 +1210,38 @@ def _quiz_write(
     return dict(operations[1]["Put"]["Item"])
 
 
-def put_quiz_session(
+def put_quiz_paper(
     student_id: str,
     *,
     quiz_id: str,
-    lesson_id: str,
     kind: str,
-    queue: Sequence[str],
+    scope: Mapping[str, str],
+    order: Sequence[str],
     expires_at: int,
     expires_at_iso: str,
-    created_at: str | None = None,
+    created_at: str,
     account_fence_generation: int | None = None,
     table: Any | None = None,
 ) -> dict[str, Any]:
+    """Open one paper of either quiz: what it asks, in order, and nothing answered yet.
+
+    `kind` is the lesson quiz's `skip` / `testOut` or the star quiz's `star`;
+    `scope` names what the paper is for (`lesson_id` or `unit_id`).
+    """
     item = {
         "PK": quiz_partition(student_id),
-        "SK": f"{QUIZ_SESSION_PREFIX}{quiz_id}",
-        "entity_type": QUIZ_SESSION_ENTITY,
+        "SK": f"{QUIZ_PAPER_PREFIX}{quiz_id}",
+        "entity_type": QUIZ_PAPER_ENTITY,
         "student_id": student_id,
         "quiz_id": quiz_id,
-        "lesson_id": lesson_id,
         "kind": kind,
-        "queue": list(queue),
-        "mistakes": 0,
+        **{str(field): str(value) for field, value in scope.items()},
+        "order": list(order),
+        "answers": [],
+        "answered": 0,
+        "dropped": [],
         "status": "inProgress",
-        "created_at": created_at or datetime.now(timezone.utc).isoformat(),
+        "created_at": created_at,
         "expires_at": expires_at,
         "expires_at_iso": expires_at_iso,
     }
@@ -1225,43 +1250,73 @@ def put_quiz_session(
     )
 
 
-def get_quiz_session(student_id: str, quiz_id: str, *, table: Any | None = None) -> dict | None:
-    """Read one quiz of this student, strongly: the answer just before it wrote."""
+def get_quiz_paper(student_id: str, quiz_id: str, *, table: Any | None = None) -> dict | None:
+    """Read one paper of this student, strongly: the answer just before it wrote."""
     target = table or get_table()
     response = _get_item(
         target,
-        Key={"PK": quiz_partition(student_id), "SK": f"{QUIZ_SESSION_PREFIX}{quiz_id}"},
+        Key={"PK": quiz_partition(student_id), "SK": f"{QUIZ_PAPER_PREFIX}{quiz_id}"},
         ConsistentRead=True,
     )
     return _optional_item(response.get("Item"))
 
 
-def update_quiz_session(
+def list_quiz_papers(student_id: str, *, table: Any | None = None) -> list[dict]:
+    """Every paper of this student still kept, either kind, any status."""
+    target = table or get_table()
+    request: dict[str, Any] = {
+        "KeyConditionExpression": (
+            Key("PK").eq(quiz_partition(student_id))
+            & Key("SK").begins_with(QUIZ_PAPER_PREFIX)
+        ),
+        "ConsistentRead": True,
+    }
+    items: list[dict] = []
+    while True:
+        response = _query(target, **request)
+        items.extend(_response_items(response.get("Items", [])))
+        cursor = response.get("LastEvaluatedKey")
+        if not cursor:
+            return items
+        request["ExclusiveStartKey"] = cursor
+
+
+def update_quiz_paper(
     student_id: str,
     quiz_id: str,
     *,
-    queue: Sequence[str],
-    mistakes: int,
-    status: str,
+    answered: int,
+    updates: Mapping[str, Any],
     account_fence_generation: int | None = None,
     table: Any | None = None,
 ) -> None:
-    target = table or get_table()
+    """Write `updates` to the paper, on condition its answer count is still `answered`.
+
+    `answered` is the count the caller read. An answer writes the whole log one
+    longer, with the count; dropping an exercise leaves the count alone. Two
+    requests that read the same paper cannot both write it: the second finds
+    the count moved, or the row changed under it, and is refused.
+    """
+    target: Any = table or get_table()
     generation = _write_generation(student_id, account_fence_generation, target)
     operations = build_practice_write_transaction(
-        item={
-            "PK": quiz_partition(student_id),
-            "SK": f"{QUIZ_SESSION_PREFIX}{quiz_id}",
-        },
+        item={"PK": quiz_partition(student_id), "SK": f"{QUIZ_PAPER_PREFIX}{quiz_id}"},
         owner_id=student_id,
         generation=generation,
         mode="update",
-        updates={"queue": list(queue), "mistakes": int(mistakes), "status": status},
+        updates=dict(updates),
     )
-    if _atomic_table(target):
-        account_deletion_repo.transact(operations, table=target)
-    else:
-        target.update_item(**operations[1]["Update"])
+    update = operations[1]["Update"]
+    update["ConditionExpression"] += " AND #paper_answered = :paper_answered_before"
+    update["ExpressionAttributeNames"]["#paper_answered"] = "answered"
+    update["ExpressionAttributeValues"][":paper_answered_before"] = int(answered)
+    try:
+        if _atomic_table(target):
+            account_deletion_repo.transact(operations, table=target)
+        else:
+            target.update_item(**update)
+    except Exception as error:  # noqa: BLE001
+        raise QuizPaperConflict(quiz_id) from error
 
 
 def put_quiz_credential(
@@ -1340,119 +1395,10 @@ def consume_quiz_credential(
     return True
 
 
-# ── Star quiz papers and their cooldowns (#165) ─────────────────────────────
+# ── What a star quiz decided: its cooldowns and passes (#165) ───────────────
 
-STAR_QUIZ_PREFIX = "STARQUIZ#"
 STAR_QUIZ_COOLDOWN_PREFIX = "STARQUIZ_COOLDOWN#"
-STAR_QUIZ_ENTITY = "practice_star_quiz"
 STAR_QUIZ_COOLDOWN_ENTITY = "practice_star_quiz_cooldown"
-
-
-class StarQuizAnswerConflict(Exception):
-    """Another answer to the same paper was recorded first."""
-
-
-def put_star_quiz(
-    student_id: str,
-    *,
-    quiz_id: str,
-    unit_id: str,
-    paper: Sequence[str],
-    expires_at: int,
-    expires_at_iso: str,
-    created_at: str,
-    account_fence_generation: int | None = None,
-    table: Any | None = None,
-) -> dict[str, Any]:
-    """Open one paper. It lives in the student's quiz partition, beside lesson quizzes."""
-    item = {
-        "PK": quiz_partition(student_id),
-        "SK": f"{STAR_QUIZ_PREFIX}{quiz_id}",
-        "entity_type": STAR_QUIZ_ENTITY,
-        "student_id": student_id,
-        "quiz_id": quiz_id,
-        "unit_id": unit_id,
-        "paper": list(paper),
-        "answers": [],
-        "answered": 0,
-        "status": "inProgress",
-        "created_at": created_at,
-        "expires_at": expires_at,
-        "expires_at_iso": expires_at_iso,
-    }
-    return _quiz_write(
-        student_id, item, account_fence_generation=account_fence_generation, table=table
-    )
-
-
-def get_star_quiz(student_id: str, quiz_id: str, *, table: Any | None = None) -> dict | None:
-    """Read one paper of this student, strongly: the answer just before it wrote."""
-    target = table or get_table()
-    response = _get_item(
-        target,
-        Key={"PK": quiz_partition(student_id), "SK": f"{STAR_QUIZ_PREFIX}{quiz_id}"},
-        ConsistentRead=True,
-    )
-    return _optional_item(response.get("Item"))
-
-
-def list_star_quizzes(student_id: str, *, table: Any | None = None) -> list[dict]:
-    """Every paper of this student still kept, any star, any status."""
-    target = table or get_table()
-    request: dict[str, Any] = {
-        "KeyConditionExpression": (
-            Key("PK").eq(quiz_partition(student_id)) & Key("SK").begins_with(STAR_QUIZ_PREFIX)
-        ),
-        "ConsistentRead": True,
-    }
-    items: list[dict] = []
-    while True:
-        response = _query(target, **request)
-        items.extend(_response_items(response.get("Items", [])))
-        cursor = response.get("LastEvaluatedKey")
-        if not cursor:
-            return items
-        request["ExclusiveStartKey"] = cursor
-
-
-def record_star_quiz_answer(
-    student_id: str,
-    quiz_id: str,
-    *,
-    answers: Sequence[Mapping[str, Any]],
-    status: str,
-    account_fence_generation: int | None = None,
-    table: Any | None = None,
-) -> None:
-    """Write the paper's answers, on condition nobody answered it in between.
-
-    `answers` is the whole list after this answer; the condition is that the
-    stored list is exactly one shorter. Two requests carrying the same answer
-    cannot both be recorded: the second finds the count moved and is refused.
-    """
-    target: Any = table or get_table()
-    generation = _write_generation(student_id, account_fence_generation, target)
-    operations = build_practice_write_transaction(
-        item={"PK": quiz_partition(student_id), "SK": f"{STAR_QUIZ_PREFIX}{quiz_id}"},
-        owner_id=student_id,
-        generation=generation,
-        mode="update",
-        updates={
-            "answers": [dict(answer) for answer in answers],
-            "answered": len(answers),
-            "status": status,
-        },
-    )
-    update = operations[1]["Update"]
-    update["ConditionExpression"] += " AND #answered = :before"
-    update["ExpressionAttributeValues"][":before"] = len(answers) - 1
-    try:
-        if _atomic_table(target):
-            account_deletion_repo.transact(operations, table=target)
-        else:
-            target.update_item(**update)
-    except Exception as error:  # noqa: BLE001
-        raise StarQuizAnswerConflict(quiz_id) from error
 
 
 def put_star_quiz_cooldown(
@@ -1536,14 +1482,14 @@ def get_star_quiz_pass(
     return _optional_item(response.get("Item"))
 
 
-#: The sort-key prefix the cooldown and pass rows share, and the quiz papers do not.
+#: The sort-key prefix the cooldown and pass rows share, and the papers (`PAPER#`) do not.
 STAR_QUIZ_OUTCOME_PREFIX = "STARQUIZ_"
 
 
 def list_star_quiz_outcomes(student_id: str, *, table: Any | None = None) -> list[dict]:
     """Every star quiz pass and cooldown row of this student, from every page.
 
-    The papers themselves (`STARQUIZ#`) are left out: what they hold is the
+    The papers themselves (`PAPER#`) are left out: what they hold is the
     quiz in progress, not what it decided.
     """
     target = table or get_table()
