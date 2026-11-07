@@ -142,7 +142,7 @@ async def test_pending_public_profile_cannot_construct_actor():
     )
     with pytest.raises(SecurityDecisionError) as denied:
         await resolve_actor(token, Repository())
-    assert denied.value.code is SecurityErrorCode.IDENTITY_CONFLICT
+    assert denied.value.code is SecurityErrorCode.EMAIL_VERIFICATION_REQUIRED
 
 
 @pytest.mark.asyncio
@@ -569,7 +569,7 @@ async def test_account_token_denies_inactive_privileged_account(rsa_jwks_keysets
             key_provider=_jwks_provider(keyset),
             identity_repository=_identity_repository(profile),
         )
-    assert denied.value.code is SecurityErrorCode.IDENTITY_CONFLICT
+    assert denied.value.code is SecurityErrorCode.ACCOUNT_DISABLED
 
 
 @pytest.mark.asyncio
@@ -620,7 +620,12 @@ async def test_token_response_denies_identity_conflicts(rsa_jwks_keysets, case):
             key_provider=provider,
             identity_repository=Repository(),
         )
-    assert denied.value.code is SecurityErrorCode.IDENTITY_CONFLICT
+    expected = (
+        SecurityErrorCode.ACCOUNT_DISABLED
+        if case == "revoked"
+        else SecurityErrorCode.IDENTITY_CONFLICT
+    )
+    assert denied.value.code is expected
 
 
 @pytest.mark.asyncio

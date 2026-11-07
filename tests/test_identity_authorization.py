@@ -231,11 +231,15 @@ async def test_identity_resolves_only_binding_one_group_active_role_and_fresh_gr
         (verified_token("admins"), active_repository()),
         (
             verified_token("students"),
-            active_repository(account={"role": "student", "account_status": "suspended"}),
+            active_repository(account={"role": "tutor", "account_status": "active"}),
         ),
         (
             verified_token("students"),
-            active_repository(account={"role": "tutor", "account_status": "active"}),
+            active_repository(account={"role": "student", "account_status": "disabled"}),
+        ),
+        (
+            verified_token("students"),
+            active_repository(account={"role": "student"}),
         ),
     ],
 )
@@ -268,7 +272,54 @@ async def test_identity_status_and_grant_revocation_apply_on_next_resolution():
     repository.account["account_status"] = "suspended"
     with pytest.raises(SecurityDecisionError) as exc_info:
         await resolve_actor(verified_token(), repository)
-    assert exc_info.value.code is SecurityErrorCode.IDENTITY_CONFLICT
+    assert exc_info.value.code is SecurityErrorCode.ACCOUNT_DISABLED
+
+
+# #289: an account the store knows but that may not act is told which case it is
+# in. Only a value outside the vocabulary is still an identity conflict.
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("role", "group", "status", "code"),
+    [
+        ("student", "students", "invited", SecurityErrorCode.ACCOUNT_INVITATION_UNCLAIMED),
+        (
+            "student",
+            "students",
+            "pending_verification",
+            SecurityErrorCode.EMAIL_VERIFICATION_REQUIRED,
+        ),
+        ("teacher", "teachers", "pending_review", SecurityErrorCode.TEACHER_REVIEW_PENDING),
+        ("admin", "admins", "pending_review", SecurityErrorCode.ACCOUNT_REVIEW_PENDING),
+        ("student", "students", "suspended", SecurityErrorCode.ACCOUNT_DISABLED),
+        ("admin", "admins", "revoked", SecurityErrorCode.ACCOUNT_DISABLED),
+        ("student", "students", "archived", SecurityErrorCode.ACCOUNT_ARCHIVED),
+        (
+            "student",
+            "students",
+            "provisioning_failed",
+            SecurityErrorCode.ACCOUNT_PROVISIONING_FAILED,
+        ),
+        ("student", "students", "deleted", SecurityErrorCode.IDENTITY_CONFLICT),
+    ],
+)
+async def test_inactive_known_account_is_refused_with_its_own_code(role, group, status, code):
+    repository = active_repository(account={"role": role, "account_status": status})
+
+    with pytest.raises(SecurityDecisionError) as exc_info:
+        await resolve_actor(verified_token(group), repository)
+
+    assert exc_info.value.code is code
+
+
+def test_every_status_but_active_has_a_refusal() -> None:
+    from stoa.security.identity import AccountStatus, inactive_account_code
+
+    for status in AccountStatus:
+        if status is AccountStatus.ACTIVE:
+            continue
+        assert inactive_account_code(status, CanonicalRole.STUDENT) is not (
+            SecurityErrorCode.IDENTITY_CONFLICT
+        )
 
 
 @pytest.mark.asyncio
@@ -533,6 +584,18 @@ def test_routine_admin_lifecycle_requires_manager_and_revokes_locally_first(monk
         "append_event",
         lambda stream_id, event: audits.append((stream_id, dict(event))),
     )
+    # The lifecycle's own table, guards and audit row are pinned in
+    # tests/test_account_lifecycle.py; here only the move it is asked for matters.
+    lifecycle = privileged_identity_service.account_lifecycle
+
+    def transition(account, expected, next, actor, reason="", **_kwargs):  # noqa: A002
+        del reason
+        assert actor.trigger is lifecycle.Trigger.PRIVILEGED_IDENTITY
+        current = profiles[account["user_id"]]
+        assert current.get("account_status") == expected
+        current["account_status"] = str(next)
+
+    monkeypatch.setattr(lifecycle, "transition", transition)
 
     class Provider:
         def __init__(self):

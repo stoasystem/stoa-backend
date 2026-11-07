@@ -16,6 +16,8 @@ from stoa.db.repositories import (
     user_repo,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
+from stoa.security.identity import AccountStatus
+from stoa.services import account_lifecycle
 from stoa.services.account_errors import AccountErrorCode, AccountViolation
 
 
@@ -99,7 +101,18 @@ def change_admin_status(
     if not profile or profile.get("role") != "admin":
         raise AccountViolation(AccountErrorCode.PRIVILEGED_IDENTITY_NOT_FOUND)
     # Deny first. Provider removal/sign-out is defense in depth and cannot delay revocation.
-    user_repo.put_user({**profile, "account_status": terminal, "updated_at": timestamp})
+    # A replay that finds the account already where this command puts it resumes
+    # after the denial instead of being refused as a move to the same status.
+    current = account_lifecycle.status_of(profile)
+    if current is not AccountStatus(terminal):
+        account_lifecycle.transition(
+            profile,
+            current,
+            terminal,
+            _lifecycle_actor(command),
+            f"privileged-identity:{command['command_id']}",
+            now=datetime.fromisoformat(timestamp),
+        )
     provider_complete = True
     try:
         provider.admin_remove_user_from_group(
@@ -161,15 +174,19 @@ def restore_capability(
 def _reconcile_admin(
     command: dict[str, Any], *, provider: Any, user_pool_id: str, now: str
 ) -> dict[str, Any]:
-    pending = {
-        "user_id": command["target_id"],
-        "email": command["target_email"],
-        "role": "admin",
-        "account_status": "pending_review",
-        "identity_command_id": command["command_id"],
-        "updated_at": now,
-    }
-    user_repo.put_user(pending)
+    # Opening the profile is not a transition; a replay after a provider failure
+    # finds the row it opened last time and carries on from it.
+    if user_repo.get_user(command["target_id"]) is None:
+        user_repo.put_user(
+            {
+                "user_id": command["target_id"],
+                "email": command["target_email"],
+                "role": "admin",
+                "account_status": AccountStatus.PENDING_REVIEW.value,
+                "identity_command_id": command["command_id"],
+                "updated_at": now,
+            }
+        )
     try:
         if hasattr(provider, "ensure_admin_identity"):
             provider.ensure_admin_identity(
@@ -189,7 +206,18 @@ def _reconcile_admin(
     except Exception as exc:
         _mark_provider_failed(command, now)
         raise AccountViolation(AccountErrorCode.IDENTITY_CHANGE_TEMPORARILY_UNAVAILABLE) from exc
-    user_repo.put_user({**pending, "account_status": "active"})
+    opened = user_repo.get_user(command["target_id"])
+    if not opened:
+        raise AccountViolation(AccountErrorCode.PRIVILEGED_IDENTITY_NOT_FOUND)
+    if account_lifecycle.status_of(opened) is not AccountStatus.ACTIVE:
+        account_lifecycle.transition(
+            opened,
+            AccountStatus.PENDING_REVIEW,
+            AccountStatus.ACTIVE,
+            _lifecycle_actor(command),
+            f"privileged-identity:{command['command_id']}",
+            now=datetime.fromisoformat(now),
+        )
     updated = privileged_identity_repo.update_command(
         command["command_id"],
         expected_version=int(command["version"]),
@@ -203,7 +231,18 @@ def _reconcile_admin(
 
 def _restore_admin(command: dict[str, Any], provider: Any, *, user_pool_id: str, now: str) -> dict[str, Any]:
     profile = user_repo.get_user(command["target_id"])
-    if not profile or profile.get("role") != "admin" or profile.get("account_status") == "deleted":
+    current = account_lifecycle.status_of(profile)
+    if (
+        not profile
+        or profile.get("role") != "admin"
+        or current is None
+        or (
+            current is not AccountStatus.ACTIVE
+            and not account_lifecycle.allowed(
+                current, AccountStatus.ACTIVE, account_lifecycle.Trigger.PRIVILEGED_IDENTITY
+            )
+        )
+    ):
         raise AccountViolation(AccountErrorCode.IDENTITY_RESTORE_NOT_ALLOWED)
     try:
         provider.admin_add_user_to_group(
@@ -212,7 +251,15 @@ def _restore_admin(command: dict[str, Any], provider: Any, *, user_pool_id: str,
     except Exception as exc:
         _mark_provider_failed(command, now)
         raise AccountViolation(AccountErrorCode.IDENTITY_CHANGE_TEMPORARILY_UNAVAILABLE) from exc
-    user_repo.put_user({**profile, "account_status": "active", "updated_at": now})
+    if current is not AccountStatus.ACTIVE:
+        account_lifecycle.transition(
+            profile,
+            current,
+            AccountStatus.ACTIVE,
+            _lifecycle_actor(command),
+            f"privileged-identity:{command['command_id']}",
+            now=datetime.fromisoformat(now),
+        )
     updated = privileged_identity_repo.update_command(
         command["command_id"],
         expected_version=int(command["version"]),
@@ -222,6 +269,15 @@ def _restore_admin(command: dict[str, Any], provider: Any, *, user_pool_id: str,
     )
     _audit(command, status="active", timestamp=now, provider_complete=True)
     return _command_response(updated)
+
+
+def _lifecycle_actor(command: dict[str, Any]) -> account_lifecycle.LifecycleActor:
+    """The manager who approved the command is the one moving the account."""
+    return account_lifecycle.LifecycleActor(
+        account_lifecycle.Trigger.PRIVILEGED_IDENTITY,
+        user_id=str(command.get("approved_by") or ""),
+        role="admin",
+    )
 
 
 def _mark_provider_failed(command: dict[str, Any], timestamp: str) -> None:

@@ -710,6 +710,18 @@ def test_duplicate_grant_id_lineages_revoke_replay_restore_and_regrant_safely(
         "append_event",
         lambda *_args, **_kwargs: None,
     )
+    # The lifecycle's own table, guards and audit row are pinned in
+    # tests/test_account_lifecycle.py; here only the move it is asked for matters.
+    lifecycle = privileged_identity_service.account_lifecycle
+
+    def transition(account, expected, next, actor, reason="", **_kwargs):  # noqa: A002
+        del reason
+        assert actor.trigger is lifecycle.Trigger.PRIVILEGED_IDENTITY
+        current = profiles[account["user_id"]]
+        assert current.get("account_status") == expected
+        current["account_status"] = str(next)
+
+    monkeypatch.setattr(lifecycle, "transition", transition)
 
     class RestoreProvider:
         def admin_add_user_to_group(self, **_kwargs):

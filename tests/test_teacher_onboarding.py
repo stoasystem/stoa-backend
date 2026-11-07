@@ -203,15 +203,25 @@ def _install_teacher_repositories(monkeypatch):
             profile["account_number"] = f"{role[:1].upper()}26-{len(numbers):04d}"
         return profile["account_number"]
 
-    def transition_account_status(*, account_id, expected_status, next_status, now=None):
-        del now
-        profile = profiles.get(account_id)
-        if profile is None or profile["account_status"] != expected_status:
+    # The lifecycle's own table, guards and audit row are pinned in
+    # tests/test_account_lifecycle.py; here only the move it is asked for matters.
+    lifecycle = teacher_application_service.account_lifecycle
+
+    def transition(account, expected, next, actor, reason="", **_kwargs):  # noqa: A002
+        del reason
+        assert actor.trigger is lifecycle.Trigger.TEACHER_APPROVAL
+        profile = profiles.get(account["user_id"])
+        if profile is None or profile["account_status"] != expected:
             raise AccountViolation(AccountErrorCode.ACCOUNT_STATUS_UNEXPECTED)
-        profile["account_status"] = next_status
+        profile["account_status"] = str(next)
 
     monkeypatch.setattr(provisioning, "open_account", open_account)
-    monkeypatch.setattr(provisioning, "transition_account_status", transition_account_status)
+    monkeypatch.setattr(
+        teacher_application_service.user_repo,
+        "get_user",
+        lambda user_id, **_kwargs: dict(profiles[user_id]) if user_id in profiles else None,
+    )
+    monkeypatch.setattr(lifecycle, "transition", transition)
 
     def create_binding(**kwargs):
         key = (kwargs["issuer"], kwargs["subject"])
