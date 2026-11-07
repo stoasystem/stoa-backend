@@ -1,12 +1,19 @@
-"""Async report recovery job orchestration."""
+"""Async report recovery job orchestration.
+
+A refused command raises `RecoveryJobError` with a `ReportRecoveryErrorCode`
+(`stoa.services.report_recovery_errors`, #285). The worker records each
+target's outcome as a code and its params beside the English `detail` it
+always stored, so old results stay readable and new ones render in the
+reader's language.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timezone
 import base64
 import hashlib
 import json
+from collections.abc import Mapping
 from typing import Any, TypeGuard
 from uuid import uuid4
 
@@ -15,7 +22,12 @@ import boto3
 from stoa.config import settings
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import report_repo
+from stoa.rule_violation import registered_code, render_message
 from stoa.services import report_recovery_service
+from stoa.services.report_recovery_errors import (
+    RecoveryJobError,
+    ReportRecoveryErrorCode,
+)
 
 MAX_TARGETS = 25
 MAX_SCAN_PAGES = 5
@@ -26,6 +38,8 @@ GENERATION_RETRY_JOB_TYPE = "retry_generation"
 RESUME_OPERATION = "resume_recovery_job"
 DEFAULT_RESUME_RESULTS = ("failed", "refused", "not_found")
 RESUMABLE_TARGET_RESULTS = {"failed", "refused", "not_found", "skipped_cancelled"}
+# The code a target records when its report is gone (an account-domain code).
+REPORT_NOT_FOUND = "report_not_found"
 RESUMABLE_SOURCE_STATUSES = {
     "completed",
     "completed_with_failures",
@@ -35,28 +49,24 @@ RESUMABLE_SOURCE_STATUSES = {
     "stopped_time_floor",
 }
 
-
-@dataclass(frozen=True)
-class RecoveryJobError(Exception):
-    status_code: int
-    detail: str
+_C = ReportRecoveryErrorCode
 
 
 def _is_record(value: object) -> TypeGuard[dict[str, object]]:
     return isinstance(value, dict) and all(isinstance(key, str) for key in value)
 
 
-def _optional_record(value: object, detail: str) -> dict[str, object] | None:
+def _optional_record(value: object, what: str) -> dict[str, object] | None:
     if value is None:
         return None
     if not _is_record(value):
-        raise RecoveryJobError(422, detail)
+        raise RecoveryJobError(_C.RECOVERY_PAGE_INCOMPLETE, internal_detail=what)
     return value
 
 
-def _required_record_list(value: object, detail: str) -> list[dict[str, object]]:
+def _required_record_list(value: object, what: str) -> list[dict[str, object]]:
     if not isinstance(value, list) or not all(_is_record(item) for item in value):
-        raise RecoveryJobError(422, detail)
+        raise RecoveryJobError(_C.RECOVERY_PAGE_INCOMPLETE, internal_detail=what)
     return value
 
 
@@ -77,14 +87,14 @@ def _required_positive_int_or_none(value: object) -> int | None:
 def _required_positive_int(job: dict[str, object], field: str) -> int:
     value = _required_positive_int_or_none(job.get(field))
     if value is None:
-        raise RecoveryJobError(422, "Recovery job record is incomplete and needs repair")
+        raise RecoveryJobError(_C.RECOVERY_JOB_RECORD_INCOMPLETE, internal_detail=field)
     return value
 
 
 def _required_nonnegative_int(job: dict[str, object], field: str) -> int:
     value = stored_int(job.get(field))
     if value is None or value < 0:
-        raise RecoveryJobError(422, "Recovery job record is incomplete and needs repair")
+        raise RecoveryJobError(_C.RECOVERY_JOB_RECORD_INCOMPLETE, internal_detail=field)
     return value
 
 
@@ -171,11 +181,11 @@ def preview_resume_job(
     max_targets: int = MAX_TARGETS,
 ) -> dict[str, Any]:
     if not reason.strip():
-        raise RecoveryJobError(422, "Recovery reason is required")
+        raise RecoveryJobError(_C.RECOVERY_REASON_REQUIRED)
     source_job = _get_resumable_source_job(source_job_id)
     job_type = _job_type_or_none(source_job)
     if job_type is None:
-        raise RecoveryJobError(422, "Source recovery job record is incomplete and needs repair")
+        raise RecoveryJobError(_C.SOURCE_RECOVERY_JOB_INCOMPLETE, internal_detail="job_type")
     result_filters = _normalized_resume_results(results)
     targets = _collect_resume_targets(source_job_id, result_filters=result_filters, max_targets=max_targets)
     token = _encode_preview_token(
@@ -224,9 +234,9 @@ def create_resume_job(
         max_targets=max_targets,
     )
     if preview["preview_token"] != preview_token:
-        raise RecoveryJobError(409, "Preview token no longer matches current recovery scope")
+        raise RecoveryJobError(_C.RECOVERY_PREVIEW_STALE)
     if preview["eligible_count"] == 0:
-        raise RecoveryJobError(422, "Resume job has no eligible targets")
+        raise RecoveryJobError(_C.RECOVERY_JOB_NO_ELIGIBLE_TARGETS, internal_detail="resume")
 
     now = _now_iso()
     job_id = uuid4().hex
@@ -322,9 +332,9 @@ def _create_job(
     max_targets: int,
 ) -> dict[str, Any]:
     if preview["preview_token"] != preview_token:
-        raise RecoveryJobError(409, "Preview token no longer matches current recovery scope")
+        raise RecoveryJobError(_C.RECOVERY_PREVIEW_STALE)
     if preview["eligible_count"] == 0:
-        raise RecoveryJobError(422, "Recovery job has no eligible targets")
+        raise RecoveryJobError(_C.RECOVERY_JOB_NO_ELIGIBLE_TARGETS, internal_detail=job_type)
     collected, _ = _collect_targets(job_type=job_type, filters=filters, max_targets=max_targets)
     eligible_targets = [item for item in collected if item["eligibility"] == "eligible"]
 
@@ -474,7 +484,7 @@ def _execute_job(
                 job_id,
                 target["SK"],
                 "skipped_cancelled",
-                detail="Cancellation requested before target attempt",
+                **_outcome_fields(_C.RECOVERY_TARGET_CANCELLED, None),
                 updated_at=_now_iso(),
             )
             continue
@@ -528,12 +538,12 @@ def cancel_resend_job(job_id: str, *, operator: str) -> dict[str, Any]:
 def cancel_recovery_job(job_id: str, *, operator: str) -> dict[str, Any]:
     job = report_repo.get_recovery_job(job_id)
     if not job:
-        raise RecoveryJobError(404, "Recovery job not found")
+        raise RecoveryJobError(_C.RECOVERY_JOB_NOT_FOUND)
     requested_at = _now_iso()
     if job.get("status") in {"completed", "completed_with_failures", "cancelled", "failed"}:
-        raise RecoveryJobError(409, "Recovery job is already terminal")
+        raise RecoveryJobError(_C.RECOVERY_JOB_ALREADY_TERMINAL)
     if not report_repo.request_recovery_job_cancellation(job_id, requested_by=operator, requested_at=requested_at):
-        raise RecoveryJobError(409, "Recovery job cannot be cancelled")
+        raise RecoveryJobError(_C.RECOVERY_JOB_NOT_CANCELLABLE)
     _write_job_audit(
         job_id,
         action="request_cancellation",
@@ -552,18 +562,18 @@ def _execute_resend_target(job: dict, target: dict, *, attempted_at: str) -> str
         target["week_start"],
     )
     if not report:
-        _finish_target(job, target, "not_found", detail="Report not found")
+        _finish_target(job, target, "not_found", code=REPORT_NOT_FOUND)
         return "not_found"
     report_id = _optional_string(report.get("report_id"))
     if report_id is None:
-        _finish_target(job, target, "refused", detail="Report record is incomplete")
+        _finish_target(job, target, "refused", code=_C.REPORT_RECORD_INCOMPLETE)
         return "refused"
     if not report_repo.try_claim_report_resend(
         report_id,
         operator=str(job.get("created_by") or "recovery-job"),
         attempted_at=attempted_at,
     ):
-        _finish_target(job, target, "refused", report_id=report_id, detail="Report is no longer eligible")
+        _finish_target(job, target, "refused", report_id=report_id, code=_C.REPORT_NO_LONGER_ELIGIBLE)
         return "refused"
     try:
         result = report_recovery_service.resend_report_email(
@@ -580,7 +590,8 @@ def _execute_resend_target(job: dict, target: dict, *, attempted_at: str) -> str
             target,
             outcome,
             report_id=report_id,
-            detail=report_recovery_service.redact_private_artifact_text(exc.detail),
+            code=exc.code,
+            params=exc.params,
             error_class=exc.error_class,
         )
         return outcome
@@ -602,7 +613,7 @@ def _execute_generation_retry_target(job: dict, target: dict, *, attempted_at: s
         target["week_start"],
     )
     if not report:
-        _finish_target(job, target, "not_found", detail="Report not found")
+        _finish_target(job, target, "not_found", code=REPORT_NOT_FOUND)
         return "not_found"
     try:
         result = report_recovery_service.retry_report_generation(
@@ -622,7 +633,8 @@ def _execute_generation_retry_target(job: dict, target: dict, *, attempted_at: s
             target,
             outcome,
             report_id=_optional_string(report.get("report_id")),
-            detail=report_recovery_service.redact_private_artifact_text(exc.detail),
+            code=exc.code,
+            params=exc.params,
             error_class=exc.error_class,
         )
         return outcome
@@ -645,7 +657,8 @@ def _finish_target(
     report_id: str | None = None,
     status: str | None = None,
     email_status: str | None = None,
-    detail: str | None = None,
+    code: str | None = None,
+    params: Mapping[str, object] | None = None,
     error_class: str | None = None,
 ) -> None:
     completed_at = _now_iso()
@@ -653,7 +666,7 @@ def _finish_target(
         "report_id": report_id or target.get("report_id"),
         "status": status,
         "email_status": email_status,
-        "detail": report_recovery_service.redact_private_artifact_text(detail),
+        **_outcome_fields(code, params),
         "error_class": error_class,
         "completed_at": completed_at,
         "updated_at": completed_at,
@@ -671,9 +684,32 @@ def _finish_target(
             "parent_id": target.get("parent_id"),
             "student_id": target.get("student_id"),
             "week_start": target.get("week_start"),
+            "code": fields["code"],
             "detail": fields["detail"],
         },
     )
+
+
+def _outcome_fields(code: str | None, params: Mapping[str, object] | None) -> dict[str, Any]:
+    """How a target result records why it was not a success.
+
+    `code` and `params` render the message in the reader's language; `detail`
+    keeps the English sentence older readers and the audit show. Params are
+    redacted like the sentence: none may name a private report artifact.
+    """
+    if code is None:
+        return {"code": None, "params": {}, "detail": None}
+    safe_params = {
+        str(name): report_recovery_service.redact_private_artifact_text(value) or ""
+        for name, value in (params or {}).items()
+    }
+    return {
+        "code": str(code),
+        "params": safe_params,
+        "detail": report_recovery_service.redact_private_artifact_text(
+            render_message(str(code), "en", **safe_params)
+        ),
+    }
 
 
 def _preview_job(
@@ -685,7 +721,7 @@ def _preview_job(
     max_targets: int,
 ) -> dict[str, Any]:
     if not reason.strip():
-        raise RecoveryJobError(422, "Recovery reason is required")
+        raise RecoveryJobError(_C.RECOVERY_REASON_REQUIRED)
     targets, scanned_pages = _collect_targets(job_type=job_type, filters=filters, max_targets=max_targets)
     eligible = [target for target in targets if target["eligibility"] == "eligible"]
     refused = [target for target in targets if target["eligibility"] != "eligible"]
@@ -715,7 +751,10 @@ def _preview_job(
 def _collect_targets(*, job_type: str, filters: dict[str, Any], max_targets: int) -> tuple[list[dict[str, Any]], int]:
     filters = _normalized_filters(filters, job_type=job_type)
     if filters.get("status") != _required_status(job_type):
-        raise RecoveryJobError(422, _unsupported_status_detail(job_type))
+        raise RecoveryJobError(
+            _C.RECOVERY_STATUS_FILTER_UNSUPPORTED,
+            params={"required_status": _required_status(job_type)},
+        )
     max_targets = min(max(1, int(max_targets)), MAX_TARGETS)
     targets: list[dict[str, Any]] = []
     last_key = None
@@ -748,15 +787,15 @@ def _collect_resend_targets(*, filters: dict[str, Any], max_targets: int) -> tup
 def _get_resumable_source_job(source_job_id: str) -> dict[str, Any]:
     source_job = report_repo.get_recovery_job(source_job_id)
     if not source_job:
-        raise RecoveryJobError(404, "Source recovery job not found")
+        raise RecoveryJobError(_C.RECOVERY_JOB_NOT_FOUND, internal_detail="source")
     status = _optional_string(source_job.get("status"))
     if status not in RESUMABLE_SOURCE_STATUSES:
-        raise RecoveryJobError(409, "Source recovery job is not terminal")
+        raise RecoveryJobError(_C.SOURCE_RECOVERY_JOB_NOT_TERMINAL)
     job_type = _optional_string(source_job.get("job_type"))
     if job_type is None or _required_positive_int_or_none(source_job.get("failure_threshold")) is None:
-        raise RecoveryJobError(422, "Source recovery job record is incomplete and needs repair")
+        raise RecoveryJobError(_C.SOURCE_RECOVERY_JOB_INCOMPLETE)
     if job_type not in {RESEND_JOB_TYPE, GENERATION_RETRY_JOB_TYPE}:
-        raise RecoveryJobError(422, "Source recovery job type cannot be resumed")
+        raise RecoveryJobError(_C.RECOVERY_JOB_TYPE_NOT_RESUMABLE, internal_detail=job_type[:80])
     return source_job
 
 
@@ -764,10 +803,15 @@ def _normalized_resume_results(results: list[str] | None) -> list[str]:
     raw = list(results or DEFAULT_RESUME_RESULTS)
     normalized = sorted({str(item) for item in raw if str(item)})
     if not normalized:
-        raise RecoveryJobError(422, "At least one resume result filter is required")
+        raise RecoveryJobError(_C.RESUME_RESULT_FILTER_REQUIRED)
     unsupported = [item for item in normalized if item not in RESUMABLE_TARGET_RESULTS]
     if unsupported:
-        raise RecoveryJobError(422, f"Unsupported resume result filter: {unsupported[0]}")
+        refused = (report_recovery_service.redact_private_artifact_text(unsupported[0]) or "")[:80]
+        raise RecoveryJobError(
+            _C.RESUME_RESULT_FILTER_UNSUPPORTED,
+            params={"result_filter": refused},
+            internal_detail=f"unsupported resume result filter: {refused}",
+        )
     return normalized
 
 
@@ -799,7 +843,9 @@ def _resume_target_preview(target: dict[str, Any]) -> dict[str, Any]:
         "status": target.get("status"),
         "email_status": target.get("email_status"),
         "source_result": target.get("result"),
-        "detail": report_recovery_service.redact_private_artifact_text(target.get("detail")),
+        "code": _optional_string(target.get("code")),
+        "params": stored_params(target.get("params")),
+        "detail": outcome_message(target),
         "error_class": target.get("error_class"),
         "artifacts": {"html_available": False, "json_available": False},
         "eligibility": "eligible",
@@ -871,7 +917,7 @@ def _cancel_job(job: dict, reason: str, cancelled_at: str, *, complete_action: s
                 job["job_id"],
                 target["SK"],
                 "skipped_cancelled",
-                detail="Cancellation requested before target attempt",
+                **_outcome_fields(_C.RECOVERY_TARGET_CANCELLED, None),
                 updated_at=cancelled_at,
             )
     fields = {
@@ -955,10 +1001,35 @@ def _required_status(job_type: str) -> str:
     return "email_failed"
 
 
-def _unsupported_status_detail(job_type: str) -> str:
-    if job_type == GENERATION_RETRY_JOB_TYPE:
-        return "Only generation_failed retry recovery is supported"
-    return "Only email_failed resend recovery is supported"
+def stored_params(value: object) -> dict[str, str]:
+    """A recorded outcome's message params; a result written before #285 has none."""
+    if not _is_record(value):
+        return {}
+    return {
+        key: report_recovery_service.redact_private_artifact_text(raw) or ""
+        for key, raw in value.items()
+    }
+
+
+def outcome_message(result: Mapping[str, object]) -> str | None:
+    """Why a target (or bulk item) was not a success, in the reader's language.
+
+    `result` carries `code`, `params` and the English `detail`. A result
+    recorded before #285 has only the `detail`, shown as stored, redacted; so
+    is one whose code this build no longer registers.
+    """
+    code = result.get("code")
+    if isinstance(code, str) and code:
+        try:
+            known = registered_code(code)
+        except KeyError:
+            known = None
+        if known is not None:
+            try:
+                return render_message(known, **stored_params(result.get("params")))
+            except (KeyError, IndexError):
+                pass
+    return report_recovery_service.redact_private_artifact_text(result.get("detail"))
 
 
 def _worker_event_name(job_type: str) -> str:

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from functools import wraps
 from typing import Literal, ParamSpec, Protocol, TypeVar, runtime_checkable
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Request
 
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.rule_violation import RuleViolation
@@ -409,6 +409,8 @@ def admin_target_provider(
                     context.actor,
                 )
             except RuleViolation:
+                # A recovery selection the service refuses (`RecoveryJobError`,
+                # #285) leaves with its own code.
                 raise
             except _ResolvedTargetNotFound as exc:
                 raise SecurityDecisionError(
@@ -424,12 +426,6 @@ def admin_target_provider(
                 raise error from exc
             except Exception as exc:
                 status_code = _exception_status(exc)
-                if status_code == 422:
-                    detail = getattr(exc, "detail", "Invalid recovery target selection")
-                    raise HTTPException(
-                        status_code=422,
-                        detail=str(detail),
-                    ) from exc
                 code = (
                     SecurityErrorCode.ACTION_NOT_ALLOWED
                     if 400 <= status_code < 500

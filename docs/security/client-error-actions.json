@@ -2538,11 +2538,141 @@
         "retryable": false
       }
     },
+    "recovery_job_already_terminal": {
+      "action": null,
+      "domain": "report_recovery",
+      "http_status": 409,
+      "message_key": "error.recovery_job_already_terminal",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "recovery_job_no_eligible_targets": {
+      "action": "correct_input",
+      "domain": "report_recovery",
+      "http_status": 422,
+      "message_key": "error.recovery_job_no_eligible_targets",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "recovery_job_not_cancellable": {
+      "action": null,
+      "domain": "report_recovery",
+      "http_status": 409,
+      "message_key": "error.recovery_job_not_cancellable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "recovery_job_not_found": {
       "action": null,
-      "domain": "account",
+      "domain": "report_recovery",
       "http_status": 404,
       "message_key": "error.recovery_job_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "recovery_job_record_incomplete": {
+      "action": "contact_support",
+      "domain": "report_recovery",
+      "http_status": 422,
+      "message_key": "error.recovery_job_record_incomplete",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "recovery_job_type_not_resumable": {
+      "action": "correct_input",
+      "domain": "report_recovery",
+      "http_status": 422,
+      "message_key": "error.recovery_job_type_not_resumable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "recovery_page_incomplete": {
+      "action": "contact_support",
+      "domain": "report_recovery",
+      "http_status": 422,
+      "message_key": "error.recovery_page_incomplete",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "recovery_preview_stale": {
+      "action": null,
+      "domain": "report_recovery",
+      "http_status": 409,
+      "message_key": "error.recovery_preview_stale",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "recovery_reason_required": {
+      "action": "correct_input",
+      "domain": "report_recovery",
+      "http_status": 422,
+      "message_key": "error.recovery_reason_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "recovery_status_filter_unsupported": {
+      "action": "correct_input",
+      "domain": "report_recovery",
+      "http_status": 422,
+      "message_key": "error.recovery_status_filter_unsupported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "recovery_target_cancelled": {
+      "action": null,
+      "domain": "report_recovery",
+      "http_status": 409,
+      "message_key": "error.recovery_target_cancelled",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -2590,11 +2720,141 @@
         "retryable": false
       }
     },
+    "report_delivery_not_failed": {
+      "action": null,
+      "domain": "report_recovery",
+      "http_status": 409,
+      "message_key": "error.report_delivery_not_failed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "report_generation_not_failed": {
+      "action": null,
+      "domain": "report_recovery",
+      "http_status": 409,
+      "message_key": "error.report_generation_not_failed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "report_generation_retry_failed": {
+      "action": "retry_later",
+      "domain": "report_recovery",
+      "http_status": 502,
+      "message_key": "error.report_generation_retry_failed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "report_generation_retry_in_progress": {
+      "action": null,
+      "domain": "report_recovery",
+      "http_status": 409,
+      "message_key": "error.report_generation_retry_in_progress",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "report_html_artifact_missing": {
+      "action": "contact_support",
+      "domain": "report_recovery",
+      "http_status": 422,
+      "message_key": "error.report_html_artifact_missing",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "report_no_longer_eligible": {
+      "action": null,
+      "domain": "report_recovery",
+      "http_status": 409,
+      "message_key": "error.report_no_longer_eligible",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "report_not_found": {
       "action": null,
       "domain": "account",
       "http_status": 404,
       "message_key": "error.report_not_found",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "report_recipient_email_missing": {
+      "action": "contact_support",
+      "domain": "report_recovery",
+      "http_status": 422,
+      "message_key": "error.report_recipient_email_missing",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "report_recipient_unlinked": {
+      "action": null,
+      "domain": "report_recovery",
+      "http_status": 403,
+      "message_key": "error.report_recipient_unlinked",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "report_record_incomplete": {
+      "action": "contact_support",
+      "domain": "report_recovery",
+      "http_status": 422,
+      "message_key": "error.report_record_incomplete",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "report_resend_failed": {
+      "action": "retry_later",
+      "domain": "report_recovery",
+      "http_status": 502,
+      "message_key": "error.report_resend_failed",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -2642,6 +2902,32 @@
         "retryable": false
       }
     },
+    "resume_result_filter_required": {
+      "action": "correct_input",
+      "domain": "report_recovery",
+      "http_status": 422,
+      "message_key": "error.resume_result_filter_required",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "resume_result_filter_unsupported": {
+      "action": "correct_input",
+      "domain": "report_recovery",
+      "http_status": 422,
+      "message_key": "error.resume_result_filter_unsupported",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "role_not_provisionable": {
       "action": "correct_input",
       "domain": "account",
@@ -2660,6 +2946,32 @@
       "domain": "curriculum",
       "http_status": 409,
       "message_key": "error.rollback_target_not_publishable",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "source_recovery_job_incomplete": {
+      "action": "contact_support",
+      "domain": "report_recovery",
+      "http_status": 422,
+      "message_key": "error.source_recovery_job_incomplete",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "source_recovery_job_not_terminal": {
+      "action": null,
+      "domain": "report_recovery",
+      "http_status": 409,
+      "message_key": "error.source_recovery_job_not_terminal",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,

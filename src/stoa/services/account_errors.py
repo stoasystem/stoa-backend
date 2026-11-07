@@ -85,7 +85,6 @@ class AccountErrorCode(StrEnum):
     CURSOR_INVALID = "cursor_invalid"
     PAGE_TOKEN_INVALID = "page_token_invalid"
     REPORT_NOT_FOUND = "report_not_found"
-    RECOVERY_JOB_NOT_FOUND = "recovery_job_not_found"
     RELATIONSHIP_STATUS_INVALID = "relationship_status_invalid"
     RELATIONSHIP_STATUS_CONFLICT = "relationship_status_conflict"
     RELATIONSHIP_STATUS_TEMPORARILY_UNAVAILABLE = "relationship_status_temporarily_unavailable"
@@ -196,7 +195,6 @@ ACCOUNT_ERROR_REGISTRY: dict[AccountErrorCode, RuleContract] = {
     _C.CURSOR_INVALID: _invalid(),
     _C.PAGE_TOKEN_INVALID: RuleContract(400, _A.CORRECT_INPUT),
     _C.REPORT_NOT_FOUND: _not_found(),
-    _C.RECOVERY_JOB_NOT_FOUND: _not_found(),
     _C.RELATIONSHIP_STATUS_INVALID: _invalid(),
     _C.RELATIONSHIP_STATUS_CONFLICT: _conflict(),
     _C.RELATIONSHIP_STATUS_TEMPORARILY_UNAVAILABLE: _unavailable(),

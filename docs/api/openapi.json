@@ -2091,6 +2091,17 @@
       },
       "BulkReportResendItemResult": {
         "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
           "detail": {
             "anyOf": [
               {
@@ -2139,6 +2150,13 @@
               }
             ],
             "title": "Operation Result"
+          },
+          "params": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Params",
+            "type": "object"
           },
           "parent_id": {
             "title": "Parent Id",
@@ -10100,6 +10118,17 @@
             "title": "Artifacts",
             "type": "object"
           },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
           "detail": {
             "anyOf": [
               {
@@ -10136,6 +10165,13 @@
               }
             ],
             "title": "Error Class"
+          },
+          "params": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Params",
+            "type": "object"
           },
           "parent_id": {
             "anyOf": [
@@ -10251,6 +10287,17 @@
             ],
             "title": "Attempted At"
           },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
           "completed_at": {
             "anyOf": [
               {
@@ -10294,6 +10341,13 @@
               }
             ],
             "title": "Error Class"
+          },
+          "params": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Params",
+            "type": "object"
           },
           "parent_id": {
             "anyOf": [
