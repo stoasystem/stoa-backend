@@ -2,9 +2,9 @@
 
 Exercises that came through the curriculum workflow had no feedback fields - the
 authoring conversion dropped them - and the answer route fell back to English:
-"Correct." under a German exercise, in a German-language app. The default is now
-German like the exercises and the seed's own defaults, and authors can write
-feedback per exercise.
+"Correct." under a German exercise, in a German-language app. The default then
+became German for every reader; it is now the catalog's, in the reader's
+language (#128), and authors can write feedback per exercise.
 """
 
 from __future__ import annotations
@@ -19,7 +19,12 @@ from actor_helpers import install_actor_overrides
 from fakes.dynamodb import FakeTable
 from stoa.db.repositories import practice_repo
 from stoa.routers import practice
-from stoa.services import curriculum_analytics_service, practice_projection_service
+from stoa.services import (
+    answer_recording,
+    curriculum_analytics_service,
+    message_catalog,
+    practice_projection_service,
+)
 from test_curriculum_publish_projection import (
     LESSON_ID,
     _exercise,
@@ -36,6 +41,7 @@ def _answer(
     repo = curriculum_analytics_service.curriculum_analytics_repo
     monkeypatch.setattr(repo, "record_student_signal", lambda item, **_kwargs: None)
     monkeypatch.setattr(repo, "increment_metric", lambda item: None)
+    monkeypatch.setattr(answer_recording, "record_practice_usage", lambda **_kwargs: None)
     monkeypatch.setattr(
         practice.practice_repo, "get_challenge", lambda challenge_id: dict(challenge)
     )
@@ -81,8 +87,8 @@ CHALLENGE = {
 @pytest.mark.parametrize(
     ("answer", "expected"),
     [
-        ("1", practice_projection_service.DEFAULT_CORRECT_FEEDBACK),
-        ("2", practice_projection_service.DEFAULT_INCORRECT_FEEDBACK),
+        ("1", message_catalog.text("practice.feedback.correct", "de")),
+        ("2", message_catalog.text("practice.feedback.incorrect", "de")),
     ],
 )
 def test_an_exercise_without_feedback_answers_in_german(
@@ -121,8 +127,42 @@ def test_authored_feedback_reaches_the_runtime_row_and_blank_feedback_does_not(
     assert first is not None and second is not None
     assert first["correct_feedback"] == "Genau, 4/4 = 1."
     assert "incorrect_feedback" not in first
-    assert practice_projection_service.answer_feedback(first) == (
+    assert practice_projection_service.answer_feedback(first, "de") == (
         "Genau, 4/4 = 1.",
-        practice_projection_service.DEFAULT_INCORRECT_FEEDBACK,
+        message_catalog.text("practice.feedback.incorrect", "de"),
     )
     assert "correct_feedback" not in second
+
+
+def test_a_translated_feedback_reaches_the_runtime_row(table: FakeTable) -> None:
+    _publish(
+        _payload(
+            _exercise(
+                1,
+                correctFeedback="Genau, 4/4 = 1.",
+                translations={
+                    "fr": {
+                        "prompt": "Calcule 1/4 + 3/4.",
+                        "correctAnswer": "1",
+                        "correctFeedback": " Exactement, 4/4 = 1. ",
+                        "incorrectFeedback": "Additionne les numérateurs.",
+                    }
+                },
+            ),
+            _exercise(3),
+        )
+    )
+
+    stored = practice_repo.get_challenge(f"{LESSON_ID}-q01")
+    assert stored is not None
+    assert stored["translations"]["fr"]["correct_feedback"] == "Exactement, 4/4 = 1."
+    assert stored["translations"]["fr"]["incorrect_feedback"] == "Additionne les numérateurs."
+
+
+def test_the_privileged_preview_keeps_the_stored_language() -> None:
+    preview = practice_projection_service.build_privileged_answer(
+        {**CHALLENGE, "translations": {"fr": {"prompt": "Calcule.", "correct_feedback": "Exact."}}}
+    )
+
+    assert preview.correct_feedback == message_catalog.text("practice.feedback.correct", "de")
+    assert preview.incorrect_feedback == message_catalog.text("practice.feedback.incorrect", "de")

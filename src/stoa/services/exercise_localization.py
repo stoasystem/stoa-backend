@@ -2,10 +2,10 @@
 
 An exercise row holds its text - and its figure, if it has one - in one language - German for the ZAP curriculum
 and for the imported knowledge base. It may also carry `translations`: for a
-locale, the prompt, options, answer, accepted answers and explanation in that
-language. A reader sees the exercise in their locale where it has one and in its
-stored language otherwise, and their answer is judged against that locale's key
-and the stored one, so an option or answer written in the stored language still
+locale, the prompt, options, answer, accepted answers, explanation and the
+feedback for a right and a wrong answer in that language. A reader sees the
+exercise in their locale where it has one and in its stored language otherwise,
+and their answer is judged against that locale's key and the stored one, so an option or answer written in the stored language still
 counts after a reader switches language.
 
 The stored row is never changed: its content hash and version cover the
@@ -37,6 +37,10 @@ TRANSLATION_FIELDS = {
     "figure": "figure",
     "option_figures": "option_figures",
     "optionFigures": "option_figures",
+    "correct_feedback": "correct_feedback",
+    "correctFeedback": "correct_feedback",
+    "incorrect_feedback": "incorrect_feedback",
+    "incorrectFeedback": "incorrect_feedback",
 }
 
 
@@ -76,7 +80,7 @@ def localized(challenge: Mapping[str, Any], locale: str) -> dict[str, Any]:
     text = translations.get(locale) if isinstance(translations, Mapping) else None
     if not isinstance(text, Mapping):
         return shown
-    for field in ("prompt", "explanation", "figure"):
+    for field in ("prompt", "explanation", "figure", "correct_feedback", "incorrect_feedback"):
         if _text(text.get(field)):
             shown[field] = text[field]
     options, stored_options = text.get("options"), challenge.get("options")

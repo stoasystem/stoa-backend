@@ -15,7 +15,7 @@ from fakes import student_evidence as fake_evidence
 from rule_violation_helpers import assert_violation
 from stoa.db.repositories import practice_repo
 from stoa.routers import practice
-from stoa.services import practice_projection_service
+from stoa.services import answer_recording, practice_projection_service
 
 
 class _PutTable:
@@ -90,11 +90,12 @@ def test_invalid_answers_fail_before_repository_access_without_echoing_input(
     with caplog.at_level(logging.WARNING), pytest.raises(
         ValueError, match=error_fragment
     ) as raised:
-        practice_repo.put_attempt(
+        # Normalizing is the judging module's: the repository stores what it is given.
+        answer_recording.answer_practice(
             "student-1",
-            "challenge-1",
+            {"challenge_id": "challenge-1", "correct_answer": "x"},
             answer,
-            False,
+            locale="de",
         )
 
     assert table_accesses == []

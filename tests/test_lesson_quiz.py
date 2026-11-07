@@ -13,7 +13,12 @@ from stoa.routers import practice
 from stoa.security.authorization import AuthorizationFacts
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.route_authorization import get_authorization_fact_repository
-from stoa.services import knowledge_mastery_service, lesson_quiz_service, usage_ledger_service
+from stoa.services import (
+    answer_recording,
+    knowledge_mastery_service,
+    lesson_quiz_service,
+    usage_ledger_service,
+)
 
 
 LESSON = {
@@ -105,6 +110,7 @@ def _world(monkeypatch, *, exercises, answered_right=(), behind_unlit=False):
         practice.curriculum_analytics_service, "record_lesson_completed", lambda **_kwargs: None
     )
     monkeypatch.setattr(practice, "_record_practice_usage", lambda **_kwargs: None)
+    monkeypatch.setattr(answer_recording, "record_practice_usage", lambda **_kwargs: None)
     monkeypatch.setattr(
         practice.curriculum_service,
         "get_prerequisites",
@@ -580,7 +586,9 @@ def test_answering_in_a_quiz_leaves_a_trace_in_the_ledger(monkeypatch):
     _world(monkeypatch, exercises=[_exercise(0)])
     # After `_world`, which silences the ledger for every other test here.
     monkeypatch.setattr(
-        practice, "_record_practice_usage", lambda **kwargs: recorded.append(str(kwargs["action"]))
+        answer_recording,
+        "record_practice_usage",
+        lambda **kwargs: recorded.append(str(kwargs["action"])),
     )
     client = _client()
     quiz_id = client.post("/practice/lessons/lesson-1/quiz", json={"kind": "skip"}).json()["quizId"]

@@ -27,7 +27,6 @@ from stoa.services import (
     curriculum_analytics_service,
     curriculum_ops_service,
     curriculum_service,
-    lesson_quiz_service,
     practice_projection_service,
 )
 
@@ -148,7 +147,7 @@ def test_a_published_lesson_is_readable_and_answerable(table: FakeTable) -> None
     assert challenge is not None
     assert challenge["unit_id"] == "brueche-u2"
     assert challenge["grade_level"] == "grade_6_primary"
-    assert lesson_quiz_service.judge_answer(" 1 ", challenge["correct_answer"])
+    assert answer_judging.judge(" 1 ", challenge["correct_answer"])
 
     preview = practice_projection_service.build_challenge_preview(challenge)
     assert preview["prompt"] == "Berechne 1/4 + 3/4."

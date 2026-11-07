@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from stoa.services import answer_judging, lesson_quiz_service
+from stoa.services import answer_judging, answer_recording
 
 
 @pytest.mark.parametrize(
@@ -108,8 +108,8 @@ def test_a_malformed_alternatives_field_counts_as_none() -> None:
 
 
 def test_the_quiz_entry_point_judges_by_the_same_rules() -> None:
-    assert lesson_quiz_service.judge_answer("31,4", "31.4")
-    assert not lesson_quiz_service.judge_answer("4/6", "2/3")
+    assert answer_recording.judge({"correct_answer": "31.4"}, "31,4", locale="de").correct
+    assert not answer_recording.judge({"correct_answer": "2/3"}, "4/6", locale="de").correct
 
 
 def test_the_answer_route_records_a_listed_alternative_as_right(monkeypatch) -> None:

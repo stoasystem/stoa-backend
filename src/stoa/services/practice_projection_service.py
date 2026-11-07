@@ -20,12 +20,11 @@ from stoa.models.practice import (
     PrivilegedPracticeAnswer,
 )
 from stoa.db.repositories import practice_repo
-from stoa.services import exercise_localization
+from stoa.services import exercise_localization, locale_service, message_catalog
 from stoa.services.curriculum_translations import translated_title
 
 
 DIRECTIONAL_HINT_POLICY_VERSION = "practice-directional-hints-v1"
-PRACTICE_SUBMITTED_ANSWER_SCHEMA_VERSION = 1
 PRACTICE_SUBMITTED_ANSWER_MAX_BYTES = 4096
 PRACTICE_SUBMITTED_ANSWER_MAX_DEPTH = 1
 PRACTICE_SUBMITTED_ANSWER_MAX_ITEMS = 50
@@ -262,24 +261,35 @@ def build_attempt_result(
     )
 
 
-#: What a student is told when an exercise brings no feedback of its own. The
-#: exercises are German (curriculum_translations: the ZAP is a German exam), and
-#: so are these, as the seed's own per-exercise defaults are. An English default
-#: put "Correct." under every exercise that came through the curriculum workflow.
-DEFAULT_CORRECT_FEEDBACK = "Richtig!"
-DEFAULT_INCORRECT_FEEDBACK = "Nicht ganz. Prüfe deinen Rechenweg und versuche es nochmal."
+def answer_feedback(challenge: Mapping[str, Any], locale: str) -> tuple[str, str]:
+    """The exercise's feedback for a right and for a wrong answer.
 
-
-def answer_feedback(challenge: Mapping[str, Any]) -> tuple[str, str]:
-    """The exercise's feedback for a right and for a wrong answer."""
+    Pass the exercise as the reader sees it (`exercise_localization.localized`),
+    so feedback written for their language is used. An exercise that brings no
+    feedback of its own gets the catalog's default in `locale` (#128); before,
+    that default was German for every reader.
+    """
     return (
-        str(challenge.get("correct_feedback") or DEFAULT_CORRECT_FEEDBACK),
-        str(challenge.get("incorrect_feedback") or DEFAULT_INCORRECT_FEEDBACK),
+        str(
+            challenge.get("correct_feedback")
+            or message_catalog.text("practice.feedback.correct", locale)
+        ),
+        str(
+            challenge.get("incorrect_feedback")
+            or message_catalog.text("practice.feedback.incorrect", locale)
+        ),
     )
 
 
 def build_privileged_answer(challenge: Mapping[str, Any]) -> PrivilegedPracticeAnswer:
-    """Project only the explicit teacher/admin pre-attempt answer contract."""
+    """Project only the explicit teacher/admin pre-attempt answer contract.
+
+    The preview shows the exercise as stored, so its feedback is the stored one
+    and the default is the one in the stored language.
+    """
+    correct_feedback, incorrect_feedback = answer_feedback(
+        challenge, locale_service.DEFAULT_LOCALE
+    )
     standard_answer = challenge.get("correct_answer", challenge.get("answer_key"))
     return PrivilegedPracticeAnswer(
         challengeId=challenge["challenge_id"],
@@ -288,8 +298,8 @@ def build_privileged_answer(challenge: Mapping[str, Any]) -> PrivilegedPracticeA
             challenge.get("explanation")
             or "Compare the solution method with the standard answer."
         ),
-        correctFeedback=answer_feedback(challenge)[0],
-        incorrectFeedback=answer_feedback(challenge)[1],
+        correctFeedback=correct_feedback,
+        incorrectFeedback=incorrect_feedback,
     )
 
 

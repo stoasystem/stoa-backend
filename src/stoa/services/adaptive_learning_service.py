@@ -23,6 +23,7 @@ from stoa.services import (
     curriculum_service,
     learning_profile_service,
     locale_service,
+    practice_projection_service,
     usage_ledger_service,
 )
 from stoa.services.adaptive_learning_errors import (
@@ -1507,7 +1508,9 @@ def _record_assignment_progress(item: dict[str, Any], *, correct: bool | None, s
         lesson_id=lesson_id,
         topic_id=str((item.get("topic_ids") or [""])[0]),
         attempt_id=f"assignment-{item.get('assignment_id')}",
-        student_answer=student_answer or "",
+        student_answer=practice_projection_service.normalize_submitted_answer(
+            student_answer or ""
+        ),
         self_reported=True,
     )
     if not correct or not lesson_id:
