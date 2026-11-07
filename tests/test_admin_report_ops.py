@@ -13,6 +13,8 @@ from stoa.services import report_recovery_job_service
 from stoa.services import report_recovery_service
 from actor_helpers import install_actor_overrides
 from fakes.dynamodb import FakeTable
+from rule_violation_helpers import assert_violation
+from stoa.services.report_recovery_errors import ReportRecoveryErrorCode
 
 
 def _app_for_user(user: dict, settings: Settings | None = None) -> FastAPI:
@@ -425,7 +427,7 @@ def test_resend_refuses_non_failed_report(monkeypatch):
 
     response = client.post("/admin/reports/parent-1/student-1/2026-06-01/resend")
 
-    assert response.status_code == 409
+    assert_violation(response, ReportRecoveryErrorCode.REPORT_DELIVERY_NOT_FAILED)
 
 
 def test_bulk_resend_is_admin_only(monkeypatch):
@@ -543,7 +545,10 @@ def test_bulk_resend_returns_mixed_results_and_continues(monkeypatch):
         "failed",
     ]
     assert data["results"][0]["report_id"] == "report-success"
-    assert data["results"][2]["detail"] == "Report not found"
+    assert data["results"][2]["code"] == "report_not_found"
+    assert data["results"][2]["detail"] == "Dieser Bericht wurde nicht gefunden."
+    assert data["results"][3]["code"] == "report_resend_failed"
+    assert data["results"][3]["params"] == {}
     assert sent == [
         ("parent-1@example.com", "<html>Report</html>", "STOA weekly report for Student"),
         ("parent-fail@example.com", "<html>Report</html>", "STOA weekly report for Student"),
@@ -672,7 +677,7 @@ def test_retry_generation_refuses_when_atomic_claim_fails(monkeypatch):
 
     response = client.post("/admin/reports/parent-1/student-1/2026-06-01/retry-generation")
 
-    assert response.status_code == 409
+    assert_violation(response, ReportRecoveryErrorCode.REPORT_GENERATION_RETRY_IN_PROGRESS)
 
 
 @pytest.mark.parametrize(
@@ -699,7 +704,7 @@ def test_retry_generation_refuses_non_generation_failed_report(monkeypatch, stat
 
     response = client.post("/admin/reports/parent-1/student-1/2026-06-01/retry-generation")
 
-    assert response.status_code == 409
+    assert_violation(response, ReportRecoveryErrorCode.REPORT_GENERATION_NOT_FAILED)
 
 
 def test_retry_generation_failure_preserves_failed_status_and_audits(monkeypatch, audit_events):
@@ -725,7 +730,8 @@ def test_retry_generation_failure_preserves_failed_status_and_audits(monkeypatch
 
     response = client.post("/admin/reports/parent-1/student-1/2026-06-01/retry-generation")
 
-    assert response.status_code == 502
+    assert_violation(response, ReportRecoveryErrorCode.REPORT_GENERATION_RETRY_FAILED)
+    assert "bad generation" not in response.text
     assert updates[0][0] == report["report_id"]
     assert updates[0][1] == "generation_failed"
     assert updates[0][2]["generation_error_class"] == "RuntimeError"
@@ -776,7 +782,8 @@ def test_retry_generation_failure_redacts_private_artifact_keys(monkeypatch):
 
     response = client.post("/admin/reports/parent-1/student-1/2026-06-01/retry-generation")
 
-    assert response.status_code == 502
+    assert_violation(response, ReportRecoveryErrorCode.REPORT_GENERATION_RETRY_FAILED)
+    assert "weekly-reports/" not in response.text
     message = updates[0][2]["generation_error_message"]
     assert "[report-artifact-key]" in message
     assert "[report-artifact-field]" in message
@@ -1072,7 +1079,7 @@ def test_create_resend_recovery_job_requires_matching_preview(monkeypatch):
         },
     )
 
-    assert response.status_code == 409
+    assert_violation(response, ReportRecoveryErrorCode.RECOVERY_PREVIEW_STALE)
     assert calls == ["target_read", "authorize", "target_read"]
 
 
@@ -1127,7 +1134,8 @@ def test_generation_retry_recovery_job_preview_rejects_wrong_status(monkeypatch)
         json={"reason": "incident generation retry", "filters": {"status": "email_failed"}},
     )
 
-    assert response.status_code == 422
+    detail = assert_violation(response, ReportRecoveryErrorCode.RECOVERY_STATUS_FILTER_UNSUPPORTED)
+    assert "generation_failed" in detail["message"]
 
 
 def test_create_generation_retry_recovery_job_persists_snapshot_and_invokes_worker(monkeypatch):
@@ -1309,7 +1317,7 @@ def test_resume_recovery_job_rejects_non_terminal_source(monkeypatch):
         json={"reason": "resume failed subset", "results": ["failed"]},
     )
 
-    assert response.status_code == 409
+    assert_violation(response, ReportRecoveryErrorCode.SOURCE_RECOVERY_JOB_NOT_TERMINAL)
     assert calls == ["source_read", "authorize", "source_read"]
 
 
@@ -1354,8 +1362,7 @@ def test_resume_recovery_job_rejects_incomplete_historical_source_without_mutati
         json={"reason": "resume after repair", "results": ["failed"]},
     )
 
-    assert response.status_code == 422
-    assert response.json() == {"detail": "Source recovery job record is incomplete and needs repair"}
+    assert_violation(response, ReportRecoveryErrorCode.SOURCE_RECOVERY_JOB_INCOMPLETE)
     assert writes == []
     assert missing_field not in source_job
 
@@ -1391,7 +1398,7 @@ def test_create_resume_job_revalidates_source_record_before_mutation(monkeypatch
         )
 
     assert error.value.status_code == 422
-    assert error.value.detail == "Source recovery job record is incomplete and needs repair"
+    assert error.value.code is ReportRecoveryErrorCode.SOURCE_RECOVERY_JOB_INCOMPLETE
     assert writes == []
 
 

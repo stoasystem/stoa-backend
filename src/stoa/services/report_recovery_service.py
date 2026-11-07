@@ -1,4 +1,10 @@
-"""Shared report recovery operations and append-only audit evidence."""
+"""Shared report recovery operations and append-only audit evidence.
+
+A refusal or failure raises `ReportRecoveryError` with a
+`ReportRecoveryErrorCode` (`stoa.services.report_recovery_errors`, #285); the
+report's audit event records the code's English message, and a recovery job
+records the code on its target.
+"""
 
 from __future__ import annotations
 
@@ -9,20 +15,29 @@ from typing import Any
 from uuid import uuid4
 
 from stoa.db.repositories import account_deletion_repo, report_repo
+from stoa.rule_violation import render_message
 from stoa.services import (
     notify_service,
     parent_link_service,
     report_artifact_service,
     report_service,
 )
+from stoa.services.report_recovery_errors import (
+    ReportRecoveryError,
+    ReportRecoveryErrorCode,
+)
 
+__all__ = [
+    "ReportRecoveryError",
+    "ReportRecoveryErrorCode",
+    "ReportRecoveryResult",
+    "redact_private_artifact_text",
+    "resend_report_email",
+    "retry_report_generation",
+    "safe_error_message",
+]
 
-@dataclass(frozen=True)
-class ReportRecoveryError(Exception):
-    status_code: int
-    detail: str
-    result: str = "failed"
-    error_class: str | None = None
+_C = ReportRecoveryErrorCode
 
 
 @dataclass(frozen=True)
@@ -60,7 +75,7 @@ def resend_report_email(
 ) -> ReportRecoveryResult:
     """Resend one failed report email and write append-only audit evidence."""
     if report.get("status") != "email_failed" and report.get("email_status") != "failed":
-        raise _refused(report, "resend_email", operator, reason, source, "Report delivery is not failed")
+        raise _refused(report, "resend_email", operator, reason, source, _C.REPORT_DELIVERY_NOT_FAILED)
 
     html_key = report.get("html_s3_key") or report.get("s3_key")
     if not html_key:
@@ -70,8 +85,7 @@ def resend_report_email(
             operator,
             reason,
             source,
-            "Report is missing HTML artifact metadata",
-            status_code=422,
+            _C.REPORT_HTML_ARTIFACT_MISSING,
         )
 
     recipient = _current_recipient(report)
@@ -82,8 +96,7 @@ def resend_report_email(
             operator,
             reason,
             source,
-            "Report recipient is no longer linked to the student",
-            status_code=403,
+            _C.REPORT_RECIPIENT_UNLINKED,
             error_class=recipient.refusal,
         )
     if recipient.email is None:
@@ -93,8 +106,7 @@ def resend_report_email(
             operator,
             reason,
             source,
-            "Report recipient has no email address",
-            status_code=422,
+            _C.REPORT_RECIPIENT_EMAIL_MISSING,
             error_class=recipient.refusal,
         )
 
@@ -144,10 +156,10 @@ def resend_report_email(
             correlation_id=correlation_id,
         )
         raise ReportRecoveryError(
-            status_code=502,
-            detail="Report resend failed",
+            _C.REPORT_RESEND_FAILED,
             result="failed",
             error_class=type(exc).__name__,
+            internal_detail=safe_error_message(exc),
         ) from exc
 
     sent_at = _now_iso()
@@ -198,7 +210,7 @@ def retry_report_generation(
 ) -> ReportRecoveryResult:
     """Retry one generation-failed report and write append-only audit evidence."""
     if report.get("status") != "generation_failed":
-        raise _refused(report, "retry_generation", operator, reason, source, "Report generation is not failed")
+        raise _refused(report, "retry_generation", operator, reason, source, _C.REPORT_GENERATION_NOT_FAILED)
 
     before = _audit_snapshot(report)
     attempted_at = _now_iso()
@@ -209,7 +221,7 @@ def retry_report_generation(
             operator,
             reason,
             source,
-            "Report generation retry is already in progress or no longer failed",
+            _C.REPORT_GENERATION_RETRY_IN_PROGRESS,
         )
     try:
         payload = report_service.build_weekly_learning_payload(parent_id, student_id, week_start)
@@ -246,10 +258,10 @@ def retry_report_generation(
             correlation_id=correlation_id,
         )
         raise ReportRecoveryError(
-            status_code=502,
-            detail="Report generation retry failed",
+            _C.REPORT_GENERATION_RETRY_FAILED,
             result="failed",
             error_class=type(exc).__name__,
+            internal_detail=safe_error_message(exc),
         ) from exc
 
     completed_at = _now_iso()
@@ -312,12 +324,17 @@ def _refused(
     actor: str,
     reason: str,
     source: str,
-    detail: str,
+    code: ReportRecoveryErrorCode,
     *,
-    status_code: int = 409,
     error_class: str | None = None,
 ) -> ReportRecoveryError:
+    """Audit a refusal, then return the violation to raise.
+
+    The audit keeps the English message, as it kept the English sentence
+    before #285, so the evidence reads the same in every console language.
+    """
     event_at = _now_iso()
+    message = render_message(code, "en")
     before = _audit_snapshot(report)
     _write_report_audit(
         report,
@@ -329,10 +346,10 @@ def _refused(
         before=before,
         after=before,
         event_at=event_at,
-        error_message=detail,
+        error_message=message,
     )
     return ReportRecoveryError(
-        status_code=status_code, detail=detail, result="refused", error_class=error_class
+        code, result="refused", error_class=error_class, internal_detail=message
     )
 
 

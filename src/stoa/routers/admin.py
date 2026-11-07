@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import Response
 
@@ -51,6 +51,7 @@ from stoa.models import user as user_model
 from stoa.models.user import SubscriptionTier
 from stoa.rule_violation import RuleViolation
 from stoa.services.account_errors import AccountErrorCode, AccountViolation
+from stoa.services.report_recovery_errors import RecoveryJobError, ReportRecoveryErrorCode
 from stoa.services.billing_errors import BillingErrorCode
 from stoa.services import (
     account_provisioning_service,
@@ -1624,6 +1625,8 @@ class BulkReportResendItemResult(BaseModel):
     operation: str = "resend_email"
     operation_result: str | None = None
     updated_at: str | None = None
+    code: str | None = None
+    params: dict[str, str] = Field(default_factory=dict)
     detail: str | None = None
     error_class: str | None = None
 
@@ -1806,6 +1809,8 @@ class RecoveryJobPreviewTarget(BaseModel):
 
 class RecoveryJobResumePreviewTarget(RecoveryJobPreviewTarget):
     source_result: str | None = None
+    code: str | None = None
+    params: dict[str, str] = Field(default_factory=dict)
     detail: str | None = None
     error_class: str | None = None
 
@@ -1896,6 +1901,8 @@ class RecoveryJobTargetResponse(BaseModel):
     result: str
     status: str | None = None
     email_status: str | None = None
+    code: str | None = None
+    params: dict[str, str] = Field(default_factory=dict)
     detail: str | None = None
     error_class: str | None = None
     attempted_at: str | None = None
@@ -3581,7 +3588,10 @@ async def bulk_resend_report_emails(
                     week_start=target.week_start,
                     result="not_found",
                     operation_result="not_found",
-                    detail="Report not found",
+                    code=AccountErrorCode.REPORT_NOT_FOUND.value,
+                    detail=report_recovery_job_service.outcome_message(
+                        {"code": AccountErrorCode.REPORT_NOT_FOUND.value}
+                    ),
                 )
             )
             continue
@@ -3624,15 +3634,12 @@ async def preview_resend_recovery_job(
     user: dict = Depends(require_role("admin")),
 ):
     """Preview a bounded async resend recovery job before mutation."""
-    try:
-        return report_recovery_job_service.preview_resend_job(
-            reason=request.reason,
-            operator=_operator_id(user),
-            filters=request.filters.model_dump(),
-            max_targets=request.max_targets,
-        )
-    except report_recovery_job_service.RecoveryJobError as exc:
-        raise _recovery_job_http_error(exc) from exc
+    return report_recovery_job_service.preview_resend_job(
+        reason=request.reason,
+        operator=_operator_id(user),
+        filters=request.filters.model_dump(),
+        max_targets=request.max_targets,
+    )
 
 
 @router.post(
@@ -3645,16 +3652,13 @@ async def create_resend_recovery_job(
     user: dict = Depends(require_role("admin")),
 ):
     """Create a bounded async resend recovery job after preview confirmation."""
-    try:
-        job = report_recovery_job_service.create_resend_job(
-            reason=request.reason,
-            operator=_operator_id(user),
-            filters=request.filters.model_dump(),
-            preview_token=request.preview_token,
-            max_targets=request.max_targets,
-        )
-    except report_recovery_job_service.RecoveryJobError as exc:
-        raise _recovery_job_http_error(exc) from exc
+    job = report_recovery_job_service.create_resend_job(
+        reason=request.reason,
+        operator=_operator_id(user),
+        filters=request.filters.model_dump(),
+        preview_token=request.preview_token,
+        max_targets=request.max_targets,
+    )
     return _recovery_job_response(job)
 
 
@@ -3668,15 +3672,12 @@ async def preview_generation_retry_recovery_job(
     user: dict = Depends(require_role("admin")),
 ):
     """Preview a bounded async generation retry recovery job before mutation."""
-    try:
-        return report_recovery_job_service.preview_generation_retry_job(
-            reason=request.reason,
-            operator=_operator_id(user),
-            filters=request.filters.model_dump(),
-            max_targets=request.max_targets,
-        )
-    except report_recovery_job_service.RecoveryJobError as exc:
-        raise _recovery_job_http_error(exc) from exc
+    return report_recovery_job_service.preview_generation_retry_job(
+        reason=request.reason,
+        operator=_operator_id(user),
+        filters=request.filters.model_dump(),
+        max_targets=request.max_targets,
+    )
 
 
 @router.post(
@@ -3689,16 +3690,13 @@ async def create_generation_retry_recovery_job(
     user: dict = Depends(require_role("admin")),
 ):
     """Create a bounded async generation retry recovery job after preview confirmation."""
-    try:
-        job = report_recovery_job_service.create_generation_retry_job(
-            reason=request.reason,
-            operator=_operator_id(user),
-            filters=request.filters.model_dump(),
-            preview_token=request.preview_token,
-            max_targets=request.max_targets,
-        )
-    except report_recovery_job_service.RecoveryJobError as exc:
-        raise _recovery_job_http_error(exc) from exc
+    job = report_recovery_job_service.create_generation_retry_job(
+        reason=request.reason,
+        operator=_operator_id(user),
+        filters=request.filters.model_dump(),
+        preview_token=request.preview_token,
+        max_targets=request.max_targets,
+    )
     return _recovery_job_response(job)
 
 
@@ -3713,16 +3711,13 @@ async def preview_resume_recovery_job(
     user: dict = Depends(require_role("admin")),
 ):
     """Preview a bounded resume job from a prior recovery job target subset."""
-    try:
-        return report_recovery_job_service.preview_resume_job(
-            source_job_id=job_id,
-            reason=request.reason,
-            operator=_operator_id(user),
-            results=request.results,
-            max_targets=request.max_targets,
-        )
-    except report_recovery_job_service.RecoveryJobError as exc:
-        raise _recovery_job_http_error(exc) from exc
+    return report_recovery_job_service.preview_resume_job(
+        source_job_id=job_id,
+        reason=request.reason,
+        operator=_operator_id(user),
+        results=request.results,
+        max_targets=request.max_targets,
+    )
 
 
 @router.post(
@@ -3736,17 +3731,14 @@ async def create_resume_recovery_job(
     user: dict = Depends(require_role("admin")),
 ):
     """Create a bounded resume job from a prior recovery job target subset."""
-    try:
-        job = report_recovery_job_service.create_resume_job(
-            source_job_id=job_id,
-            reason=request.reason,
-            operator=_operator_id(user),
-            results=request.results,
-            preview_token=request.preview_token,
-            max_targets=request.max_targets,
-        )
-    except report_recovery_job_service.RecoveryJobError as exc:
-        raise _recovery_job_http_error(exc) from exc
+    job = report_recovery_job_service.create_resume_job(
+        source_job_id=job_id,
+        reason=request.reason,
+        operator=_operator_id(user),
+        results=request.results,
+        preview_token=request.preview_token,
+        max_targets=request.max_targets,
+    )
     return _recovery_job_response(job)
 
 
@@ -3861,7 +3853,7 @@ async def get_recovery_job(
     """Get one async report recovery job."""
     job = report_repo.get_recovery_job(job_id)
     if not job:
-        raise AccountViolation(AccountErrorCode.RECOVERY_JOB_NOT_FOUND)
+        raise RecoveryJobError(ReportRecoveryErrorCode.RECOVERY_JOB_NOT_FOUND)
     return _recovery_job_response(job)
 
 
@@ -3874,7 +3866,7 @@ async def list_recovery_job_results(
 ):
     """List metadata-only target results for one async recovery job."""
     if not report_repo.get_recovery_job(job_id):
-        raise AccountViolation(AccountErrorCode.RECOVERY_JOB_NOT_FOUND)
+        raise RecoveryJobError(ReportRecoveryErrorCode.RECOVERY_JOB_NOT_FOUND)
     try:
         last_key = report_repo.decode_recovery_job_target_page_token(next_token, job_id)
     except ValueError as exc:
@@ -3894,10 +3886,7 @@ async def cancel_recovery_job(
     user: dict = Depends(require_role("admin")),
 ):
     """Request cooperative cancellation for an async report recovery job."""
-    try:
-        job = report_recovery_job_service.cancel_recovery_job(job_id, operator=_operator_id(user))
-    except report_recovery_job_service.RecoveryJobError as exc:
-        raise _recovery_job_http_error(exc) from exc
+    job = report_recovery_job_service.cancel_recovery_job(job_id, operator=_operator_id(user))
     return _recovery_job_response(job)
 
 
@@ -3913,14 +3902,11 @@ async def resend_report_email(
 ):
     """Resend a failed report email using the existing private HTML artifact."""
     report = _get_report_or_404(parent_id, student_id, week_start)
-    try:
-        result = report_recovery_service.resend_report_email(
-            report,
-            operator=_operator_id(user),
-            reason="admin_single_resend",
-        )
-    except report_recovery_service.ReportRecoveryError as exc:
-        raise _report_recovery_http_error(exc) from exc
+    result = report_recovery_service.resend_report_email(
+        report,
+        operator=_operator_id(user),
+        reason="admin_single_resend",
+    )
     return ReportResendResponse(
         report_id=result.report_id,
         status=result.status,
@@ -3937,7 +3923,7 @@ def _bulk_resend_error_result(
     exc: report_recovery_service.ReportRecoveryError,
 ) -> BulkReportResendItemResult:
     result = "failed" if exc.status_code >= 500 else "refused"
-    detail = report_recovery_service.redact_private_artifact_text(exc.detail) or "Report resend failed"
+    params = report_recovery_job_service.stored_params(dict(exc.params))
     return BulkReportResendItemResult(
         parent_id=target.parent_id,
         student_id=target.student_id,
@@ -3947,7 +3933,9 @@ def _bulk_resend_error_result(
         status=report.get("status"),
         email_status=report.get("email_status"),
         operation_result=result,
-        detail=detail,
+        code=exc.code.value,
+        params=params,
+        detail=report_recovery_job_service.outcome_message({"code": exc.code.value, "params": params}),
         error_class=exc.error_class,
     )
 
@@ -3964,17 +3952,14 @@ async def retry_report_generation(
 ):
     """Retry generation for one generation-failed weekly report."""
     report = _get_report_or_404(parent_id, student_id, week_start)
-    try:
-        result = report_recovery_service.retry_report_generation(
-            report,
-            parent_id=parent_id,
-            student_id=student_id,
-            week_start=week_start,
-            operator=_operator_id(user),
-            reason="admin_single_generation_retry",
-        )
-    except report_recovery_service.ReportRecoveryError as exc:
-        raise _report_recovery_http_error(exc) from exc
+    result = report_recovery_service.retry_report_generation(
+        report,
+        parent_id=parent_id,
+        student_id=student_id,
+        week_start=week_start,
+        operator=_operator_id(user),
+        reason="admin_single_generation_retry",
+    )
     return ReportGenerationRetryResponse(
         report_id=result.report_id,
         status=result.status,
@@ -4212,14 +4197,6 @@ def _operator_id(user: dict) -> str:
     )
 
 
-def _report_recovery_http_error(exc: report_recovery_service.ReportRecoveryError) -> HTTPException:
-    detail = report_recovery_service.redact_private_artifact_text(exc.detail) or "Report recovery operation failed"
-    return HTTPException(status_code=exc.status_code, detail=detail)
-
-
-def _recovery_job_http_error(exc: report_recovery_job_service.RecoveryJobError) -> HTTPException:
-    detail = report_recovery_service.redact_private_artifact_text(exc.detail) or "Recovery job operation failed"
-    return HTTPException(status_code=exc.status_code, detail=detail)
 
 
 
@@ -4265,7 +4242,9 @@ def _recovery_job_target_response(item: dict) -> RecoveryJobTargetResponse:
         result=str(item.get("result", "")),
         status=item.get("status"),
         email_status=item.get("email_status"),
-        detail=report_recovery_service.redact_private_artifact_text(item.get("detail")),
+        code=item.get("code") or None,
+        params=report_recovery_job_service.stored_params(item.get("params")),
+        detail=report_recovery_job_service.outcome_message(item),
         error_class=item.get("error_class"),
         attempted_at=item.get("attempted_at"),
         completed_at=item.get("completed_at"),

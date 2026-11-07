@@ -353,12 +353,6 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Ce rapport est introuvable.",
         "it": "Questo rapporto non è stato trovato.",
     },
-    "error.recovery_job_not_found": {
-        "de": "Dieser Wiederherstellungsauftrag wurde nicht gefunden.",
-        "en": "This recovery job was not found.",
-        "fr": "Cette tâche de récupération est introuvable.",
-        "it": "Questa attività di recupero non è stata trovata.",
-    },
     "error.relationship_status_invalid": {
         "de": "Wähle einen anderen Status für die Verbindung.",
         "en": "Choose a different relationship status.",
