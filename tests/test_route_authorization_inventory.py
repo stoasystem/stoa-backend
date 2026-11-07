@@ -564,7 +564,7 @@ def test_admin_body_target_provider_is_executable_exact_and_projected(monkeypatc
 
     route = next(
         route for route in app.routes
-        if isinstance(route, APIRoute) and route.path == "/admin/parent-bindings/repair"
+        if isinstance(route, APIRoute) and route.path == "/admin/parent-links/revoke"
     )
     provider = route.endpoint.admin_target_provider
     assert provider.cardinality == "scalar"

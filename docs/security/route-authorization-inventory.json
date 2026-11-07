@@ -515,24 +515,6 @@
   {
     "authorization": [
       {
-        "action": "lookup",
-        "capability": "student_support_lookup",
-        "purpose": "account_operations",
-        "resource_type": "parent_binding"
-      }
-    ],
-    "classification": "admin-capability",
-    "family": "admin",
-    "identifiers": [
-      "parent_id"
-    ],
-    "method": "GET",
-    "path": "/admin/parent-bindings",
-    "sensitive": true
-  },
-  {
-    "authorization": [
-      {
         "action": "read",
         "capability": "report_metadata_reader",
         "purpose": "report_operations",
@@ -2763,12 +2745,7 @@
       "collectionPath": null,
       "maximum": null,
       "referenceOnly": [
-        "relationship",
-        "reason",
-        "preview_id",
-        "expected_status",
-        "expected_version",
-        "status"
+        "reason"
       ],
       "required": true,
       "resolver": null,
@@ -2796,93 +2773,7 @@
       "student_id"
     ],
     "method": "POST",
-    "path": "/admin/parent-bindings/repair",
-    "sensitive": true
-  },
-  {
-    "adminTarget": {
-      "bodyParameter": "body",
-      "cardinality": "scalar",
-      "collectionPath": null,
-      "maximum": null,
-      "referenceOnly": [
-        "relationship",
-        "reason",
-        "preview_id",
-        "expected_status",
-        "expected_version",
-        "status"
-      ],
-      "required": true,
-      "resolver": null,
-      "targetPaths": [
-        "parent_id",
-        "student_id"
-      ],
-      "tupleFields": [
-        "parent_id",
-        "student_id"
-      ]
-    },
-    "authorization": [
-      {
-        "action": "update",
-        "capability": "parent_binding_repairer",
-        "purpose": "account_operations",
-        "resource_type": "parent_binding"
-      }
-    ],
-    "classification": "admin-capability",
-    "family": "admin",
-    "identifiers": [
-      "parent_id",
-      "student_id"
-    ],
-    "method": "POST",
-    "path": "/admin/parent-bindings/repair/preview",
-    "sensitive": true
-  },
-  {
-    "adminTarget": {
-      "bodyParameter": "body",
-      "cardinality": "scalar",
-      "collectionPath": null,
-      "maximum": null,
-      "referenceOnly": [
-        "relationship",
-        "reason",
-        "preview_id",
-        "expected_status",
-        "expected_version",
-        "status"
-      ],
-      "required": true,
-      "resolver": null,
-      "targetPaths": [
-        "parent_id",
-        "student_id"
-      ],
-      "tupleFields": [
-        "parent_id",
-        "student_id"
-      ]
-    },
-    "authorization": [
-      {
-        "action": "update",
-        "capability": "parent_binding_repairer",
-        "purpose": "account_operations",
-        "resource_type": "parent_binding"
-      }
-    ],
-    "classification": "admin-capability",
-    "family": "admin",
-    "identifiers": [
-      "parent_id",
-      "student_id"
-    ],
-    "method": "POST",
-    "path": "/admin/parent-bindings/status",
+    "path": "/admin/parent-links/revoke",
     "sensitive": true
   },
   {

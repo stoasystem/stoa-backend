@@ -94,15 +94,13 @@ def fence_generation(table: Any, user_id: str) -> int:
     return generation
 
 
-def binding(table: Any, pk_user: str, sk: str, label: str) -> dict[str, Any]:
-    item = table.get_item(
-        Key={"PK": f"USER#{pk_user}", "SK": sk}, ConsistentRead=True
-    ).get("Item")
-    require(bool(item), f"{label} binding is missing")
-    require(item.get("status") == "active", f"{label} binding is not active")
-    require(item.get("relationship") == "child", f"{label} binding is not a child link")
-    version = int(item.get("version") or 0)
-    require(version > 0, f"{label} binding version is not positive")
+def link_side(table: Any, key: dict[str, str], label: str) -> dict[str, Any]:
+    """One side of the parent-student link; the relationship has no other shape."""
+    item = table.get_item(Key=key, ConsistentRead=True).get("Item")
+    require(bool(item), f"{label} link side is missing")
+    require(item.get("entity_type") == "parent_student_link", f"{label} row is not a link")
+    require(item.get("status") == "active", f"{label} link side is not active")
+    require(bool(item.get("link_updated_at")), f"{label} link side has no version")
     return item
 
 
@@ -178,19 +176,22 @@ def grant_paid_entitlement(
     require(parent.get("account_status") == "active", "parent account status")
     require(student.get("role") == "student", "student profile role")
     require(student.get("account_status") == "active", "student account status")
-    require(student.get("parent_id") == parent_id, "student parent_id linkage")
-    require(
-        student.get("parent_binding_status") == "active",
-        "student parent_binding_status",
-    )
 
     parent_version = int(parent.get("version") or 0)
     student_version = int(student.get("version") or 0)
     require(parent_version > 0, "parent profile version")
     require(student_version > 0, "student profile version")
 
-    forward = binding(table, parent_id, f"CHILD#{student_id}", "parent->student")
-    reverse = binding(table, student_id, f"PARENT#{parent_id}", "student->parent")
+    forward = link_side(
+        table, {"PK": f"PARENT#{parent_id}", "SK": f"CHILD#{student_id}"}, "parent"
+    )
+    reverse = link_side(
+        table, {"PK": f"STUDENT#{student_id}", "SK": f"PARENT#{parent_id}"}, "student"
+    )
+    require(
+        forward.get("link_updated_at") == reverse.get("link_updated_at"),
+        "the two link sides disagree",
+    )
 
     parent_generation = fence_generation(table, parent_id)
     student_generation = fence_generation(table, student_id)
@@ -221,8 +222,7 @@ def grant_paid_entitlement(
         "parent_account_fence_generation": parent_generation,
         "student_profile_version": student_version,
         "student_account_fence_generation": student_generation,
-        "forward_relationship_version": int(forward["version"]),
-        "reverse_relationship_version": int(reverse["version"]),
+        "relationship_source": "parent_student_link",
     }
 
     if dry_run:

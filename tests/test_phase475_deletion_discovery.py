@@ -53,9 +53,9 @@ class _RepeatingCursorTable:
     ("candidate", "selected"),
     [
         pytest.param(
-            _row("parent_student_binding", parent_id=IDENTITY, student_id="student-1"),
+            _row("parent_student_link", parent_id=IDENTITY, student_id="student-1"),
             True,
-            id="formal-parent-binding-parent-id",
+            id="parent-link-parent-id",
         ),
         pytest.param(
             _row("question", student_id="student-1", teacher_id=IDENTITY),

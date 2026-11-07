@@ -385,11 +385,10 @@ def test_conversation_owner_and_exact_admin_capability_positive_controls(monkeyp
     assert role_only.json()["detail"]["code"] == "action_not_allowed"
 
 
-def test_unrelated_parent_conversation_is_hidden(monkeypatch):
+def test_unrelated_parent_conversation_is_hidden(monkeypatch, link_rows):
+    # No link is stored for parent-1 and student-1.
     conv = {"conversation_id": "conv-1", "student_id": "student-1"}
     monkeypatch.setattr(learning_session, "read", lambda *_: conv)
-    monkeypatch.setattr(user_repo, "get_parent_student_binding", lambda *_: None)
-    monkeypatch.setattr(user_repo, "get_student_parent_binding", lambda *_: None)
     monkeypatch.setattr(
         user_repo,
         "get_user",

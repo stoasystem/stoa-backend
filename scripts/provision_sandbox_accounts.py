@@ -33,6 +33,8 @@ from typing import Any
 import boto3
 from botocore.exceptions import ClientError
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
+
 # ── Sandbox resource identifiers ──────────────────────────────────────────────
 DEFAULT_REGION = "eu-central-2"
 DEFAULT_USER_POOL_ID = "eu-central-2_FCpWgVayX"
@@ -281,48 +283,35 @@ def dynamo_put_full_identity(
     log(f"  Wrote IDENTITY INVENTORY: USER#{user_id[:8]}...→IDENTITY#...")
 
 
-def dynamo_put_parent_child_binding(
+def dynamo_put_parent_student_link(
     table: Any,
     parent_id: str,
     student_id: str,
-    student_email: str,
     *,
     dry_run: bool,
 ) -> None:
-    """Write bidirectional parent ↔ student binding records."""
-    now = now_iso()
-
-    parent_child_item = {
-        "PK": f"USER#{parent_id}",
-        "SK": f"CHILD#{student_id}",
-        "parent_id": parent_id,
-        "student_id": student_id,
-        "student_email": student_email,
-        "relationship": "child",
-        "status": "active",
-        "binding_status": "confirmed",
-        "created_at": now,
-        "_sandbox": True,
-    }
-    child_parent_item = {
-        "PK": f"USER#{student_id}",
-        "SK": f"PARENT#{parent_id}",
-        "student_id": student_id,
-        "parent_id": parent_id,
-        "relationship": "child",
-        "status": "active",
-        "binding_status": "confirmed",
-        "created_at": now,
-        "_sandbox": True,
-    }
-
+    """Both sides of an active link, written together; the one shape a relationship has."""
     if dry_run:
-        log(f"  [DRY-RUN] Would write parent→child: {parent_id[:8]}→{student_id[:8]}")
+        log(f"  [DRY-RUN] Would link parent→student: {parent_id[:8]}→{student_id[:8]}")
         return
 
-    table.put_item(Item=parent_child_item)
-    table.put_item(Item=child_parent_item)
-    log(f"  Wrote binding: parent={parent_id[:8]}... ↔ student={student_id[:8]}...")
+    from stoa.db.repositories import parent_link_repo
+
+    try:
+        parent_link_repo.create_link(
+            parent_id=parent_id,
+            student_id=student_id,
+            status=parent_link_repo.STATUS_ACTIVE,
+            initiator_role=parent_link_repo.INITIATOR_ADMIN,
+            created_by="provision_sandbox_accounts",
+            linked_at=now_iso(),
+            table=table,
+        )
+    except parent_link_repo.ParentLinkConflict:
+        # A rerun over accounts that kept their ids finds the link already there.
+        log(f"  Link already stored: parent={parent_id[:8]}... ↔ student={student_id[:8]}...")
+        return
+    log(f"  Wrote link: parent={parent_id[:8]}... ↔ student={student_id[:8]}...")
 
 
 def dynamo_delete_user(
@@ -344,19 +333,22 @@ def dynamo_delete_user(
     except ClientError:
         pass
 
-    # Delete all USER# items
-    resp = dynamo_client.query(
-        TableName=table_name,
-        KeyConditionExpression="PK = :pk",
-        ExpressionAttributeValues={":pk": {"S": f"USER#{user_id}"}},
-        ProjectionExpression="PK, SK",
-    )
-    for item in resp.get("Items", []):
-        dynamo_client.delete_item(
+    # Delete all USER# items, and this account's side of any parent-student
+    # link (the other side lives under the other account's id).
+    count = 0
+    for pk in (f"USER#{user_id}", f"PARENT#{user_id}", f"STUDENT#{user_id}"):
+        resp = dynamo_client.query(
             TableName=table_name,
-            Key={"PK": item["PK"], "SK": item["SK"]},
+            KeyConditionExpression="PK = :pk",
+            ExpressionAttributeValues={":pk": {"S": pk}},
+            ProjectionExpression="PK, SK",
         )
-    count = len(resp.get("Items", []))
+        for item in resp.get("Items", []):
+            dynamo_client.delete_item(
+                TableName=table_name,
+                Key={"PK": item["PK"], "SK": item["SK"]},
+            )
+        count += len(resp.get("Items", []))
     log(f"  Deleted {count} DynamoDB items for user: {user_id[:8]}...")
 
 
@@ -427,9 +419,9 @@ def provision(args: argparse.Namespace) -> dict[str, Any]:
     )
     result["parent"] = {"email": PARENT_EMAIL, "sub": parent_sub, "role": "parent"}
 
-    for student_sub, student_email in zip(student_subs, STUDENT_EMAILS):
-        dynamo_put_parent_child_binding(
-            table, parent_sub, student_sub, student_email, dry_run=args.dry_run
+    for student_sub in student_subs:
+        dynamo_put_parent_student_link(
+            table, parent_sub, student_sub, dry_run=args.dry_run
         )
 
     # ── Summary ───────────────────────────────────────────────────────────────
