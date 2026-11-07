@@ -198,7 +198,7 @@
     "account_provisioning_failed": {
       "action": "contact_support",
       "domain": "security",
-      "http_status": 409,
+      "http_status": 403,
       "message_key": "error.account_provisioning_failed",
       "public_fields": [],
       "retry": {
@@ -211,7 +211,7 @@
     "account_review_pending": {
       "action": null,
       "domain": "security",
-      "http_status": 409,
+      "http_status": 403,
       "message_key": "error.account_review_pending",
       "public_fields": [],
       "retry": {
