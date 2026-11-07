@@ -516,7 +516,6 @@ def _account_profile_branch(
     *, command: Mapping[str, Any], previous: Mapping[str, Any]
 ) -> BranchResult:
     now = datetime.now(UTC).isoformat()
-    processed_relationships: set[tuple[str, str]] = set()
 
     def mutate(item: dict[str, Any]) -> None:
         if item.get("SK") == "PROFILE" and item.get("user_id") == command["user_id"]:
@@ -525,19 +524,6 @@ def _account_profile_branch(
                 user_id=str(command["user_id"]),
                 generation=int(command["generation"]),
                 now_iso=now,
-            )
-        elif (
-            item.get("entity_type") == "parent_student_binding"
-            and item.get("parent_id") == command["user_id"]
-        ):
-            pair = (str(item.get("parent_id") or ""), str(item.get("student_id") or ""))
-            if pair in processed_relationships:
-                return
-            processed_relationships.add(pair)
-            account_deletion_repo.scrub_parent_student_relationship(
-                item,
-                parent_user_id=str(command["user_id"]),
-                generation=int(command["generation"]),
             )
         elif item.get("SK") == "PROFILE":
             account_deletion_repo.scrub_parent_profile_child(
@@ -555,15 +541,12 @@ def _account_profile_branch(
     return _run_base_branch(
         command=command,
         previous=previous,
-        # The current `parent_student_link` rows were owned by no branch: the
-        # scanner found both directions and this predicate discarded them, so
-        # two clean epochs could be reached with the relationship still stored.
-        # They fall to `delete_owned_row` in `mutate` above - never to the two
-        # profile arms, whose keys are `PROFILE`, nor to the binding arm, whose
-        # entity_type differs.
+        # A relationship is stored as `parent_student_link` rows, both sides of
+        # which the scanner finds. They fall to `delete_owned_row` in `mutate`
+        # above - never to the two profile arms, whose keys are `PROFILE` - so
+        # two clean epochs cannot be reached with the relationship still stored.
         predicate=lambda item: item.get("SK") == "PROFILE"
-        or item.get("entity_type")
-        in {"parent_student_binding", parent_link_repo.ENTITY_TYPE},
+        or item.get("entity_type") == parent_link_repo.ENTITY_TYPE,
         mutate=mutate,
     )
 

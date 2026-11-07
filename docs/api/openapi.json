@@ -840,6 +840,70 @@
         "title": "AdminParentLinkRequest",
         "type": "object"
       },
+      "AdminParentLinkRevokeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "parent_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Parent Id",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "student_id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Student Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent_id",
+          "student_id",
+          "reason"
+        ],
+        "title": "AdminParentLinkRevokeRequest",
+        "type": "object"
+      },
+      "AdminParentLinkRevokeResponse": {
+        "description": "The link as it now stands: closed on both sides at `link_updated_at`.",
+        "properties": {
+          "link_updated_at": {
+            "title": "Link Updated At",
+            "type": "string"
+          },
+          "parent_id": {
+            "title": "Parent Id",
+            "type": "string"
+          },
+          "relationship": {
+            "title": "Relationship",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "student_id": {
+            "title": "Student Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent_id",
+          "student_id",
+          "relationship",
+          "status",
+          "link_updated_at"
+        ],
+        "title": "AdminParentLinkRevokeResponse",
+        "type": "object"
+      },
       "AdminPaymentReminderProjection": {
         "additionalProperties": false,
         "properties": {
@@ -7339,266 +7403,6 @@
         "title": "ParentBillingRefundProjection",
         "type": "object"
       },
-      "ParentBindingRepairApplyDisposition": {
-        "description": "Closed outcomes for one preview-bound repair attempt.",
-        "enum": [
-          "repaired",
-          "already_consistent",
-          "skipped_changed",
-          "conflict",
-          "skipped_invalid",
-          "retryable"
-        ],
-        "title": "ParentBindingRepairApplyDisposition",
-        "type": "string"
-      },
-      "ParentBindingRepairApplyResponse": {
-        "properties": {
-          "classification": {
-            "$ref": "#/components/schemas/ParentBindingRepairClassification"
-          },
-          "disposition": {
-            "$ref": "#/components/schemas/ParentBindingRepairApplyDisposition"
-          },
-          "mutated": {
-            "title": "Mutated",
-            "type": "boolean"
-          },
-          "pair_id": {
-            "title": "Pair Id",
-            "type": "string"
-          },
-          "preview_id": {
-            "title": "Preview Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "disposition",
-          "pair_id",
-          "preview_id",
-          "classification",
-          "mutated"
-        ],
-        "title": "ParentBindingRepairApplyResponse",
-        "type": "object"
-      },
-      "ParentBindingRepairClassification": {
-        "description": "Closed preview classifications for historical relationship repair.",
-        "enum": [
-          "consistent",
-          "repairable_missing_forward",
-          "repairable_missing_reverse",
-          "repairable_profile_projection",
-          "conflict",
-          "skipped_invalid"
-        ],
-        "title": "ParentBindingRepairClassification",
-        "type": "string"
-      },
-      "ParentBindingRepairObservation": {
-        "properties": {
-          "coordinate": {
-            "title": "Coordinate",
-            "type": "string"
-          },
-          "digest": {
-            "title": "Digest",
-            "type": "string"
-          },
-          "version": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Version"
-          }
-        },
-        "required": [
-          "coordinate",
-          "digest"
-        ],
-        "title": "ParentBindingRepairObservation",
-        "type": "object"
-      },
-      "ParentBindingRepairPreview": {
-        "properties": {
-          "classification": {
-            "$ref": "#/components/schemas/ParentBindingRepairClassification"
-          },
-          "observations": {
-            "items": {
-              "$ref": "#/components/schemas/ParentBindingRepairObservation"
-            },
-            "title": "Observations",
-            "type": "array"
-          },
-          "pair_id": {
-            "title": "Pair Id",
-            "type": "string"
-          },
-          "preview_id": {
-            "title": "Preview Id",
-            "type": "string"
-          },
-          "proposed_action": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Proposed Action"
-          }
-        },
-        "required": [
-          "pair_id",
-          "preview_id",
-          "classification",
-          "observations"
-        ],
-        "title": "ParentBindingRepairPreview",
-        "type": "object"
-      },
-      "ParentBindingRepairPreviewRequest": {
-        "properties": {
-          "parent_id": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Parent Id",
-            "type": "string"
-          },
-          "reason": {
-            "maxLength": 500,
-            "minLength": 1,
-            "title": "Reason",
-            "type": "string"
-          },
-          "relationship": {
-            "default": "child",
-            "maxLength": 50,
-            "minLength": 1,
-            "title": "Relationship",
-            "type": "string"
-          },
-          "student_id": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Student Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "parent_id",
-          "student_id",
-          "reason"
-        ],
-        "title": "ParentBindingRepairPreviewRequest",
-        "type": "object"
-      },
-      "ParentBindingStatusDisposition": {
-        "description": "Closed outcomes for one explicit relationship lifecycle transition.",
-        "enum": [
-          "transitioned",
-          "conflict",
-          "retryable"
-        ],
-        "title": "ParentBindingStatusDisposition",
-        "type": "string"
-      },
-      "ParentBindingStatusTransitionRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "expected_status": {
-            "enum": [
-              "active",
-              "active_pending_verification",
-              "inactive",
-              "revoked"
-            ],
-            "title": "Expected Status",
-            "type": "string"
-          },
-          "expected_version": {
-            "minimum": 1.0,
-            "title": "Expected Version",
-            "type": "integer"
-          },
-          "parent_id": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Parent Id",
-            "type": "string"
-          },
-          "reason": {
-            "maxLength": 500,
-            "minLength": 1,
-            "title": "Reason",
-            "type": "string"
-          },
-          "relationship": {
-            "default": "child",
-            "maxLength": 50,
-            "minLength": 1,
-            "title": "Relationship",
-            "type": "string"
-          },
-          "status": {
-            "enum": [
-              "active",
-              "active_pending_verification",
-              "inactive",
-              "revoked"
-            ],
-            "title": "Status",
-            "type": "string"
-          },
-          "student_id": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Student Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "parent_id",
-          "student_id",
-          "expected_status",
-          "expected_version",
-          "status",
-          "reason"
-        ],
-        "title": "ParentBindingStatusTransitionRequest",
-        "type": "object"
-      },
-      "ParentBindingStatusTransitionResponse": {
-        "properties": {
-          "disposition": {
-            "$ref": "#/components/schemas/ParentBindingStatusDisposition"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "version": {
-            "title": "Version",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "disposition",
-          "status",
-          "version"
-        ],
-        "title": "ParentBindingStatusTransitionResponse",
-        "type": "object"
-      },
       "ParentCheckoutCommandCreate": {
         "additionalProperties": false,
         "properties": {
@@ -8551,120 +8355,6 @@
           }
         },
         "title": "ParentRequestListResponse",
-        "type": "object"
-      },
-      "ParentStudentBindingListResponse": {
-        "properties": {
-          "count": {
-            "title": "Count",
-            "type": "integer"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ParentStudentBindingResponse"
-            },
-            "title": "Items",
-            "type": "array"
-          }
-        },
-        "required": [
-          "items",
-          "count"
-        ],
-        "title": "ParentStudentBindingListResponse",
-        "type": "object"
-      },
-      "ParentStudentBindingRepairRequest": {
-        "properties": {
-          "parent_id": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Parent Id",
-            "type": "string"
-          },
-          "preview_id": {
-            "maxLength": 64,
-            "minLength": 64,
-            "title": "Preview Id",
-            "type": "string"
-          },
-          "reason": {
-            "maxLength": 500,
-            "minLength": 1,
-            "title": "Reason",
-            "type": "string"
-          },
-          "relationship": {
-            "default": "child",
-            "maxLength": 50,
-            "minLength": 1,
-            "title": "Relationship",
-            "type": "string"
-          },
-          "student_id": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Student Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "parent_id",
-          "student_id",
-          "reason",
-          "preview_id"
-        ],
-        "title": "ParentStudentBindingRepairRequest",
-        "type": "object"
-      },
-      "ParentStudentBindingResponse": {
-        "properties": {
-          "parent_id": {
-            "title": "Parent Id",
-            "type": "string"
-          },
-          "relationship": {
-            "default": "child",
-            "title": "Relationship",
-            "type": "string"
-          },
-          "source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source"
-          },
-          "status": {
-            "default": "active",
-            "title": "Status",
-            "type": "string"
-          },
-          "student_id": {
-            "title": "Student Id",
-            "type": "string"
-          },
-          "updated_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Updated At"
-          }
-        },
-        "required": [
-          "parent_id",
-          "student_id"
-        ],
-        "title": "ParentStudentBindingResponse",
         "type": "object"
       },
       "ParentSubscriptionRequestCreate": {
@@ -19444,98 +19134,15 @@
         }
       }
     },
-    "/admin/parent-bindings": {
-      "get": {
-        "description": "Inspect formal parent/student bindings for admin repair.",
-        "operationId": "list_parent_bindings_admin_parent_bindings_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "parent_id",
-            "required": true,
-            "schema": {
-              "minLength": 1,
-              "title": "Parent Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ParentStudentBindingListResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthenticatedResponse"
-                }
-              }
-            },
-            "description": "No usable bearer token"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RuleViolationResponse"
-                }
-              }
-            },
-            "description": "A rule violation (`stoa.rule_violation`)"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Parent Bindings",
-        "tags": [
-          "admin"
-        ],
-        "x-stoa-authorization": {
-          "authorization": [
-            {
-              "action": "lookup",
-              "capability": "student_support_lookup",
-              "purpose": "account_operations",
-              "resource_type": "parent_binding"
-            }
-          ],
-          "classification": "admin-capability",
-          "identifiers": [
-            "parent_id"
-          ]
-        }
-      }
-    },
-    "/admin/parent-bindings/repair": {
+    "/admin/parent-links/revoke": {
       "post": {
-        "description": "Apply one unchanged repair preview through the atomic relationship writer.",
-        "operationId": "repair_parent_binding_admin_parent_bindings_repair_post",
+        "description": "End a parent-student relationship: both sides of its link in one write.\n\nOnly a link with an open side can be revoked. An account that is no longer\nusable does not stop it - that is the relationship an administrator most\nneeds to close. Either side having moved since it was read refuses the\nwhole write and nothing changes (#208).",
+        "operationId": "revoke_parent_link_admin_parent_links_revoke_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ParentStudentBindingRepairRequest"
+                "$ref": "#/components/schemas/AdminParentLinkRevokeRequest"
               }
             }
           },
@@ -19546,7 +19153,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ParentBindingRepairApplyResponse"
+                  "$ref": "#/components/schemas/AdminParentLinkRevokeResponse"
                 }
               }
             },
@@ -19588,7 +19195,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Repair Parent Binding",
+        "summary": "Revoke Parent Link",
         "tags": [
           "admin"
         ],
@@ -19599,224 +19206,7 @@
             "collectionPath": null,
             "maximum": null,
             "referenceOnly": [
-              "relationship",
-              "reason",
-              "preview_id",
-              "expected_status",
-              "expected_version",
-              "status"
-            ],
-            "required": true,
-            "resolver": null,
-            "targetPaths": [
-              "parent_id",
-              "student_id"
-            ],
-            "tupleFields": [
-              "parent_id",
-              "student_id"
-            ]
-          },
-          "authorization": [
-            {
-              "action": "update",
-              "capability": "parent_binding_repairer",
-              "purpose": "account_operations",
-              "resource_type": "parent_binding"
-            }
-          ],
-          "classification": "admin-capability",
-          "identifiers": [
-            "parent_id",
-            "student_id"
-          ]
-        }
-      }
-    },
-    "/admin/parent-bindings/repair/preview": {
-      "post": {
-        "description": "Classify one explicit historical relationship pair without mutation.",
-        "operationId": "preview_parent_binding_repair_admin_parent_bindings_repair_preview_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ParentBindingRepairPreviewRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ParentBindingRepairPreview"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthenticatedResponse"
-                }
-              }
-            },
-            "description": "No usable bearer token"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RuleViolationResponse"
-                }
-              }
-            },
-            "description": "A rule violation (`stoa.rule_violation`)"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Preview Parent Binding Repair",
-        "tags": [
-          "admin"
-        ],
-        "x-stoa-authorization": {
-          "adminTarget": {
-            "bodyParameter": "body",
-            "cardinality": "scalar",
-            "collectionPath": null,
-            "maximum": null,
-            "referenceOnly": [
-              "relationship",
-              "reason",
-              "preview_id",
-              "expected_status",
-              "expected_version",
-              "status"
-            ],
-            "required": true,
-            "resolver": null,
-            "targetPaths": [
-              "parent_id",
-              "student_id"
-            ],
-            "tupleFields": [
-              "parent_id",
-              "student_id"
-            ]
-          },
-          "authorization": [
-            {
-              "action": "update",
-              "capability": "parent_binding_repairer",
-              "purpose": "account_operations",
-              "resource_type": "parent_binding"
-            }
-          ],
-          "classification": "admin-capability",
-          "identifiers": [
-            "parent_id",
-            "student_id"
-          ]
-        }
-      }
-    },
-    "/admin/parent-bindings/status": {
-      "post": {
-        "description": "Perform one canonical-admin, expected-status/version lifecycle transition.",
-        "operationId": "transition_parent_binding_status_admin_parent_bindings_status_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ParentBindingStatusTransitionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ParentBindingStatusTransitionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthenticatedResponse"
-                }
-              }
-            },
-            "description": "No usable bearer token"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RuleViolationResponse"
-                }
-              }
-            },
-            "description": "A rule violation (`stoa.rule_violation`)"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Transition Parent Binding Status",
-        "tags": [
-          "admin"
-        ],
-        "x-stoa-authorization": {
-          "adminTarget": {
-            "bodyParameter": "body",
-            "cardinality": "scalar",
-            "collectionPath": null,
-            "maximum": null,
-            "referenceOnly": [
-              "relationship",
-              "reason",
-              "preview_id",
-              "expected_status",
-              "expected_version",
-              "status"
+              "reason"
             ],
             "required": true,
             "resolver": null,

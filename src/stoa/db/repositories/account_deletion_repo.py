@@ -254,11 +254,6 @@ SESSION_TOMBSTONE_ALLOWLIST = frozenset(
 CROSS_ACCOUNT_IDENTITY_REFERENCE_REGISTRY: Mapping[
     str, tuple[frozenset[str], frozenset[str], frozenset[str]]
 ] = {
-    "parent_student_binding": (
-        frozenset({"parent_id"}),
-        frozenset(),
-        frozenset(),
-    ),
     # The forward link row is PK=PARENT#<parent> / SK=CHILD#<student>, so the
     # student is found by student_id and the SK, but the parent is found by
     # neither. Without this the row survives its own parent's deletion while
@@ -1166,126 +1161,6 @@ def scrub_parent_profile_child(
             current = dict(refreshed)
 
 
-def scrub_parent_student_relationship(
-    item: Mapping[str, Any],
-    *,
-    parent_user_id: str,
-    generation: int,
-    table: Any | None = None,
-) -> None:
-    """CAS-remove both formal rows and only the deleting parent's projection."""
-    parent_id = _relationship_coordinate(item.get("parent_id"), "parent_id")
-    student_id = _relationship_coordinate(item.get("student_id"), "student_id")
-    relationship = _relationship_coordinate(
-        item.get("relationship"), "relationship"
-    )
-    status = _relationship_coordinate(item.get("status"), "status")
-    entity = _relationship_coordinate(item.get("entity_type"), "entity_type")
-    if entity != "parent_student_binding" or parent_id != parent_user_id:
-        raise AccountDeletionRowConflict("parent relationship identity changed")
-    version = _relationship_version(item.get("version"))
-    expected_keys = {
-        (f"USER#{parent_id}", f"CHILD#{student_id}"),
-        (f"USER#{student_id}", f"PARENT#{parent_id}"),
-    }
-    discovered_key = (
-        _relationship_coordinate(item.get("PK"), "PK"),
-        _relationship_coordinate(item.get("SK"), "SK"),
-    )
-    if discovered_key not in expected_keys:
-        raise AccountDeletionRowConflict("parent relationship coordinate changed")
-
-    target: Any = table or get_table()
-    response = _get_item(
-        target,
-        Key={"PK": f"USER#{student_id}", "SK": "PROFILE"},
-        ConsistentRead=True,
-    )
-    profile = response.get("Item")
-    if not isinstance(profile, Mapping):
-        raise AccountDeletionRowConflict("student profile disappeared")
-    profile_version = _relationship_version(profile.get("version"))
-    if (
-        profile.get("PK") != f"USER#{student_id}"
-        or profile.get("SK") != "PROFILE"
-        or profile.get("entity_type") != "user_profile"
-        or profile.get("user_id") != student_id
-        or profile.get("parent_id") != parent_id
-        or profile.get("relationship") != relationship
-        or profile.get("parent_binding_status") != status
-    ):
-        raise AccountDeletionRowConflict("student parent projection changed")
-
-    relationship_values: dict[str, Any] = {
-        ":entity": entity,
-        ":parent_id": parent_id,
-        ":student_id": student_id,
-        ":relationship": relationship,
-        ":status": status,
-        ":version": version,
-    }
-    relationship_condition = (
-        "attribute_exists(PK) AND attribute_exists(SK) AND "
-        "PK=:pk AND SK=:sk AND entity_type=:entity AND "
-        "parent_id=:parent_id AND student_id=:student_id AND "
-        "#relationship=:relationship AND #status=:status AND #version=:version"
-    )
-
-    def binding_delete(pk: str, sk: str) -> dict[str, Any]:
-        return {
-            "Delete": {
-                "Key": {"PK": pk, "SK": sk},
-                "ConditionExpression": relationship_condition,
-                "ExpressionAttributeNames": {
-                    "#relationship": "relationship",
-                    "#status": "status",
-                    "#version": "version",
-                },
-                "ExpressionAttributeValues": {
-                    **relationship_values,
-                    ":pk": pk,
-                    ":sk": sk,
-                },
-            }
-        }
-
-    profile_update = _parent_profile_scrub_operation(
-        profile,
-        parent_id=student_id,
-        expected_version=profile_version,
-        removed=("parent_id", "relationship", "parent_binding_status"),
-        replacements={},
-        expected_relationship_projection=(parent_id, relationship, status),
-    )
-    try:
-        transact(
-            [
-                deletion_fence_condition(parent_id, generation),
-                binding_delete(f"USER#{parent_id}", f"CHILD#{student_id}"),
-                binding_delete(f"USER#{student_id}", f"PARENT#{parent_id}"),
-                profile_update,
-            ],
-            table=target,
-        )
-    except AccountDeletionConflict as exc:
-        raise AccountDeletionRowConflict(
-            "parent relationship changed during cleanup"
-        ) from exc
-
-
-def _relationship_coordinate(value: object, field: str) -> str:
-    if not isinstance(value, str) or not value:
-        raise AccountDeletionRowConflict(f"invalid relationship {field}")
-    return value
-
-
-def _relationship_version(value: object) -> int:
-    parsed = stored_int(value)
-    if parsed is None or parsed <= 0:
-        raise AccountDeletionRowConflict("invalid relationship version")
-    return parsed
-
-
 def _parent_profile_child_scrub_changes(
     profile: Mapping[str, Any], child_user_id: str
 ) -> tuple[tuple[str, ...], dict[str, Any]]:
@@ -1340,28 +1215,10 @@ def _parent_profile_scrub_operation(
     expected_version: int | None,
     removed: tuple[str, ...],
     replacements: Mapping[str, Any],
-    expected_relationship_projection: tuple[str, str, str] | None = None,
 ) -> dict[str, Any]:
     names = {"#version": "version"}
-    values: dict[str, Any] = {}
-    if expected_relationship_projection is None:
-        identity_condition = "user_id=:parent AND "
-        values[":parent"] = parent_id
-    else:
-        projected_parent_id, relationship, status = expected_relationship_projection
-        identity_condition = (
-            "user_id=:student_id AND parent_id=:parent_id AND "
-            "#relationship=:relationship AND parent_binding_status=:status AND "
-        )
-        names["#relationship"] = "relationship"
-        values.update(
-            {
-                ":student_id": parent_id,
-                ":parent_id": projected_parent_id,
-                ":relationship": relationship,
-                ":status": status,
-            }
-        )
+    values: dict[str, Any] = {":parent": parent_id}
+    identity_condition = "user_id=:parent AND "
     set_parts: list[str] = []
     for index, (field, value) in enumerate(replacements.items()):
         name = f"#scrub_set_{index}"
@@ -1377,13 +1234,9 @@ def _parent_profile_scrub_operation(
     if expected_version is None:
         condition = "attribute_not_exists(#version)"
         next_version = 1
-    elif expected_relationship_projection is None:
+    else:
         condition = "#version=:expected_version"
         values[":expected_version"] = expected_version
-        next_version = expected_version + 1
-    else:
-        condition = "#version=:version"
-        values[":version"] = expected_version
         next_version = expected_version + 1
     values[":next_version"] = next_version
     expression = "SET #version=:next_version"

@@ -48,6 +48,7 @@ NEW_ROUTES = {
     ("POST", "/admin/users/{user_id}/password-reset"): "admin-capability",
     ("POST", "/admin/users/{user_id}/status"): "admin-capability",
     ("POST", "/admin/users/parent-links"): "admin-capability",
+    ("POST", "/admin/parent-links/revoke"): "admin-capability",
     ("POST", "/parents/me/children/requests"): "authorized",
     ("POST", "/students/me/parent-requests"): "authorized",
     ("POST", "/auth/invitations/claim"): "public",
@@ -74,6 +75,11 @@ ADMIN_COMMANDS = (
         "POST",
         "/admin/users/parent-links",
         {"parent_id": "parent-a", "student_id": "student-b"},
+    ),
+    (
+        "POST",
+        "/admin/parent-links/revoke",
+        {"parent_id": "parent-a", "student_id": "student-b", "reason": "support call"},
     ),
 )
 
@@ -1144,11 +1150,120 @@ def test_编号解析器已接线_不退化成拿用户号当编号猜(table: Ac
 
 
 # ---------------------------------------------------------------------------
-# Revoking the legacy binding must also close the link table
+# Revoking a link: one write over both sides, audited (#208)
 # ---------------------------------------------------------------------------
 
+REVOKE = "/admin/parent-links/revoke"
 
-def test_管理员吊销旧绑定时新表的关联一并关闭(
+
+def _revoke_body(**overrides: str) -> dict[str, str]:
+    return {
+        "parent_id": "parent-a",
+        "student_id": "student-b",
+        "reason": "guardian withdrew consent",
+        **overrides,
+    }
+
+
+def _link_sides(table: AccountAdminTable) -> list[dict[str, Any] | None]:
+    return [
+        table.rows.get((key["PK"], key["SK"]))
+        for key in (
+            parent_link_repo.parent_side_key("parent-a", "student-b"),
+            parent_link_repo.student_side_key("student-b", "parent-a"),
+        )
+    ]
+
+
+def _revocations(table: AccountAdminTable) -> list[dict[str, Any]]:
+    return [row for row in table.audit_events() if row["event_type"] == "parent_link_revoked"]
+
+
+def test_管理员撤销关联两侧一次关闭且留痕(table: AccountAdminTable) -> None:
+    _seed_profile(table, "parent-a", "parent")
+    _seed_profile(table, "student-b", "student")
+    parent_link_service.assign_link(
+        parent_id="parent-a", student_id="student-b", actor_id="admin-1"
+    )
+    client = TestClient(_app(_admin_user()))
+
+    response = client.post(REVOKE, json=_revoke_body())
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["parent_id"] == "parent-a"
+    assert body["student_id"] == "student-b"
+    assert body["status"] == parent_link_repo.STATUS_REJECTED
+    assert not current_relationship.judge("parent-a", "student-b").is_current
+    parent_side, student_side = _link_sides(table)
+    assert parent_side is not None and student_side is not None
+    assert parent_side["status"] == student_side["status"] == parent_link_repo.STATUS_REJECTED
+    assert parent_side["link_updated_at"] == student_side["link_updated_at"] == body[
+        "link_updated_at"
+    ]
+    assert parent_side["updated_by"] == "admin-1"
+    events = _revocations(table)
+    assert len(events) == 1
+    assert events[0]["actor_id"] == "admin-1"
+    assert events[0]["target_id"] == "student-b"
+    assert events[0]["action"] == "revoke_parent_link"
+    assert events[0]["reason_code"] == "guardian withdrew consent"
+    assert events[0]["evidence_reference"] == "parent-link:parent-a->student-b"
+
+
+def test_没有关联行的关系不能撤(table: AccountAdminTable) -> None:
+    _seed_profile(table, "parent-a", "parent")
+    _seed_profile(table, "student-b", "student")
+    client = TestClient(_app(_admin_user()))
+
+    response = client.post(REVOKE, json=_revoke_body())
+
+    assert_violation(response, "link_not_open")
+    assert _link_sides(table) == [None, None]
+    assert _revocations(table) == []
+
+
+def test_已经关掉的关联不能再撤一次(table: AccountAdminTable) -> None:
+    _seed_profile(table, "parent-a", "parent")
+    _seed_profile(table, "student-b", "student")
+    parent_link_service.assign_link(
+        parent_id="parent-a", student_id="student-b", actor_id="admin-1"
+    )
+    client = TestClient(_app(_admin_user()))
+    assert client.post(REVOKE, json=_revoke_body()).status_code == 200
+    closed = deepcopy(_link_sides(table))
+
+    again = client.post(REVOKE, json=_revoke_body())
+
+    assert_violation(again, "link_not_open")
+    assert _link_sides(table) == closed
+    assert len(_revocations(table)) == 1
+
+
+@pytest.mark.parametrize("unusable", ["student-b", "parent-a"])
+def test_账号不可用但关联仍是active的照样能撤(
+    table: AccountAdminTable, unusable: str
+) -> None:
+    _seed_profile(table, "parent-a", "parent")
+    _seed_profile(table, "student-b", "student")
+    parent_link_service.assign_link(
+        parent_id="parent-a", student_id="student-b", actor_id="admin-1"
+    )
+    table.rows[(f"USER#{unusable}", "PROFILE")]["account_status"] = "suspended"
+    assert not current_relationship.judge("parent-a", "student-b").is_current
+    client = TestClient(_app(_admin_user()))
+
+    response = client.post(REVOKE, json=_revoke_body())
+
+    assert response.status_code == 200, response.text
+    assert all(
+        side is not None and side["status"] == parent_link_repo.STATUS_REJECTED
+        for side in _link_sides(table)
+    )
+    assert len(_revocations(table)) == 1
+
+
+def test_一侧在读写之间变了两侧都不变也不留痕(
     table: AccountAdminTable, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _seed_profile(table, "parent-a", "parent")
@@ -1156,33 +1271,40 @@ def test_管理员吊销旧绑定时新表的关联一并关闭(
     parent_link_service.assign_link(
         parent_id="parent-a", student_id="student-b", actor_id="admin-1"
     )
-    monkeypatch.setattr(
-        user_repo,
-        "transition_parent_student_relationship_status",
-        lambda **_kwargs: user_repo.ParentBindingStatusResult(
-            user_repo.ParentBindingStatusDisposition.TRANSITIONED, status="revoked", version=2
-        ),
-    )
+    read_student_side = parent_link_repo.get_student_side_link
+
+    def racing_read(student_id: str, parent_id: str, **kwargs: Any) -> Any:
+        # The student side is read, then a racer rewrites it before the close.
+        side = read_student_side(student_id, parent_id, **kwargs)
+        key = parent_link_repo.student_side_key(student_id, parent_id)
+        table.rows[(key["PK"], key["SK"])]["link_updated_at"] = "2026-11-02T00:00:00+00:00"
+        return side
+
+    monkeypatch.setattr(parent_link_repo, "get_student_side_link", racing_read)
+    before = deepcopy(_link_sides(table))
     client = TestClient(_app(_admin_user()))
 
-    response = client.post(
-        "/admin/parent-bindings/status",
-        json={
-            "parent_id": "parent-a",
-            "student_id": "student-b",
-            "relationship": "child",
-            "expected_status": "active",
-            "expected_version": 1,
-            "status": "revoked",
-            "reason": "guardian withdrew consent",
-        },
-    )
+    response = client.post(REVOKE, json=_revoke_body())
 
-    assert response.status_code == 200, response.text
-    assert not current_relationship.judge("parent-a", "student-b").is_current
-    assert any(
-        row["event_type"] == "parent_link_revoked" for row in table.audit_events()
+    assert_violation(response, "link_revoke_conflict")
+    parent_side, student_side = _link_sides(table)
+    # The parent side is exactly as it was; the student side is the racer's.
+    assert parent_side == before[0]
+    assert parent_side is not None and parent_side["status"] == parent_link_repo.STATUS_ACTIVE
+    assert student_side == {**before[1], "link_updated_at": "2026-11-02T00:00:00+00:00"}
+    assert _revocations(table) == []
+
+
+def test_撤销请求必须写理由且不收多余字段(table: AccountAdminTable) -> None:
+    client = TestClient(_app(_admin_user()))
+
+    missing_reason = client.post(
+        REVOKE, json={"parent_id": "parent-a", "student_id": "student-b"}
     )
+    extra_field = client.post(REVOKE, json={**_revoke_body(), "status": "active"})
+
+    assert missing_reason.status_code == 422
+    assert extra_field.status_code == 422
 
 
 # ---------------------------------------------------------------------------
