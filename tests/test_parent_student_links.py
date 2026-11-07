@@ -25,6 +25,7 @@ from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import current_relationship, parent_link_service
 from rule_violation_helpers import assert_violation
+from fakes import student_evidence as fake_evidence
 
 
 NOW = "2026-09-19T10:00:00+00:00"
@@ -206,7 +207,7 @@ def _parent_app(parent_id: str) -> FastAPI:
 @pytest.fixture
 def quiet_learning_reads(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(parents.question_repo, "list_by_student", lambda *_a, **_k: {"Items": []})
-    monkeypatch.setattr(parents.practice_repo, "get_mistakes", lambda *_a, **_k: [])
+    fake_evidence.install(monkeypatch)
 
 
 def test_admin_assignment_writes_both_directions_active(table: FakeLinkTable) -> None:

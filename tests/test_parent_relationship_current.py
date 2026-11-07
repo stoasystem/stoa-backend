@@ -34,6 +34,7 @@ from stoa.services import (
 from stoa.services.current_relationship import Standing
 
 from test_parent_student_links import FakeLinkTable, _parent_app
+from fakes import student_evidence as fake_evidence
 
 
 NOW = "2026-09-19T10:00:00+00:00"
@@ -269,8 +270,7 @@ def quiet_report_sources(monkeypatch: pytest.MonkeyPatch) -> None:
         "list_by_student",
         lambda student_id, limit=500, last_key=None: {"Items": []},
     )
-    monkeypatch.setattr(report_service.practice_repo, "get_progress", lambda _s: [])
-    monkeypatch.setattr(report_service.practice_repo, "get_mistakes", lambda _s: [])
+    fake_evidence.install(monkeypatch)
 
 
 @pytest.mark.usefixtures("quiet_report_sources")
