@@ -8,8 +8,10 @@ against whatever that double permits.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from typing import Any
 
+from fakes import student_evidence as fake_evidence
 from stoa.services import knowledge_map_service as km
 from stoa.services import knowledge_mastery_service as mastery
 
@@ -312,35 +314,31 @@ FULL_CATALOG = {
 }
 
 
-def wire(monkeypatch, *, enrolled: set[str] = frozenset({"math"})) -> None:
-    """`knowledge_map` over a fixed catalog, with every read of its own stubbed."""
-    from stoa.services import curriculum_service, knowledge_mastery_service
+def wire(enrolled: set[str] = frozenset({"math"})) -> Callable[[], Any]:
+    """`knowledge_map` over a fixed catalog and a student who has done nothing yet.
 
-    monkeypatch.setattr(curriculum_service, "list_catalog", lambda **_: FULL_CATALOG)
-    monkeypatch.setattr(
-        knowledge_mastery_service,
-        "unit_states",
-        lambda *a, **k: {"u1": judged("u1", mastery.LearningState.READY)},
-    )
-    monkeypatch.setattr(knowledge_mastery_service, "skill_states", lambda *a, **k: {})
-    monkeypatch.setattr(curriculum_service, "get_progress_summary", lambda *a, **k: {"studyStreak": 3})
-    monkeypatch.setattr(km, "_review_due_by_unit", lambda *a, **k: {})
-    monkeypatch.setattr(km, "_lit_facts", lambda *a, **k: {})
-    monkeypatch.setattr(
-        km.practice_repo,
-        "get_progress",
-        lambda *a, **k: [{"subject_id": subject} for subject in sorted(enrolled)],
+    One lesson under `u1`, so the one star is drawn; progress rows in the
+    enrolled subjects only, as the content rows spell them.
+    """
+    catalog = {
+        **FULL_CATALOG,
+        "lessons": [{"id": "l1", "unitId": "u1", "subjectId": "math", "topicId": "t1"}],
+    }
+    return lambda: fake_evidence.evidence(
+        catalog=catalog,
+        progress=[{"lesson_id": f"started-{s}", "subject_id": s} for s in sorted(enrolled)],
+        ledger_open=True,
     )
 
 
-def test_every_subject_the_catalog_knows_is_accepted(monkeypatch) -> None:
+def test_every_subject_the_catalog_knows_is_accepted() -> None:
     """The whole accepted set, not one example of it.
 
     Content-bearing or not, enrolled or not: `physics` has no units on the
     platform and the student has not started `english`, and both are still
     real galaxies to look at.
     """
-    wire(monkeypatch)
+    sky_of = wire()
     known = set(FULL_CATALOG["rolloutSubjects"]) | {
         subject["id"] for subject in FULL_CATALOG["subjects"]
     }
@@ -348,13 +346,13 @@ def test_every_subject_the_catalog_knows_is_accepted(monkeypatch) -> None:
     accepted = {
         subject
         for subject in known
-        if km.knowledge_map("student-1", subject_id=subject)["subjectId"] == subject
+        if km.knowledge_map(sky_of(), subject_id=subject)["subjectId"] == subject
     }
 
     assert accepted == known
 
 
-def test_every_spelling_of_a_subject_opens_the_same_sky(monkeypatch) -> None:
+def test_every_spelling_of_a_subject_opens_the_same_sky() -> None:
     """`mathematics` is how the content rows spell `math`; both name a galaxy.
 
     Accepting an alias is not enough: the galaxies carry the catalog's own ids,
@@ -362,10 +360,10 @@ def test_every_spelling_of_a_subject_opens_the_same_sky(monkeypatch) -> None:
     whole with a summary of 0 of 0 (#124). Asking four ways has to give one
     answer, so this compares the whole map rather than the status code.
     """
-    wire(monkeypatch)
+    sky_of = wire()
     spellings = ["math", "mathematics", "Mathematik", "MATHEMATICS"]
 
-    maps = [km.knowledge_map("student-1", subject_id=spelling) for spelling in spellings]
+    maps = [km.knowledge_map(sky_of(), subject_id=spelling) for spelling in spellings]
 
     assert all(one == maps[0] for one in maps)
     assert maps[0]["subjectId"] == "math"
@@ -373,21 +371,21 @@ def test_every_spelling_of_a_subject_opens_the_same_sky(monkeypatch) -> None:
     assert maps[0]["summary"]["total"] > 0
 
 
-def test_no_subject_outside_the_catalog_is_echoed_back(monkeypatch) -> None:
+def test_no_subject_outside_the_catalog_is_echoed_back() -> None:
     """The negative control: a name nobody teaches is refused, every one of them.
 
     Without this an implementation that accepts everything passes the test
     above, which is exactly the state #124 found in production: `chemistry`
     came back 200 with `"subjectId": "chemistry"` over a sky of mathematics.
     """
-    wire(monkeypatch)
+    sky_of = wire()
     strangers = {"chemistry", "biology", "latin", "math-2", "", " ", "null", "undefined"}
     known = set(FULL_CATALOG["rolloutSubjects"])
 
     refused = set()
     for stranger in strangers:
         try:
-            km.knowledge_map("student-1", subject_id=stranger)
+            km.knowledge_map(sky_of(), subject_id=stranger)
         except km.UnknownSubject:
             refused.add(stranger)
 
@@ -397,25 +395,25 @@ def test_no_subject_outside_the_catalog_is_echoed_back(monkeypatch) -> None:
     assert not refused & known
 
 
-def test_asking_for_no_subject_at_all_is_untouched(monkeypatch) -> None:
+def test_asking_for_no_subject_at_all_is_untouched() -> None:
     """Byte for byte what it was: the first galaxy in the catalog, in focus.
 
     `focus = subject_id or (first subject)` is the behaviour the refusal must
     not have disturbed, so this pins the whole response against the same map
     built with that first subject named explicitly.
     """
-    wire(monkeypatch)
+    sky_of = wire()
     first = FULL_CATALOG["subjects"][0]["id"]
 
-    assert km.knowledge_map("student-1") == km.knowledge_map("student-1", subject_id=first)
-    assert km.knowledge_map("student-1")["subjectId"] == first
+    assert km.knowledge_map(sky_of()) == km.knowledge_map(sky_of(), subject_id=first)
+    assert km.knowledge_map(sky_of())["subjectId"] == first
 
 
-def test_a_subject_the_student_has_not_started_is_not_refused(monkeypatch) -> None:
+def test_a_subject_the_student_has_not_started_is_not_refused() -> None:
     """Browsing a galaxy before enrolling in it is what the map is for."""
-    wire(monkeypatch, enrolled={"math"})
+    sky_of = wire(enrolled={"math"})
 
-    sky = km.knowledge_map("student-1", subject_id="physics")
+    sky = km.knowledge_map(sky_of(), subject_id="physics")
 
     assert sky["subjectId"] == "physics"
     assert {galaxy["subjectId"] for galaxy in sky["galaxies"]} == {"math"}

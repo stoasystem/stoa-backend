@@ -7,10 +7,11 @@ and the questions a student is handed.
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from fakes import student_evidence as fake_evidence
 from fakes.dynamodb import FakeTable
 
 from stoa.db.repositories import review_repo
-from stoa.services import review_scheduler, review_service
+from stoa.services import review_scheduler, review_service, student_evidence
 
 NOW = datetime(2026, 3, 2, 9, 0, tzinfo=timezone.utc)
 
@@ -34,6 +35,11 @@ def use_table(monkeypatch) -> FakeTable:
     monkeypatch.setattr(review_repo, "get_table", lambda: table)
     monkeypatch.setattr(review_repo, "_write_generation", lambda *a, **k: 1)
     return table
+
+
+def _due(at: datetime) -> list[dict]:
+    """The cards student-1 has due at `at`, as a request then reads them."""
+    return list(student_evidence.for_student("student-1", now=at).due_cards)
 
 
 def test_a_stored_card_survives_the_round_trip(monkeypatch):
@@ -71,7 +77,7 @@ def test_a_wrong_answer_puts_the_question_back_in_the_queue(monkeypatch):
         student_id="student-1", challenge=CHALLENGE, correct=False, answered_at=NOW
     )
 
-    due = review_repo.list_due_cards("student-1", now=NOW + timedelta(hours=1))
+    due = _due(NOW + timedelta(hours=1))
     assert [card["challenge_id"] for card in due] == ["brueche-l1-c1"]
 
 
@@ -82,9 +88,9 @@ def test_a_right_answer_takes_the_question_out_of_the_queue(monkeypatch):
         student_id="student-1", challenge=CHALLENGE, correct=True, answered_at=NOW
     )
 
-    assert review_repo.list_due_cards("student-1", now=NOW + timedelta(hours=1)) == []
+    assert _due(NOW + timedelta(hours=1)) == []
     # ...but not forever.
-    later = review_repo.list_due_cards("student-1", now=NOW + timedelta(days=365))
+    later = _due(NOW + timedelta(days=365))
     assert [card["challenge_id"] for card in later] == ["brueche-l1-c1"]
 
 
@@ -185,7 +191,6 @@ def test_a_card_carries_where_the_question_came_from(monkeypatch):
 def test_answering_counts_towards_the_streak(monkeypatch):
     """Clearing a review has to keep a streak alive, or there is no reason to."""
     from stoa.db.repositories import practice_repo
-    from stoa.services import curriculum_service
 
     table = use_table(monkeypatch)
     monkeypatch.setattr(practice_repo, "get_table", lambda: table)
@@ -195,10 +200,11 @@ def test_answering_counts_towards_the_streak(monkeypatch):
         student_id="student-1", challenge=CHALLENGE, correct=True, answered_at=NOW
     )
 
-    days = practice_repo.list_study_days("student-1")
-    assert days == ["2026-03-02"]
+    evidence = student_evidence.for_student("student-1", now=NOW)
+    assert evidence.study_days == {"2026-03-02"}
     # No lesson was completed, which was the only thing that used to count.
-    assert curriculum_service.study_streak([], today=NOW.date(), study_days=days) == 1
+    assert evidence.completions == ()
+    assert evidence.study_streak == 1
 
 
 def test_a_day_is_recorded_once_however_many_questions(monkeypatch):
@@ -216,21 +222,19 @@ def test_a_day_is_recorded_once_however_many_questions(monkeypatch):
             answered_at=NOW,
         )
 
-    assert practice_repo.list_study_days("student-1") == ["2026-03-02"]
+    assert student_evidence.for_student("student-1").study_days == {"2026-03-02"}
 
 
 def test_a_streak_earned_before_this_existed_still_stands(monkeypatch):
     """Lesson completions were the only record; they must keep counting."""
     from datetime import date
 
-    from stoa.services import curriculum_service
-
     progress = [
         {"status": "completed", "completed_at": "2026-03-01T10:00:00+00:00"},
         {"status": "completed", "completed_at": "2026-02-28T10:00:00+00:00"},
     ]
 
-    streak = curriculum_service.study_streak(
+    streak = student_evidence.study_streak(
         progress, today=date(2026, 3, 2), study_days=["2026-03-02"]
     )
 
@@ -239,12 +243,15 @@ def test_a_streak_earned_before_this_existed_still_stands(monkeypatch):
 
 def test_the_streak_falls_back_to_lessons_when_study_days_cannot_be_read(monkeypatch):
     """A missing streak record must not take the progress response down."""
-    from stoa.db.repositories import practice_repo
-    from stoa.services import curriculum_service
+    evidence = fake_evidence.evidence(
+        progress=[
+            {"lesson_id": "l1", "status": "completed", "completed_at": "2026-03-01T10:00:00+00:00"},
+            {"lesson_id": "l2", "status": "completed", "completed_at": "2026-03-02T08:00:00+00:00"},
+        ],
+        study_days=["2026-02-28"],
+        failing=["activity"],
+        now=NOW,
+    )
 
-    def unavailable(*args, **kwargs):
-        raise RuntimeError("no credentials")
-
-    monkeypatch.setattr(practice_repo, "list_study_days", unavailable)
-
-    assert curriculum_service.recorded_study_days("student-1") == []
+    assert evidence.study_days == frozenset()
+    assert evidence.study_streak == 2

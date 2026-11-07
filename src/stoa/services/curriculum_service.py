@@ -1,21 +1,13 @@
 """Curriculum catalog projections built from existing practice content."""
 from __future__ import annotations
 
-import logging
-from collections import Counter
-from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from zoneinfo import ZoneInfo
 from typing import Any
 
 from stoa.db.repositories import curriculum_ops_repo, practice_repo
 from stoa.services import practice_projection_service
 from stoa.services import curriculum_translations
 from stoa.services.curriculum_translations import translated_title
-
-ZURICH = ZoneInfo("Europe/Zurich")
-
-logger = logging.getLogger(__name__)
 
 SUPPORTED_SUBJECTS = {"math", "physics", "german", "english"}
 VISIBLE_STATES = {"active"}
@@ -141,116 +133,6 @@ def skill_ids_by_unit(*, subject_id: str | None = None) -> dict[str, list[str]]:
     for skill_id, unit_id in skill_unit_ids(subject_id=subject_id).items():
         by_unit.setdefault(unit_id, []).append(skill_id)
     return by_unit
-
-
-def completed_days(progress: list[dict[str, Any]]) -> set[date]:
-    """Return the Zurich calendar days on which a lesson was completed."""
-    days: set[date] = set()
-    for item in progress:
-        if item.get("status") != "completed":
-            continue
-        raw = item.get("completed_at")
-        if not isinstance(raw, str) or not raw:
-            continue
-        try:
-            moment = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        except ValueError:
-            continue
-        if moment.tzinfo is None:
-            moment = moment.replace(tzinfo=UTC)
-        days.add(moment.astimezone(ZURICH).date())
-    return days
-
-
-def recorded_study_days(student_id: str) -> list[str]:
-    """Days this student did work, or nothing if that record cannot be read.
-
-    Losing it falls back to counting lesson completions, which is what the
-    streak was before, rather than failing the whole progress response.
-    """
-    try:
-        return practice_repo.list_study_days(student_id)
-    except Exception:  # noqa: BLE001
-        logger.warning("Study days unavailable; streak falls back to lessons")
-        return []
-
-
-def _studied_today(progress: list[dict[str, Any]], study_days: list[str]) -> bool:
-    today = datetime.now(ZURICH).date()
-    return today in completed_days(progress) or today.isoformat() in study_days
-
-
-def _parse_day(value: Any) -> date | None:
-    if not isinstance(value, str) or not value:
-        return None
-    try:
-        return date.fromisoformat(value)
-    except ValueError:
-        return None
-
-
-def study_streak(
-    progress: list[dict[str, Any]],
-    *,
-    today: date | None = None,
-    study_days: list[str] | None = None,
-) -> int:
-    """Count consecutive days of study ending today.
-
-    A streak survives the day after the last one, because a student who has not
-    practised yet today has not broken anything. It is only lost once a day
-    passes with nothing done.
-
-    Recorded study days carry any work that counts - clearing a review as much
-    as finishing a lesson - and are joined with the lesson completions that
-    were the only record before, so streaks earned then still stand.
-    """
-    days = completed_days(progress)
-    for raw in study_days or []:
-        parsed = _parse_day(raw)
-        if parsed:
-            days.add(parsed)
-    if not days:
-        return 0
-    current = today or datetime.now(ZURICH).date()
-    if current not in days:
-        current -= timedelta(days=1)
-        if current not in days:
-            return 0
-    streak = 0
-    while current in days:
-        streak += 1
-        current -= timedelta(days=1)
-    return streak
-
-
-def get_progress_summary(
-    student_id: str,
-    *,
-    subject_id: str | None = None,
-) -> dict[str, Any]:
-    progress = practice_repo.get_progress(student_id, subject_id)
-    completed = [item for item in progress if item.get("status") == "completed"]
-    study_days = recorded_study_days(student_id)
-    mistakes = practice_repo.get_mistakes(student_id)
-    if subject_id:
-        mistakes = [item for item in mistakes if _normal_subject_id(item.get("subject_id", "")) == _normal_subject_id(subject_id)]
-
-    weak_topic_counts = Counter(item.get("topic_id", "") for item in mistakes if item.get("topic_id"))
-    return {
-        "studentId": student_id,
-        "subjectId": subject_id,
-        "completedLessons": len(completed),
-        "completedLessonIds": [item.get("lesson_id", "") for item in completed if item.get("lesson_id")],
-        "mistakeCount": len(mistakes),
-        "studyStreak": study_streak(progress, study_days=study_days),
-        "practisedToday": _studied_today(progress, study_days),
-        "weakTopics": [
-            {"topicId": topic_id, "count": count}
-            for topic_id, count in weak_topic_counts.most_common(5)
-        ],
-        "source": "practice_progress",
-    }
 
 
 def can_preview(user: dict[str, Any]) -> bool:

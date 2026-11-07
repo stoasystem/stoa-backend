@@ -720,59 +720,23 @@ def list_student_attempts(student_id: str, *, correct: bool | None = None) -> li
     return items
 
 
-def all_challenges_answered_right(student_id: str) -> set[str]:
-    """Every exercise this student has ever answered right, across all pages.
+def list_attempts(student_id: str) -> list[dict]:
+    """Every answer this student has given, from every page, strongly consistent.
 
-    The star map judges a knowledge point lit partly on this (#57), so a
-    truncated read puts out stars the student has earned - and it gets worse
-    the more they practise, which is the opposite of what a learning product
-    should do. `list_student_attempts` reads one page; this follows them all,
-    the way `challenges_answered_right` does for one lesson (#83).
+    One read of the partition for everything the student evidence derives from
+    it (`student_evidence`): what was answered right, what went wrong, and when
+    the student last worked in each knowledge point. A truncated read would put
+    out stars the student earned, and do so more the more they practise; a
+    stale one would miss the answer saved a moment before the page was asked.
     """
     table = get_table()
-    items = _query_all_challenge_pages(
+    return _query_all_challenge_pages(
         table,
         KeyConditionExpression=(
             Key("PK").eq(f"ATTEMPTS#{student_id}") & Key("SK").begins_with("ATTEMPT#")
         ),
-        FilterExpression=Attr("correct").eq(True),
         ConsistentRead=True,
     )
-    found: set[str] = set()
-    for item in items:
-        if item.get("self_reported") is True:
-            continue
-        challenge_id = str(item.get("challenge_id") or item.get("exercise_id") or "")
-        if challenge_id:
-            found.add(challenge_id)
-    return found
-
-
-def last_activity_by_unit(student_id: str) -> dict[str, str]:
-    """When this student last did something in each knowledge point (#164).
-
-    An answer, right or wrong, or a finished lesson: the student's own
-    evidence. Every page of both, as the map's other reads are.
-    """
-    table = get_table()
-    latest: dict[str, str] = {}
-
-    def note(unit_id: object, moment: object) -> None:
-        if unit_id and moment and str(moment) > latest.get(str(unit_id), ""):
-            latest[str(unit_id)] = str(moment)
-
-    for item in _query_all_challenge_pages(
-        table,
-        KeyConditionExpression=(
-            Key("PK").eq(f"ATTEMPTS#{student_id}") & Key("SK").begins_with("ATTEMPT#")
-        ),
-    ):
-        if item.get("self_reported") is not True:
-            note(item.get("unit_id"), item.get("created_at"))
-    for item in get_progress(student_id, None):
-        if item.get("status") == "completed":
-            note(item.get("unit_id"), item.get("completed_at"))
-    return latest
 
 
 def challenges_answered_right(student_id: str, lesson_id: str) -> set[str]:
@@ -841,23 +805,7 @@ def record_attempt(
 
 
 def get_mistakes(user_id: str) -> list[dict]:
-    attempts = list_student_attempts(user_id, correct=False)
-    table = get_table()
-    legacy_response = _query(
-        table,
-        KeyConditionExpression=(
-            Key("PK").eq(f"MISTAKES#{user_id}") & Key("SK").begins_with("ATTEMPT#")
-        ),
-    )
-    legacy = _response_items(legacy_response.get("Items", []))
-    known_attempt_ids = {item.get("attempt_id") for item in attempts}
-    attempts.extend(
-        item
-        for item in legacy
-        if (item.get("attempt_id") or str(item.get("SK", "")).removeprefix("ATTEMPT#"))
-        not in known_attempt_ids
-    )
-    return attempts
+    return list_student_attempts(user_id, correct=False)
 
 
 def scan_practice_private_rows(
@@ -987,7 +935,6 @@ def _practice_owned(item: Mapping[str, Any], owner_id: str) -> bool:
     if pk in {
         f"PROGRESS#{owner_id}",
         f"ATTEMPTS#{owner_id}",
-        f"MISTAKES#{owner_id}",
         f"REVIEW#{owner_id}",
         f"ACTIVITY#{owner_id}",
         f"USAGE#{owner_id}",
@@ -1065,49 +1012,23 @@ def record_study_day(
     return item
 
 
-def list_study_days(student_id: str, *, table: Any | None = None) -> list[str]:
-    """Every Zurich day this student did some work, unordered."""
+def list_activity(student_id: str, *, table: Any | None = None) -> list[dict]:
+    """Every row of what this student did - study days and lightings - from every page.
+
+    One query for both: the lighting ledger and its lightings share a
+    sort-key prefix, and which of the two a row is decides whether a lighting
+    may be celebrated, so reading them apart would let the two answers come
+    from different moments.
+    """
     target = table or get_table()
-    response = _query(
-        target,
-        KeyConditionExpression=(
-            Key("PK").eq(study_day_partition(student_id))
-            & Key("SK").begins_with(STUDY_DAY_PREFIX)
-        ),
+    return _query_all_challenge_pages(
+        target, KeyConditionExpression=Key("PK").eq(activity_partition(student_id))
     )
-    return [
-        str(item.get("day"))
-        for item in _response_items(response.get("Items", []))
-        if item.get("day")
-    ]
 
 
 LIT_UNIT_PREFIX = "LIT#"
 LIT_LEDGER_SK = "LIT_LEDGER"
 LIT_SK_PREFIX = "LIT"
-
-
-def read_lit_ledger(student_id: str, *, table: Any | None = None) -> dict[str, Any]:
-    """This student's lighting ledger: whether it is open, and the rows in it.
-
-    One query for both, because the ledger marker and the lightings share a
-    sort-key prefix. Which of the two a row is decides nothing less than
-    whether a lighting may be celebrated, so reading them apart would let the
-    two answers come from different moments.
-    """
-    target = table or get_table()
-    response = _query(
-        target,
-        KeyConditionExpression=(
-            Key("PK").eq(activity_partition(student_id))
-            & Key("SK").begins_with(LIT_SK_PREFIX)
-        ),
-    )
-    items = _response_items(response.get("Items", []))
-    return {
-        "open": any(item.get("entity_type") == "lit_ledger" for item in items),
-        "units": [item for item in items if item.get("entity_type") == "lit_unit"],
-    }
 
 
 def _activity_write(
@@ -1564,25 +1485,6 @@ def put_star_quiz_cooldown(
     )
 
 
-def list_star_quiz_cooldowns(student_id: str, *, table: Any | None = None) -> list[dict]:
-    """Every cooldown row of this student still kept; the caller decides which still hold."""
-    target = table or get_table()
-    request: dict[str, Any] = {
-        "KeyConditionExpression": (
-            Key("PK").eq(quiz_partition(student_id))
-            & Key("SK").begins_with(STAR_QUIZ_COOLDOWN_PREFIX)
-        ),
-    }
-    items: list[dict] = []
-    while True:
-        response = _query(target, **request)
-        items.extend(_response_items(response.get("Items", [])))
-        cursor = response.get("LastEvaluatedKey")
-        if not cursor:
-            return items
-        request["ExclusiveStartKey"] = cursor
-
-
 STAR_QUIZ_PASS_PREFIX = "STARQUIZ_PASSED#"
 STAR_QUIZ_PASS_ENTITY = "practice_star_quiz_pass"
 
@@ -1633,24 +1535,21 @@ def get_star_quiz_pass(
     return _optional_item(response.get("Item"))
 
 
-def star_quiz_passed_unit_ids(student_id: str, *, table: Any | None = None) -> frozenset[str]:
-    """Every star this student lit by passing its quiz."""
+#: The sort-key prefix the cooldown and pass rows share, and the quiz papers do not.
+STAR_QUIZ_OUTCOME_PREFIX = "STARQUIZ_"
+
+
+def list_star_quiz_outcomes(student_id: str, *, table: Any | None = None) -> list[dict]:
+    """Every star quiz pass and cooldown row of this student, from every page.
+
+    The papers themselves (`STARQUIZ#`) are left out: what they hold is the
+    quiz in progress, not what it decided.
+    """
     target = table or get_table()
-    request: dict[str, Any] = {
-        "KeyConditionExpression": (
+    return _query_all_challenge_pages(
+        target,
+        KeyConditionExpression=(
             Key("PK").eq(quiz_partition(student_id))
-            & Key("SK").begins_with(STAR_QUIZ_PASS_PREFIX)
+            & Key("SK").begins_with(STAR_QUIZ_OUTCOME_PREFIX)
         ),
-    }
-    found: set[str] = set()
-    while True:
-        response = _query(target, **request)
-        found.update(
-            str(item.get("unit_id"))
-            for item in _response_items(response.get("Items", []))
-            if item.get("entity_type") == STAR_QUIZ_PASS_ENTITY and item.get("unit_id")
-        )
-        cursor = response.get("LastEvaluatedKey")
-        if not cursor:
-            return frozenset(found)
-        request["ExclusiveStartKey"] = cursor
+    )

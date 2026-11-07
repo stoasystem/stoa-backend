@@ -23,7 +23,8 @@ from boto3.dynamodb.conditions import Key
 
 from fakes.dynamodb import FakeTable
 
-from stoa.db.repositories import practice_repo
+from stoa.db.repositories import practice_repo, review_repo
+from stoa.services import curriculum_service, student_evidence
 from stoa.services import knowledge_map_service as km
 from stoa.services import knowledge_mastery_service as mastery
 
@@ -66,11 +67,8 @@ class Sky:
             "u2": judged("u2", mastery.LearningState.READY),
         }
         monkeypatch.setattr(practice_repo, "get_table", lambda: self.table)
-        monkeypatch.setattr(km.curriculum_service, "list_catalog", lambda **_k: CATALOG)
-        monkeypatch.setattr(
-            km.curriculum_service, "get_progress_summary", lambda *_a, **_k: {}
-        )
-        monkeypatch.setattr(km, "_review_due_by_unit", lambda *_a, **_k: {})
+        monkeypatch.setattr(review_repo, "get_table", lambda: self.table)
+        monkeypatch.setattr(curriculum_service, "list_catalog", lambda **_k: CATALOG)
         monkeypatch.setattr(
             km.knowledge_mastery_service,
             "unit_states",
@@ -81,7 +79,7 @@ class Sky:
         self.states[unit_id] = judged(unit_id, mastery.LearningState.LIT)
 
     def read(self, student_id: str) -> dict[str, Any]:
-        return km.knowledge_map(student_id)
+        return km.knowledge_map(student_evidence.for_student(student_id))
 
     def star(self, sky: dict[str, Any], unit_id: str) -> dict[str, Any]:
         return next(star for star in sky["stars"] if star["unitId"] == unit_id)

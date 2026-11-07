@@ -23,6 +23,7 @@ from stoa.security.authorization import (
 )
 from stoa.security.route_authorization import get_authorization_fact_repository
 from actor_helpers import install_actor_overrides
+from fakes import student_evidence as fake_evidence
 
 
 FORBIDDEN_PREVIEW_KEYS = {
@@ -295,8 +296,7 @@ def test_every_practice_preview_route_recursively_omits_answer_canaries(monkeypa
     monkeypatch.setattr(practice.practice_repo, "get_lessons", lambda **_kwargs: [lesson])
     monkeypatch.setattr(practice.practice_repo, "get_lesson", lambda _id: lesson)
     monkeypatch.setattr(practice.practice_repo, "get_challenges", lambda _id: [challenge])
-    monkeypatch.setattr(practice.practice_repo, "get_progress", lambda *_args: [])
-    monkeypatch.setattr(practice.practice_repo, "get_mistakes", lambda _id: [])
+    fake_evidence.install(monkeypatch, fake_evidence.evidence("student-1"))
 
     app = FastAPI()
     app.include_router(practice.router, prefix="/practice")

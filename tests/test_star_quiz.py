@@ -9,17 +9,20 @@ from fastapi.testclient import TestClient
 from rule_violation_helpers import assert_violation
 from fakes.dynamodb import FakeTable
 
-from stoa.db.repositories import practice_repo
+from stoa.db.repositories import practice_repo, review_repo
 from stoa.deps import get_actor
 from stoa.routers import practice
 from stoa.security.authorization import AuthorizationFacts
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.route_authorization import get_authorization_fact_repository
-from stoa.services import knowledge_map_service, knowledge_mastery_service, star_quiz_service
+from stoa.services import (
+    knowledge_map_service,
+    knowledge_mastery_service,
+    star_quiz_service,
+    student_evidence,
+)
 
 LIT = knowledge_mastery_service.LearningState.LIT
-# Taken before conftest swaps it for an empty default: these tests read the real one.
-_RETRY_AT = knowledge_map_service._star_quiz_retry_at
 
 # A star of three lessons, three exercises each, behind a prerequisite nobody has lit.
 LESSONS = {"l1": ["c-1", "c-2", "c-3"], "l2": ["c-4", "c-5", "c-6"], "l3": ["c-7", "c-8", "c-9"]}
@@ -94,7 +97,12 @@ class _World:
         self.completed = completed
 
     def state(self, unit_id: str = "u1"):
-        return knowledge_mastery_service.unit_states("student-1", catalog=_catalog())[unit_id]
+        return knowledge_mastery_service.unit_states(_evidence())[unit_id]
+
+
+def _evidence() -> student_evidence.StudentEvidence:
+    """What a fresh request reads of student-1, from the table the routes write to."""
+    return student_evidence.for_student("student-1")
 
 
 def _world(monkeypatch, *, completed=(), right=()) -> _World:
@@ -105,21 +113,40 @@ def _world(monkeypatch, *, completed=(), right=()) -> _World:
     reviews: list = []
     done = set(completed)
 
+    # What the student did before the quiz, as the table holds it.
+    table.seed(
+        *(
+            {
+                "PK": "PROGRESS#student-1",
+                "SK": f"LESSON#{lesson_id}",
+                "lesson_id": lesson_id,
+                "unit_id": "u1",
+                "subject_id": "math",
+                "status": "completed",
+                "completed_at": "2026-01-05T09:00:00+00:00",
+            }
+            for lesson_id in done
+        ),
+        *(
+            {
+                "PK": "ATTEMPTS#student-1",
+                "SK": f"ATTEMPT#right-{exercise_id}",
+                "challenge_id": exercise_id,
+                "correct": True,
+                "created_at": "2026-01-05T09:00:00+00:00",
+            }
+            for exercise_id in right
+        ),
+    )
+
     monkeypatch.setattr(practice_repo, "get_table", lambda: table)
+    monkeypatch.setattr(review_repo, "get_table", lambda: table)
     monkeypatch.setattr(practice_repo, "get_challenge", lambda item_id: exercises.get(item_id))
     monkeypatch.setattr(practice.curriculum_service, "list_catalog", lambda **_k: _catalog())
     monkeypatch.setattr(
-        knowledge_mastery_service,
-        "_indexed_lessons",
+        student_evidence,
+        "indexed_lessons",
         lambda: {"l0": [{"id": "c-0"}], **{k: [{"id": i} for i in v] for k, v in LESSONS.items()}},
-    )
-    monkeypatch.setattr(knowledge_mastery_service, "_completed_lesson_ids", lambda *a, **k: frozenset(done))
-    monkeypatch.setattr(knowledge_mastery_service, "_exercises_answered_right", lambda *a, **k: frozenset(right))
-    # The real read of the passes, from the table the routes write to.
-    monkeypatch.setattr(
-        knowledge_mastery_service,
-        "_star_quiz_passed",
-        lambda student_id: practice_repo.star_quiz_passed_unit_ids(student_id),
     )
     monkeypatch.setattr(
         practice.review_service,
@@ -263,8 +290,8 @@ def test_passing_with_one_mistake_lights_the_star_from_the_quiz(monkeypatch) -> 
     assert result["mistakes"] == 1
     assert result["retryAt"] is None
     assert world.state().state is LIT
-    ledger = practice_repo.read_lit_ledger("student-1")
-    assert [(row["unit_id"], row["lit_at_source"]) for row in ledger["units"]] == [("u1", "quiz")]
+    facts = _evidence().lit_facts
+    assert [(fact.unit_id, fact.source.value) for fact in facts.values()] == [("u1", "quiz")]
     # Every answer of the paper is scheduled, right or wrong, as ordinary practice would be.
     assert world.reviews == [(item, index != 2) for index, item in enumerate(asked)]
 
@@ -284,7 +311,7 @@ def test_passing_leaves_the_lessons_as_they_were(monkeypatch) -> None:
 def test_a_star_lit_by_its_quiz_is_celebrated_and_says_so_on_the_map(monkeypatch) -> None:
     _world(monkeypatch)
     _take(_client(), wrong_at=set())
-    facts = knowledge_map_service._stored_lit_facts(practice_repo.read_lit_ledger("student-1")["units"])
+    facts = _evidence().lit_facts
 
     assert facts["u1"].source is knowledge_mastery_service.LitSource.QUIZ
     assert knowledge_mastery_service.unacknowledged_lit(facts) == ("u1",)
@@ -296,7 +323,8 @@ def test_a_passed_star_stays_lit_when_a_lesson_is_added(monkeypatch) -> None:
     LESSONS["l4"] = ["c-10"]
     try:
         catalog = _catalog()
-        states = knowledge_mastery_service.unit_states("student-1", catalog=catalog)
+        assert any(lesson["id"] == "l4" for lesson in catalog["lessons"])
+        states = knowledge_mastery_service.unit_states(_evidence())
     finally:
         del LESSONS["l4"]
 
@@ -319,7 +347,7 @@ def test_a_second_mistake_loses_at_once_and_leaves_no_trace(monkeypatch) -> None
     assert before + timedelta(hours=24) <= retry <= datetime.now(timezone.utc) + timedelta(hours=24)
     assert world.reviews == []
     assert world.state().state is not LIT
-    assert practice_repo.read_lit_ledger("student-1")["units"] == []
+    assert _evidence().lit_facts == {}
 
 
 def test_a_lost_star_cannot_be_taken_again_for_24_hours(monkeypatch) -> None:
@@ -347,11 +375,11 @@ def test_the_map_says_when_a_lost_star_can_be_taken_again(monkeypatch) -> None:
     _world(monkeypatch)
     lost, _ = _take(_client(), wrong_at={0, 1})
 
-    retry = _RETRY_AT("student-1")
+    retry = _evidence().star_quiz_retry_at
     sky = knowledge_map_service.build_map(
         subject_id="math",
         catalog=_catalog(),
-        unit_states=knowledge_mastery_service.unit_states("student-1", catalog=_catalog()),
+        unit_states=knowledge_mastery_service.unit_states(_evidence()),
         review_due_by_unit={},
         streak_days=0,
         score=0,

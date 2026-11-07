@@ -113,7 +113,7 @@ def _world(monkeypatch, *, exercises, answered_right=(), behind_unlit=False):
     monkeypatch.setattr(
         knowledge_mastery_service,
         "unit_states",
-        lambda _student_id, **_kwargs: {
+        lambda _evidence: {
             "unit-1": _judged(
                 knowledge_mastery_service.LearningState.READY,
                 unlit=("unit-0",) if behind_unlit else (),

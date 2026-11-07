@@ -27,6 +27,7 @@ from stoa.routers import admin
 from stoa.services import curriculum_ops_service, curriculum_service, curriculum_translations
 from stoa.services.curriculum_errors import CurriculumErrorCode
 from stoa.services import knowledge_mastery_service as mastery
+from stoa.services import student_evidence
 
 
 def _seeded() -> tuple[list[dict], list[dict], list[dict]]:
@@ -344,7 +345,7 @@ def test_a_wrong_answer_after_a_right_one_does_not_put_a_skill_out(monkeypatch) 
     )
     monkeypatch.setattr(practice_repo, "get_table", lambda: table)
     monkeypatch.setattr(
-        mastery.practice_repo,
+        practice_repo,
         "get_challenges",
         lambda lesson_id: (
             [{"challenge_id": "brueche-l1-c1", "skills": ["brueche-kuerzen"], "status": "active"}]
@@ -357,7 +358,11 @@ def test_a_wrong_answer_after_a_right_one_does_not_put_a_skill_out(monkeypatch) 
         "lessons": [{"id": "brueche-l1", "unitId": "brueche-u1"}],
     }
 
-    states = mastery.skill_states("student-1", catalog=catalog)
+    states = mastery.skill_states(
+        student_evidence.StudentEvidence(
+            "student-1", content=student_evidence.Content(catalog=catalog)
+        )
+    )
 
     assert states["brueche-kuerzen"].lit is True
 

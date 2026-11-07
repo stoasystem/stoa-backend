@@ -27,8 +27,9 @@ The states are ordered: lit > in_progress > ready. A prerequisite never locks
 whose stated prerequisites are not all lit yet carries their ids beside its
 state (`unlit_prerequisite_ids`) so the map can say what to learn first.
 
-The core here is a pure function over facts the caller has already read. That
-is deliberate: this service is the shared one (#57) behind the read model
+The core here is a pure function over facts the caller has already read, and
+the readers (`unit_states`, `skill_states`) take them from one
+`student_evidence.StudentEvidence` per request. That is deliberate: this service is the shared one (#57) behind the read model
 (#59) and anything else that needs the same judgement, and a pure core can be
 tested without standing up a table double. Eight defects in this repository
 have come from doubles that were more permissive than DynamoDB; the ones that
@@ -40,10 +41,12 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence, Set as AbstractSet
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from stoa.db.repositories import practice_repo
-from stoa.services import curriculum_service, practice_projection_service
+from stoa.services import curriculum_service
+
+if TYPE_CHECKING:
+    from stoa.services.student_evidence import StudentEvidence
 
 
 class LearningState(StrEnum):
@@ -177,31 +180,15 @@ def core_lessons(lessons: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]
     return [lesson for lesson in lessons if not lesson.get("extension")] or list(lessons)
 
 
-def star_quiz_exercises(
-    unit_id: str,
-    *,
-    catalog: Mapping[str, Any],
-    indexed: Mapping[str, list[dict[str, Any]]] | None = None,
-) -> list[list[str]]:
+def star_quiz_exercises(unit_id: str, evidence: StudentEvidence) -> list[list[str]]:
     """The exercises a star quiz may ask: per core lesson, in course order (#165).
 
     The same lessons and exercises that light the unit the ordinary way, so
     passing the quiz stands in for exactly what it replaces.
     """
-    lessons = [
-        lesson
-        for lesson in catalog.get("lessons") or ()
-        if isinstance(lesson, Mapping) and str(lesson.get("unitId") or "") == unit_id
-    ]
-    indexed = _indexed_lessons() if indexed is None else indexed
-    return [
-        (
-            [str(entry["id"]) for entry in indexed[str(lesson.get("id") or "")]]
-            if str(lesson.get("id") or "") in indexed
-            else _active_exercise_ids(str(lesson.get("id") or ""))
-        )
-        for lesson in core_lessons(lessons)
-    ]
+    content = evidence.content
+    lessons = [lesson for lesson in content.lessons if str(lesson.get("unitId") or "") == unit_id]
+    return [content.exercise_ids(str(lesson.get("id") or "")) for lesson in core_lessons(lessons)]
 
 
 def _lesson_exercise_ids(
@@ -368,114 +355,28 @@ def skill_readiness(
     return out
 
 
-def _completed_lesson_ids(student_id: str, subject_id: str | None) -> frozenset[str]:
-    summary = curriculum_service.get_progress_summary(student_id, subject_id=subject_id)
-    return frozenset(str(item) for item in summary.get("completedLessonIds") or () if item)
-
-
-def _exercises_answered_right(student_id: str) -> frozenset[str]:
-    """Every exercise this student has answered right at least once.
-
-    Read once for the whole map rather than per unit: the same attempt list
-    answers every knowledge point, and a per-unit read would turn one page of
-    the star map into a request per knowledge point. Every page of it, too -
-    a truncated read puts out stars the student earned, and does so more the
-    more they practise.
-    """
-    return frozenset(practice_repo.all_challenges_answered_right(student_id))
-
-
-def _star_quiz_passed(student_id: str) -> frozenset[str]:
-    """Every star this student lit by passing its quiz (#165)."""
-    return practice_repo.star_quiz_passed_unit_ids(student_id)
-
-
-def _active_exercises(lesson_id: str) -> list[Mapping[str, Any]]:
-    return [
-        challenge
-        for challenge in practice_repo.get_challenges(lesson_id)
-        if practice_projection_service.content_state(challenge) != "archived"
-    ]
-
-
-def _exercise_id(challenge: Mapping[str, Any]) -> str:
-    return str(challenge.get("challenge_id") or challenge.get("id") or "")
-
-
-def _active_exercise_ids(lesson_id: str) -> list[str]:
-    return [_exercise_id(challenge) for challenge in _active_exercises(lesson_id)]
-
-
-def indexed_lessons() -> dict[str, list[dict[str, Any]]]:
-    """The exercise index of every lesson row, read once for a caller that judges
-    units and skills both."""
-    return _indexed_lessons()
-
-
-def _indexed_lessons() -> dict[str, list[dict[str, Any]]]:
-    """The exercise index of every lesson row that carries one, in one read.
-
-    The lesson rows carry it (`practice_repo.exercise_index`); a row written
-    before that is read through its challenges instead, one query each."""
-    out: dict[str, list[dict[str, Any]]] = {}
-    for row in practice_repo.get_lessons():
-        index = practice_repo.indexed_exercises(row)
-        if index is not None:
-            out[str(row.get("lesson_id") or "")] = index
-    return out
-
-
-def _exercise_entries(
-    lessons: Sequence[Mapping[str, Any]],
-    indexed: Mapping[str, list[dict[str, Any]]] | None = None,
-) -> dict[str, list[dict[str, Any]]]:
-    """Each lesson's live exercises - id, skills, knowledge point."""
-    indexed = _indexed_lessons() if indexed is None else indexed
-    entries: dict[str, list[dict[str, Any]]] = {}
-    for lesson in lessons:
-        lesson_id = str(lesson.get("id") or "")
-        entries[lesson_id] = indexed[lesson_id] if lesson_id in indexed else (
-            practice_repo.exercise_index(_active_exercises(lesson_id))
-        )
-    return entries
-
-
-def unit_states(
-    student_id: str,
-    *,
-    subject_id: str | None = None,
-    locale: str = "de",
-    catalog: Mapping[str, Any] | None = None,
-    indexed: Mapping[str, list[dict[str, Any]]] | None = None,
-) -> dict[str, UnitMastery]:
+def unit_states(evidence: StudentEvidence) -> dict[str, UnitMastery]:
     """Every unit's state for one student, keyed by unit id.
 
-    `catalog` lets a caller that has already built it - the read model does -
-    pass it in rather than have it built a second time.
+    Reads three facts of the evidence - the lessons finished, the exercises
+    answered right, the star quizzes passed - and nothing else.
     """
-    content = catalog if catalog is not None else curriculum_service.list_catalog(
-        subject_id=subject_id, locale=locale
-    )
-    units = [unit for unit in content.get("units") or () if isinstance(unit, Mapping)]
-    lessons = [lesson for lesson in content.get("lessons") or () if isinstance(lesson, Mapping)]
+    content = evidence.content
+    units = content.units
+    lessons = content.lessons
 
     lessons_by_unit: dict[str, list[Mapping[str, Any]]] = {}
     for lesson in lessons:
         lessons_by_unit.setdefault(str(lesson.get("unitId") or ""), []).append(lesson)
 
-    indexed = _indexed_lessons() if indexed is None else indexed
     exercises_by_lesson = {
-        str(lesson.get("id") or ""): (
-            [str(entry["id"]) for entry in indexed[str(lesson.get("id") or "")]]
-            if str(lesson.get("id") or "") in indexed
-            else _active_exercise_ids(str(lesson.get("id") or ""))
-        )
+        str(lesson.get("id") or ""): content.exercise_ids(str(lesson.get("id") or ""))
         for lesson in lessons
     }
 
-    completed = _completed_lesson_ids(student_id, subject_id)
-    answered_right = _exercises_answered_right(student_id)
-    passed_quiz = _star_quiz_passed(student_id)
+    completed = evidence.completed_lesson_ids
+    answered_right = evidence.answered_right
+    passed_quiz = evidence.star_quiz_passed
 
     judged = {
         str(unit.get("id") or ""): judge_unit(
@@ -536,33 +437,23 @@ def _unlit_prerequisite_ids(
     )
 
 
-def skill_states(
-    student_id: str,
-    *,
-    subject_id: str | None = None,
-    locale: str = "de",
-    catalog: Mapping[str, Any] | None = None,
-    indexed: Mapping[str, list[dict[str, Any]]] | None = None,
-) -> dict[str, SkillMastery]:
+def skill_states(evidence: StudentEvidence) -> dict[str, SkillMastery]:
     """Every skill point's state for one student, keyed by skill id.
 
     Taking the data only; the judgement is `judge_skills`.
     """
-    content = catalog if catalog is not None else curriculum_service.list_catalog(
-        subject_id=subject_id, locale=locale
-    )
-    units = [unit for unit in content.get("units") or () if isinstance(unit, Mapping)]
-    lessons = [lesson for lesson in content.get("lessons") or () if isinstance(lesson, Mapping)]
+    content = evidence.content
+    units = content.units
+    lessons = content.lessons
 
-    skills_by_unit = curriculum_service.skill_ids_by_unit(subject_id=subject_id)
+    skills_by_unit = curriculum_service.skill_ids_by_unit()
     skills_by_exercise: dict[str, dict[str, list[str]]] = {}
     lessons_by_skill: dict[str, list[Mapping[str, Any]]] = {}
     exercises_by_lesson: dict[str, list[Mapping[str, Any]]] = {}
-    entries_by_lesson = _exercise_entries(lessons, indexed)
     for lesson in lessons:
         unit_id = str(lesson.get("unitId") or "")
         lesson_id = str(lesson.get("id") or "")
-        for entry in entries_by_lesson.get(lesson_id, []):
+        for entry in content.exercises(lesson_id):
             skills = [str(skill) for skill in entry.get("skills") or () if skill]
             skills_by_exercise.setdefault(unit_id, {})[str(entry["id"])] = skills
             exercises_by_lesson.setdefault(lesson_id, []).append(
@@ -573,7 +464,7 @@ def skill_states(
                 if lesson not in mine:
                     mine.append(lesson)
 
-    answered_right = _exercises_answered_right(student_id)
+    answered_right = evidence.answered_right
     readiness = skill_readiness(
         lessons_by_skill=lessons_by_skill,
         exercises_by_lesson=exercises_by_lesson,

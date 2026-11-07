@@ -30,14 +30,13 @@ from datetime import datetime, timezone
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from stoa.db.repositories import practice_repo, review_repo
+from stoa.db.repositories import practice_repo
 from stoa.services import (
-    curriculum_service,
     curriculum_translations,
     knowledge_base_catalog,
     knowledge_mastery_service,
-    star_quiz_service,
 )
+from stoa.services.student_evidence import StudentEvidence
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +52,6 @@ class UnknownSubject(Exception):
 NEBULA_RADIUS = 0.055
 #: How far the band of galaxies is inset from the edges, so labels have room.
 BAND_INSET = 0.08
-#: Most due cards the per-unit counts will look at in one request.
-REVIEW_COUNT_CEILING = 500
 
 
 def _unit_interval(value: str, salt: str) -> float:
@@ -369,80 +366,30 @@ def _subject_of(star: Mapping[str, Any], subject_of_nebula: Mapping[str, str]) -
     return subject_of_nebula.get(str(star["nebulaId"]), "")
 
 
-def _review_due_by_unit(student_id: str, lessons: Sequence[Mapping[str, Any]]) -> dict[str, int]:
-    """Due review cards, counted per unit through the lesson they belong to."""
-    unit_of_lesson = {
-        str(lesson.get("id") or ""): str(lesson.get("unitId") or "") for lesson in lessons
-    }
+def _review_badges(evidence: StudentEvidence) -> dict[str, int]:
+    """Due review cards per unit, or none drawn if they cannot be read."""
     try:
-        # The repository's default limit is a page for a review session; this
-        # is a count across the whole sky, so it asks for the ceiling the map
-        # can draw. Above it the badge under-reports rather than misleads.
-        #
-        # The real ceiling is lower than this number: `list_cards` reads one
-        # DynamoDB page (1 MB) without following `LastEvaluatedKey`, so past a
-        # page the "soonest first" ordering is only over that first slice.
-        cards = review_repo.list_due_cards(
-            student_id, now=datetime.now(timezone.utc), limit=REVIEW_COUNT_CEILING
-        )
+        return evidence.review_due_by_unit
     except Exception:  # noqa: BLE001
         # Silently zeroing every review badge would look like "nothing due".
         logger.warning("Review counts unavailable for the star map", exc_info=True)
         return {}
-    counts: dict[str, int] = {}
-    for card in cards:
-        unit_id = unit_of_lesson.get(str(card.get("lesson_id") or ""), "")
-        if unit_id:
-            counts[unit_id] = counts.get(unit_id, 0) + 1
-    return counts
 
 
-def _last_evidence_by_unit(student_id: str) -> dict[str, str]:
+def _last_evidence_by_unit(evidence: StudentEvidence) -> dict[str, str]:
     """When the student last did something in each knowledge point, for the recommendation."""
     try:
-        return practice_repo.last_activity_by_unit(student_id)
+        return evidence.last_activity_by_unit
     except Exception:  # noqa: BLE001
         # A recommendation without it still picks a star in progress, by order.
         logger.warning("Last activity unavailable for the star map", exc_info=True)
         return {}
 
 
-def _star_quiz_retry_at(student_id: str) -> dict[str, str]:
-    """Per star, when a lost star quiz can be taken again (#165)."""
-    try:
-        rows = practice_repo.list_star_quiz_cooldowns(student_id)
-    except Exception:  # noqa: BLE001
-        # The quiz route refuses a star still cooling down whatever the map says.
-        logger.warning("Star quiz cooldowns unavailable for the star map", exc_info=True)
-        return {}
-    return star_quiz_service.retry_times(rows, datetime.now(timezone.utc))
-
-
-def _stored_lit_facts(rows: Sequence[Mapping[str, Any]]) -> dict[str, knowledge_mastery_service.LitFact]:
-    facts: dict[str, knowledge_mastery_service.LitFact] = {}
-    for row in rows:
-        unit_id = str(row.get("unit_id") or "")
-        if not unit_id:
-            continue
-        try:
-            source = knowledge_mastery_service.LitSource(str(row.get("lit_at_source") or ""))
-        except ValueError:
-            # A row whose source cannot be read is treated as history. Guessing
-            # `observed` here would celebrate a lighting nobody watched happen.
-            source = knowledge_mastery_service.LitSource.BACKFILLED
-        facts[unit_id] = knowledge_mastery_service.LitFact(
-            unit_id=unit_id,
-            lit_at=str(row.get("lit_at") or ""),
-            source=source,
-            acknowledged=bool(row.get("acknowledged_at")),
-        )
-    return facts
-
-
 def _lit_facts(
-    student_id: str, states: Mapping[str, knowledge_mastery_service.UnitMastery]
+    evidence: StudentEvidence, states: Mapping[str, knowledge_mastery_service.UnitMastery]
 ) -> dict[str, knowledge_mastery_service.LitFact]:
-    """Read this student's lightings, and write down the ones not seen before.
+    """This student's lightings, with the ones not seen before written down.
 
     The read model is where a lighting is first noticed, because it is the only
     place that holds the whole judgement. The writes are the new ones only, so a
@@ -454,11 +401,12 @@ def _lit_facts(
     `observed` on the next read and celebrate lightings from before the student
     ever had this feature.
     """
-    ledger = practice_repo.read_lit_ledger(student_id)
+    student_id = evidence.student_id
+    ledger_open = evidence.lit_ledger_open
     facts, fresh = knowledge_mastery_service.resolve_lit_facts(
         lit_unit_ids=sorted(knowledge_mastery_service.lit_unit_ids(states.values())),
-        stored=_stored_lit_facts(ledger["units"]),
-        ledger_open=bool(ledger["open"]),
+        stored=evidence.lit_facts,
+        ledger_open=ledger_open,
         now=datetime.now(timezone.utc).isoformat(),
     )
     try:
@@ -466,7 +414,7 @@ def _lit_facts(
             practice_repo.record_lit_unit(
                 student_id, fact.unit_id, lit_at=fact.lit_at, source=fact.source.value
             )
-        if not ledger["open"]:
+        if not ledger_open:
             practice_repo.open_lit_ledger(student_id)
     except Exception:  # noqa: BLE001
         # A sky that will not draw is worse than one whose celebration is late.
@@ -493,21 +441,18 @@ MAP_VIEWS = ("full", "skeleton")
 
 
 def knowledge_map(
-    student_id: str,
+    evidence: StudentEvidence,
     *,
     subject_id: str | None = None,
-    locale: str = "de",
     view: str = "full",
 ) -> dict[str, Any]:
     """The whole sky for one student, with `subject_id` as the galaxy in focus."""
-    catalog = curriculum_service.list_catalog(locale=locale)
+    catalog = evidence.content.catalog
     # Blank is absent, whether it arrived as no parameter at all or as one with
     # nothing in it; either way the first galaxy takes the focus as it always has.
     requested = str(subject_id or "").strip()
     _require_known_subject(requested, catalog)
-    states = knowledge_mastery_service.unit_states(student_id, locale=locale, catalog=catalog)
-    lessons = [item for item in catalog.get("lessons") or () if isinstance(item, Mapping)]
-    summary = curriculum_service.get_progress_summary(student_id)
+    states = knowledge_mastery_service.unit_states(evidence)
 
     subjects = [item for item in catalog.get("subjects") or () if isinstance(item, Mapping)]
     # Normalised, because the galaxies carry the catalog's own ids: asking for
@@ -520,30 +465,23 @@ def knowledge_map(
         else (str(subjects[0].get("id") or "") if subjects else "")
     )
 
-    # Progress rows copy their lesson's subject, `mathematics`; the galaxies
-    # carry the catalog's `math`. Compared raw, a student taking maths was told
-    # they do not take it - drawn dimmed, and since #164 given no recommendation.
-    enrolled = frozenset(
-        practice_repo.normal_subject_id(item.get("subject_id"))
-        for item in practice_repo.get_progress(student_id, None)
-        if item.get("subject_id")
-    )
     sky = build_map(
         subject_id=focus,
         catalog=catalog,
         unit_states=states,
-        review_due_by_unit=_review_due_by_unit(student_id, lessons),
-        streak_days=int(summary.get("studyStreak") or 0),
+        review_due_by_unit=_review_badges(evidence),
+        streak_days=evidence.study_streak,
         score=0,
-        enrolled_subject_ids=enrolled,
-        lit_facts=_lit_facts(student_id, states),
-        star_quiz_retry_at=_star_quiz_retry_at(student_id),
-        last_evidence_by_unit=_last_evidence_by_unit(student_id),
+        # Normalised there: a student taking maths was once told they do not
+        # take it - drawn dimmed, and since #164 given no recommendation.
+        enrolled_subject_ids=evidence.subjects_taken,
+        lit_facts=_lit_facts(evidence, states),
+        star_quiz_retry_at=evidence.star_quiz_retry_at,
+        last_evidence_by_unit=_last_evidence_by_unit(evidence),
         skill_states=(
-            None if view == "skeleton"
-            else knowledge_mastery_service.skill_states(student_id, locale=locale, catalog=catalog)
+            None if view == "skeleton" else knowledge_mastery_service.skill_states(evidence)
         ),
-        locale=locale,
+        locale=evidence.content.locale,
     )
     if view == "skeleton":
         sky["view"] = "skeleton"
@@ -557,11 +495,10 @@ MAX_NEIGHBOURHOOD = 15
 
 
 def neighbourhood(
-    student_id: str,
+    evidence: StudentEvidence,
     *,
     subject_id: str | None = None,
     around: str | None = None,
-    locale: str = "de",
 ) -> dict[str, Any]:
     """A few stars in full - small stars, practice sets, what is missing - around one.
 
@@ -570,7 +507,7 @@ def neighbourhood(
     (its prerequisites), the stars that need it, and its neighbours in its
     nebula, so the client loads what the student is about to look at rather than
     the whole sky."""
-    catalog = curriculum_service.list_catalog(locale=locale)
+    catalog = evidence.content.catalog
     requested = str(subject_id or "").strip()
     _require_known_subject(requested, catalog)
     subjects = [item for item in catalog.get("subjects") or () if isinstance(item, Mapping)]
@@ -579,10 +516,7 @@ def neighbourhood(
         if requested
         else (str(subjects[0].get("id") or "") if subjects else "")
     )
-    indexed = knowledge_mastery_service.indexed_lessons()
-    states = knowledge_mastery_service.unit_states(
-        student_id, locale=locale, catalog=catalog, indexed=indexed
-    )
+    states = knowledge_mastery_service.unit_states(evidence)
     units = {
         str(unit.get("id") or ""): unit
         for unit in catalog.get("units") or ()
@@ -591,7 +525,7 @@ def neighbourhood(
         and states.get(str(unit.get("id") or "")) is not None
         and states[str(unit.get("id") or "")].lesson_count > 0
     }
-    focus = _focus(student_id, around, units, states)
+    focus = _focus(evidence, around, units, states)
     if not focus:
         return {"subjectId": subject, "focus": None, "stars": []}
 
@@ -600,26 +534,20 @@ def neighbourhood(
         **catalog,
         "units": [units[unit_id] for unit_id in picked],
     }
-    lessons = [item for item in catalog.get("lessons") or () if isinstance(item, Mapping)]
+    lessons = evidence.content.lessons
     sky = build_map(
         subject_id=subject,
         catalog=narrowed,
         unit_states=states,
-        review_due_by_unit=_review_due_by_unit(student_id, lessons),
+        review_due_by_unit=_review_badges(evidence),
         streak_days=0,
         score=0,
         enrolled_subject_ids=frozenset(),
-        skill_states=knowledge_mastery_service.skill_states(
-            student_id, locale=locale, catalog=catalog, indexed=indexed
-        ),
-        locale=locale,
-        star_quiz_retry_at=_star_quiz_retry_at(student_id),
+        skill_states=knowledge_mastery_service.skill_states(evidence),
+        locale=evidence.content.locale,
+        star_quiz_retry_at=evidence.star_quiz_retry_at,
     )
-    done = frozenset(
-        str(item.get("lesson_id") or "")
-        for item in practice_repo.get_progress(student_id, None)
-        if item.get("status") == "completed"
-    )
+    done = evidence.completed_lesson_ids
     stars = []
     for star in sky["stars"]:
         unit_id = star["unitId"]
@@ -627,7 +555,7 @@ def neighbourhood(
             **star,
             "relation": picked[unit_id],
             "prerequisiteUnitIds": _prerequisites_of(unit_id, units),
-            "practiceSets": _practice_sets(unit_id, lessons, indexed, done),
+            "practiceSets": _practice_sets(unit_id, lessons, evidence, done),
         })
     order = list(picked)
     stars.sort(key=lambda star: order.index(star["unitId"]))
@@ -647,22 +575,16 @@ def _prerequisites_of(unit_id: str, units: Mapping[str, Mapping[str, Any]]) -> l
 
 
 def _focus(
-    student_id: str,
+    evidence: StudentEvidence,
     around: str | None,
     units: Mapping[str, Mapping[str, Any]],
     states: Mapping[str, knowledge_mastery_service.UnitMastery],
 ) -> str:
     if around and around in units:
         return around
-    finished = sorted(
-        (
-            item for item in practice_repo.get_progress(student_id, None)
-            if item.get("status") == "completed" and str(item.get("unit_id") or "") in units
-        ),
-        key=lambda item: str(item.get("completed_at") or ""),
-    )
+    finished = [item for item in evidence.completions if item.unit_id in units]
     if finished:
-        return str(finished[-1].get("unit_id") or "")
+        return finished[-1].unit_id
     ordered = sorted(units.values(), key=lambda unit: (str(unit.get("topicId") or ""), int(unit.get("order") or 0)))
     stars = [{"unitId": str(unit.get("id") or ""), "state": states[str(unit.get("id") or "")].state.value}
              for unit in ordered]
@@ -695,7 +617,7 @@ def _around(focus: str, units: Mapping[str, Mapping[str, Any]]) -> dict[str, str
 def _practice_sets(
     unit_id: str,
     lessons: Sequence[Mapping[str, Any]],
-    indexed: Mapping[str, list[dict[str, Any]]],
+    evidence: StudentEvidence,
     done: frozenset[str],
 ) -> list[dict[str, Any]]:
     """A star's practice, in the order it is worked through, each under its small star."""
@@ -706,7 +628,11 @@ def _practice_sets(
     sets = []
     for lesson in mine:
         lesson_id = str(lesson.get("id") or "")
-        skills = [skill for entry in indexed.get(lesson_id, []) for skill in entry.get("skills") or ()]
+        skills = [
+            skill
+            for entry in evidence.content.indexed.get(lesson_id, [])
+            for skill in entry.get("skills") or ()
+        ]
         item: dict[str, Any] = {
             "lessonId": lesson_id,
             "title": str(lesson.get("title") or ""),

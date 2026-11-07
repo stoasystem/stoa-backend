@@ -10,6 +10,7 @@ from __future__ import annotations
 from fakes.dynamodb import FakeTable
 
 from stoa.db.repositories import practice_repo
+from stoa.services import student_evidence
 
 
 def _attempt(student: str, index: int, *, lesson: str, challenge: str, correct: bool) -> dict:
@@ -98,7 +99,7 @@ def test_an_answer_the_backend_never_judged_does_not_count(monkeypatch) -> None:
     monkeypatch.setattr(practice_repo, "get_table", lambda: table)
 
     assert practice_repo.challenges_answered_right("student-1", "lesson-1") == {"c-0"}
-    assert practice_repo.all_challenges_answered_right("student-1") == {"c-0"}
+    assert student_evidence.for_student("student-1").answered_right == {"c-0"}
 
 
 def test_a_lesson_is_unfinished_while_one_exercise_is_only_self_reported(monkeypatch) -> None:

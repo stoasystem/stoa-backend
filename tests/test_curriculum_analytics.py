@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from stoa.routers import admin, practice
 from stoa.services import adaptive_learning_service, curriculum_analytics_service, rate_limit
 from actor_helpers import install_actor_overrides
+from fakes import student_evidence as fake_evidence
 
 
 def _app_for_user(user: dict, *, include_admin: bool = False) -> FastAPI:
@@ -100,11 +101,7 @@ def test_lesson_completion_records_aggregate_signal(monkeypatch):
     monkeypatch.setattr(practice.practice_repo, "challenges_answered_right", lambda student_id, lesson_id: {"c-1"})
     monkeypatch.setattr(practice.practice_repo, "mark_lesson_completed", lambda *args, **kwargs: None)
     monkeypatch.setattr(practice.practice_repo, "get_lessons", lambda topic_id=None: [dict(lesson)])
-    monkeypatch.setattr(
-        practice.practice_repo,
-        "get_progress",
-        lambda user_id: [{"lesson_id": "lesson-1", "status": "completed"}],
-    )
+    fake_evidence.install(monkeypatch, fake_evidence.evidence("student-1", completed=["lesson-1"]))
     client = TestClient(_app_for_user({"sub": "student-1", "role": "student"}))
 
     response = client.post("/practice/lessons/lesson-1/complete")
@@ -177,7 +174,7 @@ def test_lesson_completion_records_usage_ledger(monkeypatch):
     monkeypatch.setattr(practice.practice_repo, "challenges_answered_right", lambda student_id, lesson_id: {"c-1"})
     monkeypatch.setattr(practice.practice_repo, "mark_lesson_completed", lambda *args, **kwargs: None)
     monkeypatch.setattr(practice.practice_repo, "get_lessons", lambda topic_id=None: [dict(lesson)])
-    monkeypatch.setattr(practice.practice_repo, "get_progress", lambda user_id: [{"lesson_id": "lesson-1", "status": "completed"}])
+    fake_evidence.install(monkeypatch, fake_evidence.evidence("student-1", completed=["lesson-1"]))
     # Completion asks whether the lesson's unit is locked (#83); this one states
     # no prerequisite, so the question is settled without a star map.
     monkeypatch.setattr(practice.curriculum_service, "get_prerequisites", lambda subject_id: {})

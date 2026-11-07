@@ -124,7 +124,7 @@ def test_a_lesson_with_no_exercises_lights_on_completion_alone() -> None:
     assert result.state is mastery.LearningState.LIT
 
 
-def test_exercises_answered_right_in_another_unit_do_not_count_here() -> None:
+def test_right_answers_in_another_unit_do_not_count_here() -> None:
     result = judge(
         lessons=[lesson("l1")],
         exercises={"l1": ["e1"], "somewhere-else": ["e9"]},

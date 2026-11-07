@@ -29,7 +29,7 @@ import time
 from collections.abc import Mapping, Sequence
 from typing import Any, TypedDict
 
-from stoa.services import curriculum_service, knowledge_mastery_service
+from stoa.services import curriculum_service, knowledge_mastery_service, student_evidence
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +38,8 @@ logger = logging.getLogger(__name__)
 #: change to the curriculum reaches the list this much later at most.
 CONTENT_TTL_SECONDS = 300
 
-#: locale -> (read at, catalog, lesson index)
-_content: dict[str, tuple[float, Mapping[str, Any], Mapping[str, Any]]] = {}
+#: locale -> (read at, catalog and lesson index)
+_content: dict[str, tuple[float, student_evidence.Content]] = {}
 
 
 class Candidate(TypedDict):
@@ -100,16 +100,20 @@ def from_catalog(
     ]
 
 
-def _shared_content(locale: str) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+def _shared_content(locale: str) -> student_evidence.Content:
     """The catalog and lesson index in `locale`, read at most once per TTL."""
     now = time.monotonic()
     cached = _content.get(locale)
     if cached is not None and now - cached[0] < CONTENT_TTL_SECONDS:
-        return cached[1], cached[2]
-    catalog = curriculum_service.list_catalog(locale=locale)
-    indexed = knowledge_mastery_service.indexed_lessons()
-    _content[locale] = (now, catalog, indexed)
-    return catalog, indexed
+        return cached[1]
+    # Built now rather than on first use, so it is kept from the time it was read.
+    content = student_evidence.Content(
+        locale=locale,
+        catalog=curriculum_service.list_catalog(locale=locale),
+        indexed=student_evidence.indexed_lessons(),
+    )
+    _content[locale] = (now, content)
+    return content
 
 
 def for_student(student_id: str, *, locale: str) -> list[Candidate] | None:
@@ -117,15 +121,16 @@ def for_student(student_id: str, *, locale: str) -> list[Candidate] | None:
 
     None is not an empty map: an answer given without the list cannot have
     matched anything, so nothing it names may be taken for a gap in the
-    knowledge base either. Only the student's own progress is read on every
-    call; the content is shared (`CONTENT_TTL_SECONDS`).
+    knowledge base either. Of the student, only the three facts a star's state
+    is judged from are read on every call - the lessons finished, the exercises
+    answered right, the star quizzes passed; the content is shared
+    (`CONTENT_TTL_SECONDS`).
     """
     try:
-        catalog, indexed = _shared_content(locale)
-        states = knowledge_mastery_service.unit_states(
-            student_id, locale=locale, catalog=catalog, indexed=indexed
-        )
-        return from_catalog(catalog, states)
+        content = _shared_content(locale)
+        evidence = student_evidence.for_student(student_id, locale=locale, content=content)
+        states = knowledge_mastery_service.unit_states(evidence)
+        return from_catalog(content.catalog, states)
     except Exception:  # noqa: BLE001
         # An answer without the list is far better than no answer at all.
         logger.warning("star_map_candidates_unavailable", exc_info=True)

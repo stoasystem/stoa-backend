@@ -356,18 +356,19 @@ def test_the_latest_evidence_is_an_answer_or_a_finished_lesson_never_a_self_repo
     from fakes.dynamodb import FakeTable
 
     from stoa.db.repositories import practice_repo
+    from stoa.services import student_evidence
 
     table = FakeTable()
     table.seed(
         {"PK": "ATTEMPTS#s1", "SK": "ATTEMPT#1", "unit_id": "a", "created_at": "2026-11-01T09:00:00+00:00", "correct": False},
         {"PK": "ATTEMPTS#s1", "SK": "ATTEMPT#2", "unit_id": "a", "created_at": "2026-11-01T08:00:00+00:00", "correct": True},
         {"PK": "ATTEMPTS#s1", "SK": "ATTEMPT#3", "unit_id": "b", "created_at": "2026-11-01T12:00:00+00:00", "self_reported": True},
-        {"PK": "PROGRESS#s1", "SK": "LESSON#l1", "unit_id": "b", "status": "completed", "completed_at": "2026-11-01T10:00:00+00:00"},
-        {"PK": "PROGRESS#s1", "SK": "LESSON#l2", "unit_id": "c", "status": "in_progress", "completed_at": "2026-11-01T11:00:00+00:00"},
+        {"PK": "PROGRESS#s1", "SK": "LESSON#l1", "lesson_id": "l1", "unit_id": "b", "status": "completed", "completed_at": "2026-11-01T10:00:00+00:00"},
+        {"PK": "PROGRESS#s1", "SK": "LESSON#l2", "lesson_id": "l2", "unit_id": "c", "status": "in_progress", "completed_at": "2026-11-01T11:00:00+00:00"},
     )
     monkeypatch.setattr(practice_repo, "get_table", lambda: table)
 
-    assert practice_repo.last_activity_by_unit("s1") == {
+    assert student_evidence.for_student("s1").last_activity_by_unit == {
         "a": "2026-11-01T09:00:00+00:00",
         "b": "2026-11-01T10:00:00+00:00",
     }

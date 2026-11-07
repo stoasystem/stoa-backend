@@ -49,6 +49,7 @@ from stoa.services import (
     knowledge_mastery_service,
     locale_service,
     star_map_candidates,
+    student_evidence,
 )
 from stoa.services.ask_question import _admission, _answering, _store, dispatch
 from stoa.services.ask_question.models import SendMessageRequest, message_request_fingerprint
@@ -872,14 +873,14 @@ def star_map(monkeypatch: pytest.MonkeyPatch) -> _Reads:
         reads.catalog += 1
         return _catalog(**kwargs)
 
-    def states(student_id: str, **kwargs: Any) -> dict[str, knowledge_mastery_service.UnitMastery]:
+    def states(evidence: Any) -> dict[str, knowledge_mastery_service.UnitMastery]:
         reads.states += 1
-        return _states(student_id, **kwargs)
+        return _states(evidence.student_id)
 
     monkeypatch.setattr(star_map_candidates, "for_student", _READ_THE_MAP)
     monkeypatch.setattr(star_map_candidates, "_content", {})
     monkeypatch.setattr(curriculum_service, "list_catalog", catalog)
-    monkeypatch.setattr(knowledge_mastery_service, "indexed_lessons", lambda: {})
+    monkeypatch.setattr(student_evidence, "indexed_lessons", lambda: {})
     monkeypatch.setattr(knowledge_mastery_service, "unit_states", states)
     return reads
 

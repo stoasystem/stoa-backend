@@ -43,7 +43,12 @@ from fakes.ask_question import invokes as invokes  # noqa: F401 - the fixture
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from stoa.jobs import conversation_generation
-from stoa.services import curriculum_service, knowledge_mastery_service, star_map_candidates
+from stoa.services import (
+    curriculum_service,
+    knowledge_mastery_service,
+    star_map_candidates,
+    student_evidence,
+)
 from stoa.services.ask_question import _answering
 from fakes.ask_question import AtomicAllowanceTable
 
@@ -115,15 +120,15 @@ def sky(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """The student's map as its two reads return it; records whose map was read."""
     asked: list[str] = []
 
-    def states(student_id: str, **kwargs: Any) -> dict[str, Any]:
-        asked.append(student_id)
-        return _states(student_id, **kwargs)
+    def states(evidence: Any) -> dict[str, Any]:
+        asked.append(evidence.student_id)
+        return _states(evidence.student_id)
 
     monkeypatch.setattr(star_map_candidates, "for_student", _READ_THE_MAP)
     # The catalog is cached per language; a cache left by another test is not this map.
     monkeypatch.setattr(star_map_candidates, "_content", {})
     monkeypatch.setattr(curriculum_service, "list_catalog", _catalog)
-    monkeypatch.setattr(knowledge_mastery_service, "indexed_lessons", lambda: {})
+    monkeypatch.setattr(student_evidence, "indexed_lessons", lambda: {})
     monkeypatch.setattr(knowledge_mastery_service, "unit_states", states)
     return asked
 
