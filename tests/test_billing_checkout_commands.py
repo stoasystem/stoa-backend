@@ -391,7 +391,6 @@ def test_same_key_payload_change_and_different_open_key_are_conflicts(monkeypatc
         ("inactive_student", "checkout_beneficiary_invalid"),
         ("missing_forward", "checkout_beneficiary_invalid"),
         ("wrong_reverse_parent", "checkout_beneficiary_invalid"),
-        ("legacy_binding_only", "checkout_beneficiary_invalid"),
     ],
 )
 def test_invalid_inactive_or_unbound_beneficiary_never_reaches_provider(
@@ -408,32 +407,7 @@ def test_invalid_inactive_or_unbound_beneficiary_never_reaches_provider(
         "get_user",
         lambda user_id, **_kwargs: profiles.get(user_id),
     )
-    if mutation == "legacy_binding_only":
-        # The retired binding rows, and no link: they buy the student nothing.
-        monkeypatch.setattr(
-            subscription_service.user_repo,
-            "get_parent_student_binding",
-            lambda parent_id, student_id: {
-                "entity_type": "parent_student_binding",
-                "parent_id": parent_id,
-                "student_id": student_id,
-                "relationship": "child",
-                "status": "active",
-            },
-        )
-        monkeypatch.setattr(
-            subscription_service.user_repo,
-            "get_student_parent_binding",
-            lambda student_id, parent_id: {
-                "entity_type": "parent_student_binding",
-                "parent_id": parent_id,
-                "student_id": student_id,
-                "relationship": "child",
-                "status": "active",
-            },
-        )
-    else:
-        link_rows.link(PARENT_ID, STUDENT_ID)
+    link_rows.link(PARENT_ID, STUDENT_ID)
     if mutation == "missing_forward":
         link_rows.table.rows.pop((f"PARENT#{PARENT_ID}", f"CHILD#{STUDENT_ID}"))
     if mutation == "wrong_reverse_parent":

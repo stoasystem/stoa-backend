@@ -9,11 +9,12 @@ from audit_helpers import MemoryAuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.main import app as main_app
 from stoa.routers import admin, notifications
-from stoa.db.repositories import report_repo
+from stoa.db.repositories import parent_link_repo, report_repo
 from stoa.security.admin_authorization import admin_operation, classify_admin_route
 from stoa.security.authorization import ResourceRef, operator_capability_permits, project_support_lookup
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole, CapabilityGrant
 from stoa.services import notification_service
+from stoa.services.current_relationship import Standing, Verdict
 from rule_violation_helpers import assert_violation
 
 
@@ -78,7 +79,7 @@ def test_registered_admin_router_has_exact_executable_policy_and_controls(method
 
 def test_registered_admin_router_table_is_complete_across_main_registrations():
     keys = [(method, path) for method, path, _route in REGISTERED_ADMIN_ROUTES]
-    assert len(keys) == len(set(keys)) == 86
+    assert len(keys) == len(set(keys)) == 83
     assert ("GET", "/admin/notifications") in keys
     assert ("GET", "/admin/notifications/delivery-status") in keys
     # Card 002-D: every account command is an admin-capability route, not a role check.
@@ -102,9 +103,7 @@ def test_identity_user_usage_subscription_binding_and_curriculum_capabilities_ar
         ("GET", "/admin/users"): "student_support_lookup",
         ("GET", "/admin/usage/students/{student_id}/events"): "usage_event_inspector",
         ("POST", "/admin/subscriptions/billing/{parent_id}/refunds"): "billing_refund_executor",
-        ("POST", "/admin/parent-bindings/repair/preview"): "parent_binding_repairer",
-        ("POST", "/admin/parent-bindings/repair"): "parent_binding_repairer",
-        ("POST", "/admin/parent-bindings/status"): "parent_binding_repairer",
+        ("POST", "/admin/parent-links/revoke"): "parent_binding_repairer",
         ("POST", "/admin/curriculum/lessons/{public_lesson_id}/publish"): "curriculum_publisher",
     }
     assert {
@@ -113,33 +112,58 @@ def test_identity_user_usage_subscription_binding_and_curriculum_capabilities_ar
     } == expected
 
 
-def test_parent_binding_status_transition_requires_canonical_admin_and_redacts_conflict(
-    monkeypatch,
-):
-    calls = []
-    monkeypatch.setattr(
-        admin.user_repo,
-        "transition_parent_student_relationship_status",
-        lambda **values: calls.append(values)
-        or admin.user_repo.ParentBindingStatusResult(
-            admin.user_repo.ParentBindingStatusDisposition.CONFLICT
-        ),
-        raising=False,
+REVOKE = "/admin/parent-links/revoke"
+REVOKE_BODY = {
+    "parent_id": "parent-1",
+    "student_id": "student-1",
+    "reason": "guardian withdrew consent",
+}
+
+
+def _closed_verdict(parent_id: str, student_id: str) -> Verdict:
+    return Verdict(
+        Standing.KNOWN,
+        parent_id,
+        student_id,
+        relationship="child",
+        status="rejected",
+        source="parent_student_link",
+        version="2026-11-07T00:00:00+00:00",
     )
+
+
+def _stub_revoke(monkeypatch, effects: list, *, conflict: bool = False) -> None:
+    def revoke(parent_id, student_id, **values):
+        effects.append(("revoke", parent_id, student_id))
+        if conflict:
+            raise parent_link_repo.ParentLinkConflict("parent link close refused")
+        return _closed_verdict(parent_id, student_id)
+
+    monkeypatch.setattr(admin.current_relationship, "revoke", revoke)
+    monkeypatch.setattr(
+        admin, "_record_account_admin_event", lambda **values: effects.append(("audit", values))
+    )
+
+
+def _revoke_app(actor: Actor, sink: MemoryAuthorizationAuditSink | None = None) -> FastAPI:
     app = FastAPI()
     app.include_router(admin.router, prefix="/admin")
-    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
+    app.dependency_overrides[get_authorization_audit_sink] = (
+        (lambda: sink) if sink is not None else MemoryAuthorizationAuditSink
+    )
+    app.dependency_overrides[get_actor] = lambda: actor
+    return app
+
+
+def test_parent_link_revoke_requires_canonical_admin_and_redacts_conflict(monkeypatch):
+    effects: list = []
+    _stub_revoke(monkeypatch, effects, conflict=True)
     payload = {
         "parent_id": "parent-private-canary",
         "student_id": "student-private-canary",
-        "relationship": "child",
-        "expected_status": "active",
-        "expected_version": 4,
-        "status": "revoked",
         "reason": "approved lifecycle command private-canary",
     }
-
-    app.dependency_overrides[get_actor] = lambda: Actor(
+    parent = Actor(
         "parent-1",
         "https://identity.test",
         "parent-subject",
@@ -148,20 +172,18 @@ def test_parent_binding_status_transition_requires_canonical_admin_and_redacts_c
         "parent",
         (CapabilityGrant("parent_binding_repairer", "global", 1),),
     )
-    denied = TestClient(app).post("/admin/parent-bindings/status", json=payload)
-    assert denied.status_code == 403
-    assert calls == []
 
-    app.dependency_overrides[get_actor] = lambda: _actor("parent_binding_repairer")
-    conflict = TestClient(app).post("/admin/parent-bindings/status", json=payload)
-    assert conflict.status_code == 409
-    body = conflict.json()["detail"]
-    assert set(body) == {"code", "message", "correlationId"}
-    assert body["code"] == "relationship_status_conflict"
-    assert "parent-private-canary" not in conflict.text
-    assert "student-private-canary" not in conflict.text
+    denied = TestClient(_revoke_app(parent)).post(REVOKE, json=payload)
+    assert denied.status_code == 403
+    assert effects == []
+
+    conflict = TestClient(_revoke_app(_actor("parent_binding_repairer"))).post(
+        REVOKE, json=payload
+    )
+    body = assert_violation(conflict, "link_revoke_conflict")
+    assert set(body) >= {"code", "message", "correlationId"}
     assert "private-canary" not in conflict.text
-    assert len(calls) == 1
+    assert [kind for kind, *_ in effects] == ["revoke"]
 
 
 def test_support_lookup_projection_is_d15_only():
@@ -196,161 +218,60 @@ def test_report_target_scope_denies_before_lookup_or_mutation(monkeypatch):
     assert calls == []
 
 
-def test_parent_binding_body_target_exact_scope_allows_before_mutation(monkeypatch):
-    calls = []
-    user_repo = admin.user_repo
-    monkeypatch.setattr(
-        user_repo,
-        "apply_parent_binding_repair",
-        lambda **values: calls.append(("relationship", values))
-        or user_repo.ParentBindingRepairApplyResult(
-            user_repo.ParentBindingRepairApplyDisposition.REPAIRED,
-            user_repo.ParentBindingRepairPreview(
-                pair_id="a" * 64,
-                preview_id="b" * 64,
-                classification=user_repo.ParentBindingRepairClassification.CONSISTENT,
-                proposed_action=None,
-                relationship_version=1,
-                observations=(),
-            ),
-            mutated=True,
-        ),
-    )
-    app = FastAPI()
-    app.include_router(admin.router, prefix="/admin")
-    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
-    app.dependency_overrides[get_actor] = lambda: _actor("parent_binding_repairer", scope="student:student-1")
-    response = TestClient(app).post("/admin/parent-bindings/repair", json={
-        "parent_id": "parent-1", "student_id": "student-1", "relationship": "child",
-        "reason": "repair", "preview_id": "c" * 64,
-    })
-    assert response.status_code == 200
-    assert [kind for kind, _ in calls] == ["relationship"]
+def test_parent_link_body_target_exact_scope_allows_before_mutation(monkeypatch):
+    effects: list = []
+    _stub_revoke(monkeypatch, effects)
+    app = _revoke_app(_actor("parent_binding_repairer", scope="student:student-1"))
+
+    response = TestClient(app).post(REVOKE, json=REVOKE_BODY)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "rejected"
+    assert [kind for kind, *_ in effects] == ["revoke", "audit"]
 
 
-def test_parent_binding_conflict_is_structured_and_does_not_retry_mutation(monkeypatch):
-    calls = []
-    user_repo = admin.user_repo
-    monkeypatch.setattr(
-        user_repo,
-        "apply_parent_binding_repair",
-        lambda **values: calls.append(values)
-        or user_repo.ParentBindingRepairApplyResult(
-            user_repo.ParentBindingRepairApplyDisposition.CONFLICT,
-            user_repo.ParentBindingRepairPreview(
-                pair_id="a" * 64,
-                preview_id="b" * 64,
-                classification=user_repo.ParentBindingRepairClassification.CONFLICT,
-                proposed_action=None,
-                relationship_version=None,
-                observations=(),
-            ),
-        ),
-    )
-    app = FastAPI()
-    app.include_router(admin.router, prefix="/admin")
-    app.dependency_overrides[get_authorization_audit_sink] = MemoryAuthorizationAuditSink
-    app.dependency_overrides[get_actor] = lambda: _actor(
-        "parent_binding_repairer", scope="student:student-1"
-    )
+def test_parent_link_other_student_scope_denies_before_any_write(monkeypatch):
+    effects: list = []
+    _stub_revoke(monkeypatch, effects)
+    app = _revoke_app(_actor("parent_binding_repairer", scope="student:student-other"))
 
-    response = TestClient(app).post(
-        "/admin/parent-bindings/repair",
-        json={
-            "parent_id": "parent-1",
-            "student_id": "student-1",
-            "relationship": "child",
-            "reason": "repair",
-            "preview_id": "c" * 64,
-        },
-    )
-
-    assert_violation(response, "binding_repair_conflict")
-    assert len(calls) == 1
-
-
-@pytest.mark.parametrize("path", ["/admin/parent-bindings/repair/preview", "/admin/parent-bindings/repair"])
-def test_parent_binding_wrong_capability_denies_before_any_relationship_read_or_write(
-    monkeypatch, path
-):
-    calls = []
-    monkeypatch.setattr(
-        admin.user_repo,
-        "preview_parent_binding_repair",
-        lambda **values: calls.append(("preview", values)),
-    )
-    monkeypatch.setattr(
-        admin.user_repo,
-        "apply_parent_binding_repair",
-        lambda **values: calls.append(("apply", values)),
-    )
-    sink = MemoryAuthorizationAuditSink()
-    app = FastAPI()
-    app.include_router(admin.router, prefix="/admin")
-    app.dependency_overrides[get_authorization_audit_sink] = lambda: sink
-    app.dependency_overrides[get_actor] = lambda: _actor("student_support_lookup")
-    payload = {
-        "parent_id": "parent-1",
-        "student_id": "student-1",
-        "relationship": "child",
-        "reason": "repair",
-    }
-    if not path.endswith("preview"):
-        payload["preview_id"] = "c" * 64
-
-    response = TestClient(app).post(path, json=payload)
+    response = TestClient(app).post(REVOKE, json=REVOKE_BODY)
 
     assert response.status_code == 403
-    assert calls == []
-    assert len(sink.events) == 1
+    assert effects == []
 
 
-def test_parent_binding_preview_and_apply_persist_target_audit_before_effect(monkeypatch):
-    effects = []
-    preview = admin.user_repo.ParentBindingRepairPreview(
-        pair_id="a" * 64,
-        preview_id="b" * 64,
-        classification=admin.user_repo.ParentBindingRepairClassification.REPAIRABLE_MISSING_REVERSE,
-        proposed_action="create_missing_reverse",
-        relationship_version=1,
-        observations=(),
-    )
-    monkeypatch.setattr(
-        admin.user_repo,
-        "preview_parent_binding_repair",
-        lambda **values: effects.append(("preview", values)) or preview,
-    )
-    monkeypatch.setattr(
-        admin.user_repo,
-        "apply_parent_binding_repair",
-        lambda **values: effects.append(("apply", values))
-        or admin.user_repo.ParentBindingRepairApplyResult(
-            admin.user_repo.ParentBindingRepairApplyDisposition.REPAIRED,
-            preview,
-            mutated=True,
-        ),
-    )
+def test_parent_link_wrong_capability_denies_before_any_relationship_read_or_write(
+    monkeypatch,
+):
+    effects: list = []
+    _stub_revoke(monkeypatch, effects)
     sink = MemoryAuthorizationAuditSink()
-    app = FastAPI()
-    app.include_router(admin.router, prefix="/admin")
-    app.dependency_overrides[get_authorization_audit_sink] = lambda: sink
-    app.dependency_overrides[get_actor] = lambda: _actor(
-        "parent_binding_repairer", scope="student:student-1"
-    )
-    client = TestClient(app)
-    payload = {
-        "parent_id": "parent-1",
-        "student_id": "student-1",
-        "relationship": "child",
-        "reason": "repair",
-    }
+    app = _revoke_app(_actor("student_support_lookup"), sink)
 
-    assert client.post("/admin/parent-bindings/repair/preview", json=payload).status_code == 200
+    response = TestClient(app).post(REVOKE, json=REVOKE_BODY)
+
+    assert response.status_code == 403
+    assert effects == []
     assert len(sink.events) == 1
-    payload["preview_id"] = preview.preview_id
-    assert client.post("/admin/parent-bindings/repair", json=payload).status_code == 200
-    assert len(sink.events) == 2
-    assert [kind for kind, _ in effects] == ["preview", "apply"]
+
+
+def test_parent_link_revoke_persists_target_audit_before_effect(monkeypatch):
+    sink = MemoryAuthorizationAuditSink()
+    effects: list = []
+
+    def revoke(parent_id, student_id, **values):
+        effects.append(("revoke", len(sink.events)))
+        return _closed_verdict(parent_id, student_id)
+
+    monkeypatch.setattr(admin.current_relationship, "revoke", revoke)
+    monkeypatch.setattr(admin, "_record_account_admin_event", lambda **values: None)
+    app = _revoke_app(_actor("parent_binding_repairer", scope="student:student-1"), sink)
+
+    assert TestClient(app).post(REVOKE, json=REVOKE_BODY).status_code == 200
+    # The authorization decision was durable before the link was touched.
+    assert effects == [("revoke", 1)]
+    assert len(sink.events) == 1
 
 
 def test_bulk_body_targets_are_all_of_and_duplicate_safe(monkeypatch):

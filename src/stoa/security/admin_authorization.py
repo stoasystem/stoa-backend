@@ -537,10 +537,11 @@ def classify_admin_route(method: str, path: str) -> AdminRoutePolicy:
     if path.startswith("/admin/account-verification") or path.startswith("/admin/account-operations"):
         return _policy("student_support_lookup", AuthorizationPurpose.ACCOUNT_OPERATIONS,
                        AuthorizationAction.LOOKUP, "user_id", "parent_id")
-    if path.startswith("/admin/parent-bindings"):
-        capability = "parent_binding_repairer" if method != "GET" else "student_support_lookup"
-        return _policy(capability, AuthorizationPurpose.ACCOUNT_OPERATIONS,
-                       AuthorizationAction.UPDATE if method != "GET" else AuthorizationAction.LOOKUP,
+    if path.startswith("/admin/parent-links"):
+        # Ending a parent-student relationship is the binding repairer's: the
+        # one write left of the old binding repair (#208).
+        return _policy("parent_binding_repairer", AuthorizationPurpose.ACCOUNT_OPERATIONS,
+                       AuthorizationAction.UPDATE,
                        "parent_id", "student_id", resource_type=ResourceType.PARENT_BINDING)
     if path.startswith("/admin/billing/checkouts"):
         return _policy(

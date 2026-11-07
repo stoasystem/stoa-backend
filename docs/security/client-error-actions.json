@@ -760,58 +760,6 @@
         "retryable": true
       }
     },
-    "binding_repair_conflict": {
-      "action": null,
-      "domain": "account",
-      "http_status": 409,
-      "message_key": "error.binding_repair_conflict",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
-    "binding_repair_invalid": {
-      "action": "correct_input",
-      "domain": "account",
-      "http_status": 422,
-      "message_key": "error.binding_repair_invalid",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
-    "binding_repair_preview_changed": {
-      "action": null,
-      "domain": "account",
-      "http_status": 409,
-      "message_key": "error.binding_repair_preview_changed",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
-    "binding_repair_temporarily_unavailable": {
-      "action": "retry_later",
-      "domain": "account",
-      "http_status": 503,
-      "message_key": "error.binding_repair_temporarily_unavailable",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
     "candidate_not_in_preview": {
       "action": null,
       "domain": "adaptive_learning",
@@ -1689,6 +1637,19 @@
         "retryable": false
       }
     },
+    "link_not_open": {
+      "action": null,
+      "domain": "parent_link",
+      "http_status": 409,
+      "message_key": "error.link_not_open",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "link_not_pending": {
       "action": null,
       "domain": "parent_link",
@@ -1775,6 +1736,19 @@
       "domain": "parent_link",
       "http_status": 403,
       "message_key": "error.link_requires_administrator",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "link_revoke_conflict": {
+      "action": null,
+      "domain": "parent_link",
+      "http_status": 409,
+      "message_key": "error.link_revoke_conflict",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -2738,45 +2712,6 @@
       "domain": "report_recovery",
       "http_status": 409,
       "message_key": "error.recovery_target_cancelled",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
-    "relationship_status_conflict": {
-      "action": null,
-      "domain": "account",
-      "http_status": 409,
-      "message_key": "error.relationship_status_conflict",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
-    "relationship_status_invalid": {
-      "action": "correct_input",
-      "domain": "account",
-      "http_status": 422,
-      "message_key": "error.relationship_status_invalid",
-      "public_fields": [],
-      "retry": {
-        "idempotent_only": false,
-        "max_attempts": 0,
-        "retry_after_seconds": null,
-        "retryable": false
-      }
-    },
-    "relationship_status_temporarily_unavailable": {
-      "action": "retry_later",
-      "domain": "account",
-      "http_status": 503,
-      "message_key": "error.relationship_status_temporarily_unavailable",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,

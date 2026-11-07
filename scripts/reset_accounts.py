@@ -190,36 +190,18 @@ def write_identity(table, *, user_id: str, email: str, role: str, name: str) -> 
     })
 
 
-def bind_parent_and_child(table, parent_id: str, student_id: str, student_email: str) -> None:
-    now = now_iso()
-    table.put_item(Item={
-        "PK": f"USER#{parent_id}", "SK": f"CHILD#{student_id}",
-        "entity_type": "parent_child", "parent_id": parent_id,
-        "student_id": student_id, "child_id": student_id,
-        "student_email": student_email, "status": "active",
-        # Both directions describe the same thing: a child link.
-        "relationship": "child", "version": 1, "created_at": now, "updated_at": now,
-    })
-    table.put_item(Item={
-        "PK": f"USER#{student_id}", "SK": f"PARENT#{parent_id}",
-        "entity_type": "child_parent", "parent_id": parent_id,
-        "student_id": student_id, "status": "active",
-        "relationship": "child", "version": 1, "created_at": now, "updated_at": now,
-    })
-    # The bindings alone are not the link; readers look for these on the
-    # student's own profile.
-    table.update_item(
-        Key={"PK": f"USER#{student_id}", "SK": "PROFILE"},
-        UpdateExpression=(
-            "SET parent_id = :parent, relationship = :rel, "
-            "parent_binding_status = :status, parent_email = :email"
-        ),
-        ExpressionAttributeValues={
-            ":parent": parent_id,
-            ":rel": "child",
-            ":status": "active",
-            ":email": f"parent@{DOMAIN}",
-        },
+def link_parent_and_child(table, parent_id: str, student_id: str) -> None:
+    """Both sides of an active link, written together; the one shape a relationship has."""
+    from stoa.db.repositories import parent_link_repo
+
+    parent_link_repo.create_link(
+        parent_id=parent_id,
+        student_id=student_id,
+        status=parent_link_repo.STATUS_ACTIVE,
+        initiator_role=parent_link_repo.INITIATOR_ADMIN,
+        created_by="reset_accounts",
+        linked_at=now_iso(),
+        table=table,
     )
 
 
@@ -272,11 +254,10 @@ def main() -> int:
         created[account["email"]] = subject
         print(f"  {account['email']:34} {account['role']:9} {subject[:8]}")
 
-    bind_parent_and_child(
+    link_parent_and_child(
         table,
         created[f"parent@{DOMAIN}"],
         created[f"student@{DOMAIN}"],
-        f"student@{DOMAIN}",
     )
     print(f"  linked parent@{DOMAIN} to student@{DOMAIN}")
 

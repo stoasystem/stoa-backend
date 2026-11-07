@@ -112,14 +112,6 @@ def world(table, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         user_repo, "get_user", lambda user_id, **_k: deepcopy(profiles.get(user_id))
     )
-    for name in (
-        "get_parent_student_binding",
-        "get_student_parent_binding",
-    ):
-        monkeypatch.setattr(user_repo, name, lambda *_a, **_k: None)
-    for name in ("list_parent_student_bindings", "list_student_parent_bindings"):
-        monkeypatch.setattr(user_repo, name, lambda *_a, **_k: [])
-    monkeypatch.setattr(user_repo, "list_children_by_parent_scan", lambda *_a, **_k: [])
     # No practice at all: every star keeps the state the map was drawn with.
     for name in ("get_mistakes", "get_progress"):
         monkeypatch.setattr(practice_repo, name, lambda *_a, **_k: [])

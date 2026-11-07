@@ -60,6 +60,10 @@ class ParentLinkErrorCode(StrEnum):
     # request, and on an administrator's assignment.
     LINK_REQUEST_CONFLICT = "link_request_conflict"
     LINK_ALREADY_EXISTS = "link_already_exists"
+    # An administrator's revocation: nothing open to close, or either side
+    # moved between the read and the write (#208).
+    LINK_NOT_OPEN = "link_not_open"
+    LINK_REVOKE_CONFLICT = "link_revoke_conflict"
     LINK_REQUEST_RATE_LIMITED = "link_request_rate_limited"
     ACCOUNT_NUMBER_LOOKUP_UNAVAILABLE = "account_number_lookup_unavailable"
 
@@ -95,6 +99,8 @@ PARENT_LINK_ERROR_REGISTRY: dict[ParentLinkErrorCode, RuleContract] = {
     ),
     _Code.LINK_REQUEST_CONFLICT: RuleContract(409),
     _Code.LINK_ALREADY_EXISTS: RuleContract(409),
+    _Code.LINK_NOT_OPEN: RuleContract(409),
+    _Code.LINK_REVOKE_CONFLICT: RuleContract(409),
     _Code.LINK_REQUEST_RATE_LIMITED: RuleContract(
         429, "retry_later", retryable=True, retry_after_seconds=REQUEST_WINDOW_SECONDS
     ),

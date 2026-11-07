@@ -85,13 +85,6 @@ class AccountErrorCode(StrEnum):
     CURSOR_INVALID = "cursor_invalid"
     PAGE_TOKEN_INVALID = "page_token_invalid"
     REPORT_NOT_FOUND = "report_not_found"
-    RELATIONSHIP_STATUS_INVALID = "relationship_status_invalid"
-    RELATIONSHIP_STATUS_CONFLICT = "relationship_status_conflict"
-    RELATIONSHIP_STATUS_TEMPORARILY_UNAVAILABLE = "relationship_status_temporarily_unavailable"
-    BINDING_REPAIR_PREVIEW_CHANGED = "binding_repair_preview_changed"
-    BINDING_REPAIR_CONFLICT = "binding_repair_conflict"
-    BINDING_REPAIR_INVALID = "binding_repair_invalid"
-    BINDING_REPAIR_TEMPORARILY_UNAVAILABLE = "binding_repair_temporarily_unavailable"
 
     # Sign-up, recovery and an account holder's own password (`routers/auth.py`).
     PUBLIC_AUTHENTICATION_UNAVAILABLE = "public_authentication_unavailable"
@@ -195,13 +188,6 @@ ACCOUNT_ERROR_REGISTRY: dict[AccountErrorCode, RuleContract] = {
     _C.CURSOR_INVALID: _invalid(),
     _C.PAGE_TOKEN_INVALID: RuleContract(400, _A.CORRECT_INPUT),
     _C.REPORT_NOT_FOUND: _not_found(),
-    _C.RELATIONSHIP_STATUS_INVALID: _invalid(),
-    _C.RELATIONSHIP_STATUS_CONFLICT: _conflict(),
-    _C.RELATIONSHIP_STATUS_TEMPORARILY_UNAVAILABLE: _unavailable(),
-    _C.BINDING_REPAIR_PREVIEW_CHANGED: _conflict(),
-    _C.BINDING_REPAIR_CONFLICT: _conflict(),
-    _C.BINDING_REPAIR_INVALID: _invalid(),
-    _C.BINDING_REPAIR_TEMPORARILY_UNAVAILABLE: _unavailable(),
     _C.PUBLIC_AUTHENTICATION_UNAVAILABLE: _unavailable(),
     # Gone, not missing: an old client is told the command was withdrawn.
     _C.PUBLIC_REGISTRATION_CLOSED: RuleContract(410, _A.CONTACT_SUPPORT),

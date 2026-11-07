@@ -77,6 +77,18 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Une liaison existe déjà pour ces comptes.",
         "it": "Per questi account esiste già un collegamento.",
     },
+    "error.link_not_open": {
+        "de": "Zwischen diesen Konten besteht keine offene Verknüpfung.",
+        "en": "There is no open link between these accounts.",
+        "fr": "Il n'y a aucune liaison ouverte entre ces comptes.",
+        "it": "Tra questi account non c'è nessun collegamento aperto.",
+    },
+    "error.link_revoke_conflict": {
+        "de": "Die Verknüpfung hat sich inzwischen geändert. Bitte neu laden und noch einmal versuchen.",
+        "en": "The link changed in the meantime. Please reload and try again.",
+        "fr": "La liaison a changé entre-temps. Veuillez recharger et réessayer.",
+        "it": "Nel frattempo il collegamento è cambiato. Ricaricare e riprovare, per favore.",
+    },
     "error.link_request_rate_limited": {
         "de": "Heute wurden zu viele Anfragen gestellt. Morgen ist es wieder möglich.",
         "en": "Too many requests were made today. It is possible again tomorrow.",
