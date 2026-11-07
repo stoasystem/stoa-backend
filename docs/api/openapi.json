@@ -30569,6 +30569,7 @@
     },
     "/practice/curriculum/progress": {
       "get": {
+        "description": "One student's progress: lessons finished, streak, mistakes by topic.\n\n`subjectId` narrows the lessons and the mistakes; the streak is the\nstudent's, whatever the subject.",
         "operationId": "get_curriculum_progress_practice_curriculum_progress_get",
         "parameters": [
           {

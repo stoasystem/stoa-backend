@@ -8,13 +8,15 @@ id that does not exist, does not line up with the other two, or names content
 this student cannot see is refused, and the route turns that into a 422.
 
 The judgement itself is not re-implemented. The learning state comes from
-`knowledge_mastery_service`, the due-review count and the recommendation rule
-from `knowledge_map_service`: a second copy of either would drift from the star
-map, and the student would read one answer on the map and another in the chat.
+`knowledge_mastery_service`, the due-review count from the student evidence
+the star map reads too, and the recommendation rule from
+`knowledge_map_service`: a second copy of either would drift from the star map,
+and the student would read one answer on the map and another in the chat.
 """
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -25,7 +27,10 @@ from stoa.services import (
     knowledge_map_service,
     knowledge_mastery_service,
     practice_projection_service,
+    student_evidence,
 )
+
+logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = "practice-context.v1"
 
@@ -64,7 +69,8 @@ def resolve(
     if str(challenge.get("lesson_id") or "") != lesson_id:
         raise PracticeContextUnresolved("exercise does not belong to that lesson")
 
-    catalog = curriculum_service.list_catalog(locale=locale)
+    evidence = student_evidence.for_student(student_id, locale=locale)
+    catalog = evidence.content.catalog
     lessons = _rows(catalog, "lessons")
     lesson = _by_id(lessons, lesson_id)
     if lesson is None or str(lesson.get("unitId") or "") != unit_id:
@@ -74,9 +80,7 @@ def resolve(
         raise PracticeContextUnresolved("no such knowledge point")
     topic = _by_id(_rows(catalog, "topics"), str(unit.get("topicId") or ""))
 
-    states = knowledge_mastery_service.unit_states(
-        student_id, locale=locale, catalog=catalog
-    )
+    states = knowledge_mastery_service.unit_states(evidence)
     judged = states.get(unit_id)
     if judged is None:
         raise PracticeContextUnresolved("no such knowledge point")
@@ -95,9 +99,24 @@ def resolve(
         "topicTitle": _bounded((topic or {}).get("title"), _MAX_PROMPT_CHARS),
         "state": judged.state.value,
         "recommendation": _recommendation(unit_id, catalog, states),
-        "reviewDue": _review_due(student_id, lessons, unit_id),
-        "recentMistakes": _recent_mistakes(student_id, unit_id, lessons),
+        "reviewDue": _review_due(evidence, unit_id),
+        "recentMistakes": _recent_mistakes(evidence, unit_id, lessons),
     }
+
+
+def _review_due(evidence: student_evidence.StudentEvidence, unit_id: str) -> int:
+    """How many review cards are due on this knowledge point. A count, not a flag.
+
+    Zero and "nothing due" are the same answer; one due card and nine are not,
+    and an assistant that cannot tell them apart gives the same nudge either way.
+    The count is the star map's badge, by the same rule; like the badge, it is
+    left at zero rather than failing the answer when the cards cannot be read.
+    """
+    try:
+        return int(evidence.review_due_by_unit.get(unit_id, 0))
+    except Exception:  # noqa: BLE001
+        logger.warning("Review counts unavailable for the practice context", exc_info=True)
+        return 0
 
 
 def _all_named(*values: str) -> bool:
@@ -117,16 +136,6 @@ def _by_id(rows: Sequence[Mapping[str, Any]], row_id: str) -> Mapping[str, Any] 
 
 def _bounded(value: object, limit: int) -> str:
     return str(value or "").strip()[:limit]
-
-
-def _review_due(student_id: str, lessons: Sequence[Mapping[str, Any]], unit_id: str) -> int:
-    """How many review cards are due on this knowledge point. A count, not a flag.
-
-    Zero and "nothing due" are the same answer; one due card and nine are not,
-    and an assistant that cannot tell them apart gives the same nudge either way.
-    """
-    counts = knowledge_map_service._review_due_by_unit(student_id, lessons)
-    return int(counts.get(unit_id, 0))
 
 
 def _recommendation(
@@ -178,7 +187,9 @@ def _recommendation(
 
 
 def _recent_mistakes(
-    student_id: str, unit_id: str, lessons: Sequence[Mapping[str, Any]]
+    evidence: student_evidence.StudentEvidence,
+    unit_id: str,
+    lessons: Sequence[Mapping[str, Any]],
 ) -> list[dict[str, str]]:
     """This student's last wrong answers on this knowledge point, newest first.
 
@@ -192,9 +203,8 @@ def _recent_mistakes(
     }
     mine = [
         attempt
-        for attempt in practice_repo.get_mistakes(student_id)
-        if isinstance(attempt, Mapping)
-        and not attempt.get("self_reported")
+        for attempt in evidence.mistakes
+        if not attempt.get("self_reported")
         and (
             str(attempt.get("unit_id") or "") == unit_id
             or (
@@ -203,13 +213,6 @@ def _recent_mistakes(
             )
         )
     ]
-    mine.sort(
-        key=lambda attempt: (
-            str(attempt.get("created_at") or ""),
-            str(attempt.get("attempt_id") or ""),
-        ),
-        reverse=True,
-    )
     return [
         {
             "challengeId": str(attempt.get("challenge_id") or ""),

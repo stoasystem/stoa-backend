@@ -23,7 +23,7 @@ from actor_helpers import install_actor_overrides
 from test_curriculum_catalog_shows_seeded_topics import _seeded_table
 from stoa.db.repositories import account_deletion_repo, practice_repo
 from stoa.routers import practice
-from stoa.services import curriculum_service
+from stoa.services import curriculum_service, student_evidence
 
 SPELLINGS = ("math", "mathematics", "Mathematik")
 
@@ -80,9 +80,10 @@ def test_a_completed_lesson_counts_under_every_spelling(monkeypatch: pytest.Monk
         assert [row["lesson_id"] for row in practice_repo.get_progress("student-1", spelling)] == [
             lesson["lesson_id"]
         ], spelling
-        summary = curriculum_service.get_progress_summary("student-1", subject_id=spelling)
-        assert summary["completedLessonIds"] == [lesson["lesson_id"]], spelling
+        evidence = student_evidence.for_student("student-1")
+        assert evidence.completed_lesson_ids_in(spelling) == {lesson["lesson_id"]}, spelling
     assert practice_repo.get_progress("student-1", "physics") == []
+    assert student_evidence.for_student("student-1").completed_lesson_ids_in("physics") == set()
 
 
 def test_the_topic_roadmap_answers_under_every_spelling(monkeypatch: pytest.MonkeyPatch) -> None:

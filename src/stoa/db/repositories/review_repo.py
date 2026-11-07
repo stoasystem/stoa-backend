@@ -21,8 +21,7 @@ from stoa.db.repositories.practice_repo import (
     _atomic_table,
     _get_item,
     _put_item,
-    _query,
-    _response_items,
+    _query_all_challenge_pages,
     _write_generation,
     build_practice_write_transaction,
 )
@@ -124,35 +123,18 @@ def get_card(student_id: str, challenge_id: str, *, table: Any | None = None) ->
 
 
 def list_cards(student_id: str, *, table: Any | None = None) -> list[dict[str, Any]]:
+    """Every card of this student, from every page.
+
+    Which of them are due, and where each one counts, is the student
+    evidence's rule (`student_evidence.StudentEvidence.due_cards`).
+    """
     target = table or get_table()
-    response = _query(
+    return _query_all_challenge_pages(
         target,
         KeyConditionExpression=(
             Key("PK").eq(card_partition(student_id)) & Key("SK").begins_with(CARD_PREFIX)
         ),
     )
-    return _response_items(response.get("Items", []))
-
-
-def due_cards(
-    student_id: str, *, now: datetime, table: Any | None = None
-) -> list[dict[str, Any]]:
-    """Every card whose time has come, soonest first.
-
-    Unpaged, so a caller that selects a subset can select before it cuts a
-    page; cutting first would hide a knowledge point behind a fuller one.
-    """
-    moment = now.astimezone(timezone.utc).isoformat()
-    due = [card for card in list_cards(student_id, table=table) if str(card.get("due_at", "")) <= moment]
-    due.sort(key=lambda card: str(card.get("due_at", "")))
-    return due
-
-
-def list_due_cards(
-    student_id: str, *, now: datetime, limit: int = 20, table: Any | None = None
-) -> list[dict[str, Any]]:
-    """Cards whose time has come, soonest first."""
-    return due_cards(student_id, now=now, table=table)[:limit]
 
 
 def save_card(

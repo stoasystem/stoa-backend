@@ -11,6 +11,7 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
+from fakes import student_evidence as fake_evidence
 from rule_violation_helpers import assert_violation
 from stoa.db.repositories import practice_repo
 from stoa.routers import practice
@@ -105,11 +106,7 @@ def _mistake_client(
     monkeypatch: pytest.MonkeyPatch,
     attempts: list[dict[str, Any]],
 ) -> TestClient:
-    monkeypatch.setattr(
-        practice.practice_repo,
-        "get_mistakes",
-        lambda student_id: attempts if student_id == "student-1" else [],
-    )
+    fake_evidence.install(monkeypatch, fake_evidence.evidence("student-1", attempts=attempts))
     app = FastAPI()
     app.include_router(practice.router, prefix="/practice")
     install_actor_overrides(app, {"sub": "student-1", "role": "student"})
@@ -123,8 +120,9 @@ def test_legacy_missing_answer_is_explicit_unknown_and_never_uses_standard_answe
         monkeypatch,
         [
             {
-                "PK": "MISTAKES#student-1",
+                "PK": "ATTEMPTS#student-1",
                 "SK": "ATTEMPT#legacy-1",
+                "correct": False,
                 "challenge_id": "challenge-1",
                 "subject_id": "math",
                 "topic_id": "algebra",

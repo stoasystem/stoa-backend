@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from fakes import student_evidence as fake_evidence
 from stoa.routers import practice
 from stoa.security import route_authorization
 from actor_helpers import install_actor_overrides
@@ -259,24 +260,27 @@ def test_curriculum_progress_uses_existing_practice_records(monkeypatch):
             "account_status": "active",
         },
     )
-    monkeypatch.setattr(
-        practice.practice_repo,
-        "get_progress",
-        lambda student_id, subject_id=None: [
-            {
-                "lesson_id": "lesson-linear-1",
-                "subject_id": "math",
-                "topic_id": "linear-equations",
-                "status": "completed",
-            }
-        ],
-    )
-    monkeypatch.setattr(
-        practice.practice_repo,
-        "get_mistakes",
-        lambda student_id: [
-            {"challenge_id": "challenge-linear-1", "subject_id": "math", "topic_id": "linear-equations"}
-        ],
+    fake_evidence.install(
+        monkeypatch,
+        fake_evidence.evidence(
+            "student-1",
+            progress=[
+                {
+                    "lesson_id": "lesson-linear-1",
+                    "subject_id": "math",
+                    "topic_id": "linear-equations",
+                    "status": "completed",
+                }
+            ],
+            attempts=[
+                {
+                    "challenge_id": "challenge-linear-1",
+                    "subject_id": "math",
+                    "topic_id": "linear-equations",
+                    "correct": False,
+                }
+            ],
+        ),
     )
 
     response = _client({"sub": "student-1", "role": "student"}).get(

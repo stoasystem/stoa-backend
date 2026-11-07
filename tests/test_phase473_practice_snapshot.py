@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
+from fakes import student_evidence as fake_evidence
 from scripts import seed_practice
 from stoa.db.repositories import practice_repo
 from stoa.routers import practice
@@ -308,7 +309,10 @@ def _route_client(monkeypatch, receipt: dict[str, Any]) -> TestClient:
         if (student_id, attempt_id) == ("student-1", "attempt-1")
         else None,
     )
-    monkeypatch.setattr(practice.practice_repo, "get_mistakes", lambda _student_id: [receipt])
+    # The receipt as `/mistakes` reads it: one wrong answer in the student's evidence.
+    fake_evidence.install(
+        monkeypatch, fake_evidence.evidence("student-1", attempts=[{**receipt, "correct": False}])
+    )
     app = FastAPI()
     app.include_router(practice.router, prefix="/practice")
     install_actor_overrides(app, {"sub": "student-1", "role": "student"})
@@ -524,8 +528,7 @@ def test_every_student_preview_route_recursively_filters_real_row_canaries(monke
     monkeypatch.setattr(practice.practice_repo, "get_lesson", lambda _id: lesson)
     monkeypatch.setattr(practice.practice_repo, "get_challenges", lambda _id: [challenge])
     monkeypatch.setattr(practice.practice_repo, "get_all_challenges", lambda **_k: [challenge])
-    monkeypatch.setattr(practice.practice_repo, "get_progress", lambda *_a, **_k: [])
-    monkeypatch.setattr(practice.practice_repo, "get_mistakes", lambda _id: [])
+    fake_evidence.install(monkeypatch, fake_evidence.evidence("student-1"))
 
     app = FastAPI()
     app.include_router(practice.router, prefix="/practice")

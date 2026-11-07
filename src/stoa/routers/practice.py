@@ -58,6 +58,7 @@ from stoa.services import (
     lesson_quiz_service,
     locale_service,
     star_quiz_service,
+    student_evidence,
     usage_ledger_service,
 )
 from stoa.services import practice_projection_service, review_service
@@ -76,6 +77,13 @@ _practice_progress = authorized_student_dependency(
     query_alias="studentId",
 )
 _curriculum_answer_read = authorized_curriculum_answer_dependency()
+
+#: Wrong answers the dashboard shows, newest first.
+OVERVIEW_RECENT_MISTAKES = 5
+#: Wrong answers `/mistakes` sends, newest first.
+MISTAKES_PAGE = 20
+#: Weak topics the dashboard names, most mistakes first.
+OVERVIEW_WEAK_TOPICS = 3
 
 
 class PracticeHintRequest(BaseModel):
@@ -424,17 +432,11 @@ async def list_subjects(_actor: Actor = Depends(_catalog_access)):
 async def get_overview(actor: Actor = Depends(_practice_read)):
     """Return a full practice overview for the student dashboard."""
     locale = _actor_locale(actor)
-    user_id = actor.user_id
-    progress_records = practice_repo.get_progress(user_id)
-    completed_ids = {p["lesson_id"] for p in progress_records if p.get("status") == "completed"}
+    evidence = student_evidence.for_student(actor.user_id, locale=locale)
+    completed_ids = evidence.completed_lesson_ids
 
     # The streak counts Zurich days, so "today" must mean the same day here.
-    today = datetime.now(curriculum_service.ZURICH).date()
-    completed_today = sum(
-        1
-        for record in progress_records
-        if curriculum_service.completed_days([record]) == {today}
-    )
+    completed_today = evidence.lessons_completed_on(evidence.today)
     daily_target = 3
 
     # -- Subjects --
@@ -507,9 +509,8 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
                                 locale=locale)
 
     # -- Mistakes --
-    mistakes_raw = practice_repo.get_mistakes(user_id)[:5]
     recent_mistakes = []
-    for m in mistakes_raw:
+    for m in evidence.mistakes[:OVERVIEW_RECENT_MISTAKES]:
         recent_mistakes.append({
             "id": m.get("mistake_id", m.get("challenge_id", "")),
             "challengeId": m.get("challenge_id", ""),
@@ -521,11 +522,7 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
             "reviewedAt": None,
         })
 
-    # Weak topics: topics with ≥2 mistakes
-    topic_mistake_counts: dict[str, int] = {}
-    for m in practice_repo.get_mistakes(user_id):
-        tid = m.get("topic_id", "")
-        topic_mistake_counts[tid] = topic_mistake_counts.get(tid, 0) + 1
+    # Weak topics: the topics with the most mistakes.
     weak_topics = [
         {
             "id": tid,
@@ -537,9 +534,8 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
             ),
             "note": f"{count} incorrect answer{'s' if count != 1 else ''}",
         }
-        for tid, count in sorted(topic_mistake_counts.items(), key=lambda x: -x[1])
-        if count >= 1
-    ][:3]
+        for tid, count in evidence.mistakes_by_topic().most_common(OVERVIEW_WEAK_TOPICS)
+    ]
 
     return {
         "subjects": subjects_out,
@@ -550,9 +546,7 @@ async def get_overview(actor: Actor = Depends(_practice_read)):
             "target": daily_target,
             "label": f"{completed_today}/{daily_target} lessons today",
         },
-        "studyStreak": curriculum_service.study_streak(
-            progress_records, study_days=curriculum_service.recorded_study_days(actor.user_id)
-        ),
+        "studyStreak": evidence.study_streak,
         "progressPoints": len(completed_ids) * 10,
         "recentMistakes": recent_mistakes,
         "weakTopics": weak_topics,
@@ -636,8 +630,35 @@ async def get_curriculum_progress(
     subject_id: str | None = Query(default=None, alias="subjectId"),
     authorized_student: AuthorizedResource = Depends(_practice_progress),
 ):
+    """One student's progress: lessons finished, streak, mistakes by topic.
+
+    `subjectId` narrows the lessons and the mistakes; the streak is the
+    student's, whatever the subject.
+    """
     resolved_student_id = authorized_student.ref.student_id
-    return curriculum_service.get_progress_summary(resolved_student_id, subject_id=subject_id)
+    evidence = student_evidence.for_student(resolved_student_id)
+    completed = evidence.completed_lesson_ids_in(subject_id)
+    mistakes = [
+        item
+        for item in evidence.mistakes
+        if not subject_id or practice_repo.same_subject(item.get("subject_id", ""), subject_id)
+    ]
+    return {
+        "studentId": resolved_student_id,
+        "subjectId": subject_id,
+        "completedLessons": len(completed),
+        "completedLessonIds": [
+            item.lesson_id for item in evidence.completions if item.lesson_id in completed
+        ],
+        "mistakeCount": len(mistakes),
+        "studyStreak": evidence.study_streak,
+        "practisedToday": evidence.practised_today,
+        "weakTopics": [
+            {"topicId": topic_id, "count": count}
+            for topic_id, count in evidence.mistakes_by_topic(subject_id).most_common(5)
+        ],
+        "source": "practice_progress",
+    }
 
 
 @router.get("/knowledge-map")
@@ -679,9 +700,10 @@ async def get_knowledge_map(
     """
     try:
         return knowledge_map_service.knowledge_map(
-            authorized_student.ref.student_id,
+            student_evidence.for_student(
+                authorized_student.ref.student_id, locale=_actor_locale(actor)
+            ),
             subject_id=subject_id,
-            locale=_actor_locale(actor),
             view=view,
         )
     except knowledge_map_service.UnknownSubject:
@@ -705,10 +727,11 @@ async def get_knowledge_map_neighbourhood(
     """
     try:
         return knowledge_map_service.neighbourhood(
-            authorized_student.ref.student_id,
+            student_evidence.for_student(
+                authorized_student.ref.student_id, locale=_actor_locale(actor)
+            ),
             subject_id=subject_id,
             around=around,
-            locale=_actor_locale(actor),
         )
     except knowledge_map_service.UnknownSubject:
         raise PracticeViolation(_P.SUBJECT_UNKNOWN) from None
@@ -784,12 +807,6 @@ def _star_quiz_view(
     }
 
 
-def _star_quiz_retry_at(student_id: str, unit_id: str, now: datetime) -> str | None:
-    return star_quiz_service.retry_times(
-        practice_repo.list_star_quiz_cooldowns(student_id), now
-    ).get(unit_id)
-
-
 @router.post(
     "/knowledge-map/stars/{unit_id}/quiz",
     responses={
@@ -820,19 +837,16 @@ async def start_star_quiz(
     """
     locale = _actor_locale(actor)
     student_id = actor.user_id
-    catalog = curriculum_service.list_catalog(locale=locale)
-    indexed = knowledge_mastery_service.indexed_lessons()
-    states = knowledge_mastery_service.unit_states(
-        student_id, locale=locale, catalog=catalog, indexed=indexed
-    )
+    now = datetime.now(timezone.utc)
+    evidence = student_evidence.for_student(student_id, locale=locale, now=now)
+    states = knowledge_mastery_service.unit_states(evidence)
     judged = states.get(unit_id)
     if judged is None or judged.lesson_count == 0:
         raise PracticeViolation(_P.STAR_QUIZ_UNKNOWN_STAR)
     if judged.state is knowledge_mastery_service.LearningState.LIT:
         raise PracticeViolation(_P.STAR_QUIZ_ALREADY_LIT)
 
-    now = datetime.now(timezone.utc)
-    retry = _star_quiz_retry_at(student_id, unit_id, now)
+    retry = evidence.star_quiz_retry_at.get(unit_id)
     if retry:
         raise PracticeViolation(_P.STAR_QUIZ_COOLING_DOWN, retryAt=retry)
 
@@ -847,7 +861,7 @@ async def start_star_quiz(
             )
 
     paper = star_quiz_service.compose(
-        knowledge_mastery_service.star_quiz_exercises(unit_id, catalog=catalog, indexed=indexed)
+        knowledge_mastery_service.star_quiz_exercises(unit_id, evidence)
     )
     if not paper:
         raise PracticeViolation(_P.STAR_QUIZ_UNAVAILABLE)
@@ -1022,9 +1036,7 @@ async def get_roadmap(
     if not topic or not practice_repo.same_subject(topic.get("subject_id", ""), subject_id):
         raise PracticeViolation(_P.TOPIC_NOT_FOUND)
 
-    user_id = actor.user_id
-    progress = practice_repo.get_progress(user_id, subject_id)
-    completed_ids = {p["lesson_id"] for p in progress if p.get("status") == "completed"}
+    completed_ids = student_evidence.for_student(actor.user_id).completed_lesson_ids_in(subject_id)
 
     units_raw = sorted(
         practice_repo.get_units(topic_id), key=lambda x: x.get("order", 0)
@@ -1104,9 +1116,7 @@ async def get_path(
     if not topics:
         raise PracticeViolation(_P.NO_TOPICS_FOUND)
 
-    user_id = actor.user_id
-    progress = practice_repo.get_progress(user_id, subject_id)
-    completed_ids = {p["lesson_id"] for p in progress if p.get("status") == "completed"}
+    completed_ids = student_evidence.for_student(actor.user_id).completed_lesson_ids_in(subject_id)
 
     selected_topic_id = _string_field(topics[0], "topic_id")
     all_lessons = sorted(
@@ -1155,9 +1165,7 @@ async def get_lesson(
 ):
     lesson = dict(authorized_lesson.value)
 
-    user_id = actor.user_id
-    progress = practice_repo.get_progress(user_id)
-    completed_ids = {p["lesson_id"] for p in progress if p.get("status") == "completed"}
+    completed_ids = student_evidence.for_student(actor.user_id).completed_lesson_ids
     lesson_topic_id = _optional_string_field(lesson, "topic_id")
     all_lessons = sorted(
         practice_repo.get_lessons(topic_id=lesson_topic_id),
@@ -1470,8 +1478,10 @@ async def complete_lesson(
         practice_repo.get_lessons(topic_id=lesson_topic_id),
         key=lambda x: x.get("order", 0),
     )
-    completed_ids = {p["lesson_id"] for p in practice_repo.get_progress(actor.user_id)
-                     if p.get("status") == "completed"}
+    # Read after the completion is written; the lesson just finished counts
+    # even if the read does not see that write yet.
+    evidence = student_evidence.for_student(actor.user_id)
+    completed_ids = evidence.completed_lesson_ids | {lesson_id}
     next_lesson = next(
         (lesson for lesson in all_lessons if lesson["lesson_id"] not in completed_ids), None
     )
@@ -1480,10 +1490,7 @@ async def complete_lesson(
         "completed": True,
         "nextLessonId": next_lesson["lesson_id"] if next_lesson else None,
         "progressPoints": len(completed_ids) * 10,
-        "studyStreak": curriculum_service.study_streak(
-            practice_repo.get_progress(actor.user_id),
-            study_days=curriculum_service.recorded_study_days(actor.user_id),
-        ),
+        "studyStreak": evidence.study_streak,
         "dailyGoalCompleted": False,
     }
 
@@ -1609,10 +1616,8 @@ async def get_attempt_result(
 
 @router.get("/mistakes", response_model=PracticeMistakesResponse)
 async def get_mistakes(actor: Actor = Depends(_practice_read)):
-    user_id = actor.user_id
-    attempts = practice_repo.get_mistakes(user_id)
     mistakes = []
-    for attempt in attempts[-20:]:  # last 20 wrong answers
+    for attempt in student_evidence.for_student(actor.user_id).mistakes[:MISTAKES_PAGE]:
         try:
             mistakes.append(
                 practice_projection_service.build_mistake_projection(attempt)

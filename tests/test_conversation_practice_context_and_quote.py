@@ -23,6 +23,7 @@ from fakes.ask_question import _client as _question_client
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
 from fakes.bedrock import FakeBedrock
+from fakes import student_evidence as fake_evidence
 from fakes.dynamodb import as_stored
 from stoa.db.repositories import practice_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
@@ -31,8 +32,6 @@ from stoa.services import learning_session
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.services import (
     ask_answer,
-    curriculum_service,
-    knowledge_map_service,
     knowledge_mastery_service,
     practice_context_service,
 )
@@ -166,20 +165,6 @@ def _challenge(**overrides: Any) -> dict[str, Any]:
     return challenge
 
 
-def _mastery(unit_id: str, state) -> knowledge_mastery_service.UnitMastery:
-    return knowledge_mastery_service.UnitMastery(
-        unit_id=unit_id,
-        topic_id="topic-1",
-        subject_id="math",
-        state=state,
-        progress=0.5,
-        unmet_exercises=2,
-        lesson_count=2,
-        lessons_done=1,
-        next_lesson=None,
-    )
-
-
 def _stub_curriculum(
     monkeypatch,
     *,
@@ -190,27 +175,38 @@ def _stub_curriculum(
     state=None,
     catalog=None,
 ):
+    """The content held still, and a student whose evidence puts every unit in `state`.
+
+    Each lesson has two exercises. In progress is one of them answered right;
+    lit is every star's quiz passed; ready is nothing done.
+    """
     rows = challenges or {
         "challenge-1": _challenge() if challenge is None else challenge
     }
     monkeypatch.setattr(practice_repo, "get_challenge", lambda cid: rows.get(cid))
-    monkeypatch.setattr(
-        curriculum_service,
-        "list_catalog",
-        lambda **_kwargs: _catalog() if catalog is None else catalog,
-    )
-    monkeypatch.setattr(practice_repo, "get_mistakes", lambda _student: list(mistakes))
-    monkeypatch.setattr(
-        knowledge_map_service,
-        "_review_due_by_unit",
-        lambda _student, _lessons: dict(review_due or {}),
-    )
+    content = _catalog() if catalog is None else catalog
     judged = state or knowledge_mastery_service.LearningState.IN_PROGRESS
-    states = {
-        str(unit.get("id")): _mastery(str(unit.get("id")), judged)
-        for unit in (catalog or _catalog())["units"]
-    }
-    monkeypatch.setattr(knowledge_mastery_service, "unit_states", lambda *_a, **_k: states)
+    lessons = [str(lesson["id"]) for lesson in content["lessons"]]
+    fake_evidence.install(
+        monkeypatch,
+        fake_evidence.evidence(
+            STUDENT,
+            catalog=content,
+            exercises={lesson: [f"{lesson}-a", f"{lesson}-b"] for lesson in lessons},
+            answered_right=(
+                [f"{lesson}-a" for lesson in lessons]
+                if judged is knowledge_mastery_service.LearningState.IN_PROGRESS
+                else []
+            ),
+            star_quiz_passed=(
+                [str(unit["id"]) for unit in content["units"]]
+                if judged is knowledge_mastery_service.LearningState.LIT
+                else []
+            ),
+            attempts=mistakes,
+            review_due=review_due,
+        ),
+    )
 
 
 # ── Request contract ─────────────────────────────────────────────────────────

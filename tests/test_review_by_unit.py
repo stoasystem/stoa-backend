@@ -18,9 +18,9 @@ from stoa.db.repositories import review_repo
 from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
 from stoa.services import (
     curriculum_service,
-    knowledge_map_service,
     practice_projection_service,
     review_service,
+    student_evidence,
 )
 from stoa.services.review_scheduler import CardState
 
@@ -127,14 +127,13 @@ def test_the_due_count_is_the_whole_set_not_the_page(monkeypatch) -> None:
 def test_the_unit_count_agrees_with_the_star_map_badge(monkeypatch) -> None:
     """`dueCount` and the map's `reviewDue` must be one number, not two.
 
-    The cards here are attributed through `lesson_id`. The `challenge_id`
-    fallback is pinned on its own below, and joins this comparison once the
-    read model carries it too (#57).
+    Both come from one rule in the student evidence (#214): a card counts
+    toward its own lesson's unit and nowhere else.
     """
     use_table(monkeypatch)
     seed_a_and_b(monkeypatch)
 
-    badges = knowledge_map_service._review_due_by_unit(STUDENT, LESSONS)
+    badges = student_evidence.for_student(STUDENT, now=NOW).review_due_by_unit
 
     for unit_id in ("unit-a", "unit-b", "unit-c"):
         counted = review_service.due_review(
@@ -143,8 +142,8 @@ def test_the_unit_count_agrees_with_the_star_map_badge(monkeypatch) -> None:
         assert counted == badges.get(unit_id, 0), unit_id
 
 
-def test_a_card_is_placed_by_its_lesson_before_its_challenge(monkeypatch) -> None:
-    """`lesson_id` first, `challenge_id` only when the card carries no lesson."""
+def test_a_card_is_placed_by_its_lesson_not_its_question(monkeypatch) -> None:
+    """The card's own `lesson_id` decides, even once its question is gone."""
     use_table(monkeypatch)
     put_card("orphan", due_at=NOW - timedelta(hours=1), lesson_id="lesson-b")
     use_challenges(monkeypatch, {})
@@ -157,15 +156,21 @@ def test_a_card_is_placed_by_its_lesson_before_its_challenge(monkeypatch) -> Non
     assert result["dueCount"] == 1
 
 
-def test_a_card_without_a_lesson_is_placed_by_its_challenge(monkeypatch) -> None:
+def test_a_card_without_a_lesson_belongs_to_no_unit(monkeypatch) -> None:
+    """No lookup through its question: one rule, the same one the badge counts by (#214).
+
+    Every card in production carries its lesson; one that does not is counted
+    nowhere rather than placed by a second, per-card read.
+    """
     use_table(monkeypatch)
     put_card("loose", due_at=NOW - timedelta(hours=1))
     use_challenges(monkeypatch, {"loose": challenge("loose", "lesson-b")})
 
-    result = review_service.due_review(student_id=STUDENT, now=NOW, unit_id="unit-b")
-
-    assert [item["challengeId"] for item in result["items"]] == ["loose"]
-    assert result["dueCount"] == 1
+    for unit_id in ("unit-a", "unit-b", "unit-c"):
+        result = review_service.due_review(student_id=STUDENT, now=NOW, unit_id=unit_id)
+        assert result["items"] == []
+        assert result["dueCount"] == 0
+    assert student_evidence.for_student(STUDENT, now=NOW).review_due_by_unit == {}
 
 
 def test_a_card_outside_the_active_curriculum_belongs_to_no_unit(monkeypatch) -> None:

@@ -36,8 +36,8 @@ def _sky(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Record which student the service was asked about, and answer emptily."""
     asked: list[str] = []
 
-    def knowledge_map(student_id: str, **_kwargs: Any) -> dict[str, Any]:
-        asked.append(student_id)
+    def knowledge_map(evidence: Any, **_kwargs: Any) -> dict[str, Any]:
+        asked.append(evidence.student_id)
         return {
             "subjectId": "math",
             "galaxies": [],
@@ -110,7 +110,8 @@ def test_the_language_is_not_taken_from_the_query_string(monkeypatch: pytest.Mon
     monkeypatch.setattr(
         practice.knowledge_map_service,
         "knowledge_map",
-        lambda _student, **kwargs: seen.append(str(kwargs.get("locale"))) or {"stars": []},
+        # The language travels on the evidence, which also builds the catalog in it.
+        lambda evidence, **_kwargs: seen.append(evidence.content.locale) or {"stars": []},
     )
     monkeypatch.setattr(practice, "_actor_locale", lambda _actor: "fr")
 
@@ -133,7 +134,7 @@ def test_a_subject_the_curriculum_does_not_have_is_refused_at_the_route(
     """
     refused = {"chemistry", "biology", "latin"}
 
-    def knowledge_map(_student_id: str, *, subject_id: str | None = None, **_kw: Any):
+    def knowledge_map(_evidence: Any, *, subject_id: str | None = None, **_kw: Any):
         if subject_id in refused:
             raise practice.knowledge_map_service.UnknownSubject(subject_id)
         return {"subjectId": subject_id or "math", "stars": []}
@@ -199,7 +200,8 @@ def test_the_neighbourhood_answers_for_the_authorized_student_only(
     monkeypatch.setattr(
         practice.knowledge_map_service,
         "neighbourhood",
-        lambda student, **kwargs: asked.append((student, kwargs.get("around"))) or {"stars": []},
+        lambda evidence, **kwargs: asked.append((evidence.student_id, kwargs.get("around")))
+        or {"stars": []},
     )
 
     own = _client({"sub": "student-1", "role": "student"}).get(

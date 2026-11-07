@@ -16,7 +16,7 @@ from __future__ import annotations
 import pytest
 
 from fakes.dynamodb import FakeTable
-from stoa.services import curriculum_service, knowledge_mastery_service
+from stoa.services import curriculum_service, knowledge_mastery_service, student_evidence
 from test_curriculum_publish_projection import (
     LESSON_ID,
     _exercise,
@@ -52,7 +52,7 @@ def test_the_batch_skills_belong_to_the_unit_the_batch_maps_them_to() -> None:
 
 
 def _skill_points(table: FakeTable) -> dict[str, bool]:
-    states = knowledge_mastery_service.skill_states("student-1", subject_id="math")
+    states = knowledge_mastery_service.skill_states(student_evidence.for_student("student-1"))
     return {skill: state.lit for skill, state in states.items() if state.unit_id == "brueche-u2"}
 
 

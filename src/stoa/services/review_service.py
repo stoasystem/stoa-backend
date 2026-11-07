@@ -14,7 +14,7 @@ from typing import Any
 
 from stoa.db.repositories import practice_repo, review_repo
 from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
-from stoa.services import curriculum_service, exercise_localization, review_scheduler
+from stoa.services import exercise_localization, review_scheduler, student_evidence
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ def record_answer(
         # reason a student comes back to clear a review.
         practice_repo.record_study_day(
             student_id,
-            now.astimezone(curriculum_service.ZURICH).date().isoformat(),
+            now.astimezone(student_evidence.ZURICH).date().isoformat(),
             kind="practice",
             at=now.isoformat(),
         )
@@ -79,30 +79,6 @@ def record_answer(
         return None
 
 
-def _unit_of_lesson() -> dict[str, str]:
-    """Which unit each lesson of the active curriculum sits under."""
-    catalog = curriculum_service.list_catalog()
-    return {
-        _text(lesson.get("id")): _text(lesson.get("unitId"))
-        for lesson in catalog.get("lessons") or ()
-        if isinstance(lesson, Mapping)
-    }
-
-
-def _card_unit(card: Mapping[str, Any], unit_of_lesson: Mapping[str, str]) -> str:
-    """The unit a card belongs to, by the rule the star map's reviewDue uses.
-
-    The card's own `lesson_id` decides; only a card that carries none is placed
-    through its question. A card that lands outside the active curriculum
-    belongs to no unit and is counted nowhere.
-    """
-    lesson_id = _text(card.get("lesson_id"))
-    if not lesson_id:
-        challenge = practice_repo.get_challenge(_text(card.get("challenge_id")))
-        lesson_id = _text(challenge.get("lesson_id")) if challenge else ""
-    return unit_of_lesson.get(lesson_id, "") if lesson_id else ""
-
-
 def due_review(
     *,
     student_id: str,
@@ -114,20 +90,17 @@ def due_review(
     """The questions waiting for this student, with the content to attempt them,
     in `locale` where a question has a translation."""
     moment = now or datetime.now(timezone.utc)
-    selected: list[dict[str, Any]] | None = None
+    evidence = student_evidence.for_student(student_id, locale=locale, now=moment)
+    selected: tuple[dict[str, Any], ...] | None = None
     if unit_id:
         # Before the page is cut, not after: a knowledge point whose cards sort
         # behind a fuller one would otherwise hand back an empty session while
-        # its badge on the map says there is work.
-        unit_of_lesson = _unit_of_lesson()
-        selected = [
-            card
-            for card in review_repo.due_cards(student_id, now=moment)
-            if _card_unit(card, unit_of_lesson) == unit_id
-        ]
-        cards = selected[:limit]
+        # its badge on the map says there is work. Placed by the star map's own
+        # rule (`StudentEvidence.card_unit`), so the two numbers agree.
+        selected = evidence.due_cards_in(unit_id)
+        cards = list(selected[:limit])
     else:
-        cards = review_repo.list_due_cards(student_id, now=moment, limit=limit)
+        cards = list(evidence.due_cards[:limit])
 
     items: list[dict[str, Any]] = []
     for card in cards:

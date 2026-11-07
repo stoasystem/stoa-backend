@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from fakes import student_evidence as fake_evidence
 from stoa.services import knowledge_map_service, knowledge_mastery_service
 
 LIT = knowledge_mastery_service.LearningState.LIT
@@ -129,22 +130,20 @@ def _lesson(lesson_id: str, unit_id: str) -> dict[str, Any]:
 
 
 def _states(
-    monkeypatch, *, done: set[str], right: set[str], catalog: dict[str, Any] | None = None
+    *, done: set[str], right: set[str], catalog: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     if catalog is None:
         catalog = _catalog(_unit("u1", order=1), _unit("u2", order=2, before=["u1"]))
         catalog["lessons"] = [_lesson("l1", "u1"), _lesson("l2", "u2")]
-    monkeypatch.setattr(knowledge_mastery_service, "_active_exercise_ids", lambda lesson_id: [f"{lesson_id}-c1"])
-    # Lesson rows written before the exercise index: read through their challenges.
-    monkeypatch.setattr(knowledge_mastery_service, "_indexed_lessons", lambda: {})
-    monkeypatch.setattr(knowledge_mastery_service, "_completed_lesson_ids", lambda *a, **k: frozenset(done))
-    monkeypatch.setattr(knowledge_mastery_service, "_exercises_answered_right", lambda *a, **k: frozenset(right))
-    return knowledge_mastery_service.unit_states("student-1", catalog=catalog)
+    exercises = {lesson["id"]: [f"{lesson['id']}-c1"] for lesson in catalog["lessons"]}
+    return knowledge_mastery_service.unit_states(
+        fake_evidence.evidence(catalog=catalog, exercises=exercises, completed=done, answered_right=right)
+    )
 
 
-def test_a_knowledge_point_after_an_unlit_one_is_ready_and_names_it(monkeypatch) -> None:
+def test_a_knowledge_point_after_an_unlit_one_is_ready_and_names_it() -> None:
     # Every point can be learnt; what should come first is advice (ADR 0004).
-    states = _states(monkeypatch, done=set(), right=set())
+    states = _states(done=set(), right=set())
 
     assert states["u1"].state is READY
     assert states["u2"].state is READY
@@ -152,23 +151,23 @@ def test_a_knowledge_point_after_an_unlit_one_is_ready_and_names_it(monkeypatch)
     assert states["u2"].unlit_prerequisite_ids == ("u1",)
 
 
-def test_finishing_the_one_before_it_clears_the_flag(monkeypatch) -> None:
-    states = _states(monkeypatch, done={"l1"}, right={"l1-c1"})
+def test_finishing_the_one_before_it_clears_the_flag() -> None:
+    states = _states(done={"l1"}, right={"l1-c1"})
 
     assert states["u1"].state is LIT
     assert states["u2"].state is READY
     assert states["u2"].unlit_prerequisite_ids == ()
 
 
-def test_a_lit_point_names_no_prerequisite_even_if_one_is_dark(monkeypatch) -> None:
-    states = _states(monkeypatch, done={"l2"}, right={"l2-c1"})
+def test_a_lit_point_names_no_prerequisite_even_if_one_is_dark() -> None:
+    states = _states(done={"l2"}, right={"l2-c1"})
 
     assert states["u1"].state is READY
     assert states["u2"].state is LIT
     assert states["u2"].unlit_prerequisite_ids == ()
 
 
-def test_only_prerequisites_the_student_could_light_are_named(monkeypatch) -> None:
+def test_only_prerequisites_the_student_could_light_are_named() -> None:
     # A stated prerequisite that is not in the catalog, or has no active lesson,
     # can never be lit: naming it would flag the star for ever.
     catalog = _catalog(
@@ -178,13 +177,13 @@ def test_only_prerequisites_the_student_could_light_are_named(monkeypatch) -> No
     )
     catalog["lessons"] = [_lesson("l1", "u1"), _lesson("l2", "u2")]
 
-    states = _states(monkeypatch, done=set(), right=set(), catalog=catalog)
+    states = _states(done=set(), right=set(), catalog=catalog)
 
     assert states["u2"].unlit_prerequisite_ids == ("u1",)
 
 
-def test_the_map_carries_the_unlit_prerequisites_of_every_star(monkeypatch) -> None:
-    states = _states(monkeypatch, done=set(), right=set())
+def test_the_map_carries_the_unlit_prerequisites_of_every_star() -> None:
+    states = _states(done=set(), right=set())
     units = [_unit("u1", order=1), _unit("u2", order=2, before=["u1"])]
 
     result = _map(units, states)
@@ -196,19 +195,19 @@ def test_the_map_carries_the_unlit_prerequisites_of_every_star(monkeypatch) -> N
     assert {star["state"] for star in result["stars"]} == {"ready"}
 
 
-def test_lighting_does_not_wait_for_a_lock(monkeypatch) -> None:
+def test_lighting_does_not_wait_for_a_lock() -> None:
     # A student who finished a point before anything was wired must not have
     # it put out by a prerequisite appearing afterwards.
-    states = _states(monkeypatch, done={"l1", "l2"}, right={"l1-c1", "l2-c1"})
+    states = _states(done={"l1", "l2"}, right={"l1-c1", "l2-c1"})
 
     assert states["u1"].state is LIT
     assert states["u2"].state is LIT
 
 
-def test_a_point_with_nothing_before_it_names_nothing(monkeypatch) -> None:
+def test_a_point_with_nothing_before_it_names_nothing() -> None:
     # What comes first is only ever a stated relation, never a position in an
     # order (stoa-frontend#9).
-    states = _states(monkeypatch, done=set(), right=set())
+    states = _states(done=set(), right=set())
 
     assert states["u1"].unlit_prerequisite_ids == ()
 

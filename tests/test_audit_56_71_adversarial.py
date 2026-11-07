@@ -16,9 +16,10 @@ from fastapi.testclient import TestClient
 from actor_helpers import install_actor_overrides
 from fakes.dynamodb import FakeTable
 
-from stoa.db.repositories import curriculum_ops_repo, practice_repo
+from stoa.db.repositories import curriculum_ops_repo, practice_repo, review_repo
 from stoa.routers import admin, practice
 from stoa.security import route_authorization
+from stoa.services import curriculum_service, student_evidence
 from stoa.services import knowledge_map_service as km
 from stoa.services import knowledge_mastery_service as mastery
 
@@ -255,9 +256,8 @@ class Sky:
             "u2": _judged("u2", mastery.LearningState.READY),
         }
         monkeypatch.setattr(practice_repo, "get_table", lambda: self.table)
-        monkeypatch.setattr(km.curriculum_service, "list_catalog", lambda **_k: CATALOG)
-        monkeypatch.setattr(km.curriculum_service, "get_progress_summary", lambda *_a, **_k: {})
-        monkeypatch.setattr(km, "_review_due_by_unit", lambda *_a, **_k: {})
+        monkeypatch.setattr(review_repo, "get_table", lambda: self.table)
+        monkeypatch.setattr(curriculum_service, "list_catalog", lambda **_k: CATALOG)
         monkeypatch.setattr(
             km.knowledge_mastery_service, "unit_states", lambda *_a, **_k: dict(self.states)
         )
@@ -266,7 +266,7 @@ class Sky:
         self.states[unit_id] = _judged(unit_id, mastery.LearningState.LIT)
 
     def read(self, student_id: str) -> dict[str, Any]:
-        return km.knowledge_map(student_id)
+        return km.knowledge_map(student_evidence.for_student(student_id))
 
     def rows(self, student_id: str) -> list[dict[str, Any]]:
         response = self.table.query(
@@ -466,11 +466,14 @@ def test_a_swallowed_write_replays_the_celebration_forever(
 
 
 def test_a_read_failure_is_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Reading the ledger is outside the try: a broken read breaks the sky."""
+    """Reading the ledger is outside the try: a broken read breaks the sky.
+
+    The streak shares the partition and degrades on its own; the ledger does not.
+    """
     sky = Sky(monkeypatch, "student-a")
     monkeypatch.setattr(
         practice_repo,
-        "read_lit_ledger",
+        "list_activity",
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("table down")),
     )
 

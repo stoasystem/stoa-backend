@@ -19,7 +19,7 @@ import pytest
 
 from scripts import knowledge_base_import as kb
 from scripts import seed_practice
-from stoa.db.repositories import practice_repo
+from stoa.db.repositories import practice_repo, review_repo
 from stoa.services import (
     answer_judging,
     curriculum_migration_service,
@@ -30,6 +30,7 @@ from stoa.services import (
     knowledge_map_service,
     knowledge_mastery_service,
     practice_projection_service,
+    student_evidence,
 )
 from test_curriculum_publish_projection import install_seeded_table
 
@@ -750,6 +751,8 @@ def imported(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[dict[str, 
     made, _report, stars_file, vocabulary = _manifests(tmp_path)
     _register(monkeypatch, stars_file, vocabulary)
     table = install_seeded_table(monkeypatch)
+    # The student's review cards are in the same table as everything else.
+    monkeypatch.setattr(review_repo, "get_table", lambda: table)
     _subjects, topics, units = seed_practice.knowledge_base_rows(live=False)
     table.seed(
         *({"PK": "PRACTICE", "SK": f"TOPIC#{t['topic_id']}", **t} for t in topics),
@@ -823,19 +826,24 @@ def test_a_student_is_told_what_to_master_first_and_nothing_is_locked(
         *({"PK": "PRACTICE", "SK": f"TOPIC#{t['topic_id']}", **t} for t in topics),
         *({"PK": "PRACTICE", "SK": f"UNIT#{u['unit_id']}", **u} for u in units),
     )
-    answered: set[str] = set()
-    monkeypatch.setattr(
-        knowledge_mastery_service.practice_repo, "all_challenges_answered_right", lambda _s: set(answered)
-    )
 
     def skill(skill_id: str) -> knowledge_mastery_service.SkillMastery:
-        return knowledge_mastery_service.skill_states("student-1", subject_id="mathematics")[skill_id]
+        evidence = student_evidence.for_student("student-1")
+        return knowledge_mastery_service.skill_states(evidence)[skill_id]
 
     before = skill("brueche-brueche-addieren--sachaufgaben")
     assert before.ready is False and before.missing_unit_ids == ("brueche-bruchbegriff",)
     assert skill("brueche-brueche-addieren--schliessen").extension is True
 
-    answered.add("kb-m-p100-q1")
+    practice_repo.get_table().seed(
+        {
+            "PK": "ATTEMPTS#student-1",
+            "SK": "ATTEMPT#a1",
+            "challenge_id": "kb-m-p100-q1",
+            "correct": True,
+            "created_at": "2026-01-05T09:00:00+00:00",
+        }
+    )
     assert skill("brueche-brueche-addieren--sachaufgaben").ready is True
 
 
@@ -871,10 +879,9 @@ def test_the_star_map_reads_no_exercise_of_an_indexed_practice_set(
     monkeypatch.setattr(
         practice_repo, "get_challenges", lambda lesson_id: read.append(lesson_id) or original(lesson_id)
     )
-    monkeypatch.setattr(practice_repo, "all_challenges_answered_right", lambda _s: set())
-
-    states = knowledge_mastery_service.unit_states("student-1", subject_id="mathematics")
-    knowledge_mastery_service.skill_states("student-1", subject_id="mathematics")
+    evidence = student_evidence.for_student("student-1")
+    states = knowledge_mastery_service.unit_states(evidence)
+    knowledge_mastery_service.skill_states(evidence)
 
     assert states["brueche-brueche-addieren"].lesson_count == 2  # the extension set does not count
     assert not [lesson for lesson in read if "--" in lesson]
@@ -899,10 +906,12 @@ def test_the_skeleton_sends_every_star_without_its_small_stars(
     imported: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _go_live(imported)
-    monkeypatch.setattr(practice_repo, "all_challenges_answered_right", lambda _s: set())
-
-    full = knowledge_map_service.knowledge_map("student-1", subject_id="mathematics")
-    skeleton = knowledge_map_service.knowledge_map("student-1", subject_id="mathematics", view="skeleton")
+    full = knowledge_map_service.knowledge_map(
+        student_evidence.for_student("student-1"), subject_id="mathematics"
+    )
+    skeleton = knowledge_map_service.knowledge_map(
+        student_evidence.for_student("student-1"), subject_id="mathematics", view="skeleton"
+    )
 
     assert skeleton["view"] == "skeleton"
     assert [s["unitId"] for s in skeleton["stars"]] == [s["unitId"] for s in full["stars"]]
@@ -914,10 +923,10 @@ def test_the_neighbourhood_sends_the_star_its_prerequisites_and_its_practice(
     imported: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _go_live(imported)
-    monkeypatch.setattr(practice_repo, "all_challenges_answered_right", lambda _s: set())
-
     around = knowledge_map_service.neighbourhood(
-        "student-1", subject_id="mathematics", around="brueche-brueche-addieren", locale="fr"
+        student_evidence.for_student("student-1", locale="fr"),
+        subject_id="mathematics",
+        around="brueche-brueche-addieren",
     )
 
     assert around["focus"] == "brueche-brueche-addieren"
@@ -939,7 +948,9 @@ def test_the_neighbourhood_sends_the_star_its_prerequisites_and_its_practice(
         {"unitId": "brueche-bruchbegriff", "name": "Ce qu'est une fraction"}
     ]
     # Without a star to centre on, the map's recommendation is the focus.
-    assert knowledge_map_service.neighbourhood("student-1", subject_id="mathematics")["focus"]
+    assert knowledge_map_service.neighbourhood(
+        student_evidence.for_student("student-1"), subject_id="mathematics"
+    )["focus"]
 
 
 def test_a_star_lights_from_its_core_and_extension_practice_is_beside_it() -> None:
