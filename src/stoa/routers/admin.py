@@ -35,7 +35,7 @@ from stoa.security.admin_authorization import (
     admin_target_provider,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
-from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD
+from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD, AccountStatus
 from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
 from stoa.models.question import QuestionStatus
 from stoa.models.moderation import (
@@ -54,6 +54,7 @@ from stoa.services.account_errors import AccountErrorCode, AccountViolation
 from stoa.services.report_recovery_errors import RecoveryJobError, ReportRecoveryErrorCode
 from stoa.services.billing_errors import BillingErrorCode
 from stoa.services import (
+    account_lifecycle,
     account_provisioning_service,
     answer_judging,
     teacher_support_allowance_service,
@@ -448,24 +449,9 @@ def restore_privileged_capability(
 
 class UserUpdateRequest(BaseModel):
     subscription_tier: Optional[SubscriptionTier] = None
-    is_active: Optional[bool] = None
     name: Optional[str] = Field(default=None, min_length=1, max_length=120)
     grade: Optional[str] = Field(default=None, min_length=1, max_length=40)
     school: Optional[str] = Field(default=None, min_length=1, max_length=160)
-
-
-ACCOUNT_STATUS_INVITED = "invited"
-ACCOUNT_STATUS_ACTIVE = "active"
-ACCOUNT_STATUS_SUSPENDED = "suspended"
-ACCOUNT_STATUS_ARCHIVED = "archived"
-
-# No physical delete: an archived account keeps its number and its history.
-ACCOUNT_STATUS_TRANSITIONS = {
-    ACCOUNT_STATUS_ACTIVE: (ACCOUNT_STATUS_SUSPENDED, ACCOUNT_STATUS_ARCHIVED),
-    ACCOUNT_STATUS_SUSPENDED: (ACCOUNT_STATUS_ACTIVE, ACCOUNT_STATUS_ARCHIVED),
-    ACCOUNT_STATUS_INVITED: (ACCOUNT_STATUS_ARCHIVED,),
-    ACCOUNT_STATUS_ARCHIVED: (),
-}
 
 
 class AccountInvitationRequest(BaseModel):
@@ -2024,14 +2010,6 @@ class LegalHoldReviewMetadataRequest(BaseModel):
     break_glass: dict[str, Any] | None = None
 
 
-def _account_status_of(profile: Mapping[str, object]) -> str:
-    stored = str(profile.get("account_status") or "").strip()
-    if stored:
-        return stored
-    # Rows written before the status machine existed carry only `is_active`.
-    return ACCOUNT_STATUS_ACTIVE if profile.get("is_active", True) else ACCOUNT_STATUS_SUSPENDED
-
-
 def _account_number_of(user_id: str) -> str:
     profile = user_repo.get_user(user_id)
     return str((profile or {}).get("account_number") or "")
@@ -2234,7 +2212,7 @@ async def list_users(
             row_key = {"PK": row.get("PK"), "SK": row.get("SK")}
             row.pop("PK", None)
             row.pop("SK", None)
-            account_status = _account_status_of(row)
+            account_status = str(row.get("account_status") or "")
             if status and account_status != status:
                 continue
             if q and not _keyword_matches(row, q):
@@ -2246,7 +2224,7 @@ async def list_users(
             item = _project_account_row(row, account_status=account_status)
             item["role"] = row_role
             item["linkedAccounts"] = _linked_counterparts(row)
-            if account_status == ACCOUNT_STATUS_INVITED:
+            if account_status == AccountStatus.INVITED:
                 invitation_id = _issued_invitation_id(row)
                 if invitation_id:
                     item["invitationId"] = invitation_id
@@ -2299,9 +2277,6 @@ async def update_user(
     if body.subscription_tier is not None:
         update_parts.append("subscription_tier = :tier")
         attr_values[":tier"] = body.subscription_tier.value
-    if body.is_active is not None:
-        update_parts.append("is_active = :active")
-        attr_values[":active"] = body.is_active
     if body.name is not None:
         update_parts.append("#name = :name")
         attr_names["#name"] = "name"
@@ -2320,7 +2295,6 @@ async def update_user(
         field: present
         for field, present in (
             ("subscription_tier", body.subscription_tier is not None),
-            ("is_active", body.is_active is not None),
             ("name", body.name is not None),
             ("grade", body.grade is not None),
             ("school", body.school is not None),
@@ -2429,75 +2403,6 @@ def _account_email_or_409(profile: Mapping[str, object]) -> str:
     return email
 
 
-# One census page is one scan call; the answer short-circuits on the first other
-# active administrator, so the usual table never reaches the second page.
-ADMIN_CENSUS_PAGE_SIZE = 200
-ADMIN_CENSUS_MAX_PAGES = 25
-
-
-def _another_active_admin_exists(target_id: str) -> bool:
-    """True only when some administrator other than `target_id` is still active."""
-    table = get_table()
-    scan_kwargs: dict[str, object] = {
-        "FilterExpression": "#entity = :profile AND #role = :role",
-        "ExpressionAttributeNames": {"#entity": "SK", "#role": "role"},
-        "ExpressionAttributeValues": {":profile": "PROFILE", ":role": "admin"},
-        "Limit": ADMIN_CENSUS_PAGE_SIZE,
-    }
-    for _page in range(ADMIN_CENSUS_MAX_PAGES):
-        result = _admin_scan(table, **scan_kwargs)
-        for row in _admin_items(result):
-            if str(row.get("user_id") or "") == target_id:
-                continue
-            if _account_status_of(row) == ACCOUNT_STATUS_ACTIVE:
-                return True
-        cursor = _admin_cursor(result)
-        if not cursor:
-            return False
-        scan_kwargs["ExclusiveStartKey"] = cursor
-    # A census that ran out of pages is not evidence that anyone else is active.
-    return False
-
-
-def _refuse_status_change(
-    *, actor: Mapping[str, object], target_id: str, reason_code: AccountErrorCode
-) -> None:
-    """A refused command is still a command somebody issued, so it is recorded."""
-    _record_account_admin_event(
-        actor=actor,
-        target_id=target_id,
-        event_type="account_status_change_denied",
-        action="change_account_status",
-        reason_code=reason_code,
-        evidence_reference=f"account_status_denied:{reason_code}",
-    )
-    raise AccountViolation(reason_code)
-
-
-def _guard_admin_console_survives(
-    *, actor: Mapping[str, object], target_id: str, profile: Mapping[str, object]
-) -> None:
-    """Card 002-D / B7: one administrator may not close the admin console down.
-
-    `admin_identity_manager` is not an escalation - it already governs privileged
-    identities - but without this judgement its holder can suspend every other
-    administrator and then itself, and nobody is left who can undo it. There is no
-    break-glass path here, so the refusal has to come before the write.
-    """
-    actor_id = str(actor.get("user_id") or actor.get("sub") or "")
-    if actor_id and actor_id == target_id:
-        _refuse_status_change(
-            actor=actor, target_id=target_id, reason_code=AccountErrorCode.ACCOUNT_SELF_DEACTIVATION_FORBIDDEN
-        )
-    if str(profile.get("role") or "") != "admin":
-        return
-    if _another_active_admin_exists(target_id):
-        return
-    _refuse_status_change(
-        actor=actor, target_id=target_id, reason_code=AccountErrorCode.ACCOUNT_LAST_ACTIVE_ADMIN
-    )
-
-
 def _refuse_password_reset(
     *, actor: Mapping[str, object], target_id: str, reason_code: AccountErrorCode
 ) -> None:
@@ -2518,7 +2423,8 @@ def _guard_peer_admin_credentials(
 ) -> None:
     """Card 006: an administrator may not take another administrator's credential.
 
-    This is a different judgement from `_guard_admin_console_survives`, because the
+    This is a different judgement from the lifecycle's last-administrator guard
+    (`account_lifecycle.transition`), because the
     harm is different. Resetting someone else's password does not close the console
     down; it hands the caller a working credential for another privileged principal,
     in plaintext, in the response body, with no consent from the target and no
@@ -2710,52 +2616,23 @@ def change_account_status(
 ) -> dict[str, Any]:
     """Move one account along the status machine. Archive is as far as it goes."""
     profile = _account_profile_or_404(user_id)
-    current = _account_status_of(profile)
-    if payload.status != ACCOUNT_STATUS_ACTIVE:
-        _guard_admin_console_survives(actor=user, target_id=user_id, profile=profile)
-    if payload.status == current:
-        raise AccountViolation(AccountErrorCode.ACCOUNT_STATUS_UNCHANGED)
-    if payload.status not in ACCOUNT_STATUS_TRANSITIONS.get(current, ()):
-        raise AccountViolation(AccountErrorCode.ACCOUNT_STATUS_TRANSITION_INVALID)
-    now = _now_iso()
-    operation = user_repo.profile_update_operation(
-        user_id,
-        update_expression=(
-            "SET #account_status = :next_status, is_active = :is_active, updated_at = :now"
+    current = account_lifecycle.status_of(profile)
+    account_lifecycle.transition(
+        profile,
+        current,
+        payload.status,
+        account_lifecycle.LifecycleActor(
+            account_lifecycle.Trigger.ADMIN,
+            user_id=str(user.get("user_id") or user.get("sub") or ""),
+            role=str(user.get("role") or ""),
         ),
-        expression_attribute_names={"#account_status": "account_status"},
-        expression_attribute_values={
-            ":next_status": payload.status,
-            ":expected_status": current,
-            ":is_active": payload.status == ACCOUNT_STATUS_ACTIVE,
-            ":now": now,
-        },
-        expected_version=profile.get("version"),
-        additional_condition_expression=(
-            "#account_status = :expected_status OR attribute_not_exists(#account_status)"
-        ),
+        payload.reason,
     )
-    try:
-        fence = account_deletion_repo.require_active_account_fence(user_id)
-        account_deletion_repo.transact(
-            [
-                account_deletion_repo.active_fence_condition(
-                    user_id, int(fence.get("generation") or 0)
-                ),
-                operation,
-            ]
-        )
-    except account_deletion_repo.AccountDeletionConflict as exc:
-        raise AccountViolation(AccountErrorCode.ACCOUNT_STATUS_TRANSITION_CONFLICT) from exc
-    _record_account_admin_event(
-        actor=user,
-        target_id=user_id,
-        event_type="account_status_changed",
-        action="change_account_status",
-        reason_code=payload.reason,
-        evidence_reference=f"account_status:{current}->{payload.status}",
-    )
-    return {"userId": user_id, "accountStatus": payload.status, "previousStatus": current}
+    return {
+        "userId": user_id,
+        "accountStatus": payload.status,
+        "previousStatus": current.value if current else "",
+    }
 
 
 @router.post("/users/parent-links")

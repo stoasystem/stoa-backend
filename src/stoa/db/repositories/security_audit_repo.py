@@ -522,17 +522,37 @@ def project_audit_event(event: Mapping[str, object]) -> AuditItem:
     return projected
 
 
-def append_event(
-    stream_id: str, event: Mapping[str, object], *, table: object | None = None
-) -> AuditItem:
-    """Append one immutable event; `table` for callers bound to their own session."""
+def _event_row(stream_id: str, event: Mapping[str, object]) -> AuditItem:
     safe = project_audit_event(event)
-    row = {
+    return {
         "PK": f"SECURITY_AUDIT#{stream_id}",
         "SK": f"EVENT#{safe['event_id']}",
         "entity_type": "security_audit_event",
         **safe,
     }
+
+
+def append_event_operation(
+    stream_id: str, event: Mapping[str, object]
+) -> dict[str, object]:
+    """The same immutable row as `append_event`, as one operation of a transaction.
+
+    For a write whose audit row must land in the same commit as the change it
+    records, or not at all.
+    """
+    return {
+        "Put": {
+            "Item": _event_row(stream_id, event),
+            "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+        }
+    }
+
+
+def append_event(
+    stream_id: str, event: Mapping[str, object], *, table: object | None = None
+) -> AuditItem:
+    """Append one immutable event; `table` for callers bound to their own session."""
+    row = _event_row(stream_id, event)
     try:
         _put_item(
             table if table is not None else get_table(),

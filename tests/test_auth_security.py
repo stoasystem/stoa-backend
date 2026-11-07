@@ -251,8 +251,8 @@ def test_t472_02_dependency_path_denies_suspension_next_request_without_mutation
     assert client.get("/protected").status_code == 200
     repository.status = "suspended"
     denied = client.get("/protected")
-    assert denied.status_code == 409
-    assert denied.json()["detail"]["code"] == "identity_conflict"
+    assert denied.status_code == 403
+    assert denied.json()["detail"]["code"] == "account_disabled"
     assert handler_calls == ["student-1"]
     assert {operation for operation, *_ in repository.calls} <= {
         "get_binding",
