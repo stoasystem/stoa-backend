@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
+from stoa.db import table as db_table
 from stoa.db.repositories import attachment_repo
 from stoa.security import attachment_errors
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
@@ -204,7 +205,7 @@ def test_a_malformed_transaction_is_described_by_shape_not_by_value(caplog):
         name = "stoa-main"
         meta = None
 
-        def transact_attachment_write(self, items):
+        def transact_write_items(self, **_kwargs):
             raise ClientError(
                 {
                     "Error": {
@@ -220,7 +221,8 @@ def test_a_malformed_transaction_is_described_by_shape_not_by_value(caplog):
 
     owner = "11111111-2222-3333-4444-555555555555"
     same_key = {"PK": f"ATTACHMENT#{owner}", "SK": "META#one"}
-    with caplog.at_level(logging.INFO, logger=attachment_repo.__name__):
+    # The table gateway reads the refusal and writes it down, once, for every writer.
+    with caplog.at_level(logging.INFO, logger=db_table.__name__):
         with pytest.raises(attachment_repo.AttachmentRepositoryConflict):
             attachment_repo.transact(
                 [
@@ -234,7 +236,7 @@ def test_a_malformed_transaction_is_described_by_shape_not_by_value(caplog):
     message = next(
         r.getMessage()
         for r in caplog.records
-        if "attachment_transaction_rejected" in r.getMessage()
+        if "transaction_rejected" in r.getMessage()
     )
     assert "items=3" in message
     assert "duplicate_keys=1" in message

@@ -7,6 +7,7 @@ from typing import Any, Final
 
 from boto3.dynamodb.conditions import Key
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -221,8 +222,8 @@ def create_link(
         for item in (forward, reverse)
     )
     try:
-        account_deletion_repo.transact(operations, table=target)
-    except account_deletion_repo.AccountDeletionConflict as exc:
+        db_table.transact(operations, table=target)
+    except (db_table.WriteRefused, db_table.TableUnavailable) as exc:
         raise ParentLinkConflict("parent link already exists") from exc
     return dict(body)
 
@@ -261,8 +262,8 @@ def _conditional_rewrite(
         for item in (forward, reverse)
     )
     try:
-        account_deletion_repo.transact(operations, table=target)
-    except account_deletion_repo.AccountDeletionConflict as exc:
+        db_table.transact(operations, table=target)
+    except (db_table.WriteRefused, db_table.TableUnavailable) as exc:
         raise ParentLinkConflict(refusal) from exc
     return dict(body)
 
@@ -444,8 +445,8 @@ def close_link(
         operations.append({"Put": operation})
     target = table or get_table()
     try:
-        account_deletion_repo.transact(operations, table=target)
-    except account_deletion_repo.AccountDeletionConflict as exc:
+        db_table.transact(operations, table=target)
+    except (db_table.WriteRefused, db_table.TableUnavailable) as exc:
         raise ParentLinkConflict("parent link close refused") from exc
     return dict(body)
 

@@ -21,6 +21,7 @@ from fakes.dynamodb import FakeTable
 import pytest
 
 from actor_helpers import install_actor_overrides
+from stoa.db import table as db_table
 from stoa.services import help_requests
 
 import test_chat_help_request_lifecycle as lifecycle
@@ -209,7 +210,7 @@ def _admit_case(table: FakeTable) -> None:
     from stoa.services import teacher_support_allowance_service as allowance
 
     def persist(operations):
-        account_deletion_repo.transact(
+        db_table.transact(
             [account_deletion_repo.active_fence_condition(STUDENT, 1), *operations],
             table=table,
         )

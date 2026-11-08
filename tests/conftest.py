@@ -113,7 +113,7 @@ class _EmptyParentLinkTable:
     def query(self, **_kwargs: object) -> dict[str, object]:
         return {"Items": []}
 
-    def transact_account_deletion(self, _operations: object) -> None:
+    def transact_write_items(self, **_kwargs: object) -> None:
         raise AssertionError(
             "this test writes parent links; install its own parent_link_repo.get_table"
         )
@@ -130,6 +130,25 @@ def _default_parent_link_table(monkeypatch: pytest.MonkeyPatch) -> None:
     from stoa.db.repositories import parent_link_repo
 
     monkeypatch.setattr(parent_link_repo, "get_table", _EmptyParentLinkTable)
+
+
+@pytest.fixture(autouse=True)
+def _fresh_gateway_clients():
+    """The table gateway builds its table and client once per process.
+
+    A test runs under its own fake credentials and, for moto, its own mock, so
+    a client built by an earlier test must not carry over into it.
+    """
+    from stoa.db import table as db_table
+
+    # Held now: a test may patch `db_table.client` itself, and the patch can
+    # still be in place when this fixture is torn down.
+    clears = (db_table.client.cache_clear, db_table._real_table.cache_clear)
+    for clear in clears:
+        clear()
+    yield
+    for clear in clears:
+        clear()
 
 
 @pytest.fixture

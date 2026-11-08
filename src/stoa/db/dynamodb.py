@@ -1,9 +1,8 @@
 """DynamoDB single-table client wrapper."""
-import boto3
 from collections.abc import Callable, Mapping
 from decimal import Decimal
-from functools import lru_cache
-from stoa.config import settings
+
+from stoa.db import table as _gateway
 
 # Far more pages than this table has; a reader that needs more has a filter
 # that is not doing its job, and should say so rather than read the account.
@@ -44,10 +43,9 @@ def omit_none_attributes(item: Mapping[str, object]) -> dict[str, object]:
     return {key: value for key, value in item.items() if value is not None}
 
 
-@lru_cache
 def get_table() -> object:
-    dynamodb = boto3.resource("dynamodb", region_name=settings.aws_region)
-    return dynamodb.Table(settings.dynamodb_table_name)
+    """The table, as `stoa.db.table` holds it: built there once, in the configured region."""
+    return _gateway.table()
 
 
 def scan_every_page(

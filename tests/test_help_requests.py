@@ -15,6 +15,7 @@ from fakes.dynamodb import FakeTable
 from fakes.help_requests import seed_reply
 from fakes.learning_session import seed_conversation
 
+from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
 from stoa.services import help_requests, teacher_support_allowance_service
 
@@ -683,13 +684,14 @@ def test_a_reply_is_one_transaction_and_one_notice(world, monkeypatch) -> None:
     help_requests.take_or_finish(world.record, teacher_id=TEACHER, target="in_progress", now=at(2), table=world.table)
     world.events.clear()
     transactions: list[list[dict]] = []
-    real_transact = account_deletion_repo.transact
+    real_transact = db_table.transact
 
     def capture(operations, *, table=None):
         transactions.append(list(operations))
         return real_transact(operations, table=table)
 
-    monkeypatch.setattr(account_deletion_repo, "transact", capture)
+    monkeypatch.setattr(
+        db_table, "transact", capture)
 
     written = _reply(world.record, now=at(4), table=world.table, author_name="  Frau Muster ")
 

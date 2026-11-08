@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
-from fakes.dynamodb import as_stored as _as_stored
+from fakes.dynamodb import as_stored as _as_stored, from_wire
 
 from stoa.db.repositories import billing_fact_repo
 from stoa.models.billing import BillingFact, BillingFactKind, BillingPlanId
@@ -49,7 +49,8 @@ class AtomicBillingTable:
             ]
         }
 
-    def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+        operations = from_wire(TransactItems)
         if self.fail_next_transaction:
             self.fail_next_transaction = False
             raise RuntimeError("injected transaction failure")

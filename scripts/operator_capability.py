@@ -64,7 +64,7 @@ def _require_active_admin(table: Any, user_id: str) -> None:
 class SessionTable:
     """The table, with every write on the verified operator session.
 
-    The capability store opens its own low-level client for transactions, and
+    The table gateway opens its own low-level client for transactions, and
     that client comes from ambient credentials, not from this session. Given a
     table that carries `transact_write_items`, it uses that instead, so the
     grant lands in the account the SSO guard checked, as the reads and the

@@ -5,6 +5,7 @@ import pytest
 
 from fakes import student_evidence as fake_evidence
 
+from stoa.db import table as db_table
 from stoa.jobs import weekly_reports
 from stoa.services import notify_service, report_service
 
@@ -455,7 +456,7 @@ def test_storing_a_report_completes_the_row_its_claim_created(monkeypatch):
     store = _ConditionEvaluatingStore()
     monkeypatch.setattr(report_repo, "get_table", lambda: object())
     monkeypatch.setattr(
-        account_deletion_repo,
+        db_table,
         "transact",
         lambda operations, table=None: [
             store.put(operation) for operation in operations if "Put" in operation

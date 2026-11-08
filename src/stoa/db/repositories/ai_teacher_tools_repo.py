@@ -8,6 +8,7 @@ from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.conditions import Attr, ConditionBase
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo
 
@@ -156,9 +157,7 @@ def _created_at(item: AIDraftItem) -> str:
 
 
 def _atomic_table(table: object) -> bool:
-    return callable(getattr(table, "transact_account_deletion", None)) or bool(
-        getattr(getattr(table, "meta", None), "client", None) and getattr(table, "name", None)
-    )
+    return db_table.transactional(table)
 
 
 def _generation(item: Mapping[str, object], table: object) -> tuple[str, int]:
@@ -238,7 +237,7 @@ def put_draft(item: AIDraftItem) -> None:
         item=stored, owner_id=owner, generation=generation
     )
     if _atomic_table(table):
-        account_deletion_repo.transact(operations, table=table)
+        db_table.transact(operations, table=table)
     else:
         put = _mapping(operations[1].get("Put"))
         _put_item(table, Item=_mapping(put.get("Item")))
@@ -274,7 +273,7 @@ def update_draft(
             mode="update",
             updates=updates,
         )
-        account_deletion_repo.transact(operations, table=table)
+        db_table.transact(operations, table=table)
     else:
         _update_item(
             table,
@@ -392,7 +391,7 @@ def scrub_ai_draft_private_row(
     if isinstance(target, _TombstoneTable):
         target.replace_learning_tombstone(_mapping(item), tombstone, owner_id, generation)
     else:
-        account_deletion_repo.transact(
+        db_table.transact(
             [
                 account_deletion_repo.deletion_fence_condition(owner_id, generation),
                 {

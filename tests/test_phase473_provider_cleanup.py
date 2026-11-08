@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from stoa.db import table as db_table
 from stoa.config import UPLOAD_ROW_RETENTION_SECONDS, Settings
 from stoa.db.repositories import attachment_repo
 from stoa.jobs.upload_cleanup import cleanup_expired_uploads
@@ -692,9 +693,7 @@ def test_transactions_bypass_the_client_that_would_serialize_them_twice(monkeypa
             raise AssertionError("unused")
 
     fresh = _WireFormatRejectingClient()
-    monkeypatch.setattr(
-        attachment_repo, "wire_format_client", lambda _target: fresh
-    )
+    monkeypatch.setattr(db_table, "client", lambda: fresh)
 
     attachment_repo.transact(
         [{"Put": {"Item": {"PK": "USER#student-1", "SK": "PROBE"}}}],

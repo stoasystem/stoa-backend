@@ -10,6 +10,7 @@ import hashlib
 import struct
 from typing import Any, Mapping
 
+from stoa.db import table as db_table
 from stoa.config import settings
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
@@ -464,7 +465,7 @@ def check_and_record_operation(
             },
         ]
         try:
-            account_deletion_repo.transact(operations, table=target)
+            db_table.transact(operations, table=target)
         except Exception:
             try:
                 raced_operation = _get_item(target, operation_key)

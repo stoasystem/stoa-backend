@@ -29,10 +29,11 @@ from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 import pytest
 
-from fakes.dynamodb import FakeTable
+from fakes.dynamodb import FakeTable, from_wire
 from fakes.learning_session import patch_session_table, seed_conversation
+from stoa.db import table as db_table
 from stoa.config import Settings
-from stoa.db.repositories import account_deletion_repo, curriculum_ops_repo, usage_ledger_repo
+from stoa.db.repositories import curriculum_ops_repo, usage_ledger_repo
 from stoa.models.billing import BillingPlanId
 from stoa.routers import conversations
 from stoa.services import learning_session
@@ -140,23 +141,25 @@ def test_a_fence_that_moved_is_a_conflict_not_a_duplicate() -> None:
     table = FakeTable()
     table.seed_active_account("student-1", generation=2)
 
-    with pytest.raises(account_deletion_repo.AccountDeletionConflict, match="conditional"):
+    with pytest.raises(db_table.WriteRefused) as refused:
         usage_ledger_repo.put_usage_event(_fenced_event(), account_fence_generation=1, table=table)
 
+    assert refused.value.failed_conditions == (0,)
     assert _ledger_rows(table) == []
 
 
 def test_a_refused_request_is_a_conflict_not_a_duplicate() -> None:
     class ThrottledTable(FakeTable):
-        def transact_account_deletion(self, operations: list[dict[str, object]]) -> None:
-            raise account_deletion_repo.AccountDeletionConflict(
-                "account lifecycle dependency unavailable"
+        def transact_write_items(self, *, TransactItems: list[dict[str, object]]) -> None:  # noqa: N803
+            raise ClientError(
+                {"Error": {"Code": "ThrottlingException", "Message": "slow down"}},
+                "TransactWriteItems",
             )
 
     table = ThrottledTable()
     table.seed_active_account("student-1")
 
-    with pytest.raises(account_deletion_repo.AccountDeletionConflict, match="dependency"):
+    with pytest.raises(db_table.TableUnavailable, match="ThrottlingException"):
         usage_ledger_repo.put_usage_event(_fenced_event(), account_fence_generation=1, table=table)
 
 
@@ -257,27 +260,29 @@ def test_a_repeat_conversation_help_request_after_a_failed_ledger_write_records_
     )
     monkeypatch.setattr(conversations.user_repo, "get_user", lambda *_args, **_kwargs: None)
     refusals = {"left": 1}
-    real_seam = table.transact_account_deletion
+    real_seam = table.transact_write_items
 
-    def seam_refused_once(operations: list[dict[str, object]]) -> None:
-        # The escalation itself goes through this seam too; only the ledger's
+    def seam_refused_once(*, TransactItems: list[dict[str, object]]) -> None:  # noqa: N803
+        # The escalation itself goes through this entry too; only the ledger's
         # Put is refused, once, as a throttle would.
+        operations = from_wire(TransactItems)
         writes_ledger = any(
             str(operation.get("Put", {}).get("Item", {}).get("PK", "")).startswith("USAGE_LEDGER#")
             for operation in operations
         )
         if writes_ledger and refusals["left"]:
             refusals["left"] -= 1
-            raise account_deletion_repo.AccountDeletionConflict(
-                "account lifecycle dependency unavailable"
+            raise ClientError(
+                {"Error": {"Code": "ThrottlingException", "Message": "slow down"}},
+                "TransactWriteItems",
             )
-        real_seam(operations)
+        real_seam(TransactItems=TransactItems)
 
-    monkeypatch.setattr(table, "transact_account_deletion", seam_refused_once)
+    monkeypatch.setattr(table, "transact_write_items", seam_refused_once)
     client = _conversation_client(conversations.teacher_help_router, "/teacher-help")
     body = {"conversationId": "conv-1", "message": "please help"}
 
-    with pytest.raises(account_deletion_repo.AccountDeletionConflict):
+    with pytest.raises(db_table.TableUnavailable):
         client.post("/teacher-help/request", json=body)
     escalation_request_id = table.rows[("CONV#conv-1", "HELP")]["escalation_request_id"]
     assert dispatches == [escalation_request_id]

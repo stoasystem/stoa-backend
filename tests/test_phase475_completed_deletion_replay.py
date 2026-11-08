@@ -9,6 +9,7 @@ from fastapi import BackgroundTasks, FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
+from stoa.db import table as db_table
 from stoa import deps
 from stoa.db.repositories import account_deletion_repo
 from stoa.routers import auth
@@ -280,7 +281,7 @@ def test_completed_deletion_replays_stored_receipt_without_new_effects(
         fail_if_called("private-row discovery"),
     )
     monkeypatch.setattr(
-        account_deletion_repo, "transact", fail_if_called("repository transaction")
+        db_table, "transact", fail_if_called("repository transaction")
     )
     monkeypatch.setattr(
         account_deletion_service.boto3,

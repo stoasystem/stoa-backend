@@ -27,6 +27,7 @@ from typing import Any
 import pytest
 
 from dynamodb_expression_assertions import assert_expression_placeholders_closed
+from stoa.db import table as db_table
 from stoa.config import Settings
 from stoa.db.repositories import (
     account_deletion_repo,
@@ -41,6 +42,7 @@ from stoa.services import (
     parent_link_service,
     teacher_support_allowance_service,
 )
+from fakes.dynamodb import from_wire, transaction_canceled
 
 
 def _paid_scope(table: Any):
@@ -102,24 +104,21 @@ class ConditionalTable:
             ]
         }
 
-    def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+        operations = from_wire(TransactItems)
         staged = deepcopy(self.items)
         for operation in operations:
             if "ConditionCheck" in operation:
                 check = operation["ConditionCheck"]
                 key = (check["Key"]["PK"], check["Key"]["SK"])
                 if not _evaluate(staged.get(key), check):
-                    raise account_deletion_repo.AccountDeletionConflict(
-                        f"condition check refused for {key}"
-                    )
+                    raise transaction_canceled([])  # condition check refused
                 continue
             put = operation["Put"]
             item = deepcopy(put["Item"])
             key = (item["PK"], item["SK"])
             if not _evaluate(staged.get(key), put):
-                raise account_deletion_repo.AccountDeletionConflict(
-                    f"conditional put refused for {key}"
-                )
+                raise transaction_canceled([])  # conditional put refused
             staged[key] = item
         self.items = staged
         self.transactions.append(deepcopy(operations))
@@ -365,7 +364,7 @@ def test_link_only_family_is_provable_for_a_paid_grant(table: ConditionalTable) 
     assert ":parent_id" not in student_profile_check["ExpressionAttributeValues"]
     for operation in built.grant_operations:
         assert_expression_placeholders_closed(operation)
-    account_deletion_repo.transact(list(built.grant_operations), table=table)
+    db_table.transact(list(built.grant_operations), table=table)
 
 
 def test_link_only_student_enters_the_paid_entitlement_pool(
@@ -447,8 +446,8 @@ def test_link_only_student_occupies_the_teacher_support_allowance(
 
 def _persist(table: ConditionalTable, operations: tuple[dict[str, Any], ...]) -> bool:
     try:
-        account_deletion_repo.transact(list(operations), table=table)
-    except account_deletion_repo.AccountDeletionConflict:
+        db_table.transact(list(operations), table=table)
+    except db_table.WriteRefused:
         return False
     return True
 
@@ -464,8 +463,8 @@ def test_link_revoked_after_the_preread_cancels_the_paid_transaction(
 
     _revoke_link()
 
-    with pytest.raises(account_deletion_repo.AccountDeletionConflict):
-        account_deletion_repo.transact(list(built.grant_operations), table=table)
+    with pytest.raises(db_table.WriteRefused):
+        db_table.transact(list(built.grant_operations), table=table)
 
 
 def test_link_revoked_after_the_preread_cancels_the_paid_admission_only(
@@ -1022,8 +1021,8 @@ def test_the_link_conditions_fence_the_relationship_field(
     forward = table.items[(f"PARENT#{PARENT}", f"CHILD#{STUDENT}")]
     table.put({**forward, "relationship": "neighbour"})
 
-    with pytest.raises(account_deletion_repo.AccountDeletionConflict):
-        account_deletion_repo.transact(list(built.grant_operations), table=table)
+    with pytest.raises(db_table.WriteRefused):
+        db_table.transact(list(built.grant_operations), table=table)
 
 
 # --- B5: a profile-bound student reaches its paying link parent ------------

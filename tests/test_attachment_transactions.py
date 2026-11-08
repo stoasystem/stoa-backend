@@ -13,6 +13,7 @@ import pytest
 from botocore.exceptions import ClientError
 from moto import mock_aws
 
+from stoa.db import table as db_table
 from stoa.db.repositories import attachment_repo
 
 
@@ -120,9 +121,7 @@ def test_transaction_operation_index_classification_is_closed_and_redacted(
     if low_level:
         # Transactions go through a client built for the purpose, so the double
         # is supplied the same way rather than through the table's own client.
-        monkeypatch.setattr(
-            attachment_repo, "wire_format_client", lambda _target: table.client
-        )
+        monkeypatch.setattr(db_table, "client", lambda: table.client)
     with pytest.raises(attachment_repo.AttachmentTransactionError) as error:
         attachment_repo.transact(operations, table=table)
     assert error.value.outcome is expected
@@ -151,6 +150,21 @@ def test_transaction_operation_index_classification_is_closed_and_redacted(
         ),
         (
             {"codes": ["ThrottlingError"]},
+            attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY,
+        ),
+        # A reason that waiting will not fix, and one nobody has named yet: the
+        # client is still told to retry - it has nothing better to do - and the
+        # gateway writes the refusal down as an error (#271).
+        (
+            {"codes": ["ValidationError"]},
+            attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY,
+        ),
+        (
+            {"codes": ["ItemCollectionSizeLimitExceeded"]},
+            attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY,
+        ),
+        (
+            {"codes": ["SomethingNew"]},
             attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY,
         ),
         (
@@ -283,7 +297,7 @@ def test_the_quota_condition_is_a_dialect_the_provider_speaks():
 def test_reading_attachments_survives_the_resource_clients_second_serialization():
     """The read beside the write kept the client that serializes twice.
 
-    `wire_format_client` exists because the resource table's own client carries
+    `db_table.client` exists because the resource table's own client carries
     request transformations, so items already in wire format have every key
     turned into a map. That was known and worked around for `transact` while
     `get_attachments` went on using `target.meta.client`, and the fault sat

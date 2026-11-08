@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from stoa.db import table as db_table
 from stoa.db.repositories.security_audit_repo import AuthorizationAuditSink
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.db.dynamodb import get_table
@@ -919,7 +920,12 @@ async def request_teacher_help(
             now=now,
             table=get_table(),
         )
-    except (help_requests.HelpRequestUnavailable, account_deletion_repo.AccountDeletionConflict) as exc:
+    except (
+        help_requests.HelpRequestUnavailable,
+        account_deletion_repo.AccountDeletionConflict,
+        db_table.WriteRefused,
+        db_table.TableUnavailable,
+    ) as exc:
         # Nothing was admitted: asking again for the same case is safe.
         raise help_requests.HelpRequestViolation(
             HelpCode.TEACHER_SUPPORT_ADMISSION_RECOVERABLE, internal_detail=type(exc).__name__

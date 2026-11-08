@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
-from fakes.dynamodb import as_stored as _as_stored
+from fakes.dynamodb import as_stored as _as_stored, from_wire
 
 from stoa.db.repositories import checkout_command_repo
 from stoa.models.billing import CheckoutCommandState, CheckoutIntent, PurchasablePlanId
@@ -47,7 +47,8 @@ class AtomicCheckoutTable:
             item = self.rows.get((Key["PK"], Key["SK"]))
             return {"Item": dict(item)} if item is not None else {}
 
-    def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+        operations = from_wire(TransactItems)
         with self.lock:
             is_create = sum("Put" in operation for operation in operations) == 3
             if is_create and self.fail_before_create:

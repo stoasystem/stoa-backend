@@ -14,6 +14,7 @@ from audit_helpers import MemoryAuthorizationAuditSink
 from fakes.dynamodb import FakeTable as _FakeTable
 from fakes.dynamodb import as_stored as _as_stored
 from fakes.learning_session import patch_session_table, seed_conversation, seed_message
+from stoa.db import table as db_table
 from stoa.rule_violation import render_message
 from stoa.db.repositories import attachment_repo, question_repo, user_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
@@ -1669,17 +1670,17 @@ def test_escalating_a_conversation_writes_the_record_the_teacher_side_reads(monk
 
 def test_escalating_the_same_conversation_twice_cannot_open_a_second_case(monkeypatch):
     """Negative control: the record is created, never overwritten."""
-    from stoa.db.repositories import account_deletion_repo
 
     sent: list[list[dict]] = []
-    original = account_deletion_repo.transact
+    original = db_table.transact
 
     def recording(operations, *, table=None):
         operations = list(operations)
         sent.append(operations)
         return original(operations, table=table)
 
-    monkeypatch.setattr(account_deletion_repo, "transact", recording)
+    monkeypatch.setattr(
+        db_table, "transact", recording)
     table = _escalation_table()
 
     assert _escalate(monkeypatch, table).status_code == 200

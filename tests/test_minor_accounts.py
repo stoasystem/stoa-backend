@@ -573,20 +573,20 @@ def test_写生日时的冲突不会把账号推进去也不会烧掉令牌(tabl
     single-use token spent on an attempt that achieved nothing. The invitee
     would be locked out of an account an administrator already opened for them.
     """
-    from stoa.db.repositories import account_deletion_repo
+    from fakes.dynamodb import transaction_canceled
 
     issued = _invite()
-    real = table.transact_account_deletion
+    real = table.transact_write_items
     refused: list[int] = []
 
-    def refuse_the_birthday(operations):
+    def refuse_the_birthday(*, TransactItems):  # noqa: N803
         # The first transact after the token is burned is the birthday write.
         if not refused:
             refused.append(1)
-            raise account_deletion_repo.AccountDeletionConflict("birthday refused")
-        return real(operations)
+            raise transaction_canceled(["None", "ConditionalCheckFailed"])
+        return real(TransactItems=TransactItems)
 
-    table.transact_account_deletion = refuse_the_birthday
+    table.transact_write_items = refuse_the_birthday
 
     with pytest.raises(RuleViolation) as refusal:
         _claim(token=issued["activationToken"], date_of_birth=MINOR)
@@ -596,7 +596,7 @@ def test_写生日时的冲突不会把账号推进去也不会烧掉令牌(tabl
     assert stored["account_status"] == "invited"
     assert "date_of_birth" not in stored
 
-    table.transact_account_deletion = real
+    table.transact_write_items = real
     _claim(token=issued["activationToken"], date_of_birth=MINOR)
 
     settled = _stored(table, issued["userId"])

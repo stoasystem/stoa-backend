@@ -13,6 +13,7 @@ from collections.abc import Mapping, Sequence
 
 from botocore.exceptions import ClientError
 
+from stoa.db import table as db_table
 from stoa.config import UPLOAD_ROW_RETENTION_SECONDS
 from stoa.db.repositories import account_deletion_repo, attachment_repo
 from stoa.models.attachment import UploadStatus
@@ -58,7 +59,7 @@ def create_upload_intent(item: dict[str, object], *, table: object | None = None
         raise AttachmentRepositoryConflict("conditional_conflict")
     upload_id = _required_text(item.get("upload_id"))
     try:
-        account_deletion_repo.transact(
+        db_table.transact(
             [
                 account_deletion_repo.active_fence_condition(owner_id, generation),
                 {
@@ -72,7 +73,11 @@ def create_upload_intent(item: dict[str, object], *, table: object | None = None
             ],
             table=table or _table(),
         )
-    except account_deletion_repo.AccountDeletionConflict as exc:
+    except (
+        account_deletion_repo.AccountDeletionConflict,
+        db_table.WriteRefused,
+        db_table.TableUnavailable,
+    ) as exc:
         raise AttachmentRepositoryConflict("conditional_conflict") from exc
 
 

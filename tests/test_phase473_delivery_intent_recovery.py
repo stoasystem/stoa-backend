@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 
+from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, notification_repo
 from stoa.services import notification_service
 
@@ -149,7 +150,7 @@ def test_begin_private_claim_is_one_fence_plus_exact_version_cas(
     )
     captured: list[dict[str, Any]] = []
     monkeypatch.setattr(
-        account_deletion_repo,
+        db_table,
         "transact",
         lambda operations, **_kwargs: captured.extend(operations),
     )

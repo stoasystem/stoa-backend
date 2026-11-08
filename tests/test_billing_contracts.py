@@ -629,8 +629,8 @@ def test_a_billing_transaction_is_not_serialized_twice(monkeypatch):
     handed them to the resource table's own client, which carries request
     transformations and serializes them again - every key becomes a map and
     DynamoDB rejects the request for not matching the schema. The production
-    table does not satisfy the high-level protocol, so this is the branch it
-    takes, and the table holds no billing row at all.
+    table offers no transaction entry of its own, so the table gateway sends it
+    on its own client, and that is the branch under test.
 
     Whether anyone has tried to subscribe is not something this can settle.
     What it settles is that the write works.
@@ -649,8 +649,8 @@ def test_a_billing_transaction_is_not_serialized_twice(monkeypatch):
         BillingMode="PAY_PER_REQUEST",
     )
     table = resource.Table("stoa-main")
-    assert not isinstance(table, subscription_service._HighLevelTransactionTable), (
-        "the branch under test is the one production takes"
+    assert not callable(getattr(table, "transact_write_items", None)), (
+        "the branch under test is the one production takes: the gateway's own client"
     )
     monkeypatch.setattr(subscription_service, "get_table", lambda: table)
 

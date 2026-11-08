@@ -11,11 +11,13 @@ from typing import Any
 
 import pytest
 
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo, allowance_repo
 from stoa.models.allowance import TeacherSupportScope
 from stoa.models.billing import BillingPlanId
 from stoa.services import allowance_service
 from dynamodb_expression_assertions import assert_expression_placeholders_closed
+from fakes.dynamodb import from_wire
 
 
 UTC = timezone.utc
@@ -88,7 +90,8 @@ class AtomicAllowanceTable:
                 ]
             }
 
-    def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+        operations = from_wire(TransactItems)
         for operation in operations:
             assert_expression_placeholders_closed(operation)
         with self._lock:
@@ -244,10 +247,11 @@ def test_concurrent_reservations_cannot_overspend_either_dimension(
     reserved_input_tokens = counter["reserved_input_tokens"]
     finalized_output_tokens = counter["finalized_output_tokens"]
     reserved_output_tokens = counter["reserved_output_tokens"]
-    assert isinstance(finalized_input_tokens, int)
-    assert isinstance(reserved_input_tokens, int)
-    assert isinstance(finalized_output_tokens, int)
-    assert isinstance(reserved_output_tokens, int)
+    # Numbers come back from the table as Decimal; each must still be a whole one.
+    assert stored_int(finalized_input_tokens) is not None
+    assert stored_int(reserved_input_tokens) is not None
+    assert stored_int(finalized_output_tokens) is not None
+    assert stored_int(reserved_output_tokens) is not None
     assert finalized_input_tokens + reserved_input_tokens <= 50_000
     assert finalized_output_tokens + reserved_output_tokens <= 10_000
 

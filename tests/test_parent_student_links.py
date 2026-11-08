@@ -26,6 +26,7 @@ from stoa.security.route_authorization import get_authorization_fact_repository
 from stoa.services import current_relationship, parent_link_service
 from rule_violation_helpers import assert_violation
 from fakes import student_evidence as fake_evidence
+from fakes.dynamodb import from_wire, transaction_canceled
 
 
 NOW = "2026-09-19T10:00:00+00:00"
@@ -91,15 +92,16 @@ class FakeLinkTable:
         expression = check.get("ConditionExpression") or ""
         values = check.get("ExpressionAttributeValues") or {}
         if item is None:
-            raise account_deletion_repo.AccountDeletionConflict("condition row missing")
+            raise transaction_canceled([])  # condition row missing
         if "#status=:active" in expression and item.get("status") != values[":active"]:
-            raise account_deletion_repo.AccountDeletionConflict("condition status")
+            raise transaction_canceled([])  # condition status
         if "generation=:generation" in expression and item.get("generation") != values[
             ":generation"
         ]:
-            raise account_deletion_repo.AccountDeletionConflict("condition generation")
+            raise transaction_canceled([])  # condition generation
 
-    def transact_account_deletion(self, operations):
+    def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+        operations = from_wire(TransactItems)
         copied = deepcopy(operations)
         self.transactions.append(copied)
         staged = deepcopy(self.items)
@@ -114,20 +116,20 @@ class FakeLinkTable:
             condition = put.get("ConditionExpression") or ""
             existing = staged.get(key)
             if "attribute_not_exists(PK)" in condition and existing is not None:
-                raise account_deletion_repo.AccountDeletionConflict("exists")
+                raise transaction_canceled([])  # exists
             if "attribute_exists(PK)" in condition:
                 if existing is None:
-                    raise account_deletion_repo.AccountDeletionConflict("missing")
+                    raise transaction_canceled([])  # missing
                 if "#status = :expected_status" in condition:
                     expected = put["ExpressionAttributeValues"][":expected_status"]
                     if existing.get("status") != expected:
-                        raise account_deletion_repo.AccountDeletionConflict("status")
+                        raise transaction_canceled([])  # status
                 if "link_updated_at = :expected_link_updated_at" in condition:
                     expected_stamp = put["ExpressionAttributeValues"][
                         ":expected_link_updated_at"
                     ]
                     if existing.get("link_updated_at") != expected_stamp:
-                        raise account_deletion_repo.AccountDeletionConflict("stale")
+                        raise transaction_canceled([])  # stale
             staged[key] = item
         self.items = staged
 
@@ -140,7 +142,7 @@ class FakeLinkTable:
 
     def _refuse_guard(self, key: tuple[str, str]) -> None:
         if self.refuse_prefix and key[0].startswith(self.refuse_prefix):
-            raise account_deletion_repo.AccountDeletionConflict("injected write failure")
+            raise transaction_canceled([])  # injected write failure
 
 
 # Card 008: self-service needs both sides to be adults, and an account with no
@@ -446,7 +448,6 @@ def test_注销任一方都能扫到链接的两行():
     正向行的 PK 才带家长，SK 和字段都只指向学生，所以家长不在注册表里时
     这一行会活过它自己家长的注销，留下反向已墓碑、正向仍 active 的半截链接。
     """
-    from stoa.db.repositories import account_deletion_repo
 
     forward, reverse = _link_rows()
 
@@ -457,7 +458,6 @@ def test_注销任一方都能扫到链接的两行():
 
 def test_注销管理员不会扫走他签发的链接():
     """created_by 通常是管理员，链接不属于他。"""
-    from stoa.db.repositories import account_deletion_repo
 
     forward, _ = _link_rows()
 
@@ -489,18 +489,18 @@ def test_预读之后状态被改掉则拒绝迁移(table: FakeLinkTable) -> Non
         requester_id="parent-a", counterpart_id="student-b", now=NOW
     )
 
-    original = table.transact_account_deletion
+    original = table.transact_write_items
 
-    def racing_transact(operations):
+    def racing_transact(*, TransactItems):  # noqa: N803
         for key in (
             ("PARENT#parent-a", "CHILD#student-b"),
             ("STUDENT#student-b", "PARENT#parent-a"),
         ):
             table.items[key]["status"] = "rejected"
-        table.transact_account_deletion = original
-        return original(operations)
+        table.transact_write_items = original
+        return original(TransactItems=TransactItems)
 
-    table.transact_account_deletion = racing_transact
+    table.transact_write_items = racing_transact
 
     with pytest.raises(parent_link_repo.ParentLinkConflict):
         parent_link_service.confirm_link(
@@ -735,16 +735,16 @@ def test_两个请求同时抢一个刚释放的键位只有一个成功(table: 
         requester_id="parent-a", counterpart_id="student-b", now=_at(0)
     )
 
-    original = table.transact_account_deletion
+    original = table.transact_write_items
 
-    def racing_transact(operations):
-        table.transact_account_deletion = original
+    def racing_transact(*, TransactItems):  # noqa: N803
+        table.transact_write_items = original
         parent_link_service.request_link(
             requester_id="student-b", counterpart_id="parent-a", now=_at(14.5)
         )
-        return original(operations)
+        return original(TransactItems=TransactItems)
 
-    table.transact_account_deletion = racing_transact
+    table.transact_write_items = racing_transact
 
     with pytest.raises(parent_link_repo.ParentLinkConflict):
         parent_link_service.request_link(

@@ -10,6 +10,7 @@ from typing import Protocol, runtime_checkable
 
 from botocore.exceptions import ClientError
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -264,7 +265,7 @@ def create_or_get_public_identity_command(
             fence = account_deletion_repo.require_active_account_fence(
                 normalized_user_id, table=table
             )
-            account_deletion_repo.transact(
+            db_table.transact(
                 [
                     account_deletion_repo.active_fence_condition(
                         normalized_user_id, int(fence["generation"])
@@ -281,7 +282,11 @@ def create_or_get_public_identity_command(
                 table=table,
             )
             return command
-        except account_deletion_repo.AccountDeletionConflict as exc:
+        except (
+            account_deletion_repo.AccountDeletionConflict,
+            db_table.WriteRefused,
+            db_table.TableUnavailable,
+        ) as exc:
             existing = get_public_identity_command(email)
             if existing and existing.fingerprint == fingerprint:
                 return existing

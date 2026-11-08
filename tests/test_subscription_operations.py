@@ -1,3 +1,4 @@
+from decimal import Decimal
 import hashlib
 import hmac
 import json
@@ -8,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from botocore.exceptions import ClientError
 
+from fakes.dynamodb import from_wire
 from stoa.config import Settings, get_settings
 from fakes.links import LinkRows
 from stoa.db.repositories import billing_fact_repo, checkout_command_repo, parent_link_repo
@@ -32,6 +34,16 @@ def _billing_unfrozen(monkeypatch: pytest.MonkeyPatch) -> None:
     which reads the switch rather than this fixture.
     """
     monkeypatch.setattr(billing, "BILLING_AND_SUBSCRIPTION_ENABLED", True)
+
+def _whole_numbers_as_int(value):
+    if isinstance(value, Decimal) and value == value.to_integral_value():
+        return int(value)
+    if isinstance(value, dict):
+        return {key: _whole_numbers_as_int(member) for key, member in value.items()}
+    if isinstance(value, list):
+        return [_whole_numbers_as_int(member) for member in value]
+    return value
+
 
 class FakeTable:
     def __init__(self):
@@ -92,7 +104,9 @@ class FakeTable:
             item[field] = ExpressionAttributeValues[value_alias]
         return {"Attributes": dict(item)}
 
-    def transact_write_items(self, TransactItems):
+    def transact_write_items(self, *, TransactItems):  # noqa: N803
+        # This double has always held plain ints, as its direct writes do.
+        TransactItems = _whole_numbers_as_int(from_wire(TransactItems))  # noqa: N806
         for operation in TransactItems:
             self._check_transaction_operation(operation)
         for operation in TransactItems:
@@ -109,9 +123,6 @@ class FakeTable:
             elif "Delete" in operation:
                 key = operation["Delete"]["Key"]
                 self.items.pop((key["PK"], key["SK"]), None)
-
-    def transact_account_deletion(self, operations):
-        self.transact_write_items(TransactItems=operations)
 
     def _check_transaction_operation(self, operation):
         if "ConditionCheck" in operation:

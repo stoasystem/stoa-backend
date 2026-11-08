@@ -10,8 +10,8 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table, stored_int
-from stoa.db.repositories import account_deletion_repo
 from stoa.models.billing import BillingFact, BillingFactKind, BillingPlanId
 
 
@@ -263,7 +263,7 @@ def _create_only(item: Mapping[str, object]) -> dict[str, Any]:
 
 
 def _transact(operations: Sequence[dict[str, Any]], *, table: object) -> None:
-    account_deletion_repo.transact(operations, table=table)
+    db_table.transact(operations, table=table)
 
 
 def _event_receipt_matches(

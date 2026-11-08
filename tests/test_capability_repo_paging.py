@@ -12,9 +12,7 @@ must not come back.
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
 
-from boto3.dynamodb.types import TypeDeserializer
 from fakes.dynamodb import FakeTable
 
 from stoa.db.repositories import capability_repo
@@ -28,32 +26,15 @@ CAPABILITIES = (
 
 
 class CapabilityTable(FakeTable):
-    """The shared double, named like a table so grants take the real serialized path.
+    """The shared double, named like the real table.
 
-    The capability store sends a low-level transaction, its values tagged with
-    their types; the shared double judges resource-level values. This only
-    decodes the tags and hands the same transaction to the shared double, whose
-    conditions and effects are the ones every other test relies on.
+    Grants reach it through the table gateway in wire format, as they would reach
+    the real client; the shared double decodes them and judges them the same way
+    it judges every other test's transactions.
     """
 
     name = "stoa-main"
     meta = SimpleNamespace(client=SimpleNamespace(meta=SimpleNamespace(region_name="eu-central-2")))
-
-    def transact_write_items(self, operations=None, *, TransactItems=None):  # noqa: N803
-        decode = TypeDeserializer().deserialize
-
-        def plain(body: dict[str, Any]) -> dict[str, Any]:
-            decoded = dict(body)
-            for field in ("Item", "Key", "ExpressionAttributeValues"):
-                if field in decoded:
-                    decoded[field] = {k: decode(v) for k, v in decoded[field].items()}
-            return decoded
-
-        items = [
-            {kind: plain(body) for kind, body in operation.items()}
-            for operation in (TransactItems or [])
-        ]
-        return super().transact_write_items(operations, TransactItems=items or None)
 
 
 def _grant(table: CapabilityTable, user_id: str, capability: str, grant_id: str) -> None:

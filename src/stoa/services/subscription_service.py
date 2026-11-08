@@ -16,13 +16,13 @@ from typing import Any, Protocol, overload, runtime_checkable
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from boto3.dynamodb.types import TypeSerializer
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 from fastapi import HTTPException
 
 from stoa.config import Settings
-from stoa.db.dynamodb import get_table, omit_none_attributes, scan_every_page, stored_int
+from stoa.db import table as db_table
+from stoa.db.dynamodb import get_table, scan_every_page, stored_int
 from stoa.db.repositories import (
     account_deletion_repo,
     billing_fact_repo,
@@ -30,7 +30,6 @@ from stoa.db.repositories import (
     notification_repo,
     user_repo,
 )
-from stoa.db.repositories.attachment_repo import wire_format_client
 from stoa.models.billing import (
     BillingFact,
     BillingFactKind,
@@ -72,24 +71,6 @@ class _QueryTable(Protocol):
 @runtime_checkable
 class _ScanTable(Protocol):
     def scan(self, **kwargs: object) -> object: ...
-
-
-@runtime_checkable
-class _HighLevelTransactionTable(Protocol):
-    def transact_write_items(self, **kwargs: object) -> object: ...
-
-
-class _DynamoClient(Protocol):
-    def transact_write_items(self, **kwargs: object) -> object: ...
-
-
-class _DynamoMeta(Protocol):
-    client: _DynamoClient
-
-
-@runtime_checkable
-class _DynamoTable(Protocol):
-    meta: _DynamoMeta
 
 
 def _subscription_mapping(value: object) -> SubscriptionItem:
@@ -5176,90 +5157,41 @@ def _within_dates(value: str | None, date_from: str | None, date_to: str | None)
 
 
 def _transact_write(operations: list[dict[str, Any]]) -> None:
-    # A None is serialized as the NULL type, and the table refuses a NULL in an
-    # attribute one of its indexes keys on: `create_parent_request` writes
-    # `student_id: None` and `GSI-StudentId` keys on it. The other two
-    # transaction serializers drop them; this one did not, and nothing noticed
-    # because the request ahead of it was being refused for a different reason.
-    #
-    # It happens before the branch on purpose. Production takes the low-level
-    # path and the test doubles take the high-level one, so a rule applied to
-    # only one of them is a rule no test can see. Items only: a condition's
-    # values are explicit, and a key cannot be absent.
-    operations = [
-        {**operation, "Put": {**put, "Item": omit_none_attributes(put["Item"])}}
-        if (put := operation.get("Put")) is not None
-        else operation
-        for operation in operations
-    ]
-    table = get_table()
-    if isinstance(table, _HighLevelTransactionTable):
-        table.transact_write_items(TransactItems=operations)
-        return
+    # The table gateway serializes, and leaves every `None` out of an item, a key
+    # or a value map: `create_parent_request` writes `student_id: None`, and
+    # `GSI-StudentId` refuses a NULL key. What stays here is this writer's own
+    # leniency - an empty condition, name or value map is left out, not sent -
+    # and its callers' contract: they read the provider's own error code, so the
+    # gateway's outcome is handed back as the `ClientError` it came from.
+    try:
+        db_table.transact(
+            [_without_empty_parts(operation) for operation in operations],
+            table=get_table(),
+        )
+    except (db_table.WriteRefused, db_table.TableUnavailable) as exc:
+        if isinstance(exc.__cause__, ClientError):
+            raise exc.__cause__
+        raise
 
-    table_name = getattr(table, "name", None)
-    if not table_name:
-        table_name = getattr(table, "table_name", None)
-    if not table_name:
-        raise RuntimeError("DynamoDB table name is unavailable for transaction")
 
-    serializer = TypeSerializer()
-    client_ops: list[dict[str, Any]] = []
-    for operation in operations:
-        if "ConditionCheck" in operation:
-            check = operation["ConditionCheck"]
-            client_ops.append(
-                {
-                    "ConditionCheck": {
-                        "TableName": table_name,
-                        "Key": _serialize_map(check["Key"], serializer),
-                        **_transaction_common(check, serializer),
-                    }
-                }
-            )
-        elif "Put" in operation:
-            put = operation["Put"]
-            client_ops.append(
-                {
-                    "Put": {
-                        "TableName": table_name,
-                        "Item": _serialize_map(put["Item"], serializer),
-                        **_transaction_common(put, serializer),
-                    }
-                }
-            )
-        elif "Update" in operation:
-            update = operation["Update"]
-            client_ops.append(
-                {
-                    "Update": {
-                        "TableName": table_name,
-                        "Key": _serialize_map(update["Key"], serializer),
-                        "UpdateExpression": update["UpdateExpression"],
-                        **_transaction_common(update, serializer),
-                    }
-                }
-            )
-        elif "Delete" in operation:
-            delete = operation["Delete"]
-            client_ops.append(
-                {
-                    "Delete": {
-                        "TableName": table_name,
-                        "Key": _serialize_map(delete["Key"], serializer),
-                        **_transaction_common(delete, serializer),
-                    }
-                }
-            )
-        else:
-            raise ValueError(f"Unsupported transaction operation: {operation}")
+_OPTIONAL_TRANSACTION_PARTS = (
+    "ConditionExpression",
+    "ExpressionAttributeNames",
+    "ExpressionAttributeValues",
+)
 
-    if not isinstance(table, _DynamoTable):
-        raise RuntimeError("DynamoDB transaction client is unavailable")
-    # The items above are already in wire format, and the resource table's own
-    # client would serialize them a second time (attachment_repo's note on the
-    # same trap). Stripe's writes go through here.
-    wire_format_client(table).transact_write_items(TransactItems=client_ops)
+
+def _without_empty_parts(operation: dict[str, Any]) -> dict[str, Any]:
+    if len(operation) != 1:
+        raise ValueError(f"Unsupported transaction operation: {operation}")
+    ((action, body),) = operation.items()
+    return {
+        action: {
+            field: value
+            for field, value in body.items()
+            if value or field not in _OPTIONAL_TRANSACTION_PARTS
+        }
+    }
 
 
 def _versioned_profile_operations(
@@ -5294,24 +5226,6 @@ def _versioned_profile_operations(
             expected_version=version,
         ),
     ]
-
-
-def _transaction_common(operation: dict[str, Any], serializer: TypeSerializer) -> dict[str, Any]:
-    common: dict[str, Any] = {}
-    if operation.get("ConditionExpression"):
-        common["ConditionExpression"] = operation["ConditionExpression"]
-    if operation.get("ExpressionAttributeNames"):
-        common["ExpressionAttributeNames"] = operation["ExpressionAttributeNames"]
-    if operation.get("ExpressionAttributeValues"):
-        common["ExpressionAttributeValues"] = _serialize_map(
-            operation["ExpressionAttributeValues"],
-            serializer,
-        )
-    return common
-
-
-def _serialize_map(values: dict[str, Any], serializer: TypeSerializer) -> dict[str, Any]:
-    return {key: serializer.serialize(value) for key, value in values.items()}
 
 
 def _is_conditional_failure(exc: ClientError) -> bool:

@@ -20,6 +20,7 @@ import secrets
 from typing import Any, Callable
 from uuid import uuid4
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import (
     account_deletion_repo,
@@ -647,7 +648,11 @@ def _create_account_row(
             },
             claim_operation=claim,
         )
-    except account_deletion_repo.AccountDeletionConflict as exc:
+    except (
+        account_deletion_repo.AccountDeletionConflict,
+        db_table.WriteRefused,
+        db_table.TableUnavailable,
+    ) as exc:
         # The pair was taken between the read above and this commit, or the profile
         # row itself already exists. Nothing was written either way.
         raise AccountViolation(AccountErrorCode.ACCOUNT_EXISTS) from exc
@@ -692,15 +697,21 @@ def _attach_account_number(*, account_id: str, role: str, now: datetime) -> str:
     )
     try:
         fence = account_deletion_repo.require_active_account_fence(account_id)
-        account_deletion_repo.transact(
+        db_table.transact(
             [
                 account_deletion_repo.active_fence_condition(
                     account_id, _profile_version(fence, field="generation")
                 ),
                 operation,
-            ]
+            ],
+            # The table the fence above was read from.
+            table=account_deletion_repo.get_table(),
         )
-    except account_deletion_repo.AccountDeletionConflict as exc:
+    except (
+        account_deletion_repo.AccountDeletionConflict,
+        db_table.WriteRefused,
+        db_table.TableUnavailable,
+    ) as exc:
         raise AccountViolation(AccountErrorCode.ACCOUNT_NUMBER_ALREADY_ASSIGNED) from exc
     return account_number
 
@@ -730,15 +741,21 @@ def _record_date_of_birth(*, account_id: str, date_of_birth: str, now: datetime)
     )
     try:
         fence = account_deletion_repo.require_active_account_fence(account_id)
-        account_deletion_repo.transact(
+        db_table.transact(
             [
                 account_deletion_repo.active_fence_condition(
                     account_id, _profile_version(fence, field="generation")
                 ),
                 operation,
-            ]
+            ],
+            # The table the fence above was read from.
+            table=account_deletion_repo.get_table(),
         )
-    except account_deletion_repo.AccountDeletionConflict as exc:
+    except (
+        account_deletion_repo.AccountDeletionConflict,
+        db_table.WriteRefused,
+        db_table.TableUnavailable,
+    ) as exc:
         raise AccountViolation(AccountErrorCode.ACCOUNT_STATE_INVALID) from exc
 
 

@@ -12,9 +12,9 @@ from hashlib import sha256
 import json
 from typing import Any, Iterable, Mapping, Protocol, runtime_checkable
 
-from boto3.dynamodb.types import TypeSerializer
 from botocore.exceptions import ClientError
 
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_email_claim_repo
 
@@ -419,16 +419,21 @@ def ensure_active_account_fence(
             }
         },
     ]
-    transact(operations, table=target)
+    db_table.transact(operations, table=target)
     return require_active_account_fence(user_id, table=target)
 
 
 def materialize_profile_with_fence(
-    profile: dict[str, Any], *, now_iso: str, table: Any | None = None
-) -> None:
+    profile: dict[str, Any], *, now_iso: str
+) -> list[dict[str, Any]]:
+    """The operations that create one profile row and its active account fence.
+
+    Returned, not committed: the caller sends them in one transaction with whatever
+    else has to be decided in the same commit, such as the email claim that makes the
+    profile unique. This module stays the only one that knows the two rows' shape.
+    """
     now_iso = _valid_lifecycle_timestamp(now_iso)
     user_id = _required(profile.get("user_id"), "user_id")
-    target = table or get_table()
     profile_item = {
         "PK": f"USER#{user_id}",
         "SK": "PROFILE",
@@ -446,27 +451,20 @@ def materialize_profile_with_fence(
         "created_at": now_iso,
         "updated_at": now_iso,
     }
-    hook = getattr(target, "put_profile_with_fence", None)
-    if callable(hook):
-        hook(profile_item, fence)
-        return
-    transact(
-        [
-            {
-                "Put": {
-                    "Item": profile_item,
-                    "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
-                }
-            },
-            {
-                "Put": {
-                    "Item": fence,
-                    "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
-                }
-            },
-        ],
-        table=target,
-    )
+    return [
+        {
+            "Put": {
+                "Item": profile_item,
+                "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+            }
+        },
+        {
+            "Put": {
+                "Item": fence,
+                "ConditionExpression": "attribute_not_exists(PK) AND attribute_not_exists(SK)",
+            }
+        },
+    ]
 
 
 def get_deletion_command(
@@ -535,7 +533,7 @@ def begin_account_deletion(
         except Exception as exc:
             raise AccountDeletionConflict("deletion command conflict") from exc
     try:
-        transact(
+        _transact(
             [
                 {
                     "Put": {
@@ -772,7 +770,7 @@ def replace_with_deletion_tombstone(
         # has no such attribute - but a fake that grows one stops testing it.
         hook(dict(item), tombstone, user_id, generation)
         return
-    transact(
+    _transact(
         [
             deletion_fence_condition(user_id, generation),
             {
@@ -887,7 +885,7 @@ def scrub_teacher_question_reference(
             f"#{field}" for field in dict.fromkeys(remove_fields)
         )
     try:
-        transact(
+        _transact(
             [
                 deletion_fence_condition(teacher_id, generation),
                 {
@@ -971,7 +969,7 @@ def replace_teacher_session_with_tombstone(
         ":question_version": question_version,
     }
     try:
-        transact(
+        _transact(
             [
                 deletion_fence_condition(teacher_id, generation),
                 {
@@ -1072,7 +1070,7 @@ def delete_owned_row(
     if callable(hook):
         hook(dict(item), user_id, generation)
         return
-    transact(
+    _transact(
         [
             deletion_fence_condition(user_id, generation),
             {
@@ -1143,7 +1141,7 @@ def scrub_parent_profile_child(
                     replacements=replacements,
                 ),
             ]
-            transact(operations, table=target)
+            _transact(operations, table=target)
             return
         except AccountDeletionConflict as exc:
             if attempt == 3:
@@ -1283,7 +1281,7 @@ def terminalize_identity_row(
     if callable(hook):
         hook(dict(item), evidence, user_id, generation)
         return
-    transact(
+    _transact(
         [
             deletion_fence_condition(user_id, generation),
             {
@@ -1321,7 +1319,7 @@ def create_provider_revoke_debt(
         hook(item)
         return
     try:
-        transact(
+        _transact(
             [
                 deletion_fence_condition(user_id, generation),
                 {
@@ -1368,7 +1366,7 @@ def complete_provider_revoke_debt(
         hook(key, user_id, generation, now_iso)
         return
     try:
-        transact(
+        _transact(
             [
                 deletion_fence_condition(user_id, generation),
                 {
@@ -1961,7 +1959,7 @@ def finalize_account_deletion(
         )
         return dict(persisted_command), dict(persisted_fence)
     try:
-        transact(
+        _transact(
             [
                 {
                     "Put": {
@@ -2028,66 +2026,19 @@ def finalize_account_deletion(
     return terminal_command, terminal_fence
 
 
-def transact(operations: Iterable[dict[str, Any]], *, table: Any | None = None) -> None:
-    import boto3 as _boto3
+def _transact(operations: Iterable[dict[str, Any]], *, table: Any | None = None) -> None:
+    """One deletion-flow transaction: here a refusal is a deletion conflict.
 
-    target = table or get_table()
-    hook = getattr(target, "transact_account_deletion", None)
-    if callable(hook):
-        hook(list(operations))
-        return
-    table_name = getattr(target, "name", None)
-    if not table_name:
-        raise AccountDeletionConflict("atomic lifecycle persistence unavailable")
-    # Use a fresh low-level client to avoid any request-transformation event
-    # handlers registered on the DynamoDB resource's meta client.
-    region = getattr(
-        getattr(getattr(target, "meta", None), "client", None),
-        "meta",
-        None,
-    )
-    region_name = getattr(region, "region_name", None) or "eu-central-2"
-    client = _boto3.client("dynamodb", region_name=region_name)
-    serializer = TypeSerializer()
+    The deletion worker and its replays tell outcomes apart by re-reading the rows
+    they meant to change, not by the table's reasons, so both outcomes are reported
+    the one way the flow already handles.
+    """
     try:
-        client.transact_write_items(
-            TransactItems=[
-                _serialize_operation(operation, table_name, serializer)
-                for operation in operations
-            ]
-        )
-    except ClientError as exc:
-        # DynamoDB reports which item in the transaction refused, and losing it
-        # leaves callers with a conflict they cannot act on or diagnose.
-        reasons = exc.response.get("CancellationReasons") or []
-        logger.warning(
-            "Transaction refused: %s",
-            [
-                f"{index}:{reason.get('Code')}"
-                for index, reason in enumerate(reasons)
-                if reason.get("Code") not in (None, "None")
-            ]
-            or exc.response.get("Error", {}).get("Code"),
-        )
-        if _conditional(exc):
-            raise AccountDeletionConflict("conditional account lifecycle conflict") from exc
+        db_table.transact(operations, table=table)
+    except db_table.WriteRefused as exc:
+        raise AccountDeletionConflict("conditional account lifecycle conflict") from exc
+    except db_table.TableUnavailable as exc:
         raise AccountDeletionConflict("account lifecycle dependency unavailable") from exc
-
-
-def _serialize_operation(
-    operation: dict[str, Any], table_name: str, serializer: TypeSerializer
-) -> dict[str, Any]:
-    name, raw = next(iter(operation.items()))
-    value = dict(raw)
-    value["TableName"] = table_name
-    for key in ("Item", "Key", "ExpressionAttributeValues"):
-        if key in value:
-            value[key] = {
-                field: serializer.serialize(field_value)
-                for field, field_value in value[key].items()
-                if field_value is not None
-            }
-    return {name: value}
 
 
 def _validated_cursor(value: Any) -> dict[str, str]:

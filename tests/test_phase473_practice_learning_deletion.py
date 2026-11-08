@@ -15,6 +15,7 @@ from stoa.db.repositories import (
     practice_repo,
 )
 from stoa.services import account_deletion_service
+from fakes.dynamodb import from_wire
 
 
 STUDENT_ID = "student-learning-delete"
@@ -251,7 +252,8 @@ def test_curriculum_reconciliation_is_exact_once_across_retry() -> None:
     calls: list[list[dict[str, Any]]] = []
 
     class _Table:
-        def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+        def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+            operations = from_wire(TransactItems)
             calls.append(operations)
 
     manifest = {
@@ -353,7 +355,8 @@ def test_learning_row_updates_keep_the_generation_the_row_carries(
                     return {"Item": dict(row)}
             return {}
 
-        def transact_account_deletion(self, operations: list[dict[str, Any]]) -> None:
+        def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+            operations = from_wire(TransactItems)
             transactions.append(operations)
 
     monkeypatch.setattr(adaptive_learning_repo, "get_table", lambda: _Table())

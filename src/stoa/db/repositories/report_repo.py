@@ -11,6 +11,7 @@ from typing import Protocol, runtime_checkable
 
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Attr, ConditionBase, Key
+from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
@@ -338,7 +339,7 @@ def put_report(item: ReportItem) -> None:
     owner_id = item.get("student_id")
     generation = item.get("account_fence_generation")
     if isinstance(owner_id, str) and type(generation) is int and generation > 0:
-        account_deletion_repo.transact(
+        db_table.transact(
             [
                 account_deletion_repo.active_fence_condition(owner_id, generation),
                 {
@@ -372,7 +373,7 @@ def try_claim_report_generation(item: ReportItem) -> bool:
     generation = item.get("account_fence_generation")
     if isinstance(owner_id, str) and type(generation) is int and generation > 0:
         try:
-            account_deletion_repo.transact(
+            db_table.transact(
                 [
                     account_deletion_repo.active_fence_condition(owner_id, generation),
                     {
@@ -384,7 +385,11 @@ def try_claim_report_generation(item: ReportItem) -> bool:
                 ],
                 table=table,
             )
-        except account_deletion_repo.AccountDeletionConflict:
+        except (
+            account_deletion_repo.AccountDeletionConflict,
+            db_table.WriteRefused,
+            db_table.TableUnavailable,
+        ):
             return False
         return True
     try:
@@ -2028,7 +2033,7 @@ def register_report_object_intent(
     if isinstance(target, _RegisterObjectIntentHook):
         persisted = target.register_report_object_intent(dict(item))
         return _dependency_mapping(persisted) if persisted is not None else item
-    account_deletion_repo.transact(
+    db_table.transact(
         [
             account_deletion_repo.active_fence_condition(owner, generation),
             {
@@ -2079,7 +2084,7 @@ def record_report_object_coordinate(
             dict(intent), dict(coordinate), now_iso
         )
         return _dependency_mapping(persisted) if persisted is not None else updated
-    account_deletion_repo.transact(
+    db_table.transact(
         [
             account_deletion_repo.active_fence_condition(owner, generation),
             {
@@ -2208,7 +2213,7 @@ def register_report_email_intent(
     if isinstance(target, _RegisterEmailIntentHook):
         persisted = target.register_report_email_intent(dict(item))
         return _dependency_mapping(persisted) if persisted is not None else item
-    account_deletion_repo.transact(
+    db_table.transact(
         [
             account_deletion_repo.active_fence_condition(owner, generation),
             {
@@ -2349,7 +2354,7 @@ def scrub_report_private_row(
     if isinstance(target, _ScrubPrivateRowHook):
         target.scrub_report_private_row(dict(item), tombstone, owner_id, generation)
         return tombstone
-    account_deletion_repo.transact(
+    db_table.transact(
         [
             account_deletion_repo.deletion_fence_condition(owner_id, generation),
             {

@@ -44,7 +44,7 @@ from fakes.ask_question import bedrock as bedrock  # noqa: F401 - the fixture
 from fakes.ask_question import invokes as invokes  # noqa: F401 - the fixture
 from fakes.ask_question import star_map as star_map  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
-from fakes.dynamodb import transaction_canceled
+from fakes.dynamodb import transaction_canceled, from_wire
 from stoa.jobs import conversation_generation
 from stoa.services import curriculum_service
 
@@ -384,11 +384,11 @@ def test_an_answer_whose_count_collides_is_stored_without_it(
     write = table.transact_write_items
     collisions = []
 
-    def collide_on_the_count(operations=None, *, TransactItems=None):  # noqa: N803
-        items = TransactItems if TransactItems is not None else operations
+    def collide_on_the_count(*, TransactItems):  # noqa: N803
+        items = TransactItems
         counting = [
             str(item.get("Update", {}).get("Key", {}).get("PK", "")).startswith("KNOWLEDGE_GAP#")
-            for item in items
+            for item in from_wire(items)
         ]
         if any(counting):
             collisions.append(len(items))
