@@ -25,10 +25,10 @@ from fastapi.testclient import TestClient
 from PIL import Image
 import pytest
 
+from stoa.db import table as db_table
 from stoa.config import Settings
 from stoa.db.repositories import (
     account_deletion_repo,
-    attachment_repo,
     moderation_repo,
     notification_repo,
 )
@@ -92,7 +92,7 @@ class _Api:
         moderation: FakeRekognition | None,
         settings: Settings | None = None,
     ) -> None:
-        monkeypatch.setattr(attachment_repo, "get_table", lambda: table)
+        db_table.install(table)
         monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
         # A refused image opens a review case (#139), on the same table.
         monkeypatch.setattr(moderation_repo, "get_table", lambda: table)

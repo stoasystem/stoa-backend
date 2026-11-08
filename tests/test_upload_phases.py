@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from stoa.db.repositories import attachment_repo
+from stoa.db import table as db_table
 from stoa.models.attachment import UploadStatus
 from stoa.services import uploads
 from stoa.services.uploads import _store as upload_store
@@ -67,7 +67,7 @@ def test_an_old_row_without_a_usable_window_reads_it_from_the_ttl_field() -> Non
 def test_status_reads_the_owners_row_and_nobody_elses(monkeypatch) -> None:
     table = FakeTable()
     table.seed({**upload_store.upload_key("upload-1"), **_row(UploadStatus.VALIDATED)})
-    monkeypatch.setattr(attachment_repo, "get_table", lambda: table)
+    db_table.install(table)
     at = datetime.fromtimestamp(NOW, UTC)
 
     assert uploads.status("upload-1", OWNER, now=at) is uploads.Phase.READY

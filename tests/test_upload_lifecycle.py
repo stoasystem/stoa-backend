@@ -4,7 +4,7 @@ These used to run against repository doubles written for each test, which agreed
 whatever the test expected of them: a double that moved a row to `validated` on any
 call proved nothing about the conditional update that has to. Here the upload rows
 live in the shared DynamoDB double (`fakes.dynamodb.FakeTable`), reached through
-`attachment_repo.get_table` exactly as `uploads._store` reaches the real table, and
+installed in the table gateway (`stoa.db.table`), which `uploads._store` reads, and
 S3 is `fakes.s3.MultipartS3`, which keeps multipart uploads, parts and object
 versions. Calls go through the `uploads` entries and the sweep
 (`jobs.upload_cleanup.cleanup_expired_uploads`).
@@ -29,6 +29,7 @@ from botocore.exceptions import ClientError
 from PIL import Image
 import pytest
 
+from stoa.db import table as db_table
 from stoa.config import (
     DOCUMENT_MAX_BYTES,
     UPLOAD_INTENT_TTL_SECONDS,
@@ -194,7 +195,7 @@ class _S3(MultipartS3):
 def table(monkeypatch: pytest.MonkeyPatch) -> _Table:
     table = _Table()
     table.seed_active_account(OWNER)
-    monkeypatch.setattr(attachment_repo, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
     return table
 

@@ -14,8 +14,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
 
-from botocore.exceptions import ClientError
-
+from stoa.db import table as db_table
+from stoa.db.dynamodb import get_table
 from stoa.db.repositories import attachment_repo
 
 
@@ -106,7 +106,7 @@ def record_generation_progress(
     never the answer. The command and attempt that wrote the steps go with
     them, so a reader asking about one command never sees another's.
     """
-    target = table or attachment_repo.get_table()
+    target = table or get_table()
     update_item = getattr(target, "update_item", None)
     if not callable(update_item):
         return False
@@ -145,7 +145,7 @@ def read_generation_progress(
 
     Given a command and attempt, only steps that attempt wrote are returned.
     """
-    target = table or attachment_repo.get_table()
+    target = table or get_table()
     try:
         item = attachment_repo._optional_mapping(
             attachment_repo._get_item(
@@ -191,7 +191,7 @@ def cancel_stale_message_command(
     if command.get("owner_id") != owner_id and command.get("student_id") != owner_id:
         raise attachment_repo.AttachmentRepositoryConflict("conditional_conflict")
     remove_fields = tuple(sorted(attachment_repo.CONVERSATION_PRIVATE_FIELDS))
-    target = table or attachment_repo.get_table()
+    target = table or get_table()
     hook = getattr(target, "cancel_stale_message_command", None)
     if callable(hook):
         hook(
@@ -218,7 +218,7 @@ def get_message_command(
     *,
     table: object | None = None,
 ) -> dict[str, object] | None:
-    response = attachment_repo._get_item(table or attachment_repo.get_table(),
+    response = attachment_repo._get_item(table or get_table(),
         Key=message_command_key(conversation_id, idempotency_key), ConsistentRead=True
     )
     return attachment_repo._optional_mapping(response.get("Item"))
@@ -546,7 +546,7 @@ def claim_message_command_and_quota(
     table: object | None = None,
 ) -> MessageCommandResult:
     """Atomically create a message command and charge its daily quota once."""
-    target = table or attachment_repo.get_table()
+    target = table or get_table()
     fingerprint = str(command["fingerprint"])
     now_epoch = max(0, expires_at - 172800)
     existing = read_message_command_result(
@@ -679,7 +679,7 @@ def claim_message_ai_lease(
     account_fence_generation: int | None = None,
     table: object | None = None,
 ) -> MessageCommandResult:
-    target = table or attachment_repo.get_table()
+    target = table or get_table()
     try:
         command = get_message_command(conversation_id, idempotency_key, table=target) or {}
     except Exception:
@@ -966,7 +966,7 @@ def record_message_generation_context(
     """
     try:
         response = attachment_repo._update_item(
-            table or attachment_repo.get_table(),
+            table or get_table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression="SET generation_context=if_not_exists(generation_context, :context)",
             ConditionExpression=(
@@ -982,10 +982,10 @@ def record_message_generation_context(
             },
             ReturnValues="ALL_NEW",
         )
-    except ClientError as exc:
-        raise attachment_repo.AttachmentRepositoryConflict(
-            "conditional_conflict" if attachment_repo._conditional(exc) else "dependency_failure"
-        ) from None
+    except db_table.WriteRefused:
+        raise attachment_repo.AttachmentRepositoryConflict("conditional_conflict") from None
+    except db_table.TableUnavailable:
+        raise attachment_repo.AttachmentRepositoryConflict("dependency_failure") from None
     stored = attachment_repo._optional_mapping(response.get("Attributes"))
     stored_context = attachment_repo._optional_mapping((stored or {}).get("generation_context"))
     if stored_context is None:
@@ -1011,7 +1011,7 @@ def reopen_failed_message_command(
     """
     try:
         attachment_repo._update_item(
-            table or attachment_repo.get_table(),
+            table or get_table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=(
                 "SET #status=:committed, message_committed_at=:now "
@@ -1032,9 +1032,9 @@ def reopen_failed_message_command(
                 ":now": now_iso,
             },
         )
-    except ClientError as exc:
-        if attachment_repo._conditional(exc):
-            return False
+    except db_table.WriteRefused:
+        return False
+    except db_table.TableUnavailable:
         raise attachment_repo.AttachmentRepositoryConflict("dependency_failure") from None
     return True
 
@@ -1059,7 +1059,7 @@ def fail_message_command(
     """
     try:
         attachment_repo._update_item(
-            table or attachment_repo.get_table(),
+            table or get_table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=(
                 "SET #status=:failed, failure_category=:category, "
@@ -1083,9 +1083,9 @@ def fail_message_command(
                 ":now": now_iso,
             },
         )
-    except ClientError as exc:
-        if attachment_repo._conditional(exc):
-            return False
+    except db_table.WriteRefused:
+        return False
+    except db_table.TableUnavailable:
         raise attachment_repo.AttachmentRepositoryConflict("dependency_failure") from None
     return True
 
@@ -1105,7 +1105,7 @@ def _leased_command_update(
     """One write the attempt holding an unexpired lease may make; False if it does not."""
     try:
         attachment_repo._update_item(
-            table or attachment_repo.get_table(),
+            table or get_table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=update_expression,
             ConditionExpression=(
@@ -1122,9 +1122,9 @@ def _leased_command_update(
                 **values,
             },
         )
-    except ClientError as exc:
-        if attachment_repo._conditional(exc):
-            return False
+    except db_table.WriteRefused:
+        return False
+    except db_table.TableUnavailable:
         raise attachment_repo.AttachmentRepositoryConflict("dependency_failure") from None
     return True
 
@@ -1218,7 +1218,7 @@ def scan_generation_sweep_commands(
     moment is picked up by the next run, and whatever acts on one does so
     conditionally anyway.
     """
-    target = table or attachment_repo.get_table()
+    target = table or get_table()
     request: dict[str, object] = {
         "FilterExpression": (
             "entity_type=:entity AND (#status IN (:committed, :running) OR "
@@ -1264,7 +1264,7 @@ def _unsettled_end_update(
     """One write to an ended command still as the sweep read it and not yet settled."""
     try:
         attachment_repo._update_item(
-            table or attachment_repo.get_table(),
+            table or get_table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=update_expression,
             ConditionExpression=(
@@ -1279,9 +1279,9 @@ def _unsettled_end_update(
                 **values,
             },
         )
-    except ClientError as exc:
-        if attachment_repo._conditional(exc):
-            return False
+    except db_table.WriteRefused:
+        return False
+    except db_table.TableUnavailable:
         raise attachment_repo.AttachmentRepositoryConflict("dependency_failure") from None
     return True
 
@@ -1358,7 +1358,7 @@ def close_stale_lease(
     """
     try:
         attachment_repo._update_item(
-            table or attachment_repo.get_table(),
+            table or get_table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=(
                 "SET #status=:terminal, terminal_at=:now_iso "
@@ -1379,9 +1379,9 @@ def close_stale_lease(
                 ":now_iso": now_iso,
             },
         )
-    except ClientError as exc:
-        if attachment_repo._conditional(exc):
-            return False
+    except db_table.WriteRefused:
+        return False
+    except db_table.TableUnavailable:
         raise attachment_repo.AttachmentRepositoryConflict("dependency_failure") from None
     return True
 
@@ -1445,7 +1445,7 @@ def reject_message_command_and_compensate(
     table: object | None = None,
 ) -> MessageCommandResult:
     """Terminally reject a pre-bind command and reverse its one quota claim."""
-    target = table or attachment_repo.get_table()
+    target = table or get_table()
     try:
         command = get_message_command(conversation_id, idempotency_key, table=target)
     except Exception:
@@ -1557,7 +1557,7 @@ def mark_message_command_terminal(
     table: object | None = None,
 ) -> MessageCommandResult:
     try:
-        attachment_repo._update_item(table or attachment_repo.get_table(),
+        attachment_repo._update_item(table or get_table(),
             Key=message_command_key(conversation_id, idempotency_key),
             UpdateExpression=(
                 "SET #status=:terminal, terminal_at=:now REMOVE leaseOwner, claimedAt, expiresAt"
@@ -1576,24 +1576,24 @@ def mark_message_command_terminal(
                 ":max": 3,
             },
         )
-    except ClientError as exc:
-        if attachment_repo._conditional(exc):
-            try:
-                command = get_message_command(
-                    conversation_id, idempotency_key, table=table
+    except db_table.WriteRefused:
+        try:
+            command = get_message_command(
+                conversation_id, idempotency_key, table=table
+            )
+        except Exception:
+            return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
+        if isinstance(command, dict) and command.get("owner_id") == owner_id:
+            fingerprint = command.get("fingerprint")
+            if isinstance(fingerprint, str):
+                return classify_message_command(
+                    command,
+                    owner_id=owner_id,
+                    fingerprint=fingerprint,
+                    now_epoch=0,
                 )
-            except Exception:
-                return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
-            if isinstance(command, dict) and command.get("owner_id") == owner_id:
-                fingerprint = command.get("fingerprint")
-                if isinstance(fingerprint, str):
-                    return classify_message_command(
-                        command,
-                        owner_id=owner_id,
-                        fingerprint=fingerprint,
-                        now_epoch=0,
-                    )
-            return MessageCommandResult(MessageCommandDisposition.MISSING)
+        return MessageCommandResult(MessageCommandDisposition.MISSING)
+    except db_table.TableUnavailable:
         return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
     # Only this write ended the command; a later reader finds it already ended.
     return MessageCommandResult(

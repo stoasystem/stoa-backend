@@ -34,13 +34,12 @@ from fastapi.testclient import TestClient
 from PIL import Image
 import pytest
 
+from stoa.db import table as db_table
 from stoa.config import UPLOAD_INTENT_TTL_SECONDS, Settings
 from stoa.db.repositories import (
     account_deletion_repo,
-    attachment_repo,
     moderation_repo,
     notification_repo,
-    upload_code_repo,
 )
 from stoa.deps import (
     get_actor,
@@ -127,14 +126,13 @@ class _Api:
         for module in (
             conversations,
             _answering,
-            attachment_repo,
-            upload_code_repo,
             rate_limit,
             moderation_repo,
             notification_repo,
         ):
             monkeypatch.setattr(module, "get_table", lambda table=table: table)
         monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
+        db_table.install(table)
         self.clock = _Clock()
         monkeypatch.setattr(upload_code_service, "_now", self.clock)
         self.table = table

@@ -103,6 +103,8 @@ def build_table(monkeypatch) -> FakeTable:
     for name, module in list(sys.modules.items()):
         if name.startswith("stoa.") and hasattr(module, "get_table"):
             monkeypatch.setattr(module, "get_table", lambda table=table: table)
+    # The modules already on the table gateway read it there.
+    db_table.install(table)
     return table
 
 
