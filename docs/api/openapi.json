@@ -9268,27 +9268,21 @@
       },
       "QuizAnswerSubmission": {
         "additionalProperties": false,
-        "description": "One answer to a lesson quiz, naming the exercise it answers (#213, #113).\n\n`exerciseId` is optional until every client sends it (stoa-frontend#589):\nwithout it the answer is to the exercise the quiz asks now, and a retry\nafter a lost response is judged again rather than recognised.",
+        "description": "One answer to a lesson quiz, naming the exercise it answers (#213, #113).\n\n`exerciseId` names the exercise answered, so the same answer sent twice -\na retry after a lost response - is recognised and answered with the first\nresult rather than judged against the next exercise.",
         "properties": {
           "answer": {
             "title": "Answer"
           },
           "exerciseId": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Exerciseid"
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Exerciseid",
+            "type": "string"
           }
         },
         "required": [
-          "answer"
+          "answer",
+          "exerciseId"
         ],
         "title": "QuizAnswerSubmission",
         "type": "object"
@@ -31125,7 +31119,7 @@
     },
     "/practice/lessons/{lesson_id}/quiz/{quiz_id}/answer": {
       "post": {
-        "description": "Judge one quiz answer. No hint, no Ask, no skip - and no second slip.\n\nA wrong answer costs a heart and sends the exercise to the back of the\nqueue; the second one loses the quiz. `exerciseId` names the exercise\nanswered: sent again for an exercise already answered, it gets the first\nresult back. Without it the answer is to the exercise asked now (#113).\nQuiz answers are not recorded as attempts: passing completes the lesson\nand nothing more, so a knowledge point still lights only on exercises\nanswered right in the ordinary way (#9).",
+        "description": "Judge one quiz answer. No hint, no Ask, no skip - and no second slip.\n\nA wrong answer costs a heart and sends the exercise to the back of the\nqueue; the second one loses the quiz. `exerciseId` names the exercise\nanswered: sent again for an exercise already answered, it gets the first\nresult back (#113). Quiz answers are not recorded as attempts: passing\ncompletes the lesson and nothing more, so a knowledge point still lights\nonly on exercises answered right in the ordinary way (#9).",
         "operationId": "answer_lesson_quiz_practice_lessons__lesson_id__quiz__quiz_id__answer_post",
         "parameters": [
           {
