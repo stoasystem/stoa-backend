@@ -136,11 +136,6 @@ class _QueryTable(Protocol):
     def query(self, **kwargs: object) -> object: ...
 
 
-@runtime_checkable
-class _ScanTable(Protocol):
-    def scan(self, **kwargs: object) -> object: ...
-
-
 def _dependency_mapping(value: object) -> PracticeItem:
     if not isinstance(value, Mapping):
         raise ValueError("malformed practice dependency response")
@@ -180,12 +175,6 @@ def _query(table: object, **kwargs: object) -> PracticeItem:
     if not isinstance(table, _QueryTable):
         raise ValueError("practice dependency unavailable")
     return _dependency_mapping(table.query(**kwargs))
-
-
-def _scan(table: object, **kwargs: object) -> PracticeItem:
-    if not isinstance(table, _ScanTable):
-        raise account_deletion_repo.AccountDeletionConflict("practice dependency unavailable")
-    return _dependency_mapping(table.scan(**kwargs))
 
 
 @dataclass(frozen=True, slots=True)
@@ -815,32 +804,17 @@ def scan_practice_private_rows(
     target = table or get_table()
     if maximum_pages <= 0:
         raise account_deletion_repo.AccountDeletionConflict("invalid page bound")
-    marker = _practice_cursor(cursor) if cursor is not None else None
+    marker = dict(cursor) if cursor is not None else None
     found: list[dict[str, Any]] = []
-    for _ in range(maximum_pages):
-        kwargs: dict[str, Any] = {"ConsistentRead": True}
-        if marker is not None:
-            kwargs["ExclusiveStartKey"] = marker
-        response = _scan(target, **kwargs)
-        items = response.get("Items", [])
-        if not isinstance(items, list):
-            raise account_deletion_repo.AccountDeletionConflict("malformed practice deletion page")
-        found.extend(
-            dict(item)
-            for item in items
-            if isinstance(item, Mapping) and _practice_owned(item, owner_id)
-        )
-        raw_next = response.get("LastEvaluatedKey")
-        if raw_next is None:
+    for page in account_deletion_repo.sweep_pages(
+        "practice deletion", table=target, cursor=cursor, maximum_pages=maximum_pages
+    ):
+        found.extend(item for item in page.items if _practice_owned(item, owner_id))
+        if page.last_key is None:
             return PracticePrivatePage(tuple(found))
-        if not isinstance(raw_next, Mapping):
-            raise account_deletion_repo.AccountDeletionConflict("invalid practice deletion cursor")
-        next_marker = _practice_cursor(raw_next)
-        if next_marker == marker:
-            raise account_deletion_repo.AccountDeletionConflict(
-                "practice deletion cursor did not advance"
-            )
-        marker = next_marker
+        if page.last_key == marker:
+            raise account_deletion_repo.AccountDeletionConflict("practice deletion cursor did not advance")
+        marker = page.last_key
     return PracticePrivatePage(tuple(found), marker)
 
 
@@ -901,16 +875,6 @@ def scrub_practice_private_row(
             table=target,
         )
     return tombstone
-
-
-def _practice_cursor(value: Mapping[str, Any] | None) -> dict[str, str]:
-    if (
-        not isinstance(value, Mapping)
-        or set(value) != {"PK", "SK"}
-        or any(not isinstance(value.get(key), str) or not value.get(key) for key in ("PK", "SK"))
-    ):
-        raise account_deletion_repo.AccountDeletionConflict("invalid practice deletion cursor")
-    return {"PK": str(value["PK"]), "SK": str(value["SK"])}
 
 
 def _practice_owned(item: Mapping[str, Any], owner_id: str) -> bool:

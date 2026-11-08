@@ -446,36 +446,25 @@ def scan_adaptive_private_rows(
     table: Any | None = None,
 ) -> AdaptivePrivatePage:
     target: object = table if table is not None else get_table()
-    marker = _cursor(cursor) if cursor is not None else None
+    marker = dict(cursor) if cursor is not None else None
     found: list[dict[str, Any]] = []
-    for _ in range(maximum_pages):
-        kwargs: dict[str, Any] = {"ConsistentRead": True}
-        if marker:
-            kwargs["ExclusiveStartKey"] = marker
-        response = _scan(target, **kwargs)
-        items = response.get("Items", [])
-        if not isinstance(items, list):
-            raise account_deletion_repo.AccountDeletionConflict(
-                "malformed adaptive deletion page"
-            )
-        for item in items:
-            if not isinstance(item, Mapping) or not _owned(item, owner_id):
+    for page in account_deletion_repo.sweep_pages(
+        "adaptive deletion", table=target, cursor=cursor, maximum_pages=maximum_pages
+    ):
+        for item in page.items:
+            if not _owned(item, owner_id):
                 continue
             entity = str(item.get("entity_type") or "")
             if family == "assignment" and entity != ASSIGNMENT_ENTITY:
                 continue
             if family == "learning_memory" and entity != MEMORY_ENTITY:
                 continue
-            found.append(dict(item))
-        raw_next = response.get("LastEvaluatedKey")
-        if raw_next is None:
+            found.append(item)
+        if page.last_key is None:
             return AdaptivePrivatePage(tuple(found))
-        next_marker = _cursor(raw_next)
-        if next_marker == marker:
-            raise account_deletion_repo.AccountDeletionConflict(
-                "adaptive deletion cursor did not advance"
-            )
-        marker = next_marker
+        if page.last_key == marker:
+            raise account_deletion_repo.AccountDeletionConflict("adaptive deletion cursor did not advance")
+        marker = page.last_key
     return AdaptivePrivatePage(tuple(found), marker)
 
 
@@ -532,15 +521,3 @@ def _owned(item: Mapping[str, Any], owner_id: str) -> bool:
         item.get("student_id"),
         item.get("owner_id"),
     } or str(item.get("PK") or "").startswith(f"LEARNING_MEMORY#{owner_id}")
-
-
-def _cursor(value: Mapping[str, Any] | None) -> dict[str, str]:
-    if (
-        not isinstance(value, Mapping)
-        or set(value) != {"PK", "SK"}
-        or any(not isinstance(value.get(key), str) or not value.get(key) for key in ("PK", "SK"))
-    ):
-        raise account_deletion_repo.AccountDeletionConflict(
-            "invalid adaptive deletion cursor"
-        )
-    return {"PK": str(value["PK"]), "SK": str(value["SK"])}

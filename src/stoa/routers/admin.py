@@ -1,5 +1,5 @@
 """Admin routes — user management, report operations, and platform statistics."""
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from functools import lru_cache, partial
 from typing import Annotated, Any, Literal, Optional
@@ -113,6 +113,50 @@ def _admin_cursor(response: Mapping[str, object]) -> AdminItem | None:
     if raw_cursor is None:
         return None
     return _admin_mapping(raw_cursor)
+
+
+def _next_token(scope: str, response: Mapping[str, object]) -> str | None:
+    """Where the listing goes on, as a token only this listing reads back."""
+    cursor = _admin_cursor(response)
+    return db_table.page_token(scope, cursor) if cursor else None
+
+
+def _start_key(
+    token: str | None,
+    scope: str,
+    *,
+    key: tuple[str, ...] = db_table.BASE_KEY,
+    within: Callable[[dict[str, Any]], bool] | None = None,
+) -> AdminItem | None:
+    if not token:
+        return None
+    try:
+        return db_table.read_page_token(token, scope, key=key, within=within)
+    except db_table.PageTokenInvalid as exc:
+        raise AccountViolation(AccountErrorCode.PAGE_TOKEN_INVALID) from exc
+
+
+# A listing's scope names its partition when it reads one, so a token made for
+# one report's timeline or one job's results continues no other.
+ADMIN_REPORTS_SCAN_SCOPE = "admin_reports"
+ADMIN_REPORTS_PARENT_KEY = ("PK", "SK", "parent_id", "week_start")
+RECOVERY_JOBS_SCOPE = "recovery_jobs"
+
+
+def _admin_reports_scope(parent_id: str | None) -> str:
+    return f"admin_reports:parent:{parent_id}" if parent_id else ADMIN_REPORTS_SCAN_SCOPE
+
+
+def _in_partition(partition: str, sort_prefix: str = "") -> Callable[[dict[str, Any]], bool]:
+    def holds(key: dict[str, Any]) -> bool:
+        sort_key = key["SK"]
+        return (
+            key["PK"] == partition
+            and isinstance(sort_key, str)
+            and sort_key.startswith(sort_prefix)
+        )
+
+    return holds
 
 
 def _admin_required_text(value: object) -> str:
@@ -3015,10 +3059,17 @@ async def list_report_operations(
     actor: Actor = Depends(admin_operation),
 ):
     """List report operation metadata for admin triage."""
-    try:
-        last_key = report_repo.decode_admin_page_token(next_token)
-    except ValueError as exc:
-        raise AccountViolation(AccountErrorCode.PAGE_TOKEN_INVALID) from exc
+    scope = _admin_reports_scope(parent_id)
+    last_key = (
+        _start_key(
+            next_token,
+            scope,
+            key=ADMIN_REPORTS_PARENT_KEY,
+            within=lambda key: key["parent_id"] == parent_id,
+        )
+        if parent_id
+        else _start_key(next_token, scope)
+    )
 
     result = report_repo.list_reports_for_admin(
         status=status,
@@ -3032,7 +3083,7 @@ async def list_report_operations(
     return ReportOperationListResponse(
         items=items,
         count=len(items),
-        next_token=report_repo.encode_admin_page_token(_admin_cursor(result)),
+        next_token=_next_token(scope, result),
         access_pattern="parent_gsi" if parent_id else "bounded_scan",
     )
 
@@ -3316,16 +3367,13 @@ async def list_recovery_jobs(
     actor: Actor = Depends(admin_operation),
 ):
     """List async report recovery jobs."""
-    try:
-        last_key = report_repo.decode_recovery_job_page_token(next_token)
-    except ValueError as exc:
-        raise AccountViolation(AccountErrorCode.PAGE_TOKEN_INVALID) from exc
+    last_key = _start_key(next_token, RECOVERY_JOBS_SCOPE)
     result = report_repo.list_recovery_jobs(limit=limit, last_key=last_key)
     items = [_recovery_job_response(item) for item in _admin_items(result)]
     return RecoveryJobListResponse(
         items=items,
         count=len(items),
-        next_token=report_repo.encode_recovery_job_page_token(_admin_cursor(result)),
+        next_token=_next_token(RECOVERY_JOBS_SCOPE, result),
     )
 
 
@@ -3351,16 +3399,16 @@ async def list_recovery_job_results(
     """List metadata-only target results for one async recovery job."""
     if not report_repo.get_recovery_job(job_id):
         raise RecoveryJobError(ReportRecoveryErrorCode.RECOVERY_JOB_NOT_FOUND)
-    try:
-        last_key = report_repo.decode_recovery_job_target_page_token(next_token, job_id)
-    except ValueError as exc:
-        raise AccountViolation(AccountErrorCode.PAGE_TOKEN_INVALID) from exc
+    scope = f"recovery_job_targets:{job_id}"
+    last_key = _start_key(
+        next_token, scope, within=_in_partition(f"REPORT_RECOVERY_JOB#{job_id}", "TARGET#")
+    )
     result = report_repo.list_recovery_job_targets(job_id, limit=limit, last_key=last_key)
     items = [_recovery_job_target_response(item) for item in _admin_items(result)]
     return RecoveryJobTargetsResponse(
         items=items,
         count=len(items),
-        next_token=report_repo.encode_recovery_job_target_page_token(_admin_cursor(result)),
+        next_token=_next_token(scope, result),
     )
 
 
@@ -3488,17 +3536,16 @@ async def list_report_audit_events(
     """List append-only audit events for one report recovery timeline."""
     report = _get_report_or_404(parent_id, student_id, week_start)
     report_id = _admin_required_text(report.get("report_id"))
-    try:
-        last_key = report_repo.decode_audit_page_token(next_token, f"REPORT#{report_id}")
-    except ValueError as exc:
-        raise AccountViolation(AccountErrorCode.PAGE_TOKEN_INVALID) from exc
+    partition = f"REPORT#{report_id}"
+    scope = f"report_audit:{partition}"
+    last_key = _start_key(next_token, scope, within=_in_partition(partition, "AUDIT#"))
 
     result = report_repo.list_report_audit_events(report_id, limit=limit, last_key=last_key)
     items = [_report_audit_event_response(item) for item in _admin_items(result)]
     return ReportAuditListResponse(
         items=items,
         count=len(items),
-        next_token=report_repo.encode_audit_page_token(_admin_cursor(result)),
+        next_token=_next_token(scope, result),
         scope="report",
     )
 
@@ -3514,17 +3561,16 @@ async def list_recovery_job_audit_events(
     actor: Actor = Depends(admin_operation),
 ):
     """List append-only audit events for a report recovery job timeline."""
-    try:
-        last_key = report_repo.decode_audit_page_token(next_token, f"REPORT_RECOVERY_JOB#{job_id}")
-    except ValueError as exc:
-        raise AccountViolation(AccountErrorCode.PAGE_TOKEN_INVALID) from exc
+    partition = f"REPORT_RECOVERY_JOB#{job_id}"
+    scope = f"report_audit:{partition}"
+    last_key = _start_key(next_token, scope, within=_in_partition(partition, "AUDIT#"))
 
     result = report_repo.list_recovery_job_audit_events(job_id, limit=limit, last_key=last_key)
     items = [_report_audit_event_response(item) for item in _admin_items(result)]
     return ReportAuditListResponse(
         items=items,
         count=len(items),
-        next_token=report_repo.encode_audit_page_token(_admin_cursor(result)),
+        next_token=_next_token(scope, result),
         scope="recovery_job",
     )
 

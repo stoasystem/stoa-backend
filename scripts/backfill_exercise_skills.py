@@ -27,7 +27,7 @@ import boto3
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from stoa.db.dynamodb import scan_every_page  # noqa: E402
+from stoa.db import table as db_table  # noqa: E402
 from stoa.db.repositories import practice_repo  # noqa: E402
 from stoa.services import curriculum_translations  # noqa: E402
 
@@ -41,13 +41,12 @@ def stored_challenges(table) -> list[dict]:
     capped read of a table this size answers from its first page and reports
     nothing to do.
     """
-    result = scan_every_page(
-        lambda target, **kwargs: target.scan(**kwargs),
-        table,
+    return db_table.rows(
+        "scan",
+        table=table,
         FilterExpression="begins_with(SK, :prefix)",
         ExpressionAttributeValues={":prefix": "CHALLENGE#"},
     )
-    return [dict(row) for row in result.get("Items", [])]
 
 
 def planned_skills(row: dict) -> tuple[list[str], str | None]:

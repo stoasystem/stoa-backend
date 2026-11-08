@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 import hashlib
-import json
 import logging
 from tempfile import SpooledTemporaryFile
 from typing import Any, Sequence
@@ -29,6 +28,7 @@ from stoa.config import (
     PAID_STORAGE_BYTES,
     Settings,
 )
+from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, attachment_repo, upload_code_repo
 from stoa.models.attachment import (
     AttachmentReference,
@@ -462,40 +462,32 @@ def safe_attachment_content_disposition(filename: str) -> str:
     return f"attachment; filename*=UTF-8''{quote(safe, safe='._-')}"
 
 
+ATTACHMENT_CONTINUATION_SCOPE = "attachment_continuation"
+_ATTACHMENT_POSITION = ("attachment_id",)
+
+
 def _encode_attachment_continuation(cursor: dict[str, str] | None) -> str | None:
     if cursor is None:
         return None
-    if (
-        not isinstance(cursor, dict)
-        or set(cursor) != {"attachment_id"}
-        or not isinstance(cursor.get("attachment_id"), str)
-        or not cursor["attachment_id"]
-    ):
-        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
-    encoded = base64.urlsafe_b64encode(
-        json.dumps(cursor, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    ).decode("ascii")
-    return encoded.rstrip("=")
+    try:
+        position = db_table.page_key(cursor, key=_ATTACHMENT_POSITION)
+    except db_table.PageTokenInvalid:
+        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE) from None
+    return db_table.page_token(ATTACHMENT_CONTINUATION_SCOPE, position)
 
 
 def _decode_attachment_continuation(value: str | None) -> dict[str, str] | None:
     if value is None:
         return None
-    if not isinstance(value, str) or not value or len(value) > 512:
-        raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
     try:
-        padded = value + "=" * (-len(value) % 4)
-        decoded = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
-    except (ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError):
+        position = db_table.read_page_token(
+            value, ATTACHMENT_CONTINUATION_SCOPE, key=_ATTACHMENT_POSITION
+        )
+    except db_table.PageTokenInvalid:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from None
-    if (
-        not isinstance(decoded, dict)
-        or set(decoded) != {"attachment_id"}
-        or not isinstance(decoded.get("attachment_id"), str)
-        or not decoded["attachment_id"]
-    ):
+    if not isinstance(position["attachment_id"], str):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND)
-    return {"attachment_id": decoded["attachment_id"]}
+    return {"attachment_id": position["attachment_id"]}
 
 
 def saved_attachment_detail(item: dict[str, Any]) -> SavedAttachmentDetail:

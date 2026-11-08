@@ -456,18 +456,6 @@ def association_key(
     }
 
 
-def _valid_conversation_cursor(cursor: object) -> dict[str, str] | None:
-    if cursor is None:
-        return None
-    if (
-        not isinstance(cursor, dict)
-        or set(cursor) != {"PK", "SK"}
-        or any(not isinstance(cursor.get(key), str) or not cursor[key] for key in ("PK", "SK"))
-    ):
-        raise AttachmentRepositoryConflict("dependency_failure")
-    return dict(cursor)
-
-
 def _is_owned_conversation_private_row(item: dict[str, object], owner_id: str) -> bool:
     # A tombstone keeps its owner, so without this the deletion branch found
     # its own tombstones on every pass, never had a clean one, and a student
@@ -494,26 +482,23 @@ def scan_conversation_private_rows(
     if not owner_id or maximum_pages < 1 or maximum_pages > 100:
         raise AttachmentRepositoryConflict("dependency_failure")
     target = table or get_table()
-    current = _valid_conversation_cursor(cursor)
+    current = cursor
     items: list[dict[str, object]] = []
     scanned = 0
     seen: set[tuple[str, str]] = set()
-    for _ in range(maximum_pages):
-        request: dict[str, object] = {"ConsistentRead": True}
-        if current is not None:
-            request["ExclusiveStartKey"] = current
-        response = _scan(target, **request)
-        if not isinstance(response, dict) or not isinstance(response.get("Items", []), list):
-            raise AttachmentRepositoryConflict("dependency_failure")
-        raw_page = response.get("Items", [])
-        if not isinstance(raw_page, list):
-            raise AttachmentRepositoryConflict("dependency_failure")
-        page = [_mapping(item) for item in raw_page]
-        scanned += len(page)
+    for page in account_deletion_repo.sweep_pages(
+        "conversation",
+        table=target,
+        cursor=cursor,
+        maximum_pages=maximum_pages,
+        conflict=lambda _reason: AttachmentRepositoryConflict("dependency_failure"),
+    ):
+        rows = [_mapping(item) for item in page.items]
+        scanned += len(rows)
         items.extend(
-            item for item in page if _is_owned_conversation_private_row(item, owner_id)
+            item for item in rows if _is_owned_conversation_private_row(item, owner_id)
         )
-        current = _valid_conversation_cursor(response.get("LastEvaluatedKey"))
+        current = page.last_key
         if current is None:
             break
         identity = (current["PK"], current["SK"])

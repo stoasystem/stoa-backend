@@ -206,16 +206,12 @@ def test_something_with_no_transaction_entry_is_unavailable() -> None:
     assert unavailable.value.code == "no_transaction_entry"
 
 
-def test_the_installed_table_is_the_default(monkeypatch) -> None:
-    table = FakeTable()
-    monkeypatch.setattr(db_table, "_installed", None)
-    db_table.install(table)
-    try:
-        assert db_table.table() is table
-        db_table.transact([{"Put": {"Item": {"PK": "P", "SK": "S"}}}])
-    finally:
-        db_table.install(None)
-    assert ("P", "S") in table.rows
+def test_the_installed_table_is_the_default(fake_table: FakeTable) -> None:
+    assert db_table.table() is fake_table
+
+    db_table.transact([{"Put": {"Item": {"PK": "P", "SK": "S"}}}])
+
+    assert ("P", "S") in fake_table.rows
 
 
 # -- what comes back ------------------------------------------------------------------

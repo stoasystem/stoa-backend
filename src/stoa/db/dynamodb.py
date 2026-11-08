@@ -1,12 +1,8 @@
 """DynamoDB single-table client wrapper."""
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from decimal import Decimal
 
 from stoa.db import table as _gateway
-
-# Far more pages than this table has; a reader that needs more has a filter
-# that is not doing its job, and should say so rather than read the account.
-SCAN_PAGE_BUDGET = 200
 
 
 def stored_int(value: object) -> int | None:
@@ -46,44 +42,3 @@ def omit_none_attributes(item: Mapping[str, object]) -> dict[str, object]:
 def get_table() -> object:
     """The table, as `stoa.db.table` holds it: built there once, in the configured region."""
     return _gateway.table()
-
-
-def scan_every_page(
-    scan: Callable[..., Mapping[str, object]],
-    table: object,
-    *,
-    want: int | None = None,
-    page_budget: int = SCAN_PAGE_BUDGET,
-    **kwargs: object,
-) -> dict[str, object]:
-    """Every row a filtered scan admits, across the table's pages.
-
-    `Limit` bounds the rows a scan *reads*, not the rows its filter keeps, so
-    `_scan(table, FilterExpression=..., Limit=100)` answers from the first
-    hundred rows of the table and returns whichever of them matched. On a table
-    larger than the thing being looked for that is nothing, and nothing says so
-    -- a teacher's help request was invisible in production for exactly this
-    reason (#95). Pass `want` for a cap on matches, which is what those call
-    sites meant.
-
-    `Limit` is not forwarded: a page here is the service's own megabyte.
-    """
-    kwargs.pop("Limit", None)
-    items: list[object] = []
-    request = dict(kwargs)
-    for _page in range(page_budget):
-        result = scan(table, **request)
-        rows = result.get("Items")
-        if isinstance(rows, list):
-            items.extend(rows)
-        if want is not None and len(items) >= want:
-            return {"Items": items[:want], "Count": want}
-        cursor = result.get("LastEvaluatedKey")
-        # No key, or an empty one, is the end of the table (DynamoDB's Scan
-        # contract allows both).
-        if not cursor:
-            return {"Items": items, "Count": len(items)}
-        if not isinstance(cursor, Mapping) or cursor == request.get("ExclusiveStartKey"):
-            raise RuntimeError("the table's scan did not move forward")
-        request["ExclusiveStartKey"] = cursor
-    raise RuntimeError("a filtered scan did not reach the end of the table")

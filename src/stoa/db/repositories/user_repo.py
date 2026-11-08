@@ -1,12 +1,11 @@
 """DynamoDB access patterns for the User entity."""
 
-import base64
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
-import json
+from itertools import islice
 import re
 from typing import Any, Protocol, runtime_checkable
 
@@ -232,20 +231,7 @@ ACCOUNT_LIST_SCAN_PAGE_SIZE = 200
 ACCOUNT_LIST_SCAN_MAX_PAGES = 25
 
 
-def _encode_account_cursor(key: Mapping[str, object]) -> str:
-    return base64.urlsafe_b64encode(json.dumps(dict(key), default=str).encode("utf-8")).decode(
-        "ascii"
-    )
-
-
-def _decode_account_cursor(cursor: str) -> UserItem:
-    try:
-        decoded = json.loads(base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8"))
-    except (ValueError, UnicodeDecodeError) as exc:
-        raise InvalidAccountCursor("account list cursor is not readable") from exc
-    if not isinstance(decoded, dict):
-        raise InvalidAccountCursor("account list cursor is not a key")
-    return _dependency_mapping(decoded)
+ACCOUNT_LIST_SCOPE = "admin_accounts"
 
 
 def _keyword_matches(profile: Mapping[str, object], keyword: str) -> bool:
@@ -302,13 +288,17 @@ def list_accounts(
         "ExpressionAttributeValues": attr_values,
         "Limit": ACCOUNT_LIST_SCAN_PAGE_SIZE,
     }
-    if cursor:
-        scan_kwargs["ExclusiveStartKey"] = _decode_account_cursor(cursor)
+    try:
+        walk = db_table.pages(
+            "scan", token=cursor or None, scope=ACCOUNT_LIST_SCOPE, table=target, **scan_kwargs
+        )
+    except db_table.PageTokenInvalid as exc:
+        raise InvalidAccountCursor("account list cursor is not readable") from exc
 
     profiles: list[UserItem] = []
-    for _page in range(ACCOUNT_LIST_SCAN_MAX_PAGES):
-        result = _scan(target, **scan_kwargs)
-        for row in _items(result.get("Items", [])):
+    page_key: UserItem | None = None
+    for page in islice(walk, ACCOUNT_LIST_SCAN_MAX_PAGES):
+        for row in page.items:
             row_key = {"PK": row.pop("PK", None), "SK": row.pop("SK", None)}
             if status and str(row.get("account_status") or "") != status:
                 continue
@@ -318,12 +308,13 @@ def list_accounts(
                 continue
             profiles.append(row)
             if len(profiles) >= limit:
-                return AccountPage(profiles, _encode_account_cursor(row_key))
-        page_key = _optional_item(result.get("LastEvaluatedKey"))
-        if not page_key:
+                return AccountPage(profiles, db_table.page_token(ACCOUNT_LIST_SCOPE, row_key))
+        if page.last_key is None:
             return AccountPage(profiles, None)
-        scan_kwargs["ExclusiveStartKey"] = page_key
-    return AccountPage(profiles, _encode_account_cursor(page_key))
+        page_key = page.last_key
+    return AccountPage(
+        profiles, db_table.page_token(ACCOUNT_LIST_SCOPE, page_key) if page_key else None
+    )
 
 
 def profile_role_census(
@@ -335,28 +326,21 @@ def profile_role_census(
     past that size one call is a sample and not a census. Counting from a sample
     produces a number that looks like an answer, which is worse than no number.
     """
-    return _scan_every_page(
-        table or get_table(),
-        page_budget=page_budget,
-        FilterExpression="SK = :profile",
-        ExpressionAttributeValues={":profile": "PROFILE"},
-        ProjectionExpression="#role",
-        ExpressionAttributeNames={"#role": "role"},
-    )
-
-
-def _scan_every_page(
-    table: object, *, page_budget: int, **kwargs: object
-) -> tuple[list[UserItem], bool]:
     rows: list[UserItem] = []
-    request = dict(kwargs)
-    for _page in range(page_budget):
-        result = _scan(table, **request)
-        rows.extend(_items(result.get("Items", [])))
-        cursor = _optional_item(result.get("LastEvaluatedKey"))
-        if not cursor:
+    for page in islice(
+        db_table.pages(
+            "scan",
+            table=table or get_table(),
+            FilterExpression="SK = :profile",
+            ExpressionAttributeValues={":profile": "PROFILE"},
+            ProjectionExpression="#role",
+            ExpressionAttributeNames={"#role": "role"},
+        ),
+        page_budget,
+    ):
+        rows.extend(page.items)
+        if page.last_key is None:
             return rows, True
-        request["ExclusiveStartKey"] = cursor
     return rows, False
 
 

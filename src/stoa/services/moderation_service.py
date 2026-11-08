@@ -9,12 +9,12 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import hashlib
 from io import BytesIO
-import json
 import logging
 from typing import Any
 from uuid import uuid4
 
 from stoa.config import Settings
+from stoa.db import table as db_table
 from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import moderation_repo
 from stoa.models.moderation import (
@@ -470,23 +470,25 @@ def _case_position(item: Mapping[str, Any]) -> tuple[str, str]:
     return (str(item.get("created_at") or ""), str(item.get("case_id") or ""))
 
 
+CASE_CURSOR_SCOPE = "moderation_cases"
+
+
 def _case_cursor(position: tuple[str, str]) -> str:
-    raw = json.dumps(list(position), separators=(",", ":")).encode("utf-8")
-    return base64.urlsafe_b64encode(raw).decode("ascii")
+    created_at, case_id = position
+    return db_table.page_token(CASE_CURSOR_SCOPE, {"created_at": created_at, "case_id": case_id})
 
 
 def _case_cursor_position(cursor: str) -> tuple[str, str]:
     try:
-        decoded = json.loads(base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8"))
-    except (ValueError, UnicodeError) as exc:
+        decoded = db_table.read_page_token(cursor, CASE_CURSOR_SCOPE)
+    except db_table.PageTokenInvalid as exc:
         raise AccountViolation(AccountErrorCode.CURSOR_INVALID) from exc
-    if (
-        not isinstance(decoded, list)
-        or len(decoded) != 2
-        or not all(isinstance(part, str) for part in decoded)
+    created_at, case_id = decoded.get("created_at"), decoded.get("case_id")
+    if set(decoded) != {"created_at", "case_id"} or not (
+        isinstance(created_at, str) and isinstance(case_id, str)
     ):
         raise AccountViolation(AccountErrorCode.CURSOR_INVALID)
-    return (decoded[0], decoded[1])
+    return (created_at, case_id)
 
 
 def get_case(case_id: str, *, include_events: bool = True) -> dict[str, Any]:

@@ -1,4 +1,6 @@
+import base64
 from datetime import datetime, timezone
+import json
 
 import pytest
 from botocore.exceptions import ClientError
@@ -10,10 +12,11 @@ from fakes import student_evidence as fake_evidence
 from stoa.config import Settings
 from stoa.db.repositories import report_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
-from stoa.routers import parents
+from stoa.routers import admin as admin_router, parents
 from stoa.security.authorization import AuthorizationFacts, ParentAuthorizationFacts
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
 from stoa.security.route_authorization import get_authorization_fact_repository
+from stoa.services.account_errors import AccountViolation
 from stoa.services.current_relationship import SOURCE_LINK, Standing, Verdict
 
 
@@ -260,75 +263,67 @@ def test_report_repo_list_reports_for_parent_queries_parent_gsi(monkeypatch):
     ]
 
 
-def test_report_repo_page_token_round_trip():
-    key = {"PK": "REPORT#1", "SK": "SUMMARY"}
-
-    token = report_repo.encode_page_token(key)
-
-    assert isinstance(token, str)
-    assert report_repo.decode_page_token(token) == key
+# The report listings' page tokens: made and read by the table gateway (#298),
+# each listing's rule - its scope, and the partition its key must stay in -
+# held by the admin router that serves it.
 
 
-def test_report_repo_decode_page_token_rejects_invalid_token():
-    with pytest.raises(ValueError):
-        report_repo.decode_page_token("not-base64")
+def _round_trip(scope, key, **rule):
+    return admin_router._start_key(
+        admin_router._next_token(scope, {"LastEvaluatedKey": key}), scope, **rule
+    )
 
 
-def test_report_repo_decode_page_token_rejects_non_report_key():
-    token = report_repo.encode_page_token({"PK": "USER#1", "SK": "PROFILE"})
-
-    with pytest.raises(ValueError):
-        report_repo.decode_page_token(token)
+def _audit_rule(partition):
+    return {"within": admin_router._in_partition(partition, "AUDIT#")}
 
 
-def test_report_repo_admin_page_token_round_trips_scan_key():
+def test_admin_report_page_token_round_trips_scan_key():
     key = {"PK": "PRACTICE", "SK": "CHALLENGE#fractions"}
 
-    token = report_repo.encode_admin_page_token(key)
-
-    assert isinstance(token, str)
-    assert report_repo.decode_admin_page_token(token) == key
+    assert _round_trip(admin_router.ADMIN_REPORTS_SCAN_SCOPE, key) == key
 
 
-def test_report_repo_admin_page_token_accepts_legacy_report_key_token():
-    key = {"PK": "REPORT#1", "SK": "SUMMARY"}
-    token = report_repo.encode_page_token(key)
+def test_admin_report_page_token_from_before_the_gateway_is_refused():
+    legacy = base64.urlsafe_b64encode(
+        json.dumps({"scope": "admin_reports", "key": {"PK": "REPORT#1", "SK": "SUMMARY"}}).encode()
+    ).decode()
 
-    assert report_repo.decode_admin_page_token(token) == key
+    with pytest.raises(AccountViolation):
+        admin_router._start_key(legacy, admin_router.ADMIN_REPORTS_SCAN_SCOPE)
 
 
-def test_report_repo_audit_page_token_round_trips_report_key():
+def test_audit_page_token_round_trips_report_key():
     key = {"PK": "REPORT#report-1", "SK": "AUDIT#2026-06-04T10:00:00+00:00#event-1"}
 
-    token = report_repo.encode_audit_page_token(key)
-
-    assert isinstance(token, str)
-    assert report_repo.decode_audit_page_token(token, "REPORT#report-1") == key
+    scope = "report_audit:REPORT#report-1"
+    assert _round_trip(scope, key, **_audit_rule("REPORT#report-1")) == key
 
 
-def test_report_repo_audit_page_token_round_trips_recovery_job_key():
+def test_audit_page_token_round_trips_recovery_job_key():
     key = {"PK": "REPORT_RECOVERY_JOB#job-1", "SK": "AUDIT#2026-06-04T10:00:00+00:00#event-1"}
 
-    token = report_repo.encode_audit_page_token(key)
-
-    assert report_repo.decode_audit_page_token(token, "REPORT_RECOVERY_JOB#job-1") == key
-
-
-def test_report_repo_audit_page_token_rejects_summary_key():
-    token = report_repo.encode_audit_page_token({"PK": "REPORT#report-1", "SK": "SUMMARY"})
-
-    with pytest.raises(ValueError):
-        report_repo.decode_audit_page_token(token, "REPORT#report-1")
+    scope = "report_audit:REPORT_RECOVERY_JOB#job-1"
+    assert _round_trip(scope, key, **_audit_rule("REPORT_RECOVERY_JOB#job-1")) == key
 
 
-def test_report_repo_audit_page_token_rejects_another_timeline():
+def test_audit_page_token_rejects_summary_key():
+    scope = "report_audit:REPORT#report-1"
+
+    with pytest.raises(AccountViolation):
+        _round_trip(
+            scope, {"PK": "REPORT#report-1", "SK": "SUMMARY"}, **_audit_rule("REPORT#report-1")
+        )
+
+
+def test_audit_page_token_rejects_another_timeline():
     # #91: a token continues only the partition it came from.
     key = {"PK": "REPORT#report-1", "SK": "AUDIT#2026-06-04T10:00:00+00:00#event-1"}
-    token = report_repo.encode_audit_page_token(key)
+    token = admin_router._next_token("report_audit:REPORT#report-1", {"LastEvaluatedKey": key})
 
     for partition in ("REPORT#report-2", "REPORT_RECOVERY_JOB#report-1"):
-        with pytest.raises(ValueError):
-            report_repo.decode_audit_page_token(token, partition)
+        with pytest.raises(AccountViolation):
+            admin_router._start_key(token, f"report_audit:{partition}", **_audit_rule(partition))
 
 
 def test_report_repo_put_report_audit_event_uses_conditional_append(monkeypatch):
@@ -405,39 +400,38 @@ def test_report_repo_put_recovery_job_audit_event_uses_conditional_append(monkey
     ]
 
 
-def test_report_repo_recovery_job_page_token_round_trips_job_key():
+def test_recovery_job_page_token_round_trips_job_key():
     key = {"PK": "REPORT_RECOVERY_JOB#job-1", "SK": "SUMMARY"}
 
-    token = report_repo.encode_recovery_job_page_token(key)
-
-    assert isinstance(token, str)
-    assert report_repo.decode_recovery_job_page_token(token) == key
+    assert _round_trip(admin_router.RECOVERY_JOBS_SCOPE, key) == key
 
 
-def test_report_repo_recovery_job_page_token_continues_from_any_row_the_scan_stopped_on():
+def test_recovery_job_page_token_continues_from_any_row_the_scan_stopped_on():
     # #90: the job list is a filtered scan, so its page may end on a report row.
     key = {"PK": "REPORT#report-1", "SK": "SUMMARY"}
 
-    token = report_repo.encode_recovery_job_page_token(key)
-
-    assert report_repo.decode_recovery_job_page_token(token) == key
+    assert _round_trip(admin_router.RECOVERY_JOBS_SCOPE, key) == key
 
 
-def test_report_repo_recovery_job_target_token_stays_within_its_job():
+def test_recovery_job_target_token_stays_within_its_job():
     key = {"PK": "REPORT_RECOVERY_JOB#job-1", "SK": "TARGET#00000#report-1"}
-    token = report_repo.encode_recovery_job_target_page_token(key)
 
-    assert report_repo.decode_recovery_job_target_page_token(token, "job-1") == key
-    with pytest.raises(ValueError):
-        report_repo.decode_recovery_job_target_page_token(token, "job-2")
-    with pytest.raises(ValueError):
-        report_repo.decode_recovery_job_target_page_token(
-            report_repo.encode_recovery_job_target_page_token({"PK": "REPORT#report-1", "SK": "SUMMARY"}),
-            "job-1",
+    def rule(job_id):
+        return {"within": admin_router._in_partition(f"REPORT_RECOVERY_JOB#{job_id}", "TARGET#")}
+
+    token = admin_router._next_token("recovery_job_targets:job-1", {"LastEvaluatedKey": key})
+    assert admin_router._start_key(token, "recovery_job_targets:job-1", **rule("job-1")) == key
+    with pytest.raises(AccountViolation):
+        admin_router._start_key(token, "recovery_job_targets:job-2", **rule("job-2"))
+    with pytest.raises(AccountViolation):
+        _round_trip(
+            "recovery_job_targets:job-1", {"PK": "REPORT#report-1", "SK": "SUMMARY"}, **rule("job-1")
         )
-    with pytest.raises(ValueError):
-        report_repo.decode_recovery_job_target_page_token(
-            report_repo.encode_recovery_job_page_token(key), "job-1"
+    with pytest.raises(AccountViolation):
+        admin_router._start_key(
+            admin_router._next_token(admin_router.RECOVERY_JOBS_SCOPE, {"LastEvaluatedKey": key}),
+            "recovery_job_targets:job-1",
+            **rule("job-1"),
         )
 
 

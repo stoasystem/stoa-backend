@@ -10,6 +10,8 @@ from decimal import Decimal
 from datetime import datetime
 from hashlib import sha256
 import json
+from collections.abc import Callable, Iterator
+from itertools import islice
 from typing import Any, Iterable, Mapping, Protocol, runtime_checkable
 
 from botocore.exceptions import ClientError
@@ -28,11 +30,6 @@ logger = logging.getLogger(__name__)
 @runtime_checkable
 class _GetTable(Protocol):
     def get_item(self, **kwargs: object) -> object: ...
-
-
-@runtime_checkable
-class _ScanTable(Protocol):
-    def scan(self, **kwargs: object) -> object: ...
 
 
 @runtime_checkable
@@ -62,12 +59,6 @@ def _get_item(table: object, **kwargs: object) -> AccountDeletionItem:
     if not isinstance(table, _GetTable):
         raise AccountDeletionConflict("account deletion dependency unavailable")
     return _dependency_mapping(table.get_item(**kwargs))
-
-
-def _scan(table: object, **kwargs: object) -> AccountDeletionItem:
-    if not isinstance(table, _ScanTable):
-        raise AccountDeletionConflict("account deletion dependency unavailable")
-    return _dependency_mapping(table.scan(**kwargs))
 
 
 def _update_item(table: object, **kwargs: object) -> object:
@@ -597,24 +588,20 @@ def scan_owned_private_rows(
     if maximum_pages <= 0 or page_limit <= 0:
         raise AccountDeletionConflict("invalid private row scan bound")
     target = table or get_table()
-    current = _validated_cursor(cursor) if cursor is not None else None
+    current = continuation_key(cursor, "private row") if cursor is not None else None
     seen_rows: set[tuple[str, str]] = set()
     seen_cursors: set[tuple[str, str]] = set()
     if current is not None:
         seen_cursors.add((current["PK"], current["SK"]))
     rows: list[dict[str, Any]] = []
-    for _ in range(maximum_pages):
-        request: dict[str, Any] = {"ConsistentRead": True, "Limit": page_limit}
-        if current:
-            request["ExclusiveStartKey"] = current
-        response = _scan(target, **request)
-        raw_items = response.get("Items", [])
-        if not isinstance(raw_items, list):
-            raise AccountDeletionConflict("malformed private row page")
-        for raw in raw_items:
-            if not isinstance(raw, Mapping):
-                raise AccountDeletionConflict("malformed private row")
-            item = dict(raw)
+    for page in sweep_pages(
+        "private row",
+        table=target,
+        cursor=current,
+        page_limit=page_limit,
+        maximum_pages=maximum_pages,
+    ):
+        for item in page.items:
             if not _targets_user(item, user_id):
                 continue
             identity = (str(item.get("PK") or ""), str(item.get("SK") or ""))
@@ -623,16 +610,60 @@ def scan_owned_private_rows(
             if identity not in seen_rows:
                 seen_rows.add(identity)
                 rows.append(item)
-        raw_cursor = response.get("LastEvaluatedKey")
-        if raw_cursor is None:
+        if page.last_key is None:
             return OwnedPrivatePage(tuple(rows), None)
-        next_cursor = _validated_cursor(raw_cursor)
-        identity = (next_cursor["PK"], next_cursor["SK"])
+        identity = (page.last_key["PK"], page.last_key["SK"])
         if identity in seen_cursors:
             raise AccountDeletionConflict("repeating private row cursor")
         seen_cursors.add(identity)
-        current = next_cursor
+        current = page.last_key
     return OwnedPrivatePage(tuple(rows), current)
+
+
+def sweep_pages(
+    name: str,
+    *,
+    table: object,
+    cursor: Mapping[str, object] | None,
+    maximum_pages: int,
+    page_limit: int | None = None,
+    conflict: Callable[[str], Exception] | None = None,
+    **request: object,
+) -> Iterator[db_table.Page]:
+    """Up to `maximum_pages` strong base-table pages from `cursor`, for a deletion sweep.
+
+    The paging is the gateway's. A cursor it cannot continue from, or a table
+    that does not answer with a page, is a conflict (`AccountDeletionConflict`
+    unless the caller names its own): a sweep stops rather than skip rows.
+    Whether a cursor has come round again is the sweep's own rule and stays
+    with it.
+    """
+    refuse = conflict or AccountDeletionConflict
+    if page_limit is not None:
+        request["Limit"] = page_limit
+    try:
+        source = db_table.pages("scan", start=cursor, table=table, ConsistentRead=True, **request)
+    except db_table.PageTokenInvalid as exc:
+        raise refuse(f"invalid {name} cursor") from exc
+    except db_table.TableUnavailable as exc:
+        raise refuse(f"{name} dependency unavailable") from exc
+    taken = islice(source, maximum_pages)
+    while True:
+        try:
+            page = next(taken)
+        except StopIteration:
+            return
+        except db_table.TableUnavailable as exc:
+            raise refuse(f"malformed {name} page") from exc
+        yield page
+
+
+def continuation_key(value: object, name: str = "continuation") -> dict[str, str]:
+    """A sweep's cursor, checked as the gateway checks every key; a refusal is a conflict."""
+    try:
+        return db_table.page_key(value)
+    except db_table.PageTokenInvalid as exc:
+        raise AccountDeletionConflict(f"invalid {name} cursor") from exc
 
 
 def get_command_by_id(
@@ -680,30 +711,21 @@ def _scan_commands(
     values: Mapping[str, Any],
     maximum_pages: int = 100,
 ) -> list[dict[str, Any]]:
-    cursor: dict[str, str] | None = None
     seen: set[tuple[str, str]] = set()
     matches: list[dict[str, Any]] = []
-    for _ in range(maximum_pages):
-        request: dict[str, Any] = {
-            "ConsistentRead": True,
-            "Limit": 100,
-            "FilterExpression": filter_expression,
-            "ExpressionAttributeValues": dict(values),
-        }
-        if cursor is not None:
-            request["ExclusiveStartKey"] = cursor
-        response = _scan(target, **request)
-        raw_items = response.get("Items", [])
-        if not isinstance(raw_items, list):
-            raise AccountDeletionConflict("malformed deletion command page")
-        matches.extend(
-            dict(item) for item in raw_items if isinstance(item, Mapping)
-        )
-        raw_cursor = response.get("LastEvaluatedKey")
-        if raw_cursor is None:
+    for page in sweep_pages(
+        "deletion command",
+        table=target,
+        cursor=None,
+        page_limit=100,
+        maximum_pages=maximum_pages,
+        FilterExpression=filter_expression,
+        ExpressionAttributeValues=dict(values),
+    ):
+        matches.extend(page.items)
+        if page.last_key is None:
             return matches
-        cursor = _validated_cursor(raw_cursor)
-        identity = (cursor["PK"], cursor["SK"])
+        identity = (page.last_key["PK"], page.last_key["SK"])
         if identity in seen:
             raise AccountDeletionConflict("repeating deletion command cursor")
         seen.add(identity)
@@ -1423,29 +1445,23 @@ def scan_pending_deletion_commands(
     # Always the real scan, never a same-named method on the table: discovery
     # is what the sweep's cursor walks (ticket 13).
     target = table or get_table()
-    request: dict[str, Any] = {
-        "ConsistentRead": True,
-        "Limit": min(max(int(limit), 1), 100),
-        "FilterExpression": "entity_type=:entity AND #status IN (:pending,:running)",
-        "ExpressionAttributeNames": {"#status": "status"},
-        "ExpressionAttributeValues": {
-            ":entity": "account_deletion_command",
-            ":pending": "pending",
-            ":running": "running",
-        },
-    }
-    if cursor:
-        request["ExclusiveStartKey"] = _validated_cursor(cursor)
-    response = _scan(target, **request)
-    items = response.get("Items", [])
-    if not isinstance(items, list):
-        raise AccountDeletionConflict("malformed pending command page")
-    return OwnedPrivatePage(
-        tuple(dict(item) for item in items if isinstance(item, Mapping)),
-        _validated_cursor(response.get("LastEvaluatedKey"))
-        if response.get("LastEvaluatedKey")
-        else None,
+    page = next(
+        sweep_pages(
+            "pending command",
+            table=target,
+            cursor=cursor or None,
+            page_limit=min(max(int(limit), 1), 100),
+            maximum_pages=1,
+            FilterExpression="entity_type=:entity AND #status IN (:pending,:running)",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={
+                ":entity": "account_deletion_command",
+                ":pending": "pending",
+                ":running": "running",
+            },
+        )
     )
+    return OwnedPrivatePage(tuple(page.items), page.last_key)
 
 
 # Where the scheduled sweep stopped. A scan's `Limit` counts rows read, so one
@@ -1487,7 +1503,7 @@ def get_deletion_scan_cursor(*, table: Any | None = None) -> DeletionScanCursor:
     if version is None or version < 0:
         raise AccountDeletionConflict("invalid deletion scan cursor version")
     try:
-        cursor = _validated_cursor(item["cursor"]) if item.get("cursor") else None
+        cursor = continuation_key(item["cursor"], "deletion scan") if item.get("cursor") else None
     except AccountDeletionConflict:
         cursor = None
     # Only an observation: a malformed start time is dropped rather than
@@ -1535,7 +1551,7 @@ def advance_deletion_scan_cursor(
         "held_runs": held_runs,
     }
     if cursor is not None:
-        item["cursor"] = _validated_cursor(cursor)
+        item["cursor"] = continuation_key(cursor, "deletion scan")
     if cycle_started_at is not None:
         item["cycle_started_at"] = _valid_lifecycle_timestamp(cycle_started_at)
     request: dict[str, Any] = {"Item": item}
@@ -2052,16 +2068,6 @@ def _transact(operations: Iterable[dict[str, Any]], *, table: Any | None = None)
         raise AccountDeletionConflict("conditional account lifecycle conflict") from exc
     except db_table.TableUnavailable as exc:
         raise AccountDeletionConflict("account lifecycle dependency unavailable") from exc
-
-
-def _validated_cursor(value: Any) -> dict[str, str]:
-    if (
-        not isinstance(value, Mapping)
-        or set(value) != {"PK", "SK"}
-        or any(not isinstance(value[field], str) or not value[field] for field in ("PK", "SK"))
-    ):
-        raise AccountDeletionConflict("invalid continuation cursor")
-    return {"PK": value["PK"], "SK": value["SK"]}
 
 
 def _required(value: Any, name: str) -> str:

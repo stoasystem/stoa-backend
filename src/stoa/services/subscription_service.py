@@ -22,7 +22,7 @@ from fastapi import HTTPException
 
 from stoa.config import Settings
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table, scan_every_page, stored_int
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import (
     account_deletion_repo,
     billing_fact_repo,
@@ -3786,15 +3786,15 @@ def _last_observed_provider_event() -> dict[str, Any]:
     # Billing events live under each parent's partition, so nothing orders them
     # across parents: the latest one is only known after every page is read. One
     # page answered with the newest event of the table's first megabyte (#101).
-    response = scan_every_page(
-        _subscription_scan,
-        get_table(),
+    rows = db_table.rows(
+        "scan",
+        table=get_table(),
         FilterExpression="entity_type = :entity",
         ExpressionAttributeValues={":entity": BILLING_EVENT_ENTITY},
     )
     events = [
         item
-        for item in _subscription_items(response)
+        for item in rows
         if item.get("provider") == "stripe" and item.get("event_type") in PROVIDER_EVENT_TYPES
     ]
     if not events:
