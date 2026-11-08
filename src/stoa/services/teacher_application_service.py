@@ -20,6 +20,7 @@ from stoa.db.repositories import (
 from stoa.services import (
     account_lifecycle,
     account_provisioning_service,
+    locale_service,
     notify_service,
     teacher_identity_provider,
 )
@@ -62,18 +63,22 @@ def submit_application(
         default=0,
     ) + 1
     timestamp = _timestamp(now)
-    row = teacher_application_repo.create_application_version(
-        {
-            "application_id": application_id,
-            "version": version,
-            "status": "pending_review",
-            "verified_email": email,
-            "full_name": _bounded(payload.get("full_name"), 120, "full_name"),
-            "subjects": _subjects(payload.get("subjects")),
-            "statement": _bounded(payload.get("statement"), 2000, "statement"),
-            "created_at": timestamp,
-        }
-    )
+    row_item: dict[str, Any] = {
+        "application_id": application_id,
+        "version": version,
+        "status": "pending_review",
+        "verified_email": email,
+        "full_name": _bounded(payload.get("full_name"), 120, "full_name"),
+        "subjects": _subjects(payload.get("subjects")),
+        "statement": _bounded(payload.get("statement"), 2000, "statement"),
+        "created_at": timestamp,
+    }
+    # The candidate has no profile yet, so the language they applied in is the only
+    # one they have stored; the activation email is written in it (#278).
+    applied_in = locale_service.request_locale()
+    if applied_in:
+        row_item["preferred_locale"] = applied_in
+    row = teacher_application_repo.create_application_version(row_item)
     _audit(
         stream_id=application_id,
         event_type="teacher_application_submitted",
@@ -246,6 +251,7 @@ def _issue_invitation(
             activation_token=token,
             expires_at=expires_at.isoformat(),
             full_name=str(application.get("full_name") or ""),
+            locale=locale_service.effective_locale(application),
         )
     except Exception:
         delivered = False

@@ -1,3 +1,4 @@
+from html import escape
 import json
 from datetime import date, datetime, timezone
 
@@ -7,7 +8,7 @@ from fakes import student_evidence as fake_evidence
 from fakes.links import LinkRows
 from stoa.config import Settings
 from stoa.db.repositories import parent_link_repo
-from stoa.services import report_service
+from stoa.services import message_catalog, report_service
 
 
 @pytest.fixture(autouse=True)
@@ -639,10 +640,63 @@ def test_store_and_send_weekly_report_emails_parent_only(monkeypatch):
     assert email["Destination"]["ToAddresses"] == ["parent@example.com"]
     body = email["Message"]["Body"]["Html"]["Data"]
     assert "Student" in body
-    assert "2026-06-01 to 2026-06-07" in body
+    # A parent with no stored language reads the default one (#278).
+    assert message_catalog.text(
+        "email.weekly_report.week_range", "de", start="2026-06-01", end="2026-06-07"
+    ) in body
     assert generated_report_content()["summary"] in body
     assert "Practice fractions for ten minutes." in body
     assert "https://app.stoaedu.ch/parent/children/student-1/reports/2026-06-01" in body
+
+
+@pytest.mark.parametrize("locale", ["de", "en", "fr", "it"])
+def test_the_weekly_report_email_is_in_the_parents_language(monkeypatch, locale):
+    # Sent by a job, read by the parent: the parent's stored language (#278).
+    from stoa.db.repositories import user_repo
+
+    monkeypatch.setattr(report_service.settings, "s3_reports_bucket", "reports-bucket")
+    monkeypatch.setattr(report_service.report_repo, "put_report", lambda item: None)
+    monkeypatch.setattr(report_service.report_repo, "update_report_status", lambda report_id, status, **fields: None)
+    monkeypatch.setattr(
+        user_repo,
+        "get_user",
+        lambda user_id, **_k: {"user_id": user_id, "preferred_locale": locale},
+    )
+
+    ses = FakeSESClient()
+    report_service.store_and_send_weekly_report(
+        sample_report_payload(),
+        generated_report_content(),
+        s3_client=FakeS3Client(),
+        ses_client=ses,
+    )
+
+    def copy(key, **values):
+        return escape(message_catalog.text(f"email.weekly_report.{key}", locale, **values))
+
+    message = ses.emails[0]["Message"]
+    body = message["Body"]["Html"]["Data"]
+    assert message["Subject"]["Data"] == message_catalog.text(
+        "email.weekly_report.subject", locale, student="Student"
+    )
+    assert f'<html lang="{locale}">' in body
+    assert copy("title", student="Student") in body
+    assert copy("week") in body
+    assert copy("week_range", start="2026-06-01", end="2026-06-07") in body
+    assert copy("recommendations") in body
+    assert copy("weak_topics") in body
+    assert copy("portal_link") in body
+    assert copy("teacher_note") in body
+
+
+def test_a_report_that_names_no_student_names_the_parents_child():
+    payload = sample_report_payload()
+    payload["student"]["name"] = ""
+    body = report_service.render_weekly_report_html(
+        payload, generated_report_content(), locale="fr"
+    )
+    child = message_catalog.text("email.weekly_report.student_fallback", "fr")
+    assert escape(message_catalog.text("email.weekly_report.title", "fr", student=child)) in body
 
 
 def test_store_and_send_weekly_report_marks_email_failed_after_storage(monkeypatch):

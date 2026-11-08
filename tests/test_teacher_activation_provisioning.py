@@ -122,7 +122,14 @@ def table(monkeypatch: pytest.MonkeyPatch) -> TeacherTable:
 def delivered(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     sent: list[dict[str, Any]] = []
 
-    def send(recipient: str, *, activation_token: str, expires_at: str, full_name: str = "") -> None:
+    def send(
+        recipient: str,
+        *,
+        activation_token: str,
+        expires_at: str,
+        full_name: str = "",
+        locale: str | None = None,
+    ) -> None:
         sent.append(
             {
                 "recipient": recipient,

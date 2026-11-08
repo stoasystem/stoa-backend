@@ -23,6 +23,8 @@ from stoa.db.repositories import (
 )
 from stoa.services import (
     current_relationship,
+    locale_service,
+    message_catalog,
     notify_service,
     report_artifact_service,
     student_evidence,
@@ -368,7 +370,9 @@ def store_and_send_weekly_report(
     )
     generation = int(fence["generation"])
     report_item["account_fence_generation"] = generation
-    html_report = render_weekly_report_html(payload, generated_content)
+    # Written for the parent by a job, so in the language the parent stored (#278).
+    locale = locale_service.stored_locale(str(report_item["parent_id"]))
+    html_report = render_weekly_report_html(payload, generated_content, locale=locale)
     json_report = build_weekly_report_json_artifact(payload, generated_content, report_item)
 
     report_artifact_service.write_fenced_report_artifacts(
@@ -413,7 +417,7 @@ def store_and_send_weekly_report(
             owner_id=str(report_item["student_id"]),
             generation=generation,
             report_id=str(report_item["report_id"]),
-            subject=f"STOA weekly report for {report_item['student_name']}",
+            subject=notify_service.weekly_report_subject(report_item["student_name"], locale),
             ses_client=ses_client,
         )
         if delivery_outcome != "accepted":
@@ -611,11 +615,28 @@ def build_weekly_report_json_artifact(
     }
 
 
-def render_weekly_report_html(payload: dict[str, Any], generated_content: dict[str, Any]) -> str:
+def render_weekly_report_html(
+    payload: dict[str, Any],
+    generated_content: dict[str, Any],
+    *,
+    locale: str | None = None,
+) -> str:
+    """The report a parent is emailed, its frame in `locale` (the default when None).
+
+    Only the frame is translated here; the summary, recommendations and topics are
+    generated content and arrive in whatever language they were generated in.
+    """
+    lang = locale or locale_service.DEFAULT_LOCALE
+
+    def copy(key: str, **values: Any) -> str:
+        return escape(message_catalog.text(f"email.weekly_report.{key}", lang, **values))
+
     student = payload.get("student", {})
     week = payload.get("week", {})
-    student_name = student.get("name") or "Student"
-    week_range = _week_range_label(week)
+    student_name = student.get("name") or message_catalog.text(
+        "email.weekly_report.student_fallback", lang
+    )
+    week_range = _week_range_text(week, lang)
     recommendations = generated_content.get("recommendations", [])
     weak_topics = generated_content.get("weakTopics", [])
     portal_link = _parent_portal_link(student.get("id", ""), week.get("start", ""))
@@ -628,22 +649,35 @@ def render_weekly_report_html(payload: dict[str, Any], generated_content: dict[s
         for topic in weak_topics
     )
     teacher_note = generated_content.get("teacherNote")
-    teacher_note_html = f"<p><strong>Teacher note:</strong> {escape(teacher_note)}</p>" if teacher_note else ""
+    teacher_note_html = (
+        f"<p><strong>{copy('teacher_note')}</strong> {escape(teacher_note)}</p>"
+        if teacher_note
+        else ""
+    )
 
     return f"""<!doctype html>
-<html>
+<html lang="{escape(lang, quote=True)}">
   <body>
-    <h1>Weekly report for {escape(student_name)}</h1>
-    <p><strong>Week:</strong> {escape(week_range)}</p>
+    <h1>{copy('title', student=student_name)}</h1>
+    <p><strong>{copy('week')}</strong> {escape(week_range)}</p>
     <p>{escape(str(generated_content.get("summary", "")))}</p>
-    <h2>Recommendations</h2>
+    <h2>{copy('recommendations')}</h2>
     <ul>{recommendation_items}</ul>
-    <h2>Weak topics</h2>
+    <h2>{copy('weak_topics')}</h2>
     <ul>{weak_topic_items}</ul>
     {teacher_note_html}
-    <p><a href="{escape(portal_link)}">Open this report in the parent portal</a></p>
+    <p><a href="{escape(portal_link)}">{copy('portal_link')}</a></p>
   </body>
 </html>"""
+
+
+def _week_range_text(week: dict[str, Any], locale: str) -> str:
+    start, end = week.get("start"), week.get("end")
+    if start and end:
+        return message_catalog.text(
+            "email.weekly_report.week_range", locale, start=start, end=end
+        )
+    return str(start or end or "")
 
 
 def _parse_iso_datetime(value: Any) -> datetime | None:

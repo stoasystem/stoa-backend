@@ -1445,6 +1445,8 @@ def send_digest(
         except DeliveryOwnershipError as exc:
             attempt["status"] = exc.status
         else:
+            # The digest is read by its recipient, not by whoever's request sent it.
+            locale = _recipient_locale(_user_id(user))
             canonical_items = [
                 digest_item(
                     event,
@@ -1455,6 +1457,7 @@ def send_digest(
                             target_type=str(event.get("target_type") or ""),
                         )
                     ),
+                    locale=locale,
                 )
                 for event in batch.events
             ]
@@ -1473,8 +1476,8 @@ def send_digest(
             payload = {
                 "deliveryId": delivery_id,
                 "recipientEmail": recipient_email,
-                "subject": "STOA notification digest",
-                "html": _digest_email_html(canonical_items),
+                "subject": message_catalog.text("email.notification_digest.title", locale),
+                "html": _digest_email_html(canonical_items, locale),
                 "items": canonical_items,
                 "template": settings.notification_email_digest_template,
             }
@@ -1778,15 +1781,27 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
-def digest_item(item: dict[str, Any], *, category: str) -> dict[str, Any]:
+def _event_text(item: dict[str, Any], locale: str | None) -> tuple[Any, Any]:
+    """An event's title and summary; a role message rendered in `locale` when given."""
+    render = ROLE_MESSAGES.get(str(item.get("message_key") or ""))
+    if locale and render:
+        return render(item.get("message_params") or {}, locale)
+    return item.get("title"), item.get("summary")
+
+
+def digest_item(
+    item: dict[str, Any], *, category: str, locale: str | None = None
+) -> dict[str, Any]:
+    """One event as a digest lists it; a role message in `locale` when given."""
+    title, summary = _event_text(item, locale)
     return {
         "eventId": item.get("event_id"),
         "eventType": item.get("event_type"),
         "category": category,
         "targetType": item.get("target_type"),
         "targetId": item.get("target_id"),
-        "title": item.get("title"),
-        "summary": item.get("summary"),
+        "title": title,
+        "summary": summary,
         "createdAt": item.get("created_at"),
         "metadata": _digest_safe_metadata(item.get("metadata") or {}),
     }
@@ -1852,10 +1867,7 @@ def _user_role(user: dict[str, Any] | Actor) -> str:
 def event_response(item: dict[str, Any], *, locale: str | None = None) -> dict[str, Any]:
     """One event as the API shows it; a role message in `locale` when given."""
     delivery = (item.get("metadata") or {}).get("delivery_decision") or {}
-    title, summary = item.get("title"), item.get("summary")
-    render = ROLE_MESSAGES.get(str(item.get("message_key") or ""))
-    if locale and render:
-        title, summary = render(item.get("message_params") or {}, locale)
+    title, summary = _event_text(item, locale)
     return {
         "eventId": item.get("event_id"),
         "recipientId": item.get("recipient_id"),
@@ -1936,12 +1948,13 @@ def _send_push_provider(payload: dict[str, Any]) -> dict[str, Any]:
     return {"statusCode": response.status, "bodyHash": _hash_value(raw) if raw else None}
 
 
-def _digest_email_html(items: list[dict[str, Any]]) -> str:
+def _digest_email_html(items: list[dict[str, Any]], locale: str) -> str:
     rows = "".join(
         f"<li><strong>{_html_escape(item.get('title'))}</strong>: {_html_escape(item.get('summary'))}</li>"
         for item in items
     )
-    return f"<h1>STOA notification digest</h1><ul>{rows}</ul>"
+    heading = _html_escape(message_catalog.text("email.notification_digest.title", locale))
+    return f"<h1>{heading}</h1><ul>{rows}</ul>"
 
 
 def _redacted_provider_result(value: Any) -> dict[str, Any]:

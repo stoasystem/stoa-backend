@@ -18,6 +18,7 @@ from stoa.db.repositories import account_deletion_repo, report_repo
 from stoa.rule_violation import render_message
 from stoa.services import (
     current_relationship,
+    locale_service,
     notify_service,
     report_artifact_service,
     report_service,
@@ -122,7 +123,10 @@ def resend_report_email(
             owner_id=owner_id,
             generation=int(fence["generation"]),
             report_id=str(report["report_id"]),
-            subject=f"STOA weekly report for {report.get('student_name') or 'Student'}",
+            subject=notify_service.weekly_report_subject(
+                report.get("student_name"),
+                locale_service.stored_locale(str(report.get("parent_id") or "")),
+            ),
         )
         if delivery_outcome != "accepted":
             raise RuntimeError(delivery_outcome)

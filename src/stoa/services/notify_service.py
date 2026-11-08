@@ -7,7 +7,34 @@ import boto3
 from botocore.config import Config
 from stoa.config import settings
 from stoa.db.repositories import account_deletion_repo, report_repo
-from stoa.services import message_catalog
+from stoa.services import locale_service, message_catalog
+
+
+def teacher_invitation_message(
+    *, activation_token: str, expires_at: str, full_name: str = "", locale: str | None = None
+) -> tuple[str, str]:
+    """Render the subject and HTML body of one teacher activation email in one language.
+
+    `locale` is the language the candidate applied in; a candidate who named none is
+    written to in the default one.
+    """
+    base = settings.app_base_url.rstrip("/")
+    link = f"{base}/teacher-activate?token={quote(activation_token, safe='')}"
+    lang = locale or locale_service.DEFAULT_LOCALE
+    name = full_name.strip()
+    greeting = (
+        message_catalog.text("email.teacher_activation.greeting", lang, name=escape(name))
+        if name
+        else message_catalog.text("email.teacher_activation.greeting_anonymous", lang)
+    )
+    action = escape(message_catalog.text("email.teacher_activation.action", lang))
+    body = (
+        f"<p>{greeting}</p>"
+        f"<p>{escape(message_catalog.text('email.teacher_activation.intro', lang))}</p>"
+        f'<p><a href="{escape(link, quote=True)}">{action}</a></p>'
+        f"<p>{escape(message_catalog.text('email.teacher_activation.expiry', lang, expires=expires_at))}</p>"
+    )
+    return message_catalog.text("email.teacher_activation.subject", lang), body
 
 
 def send_teacher_invitation_email(
@@ -16,6 +43,7 @@ def send_teacher_invitation_email(
     activation_token: str,
     expires_at: str,
     full_name: str = "",
+    locale: str | None = None,
     ses_client=None,
 ) -> None:
     """Deliver a single-use teacher activation link to the reviewed candidate.
@@ -24,30 +52,30 @@ def send_teacher_invitation_email(
     in the candidate's hands. Callers must treat a raised exception as undelivered and
     re-issue rather than assume the candidate can still activate.
     """
+    subject, body = teacher_invitation_message(
+        activation_token=activation_token,
+        expires_at=expires_at,
+        full_name=full_name,
+        locale=locale,
+    )
     ses = ses_client or boto3.client("ses", region_name=settings.aws_region)
-    base = settings.app_base_url.rstrip("/")
-    link = f"{base}/teacher-activate?token={quote(activation_token, safe='')}"
-    greeting = f"Hallo {escape(full_name)}," if full_name.strip() else "Hallo,"
     ses.send_email(
         Source="noreply@stoaedu.ch",
         Destination={"ToAddresses": [recipient]},
         Message={
-            "Subject": {"Data": "STOA - Ihre Freischaltung als Lehrperson"},
-            "Body": {
-                "Html": {
-                    "Data": (
-                        f"<p>{greeting}</p>"
-                        "<p>Ihre Bewerbung als Lehrperson bei STOA wurde geprüft und "
-                        "freigegeben. Über den folgenden Link können Sie Ihr Konto "
-                        "einrichten und freischalten:</p>"
-                        f'<p><a href="{escape(link, quote=True)}">Konto freischalten</a></p>'
-                        f"<p>Der Link ist einmalig verwendbar und gültig bis "
-                        f"{escape(expires_at)}.</p>"
-                    )
-                }
-            },
+            "Subject": {"Data": subject},
+            "Body": {"Html": {"Data": body}},
         },
     )
+
+
+def weekly_report_subject(student_name: str | None, locale: str | None) -> str:
+    """The subject of one weekly report email, in the parent's language."""
+    lang = locale or locale_service.DEFAULT_LOCALE
+    student = str(student_name or "").strip() or message_catalog.text(
+        "email.weekly_report.student_fallback", lang
+    )
+    return message_catalog.text("email.weekly_report.subject", lang, student=student)
 
 
 def send_weekly_report_email(
@@ -63,7 +91,7 @@ def send_weekly_report_email(
         Source="noreply@stoaedu.ch",
         Destination={"ToAddresses": [parent_email]},
         Message={
-            "Subject": {"Data": subject or "STOA - Wochenbericht Ihres Kindes"},
+            "Subject": {"Data": subject or weekly_report_subject(None, None)},
             "Body": {"Html": {"Data": report_html}},
         },
     )
@@ -83,7 +111,7 @@ def send_fenced_weekly_report_email(
 ) -> str:
     """Send once only after durable intent, claim, and immediate fence checks."""
     operation = operation_id or uuid4().hex
-    subject_value = subject or "STOA - Wochenbericht Ihres Kindes"
+    subject_value = subject or weekly_report_subject(None, None)
     now_iso = datetime.now(UTC).isoformat()
     intent = report_repo.register_report_email_intent(
         owner_id=owner_id,
@@ -117,7 +145,7 @@ def send_fenced_weekly_report_email(
 
 # Role-neutral activation copy. Each locale carries its own subject, greeting and body
 # so an invited student, parent, teacher or admin reads the same message in their own
-# language. The teacher review flow keeps its own German-only template.
+# language. The teacher review flow has its own copy, in `message_catalog.emails`.
 ACCOUNT_INVITATION_COPY = {
     "de": {
         "subject": "STOA – Ihr Konto freischalten",
