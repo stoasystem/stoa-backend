@@ -389,7 +389,8 @@ def test_every_style_says_the_rules_still_win(style):
         "suggest_teacher to true",
         "emotional distress",
         "one valid JSON object and nothing else",
-        "never a bare straight double quote",
+        "mark any quotation with « and »",
+        "never type a straight double quote",
         "every backslash",
     ):
         assert kept in rule, (style, kept)

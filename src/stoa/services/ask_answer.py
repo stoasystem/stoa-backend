@@ -139,9 +139,10 @@ _ANSWER_STYLE_PRECEDENCE = (
     "choose the depth from the student's year group; and set suggest_teacher to true "
     "when the student stays stuck or shows emotional distress, whatever the style. "
     "However long or lively the explanation, the reply is still one valid JSON object and "
-    "nothing else: inside every string value, write quotations with typographic marks such "
-    "as « », „ “ or “ ” and never a bare straight double quote, and write every backslash, "
-    "including those in LaTeX, as two backslashes (\\\\)."
+    "nothing else. Inside every string value, mark any quotation with « and », whatever the "
+    "language, and never type a straight double quote or „ there: a straight double quote "
+    "ends the string and breaks the reply. Write every backslash, including those in LaTeX, "
+    "as two backslashes (\\\\)."
 )
 
 ANSWER_STYLE_RULES: dict[str, str] = {
