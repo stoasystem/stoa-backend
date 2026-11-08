@@ -128,9 +128,6 @@ def inventory_ai_invocation_classes() -> dict[str, AIInvocationClass]:
         "src/stoa/services/ai_service.py:invoke_answer": (
             AIInvocationClass.USER_ALLOWANCE
         ),
-        "src/stoa/services/ai_service.py:get_hint_answer": (
-            AIInvocationClass.USER_ALLOWANCE
-        ),
         "src/stoa/services/report_service.py:generate_weekly_report_content": (
             AIInvocationClass.PROVIDER_COST_ONLY
         ),
@@ -668,74 +665,3 @@ def invoke_answer(
         observed_at=observed_at,
         invocation_class=invocation_class,
     )
-
-
-def get_hint_answer(
-    prompt: str,
-    subject: str = "Mathematik",
-    grade: str = "6. Klasse",
-    *,
-    language: str = "de",
-    correlation_id: str | None = None,
-    effect_id: str | None = None,
-    observed_at: datetime | None = None,
-    invocation_class: AIInvocationClass = AIInvocationClass.USER_ALLOWANCE,
-    client: Any | None = None,
-) -> AIProviderResult[str]:
-    """Generate a short 1-2 sentence hint for a practice challenge."""
-    safe_prompt = sanitise_input(prompt, correlation_id=correlation_id)
-    system = (
-        "You are a helpful Swiss maths teacher. "
-        f"Write the hint in {language_name(language)} ({language}) and in no other language. "
-        "Give a concise hint (1-2 sentences). "
-        "Guide the student without revealing the answer. No JSON, just plain text."
-    )
-    client = client or boto3.client("bedrock-runtime", region_name=settings.aws_region)
-    body = json.dumps({
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 120,
-        "temperature": 0.3,
-        "system": system,
-        "messages": [{"role": "user", "content": safe_prompt}],
-    })
-    try:
-        response = client.invoke_model(modelId=settings.bedrock_model_id, body=body)
-        if not isinstance(response, dict):
-            raise AIInvocationFailure("malformed_response")
-        response_body = response.get("body")
-        read = getattr(response_body, "read", None)
-        if not callable(read):
-            raise AIInvocationFailure("malformed_response")
-        try:
-            result = json.loads(read())
-        finally:
-            close = getattr(response_body, "close", None)
-            if not callable(close):
-                raise AIInvocationFailure("response_cleanup_failed")
-            close()
-        if not isinstance(result, dict):
-            raise AIInvocationFailure("malformed_response")
-        text = result["content"][0]["text"]
-        if not isinstance(text, str) or not text.strip():
-            raise AIInvocationFailure("malformed_response")
-        logical_effect_id = effect_id or correlation_id or "unbound-user-allowance-hint"
-        return _provider_result(
-            text.strip(),
-            result,
-            response=response,
-            inference_profile_id=settings.bedrock_model_id,
-            effect_id=logical_effect_id,
-            observed_at=observed_at,
-            invocation_class=invocation_class,
-        )
-    except AIInvocationFailure:
-        raise
-    except Exception as exc:
-        emit_private_event(
-            "hint_generation_failed",
-            exception=exc,
-            input_size=len(prompt),
-            correlation_id=correlation_id,
-            level=logging.ERROR,
-        )
-        raise AIInvocationFailure("provider_dependency_error") from None
