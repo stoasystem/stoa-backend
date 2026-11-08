@@ -30,6 +30,7 @@ from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
 from audit_helpers import MemoryAuthorizationAuditSink
+from stoa.db import table as db_table
 from stoa.db.repositories import (
     asked_knowledge_repo,
     parent_link_repo,
@@ -109,6 +110,8 @@ def world(table, monkeypatch: pytest.MonkeyPatch):
     for name, module in list(sys.modules.items()):
         if name.startswith("stoa.") and hasattr(module, "get_table"):
             monkeypatch.setattr(module, "get_table", lambda table=table: table)
+    # The modules already on the table gateway read it there.
+    db_table.install(table)
     monkeypatch.setattr(
         user_repo, "get_user", lambda user_id, **_k: deepcopy(profiles.get(user_id))
     )
