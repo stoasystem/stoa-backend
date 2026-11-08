@@ -935,6 +935,17 @@ class CurriculumVersionResponse(BaseModel):
     exercises: list[dict[str, Any]] | None = None
 
 
+class CurriculumLessonVersionResponse(CurriculumVersionResponse):
+    """A version next to its lesson's live version, as the worklist and preview give it.
+
+    `publishedVersionId` is the version the lesson's pointer names, or null when the
+    lesson has never been published; send it as `expectedPublishedVersionId`.
+    `state` is read against it: `published` for the live version only, `superseded`
+    for one a later publish replaced (#111)."""
+
+    publishedVersionId: str | None = None
+
+
 class CurriculumUnitPrerequisitesRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -956,7 +967,7 @@ class CurriculumUnitResponse(BaseModel):
 
 
 class CurriculumWorklistResponse(BaseModel):
-    items: list[CurriculumVersionResponse]
+    items: list[CurriculumLessonVersionResponse]
     count: int
 
 
@@ -1270,7 +1281,10 @@ async def read_curriculum_migration(
     return curriculum_migration_service.get_migration(migration_id, legacy_user(actor))
 
 
-@router.get("/curriculum/lessons/{public_lesson_id}/preview", response_model=CurriculumVersionResponse)
+@router.get(
+    "/curriculum/lessons/{public_lesson_id}/preview",
+    response_model=CurriculumLessonVersionResponse,
+)
 async def preview_curriculum_lesson_version(
     public_lesson_id: str,
     version_id: str = Query(..., alias="versionId"),

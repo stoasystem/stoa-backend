@@ -114,13 +114,30 @@ EXERCISE_FIELD_ALIASES = {
 
 
 def list_worklist(status: str | None = None, limit: int = 100) -> dict[str, Any]:
-    items = [_version_response(item) for item in curriculum_ops_repo.list_worklist(status, limit)]
+    rows = curriculum_ops_repo.list_worklist()
+    items = [
+        _lesson_version_response(
+            version, rows.published_version_ids.get(str(version.get("public_id")))
+        )
+        for version in rows.versions
+    ]
+    # The filter reads the state the console is shown, so `published` lists
+    # only what is live and `superseded` what a later publish replaced.
+    if status:
+        items = [item for item in items if item["state"] == status]
+    items = items[:limit]
     return {"items": items, "count": len(items)}
 
 
 def preview_lesson(public_id: str, version_id: str) -> dict[str, Any]:
     version = _existing_version(public_id, version_id)
-    return _version_response(version, include_content=True)
+    pointer = curriculum_ops_repo.get_pointer(public_id) or {}
+    published_version_id = pointer.get("published_version_id")
+    return _lesson_version_response(
+        version,
+        published_version_id if isinstance(published_version_id, str) else None,
+        include_content=True,
+    )
 
 
 def create_lesson_draft(payload: dict[str, Any], user: dict[str, Any]) -> dict[str, Any]:
@@ -1085,6 +1102,37 @@ def _version_response(version: dict[str, Any], *, include_content: bool = False)
         response["lesson"] = version.get("lesson") or {}
         response["exercises"] = version.get("exercises") or []
     return response
+
+
+def _lesson_version_response(
+    version: dict[str, Any],
+    published_version_id: str | None,
+    *,
+    include_content: bool = False,
+) -> dict[str, Any]:
+    """A version as the console sees it next to its lesson's live version (#111).
+
+    `publishedVersionId` is the lesson's pointer, which the console sends back as
+    `expectedPublishedVersionId`. The state is read against it rather than stored:
+    the live version is `published` whatever state it was rolled back from, and a
+    version that was published and has since been replaced is `superseded`. The
+    stored rows keep the state they were last written with, so nothing is migrated."""
+    response = _version_response(version, include_content=include_content)
+    response["state"] = _effective_state(version, published_version_id)
+    response["publishedVersionId"] = published_version_id
+    return response
+
+
+def _effective_state(version: dict[str, Any], published_version_id: str | None) -> Any:
+    stored = version.get("state")
+    # A lesson without a live version has nothing to be replaced by.
+    if published_version_id is None:
+        return stored
+    if version.get("version_id") == published_version_id:
+        return "published"
+    if stored == "published":
+        return "superseded"
+    return stored
 
 
 def _pointer_response(pointer: dict[str, Any]) -> dict[str, Any]:

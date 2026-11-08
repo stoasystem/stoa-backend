@@ -130,11 +130,18 @@ def _install_curriculum_ops_repo(monkeypatch, active_refs=None):
     monkeypatch.setattr(
         repo,
         "list_worklist",
-        lambda status=None, limit=100: [
-            dict(item)
-            for item in versions.values()
-            if status is None or item.get("state") == status
-        ][:limit],
+        lambda: repo.WorklistRows(
+            sorted(
+                (dict(item) for item in versions.values()),
+                key=lambda item: str(item.get("updated_at", "")),
+                reverse=True,
+            ),
+            {
+                public_id: pointer["published_version_id"]
+                for public_id, pointer in pointers.items()
+                if pointer.get("published_version_id")
+            },
+        ),
     )
     monkeypatch.setattr(repo, "list_active_assignment_refs", lambda public_id: list(refs))
     # The draft's unit has to exist for the attribution check the lesson now carries.
