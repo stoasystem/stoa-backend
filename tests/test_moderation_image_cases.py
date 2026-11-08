@@ -109,7 +109,6 @@ class _World:
         patch_session_table(monkeypatch, self.table)
         for module in (
             account_deletion_repo,
-            moderation_repo,
             notification_repo,
         ):
             monkeypatch.setattr(module, "get_table", lambda: self.table)

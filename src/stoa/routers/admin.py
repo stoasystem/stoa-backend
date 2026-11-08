@@ -12,7 +12,6 @@ from starlette.responses import Response
 
 from stoa.db import table as db_table
 from stoa.config import Settings, get_settings
-from stoa.db.dynamodb import get_table
 from stoa.deps import get_s3_client, legacy_user
 from stoa.db.repositories import (
     account_deletion_repo,
@@ -268,7 +267,7 @@ async def read_teacher_support_allowance(
     """How many teacher-support cases this student has in a week, and from where."""
     del actor
     assigned = teacher_support_allowance_service.read_administered_weekly_cases(
-        student_id, table=get_table()
+        student_id, table=db_table.table()
     )
     return {
         "studentId": student_id,
@@ -293,7 +292,7 @@ async def set_teacher_support_allowance(
     was replaced between reading it and writing the case.
     """
     next_version = teacher_support_allowance_service.administer_weekly_cases(
-        student_id, body.weekly_cases, actor=actor, table=get_table()
+        student_id, body.weekly_cases, actor=actor, table=db_table.table()
     )
     return {
         "studentId": student_id,
@@ -2037,7 +2036,7 @@ async def list_users(
     batching it down needs `current_relationship.judge`, not this file.
     """
     del actor
-    table = get_table()
+    table = db_table.table()
     try:
         page = user_repo.list_accounts(
             limit=limit,
@@ -2368,12 +2367,7 @@ def _require_password_change_at_next_sign_in(
         expected_version=profile.get("version"),
     )
     try:
-        db_table.fenced(
-            user_id,
-            [operation],
-            # The table the fence is read from.
-            table=account_deletion_repo.get_table(),
-        )
+        db_table.fenced(user_id, [operation])
     except (
         account_deletion_repo.AccountDeletionConflict,
         db_table.WriteRefused,
@@ -2997,7 +2991,7 @@ ADMIN_STATS_MAX_PAGES = 50
 @router.get("/stats", response_model=StatsResponse)
 async def get_stats(actor: Actor = Depends(admin_operation)):
     """Return aggregate platform metrics (full-table scan — small scale only)."""
-    table = get_table()
+    table = db_table.table()
 
     # Count user profiles
     users, users_complete = user_repo.profile_role_census(

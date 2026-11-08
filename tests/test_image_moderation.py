@@ -29,7 +29,6 @@ from stoa.db import table as db_table
 from stoa.config import Settings
 from stoa.db.repositories import (
     account_deletion_repo,
-    moderation_repo,
     notification_repo,
 )
 from stoa.deps import (
@@ -94,8 +93,6 @@ class _Api:
     ) -> None:
         db_table.install(table)
         monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
-        # A refused image opens a review case (#139), on the same table.
-        monkeypatch.setattr(moderation_repo, "get_table", lambda: table)
         monkeypatch.setattr(notification_repo, "get_table", lambda: table)
         self.table = table
         self.s3 = MultipartS3(BUCKET)

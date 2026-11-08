@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 
 from dynamodb_expression_assertions import assert_expression_placeholders_closed
 
+from stoa.db import table as db_table
 from stoa.config import settings
 from stoa.routers import analytics
 
@@ -60,7 +61,7 @@ class _StubRequest:
 @pytest.fixture
 def table(monkeypatch: pytest.MonkeyPatch) -> _AnalyticsTable:
     fake = _AnalyticsTable()
-    monkeypatch.setattr(analytics, "get_table", lambda: fake)
+    db_table.install(fake)
     return fake
 
 
@@ -197,7 +198,7 @@ def test_超额时拒绝且不写事件行(
 
 def test_计数器写不进去时拒绝而不是放行(monkeypatch: pytest.MonkeyPatch) -> None:
     broken = _AnalyticsTable(update_fails=True)
-    monkeypatch.setattr(analytics, "get_table", lambda: broken)
+    db_table.install(broken)
 
     response = _client().post("/analytics/events", json=_event())
 
