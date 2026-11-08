@@ -467,8 +467,8 @@ def _answer_style_to_store(sent: str) -> str:
     """The answer style a profile write stores: a code from `choices.answerStyle`.
 
     "" (or whitespace) is the student going back to `standard`, and is stored
-    as that code. The field never held free text, so unlike the grade there is
-    no transition: anything outside the list is refused and nothing is written.
+    as that code. Anything outside the list is refused, like the grade, and
+    nothing in the request is written.
     """
     try:
         code = learning_profile_service.normalize_choice("answer_style", sent)
