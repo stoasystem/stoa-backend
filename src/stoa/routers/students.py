@@ -438,28 +438,18 @@ async def get_my_learning_history(
 def _grade_to_store(sent: str) -> str:
     """The year group a profile write stores: a code from `choices.grade`, or "".
 
-    A value written as a code must be one: a client choosing from the list
-    that sends something else is refused with `profile_choice_unknown`.
-
-    **Transition (#310), until stoa-frontend#591 is deployed.** The web client
-    live today has a free-text grade box whose own hint asks for "6. Klasse" /
-    "Year 6" / "6e année" / "6ª classe"; refusing that would answer a student
-    who did as asked with "not saved" for as long as that client is the one
-    deployed. So text that was never meant as a code is still stored as sent,
-    and the readers hold it safe: the prompt names it unreadable
-    (`resolve_grade_code`) and the star map starts where it always has. Once
-    the dropdown is live, the branch below that stores it goes and every value
-    outside the list is refused.
+    Anything else - a code the list does not offer, or typed text such as
+    "6. Klasse" - is refused with `profile_choice_unknown` and nothing is
+    written. Free text written before the dropdown (#323) stays in the table
+    and is still read through `resolve_grade_code`; it just cannot be written
+    any more.
     """
     try:
         return learning_profile_service.normalize_grade(sent)
     except ValueError:
-        if learning_profile_service.looks_like_grade_code(sent):
-            raise AccountViolation(
-                AccountErrorCode.PROFILE_CHOICE_UNKNOWN, fields=["grade"]
-            ) from None
-    logger.info("student_profile_grade_free_text_stored")
-    return sent
+        raise AccountViolation(
+            AccountErrorCode.PROFILE_CHOICE_UNKNOWN, fields=["grade"]
+        ) from None
 
 
 @router.get("/me/profile", response_model=StudentProfileResponse)

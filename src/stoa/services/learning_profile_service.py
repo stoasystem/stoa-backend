@@ -220,16 +220,6 @@ def normalize_grade(grade: str | None) -> str:
     return normalize_choice("grade", grade)
 
 
-def looks_like_grade_code(grade: str | None) -> bool:
-    """Whether a written grade was meant as a code rather than typed as text.
-
-    The profile route uses it for one transition only (#310): a client sending
-    codes that sends a wrong one is refused, while the free-text box of the
-    client still deployed keeps saving until its dropdown replaces it.
-    """
-    return str(grade or "").strip().lower().startswith("grade_")
-
-
 def resolve_grade_code(grade: str | None) -> str | None:
     """What a stored year group means: a code, "" for none said, None for unreadable.
 

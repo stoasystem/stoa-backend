@@ -292,46 +292,70 @@ def test_a_code_the_list_does_not_offer_is_refused_and_nothing_is_written(
 
 
 @pytest.mark.parametrize(
-    ("typed", "read_as"),
-    # Word for word what the live client's own hint asks the student to type,
-    # in each of its four languages, and what production already holds.
-    [
-        ("6. Klasse", "6. Klasse"),
-        ("Year 6", "Year 6"),
-        ("6e année", "6e année"),
-        ("6ª classe", "6ª classe"),
-        ("14", "14"),
-        ("Sek1", "grade_secondary_i"),
-        ("Grade 6", "grade_6_primary"),
-    ],
+    "typed",
+    # Word for word what the old free-text box's hint asked the student to
+    # type, in each of its four languages, what production already holds, and
+    # legacy spellings the read path understands - none is a code, so none may
+    # be written any more (#323).
+    ["6. Klasse", "Year 6", "6e année", "6ª classe", "14", "Sek1", "Grade 6", "<script>alert(1)</script>"],
 )
-def test_during_the_transition_typed_text_is_still_stored_as_sent(
-    profile_client, typed, read_as
-):
-    """Until stoa-frontend#591's dropdown is deployed (#310).
+def test_typed_text_is_refused_and_nothing_is_written(profile_client, typed):
+    """Since stoa-frontend#591 only codes are sent; everything else is refused.
 
-    The grade box on the web client still live is free text whose hint says
-    'Zum Beispiel «6. Klasse»'. Refusing that here would answer a student who
-    did exactly as asked with "not saved" for as long as that client is the
-    one deployed. So it is stored as sent; it is read back as the code it
-    means where one can be read from it, else as stored - in no list, so the
-    new client asks again. This test goes when the door closes.
+    The free-text box is gone, so the transition branch that stored typed text
+    as sent went with it (#323): a value outside `choices.grade` is a 422 with
+    the same code as a wrong code, whatever it looks like.
     """
     client, writes = profile_client
-    response = client.patch("/students/me/profile", json={"grade": typed})
+    response = client.patch(
+        "/students/me/profile", json={"grade": typed}, headers={"Accept-Language": "de"}
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["code"] == "profile_choice_unknown"
+    assert detail["fields"] == ["grade"]
+    assert detail["message"] == message_catalog.TEXT["error.profile_choice_unknown"]["de"]
+    assert writes == []
+
+
+@pytest.mark.parametrize(
+    ("stored", "read_as"),
+    # Text written before the dropdown is still in the table and is read as
+    # it always was: as the code it means, else as stored (in no list, so the
+    # client treats it as not said).
+    [("6. Klasse", "6. Klasse"), ("14", "14"), ("Sek1", "grade_secondary_i"), ("Grade 6", "grade_6_primary")],
+)
+def test_text_stored_before_the_dropdown_is_still_read(
+    profile_client, monkeypatch, stored, read_as
+):
+    client, writes = profile_client
+    profile = {
+        "user_id": "student-1",
+        "role": "student",
+        "account_status": "active",
+        "name": "Student One",
+        "grade": stored,
+        "created_at": "2026-07-15T00:00:00Z",
+        "updated_at": "2026-07-15T00:00:00Z",
+    }
+    monkeypatch.setattr(
+        route_authorization.user_repo, "get_user", lambda user_id, **_kwargs: dict(profile)
+    )
+    monkeypatch.setattr(students.user_repo, "get_user", lambda user_id, **_kwargs: dict(profile))
+
+    response = client.get("/students/me/profile")
+
     assert response.status_code == 200
     assert response.json()["grade"] == read_as
-    assert [write["expression_attribute_values"][":g"] for write in writes] == [typed]
+    assert writes == []
 
 
-@pytest.mark.parametrize("typed", ["6. Klasse", "Year 6", "14", "<script>alert(1)</script>"])
-def test_what_that_door_lets_through_still_cannot_reach_the_model(typed):
-    """Which is why the open door is safe: the prompt refuses it, not the write.
-
-    Every one of these is stored as sent and none of them is said to the model.
-    """
-    prompt = _system_prompt(grade=typed)
-    assert typed not in prompt
+@pytest.mark.parametrize("stored", ["6. Klasse", "Year 6", "14", "<script>alert(1)</script>"])
+def test_text_stored_before_the_dropdown_still_cannot_reach_the_model(stored):
+    """The prompt refuses unreadable stored text, whatever wrote it."""
+    prompt = _system_prompt(grade=stored)
+    assert stored not in prompt
     assert f"The student is in {ask_answer.UNREADABLE_GRADE}:" in prompt
 
 
