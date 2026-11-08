@@ -114,6 +114,72 @@ TEXT: dict[str, dict[str, str]] = {
             "per riottenere l'accesso al tuo account."
         ),
     },
+    "error.account_invitation_unclaimed": {
+        "de": (
+            "Dieses Konto wurde noch nicht aktiviert. "
+            "Öffne den Link aus deiner Einladungs-E-Mail, um es zu aktivieren."
+        ),
+        "en": (
+            "This account has not been activated yet. "
+            "Open the link in your invitation email to activate it."
+        ),
+        "fr": (
+            "Ce compte n'a pas encore été activé. "
+            "Ouvrez le lien de votre e-mail d'invitation pour l'activer."
+        ),
+        "it": (
+            "Questo account non è ancora stato attivato. "
+            "Apri il link nell'e-mail di invito per attivarlo."
+        ),
+    },
+    "error.account_review_pending": {
+        "de": "Dein Konto wird noch geprüft. Du kannst dich anmelden, sobald es freigegeben ist.",
+        "en": "Your account is still being reviewed. You can sign in once it has been approved.",
+        "fr": (
+            "Votre compte est encore en cours de vérification. "
+            "Vous pourrez vous connecter dès qu'il sera approuvé."
+        ),
+        "it": (
+            "Il tuo account è ancora in fase di verifica. "
+            "Potrai accedere non appena sarà approvato."
+        ),
+    },
+    "error.account_archived": {
+        "de": (
+            "Dieses Konto wurde archiviert. Wende dich an den Support "
+            "und gib die angezeigte Referenz an, wenn du es wieder brauchst."
+        ),
+        "en": (
+            "This account has been archived. Contact support and share "
+            "the reference shown if you need it again."
+        ),
+        "fr": (
+            "Ce compte a été archivé. Contactez le support en indiquant "
+            "la référence affichée si vous en avez de nouveau besoin."
+        ),
+        "it": (
+            "Questo account è stato archiviato. Contatta il supporto indicando "
+            "il riferimento mostrato se ti serve di nuovo."
+        ),
+    },
+    "error.account_provisioning_failed": {
+        "de": (
+            "Beim Einrichten dieses Kontos ist etwas schiefgegangen. "
+            "Wende dich an den Support und gib die angezeigte Referenz an."
+        ),
+        "en": (
+            "Something went wrong while this account was being set up. "
+            "Contact support and share the reference shown."
+        ),
+        "fr": (
+            "Un problème est survenu lors de la création de ce compte. "
+            "Contactez le support en indiquant la référence affichée."
+        ),
+        "it": (
+            "Si è verificato un problema durante la creazione di questo account. "
+            "Contatta il supporto indicando il riferimento mostrato."
+        ),
+    },
     "error.email_already_registered": {
         "de": (
             "Für diese E-Mail-Adresse gibt es bereits ein Konto. "

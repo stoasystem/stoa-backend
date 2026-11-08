@@ -1,5 +1,18 @@
 {
   "errors": {
+    "account_archived": {
+      "action": "contact_support",
+      "domain": "security",
+      "http_status": 403,
+      "message_key": "error.account_archived",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "account_disabled": {
       "action": "contact_support",
       "domain": "security",
@@ -31,6 +44,19 @@
       "domain": "account",
       "http_status": 409,
       "message_key": "error.account_exists",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_invitation_unclaimed": {
+      "action": null,
+      "domain": "security",
+      "http_status": 403,
+      "message_key": "error.account_invitation_unclaimed",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
@@ -161,6 +187,32 @@
       "domain": "account",
       "http_status": 409,
       "message_key": "error.account_profile_missing",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_provisioning_failed": {
+      "action": "contact_support",
+      "domain": "security",
+      "http_status": 403,
+      "message_key": "error.account_provisioning_failed",
+      "public_fields": [],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
+    "account_review_pending": {
+      "action": null,
+      "domain": "security",
+      "http_status": 403,
+      "message_key": "error.account_review_pending",
       "public_fields": [],
       "retry": {
         "idempotent_only": false,
