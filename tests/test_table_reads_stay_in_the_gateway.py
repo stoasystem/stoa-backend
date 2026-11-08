@@ -77,15 +77,6 @@ ALLOWED: dict[str, dict[str, set[str]]] = {
         "services/teacher_dispatch_service.py": {"get_table", "paging"},
         "services/teacher_support_allowance_service.py": {"get_table", "conditional_check"},
     },
-    "reports and notifications": {
-        "db/repositories/notification_repo.py": {"get_table", "conditional_check"},
-        "db/repositories/report_repo.py": {"get_table", "paging", "conditional_check"},
-        "db/repositories/websocket_repo.py": {"get_table"},
-        "routers/parents.py": {"get_table", "paging"},
-        "jobs/weekly_reports.py": {"get_table"},
-        "services/notification_service.py": {"get_table"},
-        "services/report_service.py": {"get_table", "paging"},
-    },
     "billing and entitlements": {
         "db/repositories/billing_fact_repo.py": {"get_table"},
         "db/repositories/checkout_command_repo.py": {"get_table"},

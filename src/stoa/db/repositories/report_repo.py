@@ -5,12 +5,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
-from typing import Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
 
-from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Attr, ConditionBase, Key
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -314,6 +312,36 @@ def _update_item(table: object, **kwargs: object) -> object:
     return table.update_item(**kwargs)
 
 
+# A read on GSI-ParentId continues from the index's key as well as the table's.
+PARENT_WEEK_KEY = ("PK", "SK", "parent_id", "week_start")
+
+
+def _page(
+    read: Literal["query", "scan"],
+    last_key: ReportItem | None,
+    *,
+    key: tuple[str, ...] = db_table.BASE_KEY,
+    **request: object,
+) -> ReportItem:
+    """One page of a listing, as its callers read it: `Items`, and `LastEvaluatedKey`
+    while there is more.
+
+    A table that cannot be read page by page, or that answers with something that
+    is not a page, is the "report dependency unavailable" these listings have
+    always raised.
+    """
+    try:
+        page = next(db_table.pages(read, start=last_key or None, key=key, **request))
+    except db_table.TableUnavailable as exc:
+        raise account_deletion_repo.AccountDeletionConflict(
+            "report dependency unavailable"
+        ) from exc
+    result: ReportItem = {"Items": page.items}
+    if page.last_key is not None:
+        result["LastEvaluatedKey"] = page.last_key
+    return result
+
+
 @dataclass(frozen=True, slots=True)
 class ReportPrivatePage:
     items: tuple[ReportItem, ...]
@@ -322,7 +350,7 @@ class ReportPrivatePage:
 
 
 def put_report(item: ReportItem) -> None:
-    table = get_table()
+    table = db_table.table()
     owner_id = item.get("student_id")
     generation = item.get("account_fence_generation")
     if isinstance(owner_id, str) and type(generation) is int and generation > 0:
@@ -356,7 +384,7 @@ def put_report(item: ReportItem) -> None:
 
 
 def try_claim_report_generation(item: ReportItem) -> bool:
-    table = get_table()
+    table = db_table.table()
     owner_id = item.get("student_id")
     generation = item.get("account_fence_generation")
     if isinstance(owner_id, str) and type(generation) is int and generation > 0:
@@ -382,20 +410,18 @@ def try_claim_report_generation(item: ReportItem) -> bool:
             return False
         return True
     try:
-        _put_item(
-            table,
+        db_table.put(
+            table=table,
             Item={"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item},
             ConditionExpression="attribute_not_exists(PK)",
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
 def update_report_status(report_id: str, status: str, **fields: object) -> None:
-    table = get_table()
+    table = db_table.table()
     update_fields = {"status": status, **fields}
     names = {f"#f{index}": key for index, key in enumerate(update_fields)}
     values = {f":v{index}": value for index, value in enumerate(update_fields.values())}
@@ -417,7 +443,7 @@ def try_apply_report_edit(
     status: str,
     fields: ReportItem,
 ) -> bool:
-    table = get_table()
+    table = db_table.table()
     update_fields = {"status": status, **fields}
     names = {f"#f{index}": key for index, key in enumerate(update_fields)}
     values = {f":v{index}": value for index, value in enumerate(update_fields.values())}
@@ -427,8 +453,8 @@ def try_apply_report_edit(
         condition = "updated_at = :expected_updated_at"
         values[":expected_updated_at"] = expected_updated_at
     try:
-        _update_item(
-            table,
+        db_table.update(
+            table=table,
             Key={"PK": f"REPORT#{report_id}", "SK": "SUMMARY"},
             UpdateExpression="SET " + ", ".join(
                 f"{name} = :v{index}" for index, name in enumerate(names)
@@ -437,15 +463,13 @@ def try_apply_report_edit(
             ExpressionAttributeNames=names,
             ExpressionAttributeValues=values,
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
 def put_report_edit_draft(report_id: str, draft: ReportItem) -> None:
-    table = get_table()
+    table = db_table.table()
     _put_item(
         table,
         Item={
@@ -459,7 +483,7 @@ def put_report_edit_draft(report_id: str, draft: ReportItem) -> None:
 
 
 def get_report_edit_draft(report_id: str, draft_id: str) -> ReportItem | None:
-    table = get_table()
+    table = db_table.table()
     response = _get_item(
         table,
         Key={"PK": f"REPORT#{report_id}", "SK": f"EDIT_DRAFT#{draft_id}"}
@@ -474,10 +498,10 @@ def mark_report_edit_draft_applied(
     applied_at: str,
     applied_by: str,
 ) -> bool:
-    table = get_table()
+    table = db_table.table()
     try:
-        _update_item(
-            table,
+        db_table.update(
+            table=table,
             Key={"PK": f"REPORT#{report_id}", "SK": f"EDIT_DRAFT#{draft_id}"},
             UpdateExpression=(
                 "SET #status = :applied, applied_at = :applied_at, "
@@ -492,15 +516,13 @@ def mark_report_edit_draft_applied(
                 ":applied_by": applied_by,
             },
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
 def put_report_artifact_edit_draft(report_id: str, draft: ReportItem) -> None:
-    table = get_table()
+    table = db_table.table()
     _put_item(
         table,
         Item={
@@ -514,7 +536,7 @@ def put_report_artifact_edit_draft(report_id: str, draft: ReportItem) -> None:
 
 
 def get_report_artifact_edit_draft(report_id: str, draft_id: str) -> ReportItem | None:
-    table = get_table()
+    table = db_table.table()
     response = _get_item(
         table,
         Key={"PK": f"REPORT#{report_id}", "SK": f"ARTIFACT_EDIT_DRAFT#{draft_id}"}
@@ -530,10 +552,10 @@ def mark_report_artifact_edit_draft_applied(
     applied_by: str,
     artifact_version_id: str,
 ) -> bool:
-    table = get_table()
+    table = db_table.table()
     try:
-        _update_item(
-            table,
+        db_table.update(
+            table=table,
             Key={"PK": f"REPORT#{report_id}", "SK": f"ARTIFACT_EDIT_DRAFT#{draft_id}"},
             UpdateExpression=(
                 "SET #status = :applied, applied_at = :applied_at, "
@@ -550,15 +572,13 @@ def mark_report_artifact_edit_draft_applied(
                 ":artifact_version_id": artifact_version_id,
             },
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
 def put_report_artifact_rollback_preview(report_id: str, preview: ReportItem) -> None:
-    table = get_table()
+    table = db_table.table()
     _put_item(
         table,
         Item={
@@ -574,7 +594,7 @@ def put_report_artifact_rollback_preview(report_id: str, preview: ReportItem) ->
 def get_report_artifact_rollback_preview(
     report_id: str, preview_id: str
 ) -> ReportItem | None:
-    table = get_table()
+    table = db_table.table()
     response = _get_item(
         table,
         Key={"PK": f"REPORT#{report_id}", "SK": f"ARTIFACT_ROLLBACK_PREVIEW#{preview_id}"}
@@ -590,7 +610,7 @@ def mark_report_artifact_rollback_preview_applied(
     applied_by: str,
     artifact_version_id: str | None,
 ) -> bool:
-    table = get_table()
+    table = db_table.table()
     values = {
         ":applied": "applied",
         ":draft": "draft",
@@ -605,18 +625,16 @@ def mark_report_artifact_rollback_preview_applied(
         update_expression += ", artifact_version_id = :artifact_version_id"
         values[":artifact_version_id"] = artifact_version_id
     try:
-        _update_item(
-            table,
+        db_table.update(
+            table=table,
             Key={"PK": f"REPORT#{report_id}", "SK": f"ARTIFACT_ROLLBACK_PREVIEW#{preview_id}"},
             UpdateExpression=update_expression,
             ConditionExpression="#status = :draft",
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues=values,
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
@@ -630,7 +648,7 @@ def try_apply_report_artifact_edit(
     status: str,
     fields: ReportItem,
 ) -> bool:
-    table = get_table()
+    table = db_table.table()
     update_fields = {"status": status, **fields}
     names = {f"#f{index}": key for index, key in enumerate(update_fields)}
     values = {f":v{index}": value for index, value in enumerate(update_fields.values())}
@@ -652,8 +670,8 @@ def try_apply_report_artifact_edit(
         conditions.append("html_s3_key = :expected_html_s3_key")
         values[":expected_html_s3_key"] = expected_html_s3_key
     try:
-        _update_item(
-            table,
+        db_table.update(
+            table=table,
             Key={"PK": f"REPORT#{report_id}", "SK": "SUMMARY"},
             UpdateExpression="SET " + ", ".join(
                 f"{name} = :v{index}" for index, name in enumerate(names)
@@ -662,16 +680,14 @@ def try_apply_report_artifact_edit(
             ExpressionAttributeNames=names,
             ExpressionAttributeValues=values,
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
 def put_report_audit_event(report_id: str, event: ReportItem) -> None:
     """Append one immutable report audit event."""
-    table = get_table()
+    table = db_table.table()
     _put_item(
         table,
         Item={
@@ -686,7 +702,7 @@ def put_report_audit_event(report_id: str, event: ReportItem) -> None:
 
 def put_recovery_job_audit_event(job_id: str, event: ReportItem) -> None:
     """Append one immutable recovery job audit event."""
-    table = get_table()
+    table = db_table.table()
     _put_item(
         table,
         Item={
@@ -701,7 +717,7 @@ def put_recovery_job_audit_event(job_id: str, event: ReportItem) -> None:
 
 def put_support_handoff_audit_event(package_id: str, event: ReportItem) -> None:
     """Append one immutable support handoff audit event."""
-    table = get_table()
+    table = db_table.table()
     _put_item(
         table,
         Item={
@@ -716,7 +732,7 @@ def put_support_handoff_audit_event(package_id: str, event: ReportItem) -> None:
 
 def get_support_handoff_delivery_record(delivery_id: str) -> ReportItem | None:
     """Return the current support handoff delivery summary, if present."""
-    table = get_table()
+    table = db_table.table()
     response = _get_item(
         table,
         Key={"PK": f"SUPPORT_HANDOFF_DELIVERY#{delivery_id}", "SK": "SUMMARY"},
@@ -750,7 +766,7 @@ def put_support_handoff_delivery_record(
     Returns `(record, created)`. Duplicate deterministic delivery IDs reuse the
     existing row so repeated requests remain idempotent.
     """
-    table = get_table()
+    table = db_table.table()
     item = {
         "PK": f"SUPPORT_HANDOFF_DELIVERY#{delivery_id}",
         "SK": "SUMMARY",
@@ -758,17 +774,16 @@ def put_support_handoff_delivery_record(
         **delivery,
     }
     try:
-        _put_item(
-            table,
+        db_table.put(
+            table=table,
             Item=item,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            existing = get_support_handoff_delivery_record(delivery_id)
-            if existing:
-                _put_support_handoff_delivery_feed_item(table, existing)
-                return existing, False
+    except db_table.WriteRefused:
+        existing = get_support_handoff_delivery_record(delivery_id)
+        if existing:
+            _put_support_handoff_delivery_feed_item(table, existing)
+            return existing, False
         raise
     _put_support_handoff_delivery_feed_item(table, item)
     return item, True
@@ -805,7 +820,7 @@ def update_support_handoff_delivery_status(
     }
     if extra_updates:
         updated.update(extra_updates)
-    table = get_table()
+    table = db_table.table()
     _put_item(
         table,
         Item={
@@ -823,7 +838,7 @@ def put_support_handoff_delivery_audit_event(
     delivery_id: str, event: ReportItem
 ) -> None:
     """Append one immutable support handoff delivery lifecycle event."""
-    table = get_table()
+    table = db_table.table()
     _put_item(
         table,
         Item={
@@ -838,7 +853,7 @@ def put_support_handoff_delivery_audit_event(
 
 def put_support_crm_message_event(delivery_id: str, event: ReportItem) -> None:
     """Persist one metadata-only support CRM/customer message outcome."""
-    table = get_table()
+    table = db_table.table()
     item = {
         "PK": f"SUPPORT_HANDOFF_DELIVERY#{delivery_id}",
         "SK": f"CRM_MESSAGE#{event['event_at']}#{event['message_id']}",
@@ -865,15 +880,12 @@ def list_support_crm_message_events(
     *, limit: int = 100, last_key: ReportItem | None = None
 ) -> ReportItem:
     """List recent metadata-only support CRM/customer message outcomes."""
-    table = get_table()
     kwargs = {
         "KeyConditionExpression": Key("PK").eq("SUPPORT_CRM_MESSAGE_FEED") & Key("SK").begins_with("MESSAGE#"),
         "Limit": limit,
         "ScanIndexForward": False,
     }
-    if last_key:
-        kwargs["ExclusiveStartKey"] = last_key
-    return _query(table, **kwargs)
+    return _page("query", last_key, **kwargs)
 
 
 def list_support_handoff_delivery_summaries(
@@ -886,7 +898,7 @@ def list_support_handoff_delivery_summaries(
     limit: int = 50,
     last_key: ReportItem | None = None,
 ) -> ReportItem:
-    table = get_table()
+    table = db_table.table()
     kwargs = {
         "KeyConditionExpression": Key("PK").eq("SUPPORT_HANDOFF_DELIVERY_FEED")
         & Key("SK").begins_with("SUMMARY#"),
@@ -902,9 +914,7 @@ def list_support_handoff_delivery_summaries(
     )
     if filter_expr is not None:
         kwargs["FilterExpression"] = filter_expr
-    if last_key:
-        kwargs["ExclusiveStartKey"] = last_key
-    result = _query(table, **kwargs)
+    result = _page("query", last_key, **kwargs)
     items = _response_items(result)
     if last_key is None and len(items) < limit:
         fallback = _scan_support_handoff_delivery_summaries(
@@ -932,21 +942,18 @@ def list_support_handoff_delivery_audit_events(
     limit: int = 50,
     last_key: ReportItem | None = None,
 ) -> ReportItem:
-    table = get_table()
     kwargs = {
         "KeyConditionExpression": Key("PK").eq(f"SUPPORT_HANDOFF_DELIVERY#{delivery_id}")
         & Key("SK").begins_with("AUDIT#"),
         "Limit": limit,
         "ScanIndexForward": False,
     }
-    if last_key:
-        kwargs["ExclusiveStartKey"] = last_key
-    return _query(table, **kwargs)
+    return _page("query", last_key, **kwargs)
 
 
 def put_audit_retention_audit_event(manifest_id: str, event: ReportItem) -> None:
     """Append one metadata-only audit retention event."""
-    table = get_table()
+    table = db_table.table()
     _put_item(
         table,
         Item={
@@ -961,10 +968,10 @@ def put_audit_retention_audit_event(manifest_id: str, event: ReportItem) -> None
 
 def put_audit_retention_manifest(manifest_id: str, manifest: ReportItem) -> bool:
     """Persist one immutable-evidence manifest reference without overwriting."""
-    table = get_table()
+    table = db_table.table()
     try:
-        _put_item(
-            table,
+        db_table.put(
+            table=table,
             Item={
                 "PK": f"AUDIT_RETENTION#{manifest_id}",
                 "SK": "IMMUTABLE_MANIFEST",
@@ -973,17 +980,15 @@ def put_audit_retention_manifest(manifest_id: str, manifest: ReportItem) -> bool
             },
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
 def get_audit_retention_manifest(manifest_id: str) -> ReportItem | None:
     """Read one persisted immutable-evidence manifest reference."""
     response = _get_item(
-        get_table(),
+        db_table.table(),
         Key={"PK": f"AUDIT_RETENTION#{manifest_id}", "SK": "IMMUTABLE_MANIFEST"}
     )
     return _optional_item(response.get("Item"))
@@ -1002,8 +1007,7 @@ def update_audit_retention_manifest_status(
     names["#status"] = "status"
     values[":expected_status"] = expected_status
     try:
-        _update_item(
-            get_table(),
+        db_table.update(
             Key={"PK": f"AUDIT_RETENTION#{manifest_id}", "SK": "IMMUTABLE_MANIFEST"},
             UpdateExpression="SET " + ", ".join(
                 f"{name} = :v{index}" for index, name in enumerate(names) if name != "#status"
@@ -1012,10 +1016,8 @@ def update_audit_retention_manifest_status(
             ExpressionAttributeNames=names,
             ExpressionAttributeValues=values,
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
@@ -1048,18 +1050,16 @@ def put_legal_hold_metadata(
     if values:
         put_kwargs["ExpressionAttributeValues"] = values
     try:
-        _put_item(get_table(), **put_kwargs)
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+        db_table.put(**put_kwargs)
+    except db_table.WriteRefused:
+        return False
     return True
 
 
 def get_legal_hold_metadata(scope_key: str) -> ReportItem | None:
     """Read current metadata-only legal hold state for an evidence scope."""
     response = _get_item(
-        get_table(),
+        db_table.table(),
         Key={"PK": f"LEGAL_HOLD#{scope_key}", "SK": "SUMMARY"},
         ConsistentRead=True,
     )
@@ -1069,7 +1069,7 @@ def get_legal_hold_metadata(scope_key: str) -> ReportItem | None:
 def put_legal_hold_audit_event(scope_key: str, event: ReportItem) -> None:
     """Append one metadata-only legal hold audit event."""
     _put_item(
-        get_table(),
+        db_table.table(),
         Item={
             "PK": f"LEGAL_HOLD#{scope_key}",
             "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
@@ -1105,18 +1105,16 @@ def put_retention_approval_metadata(
     if values:
         put_kwargs["ExpressionAttributeValues"] = values
     try:
-        _put_item(get_table(), **put_kwargs)
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+        db_table.put(**put_kwargs)
+    except db_table.WriteRefused:
+        return False
     return True
 
 
 def get_retention_approval_metadata(policy_version: str) -> ReportItem | None:
     """Read current metadata-only retention approval state."""
     response = _get_item(
-        get_table(),
+        db_table.table(),
         Key={"PK": f"RETENTION_APPROVAL#{policy_version}", "SK": "SUMMARY"},
         ConsistentRead=True,
     )
@@ -1128,7 +1126,7 @@ def put_retention_approval_audit_event(
 ) -> None:
     """Append one metadata-only retention approval audit event."""
     _put_item(
-        get_table(),
+        db_table.table(),
         Item={
             "PK": f"RETENTION_APPROVAL#{policy_version}",
             "SK": f"AUDIT#{event['event_at']}#{event['event_id']}",
@@ -1164,18 +1162,16 @@ def put_legal_hold_review_metadata(
     if values:
         put_kwargs["ExpressionAttributeValues"] = values
     try:
-        _put_item(get_table(), **put_kwargs)
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+        db_table.put(**put_kwargs)
+    except db_table.WriteRefused:
+        return False
     return True
 
 
 def get_legal_hold_review_metadata(scope_key: str) -> ReportItem | None:
     """Read latest metadata-only legal-hold review state for an evidence scope."""
     response = _get_item(
-        get_table(),
+        db_table.table(),
         Key={"PK": f"LEGAL_HOLD#{scope_key}", "SK": "REVIEW_SUMMARY"},
         ConsistentRead=True,
     )
@@ -1184,7 +1180,7 @@ def get_legal_hold_review_metadata(scope_key: str) -> ReportItem | None:
 
 def put_recovery_job(job: ReportItem, targets: list[ReportItem]) -> None:
     """Persist one recovery job and its stable target snapshot."""
-    table = get_table()
+    table = db_table.table()
     _put_item(
         table,
         Item={
@@ -1211,7 +1207,7 @@ def put_recovery_job(job: ReportItem, targets: list[ReportItem]) -> None:
 
 
 def get_recovery_job(job_id: str) -> ReportItem | None:
-    table = get_table()
+    table = db_table.table()
     response = _get_item(
         table,
         Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": "SUMMARY"},
@@ -1222,14 +1218,11 @@ def get_recovery_job(job_id: str) -> ReportItem | None:
 def list_recovery_jobs(
     *, limit: int = 50, last_key: ReportItem | None = None
 ) -> ReportItem:
-    table = get_table()
     kwargs = {
         "FilterExpression": Attr("PK").begins_with("REPORT_RECOVERY_JOB#") & Attr("SK").eq("SUMMARY"),
         "Limit": limit,
     }
-    if last_key:
-        kwargs["ExclusiveStartKey"] = last_key
-    return _scan(table, **kwargs)
+    return _page("scan", last_key, **kwargs)
 
 
 def list_recovery_job_targets(
@@ -1238,21 +1231,18 @@ def list_recovery_job_targets(
     limit: int = 50,
     last_key: ReportItem | None = None,
 ) -> ReportItem:
-    table = get_table()
     kwargs = {
         "KeyConditionExpression": Key("PK").eq(f"REPORT_RECOVERY_JOB#{job_id}") & Key("SK").begins_with("TARGET#"),
         "Limit": limit,
     }
-    if last_key:
-        kwargs["ExclusiveStartKey"] = last_key
-    return _query(table, **kwargs)
+    return _page("query", last_key, **kwargs)
 
 
 def try_claim_recovery_job(job_id: str, *, started_at: str) -> bool:
-    table = get_table()
+    table = db_table.table()
     try:
-        _update_item(
-            table,
+        db_table.update(
+            table=table,
             Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": "SUMMARY"},
             UpdateExpression="SET #status = :running, started_at = if_not_exists(started_at, :started_at), updated_at = :started_at",
             ConditionExpression="#status = :queued",
@@ -1263,18 +1253,16 @@ def try_claim_recovery_job(job_id: str, *, started_at: str) -> bool:
                 ":started_at": started_at,
             },
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
 def request_recovery_job_cancellation(job_id: str, *, requested_by: str, requested_at: str) -> bool:
-    table = get_table()
+    table = db_table.table()
     try:
-        _update_item(
-            table,
+        db_table.update(
+            table=table,
             Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": "SUMMARY"},
             UpdateExpression=(
                 "SET #status = :cancellation_requested, "
@@ -1292,15 +1280,13 @@ def request_recovery_job_cancellation(job_id: str, *, requested_by: str, request
                 ":requested_at": requested_at,
             },
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
 def update_recovery_job_status(job_id: str, status: str, **fields: object) -> None:
-    table = get_table()
+    table = db_table.table()
     update_fields = {"status": status, **fields}
     names = {f"#f{index}": key for index, key in enumerate(update_fields)}
     values = {f":v{index}": value for index, value in enumerate(update_fields.values())}
@@ -1316,10 +1302,10 @@ def update_recovery_job_status(job_id: str, status: str, **fields: object) -> No
 
 
 def try_claim_recovery_job_target(job_id: str, target_sk: str, *, attempted_at: str) -> bool:
-    table = get_table()
+    table = db_table.table()
     try:
-        _update_item(
-            table,
+        db_table.update(
+            table=table,
             Key={"PK": f"REPORT_RECOVERY_JOB#{job_id}", "SK": target_sk},
             UpdateExpression="SET #result = :in_progress, attempted_at = :attempted_at, updated_at = :attempted_at",
             ConditionExpression="#result = :pending",
@@ -1330,10 +1316,8 @@ def try_claim_recovery_job_target(job_id: str, target_sk: str, *, attempted_at: 
                 ":attempted_at": attempted_at,
             },
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
@@ -1343,7 +1327,7 @@ def update_recovery_job_target(
     result: str,
     **fields: object,
 ) -> None:
-    table = get_table()
+    table = db_table.table()
     update_fields = {"result": result, **fields}
     names = {f"#f{index}": key for index, key in enumerate(update_fields)}
     values = {f":v{index}": value for index, value in enumerate(update_fields.values())}
@@ -1364,15 +1348,12 @@ def list_report_audit_events(
     limit: int = 50,
     last_key: ReportItem | None = None,
 ) -> ReportItem:
-    table = get_table()
     kwargs = {
         "KeyConditionExpression": Key("PK").eq(f"REPORT#{report_id}") & Key("SK").begins_with("AUDIT#"),
         "Limit": limit,
         "ScanIndexForward": False,
     }
-    if last_key:
-        kwargs["ExclusiveStartKey"] = last_key
-    return _query(table, **kwargs)
+    return _page("query", last_key, **kwargs)
 
 
 def list_recovery_job_audit_events(
@@ -1381,16 +1362,13 @@ def list_recovery_job_audit_events(
     limit: int = 50,
     last_key: ReportItem | None = None,
 ) -> ReportItem:
-    table = get_table()
     kwargs = {
         "KeyConditionExpression": Key("PK").eq(f"REPORT_RECOVERY_JOB#{job_id}")
         & Key("SK").begins_with("AUDIT#"),
         "Limit": limit,
         "ScanIndexForward": False,
     }
-    if last_key:
-        kwargs["ExclusiveStartKey"] = last_key
-    return _query(table, **kwargs)
+    return _page("query", last_key, **kwargs)
 
 
 def list_support_handoff_audit_events(
@@ -1399,24 +1377,21 @@ def list_support_handoff_audit_events(
     limit: int = 50,
     last_key: ReportItem | None = None,
 ) -> ReportItem:
-    table = get_table()
     kwargs = {
         "KeyConditionExpression": Key("PK").eq(f"SUPPORT_HANDOFF#{package_id}")
         & Key("SK").begins_with("AUDIT#"),
         "Limit": limit,
         "ScanIndexForward": False,
     }
-    if last_key:
-        kwargs["ExclusiveStartKey"] = last_key
-    return _query(table, **kwargs)
+    return _page("query", last_key, **kwargs)
 
 
 def try_start_generation_retry(report_id: str, *, operator: str, attempted_at: str) -> bool:
     """Atomically claim a generation-failed report for one admin retry."""
-    table = get_table()
+    table = db_table.table()
     try:
-        _update_item(
-            table,
+        db_table.update(
+            table=table,
             Key={"PK": f"REPORT#{report_id}", "SK": "SUMMARY"},
             UpdateExpression=(
                 "SET #status = :retrying, "
@@ -1438,19 +1413,17 @@ def try_start_generation_retry(report_id: str, *, operator: str, attempted_at: s
                 ":in_progress": "in_progress",
             },
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
 def try_claim_report_resend(report_id: str, *, operator: str, attempted_at: str) -> bool:
     """Atomically claim a failed email report before resend side effects."""
-    table = get_table()
+    table = db_table.table()
     try:
-        _update_item(
-            table,
+        db_table.update(
+            table=table,
             Key={"PK": f"REPORT#{report_id}", "SK": "SUMMARY"},
             UpdateExpression=(
                 "SET #status = :resending, "
@@ -1473,15 +1446,13 @@ def try_claim_report_resend(report_id: str, *, operator: str, attempted_at: str)
                 ":in_progress": "in_progress",
             },
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
 def get_report_by_week(parent_id: str, week_start: str) -> ReportItem | None:
-    table = get_table()
+    table = db_table.table()
     resp = _query(
         table,
         IndexName="GSI-ParentId",
@@ -1553,7 +1524,6 @@ def _list_reports_for_admin_parent_query(
     limit: int,
     last_key: ReportItem | None,
 ) -> ReportItem:
-    table = get_table()
     key_expr: ConditionBase = Key("parent_id").eq(parent_id)
     if week_start:
         key_expr = key_expr & Key("week_start").eq(week_start)
@@ -1567,9 +1537,7 @@ def _list_reports_for_admin_parent_query(
     filter_expr = _admin_report_filter_expression(status=status, student_id=student_id)
     if filter_expr is not None:
         kwargs["FilterExpression"] = filter_expr
-    if last_key:
-        kwargs["ExclusiveStartKey"] = last_key
-    return _query(table, **kwargs)
+    return _page("query", last_key, key=PARENT_WEEK_KEY, **kwargs)
 
 
 def _list_reports_for_admin_scan(
@@ -1580,7 +1548,6 @@ def _list_reports_for_admin_scan(
     limit: int,
     last_key: ReportItem | None,
 ) -> ReportItem:
-    table = get_table()
     filter_expr = Attr("PK").begins_with("REPORT#") & Attr("SK").eq("SUMMARY")
     extra_filter = _admin_report_filter_expression(
         status=status,
@@ -1593,9 +1560,7 @@ def _list_reports_for_admin_scan(
         "FilterExpression": filter_expr,
         "Limit": limit,
     }
-    if last_key:
-        kwargs["ExclusiveStartKey"] = last_key
-    return _scan(table, **kwargs)
+    return _page("scan", last_key, **kwargs)
 
 
 def _admin_report_filter_expression(
@@ -1653,7 +1618,7 @@ def _scan_support_handoff_delivery_summaries(
 ) -> ReportItem:
     if limit <= 0:
         return {"Items": []}
-    table = get_table()
+    table = db_table.table()
     filter_expr = Attr("PK").begins_with("SUPPORT_HANDOFF_DELIVERY#") & Attr("SK").eq("SUMMARY")
     extra_filter = _support_handoff_delivery_filter_expression(
         status=status,
@@ -1678,15 +1643,12 @@ def list_reports_for_parent_week(
     week_start: str,
     last_key: ReportItem | None = None,
 ) -> ReportItem:
-    table = get_table()
     kwargs = {
         "IndexName": "GSI-ParentId",
         "KeyConditionExpression": Key("parent_id").eq(parent_id) & Key("week_start").eq(week_start),
         "FilterExpression": Attr("SK").eq("SUMMARY"),
     }
-    if last_key:
-        kwargs["ExclusiveStartKey"] = last_key
-    return _query(table, **kwargs)
+    return _page("query", last_key, key=PARENT_WEEK_KEY, **kwargs)
 
 
 def list_reports_for_parent(
@@ -1694,7 +1656,6 @@ def list_reports_for_parent(
     limit: int = 25,
     last_key: ReportItem | None = None,
 ) -> ReportItem:
-    table = get_table()
     kwargs = {
         "IndexName": "GSI-ParentId",
         "KeyConditionExpression": Key("parent_id").eq(parent_id),
@@ -1702,9 +1663,7 @@ def list_reports_for_parent(
         "Limit": limit,
         "ScanIndexForward": False,
     }
-    if last_key:
-        kwargs["ExclusiveStartKey"] = last_key
-    return _query(table, **kwargs)
+    return _page("query", last_key, key=PARENT_WEEK_KEY, **kwargs)
 
 
 def _required_private_string(value: object, name: str) -> str:
@@ -1752,7 +1711,7 @@ def register_report_object_intent(
         "created_at": now_iso,
         "updated_at": now_iso,
     }
-    target = table or get_table()
+    target = table or db_table.table()
     if isinstance(target, _RegisterObjectIntentHook):
         persisted = target.register_report_object_intent(dict(item))
         return _dependency_mapping(persisted) if persisted is not None else item
@@ -1802,7 +1761,7 @@ def record_report_object_coordinate(
         "state": "linked",
         "updated_at": now_iso,
     }
-    target = table or get_table()
+    target = table or db_table.table()
     if isinstance(target, _RecordObjectCoordinateHook):
         persisted = target.record_report_object_coordinate(
             dict(intent), dict(coordinate), now_iso
@@ -1934,7 +1893,7 @@ def register_report_email_intent(
         "created_at": now_iso,
         "updated_at": now_iso,
     }
-    target = table or get_table()
+    target = table or db_table.table()
     if isinstance(target, _RegisterEmailIntentHook):
         persisted = target.register_report_email_intent(dict(item))
         return _dependency_mapping(persisted) if persisted is not None else item
@@ -1961,7 +1920,7 @@ def claim_report_email_intent(
     generation = intent.get("account_fence_generation")
     if isinstance(generation, bool) or not isinstance(generation, int):
         raise account_deletion_repo.AccountDeletionConflict("invalid email generation")
-    target = table or get_table()
+    target = table or db_table.table()
     key = {"PK": str(intent["PK"]), "SK": str(intent["SK"])}
     if isinstance(target, _ClaimEmailIntentHook):
         claimed = target.claim_report_email_intent(key, generation, lease_id)
@@ -2012,7 +1971,7 @@ def scan_report_private_rows(
     """Strong base-table scan for report and denormalized support copies."""
     if maximum_pages <= 0 or page_limit <= 0:
         raise account_deletion_repo.AccountDeletionConflict("invalid report scan bound")
-    target = table or get_table()
+    target = table or db_table.table()
     current = (
         account_deletion_repo.continuation_key(cursor, "report") if cursor is not None else None
     )
@@ -2076,7 +2035,7 @@ def scrub_report_private_row(
     )
     if not set(tombstone) <= REPORT_TOMBSTONE_ALLOWLIST:
         raise account_deletion_repo.AccountDeletionConflict("report tombstone allowlist violation")
-    target = table or get_table()
+    target = table or db_table.table()
     if isinstance(target, _ScrubPrivateRowHook):
         target.scrub_report_private_row(dict(item), tombstone, owner_id, generation)
         return tombstone

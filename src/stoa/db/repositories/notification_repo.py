@@ -11,10 +11,9 @@ from typing import Protocol, runtime_checkable
 from uuid import uuid4
 
 from boto3.dynamodb.conditions import Attr, ConditionBase
-from botocore.exceptions import ClientError
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -435,14 +434,7 @@ def _intent_claim(item: Mapping[str, object]) -> DeliveryIntentClaim:
 
 
 def _delivery_conditional_loss(exc: Exception) -> bool:
-    if isinstance(exc, (account_deletion_repo.AccountDeletionConflict, db_table.WriteRefused)):
-        return True
-    if not isinstance(exc, ClientError):
-        return False
-    return str(exc.response.get("Error", {}).get("Code") or "") in {
-        "ConditionalCheckFailedException",
-        "TransactionCanceledException",
-    }
+    return isinstance(exc, (account_deletion_repo.AccountDeletionConflict, db_table.WriteRefused))
 
 
 def _strong_delivery_intent(
@@ -497,7 +489,7 @@ def classify_delivery_transaction_failure(
     fence in a deletion state. `operation_count` is the number of the begin's own
     operations, the fence check not among them.
     """
-    target = table or get_table()
+    target = table or db_table.table()
     try:
         intent = _strong_delivery_intent(scope=scope, claim=claim, table=target)
     except Exception:
@@ -655,7 +647,7 @@ def _persist_private(
     mode: str = "put",
     updates: Mapping[str, object] | None = None,
 ) -> NotificationItem:
-    target = get_table()
+    target = db_table.table()
     owner_id = str(item.get("owner_id") or item.get("student_id") or item.get("user_id") or "")
     if not owner_id:
         raise account_deletion_repo.AccountDeletionConflict("notification owner is required")
@@ -681,7 +673,7 @@ def put_event(item: NotificationItem) -> NotificationItem:
     stored = {**item, "PK": notification_pk(event_id), "SK": "META"}
     if stored.get("owner_classification") == "global_nonprivate":
         stored = seal_global_nonprivate_event(stored)
-        target = get_table()
+        target = db_table.table()
         _put_item(
             target,
             Item=stored,
@@ -693,7 +685,7 @@ def put_event(item: NotificationItem) -> NotificationItem:
 
 def get_event(event_id: str) -> NotificationItem | None:
     response = _get_item(
-        get_table(), Key={"PK": notification_pk(event_id), "SK": "META"}
+        db_table.table(), Key={"PK": notification_pk(event_id), "SK": "META"}
     )
     return _optional_item(response.get("Item"))
 
@@ -705,7 +697,7 @@ def load_delivery_event_strong(
     canonical_id = str(event_id).strip()
     if not canonical_id:
         return None
-    target = table or get_table()
+    target = table or db_table.table()
     response = _get_item(
         target,
         Key={"PK": notification_pk(canonical_id), "SK": "META"},
@@ -820,7 +812,7 @@ def update_event(
 def list_events(limit: int = 100) -> list[NotificationItem]:
     return db_table.rows(
         "scan",
-        table=get_table(),
+        table=db_table.table(),
         want=limit,
         FilterExpression=Attr("entity_type").eq(NOTIFICATION_ENTITY),
     )
@@ -838,7 +830,7 @@ def put_preferences(item: NotificationItem) -> NotificationItem:
 
 def get_preferences(user_id: str) -> NotificationItem | None:
     response = _get_item(
-        get_table(), Key={"PK": preference_pk(user_id), "SK": "META"}
+        db_table.table(), Key={"PK": preference_pk(user_id), "SK": "META"}
     )
     return _optional_item(response.get("Item"))
 
@@ -863,7 +855,7 @@ def put_push_token(item: NotificationItem) -> NotificationItem:
 
 def get_push_token(user_id: str, token_reference: str) -> NotificationItem | None:
     response = _get_item(
-        get_table(),
+        db_table.table(),
         Key={"PK": push_token_pk(user_id, token_reference), "SK": "META"}
     )
     return _optional_item(response.get("Item"))
@@ -880,7 +872,7 @@ def list_push_tokens(
     expression: ConditionBase = filters[0]
     for filter_expression in filters[1:]:
         expression = expression & filter_expression
-    return db_table.rows("scan", table=get_table(), want=limit, FilterExpression=expression)
+    return db_table.rows("scan", table=db_table.table(), want=limit, FilterExpression=expression)
 
 
 def update_push_token(
@@ -908,7 +900,7 @@ def get_payment_expiry_reminder(
     *,
     table: object | None = None,
 ) -> NotificationItem | None:
-    target = table or get_table()
+    target = table or db_table.table()
     response = _get_item(
         target,
         Key={
@@ -923,7 +915,7 @@ def get_payment_expiry_reminder(
 def list_payment_expiry_reminders(
     parent_id: str, *, table: object | None = None
 ) -> list[NotificationItem]:
-    target = table or get_table()
+    target = table or db_table.table()
     response = _query(
         target,
         KeyConditionExpression="PK = :pk",
@@ -942,7 +934,7 @@ def list_payment_expiry_reminders(
 def put_payment_expiry_reminder(
     item: Mapping[str, object], *, table: object | None = None
 ) -> NotificationItem:
-    target = table or get_table()
+    target = table or db_table.table()
     parent_id = _required_text(
         item, "parent_id", "payment reminder owner is invalid"
     )
@@ -1016,7 +1008,7 @@ def _update_payment_expiry_reminder(
     *,
     table: object | None = None,
 ) -> NotificationItem | None:
-    target = table or get_table()
+    target = table or db_table.table()
     current = get_payment_expiry_reminder(
         parent_id, reminder_identity, table=target
     )
@@ -1047,7 +1039,7 @@ def resolve_payment_expiry_reminder(
     resolved_at: str,
     table: object | None = None,
 ) -> NotificationItem | None:
-    target = table or get_table()
+    target = table or db_table.table()
     hook = getattr(target, "resolve_payment_expiry_reminder", None)
     if callable(hook):
         value = hook(parent_id, reminder_identity, resolved_at)
@@ -1067,7 +1059,7 @@ def mark_payment_expiry_reminder_notified(
     notified_at: str,
     table: object | None = None,
 ) -> NotificationItem | None:
-    target = table or get_table()
+    target = table or db_table.table()
     hook = getattr(target, "mark_payment_expiry_reminder_notified", None)
     if callable(hook):
         value = hook(parent_id, reminder_identity, notified_at)
@@ -1093,7 +1085,7 @@ def register_delivery_intent(
     table: object | None = None,
 ) -> NotificationItem:
     scope = _delivery_scope(scope, owner_id=owner_id, generation=generation)
-    target = table or get_table()
+    target = table or db_table.table()
     key = _delivery_key(scope, operation_id)
     existing = _optional_item(
         _get_item(target, Key=key, ConsistentRead=True).get("Item")
@@ -1170,7 +1162,7 @@ def claim_delivery_intent(
     table: object | None = None,
 ) -> DeliveryIntentClaim | None:
     scope = _delivery_scope(scope, owner_id=owner_id, generation=generation)
-    target = table or get_table()
+    target = table or db_table.table()
     key = _delivery_key(scope, operation_id)
     current = _optional_item(
         _get_item(target, Key=key, ConsistentRead=True).get("Item")
@@ -1216,8 +1208,8 @@ def claim_delivery_intent(
         current_version = _positive_integer(
             current, "intent_version", "delivery claim is malformed"
         )
-        response = _update_item(
-            target,
+        attributes = db_table.update(
+            table=target,
             Key=key,
             UpdateExpression=(
                 "SET #effect=:pre_effect, #status=:pre_effect, "
@@ -1248,8 +1240,8 @@ def claim_delivery_intent(
         if _delivery_conditional_loss(exc):
             return None
         raise
-    attributes = response.get("Attributes")
-    if not isinstance(attributes, Mapping):
+    # Nothing handed back: the claim is what was asked for.
+    if not attributes:
         current_version = _positive_integer(
             current, "intent_version", "delivery claim is malformed"
         )
@@ -1274,7 +1266,7 @@ def delivery_intent_sendable(
 ) -> bool:
     scope = _delivery_scope(scope, owner_id=owner_id, generation=generation)
     operation = claim.operation_id if claim is not None else str(operation_id or "")
-    target = table or get_table()
+    target = table or db_table.table()
     item = _optional_item(
         _get_item(
             target,
@@ -1309,7 +1301,7 @@ def begin_delivery_effect(
     scope = _delivery_scope(scope)
     if claim.scope_digest != scope.digest:
         return DeliveryBeginResult(DeliveryBeginDisposition.CLAIM_LOST)
-    target = table or get_table()
+    target = table or db_table.table()
     hook = getattr(target, "begin_delivery_effect", None)
     if callable(hook):
         try:
@@ -1456,7 +1448,7 @@ def recover_delivery_intent(
 ) -> NotificationItem:
     """Classify replay and terminalize an observed ambiguous inflight effect."""
     scope = _delivery_scope(scope)
-    target = table or get_table()
+    target = table or db_table.table()
     key = _delivery_key(scope, operation_id)
     item = _optional_item(
         _get_item(target, Key=key, ConsistentRead=True).get("Item")
@@ -1479,8 +1471,8 @@ def recover_delivery_intent(
         return dict(item)
     observed = _intent_claim(item)
     try:
-        response = _update_item(
-            target,
+        attributes = db_table.update(
+            table=target,
             Key=key,
             UpdateExpression=(
                 "SET #effect=:unknown, #status=:unknown, outcome_status=:unknown, "
@@ -1510,8 +1502,7 @@ def recover_delivery_intent(
                 "delivery recovery claim lost"
             ) from exc
         raise
-    attributes = response.get("Attributes")
-    return _dependency_mapping(attributes) if isinstance(attributes, Mapping) else {
+    return _dependency_mapping(attributes) if attributes else {
         "status": "provider_acceptance_unknown"
     }
 
@@ -1549,7 +1540,7 @@ def complete_delivery_intent(
     if status not in _DELIVERY_TERMINAL_STATES and not (legacy and status == "rejected"):
         raise account_deletion_repo.AccountDeletionConflict("invalid delivery completion")
     scope = _delivery_scope(scope, owner_id=owner_id, generation=generation)
-    target = table or get_table()
+    target = table or db_table.table()
     item: NotificationItem | None = None
     if claim is None:
         item = _optional_item(
@@ -1588,7 +1579,7 @@ def _finish_delivery_intent(
     now_iso: str,
     table: object | None,
 ) -> NotificationItem:
-    target = table or get_table()
+    target = table or db_table.table()
     hook_name = (
         "cancel_delivery_intent"
         if status == "canceled_account_deletion" and expected_state == "claimed_pre_effect"
@@ -1637,7 +1628,7 @@ def scan_notification_private_rows(
     maximum_pages: int = 1,
     table: object | None = None,
 ) -> NotificationPrivatePage:
-    target = table or get_table()
+    target = table or db_table.table()
     current = cursor
     seen: set[tuple[str, str]] = set()
     found: list[NotificationItem] = []
@@ -1709,7 +1700,7 @@ def _replace_notification_owner_tombstone(
 ) -> None:
     if not _targets_owner(item, owner_id):
         raise account_deletion_repo.AccountDeletionConflict("notification owner changed")
-    target = table or get_table()
+    target = table or db_table.table()
     entity = str(item.get("entity_type") or "notification")
     status = str(item.get("status") or "")
     tombstone = {
@@ -1788,7 +1779,7 @@ def scrub_notification_identity_references(
     }
     direct_match = item.get("actor_id") == owner_id
 
-    target = table or get_table()
+    target = table or db_table.table()
     hook = getattr(target, "scrub_notification_identity_references", None)
     if callable(hook):
         hook(

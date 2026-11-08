@@ -40,10 +40,20 @@ def _fenced_report_provider_compat(monkeypatch):
 
 
 class FakeDataTable:
-    def __init__(self, candidates):
+    """The job's discovery scan and the conversation queries, answered here.
+
+    Every other read and write goes to `rest`, the table the link rows live in:
+    the relationship judge reads them from the same gateway table.
+    """
+
+    def __init__(self, candidates, rest):
         self.scans = []
         self.queries = []
         self.candidates = candidates
+        self.rest = rest
+
+    def __getattr__(self, name):
+        return getattr(self.rest, name)
 
     def scan(self, **kwargs):
         # The job's one discovery scan: active parent-side link rows.
@@ -57,8 +67,14 @@ class FakeDataTable:
         return {"Items": list(self.candidates)}
 
     def query(self, **kwargs):
+        wanted = str(kwargs.get("FilterExpression").get_expression()) if "FilterExpression" in kwargs else ""
+        if kwargs.get("IndexName") != "GSI-StudentId" or not (
+            "help_request" in wanted or "conversation" in wanted
+        ):
+            # The report rows (GSI-ParentId) and what the student asked about
+            # live with everything else.
+            return self.rest.query(**kwargs)
         self.queries.append(kwargs)
-        assert kwargs["IndexName"] == "GSI-StudentId"
         if "Limit" not in kwargs:
             # Whether a teacher was asked is the help request's own record (#189),
             # read from the same index.
@@ -141,13 +157,14 @@ def test_backend_weekly_report_flow_generates_stores_and_emails_with_fakes(monke
     # The relationship the flow rides on: the job finds it by scanning the
     # parent's side, and the job and the generator both judge it.
     link_rows.link("parent-1", "student-1")
-    data_table = FakeDataTable([link_rows.side("PARENT#parent-1", "CHILD#student-1")])
+    data_table = FakeDataTable(
+        [link_rows.side("PARENT#parent-1", "CHILD#student-1")], link_rows.table
+    )
     s3 = RecordingS3Client(events)
     ses = RecordingSESClient(events)
 
     monkeypatch.setattr(report_service.settings, "s3_reports_bucket", "reports-bucket")
-    monkeypatch.setattr(weekly_reports, "get_table", lambda: data_table)
-    monkeypatch.setattr(report_service, "get_table", lambda: data_table)
+    db_table.install(data_table)
     monkeypatch.setattr(
         report_service.user_repo,
         "get_user",
@@ -454,7 +471,7 @@ def test_storing_a_report_completes_the_row_its_claim_created(monkeypatch):
     from stoa.db.repositories import account_deletion_repo, report_repo
 
     store = _ConditionEvaluatingStore()
-    monkeypatch.setattr(report_repo, "get_table", lambda: object())
+    db_table.install(object())
     monkeypatch.setattr(
         db_table,
         "transact",

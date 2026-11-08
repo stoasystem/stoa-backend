@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 from fakes.dynamodb import as_stored as _as_stored, from_wire
 
+from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo, notification_repo, websocket_repo
 from stoa.services import account_deletion_service
 
@@ -155,7 +156,7 @@ def test_notification_identity_scrub_retries_cas_then_requires_two_clean_epochs(
     table = _NotificationTable()
     retained = {key: _retained_snapshot(row) for key, row in table.rows.items()}
 
-    monkeypatch.setattr(notification_repo, "get_table", lambda: table)
+    db_table.install(table)
     empty_connections = websocket_repo.ConnectionPrivatePage(items=())
     monkeypatch.setattr(
         websocket_repo,

@@ -29,7 +29,6 @@ from stoa.db import table as db_table
 from stoa.config import Settings
 from stoa.db.repositories import (
     account_deletion_repo,
-    notification_repo,
 )
 from stoa.deps import (
     get_actor,
@@ -93,7 +92,6 @@ class _Api:
     ) -> None:
         db_table.install(table)
         monkeypatch.setattr(account_deletion_repo, "get_table", lambda: table)
-        monkeypatch.setattr(notification_repo, "get_table", lambda: table)
         self.table = table
         self.s3 = MultipartS3(BUCKET)
         self.actor = _actor(STUDENT, CanonicalRole.STUDENT)

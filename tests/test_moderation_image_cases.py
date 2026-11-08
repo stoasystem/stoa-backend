@@ -32,7 +32,6 @@ from stoa.config import Settings
 from stoa.db.repositories import (
     account_deletion_repo,
     moderation_repo,
-    notification_repo,
     user_repo,
 )
 from stoa.deps import (
@@ -109,7 +108,6 @@ class _World:
         patch_session_table(monkeypatch, self.table)
         for module in (
             account_deletion_repo,
-            notification_repo,
         ):
             monkeypatch.setattr(module, "get_table", lambda: self.table)
         db_table.install(self.table)

@@ -9,7 +9,7 @@ from typing import Protocol, runtime_checkable
 from boto3.dynamodb.conditions import Attr
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -179,7 +179,7 @@ def _generation(owner_id: str, generation: object, table: object) -> int:
 
 
 def put_connection(item: ConnectionItem) -> ConnectionItem:
-    target = get_table()
+    target = db_table.table()
     owner_id = str(item.get("owner_id") or item.get("user_id") or "")
     generation = _generation(owner_id, item.get("account_fence_generation"), target)
     connection_id = item.get("connection_id")
@@ -207,7 +207,7 @@ def put_connection(item: ConnectionItem) -> ConnectionItem:
 
 def get_connection(connection_id: str) -> ConnectionItem | None:
     response = _get_item(
-        get_table(), Key={"PK": connection_pk(connection_id), "SK": "META"}
+        db_table.table(), Key={"PK": connection_pk(connection_id), "SK": "META"}
     )
     return _optional_item(response.get("Item"))
 
@@ -220,7 +220,7 @@ def update_connection(
         return None
     if not updates:
         return existing
-    target = get_table()
+    target = db_table.table()
     owner_id = str(existing.get("owner_id") or existing.get("user_id") or "")
     generation = _generation(owner_id, existing.get("account_fence_generation"), target)
     db_table.fenced(
@@ -240,14 +240,14 @@ def update_connection(
 
 def delete_connection(connection_id: str) -> None:
     _delete_item(
-        get_table(), Key={"PK": connection_pk(connection_id), "SK": "META"}
+        db_table.table(), Key={"PK": connection_pk(connection_id), "SK": "META"}
     )
 
 
 def list_connections(limit: int = 200) -> list[ConnectionItem]:
     return db_table.rows(
         "scan",
-        table=get_table(),
+        table=db_table.table(),
         want=limit,
         FilterExpression=Attr("entity_type").eq(CONNECTION_ENTITY),
     )
@@ -273,7 +273,7 @@ def scan_account_connections(
     maximum_pages: int = 1,
     table: object | None = None,
 ) -> ConnectionPrivatePage:
-    target = table or get_table()
+    target = table or db_table.table()
     current = cursor
     seen: set[tuple[str, str]] = set()
     found: list[ConnectionItem] = []
@@ -312,7 +312,7 @@ def revoke_account_connection(
 ) -> None:
     if owner_id not in {item.get("owner_id"), item.get("user_id")}:
         raise account_deletion_repo.AccountDeletionConflict("connection owner changed")
-    target = table or get_table()
+    target = table or db_table.table()
     hook = getattr(target, "delete_connection_for_account", None)
     if callable(hook):
         hook(dict(item), owner_id, generation)

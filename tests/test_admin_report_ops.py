@@ -1532,7 +1532,7 @@ def test_every_recovery_job_can_be_listed_page_by_page_behind_other_rows(monkeyp
     # #90: a page that stops on a row that is not a job used to hand out a
     # token the next request refused.
     table = _table_with_jobs_after_other_rows(["job-a", "job-b", "job-c"])
-    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    db_table.install(table)
     client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
 
     seen, token, pages = [], None, 0
@@ -1552,7 +1552,7 @@ def test_every_recovery_job_can_be_listed_page_by_page_behind_other_rows(monkeyp
 
 def test_a_results_page_token_only_continues_within_its_own_job(monkeypatch):
     table = _table_with_jobs_after_other_rows(["job-a", "job-b"], target_count=3)
-    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    db_table.install(table)
     client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
 
     first = client.get("/admin/reports/recovery-jobs/job-a/results", params={"limit": 2})
@@ -1600,7 +1600,7 @@ def _table_with_audit_timelines():
 
 
 def _audit_client(monkeypatch, table):
-    monkeypatch.setattr(report_repo, "get_table", lambda: table)
+    db_table.install(table)
     monkeypatch.setattr(
         report_repo,
         "get_report_for_child_by_week",

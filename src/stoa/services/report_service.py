@@ -3,6 +3,7 @@
 from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
 from html import escape
+from itertools import islice
 import json
 import logging
 import re
@@ -13,7 +14,7 @@ import boto3
 from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.config import settings
-from stoa.db.dynamodb import get_table
+from stoa.db import table as db_table
 from stoa.db.repositories import (
     account_deletion_repo,
     asked_knowledge_repo,
@@ -737,6 +738,8 @@ def _list_all_questions(student_id: str) -> list[dict[str, Any]]:
 # this many conversations.
 _CONVERSATION_PAGE_BUDGET = 25
 _CONVERSATION_LIMIT = 100
+# A read on GSI-StudentId continues from the index's key as well as the table's.
+_STUDENT_INDEX_KEY = ("PK", "SK", "student_id", "created_at")
 
 
 def _list_conversations_for_student(student_id: str) -> list[dict[str, Any]]:
@@ -748,32 +751,25 @@ def _list_conversations_for_student(student_id: str) -> list[dict[str, Any]]:
     a week with no conversations in it, which is what a parent's report said.
     The questions above already follow the continuation key; this did not.
     """
-    table = get_table()
+    table = db_table.table()
     if not isinstance(table, _QueryTable):
         raise RuntimeError("report table query dependency is unavailable")
 
     conversations: list[dict[str, Any]] = []
-    last_key: dict[str, Any] | None = None
-    for _page in range(_CONVERSATION_PAGE_BUDGET):
-        request: dict[str, Any] = {
-            "IndexName": "GSI-StudentId",
-            "KeyConditionExpression": Key("student_id").eq(student_id),
-            "FilterExpression": Attr("entity_type").eq("conversation"),
-            "Limit": _CONVERSATION_LIMIT,
-            "ScanIndexForward": False,
-        }
-        if last_key is not None:
-            request["ExclusiveStartKey"] = last_key
-        result = _repository_response(table.query(**request), label="student conversations")
-        conversations.extend(_repository_items(result, label="student conversations"))
+    reads = db_table.pages(
+        "query",
+        key=_STUDENT_INDEX_KEY,
+        table=table,
+        IndexName="GSI-StudentId",
+        KeyConditionExpression=Key("student_id").eq(student_id),
+        FilterExpression=Attr("entity_type").eq("conversation"),
+        Limit=_CONVERSATION_LIMIT,
+        ScanIndexForward=False,
+    )
+    for page in islice(reads, _CONVERSATION_PAGE_BUDGET):
+        conversations.extend(page.items)
         if len(conversations) >= _CONVERSATION_LIMIT:
             break
-        raw_last_key = result.get("LastEvaluatedKey")
-        if raw_last_key is None:
-            break
-        if not isinstance(raw_last_key, Mapping):
-            raise RuntimeError("student conversation pagination is malformed")
-        last_key = dict(raw_last_key)
     from stoa.services import help_requests
 
     # Whether a teacher was asked is the request's, not the conversation's (#189).

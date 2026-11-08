@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from audit_helpers import MemoryAuthorizationAuditSink
+from stoa.db import table as db_table
 from stoa.db.repositories import (
     account_deletion_repo,
     account_number_repo,
@@ -810,7 +811,7 @@ ACCOUNT_NUMBERS = {"S26-0001": "student-b", "P26-0001": "parent-a"}
 def wired_table(table: FakeLinkTable, monkeypatch: pytest.MonkeyPatch) -> FakeLinkTable:
     """账号号码的认领行也要在表里，否则 studentNumber 根本解析不出来。"""
     monkeypatch.setattr(account_number_repo, "get_table", lambda: table)
-    monkeypatch.setattr(parents, "get_table", lambda: table)
+    db_table.install(table)
     for number, account_id in ACCOUNT_NUMBERS.items():
         table.items[(f"ACCOUNT_NUMBER#{number}", "ACCOUNT_NUMBER")] = {
             "PK": f"ACCOUNT_NUMBER#{number}",
