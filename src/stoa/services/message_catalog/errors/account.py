@@ -420,4 +420,11 @@ TEXT: dict[str, dict[str, str]] = {
         "fr": "Votre mot de passe a été modifié. Reconnectez-vous pour terminer.",
         "it": "La tua password è stata cambiata. Accedi di nuovo per completare.",
     },
+    # ── A student's own learning profile ─────────────────────────────────────
+    "error.profile_choice_unknown": {
+        "de": "Diese Auswahl gibt es nicht. Bitte wähle einen Eintrag aus der Liste.",
+        "en": "That choice is not available. Pick one from the list.",
+        "fr": "Ce choix n'existe pas. Choisissez une option dans la liste.",
+        "it": "Questa scelta non esiste. Scegli una voce dalla lista.",
+    },
 }

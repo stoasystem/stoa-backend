@@ -164,26 +164,69 @@ def supported_grade_codes() -> tuple[str, ...]:
     return GRADE_LEVEL_CODES
 
 
+# ── Profile fields chosen from a list ─────────────────────────────────────────
+#
+# A profile field the client fills from a closed list is declared here and
+# nowhere else: its codes, in the order they are offered. The client renders
+# the list it is sent (`choices` on the profile response) instead of keeping a
+# copy, a write outside it is refused with `profile_choice_unknown`, and each
+# code's name for the person choosing is the catalog's
+# `choice.<field>.<code>`, in four languages. A new field of this kind - the
+# answer style preset (#314) is the next - is one entry here and its labels.
+PROFILE_CHOICES: dict[str, tuple[str, ...]] = {
+    "grade": GRADE_LEVEL_CODES,
+}
+
+
+def choice_label(field: str, code: str, locale: str) -> str:
+    """One code of a profile field, named for the person choosing it."""
+    try:
+        resolved = locale_service.normalize_locale(locale)
+    except ValueError:
+        resolved = locale_service.DEFAULT_LOCALE
+    return message_catalog.text(f"choice.{field}.{code}", resolved)
+
+
+def profile_choices(locale: str) -> dict[str, list[dict[str, str]]]:
+    """Every list-chosen profile field: its codes in order, each with its name."""
+    return {
+        field: [{"code": code, "label": choice_label(field, code, locale)} for code in codes]
+        for field, codes in PROFILE_CHOICES.items()
+    }
+
+
+def normalize_choice(field: str, value: str | None) -> str:
+    """What a profile write may store for a list-chosen field: one code, or none.
+
+    Nothing and whitespace are the same thing and both mean "not said", which
+    stays legal. Anything else must already be one of the field's codes,
+    spelled exactly as offered.
+    """
+    stripped = str(value or "").strip()
+    if not stripped:
+        return ""
+    if stripped not in PROFILE_CHOICES[field]:
+        raise ValueError(f"Unsupported {field}: {value}")
+    return stripped
+
+
 def normalize_grade(grade: str | None) -> str:
     """The year group a profile write may store: one code, or none at all.
 
-    Nothing and whitespace are the same thing and both mean "not said", which
-    stays legal: a grade is asked for on the learning profile, not when an
-    account is opened (#50). Anything else must already be a code.
-
-    **Not yet wired into the profile route.** The live client's grade box is
-    free text and its own hint asks the student for "6. Klasse", so refusing
-    that today would turn a working field into a permanent 422 shown as "try
-    again". `students.py` stores what it is sent until the client sends codes;
-    the prompt is held safe in the meantime by `resolve_grade_code`, which is
-    where an unreadable value stops being passed on.
+    Not saying stays legal: a grade is asked for on the learning profile, not
+    when an account is opened (#50).
     """
-    value = str(grade or "").strip()
-    if not value:
-        return ""
-    if value not in GRADE_LEVEL_CODES:
-        raise ValueError(f"Unsupported grade level: {grade}")
-    return value
+    return normalize_choice("grade", grade)
+
+
+def looks_like_grade_code(grade: str | None) -> bool:
+    """Whether a written grade was meant as a code rather than typed as text.
+
+    The profile route uses it for one transition only (#310): a client sending
+    codes that sends a wrong one is refused, while the free-text box of the
+    client still deployed keeps saving until its dropdown replaces it.
+    """
+    return str(grade or "").strip().lower().startswith("grade_")
 
 
 def resolve_grade_code(grade: str | None) -> str | None:

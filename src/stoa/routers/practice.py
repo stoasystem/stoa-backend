@@ -687,9 +687,11 @@ async def get_knowledge_map(
     whose quiz was lost can be taken again - None when it can now (#165).
     A recommended star's `recommendation` is `{source, reason, relatedUnitId}`:
     `reason` is `in_progress`, `after_lit` (then `relatedUnitId` is the star
-    whose lighting it follows) or `start`; only subjects the student takes
-    carry one (#164).
+    whose lighting it follows), `grade` (nothing begun yet: the first star of
+    the year group on the student's profile, #310) or `start`; only subjects
+    the student takes carry one (#164).
     """
+    profile = authorized_student.value or {}
     try:
         return knowledge_map_service.knowledge_map(
             student_evidence.for_student(
@@ -697,6 +699,7 @@ async def get_knowledge_map(
             ),
             subject_id=subject_id,
             view=view,
+            student_grade=profile.get("grade") if isinstance(profile, Mapping) else None,
         )
     except knowledge_map_service.UnknownSubject:
         raise PracticeViolation(_P.SUBJECT_UNKNOWN) from None

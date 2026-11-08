@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from stoa.services import knowledge_map_service as km
 from stoa.services import knowledge_mastery_service as mastery
 
@@ -384,3 +386,170 @@ def test_a_subject_taken_under_its_other_name_is_taken() -> None:
 
     assert [galaxy["enrolled"] for galaxy in result["galaxies"]] == [True]
     assert [item for item, _ in recommended(result)] == ["a"]
+
+
+# ── 3. where to start, by the student's year group (#310) ────────────────────
+#
+# A course whose chapters carry a year, one star each unless said otherwise:
+# t6 (year 6), t7 (year 7), t9a and t9b (year 9), and t-none with no year.
+
+
+def _graded_unit(unit_id: str, topic_id: str, order: int, before: list[str] | None = None) -> dict[str, Any]:
+    return {
+        "id": unit_id,
+        "subjectId": "math",
+        "topicId": topic_id,
+        "title": unit_id,
+        "order": order,
+        "prerequisiteUnitIds": before or [],
+    }
+
+
+def build_graded(
+    grade: str | None,
+    *,
+    topics: list[tuple[str, str]] = (("t6", "grade_6_primary"), ("t7", "grade_7_secondary"),
+                                     ("t9a", "grade_9_secondary"), ("t9b", "grade_9_secondary")),
+    units: list[dict[str, Any]] | None = None,
+    lessons: list[dict[str, Any]] = (),
+    states: dict[str, mastery.UnitMastery] | None = None,
+    facts: list[mastery.LitFact] = (),
+    evidence: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    units = units if units is not None else [
+        _graded_unit(f"{topic_id}-s1", topic_id, 0) for topic_id, _ in topics
+    ]
+    states = states if states is not None else {
+        item["id"]: judged(item["id"], READY) for item in units
+    }
+    return km.build_map(
+        subject_id="math",
+        catalog={
+            "subjects": [{"id": "math", "name": "math", "order": 0}],
+            "topics": [
+                {"id": topic_id, "subjectId": "math", "title": topic_id, "order": index,
+                 "gradeLevel": grade_level}
+                for index, (topic_id, grade_level) in enumerate(topics)
+            ],
+            "units": units,
+            "lessons": list(lessons),
+        },
+        unit_states=states,
+        review_due_by_unit={},
+        streak_days=0,
+        score=0,
+        enrolled_subject_ids=frozenset({"math"}),
+        lit_facts={item.unit_id: item for item in facts},
+        last_evidence_by_unit=evidence or {},
+        student_grade=grade,
+    )
+
+
+def by_grade(unit_id: str) -> tuple[str, dict]:
+    return (unit_id, {"source": "system", "reason": "grade", "relatedUnitId": None})
+
+
+def by_start(unit_id: str) -> tuple[str, dict]:
+    return (unit_id, {"source": "system", "reason": "start", "relatedUnitId": None})
+
+
+def test_a_new_student_in_year_9_starts_at_the_first_star_of_year_9() -> None:
+    assert recommended(build_graded("grade_9_secondary")) == [by_grade("t9a-s1")]
+
+
+def test_a_year_with_no_chapter_of_its_own_starts_at_the_latest_year_before_it() -> None:
+    # Year 8 has no chapter: year 7 is the latest before it.
+    assert recommended(build_graded("grade_8_secondary")) == [by_grade("t7-s1")]
+
+
+def test_the_first_star_of_that_year_is_taken_not_the_last_chapter_of_it() -> None:
+    result = build_graded(
+        "grade_9_secondary",
+        units=[
+            _graded_unit("t6-s1", "t6", 0),
+            _graded_unit("t9a-s1", "t9a", 0),
+            _graded_unit("t9a-s2", "t9a", 1),
+            _graded_unit("t9b-s1", "t9b", 0),
+        ],
+    )
+    assert recommended(result) == [by_grade("t9a-s1")]
+
+
+def test_the_star_by_year_need_not_be_on_the_frontier() -> None:
+    """A prerequisite is advice, not a lock (ADR 0004); the client draws the path."""
+    units = [_graded_unit("t6-s1", "t6", 0), _graded_unit("t9a-s1", "t9a", 0, before=["t6-s1"])]
+    result = build_graded(
+        "grade_9_secondary",
+        topics=[("t6", "grade_6_primary"), ("t9a", "grade_9_secondary")],
+        units=units,
+        states={"t6-s1": judged("t6-s1", READY), "t9a-s1": judged("t9a-s1", READY, unlit=("t6-s1",))},
+    )
+    assert recommended(result) == [by_grade("t9a-s1")]
+
+
+def test_a_star_is_the_year_of_its_earliest_practice_set_before_its_chapters() -> None:
+    """The live mathematics chapters all say year 6; their practice sets say the year
+    of the knowledge points in them, which is what a star's year is."""
+    units = [_graded_unit("a", "t6", 0), _graded_unit("b", "t6", 1), _graded_unit("c", "t6", 2)]
+    lessons = [
+        {"id": "a-1", "unitId": "a", "gradeLevel": "grade_5_primary"},
+        {"id": "b-1", "unitId": "b", "gradeLevel": "grade_secondary_ii"},
+        {"id": "b-2", "unitId": "b", "gradeLevel": "grade_9_secondary"},
+        {"id": "c-1", "unitId": "c", "gradeLevel": ""},
+    ]
+    result = build_graded(
+        "grade_9_secondary", topics=[("t6", "grade_6_primary")], units=units, lessons=lessons
+    )
+    assert recommended(result) == [by_grade("b")]
+    # c says nothing in its sets and takes its chapter's year 6; a is year 5.
+    assert recommended(
+        build_graded("grade_6_primary", topics=[("t6", "grade_6_primary")], units=units, lessons=lessons)
+    ) == [by_grade("c")]
+
+
+def test_lower_secondary_with_no_year_given_starts_at_its_first_year() -> None:
+    assert recommended(build_graded("grade_secondary_i")) == [by_grade("t7-s1")]
+
+
+def test_a_legacy_spelling_the_profile_can_read_counts_as_its_year() -> None:
+    assert recommended(build_graded("Grade 6")) == [by_grade("t6-s1")]
+
+
+@pytest.mark.parametrize("grade", [None, "", "   ", "14", "6. Klasse", "grade_10_secondary"])
+def test_no_readable_year_starts_where_it_always_has(grade: str | None) -> None:
+    assert recommended(build_graded(grade)) == [by_start("t6-s1")]
+
+
+def test_a_year_before_every_chapter_starts_where_it_always_has() -> None:
+    assert recommended(build_graded("grade_3_primary")) == [by_start("t6-s1")]
+
+
+def test_a_subject_with_no_year_anywhere_starts_where_it_always_has() -> None:
+    result = build_graded("grade_9_secondary", topics=[("t-none", ""), ("t-also-none", "")])
+    assert recommended(result) == [by_start("t-none-s1")]
+
+
+def test_a_star_in_progress_comes_before_the_year() -> None:
+    states = {
+        "t6-s1": judged("t6-s1", IN_PROGRESS),
+        "t7-s1": judged("t7-s1", READY),
+        "t9a-s1": judged("t9a-s1", READY),
+        "t9b-s1": judged("t9b-s1", READY),
+    }
+    assert [item for item, _ in recommended(build_graded("grade_9_secondary", states=states))] == ["t6-s1"]
+    assert recommended(build_graded("grade_9_secondary", states=states)) == recommended(
+        build_graded(None, states=states)
+    )
+
+
+def test_a_lighting_comes_before_the_year() -> None:
+    states = {
+        "t6-s1": judged("t6-s1", LIT),
+        "t7-s1": judged("t7-s1", READY),
+        "t9a-s1": judged("t9a-s1", READY),
+        "t9b-s1": judged("t9b-s1", READY),
+    }
+    facts = [fact("t6-s1", "2026-11-01T10:00:00+00:00")]
+    with_year = recommended(build_graded("grade_9_secondary", states=states, facts=facts))
+    assert with_year == [("t7-s1", {"source": "system", "reason": "after_lit", "relatedUnitId": "t6-s1"})]
+    assert with_year == recommended(build_graded(None, states=states, facts=facts))

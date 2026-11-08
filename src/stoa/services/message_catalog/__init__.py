@@ -462,6 +462,73 @@ _COPY: dict[str, dict[str, str]] = {
         "fr": "degré secondaire I (année non précisée)",
         "it": "scuola media (anno non indicato)",
     },
+    # ── profile choices, named for the student picking one (#310) ────────
+    #
+    # `learning_profile_service.PROFILE_CHOICES` is the set and the order;
+    # these are the names in the list the client renders. The year is the same
+    # HarmoS year as the `grade.*` lines above, counted each language area's
+    # way; those are phrased to sit inside the assistant's sentence, these
+    # stand alone in a dropdown.
+    "choice.grade.grade_1_primary": {
+        "de": "1. Primarklasse",
+        "en": "Year 1 (primary school)",
+        "fr": "3e année primaire (3P)",
+        "it": "1ª elementare",
+    },
+    "choice.grade.grade_2_primary": {
+        "de": "2. Primarklasse",
+        "en": "Year 2 (primary school)",
+        "fr": "4e année primaire (4P)",
+        "it": "2ª elementare",
+    },
+    "choice.grade.grade_3_primary": {
+        "de": "3. Primarklasse",
+        "en": "Year 3 (primary school)",
+        "fr": "5e année primaire (5P)",
+        "it": "3ª elementare",
+    },
+    "choice.grade.grade_4_primary": {
+        "de": "4. Primarklasse",
+        "en": "Year 4 (primary school)",
+        "fr": "6e année primaire (6P)",
+        "it": "4ª elementare",
+    },
+    "choice.grade.grade_5_primary": {
+        "de": "5. Primarklasse",
+        "en": "Year 5 (primary school)",
+        "fr": "7e année primaire (7P)",
+        "it": "5ª elementare",
+    },
+    "choice.grade.grade_6_primary": {
+        "de": "6. Primarklasse",
+        "en": "Year 6 (primary school)",
+        "fr": "8e année primaire (8P)",
+        "it": "1ª media",
+    },
+    "choice.grade.grade_7_secondary": {
+        "de": "7. Klasse (Sekundarstufe I)",
+        "en": "Year 7 (lower secondary)",
+        "fr": "9e année (secondaire I)",
+        "it": "2ª media",
+    },
+    "choice.grade.grade_8_secondary": {
+        "de": "8. Klasse (Sekundarstufe I)",
+        "en": "Year 8 (lower secondary)",
+        "fr": "10e année (secondaire I)",
+        "it": "3ª media",
+    },
+    "choice.grade.grade_9_secondary": {
+        "de": "9. Klasse (Sekundarstufe I)",
+        "en": "Year 9 (lower secondary)",
+        "fr": "11e année (secondaire I)",
+        "it": "4ª media",
+    },
+    "choice.grade.grade_secondary_i": {
+        "de": "Sekundarstufe I, Schuljahr weiss ich nicht",
+        "en": "Lower secondary, not sure which year",
+        "fr": "Secondaire I, je ne sais pas quelle année",
+        "it": "Scuola media, non so quale anno",
+    },
 }
 
 

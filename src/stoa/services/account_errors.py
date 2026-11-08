@@ -99,6 +99,9 @@ class AccountErrorCode(StrEnum):
     PASSWORD_CHANGE_CODE_DELIVERY_FAILED = "password_change_code_delivery_failed"
     PASSWORD_CHANGE_STATE_NOT_CLEARED = "password_change_state_not_cleared"
 
+    # A student's own learning profile (`routers/students.py`).
+    PROFILE_CHOICE_UNKNOWN = "profile_choice_unknown"
+
     @property
     def contract(self) -> RuleContract:
         return ACCOUNT_ERROR_REGISTRY[self]
@@ -205,6 +208,11 @@ ACCOUNT_ERROR_REGISTRY: dict[AccountErrorCode, RuleContract] = {
     _C.PASSWORD_CHANGE_CODE_DELIVERY_FAILED: _unavailable(),
     # The password did change; signing in again finishes the change.
     _C.PASSWORD_CHANGE_STATE_NOT_CLEARED: RuleContract(503, _A.REAUTHENTICATE),
+    # A list-chosen profile field was sent a value its list does not offer
+    # (`learning_profile_service.PROFILE_CHOICES`). `fields` names which.
+    _C.PROFILE_CHOICE_UNKNOWN: RuleContract(
+        422, _A.CORRECT_INPUT, public_fields=frozenset({"fields"})
+    ),
 }
 
 register_codes("account", AccountErrorCode, ACCOUNT_ERROR_REGISTRY)

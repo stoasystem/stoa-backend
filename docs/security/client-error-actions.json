@@ -2393,6 +2393,21 @@
         "retryable": false
       }
     },
+    "profile_choice_unknown": {
+      "action": "correct_input",
+      "domain": "account",
+      "http_status": 422,
+      "message_key": "error.profile_choice_unknown",
+      "public_fields": [
+        "fields"
+      ],
+      "retry": {
+        "idempotent_only": false,
+        "max_attempts": 0,
+        "retry_after_seconds": null,
+        "retryable": false
+      }
+    },
     "provider_token_count_unavailable": {
       "action": "retry_later",
       "domain": "ask_question",
