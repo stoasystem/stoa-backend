@@ -543,10 +543,13 @@ def knowledge_map(
     subject_id: str | None = None,
     view: str = "full",
     student_grade: str | None = None,
+    chosen_subject_ids: Sequence[str] = (),
 ) -> dict[str, Any]:
     """The whole sky for one student, with `subject_id` as the galaxy in focus.
 
     `student_grade` is the year group on the student's profile, as stored.
+    `chosen_subject_ids` are the subjects the student ticked on their profile:
+    taken as much as a subject they have progress in (#321).
     """
     catalog = evidence.content.catalog
     # Blank is absent, whether it arrived as no parameter at all or as one with
@@ -575,7 +578,12 @@ def knowledge_map(
         score=0,
         # Normalised there: a student taking maths was once told they do not
         # take it - drawn dimmed, and since #164 given no recommendation.
-        enrolled_subject_ids=evidence.subjects_taken,
+        # A subject is taken once there is progress in it or the student ticked
+        # it: a new student has no progress anywhere, and would get nothing to
+        # start with however their year group reads (#321). The union only
+        # grows - unticking a subject with progress in it does not drop it.
+        enrolled_subject_ids=evidence.subjects_taken
+        | frozenset(practice_repo.normal_subject_id(item) for item in chosen_subject_ids),
         lit_facts=_lit_facts(evidence, states),
         star_quiz_retry_at=evidence.star_quiz_retry_at,
         last_evidence_by_unit=_last_evidence_by_unit(evidence),

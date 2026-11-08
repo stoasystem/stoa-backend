@@ -256,3 +256,46 @@ def test_the_year_group_on_the_student_s_profile_reaches_the_read_model(
 
     assert response.status_code == 200, response.text
     assert seen == ["grade_9_secondary"]
+
+
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [
+        ({"primary_subjects": ["math", "physics"]}, ("math", "physics")),
+        ({"subjects": ["mathematics"]}, ("mathematics",)),
+        ({}, ()),
+    ],
+)
+def test_the_subjects_ticked_on_the_profile_reach_the_read_model_from_the_same_read(
+    monkeypatch: pytest.MonkeyPatch, stored: dict[str, Any], expected: tuple[str, ...]
+) -> None:
+    """Taken as much as a subject with progress (#321), from the profile the
+    authorization dependency already read: one profile read, as before."""
+    reads: list[str] = []
+    seen: list[Any] = []
+
+    def get_user(user_id: str, **_kwargs: Any) -> dict[str, Any]:
+        reads.append(user_id)
+        return {
+            "user_id": user_id,
+            "role": "student",
+            "account_status": "active",
+            "grade": "grade_9_secondary",
+            **stored,
+        }
+
+    monkeypatch.setattr(route_authorization.user_repo, "get_user", get_user)
+    monkeypatch.setattr(
+        practice.knowledge_map_service,
+        "knowledge_map",
+        lambda _student, **kwargs: seen.append(
+            (kwargs.get("student_grade"), kwargs.get("chosen_subject_ids"))
+        )
+        or {"stars": []},
+    )
+
+    response = _client({"sub": "student-1", "role": "student"}).get("/practice/knowledge-map")
+
+    assert response.status_code == 200, response.text
+    assert seen == [("grade_9_secondary", expected)]
+    assert reads == ["student-1"]
