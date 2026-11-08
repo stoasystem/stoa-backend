@@ -657,7 +657,7 @@ def test_a_style_that_gives_answers_away_shows_against_standard(items) -> None:
     assert deltas["vivid"]["final_answer_given_pct"] == 100.0
     assert deltas["concise"]["final_answer_given_pct"] == 0.0
     assert set(deltas) == {"concise", "encouraging", "vivid"}
-    assert set(deltas["vivid"]) == set(evaluation.COMPARED)
+    assert set(deltas["vivid"]) == {*evaluation.COMPARED, "errors"}
 
 
 def test_all_styles_plan_four_times_the_calls(capsys) -> None:
@@ -695,3 +695,101 @@ def test_a_confirmed_run_in_all_styles_reports_each_against_standard(tmp_path) -
         summary["language_consistency_pct"] == 100.0 for summary in report["by_style"].values()
     )
     assert set(report["vs_standard"]) == {"concise", "encouraging", "vivid"}
+
+
+class BrokenJsonModel(FakeModel):
+    """Writes an object that never closes, which the reply parser refuses."""
+
+    BROKEN = '{"steps": ["Zuerst «schauen» wir", "dann'
+
+    def invoke_model(self, *, modelId: str, body: str):  # noqa: N803 - boto3 casing
+        response = super().invoke_model(modelId=modelId, body=body)
+        payload = json.loads(response["body"].read())
+        payload["content"][0]["text"] = self.BROKEN
+        response["body"] = io.BytesIO(json.dumps(payload).encode())
+        return response
+
+
+def test_a_refused_reply_keeps_its_text_when_asked(items) -> None:
+    from stoa.services import ai_service
+
+    original = ai_service._parse_ai_response
+    readings = evaluation.run(items[:2], ask=_asker(BrokenJsonModel()), keep_raw_failures=True)
+
+    assert [reading.error for reading in readings] == [
+        "AIInvocationFailure: malformed_response"
+    ] * 2
+    assert [reading.raw_output for reading in readings] == [BrokenJsonModel.BROKEN] * 2
+    # The parser is the production one again after the run.
+    assert ai_service._parse_ai_response is original
+
+
+def test_without_the_option_no_reply_text_is_kept(items) -> None:
+    readings = evaluation.run(items[:1], ask=_asker(BrokenJsonModel()))
+    assert readings[0].error and readings[0].raw_output is None
+
+
+def test_a_good_reply_after_a_refused_one_carries_no_stale_text(items) -> None:
+    broken = BrokenJsonModel()
+    good = FakeModel()
+    calls = iter([broken, good])
+
+    def ask(item):
+        return evaluation.ask_reply(item, next(calls))
+
+    first, second = evaluation.run(items[:2], ask=ask, keep_raw_failures=True)
+    assert first.raw_output == BrokenJsonModel.BROKEN
+    assert second.error is None and second.raw_output is None
+
+
+def test_two_styles_can_be_asked_without_standard(capsys) -> None:
+    assert evaluation.main(
+        ["--dry-run", "--style", "vivid", "--style", "encouraging", "--max-calls", "80"]
+    ) == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["styles"] == ["encouraging", "vivid"]
+    assert plan["estimate"]["calls"] == 80
+
+
+def test_two_styles_count_against_the_limit(capsys) -> None:
+    assert evaluation.main(["--dry-run", "--style", "vivid", "--style", "encouraging"]) == 1
+    assert "80 calls planned, more than --max-calls 48" in capsys.readouterr().err
+
+
+def test_styles_are_compared_with_an_earlier_standard(tmp_path) -> None:
+    earlier = tmp_path / "earlier.json"
+    earlier.write_text(
+        json.dumps({"by_style": {"standard": {
+            "errors": 2,
+            "language_consistency_pct": 90.0,
+            "mixed_language_replies": 0,
+            "refusal_pct_out_of_syllabus": 50.0,
+            "suggest_teacher_pct_out_of_syllabus": 0.0,
+            "final_answer_given_pct": 60.0,
+        }}}),
+        encoding="utf-8",
+    )
+    status = evaluation.main(
+        [
+            "--confirm-cost", "--style", "encouraging", "--compare-with", str(earlier),
+            "--output-dir", str(tmp_path), "--label", "rerun",
+        ],
+        asker=_asker(StyleRecordingModel()),
+    )
+    assert status == 0
+    report = json.loads((tmp_path / "ai-reply-eval-rerun.json").read_text(encoding="utf-8"))
+    assert list(report["by_style"]) == ["encouraging"]
+    assert report["plan"]["compare_with"] == str(earlier)
+    deltas = report["vs_standard"]["encouraging"]
+    assert deltas["language_consistency_pct"] == 10.0
+    assert deltas["errors"] == -2
+    assert deltas["final_answer_given_pct"] == -60.0
+
+
+def test_an_earlier_report_without_standard_is_refused(tmp_path, capsys) -> None:
+    earlier = tmp_path / "earlier.json"
+    earlier.write_text(json.dumps({"by_style": {"vivid": {}}}), encoding="utf-8")
+    assert evaluation.main(
+        ["--dry-run", "--style", "vivid", "--compare-with", str(earlier)]
+    ) == 1
+    assert "no standard summary" in capsys.readouterr().err

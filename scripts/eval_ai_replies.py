@@ -19,7 +19,11 @@ Five readings, over the question set in docs/evals/ai-reply-questions.json:
 Each run is in one answer style (#314), `standard` by default; `--style all`
 asks every question once in each of the four styles and compares each style's
 readings with `standard`'s, so a style paragraph that costs language
-consistency, refusals or answer leaks is seen before it ships.
+consistency, refusals or answer leaks is seen before it ships. `--style` may be
+given more than once, and `--compare-with` takes `standard` from an earlier
+report, so re-running two styles after a prompt fix does not pay for standard
+again. `--keep-raw-failures` keeps what the model wrote when its reply could
+not be parsed, which the readings otherwise never see.
 
 Calls go through ask_answer.answer - production's prompt builder and model
 call, without the chat lane's star map, memory context and streaming - with a
@@ -171,6 +175,8 @@ class Reading:
     # None for a question without a known result (`final_answer`).
     gave_final_answer: bool | None = None
     error: str | None = None
+    # What the model wrote when it could not be parsed (--keep-raw-failures).
+    raw_output: str | None = None
     input_tokens: int = 0
     output_tokens: int = 0
     excerpt: str = ""
@@ -400,6 +406,46 @@ def poisoned(poison: str | None) -> Iterator[None]:
     raise EvalError(f"unknown poisoning {poison!r}")
 
 
+class RawFailures:
+    """The text the reply parser last refused, while capturing is on."""
+
+    def __init__(self) -> None:
+        self.last: str | None = None
+
+    def take(self) -> str | None:
+        text, self.last = self.last, None
+        return text
+
+
+@contextmanager
+def capturing_raw_failures(enabled: bool) -> Iterator[RawFailures]:
+    """Wrap the reply parser in this process so a refused reply's text is kept.
+
+    Production logs only the size of an unparseable reply; an evaluation of a
+    prompt change needs the text to see why. Undone after the run.
+    """
+    from stoa.services import ai_service
+
+    raw = RawFailures()
+    if not enabled:
+        yield raw
+        return
+    original = ai_service._parse_ai_response
+
+    def parse(text: str) -> dict:
+        try:
+            return original(text)
+        except ai_service.AIInvocationFailure:
+            raw.last = text
+            raise
+
+    ai_service._parse_ai_response = parse
+    try:
+        yield raw
+    finally:
+        ai_service._parse_ai_response = original
+
+
 def estimate_cost(calls: int) -> dict[str, float]:
     per_call = (
         ESTIMATE_INPUT_TOKENS * PRICE_INPUT_PER_MTOK
@@ -414,6 +460,7 @@ def run(
     ask: Callable[[dict[str, Any]], tuple[Mapping[str, Any], int, int]],
     poison: str | None = None,
     styles: Sequence[str] = ("standard",),
+    keep_raw_failures: bool = False,
 ) -> list[Reading]:
     """Ask every question in every style and read every reply.
 
@@ -426,8 +473,9 @@ def run(
     if unknown:
         raise EvalError(f"unknown answer style {unknown[0]!r}")
     asked = [dict(item, answer_style=style) for style in styles for item in items]
-    with poisoned(poison):
+    with poisoned(poison), capturing_raw_failures(keep_raw_failures) as raw:
         for item in asked:
+            raw.take()
             try:
                 content, input_tokens, output_tokens = ask(item)
             except Exception as exc:  # noqa: BLE001 - one bad reply must not lose the run
@@ -437,6 +485,7 @@ def run(
                     out_of_syllabus=bool(item.get("out_of_syllabus")),
                     style=str(item["answer_style"]),
                     error=f"{type(exc).__name__}: {str(exc)[:200]}",
+                    raw_output=raw.take(),
                 )
                 # A reply cut off at the token limit failed validation but was
                 # paid for in full; its usage rides on the failure.
@@ -491,13 +540,18 @@ def summarize_by_style(readings: Sequence[Reading]) -> dict[str, dict[str, Any]]
     }
 
 
-def compare_to_standard(by_style: Mapping[str, Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+def compare_to_standard(
+    by_style: Mapping[str, Mapping[str, Any]],
+    standard: Mapping[str, Any] | None = None,
+) -> dict[str, dict[str, Any]]:
     """Each style's readings minus `standard`'s: what the style paragraph moved.
 
-    Worse is lower language consistency, or more mixing, refusals or final
-    answers given away. No threshold: a person reads the deltas and the replies.
+    Worse is lower language consistency, or more mixing, refusals, final
+    answers given away or failed replies. No threshold: a person reads the
+    deltas and the replies. `standard` is this run's unless one is given (from
+    an earlier report).
     """
-    standard = by_style.get("standard")
+    standard = by_style.get("standard") if standard is None else standard
     if standard is None:
         return {}
     deltas: dict[str, dict[str, Any]] = {}
@@ -510,9 +564,21 @@ def compare_to_standard(by_style: Mapping[str, Mapping[str, Any]]) -> dict[str, 
                 if summary.get(key) is None or standard.get(key) is None
                 else round(summary[key] - standard[key], 1)
             )
-            for key in COMPARED
+            for key in (*COMPARED, "errors")
         }
     return deltas
+
+
+def standard_from_report(path: Path) -> dict[str, Any]:
+    """The `standard` summary an earlier report measured."""
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+        standard = report["by_style"]["standard"]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise EvalError(f"no standard summary in {path}") from exc
+    if not isinstance(standard, dict):
+        raise EvalError(f"no standard summary in {path}")
+    return standard
 
 
 def bedrock_asker(
@@ -566,8 +632,20 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--style",
         choices=STYLE_CHOICES,
-        default="standard",
-        help="Answer style to ask in (#314); 'all' asks every question in each of the four.",
+        action="append",
+        default=None,
+        help="Answer style to ask in (#314), repeatable; 'all' asks in each of the four.",
+    )
+    parser.add_argument(
+        "--compare-with",
+        type=Path,
+        default=None,
+        help="An earlier report whose standard summary the styles are compared with.",
+    )
+    parser.add_argument(
+        "--keep-raw-failures",
+        action="store_true",
+        help="Keep the model's text when a reply cannot be parsed.",
     )
     parser.add_argument(
         "--max-calls", type=int, default=DEFAULT_MAX_CALLS, help="Refuse a bigger run."
@@ -599,13 +677,22 @@ def main(
     args = parse_args(argv)
     try:
         items = select(load_questions(args.questions), args.subset)
-        styles = ANSWER_STYLES if args.style == "all" else (args.style,)
+        chosen = args.style or ["standard"]
+        styles = (
+            ANSWER_STYLES
+            if "all" in chosen
+            else tuple(style for style in ANSWER_STYLES if style in chosen)
+        )
+        compared_standard = (
+            standard_from_report(args.compare_with) if args.compare_with else None
+        )
         calls = len(items) * len(styles)
         plan = {
             "label": args.label,
             "subset": args.subset,
             "poison": args.poison,
             "styles": list(styles),
+            "compare_with": str(args.compare_with) if args.compare_with else None,
             "estimate": estimate_cost(calls),
         }
         if calls > args.max_calls:
@@ -618,7 +705,13 @@ def main(
         if not args.confirm_cost:
             raise EvalError("a run that calls the model needs --confirm-cost")
         ask = asker or bedrock_asker(args.profile, args.region, args.account_id)
-        readings = run(items, ask=ask, poison=args.poison, styles=styles)
+        readings = run(
+            items,
+            ask=ask,
+            poison=args.poison,
+            styles=styles,
+            keep_raw_failures=args.keep_raw_failures,
+        )
     except EvalError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
@@ -631,14 +724,16 @@ def main(
         "ran_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "summary": summarize(readings),
         "by_style": (by_style := summarize_by_style(readings)),
-        "vs_standard": compare_to_standard(by_style),
+        "vs_standard": compare_to_standard(
+            by_style, None if "standard" in by_style else compared_standard
+        ),
         "replies": [reading.__dict__ for reading in readings],
     }
     args.output_dir.mkdir(parents=True, exist_ok=True)
     path = args.output_dir / f"ai-reply-eval-{args.label}.json"
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(
-        report["summary"] if len(styles) == 1
+        report["summary"] if len(styles) == 1 and not report["vs_standard"]
         else {"by_style": report["by_style"], "vs_standard": report["vs_standard"]},
         indent=2,
     ))

@@ -137,7 +137,11 @@ _ANSWER_STYLE_PRECEDENCE = (
     "explain step by step; answer only questions about the subject named above; follow "
     "the answer-language rules; stay within 300 words and the exact JSON shape above; "
     "choose the depth from the student's year group; and set suggest_teacher to true "
-    "when the student stays stuck or shows emotional distress, whatever the style."
+    "when the student stays stuck or shows emotional distress, whatever the style. "
+    "However long or lively the explanation, the reply is still one valid JSON object and "
+    "nothing else: inside every string value, write quotations with typographic marks such "
+    "as « », „ “ or “ ” and never a bare straight double quote, and write every backslash, "
+    "including those in LaTeX, as two backslashes (\\\\)."
 )
 
 ANSWER_STYLE_RULES: dict[str, str] = {
