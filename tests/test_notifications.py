@@ -569,6 +569,50 @@ def test_digest_send_selects_enabled_items_and_redacts_provider_result(monkeypat
     assert result["providerResult"] == {}
 
 
+@pytest.mark.parametrize("locale", sorted(locale_service.SUPPORTED_LOCALES))
+def test_the_digest_email_is_in_the_recipients_language(monkeypatch, locale):
+    # Sent from whoever's request, read by the recipient: their stored
+    # language, and role messages rendered in it as the inbox does (#278).
+    events, preferences = _install_notification_repo(monkeypatch)
+    monkeypatch.setattr(notification_service, "settings", _notification_provider_settings())
+    monkeypatch.setattr(
+        user_repo,
+        "get_user",
+        lambda user_id, **_k: {"user_id": user_id, "preferred_locale": locale},
+    )
+    locale_service.set_request_locale("en" if locale != "en" else "de")
+    prefs = notification_service.default_preferences()
+    for category in prefs:
+        prefs[category]["email_digest"] = True
+    preferences["teacher-1"] = {"user_id": "teacher-1", "preferences": prefs}
+    created = notification_service.create_event(
+        recipient_id="teacher-1",
+        recipient_role="teacher",
+        event_type="teacher_requested",
+        target_type="question",
+        target_id="question-1",
+        **notification_service._role_message_text("teacher_requested", {"subject": "math"}),
+    )
+    events[created["eventId"]]["recipient_id"] = "teacher-1"
+    sent = []
+
+    try:
+        result = notification_service.send_digest(
+            {"sub": "teacher-1", "role": "teacher", "email": "teacher@example.com"},
+            send_func=lambda payload: sent.append(payload) or {"messageId": "msg-1"},
+        )
+    finally:
+        locale_service.set_request_locale(None)
+
+    assert result["status"] == "sent"
+    heading = message_catalog.text("email.notification_digest.title", locale)
+    assert sent[0]["subject"] == heading
+    assert sent[0]["html"].startswith(f"<h1>{notification_service._html_escape(heading)}</h1>")
+    title, summary = notification_service._teacher_requested_message({"subject": "math"}, locale)
+    assert sent[0]["items"][0]["title"] == title
+    assert sent[0]["items"][0]["summary"] == summary
+
+
 def test_digest_send_honors_email_digest_opt_out(monkeypatch):
     _install_notification_repo(monkeypatch)
     monkeypatch.setattr(notification_service, "settings", _notification_provider_settings())

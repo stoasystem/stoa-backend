@@ -7,7 +7,7 @@ from stoa.rule_violation import RuleViolation
 from stoa.services.account_errors import AccountErrorCode, AccountViolation
 import pytest
 
-from stoa.services import teacher_application_service, teacher_identity_provider
+from stoa.services import locale_service, teacher_application_service, teacher_identity_provider
 
 
 def _reviewer():
@@ -98,13 +98,14 @@ def _install_teacher_repositories(monkeypatch):
         ][:limit],
     )
 
-    def send_invitation_email(recipient, *, activation_token, expires_at, full_name=""):
+    def send_invitation_email(recipient, *, activation_token, expires_at, full_name="", locale=None):
         delivered_invitations.append(
             {
                 "recipient": recipient,
                 "token": activation_token,
                 "expires_at": expires_at,
                 "full_name": full_name,
+                "locale": locale,
             }
         )
 
@@ -302,6 +303,68 @@ def test_public_application_and_approval_create_no_privilege(monkeypatch):
     assert _delivered_token(state) not in repr(invitation)
     assert invitation["application_version"] == application["version"]
     assert "document" not in repr(state["applications"])
+
+
+@pytest.mark.parametrize("locale", ["de", "fr", "it", "en"])
+def test_the_invitation_is_in_the_language_the_candidate_applied_in(monkeypatch, locale):
+    # The candidate has no profile; the language of the request they applied
+    # from is the one stored for them, not the reviewer's (#278).
+    state = _install_teacher_repositories(monkeypatch)
+    now = datetime(2026, 7, 14, 12, 0, tzinfo=UTC)
+    locale_service.set_request_locale(locale)
+    try:
+        application = teacher_application_service.submit_application(
+            {
+                "email": "candidate@example.test",
+                "email_verified": True,
+                "full_name": "Candidate Teacher",
+                "subjects": ["mathematics"],
+                "statement": "I teach mathematics offline.",
+            },
+            now=lambda: now,
+        )
+    finally:
+        locale_service.set_request_locale(None)
+    locale_service.set_request_locale("en" if locale != "en" else "de")
+    try:
+        teacher_application_service.review_application(
+            actor=_reviewer(),
+            application_id=application["applicationId"],
+            version=application["version"],
+            decision="approved",
+            reason="offline qualifications reviewed",
+            now=lambda: now,
+        )
+    finally:
+        locale_service.set_request_locale(None)
+
+    assert state["delivered"][-1]["locale"] == locale
+
+
+def test_a_candidate_who_named_no_language_is_invited_in_the_default_one(monkeypatch):
+    state = _install_teacher_repositories(monkeypatch)
+    now = datetime(2026, 7, 14, 12, 0, tzinfo=UTC)
+    application = teacher_application_service.submit_application(
+        {
+            "email": "candidate@example.test",
+            "email_verified": True,
+            "full_name": "Candidate Teacher",
+            "subjects": ["mathematics"],
+            "statement": "I teach mathematics offline.",
+        },
+        now=lambda: now,
+    )
+    teacher_application_service.review_application(
+        actor=_reviewer(),
+        application_id=application["applicationId"],
+        version=application["version"],
+        decision="approved",
+        reason="offline qualifications reviewed",
+        now=lambda: now,
+    )
+
+    assert "preferred_locale" not in next(iter(state["applications"].values()))
+    assert state["delivered"][-1]["locale"] == locale_service.DEFAULT_LOCALE
 
 
 def test_activation_is_same_email_single_use_and_fail_closed(monkeypatch):

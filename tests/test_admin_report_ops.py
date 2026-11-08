@@ -11,10 +11,14 @@ from stoa.routers import admin
 from stoa.security import admin_authorization
 from stoa.services import report_recovery_job_service
 from stoa.services import report_recovery_service
+from stoa.services import message_catalog
 from actor_helpers import install_actor_overrides
 from fakes.dynamodb import FakeTable
 from rule_violation_helpers import assert_violation
 from stoa.services.report_recovery_errors import ReportRecoveryErrorCode
+
+# A parent with no stored language is written to in the default one (#278).
+_SUBJECT = message_catalog.text("email.weekly_report.subject", "de", student="Student")
 
 
 def _app_for_user(user: dict, settings: Settings | None = None) -> FastAPI:
@@ -358,7 +362,7 @@ def test_resend_failed_report_uses_existing_html_artifact_and_audits(monkeypatch
 
     assert response.status_code == 200
     # The parent's current address, not the one archived on the report.
-    assert sent == [("parent-1@example.com", "<html>Report</html>", "STOA weekly report for Student")]
+    assert sent == [("parent-1@example.com", "<html>Report</html>", _SUBJECT)]
     assert updates[0][1] == "email_sent"
     assert updates[0][2]["email_status"] == "sent"
     assert updates[0][2]["last_operation"] == "resend_email"
@@ -527,8 +531,8 @@ def test_bulk_resend_returns_mixed_results_and_continues(monkeypatch):
     assert data["results"][3]["code"] == "report_resend_failed"
     assert data["results"][3]["params"] == {}
     assert sent == [
-        ("parent-1@example.com", "<html>Report</html>", "STOA weekly report for Student"),
-        ("parent-fail@example.com", "<html>Report</html>", "STOA weekly report for Student"),
+        ("parent-1@example.com", "<html>Report</html>", _SUBJECT),
+        ("parent-fail@example.com", "<html>Report</html>", _SUBJECT),
     ]
     assert html_reads == [
         "weekly-reports/parent-1/student-success/2026-06-01/report.html",
