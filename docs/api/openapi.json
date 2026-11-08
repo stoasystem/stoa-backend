@@ -3460,6 +3460,101 @@
         "title": "CurriculumLessonDraftRequest",
         "type": "object"
       },
+      "CurriculumLessonVersionResponse": {
+        "description": "A version next to its lesson's live version, as the worklist and preview give it.\n\n`publishedVersionId` is the version the lesson's pointer names, or null when the\nlesson has never been published; send it as `expectedPublishedVersionId`.\n`state` is read against it: `published` for the live version only, `superseded`\nfor one a later publish replaced (#111).",
+        "properties": {
+          "exercises": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exercises"
+          },
+          "lesson": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lesson"
+          },
+          "publicLessonId": {
+            "title": "Publiclessonid",
+            "type": "string"
+          },
+          "publishedVersionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publishedversionid"
+          },
+          "reviewState": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewstate"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedat"
+          },
+          "updatedBy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedby"
+          },
+          "versionId": {
+            "title": "Versionid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "publicLessonId",
+          "versionId",
+          "state"
+        ],
+        "title": "CurriculumLessonVersionResponse",
+        "type": "object"
+      },
       "CurriculumMigrationApplyRequest": {
         "properties": {
           "confirmationToken": {
@@ -4359,7 +4454,7 @@
           },
           "items": {
             "items": {
-              "$ref": "#/components/schemas/CurriculumVersionResponse"
+              "$ref": "#/components/schemas/CurriculumLessonVersionResponse"
             },
             "title": "Items",
             "type": "array"
@@ -17696,7 +17791,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CurriculumVersionResponse"
+                  "$ref": "#/components/schemas/CurriculumLessonVersionResponse"
                 }
               }
             },

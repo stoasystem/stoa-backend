@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from decimal import Decimal
-from typing import Protocol, SupportsInt, runtime_checkable
+from typing import NamedTuple, Protocol, SupportsInt, runtime_checkable
 
-from boto3.dynamodb.conditions import Attr, ConditionBase, Key
+from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
 
 from stoa.db.dynamodb import get_table, omit_none_attributes, scan_every_page
@@ -513,17 +513,40 @@ def list_audit_events(public_id: str, limit: int = 50) -> list[CurriculumItem]:
     return _items(resp.get("Items", []))
 
 
-def list_worklist(status: str | None = None, limit: int = 100) -> list[CurriculumItem]:
+class WorklistRows(NamedTuple):
+    """Every lesson version, newest first, and each lesson's live version.
+
+    `published_version_ids` maps a lesson's public id to the version its pointer
+    names, for every lesson that has one. It comes from the pointer rows, not from
+    the versions, so it stays right after a rollback and for a lesson whose live
+    version is too old to make the worklist's cut (#111)."""
+
+    versions: list[CurriculumItem]
+    published_version_ids: dict[str, str]
+
+
+def list_worklist() -> WorklistRows:
     table = get_table()
-    filter_expr: ConditionBase = Attr("entity_type").eq(VERSION_ENTITY)
-    if status:
-        filter_expr = filter_expr & Attr("state").eq(status)
-    # Sorted first, cut second: with the cut first the list was whichever
+    # One scan for both: the versions and the pointers that say which one is live.
+    resp = scan_every_page(
+        _scan,
+        table,
+        FilterExpression=Attr("entity_type").is_in([VERSION_ENTITY, POINTER_ENTITY]),
+    )
+    versions: list[CurriculumItem] = []
+    published_version_ids: dict[str, str] = {}
+    for item in _items(resp.get("Items", [])):
+        if item.get("entity_type") == POINTER_ENTITY:
+            public_id = item.get("public_id") or str(item.get("PK", "")).removeprefix("CURRICULUM_POINTER#")
+            published = item.get("published_version_id")
+            if isinstance(public_id, str) and public_id and isinstance(published, str):
+                published_version_ids[public_id] = published
+        else:
+            versions.append(item)
+    # Sorted here, cut by the caller: with the cut first the list was whichever
     # versions came off the front of the table, not the ones last touched.
-    resp = scan_every_page(_scan, table, FilterExpression=filter_expr)
-    items = _items(resp.get("Items", []))
-    newest = sorted(items, key=lambda item: str(item.get("updated_at", "")), reverse=True)
-    return newest[:limit]
+    newest = sorted(versions, key=lambda item: str(item.get("updated_at", "")), reverse=True)
+    return WorklistRows(newest, published_version_ids)
 
 
 def list_active_assignment_refs(public_id: str, limit: int = 100) -> list[CurriculumItem]:

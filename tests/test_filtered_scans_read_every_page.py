@@ -141,7 +141,26 @@ def test_a_curriculum_version_is_found_wherever_its_row_falls(table) -> None:
     )
     _bury(table)
 
-    assert [item["PK"] for item in curriculum_ops_repo.list_worklist()] == ["CURRICULUM#c-1"]
+    assert [item["PK"] for item in curriculum_ops_repo.list_worklist().versions] == ["CURRICULUM#c-1"]
+
+
+def test_a_lesson_pointer_is_found_wherever_its_row_falls(table) -> None:
+    # The worklist names each lesson's live version from these rows (#111).
+    table.seed(
+        {
+            "PK": "CURRICULUM_POINTER#l-1",
+            "SK": "META",
+            "entity_type": curriculum_ops_repo.POINTER_ENTITY,
+            "public_id": "l-1",
+            "published_version_id": "v-2",
+        }
+    )
+    _bury(table)
+
+    rows = curriculum_ops_repo.list_worklist()
+
+    assert rows.published_version_ids == {"l-1": "v-2"}
+    assert rows.versions == []
 
 
 def test_a_cap_on_matches_is_a_cap_on_matches(table) -> None:
