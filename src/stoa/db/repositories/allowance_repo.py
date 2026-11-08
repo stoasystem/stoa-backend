@@ -290,10 +290,6 @@ def _put_replace(
     return {"Put": payload}
 
 
-def _transact(operations: list[dict[str, Any]], *, table: object) -> None:
-    db_table.transact(operations, table=table)
-
-
 def _read_counter(
     target: object, beneficiary_id: str, week: ZurichWeek
 ) -> weekly_counter.Counter | None:
@@ -612,12 +608,11 @@ def reserve_allowance(
             at=now,
         )
         operations = [
-            account_deletion_repo.active_fence_condition(beneficiary, generation),
             _put_create(next_effect),
             counter_operation,
         ]
         try:
-            _transact(operations, table=target)
+            db_table.fenced(beneficiary, operations, generation=generation, table=target)
         except Exception:
             try:
                 raced = _strong_get(target, effect_key)
@@ -837,11 +832,10 @@ def _record_usage(
             )
         except _AllowanceDependencyFailure:
             return ProviderUsageResult(ProviderUsageDisposition.RETRYABLE)
+        generation = _stored_count(
+            current_effect["account_fence_generation"], "account_fence_generation", positive=True
+        )
         operations = [
-            account_deletion_repo.active_fence_condition(
-                beneficiary,
-                _stored_count(current_effect["account_fence_generation"], "account_fence_generation", positive=True),
-            ),
             _put_create(evidence_item),
             _put_replace(
                 next_effect,
@@ -861,7 +855,7 @@ def _record_usage(
             ),
         ]
         try:
-            _transact(operations, table=target)
+            db_table.fenced(beneficiary, operations, generation=generation, table=target)
         except Exception:
             try:
                 raced = _strong_get(target, evidence_key)
@@ -1085,11 +1079,10 @@ def _complete_allowance(
             )
         except _AllowanceDependencyFailure:
             return FinalizationResult(FinalizationDisposition.RETRYABLE)
+        generation = _stored_count(
+            current_effect["account_fence_generation"], "account_fence_generation", positive=True
+        )
         operations = [
-            account_deletion_repo.active_fence_condition(
-                beneficiary,
-                _stored_count(current_effect["account_fence_generation"], "account_fence_generation", positive=True),
-            ),
             _put_replace(
                 next_effect,
                 expected_state_version=_stored_count(current_effect["state_version"], "state_version"),
@@ -1112,7 +1105,7 @@ def _complete_allowance(
             ),
         ]
         try:
-            _transact(operations, table=target)
+            db_table.fenced(beneficiary, operations, generation=generation, table=target)
         except Exception:
             try:
                 raced = _strong_get(target, effect_key)

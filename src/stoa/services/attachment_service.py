@@ -1028,8 +1028,9 @@ def bind_message_attachments(
                     if command_operations is not None
                     else ()
                 ),
-                account_fence_generation=generation,
-            )
+            ),
+            owner=actor.user_id,
+            generation=generation,
         )
     except account_deletion_repo.AccountDeletionConflict:
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_NOT_FOUND) from None

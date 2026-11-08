@@ -148,11 +148,9 @@ def put_usage_event(
                 raise
             return True
         try:
-            db_table.transact(
+            db_table.fenced(
+                owner_id,
                 [
-                    account_deletion_repo.active_fence_condition(
-                        owner_id, account_fence_generation
-                    ),
                     {
                         "Put": {
                             "Item": event,
@@ -162,6 +160,7 @@ def put_usage_event(
                         }
                     },
                 ],
+                generation=account_fence_generation,
                 table=target,
             )
             return True

@@ -206,14 +206,10 @@ def _admit_case(table: FakeTable) -> None:
     """Spend the week's case for this conversation the way the request route does."""
     from datetime import timezone
 
-    from stoa.db.repositories import account_deletion_repo
     from stoa.services import teacher_support_allowance_service as allowance
 
-    def persist(operations):
-        db_table.transact(
-            [account_deletion_repo.active_fence_condition(STUDENT, 1), *operations],
-            table=table,
-        )
+    def persist(operations, fences):
+        db_table.fenced(STUDENT, operations, generation=1, also=fences, table=table)
         return True
 
     result = allowance.admit_teacher_support_case(

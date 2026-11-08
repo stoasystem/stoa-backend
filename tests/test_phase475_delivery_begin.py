@@ -7,7 +7,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 from stoa.db import table as db_table
-from stoa.db.repositories import notification_repo
+from stoa.db.repositories import account_deletion_repo, notification_repo
 from stoa.services import notification_service
 from fakes.dynamodb import from_wire
 
@@ -97,8 +97,11 @@ def _wrapped(error: ClientError) -> ClientError:
     return error
 
 
-def _refused(error: ClientError, operation_count: int = 2) -> db_table.WriteRefused:
-    """The gateway's reading of `error`, for calling the classifier directly."""
+def _refused(error: ClientError, operation_count: int = 1) -> db_table.WriteRefused:
+    """The gateway's reading of `error`, for calling the classifier directly.
+
+    The begin's own operation only: the gateway takes the fence check's reason out.
+    """
     return db_table.WriteRefused(
         str(error.response["Error"]["Code"]),
         db_table.cancellation_reasons(error.response, operation_count),
@@ -248,15 +251,17 @@ def test_ordered_intent_condition_loss_is_retryable_and_never_mislabeled(
         _refused(
             _client_error(
                 "TransactionCanceledException",
-                [{"Code": "ThrottlingError"}, {"Code": "None"}],
+                [{"Code": "ThrottlingError"}],
             )
         ),
         _refused(
             _client_error(
                 "TransactionCanceledException",
-                [{"Code": "ConditionalCheckFailed"}, {"Code": "SomethingNew"}],
+                [{"Code": "SomethingNew"}],
             )
         ),
+        # The fence refused, but a strong read finds it active: not a deletion.
+        account_deletion_repo.AccountNotWritable("account is not writable"),
     ],
 )
 def test_unclassified_timeout_malformed_or_throttled_failure_is_dependency_retry(
@@ -267,9 +272,7 @@ def test_unclassified_timeout_malformed_or_throttled_failure_is_dependency_retry
         failure if isinstance(failure, Exception) else RuntimeError(),
         scope=_scope(),
         claim=_claim(),
-        operation_count=2,
-        fence_operation_index=0,
-        intent_operation_index=1,
+        operation_count=1,
         table=table,
     )
     assert result.disposition is notification_repo.DeliveryBeginDisposition.DEPENDENCY_RETRY
@@ -283,9 +286,7 @@ def test_ambiguous_commit_is_reconciled_as_begun_from_exact_strong_intent() -> N
         TimeoutError("lost transaction response"),
         scope=_scope(),
         claim=_claim(),
-        operation_count=2,
-        fence_operation_index=0,
-        intent_operation_index=1,
+        operation_count=1,
         table=table,
     )
     assert result.disposition is notification_repo.DeliveryBeginDisposition.BEGUN

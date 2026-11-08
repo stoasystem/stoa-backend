@@ -428,7 +428,6 @@ def check_and_record_operation(
             "#count = :expected" if count_exists else "attribute_not_exists(#count)"
         )
         operations = [
-            account_deletion_repo.active_fence_condition(owner, generation),
             {
                 "Put": {
                     "Item": operation,
@@ -465,7 +464,7 @@ def check_and_record_operation(
             },
         ]
         try:
-            db_table.transact(operations, table=target)
+            db_table.fenced(owner, operations, generation=generation, table=target)
         except Exception:
             try:
                 raced_operation = _get_item(target, operation_key)

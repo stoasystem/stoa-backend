@@ -80,6 +80,13 @@ class AccountDeletionConflict(RuntimeError):
     """A lifecycle mutation did not match the permanent fence generation."""
 
 
+class AccountNotWritable(AccountDeletionConflict):
+    """The owner's account fence is missing, not active, or not the generation the
+    write was made under. Nothing was written. `stoa.db.table.fenced` raises it,
+    whether it found this out reading the fence or from the transaction itself.
+    """
+
+
 class DeletionCommandClaimLost(AccountDeletionConflict):
     """The deletion worker no longer owns the exact durable command state."""
 
@@ -301,6 +308,12 @@ def deletion_command_key(user_id: str, command_id: str) -> dict[str, str]:
 def active_fence_condition(
     user_id: str, generation: int | None = None
 ) -> dict[str, Any]:
+    """The condition a write behind `user_id`'s fence carries.
+
+    Writes call `stoa.db.table.fenced`, which adds it; only the deletion flow,
+    whose transactions also hold a closing account's deletion fence, uses it
+    directly.
+    """
     values: dict[str, Any] = {":active": "active"}
     expression = "#status=:active"
     if generation is not None:
@@ -347,7 +360,7 @@ def require_active_account_fence(
         or fence_generation <= 0
         or (generation is not None and fence_generation != generation)
     ):
-        raise AccountDeletionConflict("account is not writable")
+        raise AccountNotWritable("account is not writable")
     # Return a fence dict with a normalised int generation so callers don't
     # receive a Decimal from DynamoDB.
     return {**fence, "generation": fence_generation}

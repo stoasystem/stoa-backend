@@ -69,7 +69,7 @@ def seed_conversation(
     write = _store.build_conversation_write_transaction(
         item=record, owner_id=student_id, generation=generation
     )
-    row = {**write[1]["Put"]["Item"], **extra}
+    row = {**write[0]["Put"]["Item"], **extra}
     table.seed(row)
     return row
 

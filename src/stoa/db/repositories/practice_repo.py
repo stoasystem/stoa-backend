@@ -224,7 +224,7 @@ def build_practice_write_transaction(
         "owner_id": owner_id,
         "account_fence_generation": generation,
     }
-    operations = [account_deletion_repo.active_fence_condition(owner_id, generation)]
+    operations: list[dict[str, Any]] = []
     if mode == "put":
         operations.append(
             {
@@ -611,9 +611,9 @@ def mark_lesson_completed(
         else None,
     )
     if _atomic_table(table):
-        db_table.transact(operations, table=table)
+        db_table.fenced(user_id, operations, generation=generation, table=table)
     else:
-        _put_item(table, Item=operations[1]["Put"]["Item"])
+        _put_item(table, Item=operations[0]["Put"]["Item"])
     item.update(
         owner_id=user_id,
         account_fence_generation=generation,
@@ -702,11 +702,11 @@ def put_attempt(
         item=item, owner_id=student_id, generation=generation
     )
     if _atomic_table(table):
-        db_table.transact(operations, table=table)
+        db_table.fenced(student_id, operations, generation=generation, table=table)
     else:
         _put_item(
             table,
-            Item=operations[1]["Put"]["Item"],
+            Item=operations[0]["Put"]["Item"],
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
     item.update(owner_id=student_id, account_fence_generation=generation)
@@ -1001,9 +1001,9 @@ def record_study_day(
         else None,
     )
     if _atomic_table(target):
-        db_table.transact(operations, table=target)
+        db_table.fenced(student_id, operations, generation=generation, table=target)
     else:
-        _put_item(target, Item=operations[1]["Put"]["Item"])
+        _put_item(target, Item=operations[0]["Put"]["Item"])
     item.update(owner_id=student_id, account_fence_generation=generation)
     return item
 
@@ -1041,11 +1041,11 @@ def _activity_write(
         item=item, owner_id=student_id, generation=generation
     )
     if _atomic_table(target):
-        db_table.transact(operations, table=target)
+        db_table.fenced(student_id, operations, generation=generation, table=target)
     else:
         _put_item(
             target,
-            Item=operations[1]["Put"]["Item"],
+            Item=operations[0]["Put"]["Item"],
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
     item.update(owner_id=student_id, account_fence_generation=generation)
@@ -1135,10 +1135,10 @@ def acknowledge_lit_units(
             mode="update",
             updates={"acknowledged_at": moment},
         )
-        update = operations[1]["Update"]
+        update = operations[0]["Update"]
         try:
             if _atomic_table(target):
-                db_table.transact(operations, table=target)
+                db_table.fenced(student_id, operations, generation=generation, table=target)
             else:
                 target.update_item(**update)
         except Exception:  # noqa: BLE001
@@ -1185,10 +1185,10 @@ def _quiz_write(
         item=item, owner_id=student_id, generation=generation
     )
     if _atomic_table(target):
-        db_table.transact(operations, table=target)
+        db_table.fenced(student_id, operations, generation=generation, table=target)
     else:
-        _put_item(target, Item=operations[1]["Put"]["Item"])
-    return dict(operations[1]["Put"]["Item"])
+        _put_item(target, Item=operations[0]["Put"]["Item"])
+    return dict(operations[0]["Put"]["Item"])
 
 
 def put_quiz_paper(
@@ -1287,13 +1287,13 @@ def update_quiz_paper(
         mode="update",
         updates=dict(updates),
     )
-    update = operations[1]["Update"]
+    update = operations[0]["Update"]
     update["ConditionExpression"] += " AND #paper_answered = :paper_answered_before"
     update["ExpressionAttributeNames"]["#paper_answered"] = "answered"
     update["ExpressionAttributeValues"][":paper_answered_before"] = int(answered)
     try:
         if _atomic_table(target):
-            db_table.transact(operations, table=target)
+            db_table.fenced(student_id, operations, generation=generation, table=target)
         else:
             target.update_item(**update)
     except Exception as error:  # noqa: BLE001

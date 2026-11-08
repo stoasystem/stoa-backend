@@ -59,9 +59,9 @@ def create_upload_intent(item: dict[str, object], *, table: object | None = None
         raise AttachmentRepositoryConflict("conditional_conflict")
     upload_id = _required_text(item.get("upload_id"))
     try:
-        db_table.transact(
+        db_table.fenced(
+            owner_id,
             [
-                account_deletion_repo.active_fence_condition(owner_id, generation),
                 {
                     "Put": {
                         "Item": {**upload_key(upload_id), **item},
@@ -71,6 +71,7 @@ def create_upload_intent(item: dict[str, object], *, table: object | None = None
                     }
                 },
             ],
+            generation=generation,
             table=table or _table(),
         )
     except (

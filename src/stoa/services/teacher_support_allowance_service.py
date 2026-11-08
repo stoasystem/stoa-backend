@@ -18,7 +18,6 @@ from botocore.exceptions import ClientError
 
 from stoa.db.dynamodb import get_table
 from stoa.db.repositories import (
-    account_deletion_repo,
     parent_link_repo,
     security_audit_repo,
     user_repo,
@@ -55,6 +54,12 @@ ASSIGNED_WEEKLY_CASES_MAXIMUM = 200
 
 type AdmissionOperation = dict[str, Any]
 type PersistCase = Callable[[tuple[AdmissionOperation, ...]], bool]
+# An admission also hands over the accounts whose fences must hold beside the
+# beneficiary's - the granting parent's - for the caller to write behind
+# (`db_table.fenced(..., also=fences)`), since only it sends the transaction.
+type PersistAdmission = Callable[
+    [tuple[AdmissionOperation, ...], Mapping[str, int]], bool
+]
 
 
 class TeacherSupportAdmissionDisposition(StrEnum):
@@ -619,9 +624,12 @@ def _resolve_paid_scope(
     )
 
 
-def _grant_condition_operations(scope: _ResolvedScope) -> tuple[AdmissionOperation, ...]:
+def _grant_condition_operations(
+    scope: _ResolvedScope,
+) -> tuple[tuple[AdmissionOperation, ...], dict[str, int]]:
+    """The conditions an admission is made under, and the parent fence beside them."""
     if scope.support_source == SUPPORT_SOURCE_ASSIGNED:
-        return _assigned_condition_operations(scope)
+        return _assigned_condition_operations(scope), {}
     grant = scope.grant
     parent_generation = _positive_integer(
         grant.get("parent_account_fence_generation"),
@@ -648,9 +656,6 @@ def _grant_condition_operations(scope: _ResolvedScope) -> tuple[AdmissionOperati
         ":subscription_id_digest": scope.subscription_id_digest,
     }
     return (
-        # The case repository contributes the beneficiary fence because DynamoDB
-        # transactions cannot target the same fence row twice.
-        account_deletion_repo.active_fence_condition(scope.parent_id, parent_generation),
         {
             "ConditionCheck": {
                 "Key": {
@@ -688,7 +693,7 @@ def _grant_condition_operations(scope: _ResolvedScope) -> tuple[AdmissionOperati
         },
         _student_profile_condition(scope, student_profile_version),
         *_relationship_conditions(scope),
-    )
+    ), {scope.parent_id: parent_generation}
 
 
 def _assigned_condition_operations(
@@ -923,14 +928,16 @@ def admit_teacher_support_case(
     support_case_id: str,
     case_kind: str,
     beneficiary_id: str,
-    persist_case: PersistCase,
+    persist_case: PersistAdmission,
     observed_at: datetime | None = None,
     table: object | None = None,
 ) -> TeacherSupportAdmissionResult:
     """Persist the first durable case and its weekly debit in one transaction.
 
-    ``persist_case`` must prepend the beneficiary's active-account fence and
-    append the durable case mutation to the supplied allowance operations.
+    ``persist_case(operations, fences)`` must write the supplied allowance
+    operations and the durable case mutation behind the beneficiary's account
+    fence and the fences in ``fences`` (the granting parent's), in one
+    transaction.
     """
     case_id = _required_text(support_case_id, "support_case_id")
     kind = _required_text(case_kind, "case_kind", maximum=20)
@@ -1047,8 +1054,9 @@ def admit_teacher_support_case(
             },
             at=observed,
         )
+        conditions, fences = _grant_condition_operations(scope)
         operations = (
-            *_grant_condition_operations(scope),
+            *conditions,
             {
                 "Put": {
                     "Item": receipt,
@@ -1059,7 +1067,9 @@ def admit_teacher_support_case(
             },
             counter_operation,
         )
-        if not _persisted(persist_case, tuple(operations), what="case"):
+        if not _persisted(
+            lambda written: persist_case(written, fences), tuple(operations), what="case"
+        ):
             raise weekly_counter.CounterConflict()
         return TeacherSupportAdmissionResult(
             TeacherSupportAdmissionDisposition.ADMITTED,

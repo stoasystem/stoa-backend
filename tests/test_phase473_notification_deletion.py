@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from stoa.db import table as db_table
 from stoa.db.repositories import notification_repo, websocket_repo
 from stoa.services import account_deletion_service, notification_service
 from fakes.dynamodb import from_wire
@@ -124,7 +125,16 @@ def test_private_event_and_connection_write_builders_start_with_exact_fence() ->
         generation=GENERATION,
         mode="put",
     )
-    for operations in (event_ops, connection_ops):
+    for built in (event_ops, connection_ops):
+        assert all("ConditionCheck" not in operation for operation in built)
+        sent: list[list[dict[str, Any]]] = []
+
+        class _Table:
+            def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+                sent.append(from_wire(TransactItems))
+
+        db_table.fenced(STUDENT_ID, built, generation=GENERATION, table=_Table())
+        operations = sent[0]
         fence = operations[0]["ConditionCheck"]
         assert fence["Key"] == {"PK": f"USER#{STUDENT_ID}", "SK": "ACCOUNT_FENCE"}
         assert fence["ExpressionAttributeValues"][":generation"] == GENERATION

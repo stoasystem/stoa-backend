@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
@@ -72,6 +72,9 @@ class PaidTransitionDisposition(StrEnum):
 class PaidGrantBuild:
     grant_items: tuple[dict[str, object], ...]
     grant_operations: tuple[dict[str, Any], ...]
+    # Every account the grants are proven against - the parent first - with the
+    # fence generation its proof read; the transaction holds each fence.
+    account_fences: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -888,9 +891,6 @@ def _proof_operations(
                     role="parent",
                     version=proof.parent_profile_version,
                 ),
-                account_deletion_repo.active_fence_condition(
-                    parent_id, proof.parent_fence_generation
-                ),
             )
         )
     # The relationship is not mirrored onto the student profile, so the profile
@@ -914,12 +914,15 @@ def _proof_operations(
             ),
         )
     )
-    operations.append(
-        account_deletion_repo.active_fence_condition(
-            student_id, proof.student_fence_generation
-        )
-    )
     return operations
+
+
+def _proof_fences(
+    fences: dict[str, int], parent_id: str, student_id: str, proof: _RelationshipProof
+) -> None:
+    """The parent's fence as its first proof read it, and each student's own."""
+    fences.setdefault(parent_id, proof.parent_fence_generation)
+    fences[student_id] = proof.student_fence_generation
 
 
 def build_paid_activation_operations(
@@ -961,8 +964,10 @@ def build_paid_activation_operations(
 
     grants: list[dict[str, object]] = []
     operations: list[dict[str, Any]] = []
+    fences: dict[str, int] = {}
     for index, student_id in enumerate(selected):
         proof = _relationship_proof(request.parent_id, student_id, table=target)
+        _proof_fences(fences, request.parent_id, student_id, proof)
         operations.extend(
             _proof_operations(
                 request.parent_id,
@@ -992,7 +997,7 @@ def build_paid_activation_operations(
                 proof,
             )
         )
-    return PaidGrantBuild(tuple(grants), tuple(operations))
+    return PaidGrantBuild(tuple(grants), tuple(operations), fences)
 
 
 def commit_paid_activation(
@@ -1021,6 +1026,7 @@ def commit_paid_activation(
         grant_items=built.grant_items,
         allowance_item=allowance_item,
         grant_operations=built.grant_operations,
+        account_fences=built.account_fences,
         table=target,
     )
 
@@ -1151,6 +1157,7 @@ def apply_paid_upgrade(
         return PaidGrantResult(PaidGrantDisposition.ALREADY_APPLIED)
 
     operations: list[dict[str, Any]] = []
+    fences: dict[str, int] = {}
     for index, (student_id, grant) in enumerate(zip(selected, current, strict=True)):
         try:
             old_plan = BillingPlanId(_required_text(grant.get("plan_id"), "plan_id"))
@@ -1172,6 +1179,7 @@ def apply_paid_upgrade(
             proof = _relationship_proof(parent, student_id, table=target)
         except (KeyError, PaidGrantConflict, ValueError):
             return PaidGrantResult(PaidGrantDisposition.CONFLICT)
+        _proof_fences(fences, parent, student_id, proof)
         operations.extend(
             _proof_operations(parent, student_id, proof, include_parent=index == 0)
         )
@@ -1208,8 +1216,11 @@ def apply_paid_upgrade(
                 }
             }
         )
+    generation = fences.pop(parent)
     try:
-        db_table.transact(operations, table=target)
+        db_table.fenced(
+            parent, operations, generation=generation, also=fences, table=target
+        )
     except Exception:
         try:
             replayed = [

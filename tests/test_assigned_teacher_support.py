@@ -629,13 +629,13 @@ def test_an_administrator_raising_the_figure_mid_request_does_not_503_the_studen
     _raise_to(table, 3, version=1)
     intruded: list[bool] = []
 
-    def commit(allowance_operations: tuple[dict[str, Any], ...]) -> bool:
+    def commit(allowance_operations: tuple[dict[str, Any], ...], fences) -> bool:
         if not intruded:
             intruded.append(True)
             _raise_to(table, 30, version=2)
         return _case_committer(
             table, kind="question", case_id="q-1", beneficiary_id=STUDENT
-        )(allowance_operations)
+        )(allowance_operations, fences)
 
     result = service.admit_teacher_support_case(
         support_case_id="q-1",

@@ -177,7 +177,7 @@ def build_adaptive_write_transaction(
         "owner_id": owner_id,
         "account_fence_generation": generation,
     }
-    operations = [account_deletion_repo.active_fence_condition(owner_id, generation)]
+    operations: list[dict[str, Any]] = []
     if mode == "put":
         if stored.get("source_type") == "ai_draft" and stored.get("source_id"):
             operations.append(
@@ -261,7 +261,7 @@ def put_memory_snapshot(item: dict[str, Any]) -> None:
         else None,
     )
     if _atomic_table(table):
-        db_table.transact(operations, table=table)
+        db_table.fenced(owner, operations, generation=generation, table=table)
     else:
         _put_item(table, Item=operations[-1]["Put"]["Item"])
     item.update(owner_id=owner, account_fence_generation=generation)
@@ -294,7 +294,7 @@ def put_assignment(item: dict[str, Any]) -> None:
         item=stored, owner_id=owner, generation=generation
     )
     if _atomic_table(table):
-        db_table.transact(operations, table=table)
+        db_table.fenced(owner, operations, generation=generation, table=table)
     else:
         _put_item(table, Item=operations[-1]["Put"]["Item"])
     item.update(owner_id=owner, account_fence_generation=generation)
@@ -314,7 +314,7 @@ def put_assignment_if_absent(item: dict[str, Any]) -> tuple[dict[str, Any], bool
     )
     try:
         if _atomic_table(table):
-            db_table.transact(operations, table=table)
+            db_table.fenced(owner, operations, generation=generation, table=table)
         else:
             _put_item(
                 table,
@@ -390,7 +390,7 @@ def update_assignment(
                 mutation["ConditionExpression"] += " AND #expected_status=:expected_status"
                 mutation["ExpressionAttributeNames"]["#expected_status"] = "status"
                 mutation["ExpressionAttributeValues"][":expected_status"] = expected_status
-            db_table.transact(operations, table=table)
+            db_table.fenced(owner, operations, generation=generation, table=table)
             return get_assignment(assignment_id) or {**existing, **updates}
         resp = _update_item(table, **kwargs)
     except (

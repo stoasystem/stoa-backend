@@ -33,7 +33,7 @@ from fakes.dynamodb import FakeTable, from_wire
 from fakes.learning_session import patch_session_table, seed_conversation
 from stoa.db import table as db_table
 from stoa.config import Settings
-from stoa.db.repositories import curriculum_ops_repo, usage_ledger_repo
+from stoa.db.repositories import account_deletion_repo, curriculum_ops_repo, usage_ledger_repo
 from stoa.models.billing import BillingPlanId
 from stoa.routers import conversations
 from stoa.services import learning_session
@@ -141,10 +141,11 @@ def test_a_fence_that_moved_is_a_conflict_not_a_duplicate() -> None:
     table = FakeTable()
     table.seed_active_account("student-1", generation=2)
 
-    with pytest.raises(db_table.WriteRefused) as refused:
+    # The fence's own condition refused: the account is not writable, which is
+    # not the caller's write being refused.
+    with pytest.raises(account_deletion_repo.AccountNotWritable):
         usage_ledger_repo.put_usage_event(_fenced_event(), account_fence_generation=1, table=table)
 
-    assert refused.value.failed_conditions == (0,)
     assert _ledger_rows(table) == []
 
 
@@ -247,7 +248,7 @@ def test_a_repeat_conversation_help_request_after_a_failed_ledger_write_records_
         "admit_teacher_support_case",
         lambda *, persist_case, **_kwargs: service.TeacherSupportAdmissionResult(
             service.TeacherSupportAdmissionDisposition.ADMITTED
-            if persist_case(())
+            if persist_case((), {})
             else service.TeacherSupportAdmissionDisposition.REPLAYED
         ),
     )

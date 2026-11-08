@@ -12,6 +12,7 @@ from fakes.ask_question import DELETED_STUDENT as STUDENT_ID
 from fakes.ask_question import DELETION_NOW as NOW
 from fakes.ask_question import PRIVATE_CONVERSATION as CONVERSATION_ID
 from fakes.ask_question import _private_message as _message
+from fakes.dynamodb import from_wire
 from stoa.db.repositories import attachment_repo
 from stoa.services import account_deletion_service, attachment_service, learning_session
 
@@ -65,13 +66,19 @@ def test_conversation_source_registry_closes_rows_writers_and_private_fields() -
 
 
 def test_every_conversation_write_transaction_starts_with_exact_account_fence() -> None:
-    # The session's fenced write moved to learning_session with the record (#226).
-    build = learning_session.build_conversation_write_transaction
-    operations = build(
-        item=_message(),
+    # The session's fenced write moved to learning_session with the record (#226);
+    # the table gateway puts the fence in front of it (#297).
+    operations: list[dict[str, Any]] = []
+
+    class _Table:
+        def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+            operations.extend(from_wire(TransactItems))
+
+    learning_session._store.create_conversation_record(
+        _message(),
         owner_id=STUDENT_ID,
         generation=7,
-        mode="put",
+        table=_Table(),
     )
     fence = operations[0]["ConditionCheck"]
     assert fence["Key"] == {"PK": f"USER#{STUDENT_ID}", "SK": "ACCOUNT_FENCE"}

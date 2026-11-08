@@ -492,33 +492,25 @@ def test_message_command_claim_groups_command_quota_operation_and_counter() -> N
         limit=8,
         expires_at=2_000_000_000,
     )
+    # The account fence is put in front when the claim is sent (#297).
     assert [operation.kind for operation in operations] == [
-        attachment_repo.TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
         attachment_repo.TransactionOperationKind.MESSAGE_COMMAND_PUT,
         attachment_repo.TransactionOperationKind.CHAT_QUOTA_OPERATION_PUT,
         attachment_repo.TransactionOperationKind.CHAT_QUOTA_UPDATE,
     ]
-    condition = operations[0]["ConditionCheck"]
-    assert isinstance(condition, dict)
-    condition_key = condition["Key"]
-    assert isinstance(condition_key, dict)
-    assert condition_key == {
-        "PK": "USER#student-1",
-        "SK": "ACCOUNT_FENCE",
-    }
-    put = operations[1]["Put"]
+    put = operations[0]["Put"]
     assert isinstance(put, dict)
     command_item = put["Item"]
     assert isinstance(command_item, dict)
     assert command_item["fingerprint"] == "f" * 64
     assert command_item["counter_value"] == 5
     assert "content" not in command_item and "attachment_ids" not in command_item
-    quota_put = operations[2]["Put"]
+    quota_put = operations[1]["Put"]
     assert isinstance(quota_put, dict)
     quota_item = quota_put["Item"]
     assert isinstance(quota_item, dict)
     assert quota_item["SK"] == "CHAT_QUOTA_OP#opaque-command"
-    update = operations[3]["Update"]
+    update = operations[2]["Update"]
     assert isinstance(update, dict)
     update_values = update["ExpressionAttributeValues"]
     assert isinstance(update_values, dict)
@@ -951,7 +943,7 @@ def test_a_zero_row_still_refuses_a_claim_that_raced_past_it():
     assert _claim(table, "winner").counter_value == 1
 
     try:
-        attachment_repo.transact(stale, table=table)
+        attachment_repo.transact(stale, table=table, owner=OWNER, generation=1)
     except attachment_repo.AttachmentTransactionError:
         pass
     else:
@@ -986,14 +978,20 @@ def test_command_claim_and_text_only_message_commit_share_account_fence() -> Non
         expires_at=100,
         account_fence_generation=7,
     )
-    assert claim[0].kind is attachment_repo.TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK
-    claim_item = claim[0].item
-    assert isinstance(claim_item, dict)
-    condition_check = claim_item["ConditionCheck"]
-    assert isinstance(condition_check, dict)
-    values = condition_check["ExpressionAttributeValues"]
-    assert isinstance(values, dict)
-    assert values[":generation"] == 7
+    # The claim, like the commit below, is sent behind the fence at its generation.
+    assert all(
+        operation.kind is not attachment_repo.TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK
+        for operation in claim
+    )
+    claimed: list[dict[str, Any]] = []
+
+    class _ClaimCapture:
+        def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+            claimed.extend(from_wire(TransactItems))
+
+    attachment_repo.transact(claim, owner=STUDENT_ID, generation=7, table=_ClaimCapture())
+    assert claimed[0]["ConditionCheck"]["Key"] == {"PK": f"USER#{STUDENT_ID}", "SK": "ACCOUNT_FENCE"}
+    assert claimed[0]["ConditionCheck"]["ExpressionAttributeValues"][":generation"] == 7
 
     private = _message()
     commit = attachment_repo.build_message_attachment_transaction(
@@ -1016,9 +1014,21 @@ def test_command_claim_and_text_only_message_commit_share_account_fence() -> Non
         trailing_operations=ask_question_store.message_committed_operations(
             {**command, "owner_id": STUDENT_ID}, owner_id=STUDENT_ID, now_iso=NOW
         ),
-        account_fence_generation=7,
     )
-    assert commit[0].kind is attachment_repo.TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK
+    # The commit is sent behind the fence the message was stamped with.
+    assert all(
+        operation.kind is not attachment_repo.TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK
+        for operation in commit
+    )
+    sent: list[dict[str, Any]] = []
+
+    class _Capture:
+        def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+            sent.extend(from_wire(TransactItems))
+
+    attachment_repo.transact(commit, owner=STUDENT_ID, generation=7, table=_Capture())
+    assert sent[0]["ConditionCheck"]["Key"] == {"PK": f"USER#{STUDENT_ID}", "SK": "ACCOUNT_FENCE"}
+    assert sent[0]["ConditionCheck"]["ExpressionAttributeValues"][":generation"] == 7
 
 
 def test_stale_command_cancel_removes_result_fingerprint_and_lease() -> None:

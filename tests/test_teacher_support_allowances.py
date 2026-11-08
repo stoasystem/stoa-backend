@@ -11,7 +11,7 @@ from decimal import Decimal
 import asyncio
 import inspect
 import threading
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 import pytest
 
@@ -256,10 +256,12 @@ def _case_committer(
     case_id: str,
     beneficiary_id: str,
     calls: list[tuple[dict[str, Any], ...]] | None = None,
-) -> Callable[[tuple[dict[str, Any], ...]], bool]:
+) -> Callable[[tuple[dict[str, Any], ...], Mapping[str, int]], bool]:
     seed_fenced_rows(table, beneficiary_id)
 
-    def commit(allowance_operations: tuple[dict[str, Any], ...]) -> bool:
+    def commit(
+        allowance_operations: tuple[dict[str, Any], ...], fences: Mapping[str, int]
+    ) -> bool:
         if calls is not None:
             calls.append(allowance_operations)
         case_operation = {
@@ -276,12 +278,11 @@ def _case_committer(
             }
         }
         try:
-            db_table.transact(
-                [
-                    account_deletion_repo.active_fence_condition(beneficiary_id, 6),
-                    *allowance_operations,
-                    case_operation,
-                ],
+            db_table.fenced(
+                beneficiary_id,
+                [*allowance_operations, case_operation],
+                generation=6,
+                also=fences,
                 table=table,
             )
         except account_deletion_repo.AccountDeletionConflict:

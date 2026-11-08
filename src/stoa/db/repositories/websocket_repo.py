@@ -148,7 +148,7 @@ def build_connection_write_transaction(
         "owner_id": owner_id,
         "account_fence_generation": generation,
     }
-    operations = [account_deletion_repo.active_fence_condition(owner_id, generation)]
+    operations: list[ConnectionItem] = []
     if mode == "put":
         operations.append(
             {
@@ -207,10 +207,12 @@ def put_connection(item: ConnectionItem) -> ConnectionItem:
         "owner_id": owner_id,
         "account_fence_generation": generation,
     }
-    db_table.transact(
+    db_table.fenced(
+        owner_id,
         build_connection_write_transaction(
             item=stored, owner_id=owner_id, generation=generation, mode="put"
         ),
+        generation=generation,
         table=target,
     )
     return stored
@@ -234,7 +236,8 @@ def update_connection(
     target = get_table()
     owner_id = str(existing.get("owner_id") or existing.get("user_id") or "")
     generation = _generation(owner_id, existing.get("account_fence_generation"), target)
-    db_table.transact(
+    db_table.fenced(
+        owner_id,
         build_connection_write_transaction(
             item=existing,
             owner_id=owner_id,
@@ -242,6 +245,7 @@ def update_connection(
             mode="update",
             updates=updates,
         ),
+        generation=generation,
         table=target,
     )
     return {**existing, **updates}

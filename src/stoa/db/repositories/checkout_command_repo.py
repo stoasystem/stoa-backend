@@ -560,21 +560,20 @@ def register_checkout_command(
         "created_at": timestamp,
     }
     operations: list[dict[str, Any]] = [
-        account_deletion_repo.active_fence_condition(intent.parent_id, generation),
-        *[
-            {
-                "Put": {
-                    "Item": item,
-                    "ConditionExpression": (
-                        "attribute_not_exists(PK) AND attribute_not_exists(SK)"
-                    ),
-                }
+        {
+            "Put": {
+                "Item": item,
+                "ConditionExpression": (
+                    "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                ),
             }
-            for item in (command, guard, lookup)
-        ],
+        }
+        for item in (command, guard, lookup)
     ]
     try:
-        db_table.transact(operations, table=target)
+        db_table.fenced(
+            intent.parent_id, operations, generation=generation, table=target
+        )
     except Exception:
         return _classify_registration_replay(
             table=target,
@@ -735,18 +734,15 @@ def claim_provider_create(
             },
         }
     }
-    operations = [
-        account_deletion_repo.active_fence_condition(
-            str(current["parent_id"]),
-            _positive_integer(
-                current.get("account_fence_generation"),
-                "account_fence_generation",
-            ),
-        ),
-        operation,
-    ]
+    generation = _positive_integer(
+        current.get("account_fence_generation"),
+        "account_fence_generation",
+    )
+    operations = [operation]
     try:
-        db_table.transact(operations, table=target)
+        db_table.fenced(
+            str(current["parent_id"]), operations, generation=generation, table=target
+        )
     except Exception:
         try:
             refreshed = _strong_command(command_id, table=target)
@@ -875,18 +871,13 @@ def attach_provider_session(
             "ExpressionAttributeValues": values,
         }
     }
-    operations = [
-        account_deletion_repo.active_fence_condition(
-            claim.parent_id,
-            _positive_integer(
-                current.get("account_fence_generation"),
-                "account_fence_generation",
-            ),
-        ),
-        operation,
-    ]
+    generation = _positive_integer(
+        current.get("account_fence_generation"),
+        "account_fence_generation",
+    )
+    operations = [operation]
     try:
-        db_table.transact(operations, table=target)
+        db_table.fenced(claim.parent_id, operations, generation=generation, table=target)
     except Exception:
         try:
             refreshed = _strong_command(claim.command_id, table=target)
@@ -998,18 +989,13 @@ def mark_provider_outcome_unknown(
             "ExpressionAttributeValues": values,
         }
     }
-    operations = [
-        account_deletion_repo.active_fence_condition(
-            claim.parent_id,
-            _positive_integer(
-                current.get("account_fence_generation"),
-                "account_fence_generation",
-            ),
-        ),
-        operation,
-    ]
+    generation = _positive_integer(
+        current.get("account_fence_generation"),
+        "account_fence_generation",
+    )
+    operations = [operation]
     try:
-        db_table.transact(operations, table=target)
+        db_table.fenced(claim.parent_id, operations, generation=generation, table=target)
     except Exception:
         try:
             refreshed = _strong_command(claim.command_id, table=target)
@@ -1231,18 +1217,13 @@ def claim_session_expiration(
             },
         }
     }
-    operations = [
-        account_deletion_repo.active_fence_condition(
-            parent_id,
-            _positive_integer(
-                current.get("account_fence_generation"),
-                "account_fence_generation",
-            ),
-        ),
-        operation,
-    ]
+    generation = _positive_integer(
+        current.get("account_fence_generation"),
+        "account_fence_generation",
+    )
+    operations = [operation]
     try:
-        db_table.transact(operations, table=target)
+        db_table.fenced(parent_id, operations, generation=generation, table=target)
     except Exception:
         try:
             refreshed = _strong_command(command_id, table=target)
@@ -1384,18 +1365,13 @@ def record_session_expiration(
             },
         }
     }
-    operations = [
-        account_deletion_repo.active_fence_condition(
-            parent_id,
-            _positive_integer(
-                current.get("account_fence_generation"),
-                "account_fence_generation",
-            ),
-        ),
-        operation,
-    ]
+    generation = _positive_integer(
+        current.get("account_fence_generation"),
+        "account_fence_generation",
+    )
+    operations = [operation]
     try:
-        db_table.transact(operations, table=target)
+        db_table.fenced(parent_id, operations, generation=generation, table=target)
     except Exception:
         try:
             refreshed = _strong_command(command_id, table=target)
@@ -1620,7 +1596,6 @@ def supersede_checkout_command(
         "created_at": timestamp,
     }
     operations: list[dict[str, Any]] = [
-        account_deletion_repo.active_fence_condition(parent_id, generation),
         {
             "Update": {
                 "Key": _command_key(old_command_id),
@@ -1694,7 +1669,7 @@ def supersede_checkout_command(
         },
     ]
     try:
-        db_table.transact(operations, table=target)
+        db_table.fenced(parent_id, operations, generation=generation, table=target)
     except Exception:
         return _classify_supersession_replay(
             table=target,

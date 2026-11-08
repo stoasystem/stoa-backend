@@ -615,9 +615,17 @@ def ask(
         },
     ]
 
-    def persist_case(allowance_operations: tuple[dict[str, Any], ...]) -> bool:
+    def persist_case(
+        allowance_operations: tuple[dict[str, Any], ...], fences: Mapping[str, int]
+    ) -> bool:
         try:
-            db_table.transact([*rows, *allowance_operations], table=store)
+            db_table.fenced(
+                student_id,
+                [*rows, *allowance_operations],
+                generation=generation,
+                also=fences,
+                table=store,
+            )
         except Exception:  # noqa: BLE001 - every refusal means something moved
             return False
         return True
@@ -719,7 +727,7 @@ def dispatch(record: Mapping[str, Any], *, now: str | None = None, table: Any | 
             remove=_NO_CANDIDATE_FIELDS,
             condition="escalation_status = :pending AND attribute_not_exists(teacher_id)",
             values={":pending": PENDING},
-            extra=teacher_dispatch_service.teacher_assignment_conditions(candidate),
+            teacher=candidate,
             table=store,
         )
     except HelpRequestConflict:
@@ -900,16 +908,13 @@ def _end(
             condition="escalation_status = :pending AND attribute_not_exists(teacher_id)",
             values={":pending": PENDING},
         )
-        rows = [
-            account_deletion_repo.active_fence_condition(
-                owner, _int(record.get("account_fence_generation"), 1)
-            ),
-            update,
-        ]
+        generation = _int(record.get("account_fence_generation"), 1)
 
         def persist(refund_operations: tuple[dict[str, Any], ...]) -> bool:
             try:
-                db_table.transact([*rows, *refund_operations], table=store)
+                db_table.fenced(
+                    owner, [update, *refund_operations], generation=generation, table=store
+                )
             except Exception:  # noqa: BLE001 - every refusal means something moved
                 return False
             return True
@@ -1050,8 +1055,9 @@ def _advance(
         changes,
         condition=condition,
         values=values,
-        extra=(*_teacher_standing_conditions(teacher_id, store), *reply_operations),
+        extra=reply_operations,
         fence=True,
+        teacher=_teacher_standing(teacher_id, store),
         table=store,
     )
 
@@ -1163,7 +1169,7 @@ def reply(
     reply_operations = (
         learning_session.build_conversation_write_transaction(
             item=note_row, owner_id=student_id, generation=generation
-        )[1],
+        )[0],
         message_put,
         *image_operations,
     )
@@ -1286,8 +1292,8 @@ def _id_list(value: Any) -> list[Any]:
     return [value]
 
 
-def _teacher_standing_conditions(teacher_id: str, table: Any) -> tuple[dict[str, Any], ...]:
-    """Bind the acting teacher's active fence and exact current profile."""
+def _teacher_standing(teacher_id: str, table: Any) -> dict[str, Any]:
+    """The acting teacher's active fence and exact current profile, as a dispatch candidate."""
     try:
         response = table.get_item(Key={"PK": f"USER#{teacher_id}", "SK": "PROFILE"}, ConsistentRead=True)
         profile = response.get("Item") if isinstance(response, Mapping) else None
@@ -1299,14 +1305,12 @@ def _teacher_standing_conditions(teacher_id: str, table: Any) -> tuple[dict[str,
     role = str(profile.get("role") or "").lower()
     if role not in teacher_dispatch_service.ELIGIBLE_ROLES:
         raise HelpRequestConflict("profile cannot take teacher help requests")
-    return teacher_dispatch_service.teacher_assignment_conditions(
-        {
-            "teacherId": teacher_id,
-            "role": str(profile.get("role")),
-            "accountFenceGeneration": int(fence["generation"]),
-            "profileVersion": _int(profile.get("version"), 0),
-        }
-    )
+    return {
+        "teacherId": teacher_id,
+        "role": str(profile.get("role")),
+        "accountFenceGeneration": int(fence["generation"]),
+        "profileVersion": _int(profile.get("version"), 0),
+    }
 
 
 # ── The sweep ────────────────────────────────────────────────────────────────
@@ -1493,26 +1497,38 @@ def _write(
     values: Mapping[str, Any] | None = None,
     extra: Sequence[dict[str, Any]] = (),
     fence: bool = False,
+    teacher: Mapping[str, Any] | None = None,
     table: Any,
 ) -> dict[str, Any]:
     """Write one change to the record (and ``extra``) in one transaction.
 
-    ``fence`` adds the student's active account fence, for writes that put
-    rows in the student's conversation. Returns the record as written.
+    ``fence`` holds it behind the student's active account fence, for writes
+    that put rows in the student's conversation. ``teacher``, a `plan_dispatch`
+    candidate, binds the teacher's profile and holds it behind the teacher's
+    fence too. Returns the record as written.
     """
-    operations: list[dict[str, Any]] = []
+    fences: dict[str, int] = {}
     if fence:
-        operations.append(
-            account_deletion_repo.active_fence_condition(
-                str(record.get("student_id") or ""), _int(record.get("account_fence_generation"), 1)
-            )
-        )
-    operations.append(
+        fences[str(record.get("student_id") or "")] = _int(record.get("account_fence_generation"), 1)
+    operations = [
         _update_operation(record, changes, remove=remove, condition=condition, values=values)
-    )
+    ]
+    if teacher is not None:
+        fences[str(teacher["teacherId"])] = int(teacher["accountFenceGeneration"])
+        operations.extend(teacher_dispatch_service.teacher_assignment_conditions(dict(teacher)))
     operations.extend(extra)
     try:
-        db_table.transact(operations, table=table)
+        if fences:
+            owner, *others = fences
+            db_table.fenced(
+                owner,
+                operations,
+                generation=fences[owner],
+                also={account: fences[account] for account in others},
+                table=table,
+            )
+        else:
+            db_table.transact(operations, table=table)
     except Exception as exc:  # noqa: BLE001 - every refusal means the request moved on
         raise HelpRequestConflict("help request changed before the write") from exc
     written = {key_: value for key_, value in record.items() if key_ not in remove or key_ in changes}

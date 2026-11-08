@@ -169,7 +169,6 @@ def build_curriculum_signal_transaction(
     signal_field = f"signal_{signal['signal_type']}_count"
     source_field = f"source_{signal['source_type']}_count"
     return [
-        account_deletion_repo.active_fence_condition(student_id, generation),
         {
             "Put": {
                 "Item": signal,
@@ -232,12 +231,12 @@ def record_student_signal(
         student_id=student_id, generation=generation, item=item
     )
     if _atomic_table(target):
-        db_table.transact(operations, table=target)
+        db_table.fenced(student_id, operations, generation=generation, table=target)
     else:
         # Compatibility for focused unit fakes; production always uses one transaction.
-        first_put = _mapping(operations[1].get("Put"))
-        second_put = _mapping(operations[2].get("Put"))
-        update = _mapping(operations[3].get("Update"))
+        first_put = _mapping(operations[0].get("Put"))
+        second_put = _mapping(operations[1].get("Put"))
+        update = _mapping(operations[2].get("Update"))
         _put_item(target, Item=_mapping(first_put.get("Item")))
         _put_item(target, Item=_mapping(second_put.get("Item")))
         _update_item(target, **update)

@@ -276,8 +276,9 @@ def test_registration_atomically_creates_three_distinct_rows_behind_parent_fence
 
     assert result.disposition is checkout_command_repo.CheckoutCommandDisposition.CREATED
     assert result.command is not None
-    operations = result.operations
+    operations = table.transactions[-1]
     assert len(operations) == 4
+    assert list(result.operations) == operations[1:]
     assert operations[0]["ConditionCheck"]["Key"] == {
         "PK": "USER#parent-private-canary",
         "SK": "ACCOUNT_FENCE",

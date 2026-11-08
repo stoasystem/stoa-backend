@@ -10,6 +10,9 @@ there is one of each:
 - `transact(operations)`: operations in the repositories' own shape - plain Python
   values, no `TableName` - serialized once, sent once. `Item`, `Key` and
   `ExpressionAttributeValues` lose their `None` members, always.
+- `fenced(owner, operations)`: the same, behind the owner's account fence - the
+  fence read, its condition put in front, a refused fence reported as the account
+  not being writable rather than as the caller's own operations failing.
 - Two outcomes besides success. `WriteRefused`: the table read the transaction and
   turned it down, and says why for each operation. `TableUnavailable`: the table
   could not be asked, or did not answer in a shape that says anything. A repository
@@ -24,11 +27,11 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from functools import lru_cache
-from typing import Any
+from typing import Any, cast
 
 import boto3
 from boto3.dynamodb.types import TypeSerializer
@@ -241,6 +244,85 @@ def transact(operations: Iterable[Operation], *, table: object | None = None) ->
     except BotoCoreError as exc:
         logger.warning("table_unavailable code=%s", type(exc).__name__)
         raise TableUnavailable(type(exc).__name__) from exc
+
+
+# -- a write behind an account's fence ------------------------------------------------
+
+type Operations = Iterable[Operation] | Callable[[int], Iterable[Operation]]
+
+
+def fenced(
+    owner: str,
+    operations: Operations,
+    *,
+    generation: int | None = None,
+    any_generation: bool = False,
+    also: Mapping[str, int | None] | None = None,
+    table: object | None = None,
+) -> None:
+    """Commit `operations` only while `owner`'s account fence is active.
+
+    Every private write is made behind the fence its owner's account deletion
+    flips, so a write and a deletion cannot both win. A caller names the owner and
+    its own operations; this reads the fence, puts its condition in front of them
+    and sends the transaction.
+
+    - `generation`: the fence generation the caller already holds (stamped on a
+      row it read, or read earlier in the same request). The fence is then not
+      read again: the condition alone says whether it still holds.
+    - `any_generation`: neither read the fence nor hold it to a generation; the
+      condition asks only that it be active. For a best-effort write that must
+      not cost a read of its own (the sign-in time stamp).
+    - `operations` may be a function of the generation, for rows that carry it.
+    - `also`: other accounts whose fences must hold in the same transaction,
+      each with its generation or `None` to read it.
+
+    Outcomes besides success: `AccountNotWritable` (an `AccountDeletionConflict`)
+    when a fence is missing, not active or not the expected generation - whether
+    the read said so or the transaction did. `WriteRefused` when the caller's own
+    operations were refused; its `reasons` line up with them, the fence checks
+    taken out, and are empty when they cannot be told apart. `TableUnavailable`
+    as from `transact`.
+    """
+    fences = _account_fences()
+    if any_generation and (generation is not None or callable(operations)):
+        raise ValueError("a write under any generation neither holds nor stamps one")
+    owners = {owner: generation, **(also or {})}
+    if len(owners) != 1 + len(also or {}):
+        raise ValueError("an account's fence can be held only once in a transaction")
+    generations: dict[str, int | None] = {
+        account: known
+        if known is not None or (account == owner and any_generation)
+        else int(fences.require_active_account_fence(account, table=table)["generation"])
+        for account, known in owners.items()
+    }
+    own = list(operations(cast(int, generations[owner])) if callable(operations) else operations)
+    conditions = [
+        fences.active_fence_condition(account, held) for account, held in generations.items()
+    ]
+    try:
+        transact([*conditions, *own], table=table)
+    except WriteRefused as exc:
+        fence_reasons, own_reasons = exc.reasons[: len(conditions)], exc.reasons[len(conditions) :]
+        kinds = {reason.kind for reason in fence_reasons}
+        if ReasonKind.CONDITION_FAILED in kinds:
+            raise fences.AccountNotWritable("account is not writable") from exc
+        if kinds - {ReasonKind.NOT_THE_CAUSE}:
+            # The fence row itself was busy or throttled: the caller's reasons
+            # alone would say nothing went wrong with its operations.
+            own_reasons = ()
+        raise WriteRefused(exc.code, own_reasons) from exc
+
+
+def _account_fences() -> Any:
+    """The account fence's row, condition, read and conflict.
+
+    They belong to the account deletion flow, which writes through this module,
+    so it is imported when a fenced write first needs it.
+    """
+    from stoa.db.repositories import account_deletion_repo
+
+    return account_deletion_repo
 
 
 def _serialize(operation: Operation, table_name: str) -> dict[str, object]:

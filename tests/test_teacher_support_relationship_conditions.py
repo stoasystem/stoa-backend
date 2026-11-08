@@ -45,7 +45,11 @@ def _scope(**overrides: Any) -> allowance._ResolvedScope:
 
 def _checks(scope: allowance._ResolvedScope) -> dict[tuple[str, str], dict[str, Any]]:
     checks: dict[tuple[str, str], dict[str, Any]] = {}
-    for operation in allowance._grant_condition_operations(scope):
+    operations, fences = allowance._grant_condition_operations(scope)
+    # The parent's account fence travels beside the conditions, for the case
+    # repository to write behind (#297).
+    assert fences == {scope.parent_id: scope.grant["parent_account_fence_generation"]}
+    for operation in operations:
         body = operation.get("ConditionCheck")
         if body is not None:
             checks[(body["Key"]["PK"], body["Key"]["SK"])] = body

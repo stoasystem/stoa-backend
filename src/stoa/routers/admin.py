@@ -2324,15 +2324,10 @@ def _require_password_change_at_next_sign_in(
         expected_version=profile.get("version"),
     )
     try:
-        fence = account_deletion_repo.require_active_account_fence(user_id)
-        db_table.transact(
-            [
-                account_deletion_repo.active_fence_condition(
-                    user_id, int(fence.get("generation") or 0)
-                ),
-                operation,
-            ],
-            # The table the fence above was read from.
+        db_table.fenced(
+            user_id,
+            [operation],
+            # The table the fence is read from.
             table=account_deletion_repo.get_table(),
         )
     except (

@@ -16,7 +16,7 @@ from enum import StrEnum
 
 from botocore.exceptions import ClientError
 
-from stoa.db.repositories import account_deletion_repo, attachment_repo
+from stoa.db.repositories import attachment_repo
 
 
 class MessageCommandDisposition(StrEnum):
@@ -382,12 +382,6 @@ def build_message_command_claim_transaction(
     }
     return [
         attachment_repo.TransactionOperation(
-            attachment_repo.TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
-            account_deletion_repo.active_fence_condition(
-                owner_id, account_fence_generation
-            ),
-        ),
-        attachment_repo.TransactionOperation(
             attachment_repo.TransactionOperationKind.MESSAGE_COMMAND_PUT,
             {
                 "Put": {
@@ -608,7 +602,12 @@ def claim_message_command_and_quota(
             account_fence_generation=account_fence_generation,
         )
         try:
-            attachment_repo.transact(operations, table=target)
+            attachment_repo.transact(
+                operations,
+                table=target,
+                owner=owner_id,
+                generation=account_fence_generation,
+            )
         except attachment_repo.AttachmentTransactionError as exc:
             if exc.outcome is attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY:
                 return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
@@ -743,10 +742,6 @@ def claim_message_ai_lease(
         attachment_repo.transact(
             [
                 attachment_repo.TransactionOperation(
-                    attachment_repo.TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
-                    account_deletion_repo.active_fence_condition(owner_id, generation),
-                ),
-                attachment_repo.TransactionOperation(
                     attachment_repo.TransactionOperationKind.MESSAGE_COMMAND_UPDATE,
                     {
                         "Update": {
@@ -789,6 +784,8 @@ def claim_message_ai_lease(
                 ),
             ],
             table=target,
+            owner=owner_id,
+            generation=generation,
         )
     except attachment_repo.AttachmentTransactionError as exc:
         if exc.outcome is attachment_repo.AttachmentTransactionOutcome.CONCEALED_RESOURCE_CONFLICT:
@@ -866,12 +863,6 @@ def complete_message_command(
     ):
         return MessageCommandResult(MessageCommandDisposition.RETRYABLE)
     operations = [
-        attachment_repo.TransactionOperation(
-            attachment_repo.TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
-            account_deletion_repo.active_fence_condition(
-                owner_id, account_fence_generation
-            ),
-        ),
         # The answer's own put, as `learning_session.append` made it (#227).
         attachment_repo.TransactionOperation(
             attachment_repo.TransactionOperationKind.ASSISTANT_MESSAGE_PUT,
@@ -918,7 +909,9 @@ def complete_message_command(
         ),
     ]
     try:
-        attachment_repo.transact(operations, table=table)
+        attachment_repo.transact(
+            operations, table=table, owner=owner_id, generation=account_fence_generation
+        )
     except attachment_repo.AttachmentTransactionError:
         try:
             command = get_message_command(
@@ -1408,12 +1401,6 @@ def renew_message_ai_lease(
         attachment_repo.transact(
             [
                 attachment_repo.TransactionOperation(
-                    attachment_repo.TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
-                    account_deletion_repo.active_fence_condition(
-                        owner_id, account_fence_generation
-                    ),
-                ),
-                attachment_repo.TransactionOperation(
                     attachment_repo.TransactionOperationKind.MESSAGE_COMMAND_UPDATE,
                     {
                         "Update": {
@@ -1437,6 +1424,8 @@ def renew_message_ai_lease(
                 ),
             ],
             table=table,
+            owner=owner_id,
+            generation=account_fence_generation,
         )
     except attachment_repo.AttachmentTransactionError as exc:
         if exc.outcome is attachment_repo.AttachmentTransactionOutcome.CONCEALED_RESOURCE_CONFLICT:
