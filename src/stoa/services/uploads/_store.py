@@ -10,7 +10,6 @@ operation fence a takeover replaces. The shared DynamoDB helpers stay in
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime
 
 from botocore.exceptions import ClientError
 
@@ -408,7 +407,7 @@ def list_upload_cleanup_candidates(
             "begins_with(PK,:upload) AND SK=:meta AND ("
             "#status IN (:invalid,:expired,:cleanup_pending) OR ("
             "#status IN (:pending,:validating,:validated,:issuing,:assembling,:promoting) "
-            "AND " + PAST_USABLE + "))"
+            "AND " + PAST_USABLE + " AND " + LEASE_LAPSED + "))"
         ),
         "ExpressionAttributeNames": {"#status": "status"},
         "ExpressionAttributeValues": {
@@ -453,7 +452,9 @@ def claim_upload_cleanup(
     """Conditionally make one eligible intent non-consumable for cleanup.
 
     Eligible is refused or already claimed, or any other unspent state once its
-    usable window is over.
+    usable window is over and no operation lease is still live on it: a worker
+    holding one may still have a provider write in flight, which no fence stops
+    (#268).
     """
     return _apply(
         _transition_request(
@@ -463,7 +464,7 @@ def claim_upload_cleanup(
             condition=(
                 "#status IN (:invalid,:expired,:cleanup_pending) OR ("
                 "#status IN (:pending,:validating,:validated,:issuing,:assembling,:promoting) "
-                "AND " + PAST_USABLE + ")"
+                "AND " + PAST_USABLE + " AND " + LEASE_LAPSED + ")"
             ),
             values={
                 ":invalid": UploadStatus.INVALID.value,
@@ -533,7 +534,9 @@ def advance_upload_cleanup_reference_scan(
     )
 
 
-def block_upload_cleanup(upload_id: str, version: int, *, table: object | None = None) -> bool:
+def block_upload_cleanup(
+    upload_id: str, version: int, *, now_epoch: int, table: object | None = None
+) -> bool:
     return _cleanup_update(
         upload_id,
         version,
@@ -542,7 +545,7 @@ def block_upload_cleanup(upload_id: str, version: int, *, table: object | None =
         {
             ":blocked": "cleanup_blocked",
             ":next": version + 1,
-            ":retire": _retire_at(),
+            ":retire": _retire_at(now_epoch),
         },
         table=table,
     )
@@ -553,6 +556,7 @@ def complete_upload_cleanup(
     version: int,
     cleaned_at: str,
     *,
+    now_epoch: int,
     table: object | None = None,
 ) -> bool:
     return (
@@ -567,7 +571,7 @@ def complete_upload_cleanup(
                     "cleanup_immutable_deleted=:true AND cleanup_parts_absent=:true"
                 ),
                 values={":true": True},
-                attributes={"cleaned_at": cleaned_at, "expires_at": _retire_at()},
+                attributes={"cleaned_at": cleaned_at, "expires_at": _retire_at(now_epoch)},
                 remove=(
                     "staging_object_key", "staging_version_id", "staging_etag",
                     "multipart_upload_id", "immutable_object_key", "immutable_version_id",
@@ -1025,6 +1029,10 @@ USABLE = "(usable_until > :now OR (attribute_not_exists(usable_until) AND expire
 PAST_USABLE = (
     "(usable_until <= :now OR (attribute_not_exists(usable_until) AND expires_at <= :now))"
 )
+# No operation is under way on the row: none was leased, or its lease has run out.
+LEASE_LAPSED = (
+    "(attribute_not_exists(operation_lease_expires_at) OR operation_lease_expires_at <= :now)"
+)
 
 
 def usable_until(item: Mapping[str, object]) -> int:
@@ -1035,9 +1043,9 @@ def usable_until(item: Mapping[str, object]) -> int:
     return _required_integer(stored)
 
 
-def _retire_at() -> int:
-    """When an upload row that has just ended leaves the table, by its TTL."""
-    return int(datetime.now(UTC).timestamp()) + UPLOAD_ROW_RETENTION_SECONDS
+def _retire_at(now_epoch: int) -> int:
+    """When an upload row that ends at `now_epoch` leaves the table, by its TTL."""
+    return now_epoch + UPLOAD_ROW_RETENTION_SECONDS
 
 
 def _transition_request(

@@ -38,7 +38,12 @@ class MultipartS3:
     def create_multipart_upload(self, **kwargs: Any) -> dict[str, Any]:
         assert kwargs["Bucket"] == self.bucket and kwargs["ChecksumAlgorithm"] == "SHA256"
         upload_id = f"mp-{len(self.uploads) + 1}"
-        self.uploads[upload_id] = {"Key": kwargs["Key"], "parts": {}}
+        # S3 gives the completed object the metadata the upload was created with.
+        self.uploads[upload_id] = {
+            "Key": kwargs["Key"],
+            "Metadata": dict(kwargs.get("Metadata") or {}),
+            "parts": {},
+        }
         return {"UploadId": upload_id}
 
     def generate_presigned_url(self, ClientMethod: str, Params: dict[str, Any], ExpiresIn: int, HttpMethod: str) -> str:
@@ -76,7 +81,7 @@ class MultipartS3:
             if index < len(listed) - 1:
                 assert part["Size"] >= MIN_PART_BYTES, "EntityTooSmall"
             data += part["data"]
-        return self._store(kwargs["Key"], data, {"upload-id": "staging"})
+        return self._store(kwargs["Key"], data, upload["Metadata"])
 
     def abort_multipart_upload(self, **kwargs: Any) -> dict[str, Any]:
         self.uploads.pop(kwargs["UploadId"], None)

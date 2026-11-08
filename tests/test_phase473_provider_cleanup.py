@@ -187,7 +187,7 @@ class StatefulCleanupRepository:
     def advance_upload_cleanup_reference_scan(self, upload_id, version, cursor):
         return self._advance(upload_id, version, cleanup_reference_cursor=cursor)
 
-    def block_upload_cleanup(self, upload_id, version):
+    def block_upload_cleanup(self, upload_id, version, *, now_epoch):
         return self._advance(upload_id, version, status="cleanup_blocked")
 
     def defer_cleanup_reconciliation(
@@ -241,7 +241,7 @@ class StatefulCleanupRepository:
             upload_id, version, immutable_version_id=version_id, immutable_etag=etag
         )
 
-    def complete_upload_cleanup(self, upload_id, version, cleaned_at):
+    def complete_upload_cleanup(self, upload_id, version, cleaned_at, *, now_epoch):
         value = self.uploads[upload_id]
         required = (
             "cleanup_multipart_aborted",
@@ -579,7 +579,12 @@ def test_repository_candidate_policy_never_uses_operation_lease_as_ttl() -> None
     upload_store.list_upload_cleanup_candidates(NOW_EPOCH, limit=10, table=table)
 
     assert table.scan_request is not None
-    assert "operation_lease_expires_at" not in table.scan_request["FilterExpression"]
+    # The lease never makes a row eligible: it may only hold an unspent row back
+    # past its usable window while an operation is live on it (#268).
+    expression = table.scan_request["FilterExpression"]
+    lease_condition = f"{upload_store.PAST_USABLE} AND {upload_store.LEASE_LAPSED}"
+    assert lease_condition in expression
+    assert expression.replace(lease_condition, "").count("operation_lease_expires_at") == 0
 
 
 def test_job_isolates_candidate_failure_and_preserves_continuation(monkeypatch) -> None:
