@@ -322,6 +322,15 @@ async def get_deletion_command(
 
 async def get_current_user(actor: Actor = Depends(get_actor)) -> dict[str, Any]:
     """Read-only legacy projection for handlers awaiting typed Actor migration."""
+    return legacy_user(actor)
+
+
+def legacy_user(actor: Actor) -> dict[str, Any]:
+    """The claims dict that services not yet taking an `Actor` still read.
+
+    A handler that already holds the `Actor` hands this on to such a service; it
+    never reads an id or a role back out of it.
+    """
     capabilities = {
         grant.capability: "granted"
         for grant in actor.current_grants

@@ -1,26 +1,24 @@
 """Admin routes — user management, report operations, and platform statistics."""
-import base64
-import json
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from functools import lru_cache, partial
-from typing import Annotated, Any, Literal, Optional, Protocol, runtime_checkable
+from typing import Annotated, Any, Literal, Optional
 from uuid import uuid4
 
 import boto3
-from boto3.dynamodb.conditions import Attr, Key
 from fastapi import APIRouter, Body, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import Response
 
 from stoa.config import Settings, get_settings
 from stoa.db.dynamodb import get_table
-from stoa.deps import get_s3_client
+from stoa.deps import get_s3_client, legacy_user
 from stoa.db.repositories import (
     account_deletion_repo,
     account_invitation_repo,
     checkout_command_repo,
     parent_link_repo,
+    question_repo,
     report_repo,
     security_audit_repo,
     user_repo,
@@ -35,7 +33,7 @@ from stoa.security.admin_authorization import (
     admin_target_provider,
 )
 from stoa.security.errors import SecurityDecisionError, SecurityErrorCode
-from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD, AccountStatus
+from stoa.security.identity import MUST_CHANGE_PASSWORD_FIELD, AccountStatus, Actor
 from stoa.models.practice import DEFAULT_CHALLENGE_TYPE
 from stoa.models.question import QuestionStatus
 from stoa.models.moderation import (
@@ -87,16 +85,6 @@ router = APIRouter()
 type AdminItem = dict[str, object]
 
 
-@runtime_checkable
-class _ScanTable(Protocol):
-    def scan(self, **kwargs: object) -> object: ...
-
-
-@runtime_checkable
-class _QueryTable(Protocol):
-    def query(self, **kwargs: object) -> object: ...
-
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -110,18 +98,6 @@ def _admin_mapping(value: object) -> AdminItem:
             raise RuntimeError("admin data dependency unavailable")
         result[key] = member
     return result
-
-
-def _admin_scan(table: object, **kwargs: object) -> AdminItem:
-    if not isinstance(table, _ScanTable):
-        raise RuntimeError("admin data dependency unavailable")
-    return _admin_mapping(table.scan(**kwargs))
-
-
-def _admin_query(table: object, **kwargs: object) -> AdminItem:
-    if not isinstance(table, _QueryTable):
-        raise RuntimeError("admin data dependency unavailable")
-    return _admin_mapping(table.query(**kwargs))
 
 
 def _admin_items(response: Mapping[str, object]) -> list[AdminItem]:
@@ -138,38 +114,10 @@ def _admin_cursor(response: Mapping[str, object]) -> AdminItem | None:
     return _admin_mapping(raw_cursor)
 
 
-def _admin_scan_every_page(
-    table: object, *, page_budget: int, **kwargs: object
-) -> tuple[list[AdminItem], bool]:
-    """Every row the filter admits, and whether the walk finished.
-
-    A single scan answers from at most one megabyte of rows read, so on any table
-    past that size one call is a sample and not a census. Counting from a sample
-    produces a number that looks like an answer, which is worse than no number.
-    """
-    rows: list[AdminItem] = []
-    request = dict(kwargs)
-    for _page in range(page_budget):
-        result = _admin_scan(table, **request)
-        rows.extend(_admin_items(result))
-        cursor = _admin_cursor(result)
-        if not cursor:
-            return rows, True
-        request["ExclusiveStartKey"] = cursor
-    return rows, False
-
-
 def _admin_required_text(value: object) -> str:
     if not isinstance(value, str) or not value:
         raise RuntimeError("admin data dependency unavailable")
     return value
-
-# All historical role dependencies below resolve through the exact registered
-# method/path capability table.  The name remains local only to keep the route
-# signatures stable while removing role as authority.
-def require_role(*_roles: str):
-    return admin_operation
-
 
 CURRICULUM_DRAFT_TARGET = AdminTargetProvider(
     "scalar", "body", ("publicLessonId",), ("public_lesson_id",),
@@ -270,16 +218,11 @@ class TeacherSupportAllowanceCommand(BaseModel):
 @router.get("/teacher-support/allowances/{student_id}")
 async def read_teacher_support_allowance(
     student_id: str,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """How many teacher-support cases this student has in a week, and from where."""
-    del user
-    # The same 404 the write gives. Answering "7, by default" for an id that is
-    # not an account made "look it up, then change it" contradict itself.
-    profile = _account_profile_or_404(student_id)
-    if str(profile.get("role") or "") != "student":
-        raise AccountViolation(AccountErrorCode.ACCOUNT_NOT_A_STUDENT)
-    assigned = teacher_support_allowance_service.read_assigned_weekly_cases(
+    del actor
+    assigned = teacher_support_allowance_service.read_administered_weekly_cases(
         student_id, table=get_table()
     )
     return {
@@ -295,7 +238,7 @@ async def read_teacher_support_allowance(
 async def set_teacher_support_allowance(
     student_id: str,
     body: TeacherSupportAllowanceCommand,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Set this student's weekly figure, replacing whatever it was.
 
@@ -304,32 +247,8 @@ async def set_teacher_support_allowance(
     fences the same version, so a case can never be spent against a figure that
     was replaced between reading it and writing the case.
     """
-    profile = _account_profile_or_404(student_id)
-    if str(profile.get("role") or "") != "student":
-        raise AccountViolation(AccountErrorCode.ACCOUNT_NOT_A_STUDENT)
-
-    written = teacher_support_allowance_service.set_assigned_weekly_cases(
-        student_id,
-        body.weekly_cases,
-        actor_id=str(user.get("sub") or user.get("user_id") or ""),
-        table=get_table(),
-    )
-    if (
-        written.disposition
-        is teacher_support_allowance_service.AssignedCasesDisposition.VERSION_CONFLICT
-    ):
-        # A concurrent administrator got there first. Their figure stands; this
-        # one is refused rather than silently overwriting it.
-        raise AccountViolation(AccountErrorCode.ALLOWANCE_VERSION_CONFLICT)
-    next_version = written.state_version
-
-    _record_account_admin_event(
-        actor=user,
-        target_id=student_id,
-        event_type="teacher_support_allowance_set",
-        action="set_teacher_support_allowance",
-        reason_code="teacher_support_allowance_set",
-        evidence_reference=f"weekly_cases={body.weekly_cases};state_version={next_version}",
+    next_version = teacher_support_allowance_service.administer_weekly_cases(
+        student_id, body.weekly_cases, actor=actor, table=get_table()
     )
     return {
         "studentId": student_id,
@@ -373,12 +292,12 @@ def get_privileged_identity_provider(settings: Settings = Depends(get_settings))
 @router.post("/privileged-identities/admins")
 def provision_privileged_admin(
     payload: AdminProvisionCommand,
-    user: dict[str, Any] = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
     provider: Any = Depends(get_privileged_identity_provider),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     return privileged_identity_service.provision_admin(
-        actor=user,
+        actor=actor,
         provider=provider,
         user_pool_id=settings.cognito_user_pool_id,
         **payload.model_dump(),
@@ -389,12 +308,12 @@ def provision_privileged_admin(
 def change_privileged_admin_status(
     target_id: str,
     payload: AdminStatusCommand,
-    user: dict[str, Any] = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
     provider: Any = Depends(get_privileged_identity_provider),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     return privileged_identity_service.change_admin_status(
-        actor=user,
+        actor=actor,
         target_id=target_id,
         provider=provider,
         user_pool_id=settings.cognito_user_pool_id,
@@ -406,10 +325,10 @@ def change_privileged_admin_status(
 def grant_privileged_capability(
     target_id: str,
     payload: CapabilityGrantCommand,
-    user: dict[str, Any] = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ) -> dict[str, Any]:
     return privileged_identity_service.grant_capability(
-        actor=user,
+        actor=actor,
         target_id=target_id,
         **payload.model_dump(),
     )
@@ -419,10 +338,10 @@ def grant_privileged_capability(
 def revoke_privileged_capability(
     target_id: str,
     payload: CapabilityTransitionCommand,
-    user: dict[str, Any] = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ) -> dict[str, Any]:
     return privileged_identity_service.revoke_capability(
-        actor=user,
+        actor=actor,
         target_id=target_id,
         **payload.model_dump(),
     )
@@ -432,10 +351,10 @@ def revoke_privileged_capability(
 def restore_privileged_capability(
     target_id: str,
     payload: CapabilityTransitionCommand,
-    user: dict[str, Any] = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ) -> dict[str, Any]:
     return privileged_identity_service.restore_capability(
-        actor=user,
+        actor=actor,
         target_id=target_id,
         **payload.model_dump(),
     )
@@ -1141,7 +1060,7 @@ async def list_moderation_cases(
     assignee: Optional[str] = Query(default=None),
     date_from: Optional[str] = Query(default=None),
     date_to: Optional[str] = Query(default=None),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """One page of moderation cases, newest first, for internal operations."""
     page = moderation_service.list_cases(
@@ -1165,7 +1084,7 @@ async def list_moderation_cases(
 @router.get("/moderation/cases/{case_id}", response_model=ModerationCaseResponse)
 async def get_moderation_case(
     case_id: str,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Open a moderation case with context and audit history."""
     return moderation_service.get_case(case_id)
@@ -1181,7 +1100,7 @@ async def get_moderation_case(
 )
 async def get_moderation_case_image(
     case_id: str,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
     s3=Depends(get_s3_client),
     settings: Settings = Depends(get_settings),
 ):
@@ -1204,27 +1123,27 @@ async def get_moderation_case_image(
 async def update_moderation_case(
     case_id: str,
     body: ModerationCaseUpdateRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Assign, transition, or resolve a moderation case."""
-    return moderation_service.update_case(case_id, body, user)
+    return moderation_service.update_case(case_id, body, legacy_user(actor))
 
 
 @router.post("/moderation/cases/{case_id}/notes", response_model=ModerationCaseResponse)
 async def add_moderation_case_note(
     case_id: str,
     body: ModerationCaseNoteRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Append an internal moderation note."""
-    return moderation_service.add_note(case_id, body, user)
+    return moderation_service.add_note(case_id, body, legacy_user(actor))
 
 
 @router.get("/curriculum/worklist", response_model=CurriculumWorklistResponse)
 async def list_curriculum_authoring_worklist(
     status: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=200),
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """List internal curriculum authoring items awaiting operational action."""
     return curriculum_ops_service.list_worklist(status=status, limit=limit)
@@ -1236,7 +1155,7 @@ async def get_curriculum_content_quality(
     subject_id: str | None = Query(default=None, alias="subjectId"),
     topic_id: str | None = Query(default=None, alias="topicId"),
     limit: int = Query(default=100, ge=1, le=200),
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Return aggregate-only curriculum quality metrics for operators."""
     return curriculum_analytics_service.content_quality_summary(
@@ -1249,7 +1168,7 @@ async def get_curriculum_content_quality(
 
 @router.get("/curriculum/analytics/warehouse-readiness", response_model=CurriculumWarehouseReadinessResponse)
 async def get_curriculum_warehouse_readiness(
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Return local warehouse analytics readiness without requiring live BI infrastructure."""
     return curriculum_analytics_service.warehouse_readiness()
@@ -1261,7 +1180,7 @@ async def get_curriculum_warehouse_export(
     subject_id: str | None = Query(default=None, alias="subjectId"),
     topic_id: str | None = Query(default=None, alias="topicId"),
     limit: int = Query(default=100, ge=1, le=250),
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Return bounded aggregate rows shaped for future warehouse ingestion."""
     return curriculum_analytics_service.warehouse_export(
@@ -1277,7 +1196,7 @@ async def get_curriculum_analytics_dashboard(
     subject_id: str | None = Query(default=None, alias="subjectId"),
     topic_id: str | None = Query(default=None, alias="topicId"),
     limit: int = Query(default=100, ge=1, le=250),
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Return aggregate operator dashboard signals for curriculum and sequencing health."""
     return curriculum_analytics_service.operator_dashboard(
@@ -1291,21 +1210,21 @@ async def get_curriculum_analytics_dashboard(
 @admin_target_provider(CURRICULUM_DRAFT_TARGET)
 async def create_curriculum_lesson_draft(
     body: CurriculumLessonDraftRequest,
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Create an internal lesson-plus-exercises authoring draft."""
-    return curriculum_ops_service.create_lesson_draft(body.model_dump(by_alias=False), user)
+    return curriculum_ops_service.create_lesson_draft(body.model_dump(by_alias=False), legacy_user(actor))
 
 
 @router.patch("/curriculum/units/{unit_id}", response_model=CurriculumUnitResponse)
 async def patch_curriculum_unit_prerequisites(
     unit_id: str,
     body: CurriculumUnitPrerequisitesRequest,
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Replace one unit's prerequisite relations; units are created by the seed only."""
     return curriculum_ops_service.patch_unit_prerequisites(
-        unit_id, body.model_dump(by_alias=False), user
+        unit_id, body.model_dump(by_alias=False), legacy_user(actor)
     )
 
 
@@ -1315,10 +1234,10 @@ async def patch_curriculum_unit_prerequisites(
 )
 async def dry_run_curriculum_migration(
     manifest: dict[str, Any] = Body(...),
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Validate a curriculum migration manifest without mutating content state."""
-    return curriculum_migration_service.dry_run(manifest, user)
+    return curriculum_migration_service.dry_run(manifest, legacy_user(actor))
 
 
 @router.post(
@@ -1328,14 +1247,14 @@ async def dry_run_curriculum_migration(
 async def apply_curriculum_migration(
     migration_id: str,
     body: CurriculumMigrationApplyRequest,
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Apply a confirmed curriculum migration manifest and persist evidence."""
     return curriculum_migration_service.apply_migration(
         migration_id,
         body.manifest,
         body.confirmation_token,
-        user,
+        legacy_user(actor),
     )
 
 
@@ -1345,17 +1264,17 @@ async def apply_curriculum_migration(
 )
 async def read_curriculum_migration(
     migration_id: str,
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Read evidence for an applied curriculum migration."""
-    return curriculum_migration_service.get_migration(migration_id, user)
+    return curriculum_migration_service.get_migration(migration_id, legacy_user(actor))
 
 
 @router.get("/curriculum/lessons/{public_lesson_id}/preview", response_model=CurriculumVersionResponse)
 async def preview_curriculum_lesson_version(
     public_lesson_id: str,
     version_id: str = Query(..., alias="versionId"),
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Preview an unpublished curriculum version without changing student reads."""
     return curriculum_ops_service.preview_lesson(public_lesson_id, version_id)
@@ -1366,14 +1285,14 @@ async def diff_curriculum_lesson_versions(
     public_lesson_id: str,
     from_version_id: str = Query(..., alias="fromVersionId"),
     to_version_id: str = Query(..., alias="toVersionId"),
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Return a bounded structural diff between two curriculum versions."""
     return curriculum_ops_service.diff_lesson_versions(
         public_lesson_id,
         from_version_id,
         to_version_id,
-        user,
+        legacy_user(actor),
     )
 
 
@@ -1381,10 +1300,10 @@ async def diff_curriculum_lesson_versions(
 async def read_curriculum_lesson_audit(
     public_lesson_id: str,
     limit: int = Query(default=50, ge=1, le=100),
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Read bounded lifecycle audit events for one curriculum lesson."""
-    return curriculum_ops_service.audit_lesson(public_lesson_id, user, limit=limit)
+    return curriculum_ops_service.audit_lesson(public_lesson_id, legacy_user(actor), limit=limit)
 
 
 @router.patch(
@@ -1395,10 +1314,10 @@ async def patch_curriculum_lesson_draft(
     public_lesson_id: str,
     version_id: str,
     body: dict[str, Any] = Body(default_factory=dict),
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Patch a draft curriculum lesson without changing published student reads."""
-    return curriculum_ops_service.patch_lesson_draft(public_lesson_id, version_id, body, user)
+    return curriculum_ops_service.patch_lesson_draft(public_lesson_id, version_id, body, legacy_user(actor))
 
 
 @router.post(
@@ -1408,10 +1327,10 @@ async def patch_curriculum_lesson_draft(
 async def preview_curriculum_lesson_validation(
     public_lesson_id: str,
     version_id: str,
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Validate draft publish readiness without mutating the curriculum version."""
-    return curriculum_ops_service.validation_preview(public_lesson_id, version_id, user)
+    return curriculum_ops_service.validation_preview(public_lesson_id, version_id, legacy_user(actor))
 
 
 @router.post(
@@ -1421,10 +1340,10 @@ async def preview_curriculum_lesson_validation(
 async def submit_curriculum_lesson_review(
     public_lesson_id: str,
     version_id: str,
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Move a draft curriculum version into QA review."""
-    return curriculum_ops_service.submit_review(public_lesson_id, version_id, user)
+    return curriculum_ops_service.submit_review(public_lesson_id, version_id, legacy_user(actor))
 
 
 @router.post(
@@ -1434,10 +1353,10 @@ async def submit_curriculum_lesson_review(
 async def approve_curriculum_lesson_version(
     public_lesson_id: str,
     version_id: str,
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Approve a reviewed curriculum version for admin publish."""
-    return curriculum_ops_service.approve(public_lesson_id, version_id, user)
+    return curriculum_ops_service.approve(public_lesson_id, version_id, legacy_user(actor))
 
 
 @router.post(
@@ -1448,10 +1367,10 @@ async def request_curriculum_lesson_changes(
     public_lesson_id: str,
     version_id: str,
     body: CurriculumReviewNoteRequest,
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Return a curriculum version to authoring with review notes."""
-    return curriculum_ops_service.request_changes(public_lesson_id, version_id, user, body.reason)
+    return curriculum_ops_service.request_changes(public_lesson_id, version_id, legacy_user(actor), body.reason)
 
 
 @router.post("/curriculum/lessons/{public_lesson_id}/publish")
@@ -1459,13 +1378,13 @@ async def request_curriculum_lesson_changes(
 async def publish_curriculum_lesson_version(
     public_lesson_id: str,
     body: CurriculumPublishRequest,
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Publish an approved curriculum version through a conditional manifest update."""
     return curriculum_ops_service.publish(
         public_lesson_id,
         body.version_id,
-        user,
+        legacy_user(actor),
         expected_published_version_id=body.expected_published_version_id,
         reason=body.reason,
     )
@@ -1476,13 +1395,13 @@ async def publish_curriculum_lesson_version(
 async def rollback_curriculum_lesson_version(
     public_lesson_id: str,
     body: CurriculumPublishRequest,
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Rollback the published curriculum pointer to a previous safe version."""
     return curriculum_ops_service.rollback(
         public_lesson_id,
         body.version_id,
-        user,
+        legacy_user(actor),
         expected_published_version_id=body.expected_published_version_id,
         reason=body.reason or "rollback requested",
     )
@@ -1493,13 +1412,13 @@ async def rollback_curriculum_lesson_version(
 async def archive_curriculum_lesson_version(
     public_lesson_id: str,
     body: CurriculumPublishRequest,
-    user: dict = Depends(require_role("admin", "teacher")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Archive a curriculum version when no active assignments block it."""
     return curriculum_ops_service.archive(
         public_lesson_id,
         body.version_id,
-        user,
+        legacy_user(actor),
         reason=body.reason or "archive requested",
     )
 
@@ -2038,65 +1957,6 @@ def _project_account_row(
     return projected
 
 
-def _issued_invitation_id(profile: Mapping[str, object]) -> str:
-    """The live invitation an `invited` account can actually be reissued from.
-
-    Card 002-D / B5: the console used to resend against the account id, which the
-    reissue command resolves through a pointer row keyed by invitation id, so the
-    button could only ever answer 404. Both rows already carry the address, so the
-    id is read back through the address index. The invitation id is a handle, not a
-    credential - the token and its digest stay where they are.
-    """
-    email = str(profile.get("email") or "").strip()
-    account_id = str(profile.get("user_id") or "").strip()
-    if not email or not account_id:
-        return ""
-    response = _admin_query(
-        get_table(),
-        IndexName="GSI-Email",
-        KeyConditionExpression=Key("email").eq(email),
-        FilterExpression=(
-            Attr("entity_type").eq("account_invitation")
-            & Attr("status").eq(account_invitation_repo.ISSUED_STATUS)
-            & Attr("account_id").eq(account_id)
-        ),
-    )
-    live = sorted(
-        _admin_items(response),
-        key=lambda row: str(row.get("issued_at") or ""),
-    )
-    return str(live[-1].get("invitation_id") or "") if live else ""
-
-
-def _keyword_matches(profile: Mapping[str, object], keyword: str) -> bool:
-    needle = keyword.strip().casefold()
-    if not needle:
-        return True
-    return any(
-        needle in str(profile.get(field) or "").casefold()
-        for field in ("name", "email", "account_number", "user_id")
-    )
-
-
-def _within_created_range(
-    profile: Mapping[str, object], created_from: str | None, created_to: str | None
-) -> bool:
-    created_at = str(profile.get("created_at") or "")
-    if created_from and created_at < created_from:
-        return False
-    if created_to and created_at > created_to:
-        return False
-    return True
-
-
-# One scan page is rows read, not accounts found: `Limit` is applied before the
-# filter, so on a table whose lessons and attempts outnumber its profiles a page
-# can hold no account at all. The walk follows the continuation key until the
-# requested page is full, and stops at a budget so it cannot become a table walk.
-ADMIN_USER_SCAN_PAGE_SIZE = 200
-ADMIN_USER_SCAN_MAX_PAGES = 25
-
-
 @router.get("/users")
 async def list_users(
     limit: int = Query(default=50, ge=1, le=200),
@@ -2106,7 +1966,7 @@ async def list_users(
     created_from: Optional[str] = Query(default=None, max_length=40),
     created_to: Optional[str] = Query(default=None, max_length=40),
     cursor: Optional[str] = Query(default=None, max_length=2000),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """One page of accounts, grouped by role, with their confirmed parent links.
 
@@ -2117,86 +1977,49 @@ async def list_users(
     tests/test_admin_user_list_read_amplification.py so it cannot grow unnoticed;
     batching it down needs `current_relationship.judge`, not this file.
     """
+    del actor
     table = get_table()
-
-    filter_expr = "#entity = :profile"
-    attr_names = {"#entity": "SK"}
-    attr_values: dict[str, object] = {":profile": "PROFILE"}
-
-    if role:
-        filter_expr += " AND #role = :role"
-        attr_names["#role"] = "role"
-        attr_values[":role"] = role
-
-    scan_kwargs: dict[str, object] = {
-        "FilterExpression": filter_expr,
-        "ExpressionAttributeNames": attr_names,
-        "ExpressionAttributeValues": attr_values,
-        "Limit": ADMIN_USER_SCAN_PAGE_SIZE,
-    }
-    if cursor:
-        try:
-            decoded = json.loads(base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8"))
-        except (ValueError, UnicodeDecodeError) as exc:
-            raise AccountViolation(AccountErrorCode.CURSOR_INVALID) from exc
-        if not isinstance(decoded, dict):
-            raise AccountViolation(AccountErrorCode.CURSOR_INVALID)
-        scan_kwargs["ExclusiveStartKey"] = decoded
+    try:
+        page = user_repo.list_accounts(
+            limit=limit,
+            role=role,
+            status=status,
+            keyword=q,
+            created_from=created_from,
+            created_to=created_to,
+            cursor=cursor,
+            table=table,
+        )
+    except user_repo.InvalidAccountCursor as exc:
+        raise AccountViolation(AccountErrorCode.CURSOR_INVALID) from exc
+    invitation_ids = account_invitation_repo.issued_invitation_ids(
+        (
+            profile
+            for profile in page.profiles
+            if str(profile.get("account_status") or "") == AccountStatus.INVITED
+        ),
+        table=table,
+    )
 
     items: list[dict[str, object]] = []
     groups: dict[str, int] = {}
-    next_key: Mapping[str, object] | None = None
-    full = False
-
-    for _page in range(ADMIN_USER_SCAN_MAX_PAGES):
-        result = _admin_scan(table, **scan_kwargs)
-        for row in _admin_items(result):
-            row_key = {"PK": row.get("PK"), "SK": row.get("SK")}
-            row.pop("PK", None)
-            row.pop("SK", None)
-            account_status = str(row.get("account_status") or "")
-            if status and account_status != status:
-                continue
-            if q and not _keyword_matches(row, q):
-                continue
-            if not _within_created_range(row, created_from, created_to):
-                continue
-            row_role = str(row.get("role") or "unknown")
-            groups[row_role] = groups.get(row_role, 0) + 1
-            item = _project_account_row(row, account_status=account_status)
-            item["role"] = row_role
-            item["linkedAccounts"] = _linked_counterparts(row)
-            if account_status == AccountStatus.INVITED:
-                invitation_id = _issued_invitation_id(row)
-                if invitation_id:
-                    item["invitationId"] = invitation_id
-            items.append(item)
-            if len(items) >= limit:
-                # Resume at the row just handed out, so the next page neither
-                # repeats it nor skips the rest of the scan page it came from.
-                next_key = row_key
-                full = True
-                break
-        if full:
-            break
-        page_key = _admin_cursor(result)
-        if not page_key:
-            break
-        scan_kwargs["ExclusiveStartKey"] = page_key
-    else:
-        # The budget ran out. Say the walk stopped rather than that it finished.
-        next_key = _admin_cursor(result)
-
-    next_cursor = (
-        base64.urlsafe_b64encode(json.dumps(next_key, default=str).encode("utf-8")).decode("ascii")
-        if next_key
-        else None
-    )
+    for profile in page.profiles:
+        row_role = str(profile.get("role") or "unknown")
+        groups[row_role] = groups.get(row_role, 0) + 1
+        item = _project_account_row(
+            profile, account_status=str(profile.get("account_status") or "")
+        )
+        item["role"] = row_role
+        item["linkedAccounts"] = _linked_counterparts(profile)
+        invitation_id = invitation_ids.get(str(profile.get("user_id") or ""))
+        if invitation_id:
+            item["invitationId"] = invitation_id
+        items.append(item)
     return {
         "items": items,
         "count": len(items),
         "groups": groups,
-        "nextCursor": next_cursor,
+        "nextCursor": page.next_cursor,
     }
 
 
@@ -2204,7 +2027,7 @@ async def list_users(
 async def update_user(
     user_id: str,
     body: UserUpdateRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Update a user's subscription tier or active status."""
     profile = user_repo.get_user(user_id)
@@ -2251,7 +2074,7 @@ async def update_user(
         owned_fields=frozenset(changed),
     )
     _record_account_admin_event(
-        actor=user,
+        actor=actor,
         target_id=user_id,
         event_type="account_profile_edited",
         action="update_account_profile",
@@ -2293,7 +2116,7 @@ def _invitation_delivery(locale: str | None):
 
 def _record_account_admin_event(
     *,
-    actor: Mapping[str, object],
+    actor: Actor,
     target_id: str,
     event_type: str,
     action: str,
@@ -2304,8 +2127,8 @@ def _record_account_admin_event(
     event: dict[str, object] = {
         "event_id": f"event_{uuid4().hex}",
         "event_type": event_type,
-        "actor_id": str(actor.get("user_id") or actor.get("sub") or ""),
-        "actor_role": str(actor.get("role") or ""),
+        "actor_id": actor.user_id,
+        "actor_role": actor.role.value,
         "target_id": target_id,
         "target_type": "account",
         "action": action,
@@ -2346,7 +2169,7 @@ def _account_email_or_409(profile: Mapping[str, object]) -> str:
 
 
 def _refuse_password_reset(
-    *, actor: Mapping[str, object], target_id: str, reason_code: AccountErrorCode
+    *, actor: Actor, target_id: str, reason_code: AccountErrorCode
 ) -> None:
     """A refused reset is still a command somebody issued, so it is recorded."""
     _record_account_admin_event(
@@ -2361,7 +2184,7 @@ def _refuse_password_reset(
 
 
 def _guard_peer_admin_credentials(
-    *, actor: Mapping[str, object], target_id: str, profile: Mapping[str, object]
+    *, actor: Actor, target_id: str, profile: Mapping[str, object]
 ) -> None:
     """Card 006: an administrator may not take another administrator's credential.
 
@@ -2384,8 +2207,7 @@ def _guard_peer_admin_credentials(
     separate trust domain with its own audit trail. Keeping the break-glass there
     is the point: an attacker holding one administrator session cannot reach it.
     """
-    actor_id = str(actor.get("user_id") or actor.get("sub") or "")
-    if actor_id and actor_id == target_id:
+    if actor.user_id == target_id:
         return
     if str(profile.get("role") or "") != "admin":
         return
@@ -2399,7 +2221,7 @@ def _guard_peer_admin_credentials(
 @router.post("/users/invitations")
 def invite_account(
     payload: AccountInvitationRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     """Open one account in `invited` state and mail its single-use activation link."""
@@ -2409,7 +2231,7 @@ def invite_account(
         else account_provisioning_service.DEFAULT_INVITATION_SECONDS
     )
     return account_provisioning_service.invite_account(
-        actor=user,
+        actor=legacy_user(actor),
         role=payload.role,
         email=payload.email,
         full_name=payload.fullName,
@@ -2422,13 +2244,13 @@ def invite_account(
 @router.post("/users")
 def assign_account(
     payload: AccountAssignmentRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
     settings: Settings = Depends(get_settings),
     provider: Any = Depends(get_account_identity_provider),
 ) -> dict[str, Any]:
     """Open one active account and hand its initial password back exactly once."""
     return account_provisioning_service.assign_account(
-        actor=user,
+        actor=legacy_user(actor),
         role=payload.role,
         email=payload.email,
         full_name=payload.fullName,
@@ -2442,7 +2264,7 @@ def assign_account(
 def reissue_account_invitation(
     invitation_id: str,
     payload: AccountInvitationReissueRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ) -> dict[str, Any]:
     """Replace one undelivered invitation, reusing the number already allocated."""
     expiry = (
@@ -2451,7 +2273,7 @@ def reissue_account_invitation(
         else account_provisioning_service.DEFAULT_INVITATION_SECONDS
     )
     return account_provisioning_service.reissue_invitation(
-        actor=user,
+        actor=legacy_user(actor),
         invitation_id=invitation_id,
         invitation_expiry_seconds=expiry,
         deliver=_invitation_delivery(payload.locale),
@@ -2461,10 +2283,10 @@ def reissue_account_invitation(
 @router.delete("/users/invitations/{invitation_id}")
 def revoke_account_invitation(
     invitation_id: str,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ) -> dict[str, Any]:
     return account_provisioning_service.revoke_invitation(
-        actor=user, invitation_id=invitation_id
+        actor=legacy_user(actor), invitation_id=invitation_id
     )
 
 
@@ -2504,7 +2326,7 @@ def _require_password_change_at_next_sign_in(
 def reset_account_password(
     user_id: str,
     payload: AccountPasswordResetRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
     settings: Settings = Depends(get_settings),
     provider: Any = Depends(get_account_password_administrator),
 ) -> dict[str, Any]:
@@ -2522,7 +2344,7 @@ def reset_account_password(
     the command. Refusals are recorded too, from the same helper.
     """
     profile = _account_profile_or_404(user_id)
-    _guard_peer_admin_credentials(actor=user, target_id=user_id, profile=profile)
+    _guard_peer_admin_credentials(actor=actor, target_id=user_id, profile=profile)
     email = _account_email_or_409(profile)
     _require_password_change_at_next_sign_in(user_id, profile)
     temporary_password = account_provisioning_service.generate_initial_password()
@@ -2536,7 +2358,7 @@ def reset_account_password(
     except Exception as exc:
         raise SecurityDecisionError(SecurityErrorCode.IDENTITY_PROVIDER_UNAVAILABLE) from exc
     _record_account_admin_event(
-        actor=user,
+        actor=actor,
         target_id=user_id,
         event_type="account_password_reset",
         action="reset_account_password",
@@ -2554,7 +2376,7 @@ def reset_account_password(
 def change_account_status(
     user_id: str,
     payload: AccountStatusChangeRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ) -> dict[str, Any]:
     """Move one account along the status machine. Archive is as far as it goes."""
     profile = _account_profile_or_404(user_id)
@@ -2565,8 +2387,8 @@ def change_account_status(
         payload.status,
         account_lifecycle.LifecycleActor(
             account_lifecycle.Trigger.ADMIN,
-            user_id=str(user.get("user_id") or user.get("sub") or ""),
-            role=str(user.get("role") or ""),
+            user_id=actor.user_id,
+            role=actor.role.value,
         ),
         payload.reason,
     )
@@ -2580,20 +2402,20 @@ def change_account_status(
 @router.post("/users/parent-links")
 def assign_parent_link(
     body: AdminParentLinkRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ) -> dict[str, Any]:
     """Administrator assignment is trusted and audited, so it starts active."""
     try:
         link = parent_link_service.assign_link(
             parent_id=body.parent_id,
             student_id=body.student_id,
-            actor_id=str(user.get("user_id") or user.get("sub") or ""),
+            actor_id=actor.user_id,
             relationship=body.relationship,
         )
     except parent_link_repo.ParentLinkConflict as exc:
         raise parent_link_service.ParentLinkError("link_already_exists") from exc
     _record_account_admin_event(
-        actor=user,
+        actor=actor,
         target_id=body.student_id,
         event_type="parent_link_assigned",
         action="assign_parent_link",
@@ -2607,7 +2429,7 @@ def assign_parent_link(
 @admin_target_provider(PARENT_LINK_TARGET)
 async def revoke_parent_link(
     body: AdminParentLinkRevokeRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ) -> AdminParentLinkRevokeResponse:
     """End a parent-student relationship: both sides of its link in one write.
 
@@ -2620,7 +2442,7 @@ async def revoke_parent_link(
         closed = current_relationship.revoke(
             body.parent_id,
             body.student_id,
-            actor_id=str(user.get("user_id") or user.get("sub") or "admin"),
+            actor_id=actor.user_id,
             now=_now_iso(),
         )
     except parent_link_repo.ParentLinkConflict as exc:
@@ -2628,7 +2450,7 @@ async def revoke_parent_link(
     if closed is None:
         raise parent_link_service.ParentLinkError("link_not_open")
     _record_account_admin_event(
-        actor=user,
+        actor=actor,
         target_id=body.student_id,
         event_type="parent_link_revoked",
         action="revoke_parent_link",
@@ -2652,7 +2474,7 @@ async def list_subscription_requests(
     parent_id: Optional[str] = Query(default=None),
     date_from: Optional[str] = Query(default=None),
     date_to: Optional[str] = Query(default=None),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """List manual subscription requests for admin processing.
 
@@ -2674,7 +2496,7 @@ async def list_subscription_requests(
 @router.get("/subscriptions/requests/{request_id}", response_model=SubscriptionRequestResponse)
 async def get_subscription_request(
     request_id: str,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Open one manual subscription request with lifecycle history.
 
@@ -2782,7 +2604,7 @@ async def get_billing_checkout_support(
     checkout_ref: str,
     parent_id: str = Query(..., alias="parentId", min_length=1, max_length=200),
     detail: bool = Query(default=False),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
     provider: billing_reconciliation_service.BillingReconciliationProvider = Depends(
         get_billing_reconciliation_provider
     ),
@@ -2792,7 +2614,7 @@ async def get_billing_checkout_support(
     Frozen by card 007: no checkout can exist to support.
     """
     refuse_if_frozen()
-    del user
+    del actor
     command = _load_admin_checkout_command(
         checkout_ref,
         parent_id=parent_id,
@@ -2828,7 +2650,7 @@ async def recheck_billing_checkout_support(
     checkout_ref: str,
     body: AdminCheckoutRecheckRequest,
     parent_id: str = Query(..., alias="parentId", min_length=1, max_length=200),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
     provider: billing_reconciliation_service.BillingReconciliationProvider = Depends(
         get_billing_reconciliation_provider
     ),
@@ -2838,7 +2660,7 @@ async def recheck_billing_checkout_support(
     Frozen by card 007: reconciliation calls the payment provider.
     """
     refuse_if_frozen()
-    del body, user
+    del body, actor
     command = _load_admin_checkout_command(
         checkout_ref,
         parent_id=parent_id,
@@ -2863,7 +2685,7 @@ async def list_subscription_billing(
     billing_status: Optional[str] = Query(default=None),
     billing_provider: Optional[str] = Query(default=None),
     settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """List provider billing records for admin visibility.
 
@@ -2886,7 +2708,7 @@ async def list_subscription_accounting_export(
     limit: int = Query(default=100, ge=1, le=500),
     parent_id: Optional[str] = Query(default=None),
     settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """List redacted provider billing rows for Swiss accounting handoff.
 
@@ -2904,7 +2726,7 @@ async def list_subscription_accounting_export(
 @router.get("/subscriptions/billing/provider-readiness", response_model=SubscriptionProviderReadinessResponse)
 async def get_subscription_provider_readiness(
     settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Inspect redacted live provider readiness without creating provider mutations.
 
@@ -2917,7 +2739,7 @@ async def get_subscription_provider_readiness(
 @router.get("/subscriptions/billing/rollout-controls", response_model=SubscriptionRolloutControlsResponse)
 async def get_subscription_rollout_controls(
     settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Inspect effective checkout/refund rollout controls.
 
@@ -2931,7 +2753,7 @@ async def get_subscription_rollout_controls(
 async def update_subscription_rollout_controls(
     body: SubscriptionRolloutControlsUpdateRequest,
     settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Update checkout/refund rollout controls for new live-changing operations.
 
@@ -2942,7 +2764,7 @@ async def update_subscription_rollout_controls(
         checkout_state=body.checkout_state,
         refunds_state=body.refunds_state,
         reason=body.reason,
-        user=user,
+        user=legacy_user(actor),
         settings=settings,
     )
 
@@ -2951,7 +2773,7 @@ async def update_subscription_rollout_controls(
 async def get_subscription_billing(
     parent_id: str,
     settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Open one parent provider billing record with recent event history.
 
@@ -2966,7 +2788,7 @@ async def get_student_usage_summary(
     student_id: str,
     day: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Return a privacy-safe student quota usage summary for support."""
     return usage_ledger_service.build_student_usage_summary(
@@ -2982,7 +2804,7 @@ async def list_student_usage_events(
     day: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
     action: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """List redacted usage ledger events for support investigation."""
     items = usage_ledger_service.list_usage_events(
@@ -3000,7 +2822,7 @@ async def preview_usage_reconciliation(
     day: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
     action: str = Query(default=usage_ledger_service.QUESTION_SUBMISSION_ACTION),
     repair: bool = Query(default=False),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Preview or explicitly repair daily counter versus ledger reconciliation."""
     return usage_ledger_service.reconcile_usage_action(
@@ -3014,7 +2836,7 @@ async def preview_usage_reconciliation(
 @router.get("/account-verification/{user_id}", response_model=AccountVerificationSupportResponse)
 async def get_account_verification_support(
     user_id: str,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Return bounded email verification state for account support."""
     profile = user_repo.get_user(user_id)
@@ -3031,7 +2853,7 @@ async def get_parent_account_operations(
     parent_id: str,
     day: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Return support-grade parent account operations detail."""
     try:
@@ -3051,7 +2873,7 @@ async def execute_subscription_refund(
     parent_id: str,
     body: SubscriptionRefundExecutionRequest,
     settings: Settings = Depends(get_settings),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Execute a gated provider refund for an eligible billing record.
 
@@ -3063,7 +2885,7 @@ async def execute_subscription_refund(
         amount=body.amount,
         reason=body.reason,
         idempotency_key=body.idempotency_key,
-        user=user,
+        user=legacy_user(actor),
         settings=settings,
     )
 
@@ -3072,7 +2894,7 @@ async def execute_subscription_refund(
 async def update_subscription_request(
     request_id: str,
     body: SubscriptionRequestUpdateRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Move a subscription request through review lifecycle states.
 
@@ -3084,7 +2906,7 @@ async def update_subscription_request(
         status=body.status,
         admin_note=body.admin_note,
         effective_at=body.effective_at,
-        user=user,
+        user=legacy_user(actor),
     )
 
 
@@ -3092,7 +2914,7 @@ async def update_subscription_request(
 async def apply_subscription_request(
     request_id: str,
     body: SubscriptionRequestApplyRequest = Body(default_factory=SubscriptionRequestApplyRequest),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Apply an approved manual request and update the parent's subscription tier.
 
@@ -3103,7 +2925,7 @@ async def apply_subscription_request(
         request_id=request_id,
         admin_note=body.admin_note,
         effective_at=body.effective_at,
-        user=user,
+        user=legacy_user(actor),
     )
 
 
@@ -3113,18 +2935,13 @@ ADMIN_STATS_MAX_PAGES = 50
 
 
 @router.get("/stats", response_model=StatsResponse)
-async def get_stats(user: dict = Depends(require_role("admin"))):
+async def get_stats(actor: Actor = Depends(admin_operation)):
     """Return aggregate platform metrics (full-table scan — small scale only)."""
     table = get_table()
 
     # Count user profiles
-    users, users_complete = _admin_scan_every_page(
-        table,
-        page_budget=ADMIN_STATS_MAX_PAGES,
-        FilterExpression="SK = :profile",
-        ExpressionAttributeValues={":profile": "PROFILE"},
-        ProjectionExpression="#role",
-        ExpressionAttributeNames={"#role": "role"},
+    users, users_complete = user_repo.profile_role_census(
+        page_budget=ADMIN_STATS_MAX_PAGES, table=table
     )
 
     counts = {"student": 0, "parent": 0, "teacher": 0}
@@ -3134,27 +2951,8 @@ async def get_stats(user: dict = Depends(require_role("admin"))):
             counts[r] += 1
 
     # Count questions by status
-    meta_rows, questions_complete = _admin_scan_every_page(
-        table,
-        page_budget=ADMIN_STATS_MAX_PAGES,
-        FilterExpression="SK = :meta",
-        ExpressionAttributeValues={":meta": "META"},
-        ProjectionExpression=", ".join(
-            [
-                "#s",
-                "teacher_requested_at",
-                "queue_visible_at",
-                "teacher_taken_over_at",
-                "teacher_first_replied_at",
-                "resolved_at",
-                "sla_request_to_takeover_seconds",
-                "sla_request_to_first_reply_seconds",
-                "sla_takeover_to_first_reply_seconds",
-                "sla_request_to_resolved_seconds",
-                "teacher_first_reply_sla_bucket",
-            ]
-        ),
-        ExpressionAttributeNames={"#s": "status"},
+    meta_rows, questions_complete = question_repo.question_meta_census(
+        page_budget=ADMIN_STATS_MAX_PAGES, table=table
     )
     question_statuses = {status.value for status in QuestionStatus}
     questions = [
@@ -3198,7 +2996,7 @@ async def list_report_operations(
     parent_id: Optional[str] = Query(default=None),
     student_id: Optional[str] = Query(default=None),
     next_token: Optional[str] = Query(default=None),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """List report operation metadata for admin triage."""
     try:
@@ -3231,7 +3029,7 @@ async def get_report_operations(
     parent_id: str,
     student_id: str,
     week_start: str,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Inspect report artifact and delivery metadata without exposing artifact content."""
     report = _get_report_or_404(parent_id, student_id, week_start)
@@ -3242,10 +3040,10 @@ async def get_report_operations(
 @admin_target_provider(BULK_REPORT_TARGETS)
 async def bulk_resend_report_emails(
     request: BulkReportResendRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Resend selected failed report emails with independent per-item results."""
-    operator = _operator_id(user)
+    operator = actor.user_id
     results: list[BulkReportResendItemResult] = []
 
     for target in request.reports:
@@ -3301,12 +3099,12 @@ async def bulk_resend_report_emails(
 @admin_target_provider(RECOVERY_FILTER_PREVIEW_TARGETS)
 async def preview_resend_recovery_job(
     request: RecoveryJobPreviewRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Preview a bounded async resend recovery job before mutation."""
     return report_recovery_job_service.preview_resend_job(
         reason=request.reason,
-        operator=_operator_id(user),
+        operator=actor.user_id,
         filters=request.filters.model_dump(),
         max_targets=request.max_targets,
     )
@@ -3319,12 +3117,12 @@ async def preview_resend_recovery_job(
 @admin_target_provider(RECOVERY_FILTER_TARGETS)
 async def create_resend_recovery_job(
     request: RecoveryJobCreateRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Create a bounded async resend recovery job after preview confirmation."""
     job = report_recovery_job_service.create_resend_job(
         reason=request.reason,
-        operator=_operator_id(user),
+        operator=actor.user_id,
         filters=request.filters.model_dump(),
         preview_token=request.preview_token,
         max_targets=request.max_targets,
@@ -3339,12 +3137,12 @@ async def create_resend_recovery_job(
 @admin_target_provider(RECOVERY_FILTER_PREVIEW_TARGETS)
 async def preview_generation_retry_recovery_job(
     request: RecoveryJobPreviewRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Preview a bounded async generation retry recovery job before mutation."""
     return report_recovery_job_service.preview_generation_retry_job(
         reason=request.reason,
-        operator=_operator_id(user),
+        operator=actor.user_id,
         filters=request.filters.model_dump(),
         max_targets=request.max_targets,
     )
@@ -3357,12 +3155,12 @@ async def preview_generation_retry_recovery_job(
 @admin_target_provider(RECOVERY_FILTER_TARGETS)
 async def create_generation_retry_recovery_job(
     request: RecoveryJobCreateRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Create a bounded async generation retry recovery job after preview confirmation."""
     job = report_recovery_job_service.create_generation_retry_job(
         reason=request.reason,
-        operator=_operator_id(user),
+        operator=actor.user_id,
         filters=request.filters.model_dump(),
         preview_token=request.preview_token,
         max_targets=request.max_targets,
@@ -3378,13 +3176,13 @@ async def create_generation_retry_recovery_job(
 async def preview_resume_recovery_job(
     job_id: str,
     request: RecoveryJobResumePreviewRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Preview a bounded resume job from a prior recovery job target subset."""
     return report_recovery_job_service.preview_resume_job(
         source_job_id=job_id,
         reason=request.reason,
-        operator=_operator_id(user),
+        operator=actor.user_id,
         results=request.results,
         max_targets=request.max_targets,
     )
@@ -3398,13 +3196,13 @@ async def preview_resume_recovery_job(
 async def create_resume_recovery_job(
     job_id: str,
     request: RecoveryJobResumeCreateRequest,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Create a bounded resume job from a prior recovery job target subset."""
     job = report_recovery_job_service.create_resume_job(
         source_job_id=job_id,
         reason=request.reason,
-        operator=_operator_id(user),
+        operator=actor.user_id,
         results=request.results,
         preview_token=request.preview_token,
         max_targets=request.max_targets,
@@ -3453,7 +3251,7 @@ async def create_resume_recovery_job(
 @router.post("/reports/release-evidence/validate")
 async def validate_release_evidence(
     bundle: dict[str, Any] = Body(...),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Validate and redact a release evidence bundle without mutating reports."""
     return release_evidence_service.validate_release_bundle(bundle)
@@ -3466,7 +3264,7 @@ async def get_release_fixture_status(
     student_id: Optional[str] = Query(default=None),
     week_start: Optional[str] = Query(default=None),
     expected_artifact_version: Optional[str] = Query(default=None),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Inspect one approved safe fixture without exposing private artifact metadata."""
     approved = release_evidence_service.approved_fixture_config(fixture_name)
@@ -3499,7 +3297,7 @@ async def get_release_fixture_status(
 async def list_recovery_jobs(
     limit: int = Query(default=50, ge=1, le=100),
     next_token: Optional[str] = Query(default=None),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """List async report recovery jobs."""
     try:
@@ -3518,7 +3316,7 @@ async def list_recovery_jobs(
 @router.get("/reports/recovery-jobs/{job_id}", response_model=RecoveryJobResponse)
 async def get_recovery_job(
     job_id: str,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Get one async report recovery job."""
     job = report_repo.get_recovery_job(job_id)
@@ -3532,7 +3330,7 @@ async def list_recovery_job_results(
     job_id: str,
     limit: int = Query(default=50, ge=1, le=100),
     next_token: Optional[str] = Query(default=None),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """List metadata-only target results for one async recovery job."""
     if not report_repo.get_recovery_job(job_id):
@@ -3553,10 +3351,10 @@ async def list_recovery_job_results(
 @router.post("/reports/recovery-jobs/{job_id}/cancel", response_model=RecoveryJobResponse)
 async def cancel_recovery_job(
     job_id: str,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Request cooperative cancellation for an async report recovery job."""
-    job = report_recovery_job_service.cancel_recovery_job(job_id, operator=_operator_id(user))
+    job = report_recovery_job_service.cancel_recovery_job(job_id, operator=actor.user_id)
     return _recovery_job_response(job)
 
 
@@ -3568,13 +3366,13 @@ async def resend_report_email(
     parent_id: str,
     student_id: str,
     week_start: str,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Resend a failed report email using the existing private HTML artifact."""
     report = _get_report_or_404(parent_id, student_id, week_start)
     result = report_recovery_service.resend_report_email(
         report,
-        operator=_operator_id(user),
+        operator=actor.user_id,
         reason="admin_single_resend",
     )
     return ReportResendResponse(
@@ -3618,7 +3416,7 @@ async def retry_report_generation(
     parent_id: str,
     student_id: str,
     week_start: str,
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """Retry generation for one generation-failed weekly report."""
     report = _get_report_or_404(parent_id, student_id, week_start)
@@ -3627,7 +3425,7 @@ async def retry_report_generation(
         parent_id=parent_id,
         student_id=student_id,
         week_start=week_start,
-        operator=_operator_id(user),
+        operator=actor.user_id,
         reason="admin_single_generation_retry",
     )
     return ReportGenerationRetryResponse(
@@ -3669,7 +3467,7 @@ async def list_report_audit_events(
     week_start: str,
     limit: int = Query(default=50, ge=1, le=100),
     next_token: Optional[str] = Query(default=None),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """List append-only audit events for one report recovery timeline."""
     report = _get_report_or_404(parent_id, student_id, week_start)
@@ -3697,7 +3495,7 @@ async def list_recovery_job_audit_events(
     job_id: str,
     limit: int = Query(default=50, ge=1, le=100),
     next_token: Optional[str] = Query(default=None),
-    user: dict = Depends(require_role("admin")),
+    actor: Actor = Depends(admin_operation),
 ):
     """List append-only audit events for a report recovery job timeline."""
     try:
@@ -3858,13 +3656,6 @@ def _disabled_reason(status: str | None, required_status: str) -> str:
     return f"Report status is {status}; requires {required_status}"
 
 
-def _operator_id(user: dict) -> str:
-    return str(
-        user.get("sub")
-        or user.get("username")
-        or user.get("email")
-        or "unknown-admin"
-    )
 
 
 

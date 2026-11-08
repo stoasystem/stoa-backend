@@ -1,10 +1,12 @@
 """DynamoDB access patterns for the User entity."""
 
+import base64
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
+import json
 import re
 from typing import Any, Protocol, runtime_checkable
 
@@ -220,6 +222,154 @@ def find_other_active_admin(user_id: str) -> str | None:
             return None
         scan_kwargs["ExclusiveStartKey"] = cursor
     return None
+
+
+class InvalidAccountCursor(ValueError):
+    """A list cursor that is not one `list_accounts` handed out."""
+
+
+@dataclass(frozen=True, slots=True)
+class AccountPage:
+    """One page of profile rows, without their table keys, and where the next starts."""
+
+    profiles: list[UserItem]
+    next_cursor: str | None
+
+
+# One scan page is rows read, not accounts found: `Limit` is applied before the
+# filter, so on a table whose lessons and attempts outnumber its profiles a page
+# can hold no account at all. The walk follows the continuation key until the
+# requested page is full, and stops at a budget so it cannot become a table walk.
+ACCOUNT_LIST_SCAN_PAGE_SIZE = 200
+ACCOUNT_LIST_SCAN_MAX_PAGES = 25
+
+
+def _encode_account_cursor(key: Mapping[str, object]) -> str:
+    return base64.urlsafe_b64encode(json.dumps(dict(key), default=str).encode("utf-8")).decode(
+        "ascii"
+    )
+
+
+def _decode_account_cursor(cursor: str) -> UserItem:
+    try:
+        decoded = json.loads(base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise InvalidAccountCursor("account list cursor is not readable") from exc
+    if not isinstance(decoded, dict):
+        raise InvalidAccountCursor("account list cursor is not a key")
+    return _dependency_mapping(decoded)
+
+
+def _keyword_matches(profile: Mapping[str, object], keyword: str) -> bool:
+    needle = keyword.strip().casefold()
+    if not needle:
+        return True
+    return any(
+        needle in str(profile.get(field) or "").casefold()
+        for field in ("name", "email", "account_number", "user_id")
+    )
+
+
+def _within_created_range(
+    profile: Mapping[str, object], created_from: str | None, created_to: str | None
+) -> bool:
+    created_at = str(profile.get("created_at") or "")
+    if created_from and created_at < created_from:
+        return False
+    if created_to and created_at > created_to:
+        return False
+    return True
+
+
+def list_accounts(
+    *,
+    limit: int,
+    role: str | None = None,
+    status: str | None = None,
+    keyword: str | None = None,
+    created_from: str | None = None,
+    created_to: str | None = None,
+    cursor: str | None = None,
+    table: object | None = None,
+) -> AccountPage:
+    """Up to `limit` profiles that pass every filter given, in table order.
+
+    `next_cursor` resumes right after the last profile returned, so a page neither
+    repeats a profile nor skips the rest of the scan page it came from. It is also
+    set when the scan budget runs out before the page is full, at the point the walk
+    stopped: a short page with a cursor means "keep going", not "that was all".
+    Raises `InvalidAccountCursor` for a cursor this function did not produce.
+    """
+    target = table or get_table()
+    filter_expr = "#entity = :profile"
+    attr_names = {"#entity": "SK"}
+    attr_values: dict[str, object] = {":profile": "PROFILE"}
+    if role:
+        filter_expr += " AND #role = :role"
+        attr_names["#role"] = "role"
+        attr_values[":role"] = role
+    scan_kwargs: dict[str, object] = {
+        "FilterExpression": filter_expr,
+        "ExpressionAttributeNames": attr_names,
+        "ExpressionAttributeValues": attr_values,
+        "Limit": ACCOUNT_LIST_SCAN_PAGE_SIZE,
+    }
+    if cursor:
+        scan_kwargs["ExclusiveStartKey"] = _decode_account_cursor(cursor)
+
+    profiles: list[UserItem] = []
+    for _page in range(ACCOUNT_LIST_SCAN_MAX_PAGES):
+        result = _scan(target, **scan_kwargs)
+        for row in _items(result.get("Items", [])):
+            row_key = {"PK": row.pop("PK", None), "SK": row.pop("SK", None)}
+            if status and str(row.get("account_status") or "") != status:
+                continue
+            if keyword and not _keyword_matches(row, keyword):
+                continue
+            if not _within_created_range(row, created_from, created_to):
+                continue
+            profiles.append(row)
+            if len(profiles) >= limit:
+                return AccountPage(profiles, _encode_account_cursor(row_key))
+        page_key = _optional_item(result.get("LastEvaluatedKey"))
+        if not page_key:
+            return AccountPage(profiles, None)
+        scan_kwargs["ExclusiveStartKey"] = page_key
+    return AccountPage(profiles, _encode_account_cursor(page_key))
+
+
+def profile_role_census(
+    *, page_budget: int, table: object | None = None
+) -> tuple[list[UserItem], bool]:
+    """Every profile's role, and whether the walk read the whole table.
+
+    A single scan answers from at most one megabyte of rows read, so on any table
+    past that size one call is a sample and not a census. Counting from a sample
+    produces a number that looks like an answer, which is worse than no number.
+    """
+    return _scan_every_page(
+        table or get_table(),
+        page_budget=page_budget,
+        FilterExpression="SK = :profile",
+        ExpressionAttributeValues={":profile": "PROFILE"},
+        ProjectionExpression="#role",
+        ExpressionAttributeNames={"#role": "role"},
+    )
+
+
+def _scan_every_page(
+    table: object, *, page_budget: int, **kwargs: object
+) -> tuple[list[UserItem], bool]:
+    rows: list[UserItem] = []
+    request = dict(kwargs)
+    for _page in range(page_budget):
+        result = _scan(table, **request)
+        rows.extend(_items(result.get("Items", [])))
+        cursor = _optional_item(result.get("LastEvaluatedKey"))
+        if not cursor:
+            return rows, True
+        request["ExclusiveStartKey"] = cursor
+    return rows, False
 
 
 def active_admin_condition(user_id: str) -> TransactionOperation:

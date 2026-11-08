@@ -33,6 +33,11 @@ class _QueryTable(Protocol):
 
 
 @runtime_checkable
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
 class _UpdateTable(Protocol):
     def update_item(self, **kwargs: object) -> object: ...
 
@@ -59,6 +64,12 @@ def _query(table: object, **kwargs: object) -> QuestionItem:
     return _response(table.query(**kwargs))
 
 
+def _scan(table: object, **kwargs: object) -> QuestionItem:
+    if not isinstance(table, _ScanTable):
+        raise account_deletion_repo.AccountDeletionConflict("question dependency unavailable")
+    return _response(table.scan(**kwargs))
+
+
 def _update_item(table: object, **kwargs: object) -> QuestionItem:
     if not isinstance(table, _UpdateTable):
         raise account_deletion_repo.AccountDeletionConflict("question dependency unavailable")
@@ -70,6 +81,51 @@ def _response(value: object) -> QuestionItem:
     if not isinstance(value, dict) or any(not isinstance(key, str) for key in value):
         raise account_deletion_repo.AccountDeletionConflict("question dependency unavailable")
     return {key: item for key, item in value.items() if isinstance(key, str)}
+
+
+# What the platform dashboard measures a question by; nothing it would have to redact.
+QUESTION_CENSUS_FIELDS = (
+    "teacher_requested_at",
+    "queue_visible_at",
+    "teacher_taken_over_at",
+    "teacher_first_replied_at",
+    "resolved_at",
+    "sla_request_to_takeover_seconds",
+    "sla_request_to_first_reply_seconds",
+    "sla_takeover_to_first_reply_seconds",
+    "sla_request_to_resolved_seconds",
+    "teacher_first_reply_sla_bucket",
+)
+
+
+def question_meta_census(
+    *, page_budget: int, table: object | None = None
+) -> tuple[list[QuestionItem], bool]:
+    """Status and response times of every `META` row, and whether the walk finished.
+
+    `META` is not only questions (an invitation is a `META` row too), so a caller
+    keeps the rows whose status is a question status. A walk that ran out of pages
+    answers False: counting from it would be a sample presented as a total.
+    """
+    target = _table(table)
+    request: dict[str, object] = {
+        "FilterExpression": "SK = :meta",
+        "ExpressionAttributeValues": {":meta": "META"},
+        "ProjectionExpression": ", ".join(["#s", *QUESTION_CENSUS_FIELDS]),
+        "ExpressionAttributeNames": {"#s": "status"},
+    }
+    rows: list[QuestionItem] = []
+    for _page in range(page_budget):
+        result = _scan(target, **request)
+        items = result.get("Items", [])
+        if not isinstance(items, list):
+            raise account_deletion_repo.AccountDeletionConflict("question dependency unavailable")
+        rows.extend(_response(item) for item in items)
+        cursor = result.get("LastEvaluatedKey")
+        if not cursor:
+            return rows, True
+        request["ExclusiveStartKey"] = cursor
+    return rows, False
 
 
 def _frame(value: str) -> bytes:
