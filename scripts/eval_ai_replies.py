@@ -7,12 +7,23 @@ It is an evaluation, not a gate: no thresholds, not in CI, and it costs money.
 (The card names it after the legacy term; the terminology gate keeps that word
 out of code, so the files are named for AI replies instead.)
 
-Four readings, over the question set in docs/evals/ai-reply-questions.json:
+Five readings, over the question set in docs/evals/ai-reply-questions.json:
 
 - language consistency: replies whose language is the one asked for;
 - term violations: occurrences of the legacy terms the allowlist names;
 - mixed-language replies: replies with parts in another language;
-- refusal rate: out-of-syllabus questions the model declined to explain.
+- refusal rate: out-of-syllabus questions the model declined to explain;
+- final answer given: replies to a question with a known result (its
+  `final_answer`) that state that result, which the prompt says never to do.
+
+Each run is in one answer style (#314), `standard` by default; `--style all`
+asks every question once in each of the four styles and compares each style's
+readings with `standard`'s, so a style paragraph that costs language
+consistency, refusals or answer leaks is seen before it ships. `--style` may be
+given more than once, and `--compare-with` takes `standard` from an earlier
+report, so re-running two styles after a prompt fix does not pay for standard
+again. `--keep-raw-failures` keeps what the model wrote when its reply could
+not be parsed, which the readings otherwise never see.
 
 Calls go through ask_answer.answer - production's prompt builder and model
 call, without the chat lane's star map, memory context and streaming - with a
@@ -51,6 +62,18 @@ LANGUAGES = ("de", "en", "fr", "it")
 POISONS = ("language-german", "pre-e1")
 DEFAULT_AWS_ACCOUNT_ID = "562923011260"
 SUBSETS = ("all", "in-syllabus", "out-of-syllabus")
+# `learning_profile_service.ANSWER_STYLE_CODES`, standard first; a test keeps
+# the two the same. Spelled out so a dry run imports nothing from the app.
+ANSWER_STYLES = ("standard", "concise", "encouraging", "vivid")
+STYLE_CHOICES = (*ANSWER_STYLES, "all")
+# The readings compared between a style and `standard`.
+COMPARED = (
+    "language_consistency_pct",
+    "mixed_language_replies",
+    "refusal_pct_out_of_syllabus",
+    "suggest_teacher_pct_out_of_syllabus",
+    "final_answer_given_pct",
+)
 DEFAULT_MAX_CALLS = 48
 # Anthropic's first-party rate for Claude Sonnet 4.6, in USD per million
 # tokens. Bedrock is priced by AWS; the estimate on #43 also gives twice this.
@@ -124,6 +147,11 @@ REFUSAL_PHRASES: dict[str, tuple[str, ...]] = {
            "posso aiutarti solo"),
 }
 _LATEX = re.compile(r"\$\$.*?\$\$|\$[^$]*\$", re.DOTALL)
+_FRACTION = re.compile(r"\\[dt]?frac\{([^{}]+)\}\{([^{}]+)\}")
+# Markup that changes how a result looks, not what it says.
+_MARKUP = ("\\left", "\\right", "\\text", "\\mathrm", "\\,", "\\;", "\\!", "\\ ")
+_SYMBOLS = (("\u2212", "-"), ("\u2013", "-"), ("\\cdot", "*"), ("\\times", "*"),
+            ("\u00d7", "*"), ("\u00b7", "*"), ("^2", "\u00b2"), ("\\gt", ">"))
 _WORD = re.compile(r"[^\W\d_]+(?:'[^\W\d_]+)?", re.UNICODE)
 
 
@@ -136,6 +164,7 @@ class Reading:
     item_id: str
     expected_language: str
     out_of_syllabus: bool
+    style: str = "standard"
     detected_language: str | None = None
     language_ok: bool = False
     mixed: bool = False
@@ -143,7 +172,11 @@ class Reading:
     term_violations: int = 0
     refused: bool = False
     suggested_teacher: bool = False
+    # None for a question without a known result (`final_answer`).
+    gave_final_answer: bool | None = None
     error: str | None = None
+    # What the model wrote when it could not be parsed (--keep-raw-failures).
+    raw_output: str | None = None
     input_tokens: int = 0
     output_tokens: int = 0
     excerpt: str = ""
@@ -166,6 +199,13 @@ def load_questions(path: Path = QUESTIONS) -> list[dict[str, Any]]:
             raise EvalError(f"question {item['id']} expects an unknown language")
         if item["id"] in seen:
             raise EvalError(f"question {item['id']} appears twice")
+        final = item.get("final_answer")
+        if final is not None and (
+            not isinstance(final, list)
+            or not final
+            or not all(isinstance(entry, str) and entry.strip() for entry in final)
+        ):
+            raise EvalError(f"question {item['id']} has a malformed final_answer")
         seen.add(item["id"])
     return items
 
@@ -212,6 +252,49 @@ def _segments(content: Mapping[str, Any]) -> list[str]:
     return parts
 
 
+def _normal_math(text: str) -> str:
+    """A result as written, without the spacing and LaTeX that do not change it."""
+    normal = text.lower()
+    for written, meant in _SYMBOLS:
+        normal = normal.replace(written, meant)
+    normal = _FRACTION.sub(r"\1/\2", normal)
+    for markup in _MARKUP:
+        normal = normal.replace(markup, "")
+    # Spaces, dollars, braces and the Swiss thousands apostrophe.
+    return re.sub(r"[\s${}'\u2019]", "", normal)
+
+
+def _number_continues(text: str, at: int, step: int) -> bool:
+    """Whether the number ending (or starting) next to `at` runs on past it."""
+    if not 0 <= at < len(text):
+        return False
+    if text[at].isdigit():
+        return True
+    beyond = at + step
+    return text[at] in ".," and 0 <= beyond < len(text) and text[beyond].isdigit()
+
+
+def states_final_answer(text: str, spellings: Sequence[str]) -> bool:
+    """Whether the text states one of the result's spellings, as a whole number.
+
+    "30" is found in "0.2 * 150 = 30." and not in "300" or "3.30"; "7/12" in
+    "$\\frac{7}{12}$". A heuristic like the refusal phrases: the report keeps
+    every reply, for a person to check.
+    """
+    haystack = _normal_math(text)
+    for spelling in spellings:
+        needle = _normal_math(spelling)
+        if not needle:
+            continue
+        for match in re.finditer(re.escape(needle), haystack):
+            if needle[0].isdigit() and _number_continues(haystack, match.start() - 1, -1):
+                continue
+            if needle[-1].isdigit() and _number_continues(haystack, match.end(), 1):
+                continue
+            return True
+    return False
+
+
 def forbidden_terms(path: Path = TERM_ALLOWLIST) -> list[str]:
     """The legacy terms, as the terminology allowlist names them."""
     entries = json.loads(path.read_text(encoding="utf-8")).get("entries", [])
@@ -242,7 +325,7 @@ def _term_pattern(stems: Sequence[str]) -> re.Pattern[str] | None:
 def read_reply(
     item: Mapping[str, Any], content: Mapping[str, Any], *, terms: Sequence[str] = ()
 ) -> Reading:
-    """The four readings for one reply."""
+    """The readings for one reply."""
     expected = str(item["expected_language"])
     segments = _segments(content)
     text = "\n".join(segments)
@@ -276,6 +359,18 @@ def read_reply(
     # question: the model may explain and hand over rather than decline, so
     # this is read beside the refusals.
     reading.suggested_teacher = content.get("suggest_teacher") is True
+    final = item.get("final_answer")
+    if final:
+        stated = [
+            _segment(entry)
+            for key in ("steps", "hints")
+            if isinstance(content.get(key), list)
+            for entry in content[key]
+        ]
+        if isinstance(content.get("answer"), str):
+            stated.append(content["answer"])
+        reading.gave_final_answer = states_final_answer("\n".join(stated), final)
+    reading.style = str(item.get("answer_style") or "standard")
     return reading
 
 
@@ -311,6 +406,46 @@ def poisoned(poison: str | None) -> Iterator[None]:
     raise EvalError(f"unknown poisoning {poison!r}")
 
 
+class RawFailures:
+    """The text the reply parser last refused, while capturing is on."""
+
+    def __init__(self) -> None:
+        self.last: str | None = None
+
+    def take(self) -> str | None:
+        text, self.last = self.last, None
+        return text
+
+
+@contextmanager
+def capturing_raw_failures(enabled: bool) -> Iterator[RawFailures]:
+    """Wrap the reply parser in this process so a refused reply's text is kept.
+
+    Production logs only the size of an unparseable reply; an evaluation of a
+    prompt change needs the text to see why. Undone after the run.
+    """
+    from stoa.services import ai_service
+
+    raw = RawFailures()
+    if not enabled:
+        yield raw
+        return
+    original = ai_service._parse_ai_response
+
+    def parse(text: str) -> dict:
+        try:
+            return original(text)
+        except ai_service.AIInvocationFailure:
+            raw.last = text
+            raise
+
+    ai_service._parse_ai_response = parse
+    try:
+        yield raw
+    finally:
+        ai_service._parse_ai_response = original
+
+
 def estimate_cost(calls: int) -> dict[str, float]:
     per_call = (
         ESTIMATE_INPUT_TOKENS * PRICE_INPUT_PER_MTOK
@@ -324,12 +459,23 @@ def run(
     *,
     ask: Callable[[dict[str, Any]], tuple[Mapping[str, Any], int, int]],
     poison: str | None = None,
+    styles: Sequence[str] = ("standard",),
+    keep_raw_failures: bool = False,
 ) -> list[Reading]:
-    """Ask every question and read every reply; a failed call is recorded, not raised."""
+    """Ask every question in every style and read every reply.
+
+    The style rides on the item as `answer_style`, which `ask_reply` hands to
+    the prompt builder. A failed call is recorded, not raised.
+    """
     readings: list[Reading] = []
     terms = forbidden_terms()
-    with poisoned(poison):
-        for item in items:
+    unknown = [style for style in styles if style not in ANSWER_STYLES]
+    if unknown:
+        raise EvalError(f"unknown answer style {unknown[0]!r}")
+    asked = [dict(item, answer_style=style) for style in styles for item in items]
+    with poisoned(poison), capturing_raw_failures(keep_raw_failures) as raw:
+        for item in asked:
+            raw.take()
             try:
                 content, input_tokens, output_tokens = ask(item)
             except Exception as exc:  # noqa: BLE001 - one bad reply must not lose the run
@@ -337,7 +483,9 @@ def run(
                     item_id=str(item["id"]),
                     expected_language=str(item["expected_language"]),
                     out_of_syllabus=bool(item.get("out_of_syllabus")),
+                    style=str(item["answer_style"]),
                     error=f"{type(exc).__name__}: {str(exc)[:200]}",
+                    raw_output=raw.take(),
                 )
                 # A reply cut off at the token limit failed validation but was
                 # paid for in full; its usage rides on the failure.
@@ -356,6 +504,7 @@ def run(
 def summarize(readings: Sequence[Reading]) -> dict[str, Any]:
     answered = [reading for reading in readings if reading.error is None]
     beyond = [reading for reading in answered if reading.out_of_syllabus]
+    keyed = [reading for reading in answered if reading.gave_final_answer is not None]
     input_tokens = sum(reading.input_tokens for reading in readings)
     output_tokens = sum(reading.output_tokens for reading in readings)
 
@@ -372,6 +521,7 @@ def summarize(readings: Sequence[Reading]) -> dict[str, Any]:
         "suggest_teacher_pct_out_of_syllabus": rate(
             sum(r.suggested_teacher for r in beyond), len(beyond)
         ),
+        "final_answer_given_pct": rate(sum(bool(r.gave_final_answer) for r in keyed), len(keyed)),
         "tokens": {"input": input_tokens, "output": output_tokens},
         "cost_usd_at_first_party_rate": round(
             (input_tokens * PRICE_INPUT_PER_MTOK + output_tokens * PRICE_OUTPUT_PER_MTOK)
@@ -379,6 +529,56 @@ def summarize(readings: Sequence[Reading]) -> dict[str, Any]:
             4,
         ),
     }
+
+
+def summarize_by_style(readings: Sequence[Reading]) -> dict[str, dict[str, Any]]:
+    """One summary per style, in the order the styles are offered."""
+    return {
+        style: summarize([reading for reading in readings if reading.style == style])
+        for style in ANSWER_STYLES
+        if any(reading.style == style for reading in readings)
+    }
+
+
+def compare_to_standard(
+    by_style: Mapping[str, Mapping[str, Any]],
+    standard: Mapping[str, Any] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Each style's readings minus `standard`'s: what the style paragraph moved.
+
+    Worse is lower language consistency, or more mixing, refusals, final
+    answers given away or failed replies. No threshold: a person reads the
+    deltas and the replies. `standard` is this run's unless one is given (from
+    an earlier report).
+    """
+    standard = by_style.get("standard") if standard is None else standard
+    if standard is None:
+        return {}
+    deltas: dict[str, dict[str, Any]] = {}
+    for style, summary in by_style.items():
+        if style == "standard":
+            continue
+        deltas[style] = {
+            key: (
+                None
+                if summary.get(key) is None or standard.get(key) is None
+                else round(summary[key] - standard[key], 1)
+            )
+            for key in (*COMPARED, "errors")
+        }
+    return deltas
+
+
+def standard_from_report(path: Path) -> dict[str, Any]:
+    """The `standard` summary an earlier report measured."""
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+        standard = report["by_style"]["standard"]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise EvalError(f"no standard summary in {path}") from exc
+    if not isinstance(standard, dict):
+        raise EvalError(f"no standard summary in {path}")
+    return standard
 
 
 def bedrock_asker(
@@ -412,6 +612,7 @@ def ask_reply(
             subject=item["subject"],
             grade=item["grade"],
             locale=item["language"],
+            answer_style=str(item.get("answer_style") or "standard"),
         ),
         ask_answer.ModelCall(
             model=client, correlation_id=correlation_id, effect_id=f"eval-{item['id']}"
@@ -428,6 +629,24 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--questions", type=Path, default=QUESTIONS)
     parser.add_argument("--subset", choices=SUBSETS, default="all", help="Which questions.")
     parser.add_argument("--poison", choices=POISONS, default=None, help="Poisoned run.")
+    parser.add_argument(
+        "--style",
+        choices=STYLE_CHOICES,
+        action="append",
+        default=None,
+        help="Answer style to ask in (#314), repeatable; 'all' asks in each of the four.",
+    )
+    parser.add_argument(
+        "--compare-with",
+        type=Path,
+        default=None,
+        help="An earlier report whose standard summary the styles are compared with.",
+    )
+    parser.add_argument(
+        "--keep-raw-failures",
+        action="store_true",
+        help="Keep the model's text when a reply cannot be parsed.",
+    )
     parser.add_argument(
         "--max-calls", type=int, default=DEFAULT_MAX_CALLS, help="Refuse a bigger run."
     )
@@ -458,15 +677,27 @@ def main(
     args = parse_args(argv)
     try:
         items = select(load_questions(args.questions), args.subset)
+        chosen = args.style or ["standard"]
+        styles = (
+            ANSWER_STYLES
+            if "all" in chosen
+            else tuple(style for style in ANSWER_STYLES if style in chosen)
+        )
+        compared_standard = (
+            standard_from_report(args.compare_with) if args.compare_with else None
+        )
+        calls = len(items) * len(styles)
         plan = {
             "label": args.label,
             "subset": args.subset,
             "poison": args.poison,
-            "estimate": estimate_cost(len(items)),
+            "styles": list(styles),
+            "compare_with": str(args.compare_with) if args.compare_with else None,
+            "estimate": estimate_cost(calls),
         }
-        if len(items) > args.max_calls:
+        if calls > args.max_calls:
             raise EvalError(
-                f"{len(items)} calls planned, more than --max-calls {args.max_calls}"
+                f"{calls} calls planned, more than --max-calls {args.max_calls}"
             )
         if args.dry_run:
             print(json.dumps(plan, indent=2))
@@ -474,7 +705,13 @@ def main(
         if not args.confirm_cost:
             raise EvalError("a run that calls the model needs --confirm-cost")
         ask = asker or bedrock_asker(args.profile, args.region, args.account_id)
-        readings = run(items, ask=ask, poison=args.poison)
+        readings = run(
+            items,
+            ask=ask,
+            poison=args.poison,
+            styles=styles,
+            keep_raw_failures=args.keep_raw_failures,
+        )
     except EvalError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
@@ -486,12 +723,20 @@ def main(
         "plan": plan,
         "ran_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "summary": summarize(readings),
+        "by_style": (by_style := summarize_by_style(readings)),
+        "vs_standard": compare_to_standard(
+            by_style, None if "standard" in by_style else compared_standard
+        ),
         "replies": [reading.__dict__ for reading in readings],
     }
     args.output_dir.mkdir(parents=True, exist_ok=True)
     path = args.output_dir / f"ai-reply-eval-{args.label}.json"
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps(report["summary"], indent=2))
+    print(json.dumps(
+        report["summary"] if len(styles) == 1 and not report["vs_standard"]
+        else {"by_style": report["by_style"], "vs_standard": report["vs_standard"]},
+        indent=2,
+    ))
     print(f"report: {path}")
     return 0
 

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "card": "stoa-docs 078 (C-10); stoasystem/stoa-backend#43",
-  "note": "4 languages x 4 subjects (the platform's SUPPORTED_SUBJECTS) x 2 difficulties, plus out-of-syllabus in-subject questions far above the student's grade. The forbidden terms are read from docs/security/tutor-term-allowlist.json when the evaluation runs, so the legacy term is written nowhere here.",
+  "note": "4 languages x 4 subjects (the platform's SUPPORTED_SUBJECTS) x 2 difficulties, plus out-of-syllabus in-subject questions far above the student's grade. The forbidden terms are read from docs/security/tutor-term-allowlist.json when the evaluation runs, so the legacy term is written nowhere here. `final_answer` (#314) lists the spellings of the result for questions that have one; a reply that states any of them, ignoring spaces and LaTeX markup, gave the final answer away.",
   "items": [
     {
       "id": "de-math-easy",
@@ -11,7 +11,10 @@
       "difficulty": "easy",
       "out_of_syllabus": false,
       "question": "Wie addiere ich die Brüche 1/3 und 1/4?",
-      "expected_language": "de"
+      "expected_language": "de",
+      "final_answer": [
+        "7/12"
+      ]
     },
     {
       "id": "de-math-hard",
@@ -21,7 +24,12 @@
       "difficulty": "hard",
       "out_of_syllabus": false,
       "question": "Wie löse ich das Gleichungssystem 2x + y = 7 und x - y = 2?",
-      "expected_language": "de"
+      "expected_language": "de",
+      "final_answer": [
+        "x=3",
+        "(3|1)",
+        "(3,1)"
+      ]
     },
     {
       "id": "de-physics-easy",
@@ -41,7 +49,10 @@
       "difficulty": "hard",
       "out_of_syllabus": false,
       "question": "Ein Auto beschleunigt in 5 Sekunden von 0 auf 20 m/s. Wie gross ist die Beschleunigung?",
-      "expected_language": "de"
+      "expected_language": "de",
+      "final_answer": [
+        "4m/s"
+      ]
     },
     {
       "id": "de-german-easy",
@@ -91,7 +102,10 @@
       "difficulty": "easy",
       "out_of_syllabus": false,
       "question": "How do I find 20% of 150?",
-      "expected_language": "en"
+      "expected_language": "en",
+      "final_answer": [
+        "30"
+      ]
     },
     {
       "id": "en-math-hard",
@@ -101,7 +115,10 @@
       "difficulty": "hard",
       "out_of_syllabus": false,
       "question": "How do I solve the equation 3(x - 2) = 2x + 5?",
-      "expected_language": "en"
+      "expected_language": "en",
+      "final_answer": [
+        "x=11"
+      ]
     },
     {
       "id": "en-physics-easy",
@@ -121,7 +138,10 @@
       "difficulty": "hard",
       "out_of_syllabus": false,
       "question": "A 2 kg ball moves at 3 m/s. What is its kinetic energy?",
-      "expected_language": "en"
+      "expected_language": "en",
+      "final_answer": [
+        "9J"
+      ]
     },
     {
       "id": "en-german-easy",
@@ -171,7 +191,10 @@
       "difficulty": "easy",
       "out_of_syllabus": false,
       "question": "Comment calculer le périmètre d'un rectangle de 5 cm sur 3 cm ?",
-      "expected_language": "fr"
+      "expected_language": "fr",
+      "final_answer": [
+        "16cm"
+      ]
     },
     {
       "id": "fr-math-hard",
@@ -181,7 +204,11 @@
       "difficulty": "hard",
       "out_of_syllabus": false,
       "question": "Comment factoriser l'expression x² - 9 ?",
-      "expected_language": "fr"
+      "expected_language": "fr",
+      "final_answer": [
+        "(x-3)(x+3)",
+        "(x+3)(x-3)"
+      ]
     },
     {
       "id": "fr-physics-easy",
@@ -201,7 +228,10 @@
       "difficulty": "hard",
       "out_of_syllabus": false,
       "question": "Une résistance de 10 ohms est traversée par un courant de 2 A. Quelle est la tension ?",
-      "expected_language": "fr"
+      "expected_language": "fr",
+      "final_answer": [
+        "20V"
+      ]
     },
     {
       "id": "fr-german-easy",
@@ -251,7 +281,10 @@
       "difficulty": "easy",
       "out_of_syllabus": false,
       "question": "Come si calcola l'area di un triangolo con base 6 cm e altezza 4 cm?",
-      "expected_language": "it"
+      "expected_language": "it",
+      "final_answer": [
+        "12cm"
+      ]
     },
     {
       "id": "it-math-hard",
@@ -261,7 +294,10 @@
       "difficulty": "hard",
       "out_of_syllabus": false,
       "question": "Come si risolve la disequazione 2x - 3 > 5?",
-      "expected_language": "it"
+      "expected_language": "it",
+      "final_answer": [
+        "x>4"
+      ]
     },
     {
       "id": "it-physics-easy",
@@ -281,7 +317,19 @@
       "difficulty": "hard",
       "out_of_syllabus": false,
       "question": "Quanta energia serve per scaldare 1 kg d'acqua di 10 gradi?",
-      "expected_language": "it"
+      "expected_language": "it",
+      "final_answer": [
+        "41860J",
+        "41.86kJ",
+        "41,86kJ",
+        "41.9kJ",
+        "41,9kJ",
+        "41.8kJ",
+        "41,8kJ",
+        "41800J",
+        "42kJ",
+        "42000J"
+      ]
     },
     {
       "id": "it-german-easy",

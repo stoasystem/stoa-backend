@@ -509,3 +509,287 @@ def test_a_confirmed_run_writes_its_report(tmp_path) -> None:
     report = json.loads((tmp_path / "ai-reply-eval-offline.json").read_text())
     assert report["summary"]["language_consistency_pct"] == 100.0
     assert len(report["replies"]) == 40
+
+
+# --- Answer styles (#314) ---
+
+
+class StyleRecordingModel(FakeModel):
+    """Answers as FakeModel does, and gives the result away in the style it is told to leak in."""
+
+    def __init__(self, *, leaking_style: str | None = None) -> None:
+        super().__init__()
+        self.systems: list[str] = []
+        self.leaking_style = leaking_style
+
+    def invoke_model(self, *, modelId: str, body: str):  # noqa: N803 - boto3 casing
+        request = json.loads(body)
+        system = request["system"] if isinstance(request["system"], str) else json.dumps(
+            request["system"]
+        )
+        self.systems.append(system)
+        response = super().invoke_model(modelId=modelId, body=body)
+        leak = self.leaking_style
+        if leak is not None and ask_answer.ANSWER_STYLE_RULES[leak] in system:
+            payload = json.loads(response["body"].read())
+            content = json.loads(payload["content"][0]["text"])
+            content["answer"] += " Das Ergebnis ist $\\frac{7}{12}$."
+            payload["content"][0]["text"] = json.dumps(content, ensure_ascii=False)
+            response["body"] = io.BytesIO(json.dumps(payload).encode())
+        return response
+
+
+def _styled_as(system: str) -> str:
+    found = [
+        style for style, rule in ask_answer.ANSWER_STYLE_RULES.items() if rule in system
+    ]
+    return found[0] if found else "standard"
+
+
+def test_the_styles_are_the_ones_the_profile_offers() -> None:
+    from stoa.services import learning_profile_service
+
+    assert evaluation.ANSWER_STYLES == learning_profile_service.ANSWER_STYLE_CODES
+
+
+def test_every_known_result_is_written_as_a_list_of_spellings(items) -> None:
+    keyed = [item for item in items if "final_answer" in item]
+    assert len(keyed) >= 12
+    for item in keyed:
+        assert not item["out_of_syllabus"], item["id"]
+        assert item["subject"] in {"math", "physics"}, item["id"]
+        assert all(isinstance(entry, str) and entry.strip() for entry in item["final_answer"])
+    assert {item["language"] for item in keyed} == set(evaluation.LANGUAGES)
+
+
+def test_a_malformed_known_result_is_refused(tmp_path) -> None:
+    document = json.loads(evaluation.QUESTIONS.read_text(encoding="utf-8"))
+    document["items"][0]["final_answer"] = "7/12"
+    path = tmp_path / "questions.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    with pytest.raises(evaluation.EvalError, match="malformed final_answer"):
+        evaluation.load_questions(path)
+
+
+@pytest.mark.parametrize(
+    ("text", "spellings", "stated"),
+    [
+        ("Also 0,2 · 150 = 30.", ["30"], True),
+        ("Das sind 300 Franken.", ["30"], False),
+        ("Es kostet 3.30 Fr.", ["30"], False),
+        ("Es kostet 30.5 Fr.", ["30"], False),
+        ("Das Ergebnis ist $\\frac{7}{12}$.", ["7/12"], True),
+        ("Das Ergebnis ist $\\dfrac{7}{12}$", ["7/12"], True),
+        ("Also $x = 11$.", ["x=11"], True),
+        ("Also $x = 115$.", ["x=11"], False),
+        ("$U = 20\\,\\text{V}$", ["20V"], True),
+        ("U = 20 Volt", ["20V"], True),
+        ("Q = 41'860 J", ["41860J"], True),
+        ("$(x − 3)(x + 3)$", ["(x-3)(x+3)"], True),
+        ("x > 4", ["x>4"], True),
+        ("x > 45", ["x>4"], False),
+        ("a = 4 m/s^2", ["4m/s"], True),
+        ("a = 14 m/s^2", ["4m/s"], False),
+        ("Rechne zuerst den Nenner aus.", ["7/12"], False),
+    ],
+)
+def test_a_result_is_found_however_it_is_written(text, spellings, stated) -> None:
+    assert evaluation.states_final_answer(text, spellings) is stated
+
+
+def test_a_reply_that_states_the_result_gave_the_final_answer_away() -> None:
+    item = {"id": "q", "expected_language": "de", "subject": "math", "final_answer": ["7/12"]}
+    leaked = evaluation.read_reply(
+        item, {"steps": ["Zuerst den Nenner finden."], "answer": "Also ist es 7/12."}
+    )
+    kept = evaluation.read_reply(
+        item, {"steps": ["Zuerst den Nenner finden."], "answer": "Rechne jetzt selbst weiter."}
+    )
+    unkeyed = evaluation.read_reply(
+        {"id": "r", "expected_language": "de", "subject": "math"},
+        {"steps": ["7/12"], "answer": "7/12"},
+    )
+    assert leaked.gave_final_answer is True
+    assert kept.gave_final_answer is False
+    assert unkeyed.gave_final_answer is None
+
+
+def test_every_question_is_asked_once_in_each_style(items) -> None:
+    model = StyleRecordingModel()
+    chosen = items[:2]
+
+    readings = evaluation.run(chosen, ask=_asker(model), styles=evaluation.ANSWER_STYLES)
+
+    assert [(reading.style, reading.item_id) for reading in readings] == [
+        (style, item["id"]) for style in evaluation.ANSWER_STYLES for item in chosen
+    ]
+    assert [_styled_as(system) for system in model.systems] == [
+        style for style in evaluation.ANSWER_STYLES for _ in chosen
+    ]
+
+
+def test_a_plain_run_is_in_standard_as_before(items) -> None:
+    model = StyleRecordingModel()
+    readings = evaluation.run(items[:3], ask=_asker(model))
+    assert {reading.style for reading in readings} == {"standard"}
+    assert all("ANSWER STYLE" not in system for system in model.systems)
+
+
+def test_an_unknown_style_is_refused_before_any_call(items) -> None:
+    def never(_item):
+        raise AssertionError("an unknown style must not call the model")
+
+    with pytest.raises(evaluation.EvalError, match="unknown answer style"):
+        evaluation.run(items[:1], ask=never, styles=("sarcastic",))
+
+
+def test_a_style_that_gives_answers_away_shows_against_standard(items) -> None:
+    keyed = [item for item in items if item["id"] == "de-math-easy"]
+    model = StyleRecordingModel(leaking_style="vivid")
+
+    readings = evaluation.run(keyed, ask=_asker(model), styles=evaluation.ANSWER_STYLES)
+    by_style = evaluation.summarize_by_style(readings)
+    deltas = evaluation.compare_to_standard(by_style)
+
+    assert list(by_style) == list(evaluation.ANSWER_STYLES)
+    assert by_style["standard"]["final_answer_given_pct"] == 0.0
+    assert by_style["vivid"]["final_answer_given_pct"] == 100.0
+    assert deltas["vivid"]["final_answer_given_pct"] == 100.0
+    assert deltas["concise"]["final_answer_given_pct"] == 0.0
+    assert set(deltas) == {"concise", "encouraging", "vivid"}
+    assert set(deltas["vivid"]) == {*evaluation.COMPARED, "errors"}
+
+
+def test_all_styles_plan_four_times_the_calls(capsys) -> None:
+    assert evaluation.main(["--dry-run", "--style", "all", "--max-calls", "160"]) == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["estimate"]["calls"] == 160
+    assert plan["styles"] == list(evaluation.ANSWER_STYLES)
+
+
+def test_all_styles_count_against_the_limit(capsys) -> None:
+    assert evaluation.main(["--dry-run", "--style", "all"]) == 1
+    assert "160 calls planned, more than --max-calls 48" in capsys.readouterr().err
+
+
+def test_a_confirmed_run_in_all_styles_reports_each_against_standard(tmp_path) -> None:
+    status = evaluation.main(
+        [
+            "--confirm-cost",
+            "--style",
+            "all",
+            "--max-calls",
+            "160",
+            "--output-dir",
+            str(tmp_path),
+            "--label",
+            "styles",
+        ],
+        asker=_asker(StyleRecordingModel()),
+    )
+    assert status == 0
+    report = json.loads((tmp_path / "ai-reply-eval-styles.json").read_text(encoding="utf-8"))
+    assert len(report["replies"]) == 160
+    assert list(report["by_style"]) == list(evaluation.ANSWER_STYLES)
+    assert all(
+        summary["language_consistency_pct"] == 100.0 for summary in report["by_style"].values()
+    )
+    assert set(report["vs_standard"]) == {"concise", "encouraging", "vivid"}
+
+
+class BrokenJsonModel(FakeModel):
+    """Writes an object that never closes, which the reply parser refuses."""
+
+    BROKEN = '{"steps": ["Zuerst «schauen» wir", "dann'
+
+    def invoke_model(self, *, modelId: str, body: str):  # noqa: N803 - boto3 casing
+        response = super().invoke_model(modelId=modelId, body=body)
+        payload = json.loads(response["body"].read())
+        payload["content"][0]["text"] = self.BROKEN
+        response["body"] = io.BytesIO(json.dumps(payload).encode())
+        return response
+
+
+def test_a_refused_reply_keeps_its_text_when_asked(items) -> None:
+    from stoa.services import ai_service
+
+    original = ai_service._parse_ai_response
+    readings = evaluation.run(items[:2], ask=_asker(BrokenJsonModel()), keep_raw_failures=True)
+
+    assert [reading.error for reading in readings] == [
+        "AIInvocationFailure: malformed_response"
+    ] * 2
+    assert [reading.raw_output for reading in readings] == [BrokenJsonModel.BROKEN] * 2
+    # The parser is the production one again after the run.
+    assert ai_service._parse_ai_response is original
+
+
+def test_without_the_option_no_reply_text_is_kept(items) -> None:
+    readings = evaluation.run(items[:1], ask=_asker(BrokenJsonModel()))
+    assert readings[0].error and readings[0].raw_output is None
+
+
+def test_a_good_reply_after_a_refused_one_carries_no_stale_text(items) -> None:
+    broken = BrokenJsonModel()
+    good = FakeModel()
+    calls = iter([broken, good])
+
+    def ask(item):
+        return evaluation.ask_reply(item, next(calls))
+
+    first, second = evaluation.run(items[:2], ask=ask, keep_raw_failures=True)
+    assert first.raw_output == BrokenJsonModel.BROKEN
+    assert second.error is None and second.raw_output is None
+
+
+def test_two_styles_can_be_asked_without_standard(capsys) -> None:
+    assert evaluation.main(
+        ["--dry-run", "--style", "vivid", "--style", "encouraging", "--max-calls", "80"]
+    ) == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["styles"] == ["encouraging", "vivid"]
+    assert plan["estimate"]["calls"] == 80
+
+
+def test_two_styles_count_against_the_limit(capsys) -> None:
+    assert evaluation.main(["--dry-run", "--style", "vivid", "--style", "encouraging"]) == 1
+    assert "80 calls planned, more than --max-calls 48" in capsys.readouterr().err
+
+
+def test_styles_are_compared_with_an_earlier_standard(tmp_path) -> None:
+    earlier = tmp_path / "earlier.json"
+    earlier.write_text(
+        json.dumps({"by_style": {"standard": {
+            "errors": 2,
+            "language_consistency_pct": 90.0,
+            "mixed_language_replies": 0,
+            "refusal_pct_out_of_syllabus": 50.0,
+            "suggest_teacher_pct_out_of_syllabus": 0.0,
+            "final_answer_given_pct": 60.0,
+        }}}),
+        encoding="utf-8",
+    )
+    status = evaluation.main(
+        [
+            "--confirm-cost", "--style", "encouraging", "--compare-with", str(earlier),
+            "--output-dir", str(tmp_path), "--label", "rerun",
+        ],
+        asker=_asker(StyleRecordingModel()),
+    )
+    assert status == 0
+    report = json.loads((tmp_path / "ai-reply-eval-rerun.json").read_text(encoding="utf-8"))
+    assert list(report["by_style"]) == ["encouraging"]
+    assert report["plan"]["compare_with"] == str(earlier)
+    deltas = report["vs_standard"]["encouraging"]
+    assert deltas["language_consistency_pct"] == 10.0
+    assert deltas["errors"] == -2
+    assert deltas["final_answer_given_pct"] == -60.0
+
+
+def test_an_earlier_report_without_standard_is_refused(tmp_path, capsys) -> None:
+    earlier = tmp_path / "earlier.json"
+    earlier.write_text(json.dumps({"by_style": {"vivid": {}}}), encoding="utf-8")
+    assert evaluation.main(
+        ["--dry-run", "--style", "vivid", "--compare-with", str(earlier)]
+    ) == 1
+    assert "no standard summary" in capsys.readouterr().err

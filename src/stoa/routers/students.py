@@ -71,10 +71,14 @@ class ProfileChoices(BaseModel):
 
     The client renders these instead of keeping its own copy
     (`learning_profile_service.PROFILE_CHOICES`); the write accepts a `code`
-    from the field's list, or "" for not said.
+    from the field's list, or "" (the grade: not said; the answer style:
+    `standard`).
     """
 
     grade: list[ProfileChoice]
+    # Declared as `answer_style` (`PROFILE_CHOICES`), sent as `answerStyle`
+    # like the profile field it is the list for.
+    answerStyle: list[ProfileChoice] = Field(validation_alias="answer_style")
 
 
 class StudentProfileResponse(BaseModel):
@@ -89,6 +93,10 @@ class StudentProfileResponse(BaseModel):
     primarySubjects: list[str]
     schoolSystem: str | None = None
     preferredAnswerLanguage: str | None = None
+    # How the assistant answers this student (#314): a code from
+    # `choices.answerStyle`, `standard` when none was chosen. The student's own
+    # profile only: no parent, teacher or admin view carries or sets it.
+    answerStyle: str
     guardianStatus: str
     createdAt: str
     updatedAt: str
@@ -100,6 +108,8 @@ class UpdateStudentProfileRequest(BaseModel):
     primarySubjects: list[str] | None = None
     schoolSystem: str | None = None
     name: str | None = None
+    # A code from `choices.answerStyle`, or "" for `standard`.
+    answerStyle: str | None = None
 
 
 def _invalid_stored_student_response(correlation_id: str, field: str) -> NoReturn:
@@ -190,6 +200,7 @@ def _student_profile_response(
         preferredAnswerLanguage=_optional_profile_text(
             profile, "preferred_locale", correlation_id
         ),
+        answerStyle=learning_profile_service.answer_style_code(profile.get("answer_style")),
         guardianStatus=_guardian_status(profile),
         createdAt=_required_profile_text(profile, "created_at", correlation_id),
         updatedAt=updated_at or _required_profile_text(profile, "updated_at", correlation_id),
@@ -452,6 +463,22 @@ def _grade_to_store(sent: str) -> str:
         ) from None
 
 
+def _answer_style_to_store(sent: str) -> str:
+    """The answer style a profile write stores: a code from `choices.answerStyle`.
+
+    "" (or whitespace) is the student going back to `standard`, and is stored
+    as that code. Anything outside the list is refused, like the grade, and
+    nothing in the request is written.
+    """
+    try:
+        code = learning_profile_service.normalize_choice("answer_style", sent)
+    except ValueError:
+        raise AccountViolation(
+            AccountErrorCode.PROFILE_CHOICE_UNKNOWN, fields=["answerStyle"]
+        ) from None
+    return code or learning_profile_service.DEFAULT_ANSWER_STYLE
+
+
 @router.get("/me/profile", response_model=StudentProfileResponse)
 async def get_my_profile(
     authorized: AuthorizedResource = Depends(
@@ -491,6 +518,10 @@ async def update_my_profile(
     if body.grade is not None:
         update_expr_parts.append("grade = :g")
         expr_values[":g"] = _grade_to_store(body.grade)
+
+    if body.answerStyle is not None:
+        update_expr_parts.append("answer_style = :as")
+        expr_values[":as"] = _answer_style_to_store(body.answerStyle)
 
     if body.primarySubjects is not None:
         update_expr_parts.append("primary_subjects = :s")

@@ -9144,8 +9144,15 @@
         "type": "object"
       },
       "ProfileChoices": {
-        "description": "What each list-chosen profile field may be set to, in the order offered.\n\nThe client renders these instead of keeping its own copy\n(`learning_profile_service.PROFILE_CHOICES`); the write accepts a `code`\nfrom the field's list, or \"\" for not said.",
+        "description": "What each list-chosen profile field may be set to, in the order offered.\n\nThe client renders these instead of keeping its own copy\n(`learning_profile_service.PROFILE_CHOICES`); the write accepts a `code`\nfrom the field's list, or \"\" (the grade: not said; the answer style:\n`standard`).",
         "properties": {
+          "answerStyle": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileChoice"
+            },
+            "title": "Answerstyle",
+            "type": "array"
+          },
           "grade": {
             "items": {
               "$ref": "#/components/schemas/ProfileChoice"
@@ -9155,7 +9162,8 @@
           }
         },
         "required": [
-          "grade"
+          "grade",
+          "answerStyle"
         ],
         "title": "ProfileChoices",
         "type": "object"
@@ -11825,6 +11833,10 @@
       },
       "StudentProfileResponse": {
         "properties": {
+          "answerStyle": {
+            "title": "Answerstyle",
+            "type": "string"
+          },
           "choices": {
             "$ref": "#/components/schemas/ProfileChoices"
           },
@@ -11897,6 +11909,7 @@
           "email",
           "grade",
           "primarySubjects",
+          "answerStyle",
           "guardianStatus",
           "createdAt",
           "updatedAt",
@@ -13567,6 +13580,17 @@
       },
       "UpdateStudentProfileRequest": {
         "properties": {
+          "answerStyle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answerstyle"
+          },
           "grade": {
             "anyOf": [
               {
