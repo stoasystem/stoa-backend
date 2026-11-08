@@ -17,7 +17,7 @@ from boto3.dynamodb.conditions import Key
 
 from stoa.db import table as db_table
 from stoa.db.dynamodb import get_table
-from stoa.db.repositories import account_deletion_repo, attachment_repo
+from stoa.db.repositories import attachment_repo
 from stoa.db.repositories.attachment_repo import AttachmentRepositoryConflict
 from stoa.security.attachment_errors import AttachmentDecisionError, AttachmentErrorCode
 
@@ -91,8 +91,10 @@ def build_conversation_write_transaction(
     generation: int,
     mode: str = "put",
 ) -> list[dict[str, object]]:
-    """Build one owner-stamped conversation write behind the permanent fence.
+    """Build one owner-stamped conversation write, to be sent behind the permanent fence.
 
+    Returns the write alone; the transaction it goes in is sent through
+    `db_table.fenced(owner_id, ..., generation=generation)`, which checks the fence.
     Message rows no longer go through it: `append` (in `_write`) makes them.
     """
     if not owner_id or type(generation) is not int or generation <= 0:
@@ -125,7 +127,7 @@ def build_conversation_write_transaction(
         }
     else:
         raise AttachmentRepositoryConflict("conditional_conflict")
-    return [account_deletion_repo.active_fence_condition(owner_id, generation), mutation]
+    return [mutation]
 
 
 def _conversation_write(
@@ -142,15 +144,15 @@ def _conversation_write(
     target = table or get_table()
     if not db_table.transactional(target) and hasattr(target, "put_item") and mode == "put":
         # Narrow compatibility for inherited in-memory fakes. Production tables
-        # always execute the two-item transaction above.
-        put = attachment_repo._mapping(operations[1].get("Put"))
+        # always execute the fenced transaction below.
+        put = attachment_repo._mapping(operations[0].get("Put"))
         attachment_repo._put_item(target, Item=attachment_repo._mapping(put.get("Item")))
     else:
         try:
-            db_table.transact(operations, table=target)
+            db_table.fenced(owner_id, operations, generation=generation, table=target)
         except (db_table.WriteRefused, db_table.TableUnavailable) as exc:
             raise AttachmentRepositoryConflict("conditional_conflict") from exc
-    return attachment_repo._mapping(attachment_repo._mapping(operations[1].get("Put")).get("Item"))
+    return attachment_repo._mapping(attachment_repo._mapping(operations[0].get("Put")).get("Item"))
 
 
 def create_conversation_record(

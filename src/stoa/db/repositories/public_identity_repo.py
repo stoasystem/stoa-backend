@@ -262,14 +262,9 @@ def create_or_get_public_identity_command(
     table = get_table()
     if hasattr(getattr(table, "meta", None), "client"):
         try:
-            fence = account_deletion_repo.require_active_account_fence(
-                normalized_user_id, table=table
-            )
-            db_table.transact(
+            db_table.fenced(
+                normalized_user_id,
                 [
-                    account_deletion_repo.active_fence_condition(
-                        normalized_user_id, int(fence["generation"])
-                    ),
                     {
                         "Put": {
                             "Item": command.as_item(),

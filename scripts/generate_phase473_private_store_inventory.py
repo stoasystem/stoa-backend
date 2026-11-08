@@ -163,7 +163,10 @@ for _finding in FINDING_REGISTRY:
     _finding["privacy_surface"] = "bounded_noncontent_lifecycle_facts"
 
 
-SEMANTIC_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
+# A token is a string the symbol's source must contain, or a tuple of strings of
+# which it must contain one: the reviewed form at the pinned candidate and the
+# form the same guarantee took after it.
+SEMANTIC_REQUIREMENTS: dict[str, dict[str, tuple[str | tuple[str, ...], ...]]] = {
     "src/stoa/db/repositories/account_deletion_repo.py": {
         "claim_deletion_command": ("lease_expires_at<:now_epoch", ":now_epoch", ":expiry"),
         "renew_deletion_command_claim": (
@@ -201,7 +204,9 @@ SEMANTIC_REQUIREMENTS: dict[str, dict[str, tuple[str, ...]]] = {
             "intent_version=:version",
             "scope_digest=:scope",
             "payload_digest=:payload",
-            "active_fence_condition",
+            # The begin's write holds the owner's account fence: built by hand at
+            # the candidate, added by the table gateway since #297.
+            ("active_fence_condition", "db_table.fenced("),
             "classification_digest=:classification_seal",
         ),
         "recover_delivery_intent": (
@@ -480,7 +485,7 @@ def validate_private_store_semantics(root: Path | str) -> None:
                 )
         for symbol, required in symbol_requirements.items():
             body = functions.get(symbol)
-            if body is None or any(token not in body for token in required):
+            if body is None or not all(_contains(body, token) for token in required):
                 raise ValueError(
                     f"reviewed private-store semantic missing: {relative}:{symbol}"
                 )
@@ -505,6 +510,11 @@ def validate_private_store_semantics(root: Path | str) -> None:
             raise ValueError(
                 "reviewed private-store semantic missing: authoritative websocket load"
             )
+
+
+def _contains(body: str, token: str | tuple[str, ...]) -> bool:
+    alternatives = (token,) if isinstance(token, str) else token
+    return any(alternative in body for alternative in alternatives)
 
 
 def discover_mutation_sinks(root: Path | str) -> list[MutationSink]:

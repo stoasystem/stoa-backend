@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 
+from fakes.dynamodb import from_wire
 from stoa.config import Settings
 from stoa.db.repositories import attachment_repo
 from stoa.services import attachment_service, learning_session
@@ -152,14 +153,22 @@ def test_message_association_transaction_checks_resource_and_account_fences() ->
     )
 
     checks = _condition_checks(operations)
-    assert len(checks) == 2
-    assert {check["Key"]["SK"] for check in checks} == {
-        "ACCOUNT_FENCE",
+    assert [check["Key"]["SK"] for check in checks] == [
         f"RETENTION#RESOURCE#conversation#{RESOURCE}",
-    }
-    account = next(check for check in checks if check["Key"]["SK"] == "ACCOUNT_FENCE")
-    assert account["Key"]["PK"] == f"USER#{OWNER}"
+    ]
+
+    # The account fence is the table gateway's to add, first, when it is sent.
+    sent: list[dict[str, Any]] = []
+
+    class _Capture:
+        def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+            sent.extend(from_wire(TransactItems))
+
+    attachment_repo.transact(operations, owner=OWNER, generation=1, table=_Capture())
+    account = sent[0]["ConditionCheck"]
+    assert account["Key"] == {"PK": f"USER#{OWNER}", "SK": "ACCOUNT_FENCE"}
     assert account["ConditionExpression"] == "#status=:active AND generation=:generation"
+    assert len([operation for operation in sent if "ConditionCheck" in operation]) == 2
 
 
 class _VersionListingS3:

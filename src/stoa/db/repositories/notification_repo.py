@@ -500,15 +500,15 @@ def classify_delivery_transaction_failure(
     scope: DeliveryIntentScope,
     claim: DeliveryIntentClaim,
     operation_count: int,
-    fence_operation_index: int | None,
-    intent_operation_index: int,
     table: object | None = None,
 ) -> DeliveryBeginResult:
     """Classify a failed begin using ordered reasons and authoritative strong reads.
 
     A transaction/provider exception is never itself evidence of account deletion.
-    The deletion outcome requires both an exact fence-condition cancellation reason
-    and a strong read of the permanent fence in a deletion state.
+    The deletion outcome requires both the fence condition refusing the write
+    (`AccountNotWritable` from the gateway) and a strong read of the permanent
+    fence in a deletion state. `operation_count` is the number of the begin's own
+    operations, the fence check not among them.
     """
     target = table or get_table()
     try:
@@ -520,20 +520,10 @@ def classify_delivery_transaction_failure(
     if begun_claim is not None:
         return DeliveryBeginResult(DeliveryBeginDisposition.BEGUN, begun_claim)
 
-    # Only the table's own per-operation reasons say which condition lost; the
-    # gateway has already read and sorted them.
     if (
-        not isinstance(exc, db_table.WriteRefused)
-        or exc.code != "TransactionCanceledException"
-        or len(exc.reasons) != operation_count
-        or exc.causes - {db_table.ReasonKind.CONDITION_FAILED}
+        isinstance(exc, account_deletion_repo.AccountNotWritable)
+        and scope.kind == "private_owner"
     ):
-        return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
-    conditional_indexes = list(exc.failed_conditions)
-
-    if fence_operation_index is not None and fence_operation_index in conditional_indexes:
-        if scope.kind != "private_owner":
-            return DeliveryBeginResult(DeliveryBeginDisposition.CLAIM_LOST)
         try:
             fence = account_deletion_repo.get_account_fence(
                 str(scope.owner_id), table=target
@@ -549,15 +539,20 @@ def classify_delivery_transaction_failure(
             return DeliveryBeginResult(
                 DeliveryBeginDisposition.PROVEN_ACCOUNT_DELETED
             )
-        if fence is None or fence.get("status") != "active":
-            return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
+        # The fence refused but is not deleting this generation: the reasons
+        # of the begin's own operations were not kept, so it is tried again.
+        return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
 
-    if intent_operation_index in conditional_indexes:
-        return DeliveryBeginResult(DeliveryBeginDisposition.CLAIM_LOST)
-    if any(
-        index not in {fence_operation_index, intent_operation_index}
-        for index in conditional_indexes
+    # Only the table's own per-operation reasons say which condition lost; the
+    # gateway has already read and sorted them.
+    if (
+        not isinstance(exc, db_table.WriteRefused)
+        or exc.code != "TransactionCanceledException"
+        or len(exc.reasons) != operation_count
+        or exc.causes - {db_table.ReasonKind.CONDITION_FAILED}
     ):
+        return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
+    if exc.failed_conditions:
         return DeliveryBeginResult(DeliveryBeginDisposition.CLAIM_LOST)
     return DeliveryBeginResult(DeliveryBeginDisposition.DEPENDENCY_RETRY)
 
@@ -620,7 +615,7 @@ def build_notification_write_transaction(
         "owner_id": owner_id,
         "account_fence_generation": generation,
     }
-    operations = [account_deletion_repo.active_fence_condition(owner_id, generation)]
+    operations: list[NotificationItem] = []
     if mode == "put":
         operations.append(
             {
@@ -679,7 +674,8 @@ def _persist_private(
         raise account_deletion_repo.AccountDeletionConflict("notification owner is required")
     generation = _generation(owner_id, item.get("account_fence_generation"), target)
     stored = {**item, "owner_id": owner_id, "account_fence_generation": generation}
-    db_table.transact(
+    db_table.fenced(
+        owner_id,
         build_notification_write_transaction(
             item=stored,
             owner_id=owner_id,
@@ -687,6 +683,7 @@ def _persist_private(
             mode=mode,
             updates=updates,
         ),
+        generation=generation,
         table=target,
     )
     return stored
@@ -1005,12 +1002,14 @@ def put_payment_expiry_reminder(
         persisted = hook(stored)
         return stored if persisted is None else _dependency_mapping(persisted)
     try:
-        db_table.transact(
+        db_table.fenced(
+            parent_id,
             build_notification_write_transaction(
                 item=stored,
                 owner_id=parent_id,
                 generation=generation,
             ),
+            generation=generation,
             table=target,
         )
     except Exception as exc:
@@ -1041,7 +1040,8 @@ def _update_payment_expiry_reminder(
     generation = _generation(
         parent_id, current.get("account_fence_generation"), target
     )
-    db_table.transact(
+    db_table.fenced(
+        parent_id,
         build_notification_write_transaction(
             item=current,
             owner_id=parent_id,
@@ -1049,6 +1049,7 @@ def _update_payment_expiry_reminder(
             mode="update",
             updates=updates,
         ),
+        generation=generation,
         table=target,
     )
     return {**current, **dict(updates)}
@@ -1150,13 +1151,15 @@ def register_delivery_intent(
         persisted = hook(item)
         return item if not persisted else _dependency_mapping(persisted)
     if scope.kind == "private_owner":
-        db_table.transact(
+        db_table.fenced(
+            str(scope.owner_id),
             build_notification_write_transaction(
                 item=item,
                 owner_id=str(scope.owner_id),
                 generation=int(scope.generation or 0),
                 mode="put",
             ),
+            generation=int(scope.generation or 0),
             table=target,
         )
     else:
@@ -1333,9 +1336,7 @@ def begin_delivery_effect(
                 exc,
                 scope=scope,
                 claim=claim,
-                operation_count=2,
-                fence_operation_index=0 if scope.kind == "private_owner" else None,
-                intent_operation_index=1,
+                operation_count=1 if scope.kind == "private_owner" else 2,
                 table=target,
             )
     condition_expression = (
@@ -1354,13 +1355,7 @@ def begin_delivery_effect(
         ":one": 1,
     }
     event_checks: list[NotificationItem] = []
-    if scope.kind == "private_owner":
-        event_checks.append(
-            account_deletion_repo.active_fence_condition(
-                str(scope.owner_id), int(scope.generation or 0)
-            )
-        )
-    else:
+    if scope.kind != "private_owner":
         intent = _optional_item(
             _get_item(
                 target,
@@ -1434,15 +1429,21 @@ def begin_delivery_effect(
     update: NotificationItem = {"Update": update_details}
     operations = [*event_checks, update]
     try:
-        db_table.transact(operations, table=target)
+        if scope.kind == "private_owner":
+            db_table.fenced(
+                str(scope.owner_id),
+                operations,
+                generation=int(scope.generation or 0),
+                table=target,
+            )
+        else:
+            db_table.transact(operations, table=target)
     except Exception as exc:
         return classify_delivery_transaction_failure(
             exc,
             scope=scope,
             claim=claim,
             operation_count=len(operations),
-            fence_operation_index=0 if scope.kind == "private_owner" else None,
-            intent_operation_index=len(operations) - 1,
             table=target,
         )
     return DeliveryBeginResult(

@@ -123,13 +123,10 @@ def activate_student_free_trial(
                     "attribute_not_exists(#trial_schema_field)"
                 ),
             )
-            db_table.transact(
-                [
-                    account_deletion_repo.active_fence_condition(
-                        student_id, generation
-                    ),
-                    operation,
-                ],
+            db_table.fenced(
+                student_id,
+                [operation],
+                generation=generation,
                 # The table the fence above was read from.
                 table=account_deletion_repo.get_table(),
             )

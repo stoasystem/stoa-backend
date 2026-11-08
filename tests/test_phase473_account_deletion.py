@@ -272,11 +272,22 @@ def test_every_primary_writer_uses_the_same_active_fence_and_exact_generation(mo
     repository, _service, _job = _deletion_modules()
     expected_key = repository.account_fence_key(STUDENT_ID)
 
-    profile_ops = user_repo.build_profile_update_transaction(
+    profile_ops: list[dict[str, Any]] = []
+
+    class _ProfileTable:
+        def get_item(self, *, Key: dict[str, str], **_kwargs: Any) -> dict[str, Any]:  # noqa: N803
+            if Key["SK"] == "ACCOUNT_FENCE":
+                return {"Item": {**Key, "status": "active", "generation": 4}}
+            return {"Item": {**Key, "user_id": STUDENT_ID, "version": 1}}
+
+        def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+            profile_ops.extend(from_wire(TransactItems))
+
+    monkeypatch.setattr(user_repo, "get_table", _ProfileTable)
+    user_repo.update_profile_fields_versioned(
         STUDENT_ID,
         update_expression="SET grade=:grade",
         expression_attribute_values={":grade": "9"},
-        expected_generation=4,
     )
     # No question row is written any more; a help request is (#189), and a
     # write that puts rows in the student's conversation carries their fence.
@@ -311,11 +322,19 @@ def test_every_primary_writer_uses_the_same_active_fence_and_exact_generation(mo
         table=_CapturingTable(),
     )
     # The question attachment writer this checked went with #148; a
-    # conversation write is the learning session's writer now (#226).
-    attachment_checks = learning_session.build_conversation_write_transaction(
-        item={"PK": "CONV#c-1", "SK": "CONV", "conversation_id": "c-1"},
+    # conversation write is the learning session's writer now (#226), sent
+    # behind the fence by the table gateway (#297).
+    attachment_checks: list[dict[str, Any]] = []
+
+    class _ConversationTable:
+        def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+            attachment_checks.extend(from_wire(TransactItems))
+
+    learning_session._store.create_conversation_record(
+        {"PK": "CONV#c-1", "SK": "CONV", "conversation_id": "c-1"},
         owner_id=STUDENT_ID,
         generation=4,
+        table=_ConversationTable(),
     )
     def payload(operation: object) -> dict[str, Any]:
         if isinstance(operation, attachment_repo.TransactionOperation):

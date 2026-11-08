@@ -186,7 +186,7 @@ def build_ai_draft_write_transaction(
         "owner_id": owner_id,
         "account_fence_generation": generation,
     }
-    operations = [account_deletion_repo.active_fence_condition(owner_id, generation)]
+    operations: list[AIDraftItem] = []
     if mode == "put":
         operations.append(
             {
@@ -237,9 +237,9 @@ def put_draft(item: AIDraftItem) -> None:
         item=stored, owner_id=owner, generation=generation
     )
     if _atomic_table(table):
-        db_table.transact(operations, table=table)
+        db_table.fenced(owner, operations, generation=generation, table=table)
     else:
-        put = _mapping(operations[1].get("Put"))
+        put = _mapping(operations[0].get("Put"))
         _put_item(table, Item=_mapping(put.get("Item")))
     item.update(owner_id=owner, account_fence_generation=generation)
 
@@ -273,7 +273,7 @@ def update_draft(
             mode="update",
             updates=updates,
         )
-        db_table.transact(operations, table=table)
+        db_table.fenced(owner, operations, generation=generation, table=table)
     else:
         _update_item(
             table,

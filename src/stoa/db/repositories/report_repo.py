@@ -339,9 +339,9 @@ def put_report(item: ReportItem) -> None:
     owner_id = item.get("student_id")
     generation = item.get("account_fence_generation")
     if isinstance(owner_id, str) and type(generation) is int and generation > 0:
-        db_table.transact(
+        db_table.fenced(
+            owner_id,
             [
-                account_deletion_repo.active_fence_condition(owner_id, generation),
                 {
                     "Put": {
                         "Item": {"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item},
@@ -361,6 +361,7 @@ def put_report(item: ReportItem) -> None:
                     }
                 },
             ],
+            generation=generation,
             table=table,
         )
         return
@@ -373,9 +374,9 @@ def try_claim_report_generation(item: ReportItem) -> bool:
     generation = item.get("account_fence_generation")
     if isinstance(owner_id, str) and type(generation) is int and generation > 0:
         try:
-            db_table.transact(
+            db_table.fenced(
+                owner_id,
                 [
-                    account_deletion_repo.active_fence_condition(owner_id, generation),
                     {
                         "Put": {
                             "Item": {"PK": f"REPORT#{item['report_id']}", "SK": "SUMMARY", **item},
@@ -383,6 +384,7 @@ def try_claim_report_generation(item: ReportItem) -> bool:
                         }
                     },
                 ],
+                generation=generation,
                 table=table,
             )
         except (
@@ -2033,9 +2035,9 @@ def register_report_object_intent(
     if isinstance(target, _RegisterObjectIntentHook):
         persisted = target.register_report_object_intent(dict(item))
         return _dependency_mapping(persisted) if persisted is not None else item
-    db_table.transact(
+    db_table.fenced(
+        owner,
         [
-            account_deletion_repo.active_fence_condition(owner, generation),
             {
                 "Put": {
                     "Item": item,
@@ -2043,6 +2045,7 @@ def register_report_object_intent(
                 }
             },
         ],
+        generation=generation,
         table=target,
     )
     return item
@@ -2084,9 +2087,9 @@ def record_report_object_coordinate(
             dict(intent), dict(coordinate), now_iso
         )
         return _dependency_mapping(persisted) if persisted is not None else updated
-    db_table.transact(
+    db_table.fenced(
+        owner,
         [
-            account_deletion_repo.active_fence_condition(owner, generation),
             {
                 "Update": {
                     "Key": {"PK": str(intent["PK"]), "SK": str(intent["SK"])},
@@ -2111,6 +2114,7 @@ def record_report_object_coordinate(
                 }
             },
         ],
+        generation=generation,
         table=target,
     )
     return updated
@@ -2213,9 +2217,9 @@ def register_report_email_intent(
     if isinstance(target, _RegisterEmailIntentHook):
         persisted = target.register_report_email_intent(dict(item))
         return _dependency_mapping(persisted) if persisted is not None else item
-    db_table.transact(
+    db_table.fenced(
+        owner,
         [
-            account_deletion_repo.active_fence_condition(owner, generation),
             {
                 "Put": {
                     "Item": item,
@@ -2223,6 +2227,7 @@ def register_report_email_intent(
                 }
             },
         ],
+        generation=generation,
         table=target,
     )
     return item

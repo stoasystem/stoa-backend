@@ -60,14 +60,13 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
 
 
 def _commit(table: FakeTable, case_id: str, extra: list[dict[str, Any]] | None = None):
-    def commit(operations: tuple[dict[str, Any], ...]) -> bool:
+    def commit(operations: tuple[dict[str, Any], ...], fences=None) -> bool:
         try:
-            db_table.transact(
-                [
-                    account_deletion_repo.active_fence_condition(STUDENT, FENCE),
-                    *operations,
-                    *(extra or []),
-                ],
+            db_table.fenced(
+                STUDENT,
+                [*operations, *(extra or [])],
+                generation=FENCE,
+                also=fences,
                 table=table,
             )
         except account_deletion_repo.AccountDeletionConflict:

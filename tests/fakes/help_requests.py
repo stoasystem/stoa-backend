@@ -48,6 +48,6 @@ def seed_reply(
     write = learning_session.build_conversation_write_transaction(
         item=row, owner_id=student_id, generation=generation
     )
-    stamped = dict(write[1]["Put"]["Item"])
+    stamped = dict(write[0]["Put"]["Item"])
     table.seed(stamped)
     return stamped

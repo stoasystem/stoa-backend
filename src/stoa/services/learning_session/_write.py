@@ -97,8 +97,8 @@ def append(
     Returns `{"Put": {...}}` for the caller's transaction, conditional on the
     row not existing yet. It is not fenced on its own: every transaction a
     message is written in already checks the student's account fence once
-    (`account_deletion_repo.active_fence_condition(student_id, generation)`),
-    and the row is stamped with that `generation`.
+    (`db_table.fenced(student_id, ..., generation=generation)`), and the row is
+    stamped with that `generation`.
 
     The row is stamped with its key, the schema, the student as owner and the
     fence generation. Each role takes its own keyword arguments, refused for

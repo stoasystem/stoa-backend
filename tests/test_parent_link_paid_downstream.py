@@ -435,7 +435,7 @@ def test_link_only_student_occupies_the_teacher_support_allowance(
         case_kind="question",
         beneficiary_id=STUDENT,
         observed_at=NOW,
-        persist_case=lambda operations: _persist(table, operations),
+        persist_case=lambda operations, fences: _persist(table, operations, fences),
         table=table,
     )
 
@@ -444,9 +444,23 @@ def test_link_only_student_occupies_the_teacher_support_allowance(
     assert result.admission.post_admission_count == 1
 
 
-def _persist(table: ConditionalTable, operations: tuple[dict[str, Any], ...]) -> bool:
+def _persist(
+    table: ConditionalTable,
+    operations: tuple[dict[str, Any], ...],
+    fences: dict[str, int],
+) -> bool:
+    """Commit as the case repository would, short of the student's own fence."""
     try:
-        db_table.transact(list(operations), table=table)
+        db_table.transact(
+            [
+                *(
+                    account_deletion_repo.active_fence_condition(account, generation)
+                    for account, generation in fences.items()
+                ),
+                *operations,
+            ],
+            table=table,
+        )
     except db_table.WriteRefused:
         return False
     return True
@@ -475,11 +489,11 @@ def test_link_revoked_after_the_preread_cancels_the_paid_admission_only(
 
     revoked: list[bool] = []
 
-    def persist(operations: tuple[dict[str, Any], ...]) -> bool:
+    def persist(operations: tuple[dict[str, Any], ...], fences: dict[str, int]) -> bool:
         if not revoked:
             revoked.append(True)
             _revoke_link()
-        return _persist(table, operations)
+        return _persist(table, operations, fences)
 
     result = teacher_support_allowance_service.admit_teacher_support_case(
         support_case_id="question-2",
@@ -548,8 +562,8 @@ def test_grant_stored_before_this_card_admits_through_the_link_conditions(
         case_kind="question",
         beneficiary_id=STUDENT,
         observed_at=NOW,
-        persist_case=lambda operations: (
-            captured.append(operations) or _persist(table, operations)
+        persist_case=lambda operations, fences: (
+            captured.append(operations) or _persist(table, operations, fences)
         ),
         table=table,
     )
@@ -680,7 +694,7 @@ def _admit(fake: ConditionalTable, case_id: str) -> Any:
         case_kind="question",
         beneficiary_id=STUDENT,
         observed_at=NOW,
-        persist_case=lambda operations: _persist(fake, operations),
+        persist_case=lambda operations, fences: _persist(fake, operations, fences),
         table=fake,
     )
 

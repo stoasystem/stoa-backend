@@ -150,9 +150,9 @@ def list_links_for_student(student_id: str, *, table: Any | None = None) -> list
     return _items(response.get("Items", []))
 
 
-def _participant_fence_conditions(
-    parent_id: str, student_id: str, *, target: Any
-) -> list[dict[str, Any]]:
+def _write_behind_participant_fences(
+    body: Mapping[str, Any], operations: list[dict[str, Any]], *, target: Any, refusal: str
+) -> None:
     """Both accounts must still be writable, judged inside the write itself.
 
     A profile stays active and readable after a deletion is accepted; the fence
@@ -160,20 +160,17 @@ def _participant_fence_conditions(
     private relationship into an account already being deleted, and the two
     relationship rows were the only things the transaction conditioned on.
     """
-    conditions: list[dict[str, Any]] = []
-    for user_id in (parent_id, student_id):
-        try:
-            fence = account_deletion_repo.require_active_account_fence(
-                user_id, table=target
-            )
-        except account_deletion_repo.AccountDeletionConflict as exc:
-            raise ParentLinkConflict("parent link participant is not writable") from exc
-        conditions.append(
-            account_deletion_repo.active_fence_condition(
-                user_id, int(fence["generation"])
-            )
+    try:
+        db_table.fenced(
+            str(body["parent_id"]),
+            operations,
+            also={str(body["student_id"]): None},
+            table=target,
         )
-    return conditions
+    except account_deletion_repo.AccountDeletionConflict as exc:
+        raise ParentLinkConflict("parent link participant is not writable") from exc
+    except (db_table.WriteRefused, db_table.TableUnavailable) as exc:
+        raise ParentLinkConflict(refusal) from exc
 
 
 def _both_sides(body: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -209,10 +206,7 @@ def create_link(
     )
     target = table or get_table()
     forward, reverse = _both_sides(body)
-    operations = _participant_fence_conditions(
-        str(body["parent_id"]), str(body["student_id"]), target=target
-    )
-    operations.extend(
+    operations = [
         {
             "Put": {
                 "Item": item,
@@ -220,11 +214,10 @@ def create_link(
             }
         }
         for item in (forward, reverse)
+    ]
+    _write_behind_participant_fences(
+        body, operations, target=target, refusal="parent link already exists"
     )
-    try:
-        db_table.transact(operations, table=target)
-    except (db_table.WriteRefused, db_table.TableUnavailable) as exc:
-        raise ParentLinkConflict("parent link already exists") from exc
     return dict(body)
 
 
@@ -247,10 +240,7 @@ def _conditional_rewrite(
     refusal: str,
 ) -> LinkItem:
     forward, reverse = _both_sides(body)
-    operations = _participant_fence_conditions(
-        str(body["parent_id"]), str(body["student_id"]), target=target
-    )
-    operations.extend(
+    operations = [
         {
             "Put": {
                 "Item": item,
@@ -260,11 +250,8 @@ def _conditional_rewrite(
             }
         }
         for item in (forward, reverse)
-    )
-    try:
-        db_table.transact(operations, table=target)
-    except (db_table.WriteRefused, db_table.TableUnavailable) as exc:
-        raise ParentLinkConflict(refusal) from exc
+    ]
+    _write_behind_participant_fences(body, operations, target=target, refusal=refusal)
     return dict(body)
 
 

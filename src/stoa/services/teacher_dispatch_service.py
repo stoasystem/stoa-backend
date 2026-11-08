@@ -1,8 +1,9 @@
 """Which teacher a help request is offered to: the ranking policy.
 
 `plan_dispatch` ranks the teachers who could take a request now, and
-`teacher_assignment_conditions` binds an offer to the chosen teacher's account
-and profile as they were read. The two availability readers tell a student
+`teacher_assignment_conditions` binds an offer to the chosen teacher's profile
+as it was read; the write holds the teacher's account fence at the generation
+read with it (`db_table.fenced`). The two availability readers tell a student
 whether anyone is on dispatch and a teacher whether they are. The request
 itself - its offers, deadlines and lapses - is `help_requests`' (#189).
 """
@@ -112,18 +113,17 @@ def plan_dispatch(
 
 def teacher_assignment_conditions(
     teacher: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Bind a planned candidate's active fence and exact profile into a write.
+) -> tuple[dict[str, Any]]:
+    """Bind a planned candidate's exact profile into a write.
 
     ``teacher`` is a `plan_dispatch` candidate; `help_requests` adds these to
-    an offer, and to a teacher's move on a request.
+    an offer, and to a teacher's move on a request, sent behind the teacher's
+    account fence at the candidate's `accountFenceGeneration`.
     """
     teacher_id = str(teacher["teacherId"])
     role = str(teacher["role"])
-    generation = int(teacher["accountFenceGeneration"])
     profile_version = int(teacher["profileVersion"])
     return (
-        account_deletion_repo.active_fence_condition(teacher_id, generation),
         {
             "ConditionCheck": {
                 "Key": {"PK": f"USER#{teacher_id}", "SK": "PROFILE"},

@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from stoa.db import table as db_table
 from stoa.db.repositories import (
     adaptive_learning_repo,
     ai_teacher_tools_repo,
@@ -35,6 +36,22 @@ def _fence(operation: dict[str, Any]) -> dict[str, Any]:
     assert check["Key"] == {"PK": f"USER#{STUDENT_ID}", "SK": "ACCOUNT_FENCE"}
     assert check["ExpressionAttributeValues"][":generation"] == GENERATION
     return check
+
+
+def _sent(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """What reaches the table when a builder's operations are written behind the fence."""
+    assert not any(
+        operation.get("ConditionCheck", {}).get("Key", {}).get("SK") == "ACCOUNT_FENCE"
+        for operation in operations
+    ), "the gateway adds the fence; a builder that adds it too holds it twice"
+    sent: list[list[dict[str, Any]]] = []
+
+    class _Table:
+        def transact_write_items(self, *, TransactItems: list[dict[str, Any]]) -> None:  # noqa: N803
+            sent.append(from_wire(TransactItems))
+
+    db_table.fenced(STUDENT_ID, operations, generation=GENERATION, table=_Table())
+    return sent[0]
 
 
 def test_source_registry_closes_learning_rows_writers_and_private_fields() -> None:
@@ -111,11 +128,13 @@ def test_every_learning_write_builder_starts_with_exact_account_fence() -> None:
         ),
     )
     for builder, item, mode in builders:
-        operations = builder(
-            item=item,
-            owner_id=STUDENT_ID,
-            generation=GENERATION,
-            mode=mode,
+        operations = _sent(
+            builder(
+                item=item,
+                owner_id=STUDENT_ID,
+                generation=GENERATION,
+                mode=mode,
+            )
         )
         _fence(operations[0])
         mutation = operations[1]["Put"]
@@ -140,7 +159,7 @@ def test_existing_assignment_and_draft_updates_require_owner_and_row() -> None:
         mode="update",
         updates={"status": "accepted"},
     )
-    for operations in (assignment_ops, draft_ops):
+    for operations in (_sent(assignment_ops), _sent(draft_ops)):
         _fence(operations[0])
         update = operations[1]["Update"]
         condition = update["ConditionExpression"]
@@ -150,7 +169,7 @@ def test_existing_assignment_and_draft_updates_require_owner_and_row() -> None:
 
 def test_curriculum_signal_is_random_owner_manifested_and_fenced_without_student_hash() -> None:
     build = _contract(curriculum_analytics_repo, "build_curriculum_signal_transaction")
-    operations = build(
+    built = build(
         student_id=STUDENT_ID,
         generation=GENERATION,
         item={
@@ -166,6 +185,7 @@ def test_curriculum_signal_is_random_owner_manifested_and_fenced_without_student
             "created_at": NOW,
         },
     )
+    operations = _sent(built)
     _fence(operations[0])
     signal = operations[1]["Put"]["Item"]
     manifest = operations[2]["Put"]["Item"]

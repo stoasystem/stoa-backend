@@ -115,7 +115,7 @@ def world(monkeypatch) -> World:
     def admit(*, persist_case, **_kwargs):
         if built.admission is not Admission.ADMITTED:
             return teacher_support_allowance_service.TeacherSupportAdmissionResult(built.admission)
-        assert persist_case(())
+        assert persist_case((), {})
         return teacher_support_allowance_service.TeacherSupportAdmissionResult(Admission.ADMITTED)
 
     def refund(*, persist_refund, reason, **_kwargs):

@@ -174,8 +174,8 @@ def save_card(
         else None,
     )
     if _atomic_table(target):
-        db_table.transact(operations, table=target)
+        db_table.fenced(student_id, operations, generation=generation, table=target)
     else:
-        _put_item(target, Item=operations[1]["Put"]["Item"])
+        _put_item(target, Item=operations[0]["Put"]["Item"])
     item.update(owner_id=student_id, account_fence_generation=generation)
     return item

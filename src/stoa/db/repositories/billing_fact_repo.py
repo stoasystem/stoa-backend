@@ -780,9 +780,15 @@ def commit_paid_activation(
     grant_items: Sequence[Mapping[str, object]],
     allowance_item: Mapping[str, object],
     grant_operations: Sequence[Mapping[str, object]] = (),
+    account_fences: Mapping[str, int] | None = None,
     table: object | None = None,
 ) -> ActivationResult:
-    """Conditionally publish command, billing, grants, allowance, and one receipt."""
+    """Conditionally publish command, billing, grants, allowance, and one receipt.
+
+    `account_fences` names each account the grants were proven against - the
+    parent among them - with the fence generation its proof read; the
+    transaction is then sent behind every one of those fences.
+    """
     activation = _activation_request(request)
     target = table or get_table()
     projection = _activation_item(
@@ -968,8 +974,20 @@ def commit_paid_activation(
     if len(targets) != len(set(targets)):
         raise ValueError("activation transaction item targets must be unique")
 
+    fences = dict(account_fences or {})
+    if fences and activation.parent_id not in fences:
+        raise ValueError("account_fences must hold the parent's fence")
     try:
-        _transact(operations, table=target)
+        if fences:
+            db_table.fenced(
+                activation.parent_id,
+                operations,
+                generation=fences.pop(activation.parent_id),
+                also=fences,
+                table=target,
+            )
+        else:
+            _transact(operations, table=target)
     except Exception:
         try:
             replay_receipt = _strong_get(target, receipt_key)

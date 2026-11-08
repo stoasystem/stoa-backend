@@ -974,16 +974,9 @@ def build_message_attachment_transaction(
     limit_bytes: int,
     now_iso: str,
     trailing_operations: Sequence[TransactionOperation] = (),
-    account_fence_generation: int = 1,
 ) -> list[TransactionOperation]:
-    operations: list[TransactionOperation] = [
-        TransactionOperation(
-            TransactionOperationKind.ACCOUNT_RETENTION_FENCE_CHECK,
-            account_deletion_repo.active_fence_condition(
-                owner_id, account_fence_generation
-            ),
-        )
-    ]
+    """The message's own operations; `transact(..., owner=owner_id)` puts the fence first."""
+    operations: list[TransactionOperation] = []
     if associations:
         resource_type = _required_text(
             associations[0].get("resource_type") or "conversation"
@@ -1553,7 +1546,14 @@ def transact(
     operations: list[dict[str, object]] | list[TransactionOperation],
     *,
     table: object | None = None,
+    owner: str | None = None,
+    generation: int | None = None,
 ) -> None:
+    """Commit `operations` as one transaction, behind `owner`'s account fence when named.
+
+    `db_table.fenced` checks the fence, at `generation` when the caller holds one.
+    A fence that no longer holds is refused as the operations' own conditions are.
+    """
     target = table or get_table()
     described_operations: list[TransactionOperation] = []
     transact_items: list[AttachmentItem] = []
@@ -1567,7 +1567,16 @@ def transact(
     if described and len(described_operations) != len(operations):
         raise AttachmentRepositoryConflict("dependency_failure")
     try:
-        db_table.transact(transact_items, table=target)
+        if owner is None:
+            db_table.transact(transact_items, table=target)
+        else:
+            db_table.fenced(owner, transact_items, generation=generation, table=target)
+    except account_deletion_repo.AccountNotWritable:
+        if described:
+            raise AttachmentTransactionError(
+                AttachmentTransactionOutcome.CONCEALED_RESOURCE_CONFLICT
+            ) from None
+        raise AttachmentRepositoryConflict() from None
     except db_table.WriteRefused as exc:
         if described:
             raise AttachmentTransactionError(

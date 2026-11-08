@@ -202,18 +202,15 @@ def transition(
         created_at=instant,
     )
     try:
-        fence = account_deletion_repo.require_active_account_fence(user_id)
-        db_table.transact(
+        db_table.fenced(
+            user_id,
             [
-                account_deletion_repo.active_fence_condition(
-                    user_id, int(fence.get("generation") or 0)
-                ),
                 update,
                 *survivor,
                 security_audit_repo.append_event_operation(user_id, event),
                 *also,
             ],
-            # The table the fence above was read from.
+            # The table the fence is read from.
             table=account_deletion_repo.get_table(),
         )
     except (

@@ -696,15 +696,10 @@ def _attach_account_number(*, account_id: str, role: str, now: datetime) -> str:
         additional_condition_expression="attribute_not_exists(#account_number)",
     )
     try:
-        fence = account_deletion_repo.require_active_account_fence(account_id)
-        db_table.transact(
-            [
-                account_deletion_repo.active_fence_condition(
-                    account_id, _profile_version(fence, field="generation")
-                ),
-                operation,
-            ],
-            # The table the fence above was read from.
+        db_table.fenced(
+            account_id,
+            [operation],
+            # The table the fence is read from.
             table=account_deletion_repo.get_table(),
         )
     except (
@@ -740,15 +735,10 @@ def _record_date_of_birth(*, account_id: str, date_of_birth: str, now: datetime)
         additional_condition_expression="attribute_not_exists(#date_of_birth)",
     )
     try:
-        fence = account_deletion_repo.require_active_account_fence(account_id)
-        db_table.transact(
-            [
-                account_deletion_repo.active_fence_condition(
-                    account_id, _profile_version(fence, field="generation")
-                ),
-                operation,
-            ],
-            # The table the fence above was read from.
+        db_table.fenced(
+            account_id,
+            [operation],
+            # The table the fence is read from.
             table=account_deletion_repo.get_table(),
         )
     except (
@@ -1045,8 +1035,8 @@ def _parse_timestamp(value: Any) -> datetime:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
-def _profile_version(item: dict[str, Any], field: str = "version") -> int:
-    number = stored_int(item.get(field))
+def _profile_version(item: dict[str, Any]) -> int:
+    number = stored_int(item.get("version"))
     if number is None or number <= 0:
         raise AccountViolation(AccountErrorCode.ACCOUNT_STATE_INVALID)
     return number

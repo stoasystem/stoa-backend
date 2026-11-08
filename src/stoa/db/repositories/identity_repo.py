@@ -118,11 +118,9 @@ def create_identity_binding(
             "created_at": created_at,
         }
         try:
-            db_table.transact(
+            db_table.fenced(
+                normalized_user_id,
                 [
-                    account_deletion_repo.active_fence_condition(
-                        normalized_user_id, int(fence["generation"])
-                    ),
                     {
                         "Put": {
                             "Item": binding,
@@ -140,6 +138,7 @@ def create_identity_binding(
                         }
                     },
                 ],
+                generation=int(fence["generation"]),
                 table=table,
             )
             return binding

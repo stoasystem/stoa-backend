@@ -381,12 +381,8 @@ def put_case(
 ) -> dict[str, Any]:
     target = table or get_table()
     student_id, generation = _required_owner(item)
-    account_deletion_repo.require_active_account_fence(
-        student_id, generation, table=target
-    )
     summary = _summary_item(item)
     operations: list[dict[str, Any]] = [
-        account_deletion_repo.active_fence_condition(student_id, generation),
         {
             "Put": {
                 "Item": summary,
@@ -407,7 +403,7 @@ def put_case(
                 }
             }
         )
-    db_table.transact(operations, table=target)
+    db_table.fenced(student_id, operations, generation=generation, table=target)
     return summary
 
 
@@ -424,13 +420,10 @@ def put_event(
             "moderation case does not exist"
         )
     student_id, generation = _required_owner(summary)
-    account_deletion_repo.require_active_account_fence(
-        student_id, generation, table=target
-    )
     persisted = _event_item(case_id, event, summary=summary)
-    db_table.transact(
+    db_table.fenced(
+        student_id,
         [
-            account_deletion_repo.active_fence_condition(student_id, generation),
             {
                 "Put": {
                     "Item": persisted,
@@ -453,6 +446,7 @@ def put_event(
                 }
             },
         ],
+        generation=generation,
         table=target,
     )
     return persisted
@@ -519,16 +513,13 @@ def update_case(
             "moderation case does not exist"
         )
     student_id, generation = _required_owner(existing)
-    account_deletion_repo.require_active_account_fence(
-        student_id, generation, table=target
-    )
     names = {f"#{key}": key for key in attrs}
     values = {f":{key}": value for key, value in attrs.items()}
     values.update({":owner": student_id, ":generation": generation})
     expression = "SET " + ", ".join(f"#{key} = :{key}" for key in attrs)
-    db_table.transact(
+    db_table.fenced(
+        student_id,
         [
-            account_deletion_repo.active_fence_condition(student_id, generation),
             {
                 "Update": {
                     "Key": {"PK": f"MODERATION#{case_id}", "SK": "SUMMARY"},
@@ -542,6 +533,7 @@ def update_case(
                 }
             },
         ],
+        generation=generation,
         table=target,
     )
     return {**existing, **attrs}

@@ -417,11 +417,12 @@ def record_sign_in(
     than another read. Edits read the version in the request that writes it, so
     a sign-in can only move it under one inside that request, as any other
     profile write can. The fence condition is what keeps an account that has
-    begun deletion from being written to.
+    begun deletion from being written to; it asks only that the fence be
+    active, so it is not read either.
     """
-    db_table.transact(
+    db_table.fenced(
+        user_id,
         [
-            account_deletion_repo.active_fence_condition(user_id),
             profile_update_operation(
                 user_id,
                 update_expression="SET last_login_at = :signed_in_at",
@@ -429,6 +430,7 @@ def record_sign_in(
                 expected_version=_optional_profile_version(profile.get("version")),
             ),
         ],
+        any_generation=True,
         table=get_table(),
     )
 
@@ -548,28 +550,6 @@ def update_email_verification_state(user_id: str, fields: Mapping[str, object]) 
     )
 
 
-def build_profile_update_transaction(
-    user_id: str,
-    *,
-    update_expression: str,
-    expression_attribute_values: Mapping[str, object],
-    expression_attribute_names: Mapping[str, str] | None = None,
-    expected_generation: int,
-    expected_version: int | None = None,
-) -> list[TransactionOperation]:
-    """Build one exact-generation, exact-version profile update."""
-    return [
-        account_deletion_repo.active_fence_condition(user_id, expected_generation),
-        profile_update_operation(
-            user_id,
-            update_expression=update_expression,
-            expression_attribute_values=expression_attribute_values,
-            expression_attribute_names=expression_attribute_names,
-            expected_version=expected_version,
-        ),
-    ]
-
-
 def profile_update_operation(
     user_id: str,
     *,
@@ -644,19 +624,20 @@ def update_profile_fields_versioned(
             return ProfileWriteResult(ProfileWriteDisposition.RETRYABLE, attempts=attempt)
         expected_version = _optional_profile_version(profile.get("version"))
         try:
-            fence = account_deletion_repo.require_active_account_fence(user_id, table=table)
             values = dict(expression_attribute_values)
             if values_from_profile is not None:
                 values.update(values_from_profile(profile))
-            db_table.transact(
-                build_profile_update_transaction(
-                    user_id,
-                    update_expression=update_expression,
-                    expression_attribute_values=values,
-                    expression_attribute_names=expression_attribute_names,
-                    expected_generation=_required_positive_integer(fence.get("generation")),
-                    expected_version=expected_version,
-                ),
+            db_table.fenced(
+                user_id,
+                [
+                    profile_update_operation(
+                        user_id,
+                        update_expression=update_expression,
+                        expression_attribute_values=values,
+                        expression_attribute_names=expression_attribute_names,
+                        expected_version=expected_version,
+                    )
+                ],
                 table=table,
             )
         except (
@@ -722,20 +703,6 @@ def _items(value: object) -> list[UserItem]:
             raise ValueError("malformed user repository response")
         items.append(item)
     return items
-
-
-def _required_positive_integer(value: object) -> int:
-    if isinstance(value, bool):
-        raise ValueError("malformed account fence generation")
-    if isinstance(value, int):
-        parsed = value
-    elif isinstance(value, Decimal) and value == value.to_integral_value():
-        parsed = int(value)
-    else:
-        raise ValueError("malformed account fence generation")
-    if parsed < 1:
-        raise ValueError("malformed account fence generation")
-    return parsed
 
 
 def _required_profile_version(value: object) -> int:

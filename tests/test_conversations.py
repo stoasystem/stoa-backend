@@ -165,7 +165,7 @@ def test_conversation_teacher_help_records_support_visible_usage(monkeypatch):
             conversations.teacher_support_allowance_service.TeacherSupportAdmissionResult(
                 conversations.teacher_support_allowance_service.TeacherSupportAdmissionDisposition.ADMITTED
             )
-            if persist_case(())
+            if persist_case((), {})
             else None
         ),
     )
@@ -211,7 +211,7 @@ def test_repeat_teacher_help_replays_the_existing_escalation(monkeypatch):
 
     def _record_admission(*, persist_case, **kwargs):
         admissions.append(kwargs)
-        persist_case(())
+        persist_case((), {})
         return conversations.teacher_support_allowance_service.TeacherSupportAdmissionResult(
             conversations.teacher_support_allowance_service.TeacherSupportAdmissionDisposition.RETRYABLE
         )
@@ -1037,7 +1037,7 @@ def test_conversation_repository_transport_stages_are_structured_retry(
         # whether it landed fails too.
         transact = attachment_repo.transact
 
-        def lose_the_completion(operations: Any, *, table: Any = None) -> Any:
+        def lose_the_completion(operations: Any, *, table: Any = None, **fence: Any) -> Any:
             if any(
                 getattr(operation, "kind", None)
                 is attachment_repo.TransactionOperationKind.ASSISTANT_MESSAGE_PUT
@@ -1046,7 +1046,7 @@ def test_conversation_repository_transport_stages_are_structured_retry(
                 raise attachment_repo.AttachmentTransactionError(
                     attachment_repo.AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
                 )
-            return transact(operations, table=table)
+            return transact(operations, table=table, **fence)
 
         monkeypatch.setattr(attachment_repo, "transact", lose_the_completion)
         # After the request's, the claim's and the lease's reads: the read-back.
@@ -1720,10 +1720,12 @@ def test_the_help_request_is_written_in_the_same_transaction_as_the_case():
         for node in ast.walk(persist)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "transact"
+        and node.func.attr == "fenced"
     ]
     assert len(calls) == 1
-    (sent,) = calls[0].args
+    # Behind the student's account fence (#297): owner first, then the rows.
+    owner, sent = calls[0].args
+    assert isinstance(owner, ast.Name) and owner.id == "student_id"
     assert isinstance(sent, ast.List)
     starred = {
         element.value.id
