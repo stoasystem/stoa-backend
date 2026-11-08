@@ -51,6 +51,7 @@ from stoa.services import (
     answer_recording,
     knowledge_map_service,
     curriculum_analytics_service,
+    learning_profile_service,
     curriculum_service,
     entitlement_service,
     locale_service,
@@ -689,9 +690,12 @@ async def get_knowledge_map(
     `reason` is `in_progress`, `after_lit` (then `relatedUnitId` is the star
     whose lighting it follows), `grade` (nothing begun yet: the first star of
     the year group on the student's profile, #310) or `start`; only subjects
-    the student takes carry one (#164).
+    the student takes carry one (#164) - those with progress, and those ticked
+    on the profile (#321).
     """
     profile = authorized_student.value or {}
+    if not isinstance(profile, Mapping):
+        profile = {}
     try:
         return knowledge_map_service.knowledge_map(
             student_evidence.for_student(
@@ -699,7 +703,8 @@ async def get_knowledge_map(
             ),
             subject_id=subject_id,
             view=view,
-            student_grade=profile.get("grade") if isinstance(profile, Mapping) else None,
+            student_grade=profile.get("grade"),
+            chosen_subject_ids=learning_profile_service.chosen_subjects(profile),
         )
     except knowledge_map_service.UnknownSubject:
         raise PracticeViolation(_P.SUBJECT_UNKNOWN) from None

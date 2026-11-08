@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
+from collections.abc import Mapping
 from typing import Any
 
 from stoa.db.dynamodb import stored_int
@@ -243,6 +244,21 @@ def resolve_grade_code(grade: str | None) -> str | None:
     if value in GRADE_LEVEL_CODES:
         return value
     return LEGACY_GRADE_SPELLINGS.get(" ".join(value.lower().split()))
+
+
+def chosen_subjects(profile: Mapping[str, object]) -> tuple[str, ...]:
+    """The subjects a student ticked on their profile, as stored (#321).
+
+    `primary_subjects`, else the older `subjects` - the same precedence as the
+    profile response. Read for the star map, so nothing here refuses: a value
+    that is not a list, an entry that is not text and a blank entry are passed
+    over, and an id no subject goes by simply matches nothing. Not normalised:
+    the reader compares through `practice_repo.normal_subject_id`.
+    """
+    value = profile.get("primary_subjects") if "primary_subjects" in profile else profile.get("subjects")
+    if not isinstance(value, list):
+        return ()
+    return tuple(item for item in value if isinstance(item, str) and item.strip())
 
 
 def grade_label(code: str, locale: str) -> str:
