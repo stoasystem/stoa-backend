@@ -27,6 +27,11 @@ class _QueryTable(Protocol):
     def query(self, **kwargs: object) -> object: ...
 
 
+@runtime_checkable
+class _ScanTable(Protocol):
+    def scan(self, **kwargs: object) -> object: ...
+
+
 def _dependency_mapping(value: object) -> UserItem:
     item = _optional_item(value)
     if item is None:
@@ -44,6 +49,12 @@ def _query(table: object, **kwargs: object) -> UserItem:
     if not isinstance(table, _QueryTable):
         raise ValueError("user repository dependency unavailable")
     return _dependency_mapping(table.query(**kwargs))
+
+
+def _scan(table: object, **kwargs: object) -> UserItem:
+    if not isinstance(table, _ScanTable):
+        raise ValueError("user repository dependency unavailable")
+    return _dependency_mapping(table.scan(**kwargs))
 
 
 PROFILE_WRITE_MAX_ATTEMPTS = 3
