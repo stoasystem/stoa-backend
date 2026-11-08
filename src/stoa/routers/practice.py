@@ -1115,10 +1115,9 @@ async def answer_lesson_quiz(
     A wrong answer costs a heart and sends the exercise to the back of the
     queue; the second one loses the quiz. `exerciseId` names the exercise
     answered: sent again for an exercise already answered, it gets the first
-    result back. Without it the answer is to the exercise asked now (#113).
-    Quiz answers are not recorded as attempts: passing completes the lesson
-    and nothing more, so a knowledge point still lights only on exercises
-    answered right in the ordinary way (#9).
+    result back (#113). Quiz answers are not recorded as attempts: passing
+    completes the lesson and nothing more, so a knowledge point still lights
+    only on exercises answered right in the ordinary way (#9).
     """
     try:
         return quiz.answer(

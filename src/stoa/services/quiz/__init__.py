@@ -36,9 +36,6 @@ Every answer, of either kind, goes down the same ladder (`answer`):
    did not move. When it did, the paper is read again: the same exercise
    answered in between is a replay, anything else is out of order.
 
-An answer that does not name its exercise (an old lesson-quiz client, before
-stoa-frontend#589) answers the exercise asked now and has no replay protection.
-
 Every accepted answer leaves one usage event, `{quiz_id}:{n}` for the n-th
 answer (`answer_recording.record_quiz_answer`). Refusals are `Refused`, with a
 `Reason` the route maps to its kind's error code.
@@ -480,7 +477,7 @@ def answer(
     quiz_id: str,
     *,
     scope_id: str,
-    exercise_id: str | None,
+    exercise_id: str,
     raw_answer: object,
     locale: str,
     now: datetime | None = None,
@@ -495,10 +492,9 @@ def answer(
     ):
         raise Refused(Reason.UNKNOWN)
 
-    if exercise_id is not None:
-        replayed = _replay(kind, paper, exercise_id, locale)
-        if replayed is not None:
-            return replayed
+    replayed = _replay(kind, paper, exercise_id, locale)
+    if replayed is not None:
+        return replayed
     now_standing = standing(kind, paper)
     if now_standing.status != rules.IN_PROGRESS:
         raise Refused(Reason.FINISHED)
@@ -516,10 +512,10 @@ def answer(
             break
         gone.append(remaining.pop(0))
     asking = remaining[0] if remaining else None
-    if asking is None or (exercise_id is not None and exercise_id in gone):
+    if asking is None or exercise_id in gone:
         _drop(student_id, paper, gone, exhausted=asking is None)
         raise Refused(Reason.GONE)
-    if exercise_id is not None and exercise_id != asking:
+    if exercise_id != asking:
         if gone:
             _drop(student_id, paper, gone, exhausted=False)
         raise Refused(Reason.OUT_OF_ORDER)

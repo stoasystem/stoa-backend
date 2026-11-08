@@ -8,7 +8,7 @@ Four parts:
 * what only one kind does (hearts and the credential; who may take a star,
   the cooldown, the map);
 * the routes: one call each, every refusal mapped to its kind's error code,
-  and an old lesson-quiz client that never sends `exerciseId`.
+  and a lesson-quiz answer that must name its exercise.
 """
 
 from __future__ import annotations
@@ -209,19 +209,18 @@ class Kind:
         view: dict,
         *,
         right: bool,
-        exercise_id: str | None = "asked",
+        exercise_id: str = "asked",
         now: datetime | None = None,
         student_id: str = STUDENT,
     ) -> dict:
         named = self.asked(view) if exercise_id == "asked" else exercise_id
-        target = named or self.asked(view)
         return quiz.answer(
             self.config,
             student_id,
             view["quizId"],
             scope_id=self.scope_id,
             exercise_id=named,
-            raw_answer=_right(target) if right else "wrong",
+            raw_answer=_right(named) if right else "wrong",
             locale="de",
             now=now,
         )
@@ -675,35 +674,6 @@ def test_a_lesson_quiz_asks_a_wrong_exercise_again_as_a_new_answer(
     assert passed["credential"]
 
 
-def test_a_lesson_quiz_answer_without_its_exercise_answers_the_one_asked(world: World) -> None:
-    view = LESSON_KIND.start()
-    asked = LESSON_KIND.asked(view)
-
-    reply = LESSON_KIND.answer(view, right=True, exercise_id=None)
-
-    assert reply["correct"] is True
-    assert [answer["exerciseId"] for answer in world.paper(view["quizId"])["answers"]] == [asked]
-
-
-def test_without_its_exercise_a_gone_one_is_passed_over_for_the_next(world: World) -> None:
-    view = LESSON_KIND.start()
-    order = list(world.paper(view["quizId"])["order"])
-    world.gone.add(order[0])
-
-    reply = quiz.answer(
-        quiz.LESSON,
-        STUDENT,
-        view["quizId"],
-        scope_id="lesson-1",
-        exercise_id=None,
-        raw_answer=_right(order[1]),
-        locale="de",
-    )
-
-    assert reply["correct"] is True
-    assert world.paper(view["quizId"])["dropped"] == [order[0]]
-
-
 def test_spending_a_credential_twice_is_refused(world: World) -> None:
     passed, _ = _finish(LESSON_KIND, LESSON_KIND.start())
 
@@ -961,16 +931,20 @@ def test_a_star_cooling_down_says_when_it_opens(world: World, monkeypatch: pytes
     assert_violation(response, "star_quiz_cooling_down", retryAt="2026-11-08T10:00:00+00:00")
 
 
-def test_the_lesson_quiz_answer_body_takes_an_optional_exercise_id(world: World) -> None:
+def test_the_lesson_quiz_answer_body_needs_its_exercise_id(world: World) -> None:
     client = _client()
     view = client.post("/practice/lessons/lesson-1/quiz", json={"kind": "skip"}).json()
     path = f"/practice/lessons/lesson-1/quiz/{view['quizId']}/answer"
+    asked = view["exercise"]["challengeId"]
 
-    named = client.post(path, json={"answer": "wrong", "exerciseId": view["exercise"]["challengeId"]})
-    unknown_field = client.post(path, json={"answer": "x", "somethingElse": 1})
+    unnamed = client.post(path, json={"answer": _right(asked)})
+    empty = client.post(path, json={"answer": _right(asked), "exerciseId": ""})
+    unknown_field = client.post(path, json={"answer": "x", "exerciseId": asked, "somethingElse": 1})
 
-    assert named.status_code == 200, named.text
+    assert unnamed.status_code == 422
+    assert empty.status_code == 422
     assert unknown_field.status_code == 422
+    assert world.paper(view["quizId"])["answered"] == 0
     # The practice answer keeps refusing anything but its answer.
     assert (
         client.post("/practice/challenges/e-0/answer", json={"answer": "x", "exerciseId": "e-0"}).status_code
@@ -978,8 +952,25 @@ def test_the_lesson_quiz_answer_body_takes_an_optional_exercise_id(world: World)
     )
 
 
-def test_an_old_client_finishes_a_lesson_quiz_without_exercise_ids(world: World) -> None:
-    """The web client sends `{answer}` alone until stoa-frontend#589 ships."""
+def test_a_lesson_quiz_answer_sent_again_through_its_route_gets_the_first_result(
+    world: World,
+) -> None:
+    client = _client()
+    view = client.post("/practice/lessons/lesson-1/quiz", json={"kind": "skip"}).json()
+    path = f"/practice/lessons/lesson-1/quiz/{view['quizId']}/answer"
+    asked = view["exercise"]["challengeId"]
+
+    first = client.post(path, json={"answer": _right(asked), "exerciseId": asked})
+    # The response was lost; the client sends the same answer again.
+    again = client.post(path, json={"answer": _right(asked), "exerciseId": asked})
+
+    assert first.status_code == 200, first.text
+    assert again.status_code == 200, again.text
+    assert again.json() == first.json()
+    assert world.paper(view["quizId"])["answered"] == 1
+
+
+def test_a_lesson_quiz_is_taken_through_its_routes(world: World) -> None:
     client = _client()
     view = client.post("/practice/lessons/lesson-1/quiz", json={"kind": "skip"}).json()
     quiz_id = view["quizId"]
@@ -989,7 +980,8 @@ def test_an_old_client_finishes_a_lesson_quiz_without_exercise_ids(world: World)
         answer = "wrong" if not wrong_once else _right(asked)
         wrong_once = True
         reply = client.post(
-            f"/practice/lessons/lesson-1/quiz/{quiz_id}/answer", json={"answer": answer}
+            f"/practice/lessons/lesson-1/quiz/{quiz_id}/answer",
+            json={"answer": answer, "exerciseId": asked},
         )
         assert reply.status_code == 200, reply.text
         view = reply.json()

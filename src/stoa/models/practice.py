@@ -126,15 +126,13 @@ class PracticeAnswerSubmission(_PracticeContract):
 class QuizAnswerSubmission(_PracticeContract):
     """One answer to a lesson quiz, naming the exercise it answers (#213, #113).
 
-    `exerciseId` is optional until every client sends it (stoa-frontend#589):
-    without it the answer is to the exercise the quiz asks now, and a retry
-    after a lost response is judged again rather than recognised.
+    `exerciseId` names the exercise answered, so the same answer sent twice -
+    a retry after a lost response - is recognised and answered with the first
+    result rather than judged against the next exercise.
     """
 
     answer: object
-    exercise_id: str | None = Field(
-        default=None, alias="exerciseId", min_length=1, max_length=200
-    )
+    exercise_id: str = Field(alias="exerciseId", min_length=1, max_length=200)
 
 
 class PracticeHintResponse(_PracticeContract):
