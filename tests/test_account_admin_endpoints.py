@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from actor_helpers import install_actor_overrides
 from test_account_provisioning import FakeAccountTable, RecordingProvider
 
+from stoa.db import table as db_table
 from stoa.config import Settings, get_settings
 from stoa.db.repositories import (
     account_deletion_repo,
@@ -185,11 +186,11 @@ def table(monkeypatch: pytest.MonkeyPatch) -> AccountAdminTable:
         parent_link_repo,
         security_audit_repo,
         user_repo,
-        admin,
         auth,
         parents,
     ):
         monkeypatch.setattr(module, "get_table", lambda fake=fake: fake)
+    db_table.install(fake)
     parent_link_service.set_account_number_resolver(account_numbering_service.resolve_account_id)
     return fake
 

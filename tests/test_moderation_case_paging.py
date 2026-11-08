@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from actor_helpers import install_actor_overrides
-from stoa.db.repositories import moderation_repo
+from stoa.db import table as db_table
 from stoa.routers import admin
 
 SCAN_PAGE = 3
@@ -24,7 +24,7 @@ SCAN_PAGE = 3
 @pytest.fixture
 def table(monkeypatch) -> FakeTable:
     built = FakeTable(page_item_cap=SCAN_PAGE)
-    monkeypatch.setattr(moderation_repo, "get_table", lambda: built)
+    db_table.install(built)
     return built
 
 

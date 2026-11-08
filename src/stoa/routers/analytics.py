@@ -18,7 +18,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from stoa.config import settings
-from stoa.db.dynamodb import get_table
+from stoa.db import table as db_table
 from stoa.security.route_inventory import explicit_route_classification
 from stoa.services import rate_limit
 
@@ -125,7 +125,7 @@ def admit_analytics_event(
 )
 async def ingest_event(body: AnalyticsEventIn, request: Request):
     """Record one client analytics event for later CloudWatch Logs Insights / table queries."""
-    table = get_table()
+    table = db_table.table()
     admit_analytics_event(request, table=table)
     session_id = body.sessionId or "anon"
     received_at = datetime.now(timezone.utc).isoformat()

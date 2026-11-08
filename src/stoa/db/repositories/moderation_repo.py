@@ -8,7 +8,7 @@ from typing import Any, Mapping, Protocol, runtime_checkable
 from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table, stored_int
+from stoa.db.dynamodb import stored_int
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -210,7 +210,7 @@ def scan_moderation_private_rows(
         raise account_deletion_repo.AccountDeletionConflict(
             "invalid moderation scan bound"
         )
-    target: object = table if table is not None else get_table()
+    target: object = table if table is not None else db_table.table()
     current = (
         account_deletion_repo.continuation_key(cursor, "moderation continuation")
         if cursor is not None
@@ -279,7 +279,7 @@ def scrub_moderation_row(
     table: Any | None = None,
 ) -> dict[str, Any]:
     """Replace one resolved moderation row with a strict noncontent tombstone."""
-    target: object = table if table is not None else get_table()
+    target: object = table if table is not None else db_table.table()
     key = account_deletion_repo.continuation_key(
         {"PK": item.get("PK"), "SK": item.get("SK")}, "moderation continuation"
     )
@@ -346,7 +346,7 @@ def put_case(
     *,
     table: Any | None = None,
 ) -> dict[str, Any]:
-    target = table or get_table()
+    target = table or db_table.table()
     student_id, generation = _required_owner(item)
     summary = _summary_item(item)
     operations: list[dict[str, Any]] = [
@@ -380,7 +380,7 @@ def put_event(
     *,
     table: Any | None = None,
 ) -> dict[str, Any]:
-    target = table or get_table()
+    target = table or db_table.table()
     summary = get_case(case_id, table=target)
     if not summary:
         raise account_deletion_repo.AccountDeletionConflict(
@@ -422,7 +422,7 @@ def put_event(
 def get_case(
     case_id: str, *, table: Any | None = None
 ) -> dict[str, Any] | None:
-    target: object = table if table is not None else get_table()
+    target: object = table if table is not None else db_table.table()
     resp = _get_item(
         target,
         Key={"PK": f"MODERATION#{case_id}", "SK": "SUMMARY"},
@@ -435,9 +435,8 @@ def get_case(
 
 
 def list_case_events(case_id: str, limit: int = 100) -> list[dict[str, Any]]:
-    table = get_table()
     resp = _query(
-        table,
+        db_table.table(),
         KeyConditionExpression=Key("PK").eq(f"MODERATION#{case_id}") & Key("SK").begins_with("EVENT#"),
         Limit=limit,
         ScanIndexForward=True,
@@ -451,11 +450,10 @@ def list_case_events(case_id: str, limit: int = 100) -> list[dict[str, Any]]:
 
 def list_cases(limit: int | None = 50) -> list[dict[str, Any]]:
     """Live cases, at most `limit` of them; every one when it is None."""
-    table = get_table()
     # The cap is applied after the privacy filter, not before it: a page of
     # deleted cases must not be what a reader gets instead of live ones.
     rows = db_table.rows(
-        "scan", table=table, FilterExpression=Attr("entity_type").eq("moderation_case")
+        "scan", FilterExpression=Attr("entity_type").eq("moderation_case")
     )
     cases = [item for item in rows if item.get("privacy_deleted") is not True]
     return cases[:limit]
@@ -469,7 +467,7 @@ def update_case(
 ) -> dict[str, Any] | None:
     if not attrs:
         return get_case(case_id, table=table)
-    target = table or get_table()
+    target = table or db_table.table()
     existing = get_case(case_id, table=target)
     if not existing:
         raise account_deletion_repo.AccountDeletionConflict(

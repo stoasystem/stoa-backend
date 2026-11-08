@@ -38,7 +38,6 @@ from stoa.db import table as db_table
 from stoa.config import UPLOAD_INTENT_TTL_SECONDS, Settings
 from stoa.db.repositories import (
     account_deletion_repo,
-    moderation_repo,
     notification_repo,
 )
 from stoa.deps import (
@@ -127,7 +126,6 @@ class _Api:
             conversations,
             _answering,
             rate_limit,
-            moderation_repo,
             notification_repo,
         ):
             monkeypatch.setattr(module, "get_table", lambda table=table: table)

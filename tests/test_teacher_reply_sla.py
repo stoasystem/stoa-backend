@@ -70,7 +70,7 @@ class FakeAdminTable:
 
 
 def test_admin_stats_exposes_aggregate_teacher_sla_without_content(monkeypatch):
-    monkeypatch.setattr(admin, "get_table", lambda: FakeAdminTable())
+    db_table.install(FakeAdminTable())
 
     client = _app(admin.router, "/admin", {"sub": "admin-1", "role": "admin"})
     response = client.get("/admin/stats")

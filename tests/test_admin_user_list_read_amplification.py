@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 from actor_helpers import install_actor_overrides
 from fakes.dynamodb import FakeTable
 
+from stoa.db import table as db_table
 from stoa.db.repositories import parent_link_repo, user_repo
 from stoa.routers import admin
 
@@ -101,8 +102,9 @@ def _seed(table: CountingTable) -> None:
 def table(monkeypatch: pytest.MonkeyPatch) -> CountingTable:
     counting = CountingTable()
     _seed(counting)
-    for module in (admin, parent_link_repo, user_repo):
+    for module in (parent_link_repo, user_repo):
         monkeypatch.setattr(module, "get_table", lambda counting=counting: counting)
+    db_table.install(counting)
     return counting
 
 
@@ -211,8 +213,9 @@ def test_账号藏在扫描页之后也照样答200(monkeypatch: pytest.MonkeyPa
     """
     counting = CountingTable()
     _seed_noise_first(counting, noise_rows=500)
-    for module in (admin, parent_link_repo, user_repo):
+    for module in (parent_link_repo, user_repo):
         monkeypatch.setattr(module, "get_table", lambda counting=counting: counting)
+    db_table.install(counting)
 
     assert _client().get("/admin/users").status_code == 200
 
@@ -229,8 +232,9 @@ def test_平台统计要读完整张表(monkeypatch: pytest.MonkeyPatch) -> None
     """
     counting = CountingTable()
     _seed_noise_first(counting, noise_rows=500)
-    for module in (admin, parent_link_repo, user_repo):
+    for module in (parent_link_repo, user_repo):
         monkeypatch.setattr(module, "get_table", lambda counting=counting: counting)
+    db_table.install(counting)
 
     response = _client().get("/admin/stats")
 
@@ -251,8 +255,9 @@ def test_统计走不完时说明数字是下限(monkeypatch: pytest.MonkeyPatch
     """
     counting = CountingTable(page_size_bytes=512)
     _seed_noise_first(counting, noise_rows=800)
-    for module in (admin, parent_link_repo, user_repo):
+    for module in (parent_link_repo, user_repo):
         monkeypatch.setattr(module, "get_table", lambda counting=counting: counting)
+    db_table.install(counting)
 
     response = _client().get("/admin/stats")
 

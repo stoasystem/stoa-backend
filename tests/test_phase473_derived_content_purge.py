@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from fakes.dynamodb import as_stored as _as_stored, from_wire
 
+from stoa.db import table as db_table
 from stoa.db.repositories import moderation_repo
 from stoa.models.moderation import (
     ModerationCaseNoteRequest,
@@ -416,7 +417,7 @@ def test_moderation_tombstones_are_not_returned_as_active_cases(
             }
 
     table = _Table()
-    monkeypatch.setattr(moderation_repo, "get_table", lambda: table)
+    db_table.install(table)
     assert moderation_repo.get_case(CASE_ID, table=table) is None
     assert [item["case_id"] for item in moderation_repo.list_cases()] == [
         "active-case"
