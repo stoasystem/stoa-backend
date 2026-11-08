@@ -29,7 +29,12 @@ from botocore.exceptions import ClientError
 from PIL import Image
 import pytest
 
-from stoa.config import DOCUMENT_MAX_BYTES, UPLOAD_INTENT_TTL_SECONDS, Settings
+from stoa.config import (
+    DOCUMENT_MAX_BYTES,
+    UPLOAD_INTENT_TTL_SECONDS,
+    UPLOAD_ROW_RETENTION_SECONDS,
+    Settings,
+)
 from stoa.db.repositories import account_deletion_repo, attachment_repo
 from stoa.jobs import upload_cleanup
 from stoa.jobs.upload_cleanup import cleanup_expired_uploads
@@ -137,26 +142,13 @@ def _upload_write_setting(attribute: str) -> Callable[[str, dict[str, Any]], boo
 class _S3(MultipartS3):
     """`MultipartS3`, plus what recovery and the sweep need from the bucket.
 
-    A completed object carries the metadata its multipart upload was created with,
-    as on S3 (`MultipartS3` stamps a fixed value); `list_multipart_uploads` lists by
-    prefix, as S3 does. `deletes` is every delete the code under test sent.
+    `list_multipart_uploads` lists by prefix, as S3 does. `deletes` is every delete
+    the code under test sent.
     """
 
     def __init__(self) -> None:
         super().__init__(BUCKET)
-        self._multipart_metadata: dict[str, dict[str, str]] = {}
         self.deletes: list[tuple[str, str | None]] = []
-
-    def create_multipart_upload(self, **kwargs: Any) -> dict[str, Any]:
-        created = super().create_multipart_upload(**kwargs)
-        self._multipart_metadata[created["UploadId"]] = dict(kwargs.get("Metadata") or {})
-        return created
-
-    def complete_multipart_upload(self, **kwargs: Any) -> dict[str, Any]:
-        metadata = self._multipart_metadata.pop(kwargs["UploadId"], {})
-        result = super().complete_multipart_upload(**kwargs)
-        self.objects[(kwargs["Key"], result["VersionId"])]["Metadata"] = metadata
-        return result
 
     def list_multipart_uploads(self, **kwargs: Any) -> dict[str, Any]:
         prefix = str(kwargs.get("Prefix") or "")
@@ -720,6 +712,19 @@ def test_promotion_provider_success_repository_split_recovers_exact_version(tabl
     [version] = s3.versions_of(immutable)
     assert row["immutable_object_key"] == promoting["immutable_object_key"] == immutable
     assert row["immutable_version_id"] == version
+    # Recovery pays the staging debt as the uninterrupted promotion does (#267).
+    assert not s3.holds(promoting["staging_object_key"], promoting["staging_version_id"])
+    assert (promoting["staging_object_key"], promoting["staging_version_id"]) in s3.deletes
+    assert not any(
+        name in row
+        for name in (
+            "staging_cleanup_status",
+            "staging_object_key",
+            "staging_version_id",
+            "staging_etag",
+            "multipart_upload_id",
+        )
+    )
 
 
 @pytest.mark.parametrize(
@@ -941,6 +946,9 @@ def test_cleanup_is_bounded_idempotent_and_never_deletes_active_or_durable_uploa
     assert repeated.deleted == 0 and repeated.scanned == 0
     assert s3.holds(durable["staging_object_key"], durable["staging_version_id"])
     assert _row(table, "durable")["status"] == "cleanup_blocked"
+    # An ended row's TTL counts from the sweep's clock, not the wall clock (#269).
+    assert _row(table, "durable")["expires_at"] == NOW_EPOCH + UPLOAD_ROW_RETENTION_SECONDS
+    assert _row(table, "expired")["expires_at"] == NOW_EPOCH + UPLOAD_ROW_RETENTION_SECONDS
     assert _row(table, "active")["status"] == "validated"
     assert _row(table, "consumed")["status"] == "consumed"
 
@@ -970,6 +978,8 @@ def test_validated_cleanup_deletes_staging_and_immutable_exact_versions_before_c
     assert s3.holds(immutable_key, newer_unrelated)
     row = _row(table, "both")
     assert row["status"] == "cleanup_complete"
+    assert row["cleaned_at"] == NOW.isoformat()
+    assert row["expires_at"] == NOW_EPOCH + UPLOAD_ROW_RETENTION_SECONDS
     assert not any(
         name in row
         for name in (
@@ -1318,6 +1328,63 @@ def test_an_issuance_still_in_flight_is_not_cleanup_eligible(table) -> None:
     assert _row(table, "active-issuing")["status"] == "issuing"
     assert multipart in s3.uploads
     assert s3.deletes == []
+
+
+class _SweepDuringPromotionS3(_S3):
+    """The sweep runs at `sweep_at` while the promoting worker's put to `objects/` is in flight.
+
+    The put lands once the sweep is done, as a provider write already sent does: no
+    fence stops it. `sweep` is what that sweep reported.
+    """
+
+    def __init__(self, sweep_at: datetime) -> None:
+        super().__init__()
+        self.sweep_at = sweep_at
+        self.sweep: upload_cleanup.CleanupSummary | None = None
+
+    def put_object(self, **kwargs: Any) -> dict[str, Any]:
+        if self.sweep is None and str(kwargs["Key"]).startswith("objects/"):
+            self.sweep = cleanup_expired_uploads(s3=self, settings_obj=SETTINGS, now=self.sweep_at)
+        return super().put_object(**kwargs)
+
+
+def test_a_promotion_whose_lease_outlives_the_usable_window_is_not_swept_under_it(table) -> None:
+    """#268: a completion late in the usable window holds a lease past its end.
+
+    The sweep at that moment must leave the row to the worker: had it claimed the
+    row, it would find no immutable object yet, report the upload clean, and the
+    worker's put would then leave an object no row records.
+    """
+    usable_until = NOW + timedelta(seconds=UPLOAD_INTENT_TTL_SECONDS)
+    completed_at = usable_until - timedelta(seconds=10)
+    s3 = _SweepDuringPromotionS3(sweep_at=usable_until + timedelta(seconds=30))
+    upload_id = _uploaded(s3, _png())
+
+    result = _complete(s3, upload_id, now=completed_at)
+
+    assert s3.sweep is not None and s3.sweep.claimed == 0
+    assert result["status"] == "validated"
+    row = _row(table, upload_id)
+    [immutable] = s3.immutable_keys()
+    assert row["immutable_object_key"] == immutable
+    assert s3.versions_of(immutable) == [row["immutable_version_id"]]
+
+
+def test_a_lapsed_lease_past_the_usable_window_is_swept(table) -> None:
+    """The lease only defers the sweep: once it lapses, the abandoned promotion is cleaned."""
+    s3 = _S3()
+    _seed_cleanup(
+        table, s3, "lapsed", "promoting",
+        operation_kind="immutable_promotion", operation_fence="lapsed-fence",
+        operation_lease_expires_at=NOW_EPOCH,
+        immutable_object_key="objects/private/lapsed-key",
+        content_sha256="d" * 64, content_length=3,
+    )
+
+    result = _sweep(s3)
+
+    assert result.claimed == result.deleted == 1
+    assert _row(table, "lapsed")["status"] == "cleanup_complete"
 
 
 def test_cleanup_rejects_invalid_cursor_without_touching_the_table(table) -> None:

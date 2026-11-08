@@ -244,20 +244,20 @@ def _cleanup_pending(table: FakeTable, **fields: Any) -> None:
     )
 
 
-def _expires_in_a_week(row: dict[str, Any]) -> bool:
-    now = datetime.now(UTC).timestamp()
-    return abs(int(row["expires_at"]) - (now + UPLOAD_ROW_RETENTION_SECONDS)) < 120
+# The sweep's own clock, far from the wall clock: an ended row's TTL counts from it (#269).
+ENDED_AT = datetime(2026, 7, 16, tzinfo=UTC)
+ENDED_EPOCH = int(ENDED_AT.timestamp())
 
 
 def test_a_protected_upload_starts_its_ttl() -> None:
     table = FakeTable()
     _cleanup_pending(table)
 
-    assert upload_store.block_upload_cleanup("u-ended", 3, table=table)
+    assert upload_store.block_upload_cleanup("u-ended", 3, now_epoch=ENDED_EPOCH, table=table)
 
     row = _row(table, "u-ended")
     assert row["status"] == "cleanup_blocked"
-    assert _expires_in_a_week(row)
+    assert row["expires_at"] == ENDED_EPOCH + UPLOAD_ROW_RETENTION_SECONDS
 
 
 def test_a_cleaned_upload_starts_its_ttl() -> None:
@@ -271,12 +271,12 @@ def test_a_cleaned_upload_starts_its_ttl() -> None:
     )
 
     assert upload_store.complete_upload_cleanup(
-        "u-ended", 3, datetime.now(UTC).isoformat(), table=table
+        "u-ended", 3, ENDED_AT.isoformat(), now_epoch=ENDED_EPOCH, table=table
     )
 
     row = _row(table, "u-ended")
     assert row["status"] == "cleanup_complete"
-    assert _expires_in_a_week(row)
+    assert row["expires_at"] == ENDED_EPOCH + UPLOAD_ROW_RETENTION_SECONDS
 
 
 def test_the_account_deletion_function_runs_the_sweep_by_name(

@@ -116,7 +116,8 @@ def cleanup_upload_intent(
         _store.usable_until(candidate) > now_epoch
     ):
         # The short operation lease authorizes takeover/reconciliation only;
-        # it never shortens the owner-visible 30-minute intent lifetime.
+        # it never shortens the owner-visible 30-minute intent lifetime. Past
+        # that lifetime a live lease still defers the claim (`claim_upload_cleanup`).
         return "skipped"
     reason = (
         "invalid"
@@ -143,7 +144,9 @@ def cleanup_upload_intent(
             return "skipped"
         version = int(current["version"])
         if current.get("durable_attachment_id"):
-            repository.block_upload_cleanup(str(current["upload_id"]), version)
+            repository.block_upload_cleanup(
+                str(current["upload_id"]), version, now_epoch=now_epoch
+            )
             return "protected"
         immutable_key = str(current.get("immutable_object_key") or "")
         immutable_version = str(current.get("immutable_version_id") or "")
@@ -155,7 +158,9 @@ def cleanup_upload_intent(
             exclusive_start_key=current.get("cleanup_reference_cursor"),
         )
         if found:
-            repository.block_upload_cleanup(str(current["upload_id"]), version)
+            repository.block_upload_cleanup(
+                str(current["upload_id"]), version, now_epoch=now_epoch
+            )
             return "protected"
         if next_cursor:
             if repository.advance_upload_cleanup_reference_scan(
@@ -337,7 +342,7 @@ def cleanup_upload_intent(
             current["cleanup_parts_absent"] = True
 
         if not repository.complete_upload_cleanup(
-            str(current["upload_id"]), version, now.isoformat()
+            str(current["upload_id"]), version, now.isoformat(), now_epoch=now_epoch
         ):
             return "retryable"
     except (
@@ -1151,7 +1156,7 @@ def _recover_immutable_promotion(
                 raise AttachmentDecisionError(
                     AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
                 )
-            if _gateway_call(
+            if not _gateway_call(
                 lambda: repository.record_immutable_version(
                     item["upload_id"],
                     actor.user_id,
@@ -1162,10 +1167,23 @@ def _recover_immutable_promotion(
                     validated_at=now.isoformat(),
                 )
             ):
-                return {"uploadId": item["upload_id"], "status": "validated", "attachment": None}
-            raise AttachmentDecisionError(
-                AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                raise AttachmentDecisionError(
+                    AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE
+                )
+            # One transition since the recovery claim (the uninterrupted promotion
+            # makes two), and it left the staging copy owed, as there (#267).
+            _reconcile_staging_cleanup_debt(
+                {
+                    **item,
+                    "status": "validated",
+                    "version": int(item["version"]) + 1,
+                    "staging_cleanup_status": "pending",
+                },
+                s3=s3,
+                settings=settings,
+                repository=repository,
             )
+            return {"uploadId": item["upload_id"], "status": "validated", "attachment": None}
     except AttachmentDecisionError:
         raise
     except Exception:
