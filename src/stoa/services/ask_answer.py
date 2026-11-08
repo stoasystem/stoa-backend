@@ -123,6 +123,62 @@ wish such as "something harder", and when the wish fits several stars, in which 
 """
 
 
+# ── Answer style presets (#314) ───────────────────────────────────────────────
+#
+# The student picks a style code on their profile; they never write any of
+# this. Each non-standard code maps to one fixed paragraph appended right after
+# the system prompt above; `standard` appends nothing, so its prompt is the
+# prompt every student had before styles existed, to the character. Every
+# paragraph ends with the same reminder that a style is tone and manner only
+# and that the rules above win where the two disagree.
+_ANSWER_STYLE_PRECEDENCE = (
+    "This style changes only your tone and the way you explain. Everything above still "
+    "holds and wins wherever the two disagree: never give the final answer directly, "
+    "explain step by step; answer only questions about the subject named above; follow "
+    "the answer-language rules; stay within 300 words and the exact JSON shape above; "
+    "choose the depth from the student's year group; and set suggest_teacher to true "
+    "when the student stays stuck or shows emotional distress, whatever the style."
+)
+
+ANSWER_STYLE_RULES: dict[str, str] = {
+    "concise": (
+        "ANSWER STYLE (chosen by the student): concise and rigorous. Give the steps and "
+        "only the reasoning each step needs. No greeting, no small talk, no warm-up "
+        "sentences, no filler praise. Use exact terms and clean notation. Brief is not "
+        "cold: still notice how the student is doing, and when they seem stuck or upset, "
+        "one short, plain sentence of reassurance belongs in the answer."
+    ),
+    "encouraging": (
+        "ANSWER STYLE (chosen by the student): warm and encouraging. When the student "
+        "shows their own work, begin by naming specifically what they already did or "
+        "understood correctly. When they are stuck or frustrated, reassure them first in "
+        "a sentence, then explain. Keep a patient, kind tone and treat mistakes as a "
+        "normal part of learning. Praise real effort and real progress, never with empty "
+        "flattery, and never call a wrong step right."
+    ),
+    "vivid": (
+        "ANSWER STYLE (chosen by the student): analogies and examples. Explain through "
+        "comparisons, everyday examples or a very short story suited to the student's "
+        "age. After every comparison, say plainly which idea of the subject it stands "
+        "for, by that idea's proper name, and where the comparison stops fitting. A "
+        "comparison must never make the concept wrong: when none fits without distorting "
+        "it, explain directly instead. Comparisons count toward the 300-word limit."
+    ),
+}
+
+
+def answer_style_rule(style: str | None) -> str:
+    """What a style adds to the system prompt: its paragraph, or nothing at all.
+
+    `standard`, nothing, and any code the platform does not know add nothing,
+    so a command stored before styles existed is answered as it always was.
+    """
+    paragraph = ANSWER_STYLE_RULES.get(learning_profile_service.answer_style_code(style))
+    if paragraph is None:
+        return ""
+    return f"\n\n{paragraph}\n{_ANSWER_STYLE_PRECEDENCE}\n"
+
+
 def grade_for_prompt(grade: str | None, language: str) -> str:
     """What `{grade}` becomes: a year group the model can read, never a stored value.
 
@@ -452,6 +508,8 @@ class Asker:
     # A short summary of the student's weak topics, untrusted (it derives from
     # what the model named before) and scrubbed before it reaches the prompt.
     memory_context: str | None = None
+    # The student's answer style code (#314); `standard` adds nothing.
+    answer_style: str = learning_profile_service.DEFAULT_ANSWER_STYLE
 
 
 @dataclass(frozen=True, slots=True)
@@ -587,6 +645,7 @@ def _reply(
         language=language,
         language_name=ai_service.language_name(language),
     )
+    system_prompt += answer_style_rule(asker.answer_style)
     # Memory text derives from topic labels the model extracted out of student
     # questions, so it is untrusted and must be scrubbed before it can reach the
     # system prompt — otherwise a crafted question becomes stored injection.

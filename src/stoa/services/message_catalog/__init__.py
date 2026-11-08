@@ -529,6 +529,32 @@ _COPY: dict[str, dict[str, str]] = {
         "fr": "Secondaire I, je ne sais pas quelle année",
         "it": "Scuola media, non so quale anno",
     },
+    # How the assistant answers (#314), in the order the student is offered
+    # them. Named for what the student gets; never "cold" for the short one.
+    "choice.answer_style.standard": {
+        "de": "Ausgewogen",
+        "en": "Balanced",
+        "fr": "Équilibré",
+        "it": "Equilibrato",
+    },
+    "choice.answer_style.concise": {
+        "de": "Kurz und genau",
+        "en": "Short and precise",
+        "fr": "Court et précis",
+        "it": "Breve e preciso",
+    },
+    "choice.answer_style.encouraging": {
+        "de": "Geduldig und ermutigend",
+        "en": "Patient and encouraging",
+        "fr": "Patient et encourageant",
+        "it": "Paziente e incoraggiante",
+    },
+    "choice.answer_style.vivid": {
+        "de": "Mit Vergleichen und Beispielen",
+        "en": "With comparisons and examples",
+        "fr": "Avec des comparaisons et des exemples",
+        "it": "Con paragoni ed esempi",
+    },
 }
 
 

@@ -32,6 +32,7 @@ from stoa.services import (
     ai_service,
     ask_answer,
     attachment_service,
+    learning_profile_service,
     locale_service,
     runtime_budget_service,
 )
@@ -250,6 +251,21 @@ def _student_locale(student_id: str) -> str:
     name the rest of the module calls it by (#124).
     """
     return locale_service.reader_locale(student_id)
+
+
+def _student_answer_style(student_id: str) -> str:
+    """The answer style on the student's profile now, `standard` on lookup failure.
+
+    Read afresh for every question, unlike the grade, which a conversation
+    keeps from its start: a student who changes their style has the very next
+    question answered in it (#314). A style is never worth a failed question.
+    """
+    try:
+        profile = user_repo.get_user(student_id)
+    except Exception:  # noqa: BLE001 - an answer in the standard style beats none
+        logger.warning("student_answer_style_fetch_failed", exc_info=True)
+        profile = None
+    return learning_profile_service.answer_style_code((profile or {}).get("answer_style"))
 
 
 def _completed_command_response(command: dict) -> SendMessageResponse | None:
@@ -492,7 +508,11 @@ def _resolve_generation_context(
     The practice context rides here rather than being looked up again when the
     answer is generated: the worker would otherwise read whatever the
     curriculum and the student's attempts say by then, not what they said when
-    the question was asked.
+    the question was asked. So does the answer style: a style changed after the
+    question was sent does not reach its answer.
+
+    `answer_style` was added without a new schema version: it is optional, and
+    every reader takes a missing or unknown one as `standard` (#314).
     """
     return {
         "schema_version": "generation-context.v1",
@@ -501,6 +521,7 @@ def _resolve_generation_context(
         "grade": grade,
         "memory_context": _memory_context_for_student(student_id, actor, subject),
         "practice_context": practice_context,
+        "answer_style": _student_answer_style(student_id),
     }
 
 
@@ -511,7 +532,8 @@ def _generation_context_without_request(
 
     The worker has no request: the language is the student's stored
     preference, and the weak topics are left out, because reading them needs
-    the student's own authorisation.
+    the student's own authorisation. It carries no answer style, so the answer
+    is given in `standard`, as it would have been when the command was sent.
     """
     try:
         profile = user_repo.get_user(student_id)
@@ -1061,6 +1083,8 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
     ):
         raise AttachmentDecisionError(AttachmentErrorCode.UPLOAD_SERVICE_UNAVAILABLE)
     memory_context = context["memory_context"]
+    # Missing on a command stored before styles existed (#314): `standard`.
+    answer_style = learning_profile_service.answer_style_code(context.get("answer_style"))
     # A question about a part of an earlier answer is a follow-up whatever the
     # model makes of it: it is shown no star map, and counts no gaps (#142).
     follow_up = committed.quote is not None and committed.quote.source.part is not None
@@ -1246,6 +1270,7 @@ def generate_for_command(committed: CommittedMessage) -> SendMessageResponse:
                     grade=context["grade"],
                     locale=context["locale"],
                     memory_context=memory_context,
+                    answer_style=answer_style,
                 ),
                 ask_answer.ModelCall(
                     model=metered,

@@ -172,10 +172,20 @@ def supported_grade_codes() -> tuple[str, ...]:
 # the list it is sent (`choices` on the profile response) instead of keeping a
 # copy, a write outside it is refused with `profile_choice_unknown`, and each
 # code's name for the person choosing is the catalog's
-# `choice.<field>.<code>`, in four languages. A new field of this kind - the
-# answer style preset (#314) is the next - is one entry here and its labels.
+# `choice.<field>.<code>`, in four languages. A new field of this kind is one
+# entry here and its labels.
+
+# How the assistant talks to a student who picked one (#314). The student picks
+# a code, never a sentence: each non-standard code maps to a fixed paragraph in
+# `ask_answer.ANSWER_STYLE_RULES`, so nothing the student writes reaches the
+# system prompt. `standard` is the answer as it was before styles existed and is
+# what a profile that never chose one gets.
+ANSWER_STYLE_CODES: tuple[str, ...] = ("standard", "concise", "encouraging", "vivid")
+DEFAULT_ANSWER_STYLE = "standard"
+
 PROFILE_CHOICES: dict[str, tuple[str, ...]] = {
     "grade": GRADE_LEVEL_CODES,
+    "answer_style": ANSWER_STYLE_CODES,
 }
 
 
@@ -209,6 +219,19 @@ def normalize_choice(field: str, value: str | None) -> str:
     if stripped not in PROFILE_CHOICES[field]:
         raise ValueError(f"Unsupported {field}: {value}")
     return stripped
+
+
+def answer_style_code(value: object) -> str:
+    """The style an answer is given in: a code the platform knows, else `standard`.
+
+    Read wherever a style is used - the profile response, the question's
+    generation context, the worker - so a value nobody can read (a command
+    stored before styles existed, a code later withdrawn) answers the way
+    every student was answered before #314, never with an error.
+    """
+    if isinstance(value, str) and value in ANSWER_STYLE_CODES:
+        return value
+    return DEFAULT_ANSWER_STYLE
 
 
 def normalize_grade(grade: str | None) -> str:
