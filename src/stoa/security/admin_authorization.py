@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
+import dataclasses
 from dataclasses import dataclass
 from functools import wraps
 from typing import Literal, ParamSpec, Protocol, TypeVar, runtime_checkable
@@ -88,6 +89,25 @@ class AdminAuthorizationContext:
     actor: Actor
     correlation_id: str
     audit_sink: AuthorizationAuditSink
+
+
+@dataclass(frozen=True, slots=True)
+class AdmittedAdmin(Actor):
+    """The actor `admin_operation` let in on a route whose typed targets are not checked yet.
+
+    The route's own body names those targets, and FastAPI only hands the validated
+    body to the endpoint, so `admin_target_provider` finishes the decision there;
+    `pending_targets` is what it finishes it with. The handler sees an ordinary `Actor`.
+    """
+
+    pending_targets: AdminAuthorizationContext | None = dataclasses.field(
+        default=None, compare=False, repr=False
+    )
+
+
+def _admitted(actor: Actor, context: AdminAuthorizationContext) -> AdmittedAdmin:
+    values = {member.name: getattr(actor, member.name) for member in dataclasses.fields(Actor)}
+    return AdmittedAdmin(**values, pending_targets=context)
 
 
 @runtime_checkable
@@ -393,12 +413,10 @@ def admin_target_provider(
         async def wrapped(
             *args: EndpointParams.args, **kwargs: EndpointParams.kwargs
         ) -> EndpointResult:
-            user = kwargs.get("user")
-            if not isinstance(user, dict) or "_admin_authorization" not in user:
+            actor = kwargs.get("actor")
+            if not isinstance(actor, AdmittedAdmin) or actor.pending_targets is None:
                 raise RuntimeError("typed admin target provider lacks authorization context")
-            context = user["_admin_authorization"]
-            if not isinstance(context, AdminAuthorizationContext):
-                raise RuntimeError("typed admin target provider has invalid authorization context")
+            context = actor.pending_targets
             body = kwargs.get(provider.body_parameter)
             try:
                 refs = _provider_refs(
@@ -718,7 +736,7 @@ async def admin_operation(
     actor: Actor = Depends(get_actor),
     correlation_id: str = Depends(get_request_correlation_id),
     audit_sink: AuthorizationAuditSink = Depends(get_authorization_audit_sink),
-) -> dict[str, object]:
+) -> Actor:
     route = request.scope.get("route")
     path = str(getattr(route, "path", request.url.path))
     try:
@@ -760,20 +778,16 @@ async def admin_operation(
         raise SecurityDecisionError(decision.result_code, correlation_id)
     provider = getattr(getattr(route, "endpoint", None), "admin_target_provider", None)
     if provider is not None:
-        return {
-            "sub": actor.user_id,
-            "user_id": actor.user_id,
-            "role": actor.role.value,
-            "account_status": actor.account_status.value,
-            "capabilities": {grant.capability: "granted" for grant in actor.current_grants},
-            "_admin_authorization": AdminAuthorizationContext(
+        return _admitted(
+            actor,
+            AdminAuthorizationContext(
                 request=request,
                 policy=policy,
                 actor=actor,
                 correlation_id=correlation_id,
                 audit_sink=audit_sink,
             ),
-        }
+        )
     try:
         resource_id, student_id = await _target(request, policy, actor, correlation_id)
     except SecurityDecisionError as exc:
@@ -813,15 +827,7 @@ async def admin_operation(
     )
     if not decision.allowed:
         raise SecurityDecisionError(decision.result_code, correlation_id)
-    return {
-        "sub": actor.user_id,
-        "user_id": actor.user_id,
-        "role": actor.role.value,
-        "account_status": actor.account_status.value,
-        "capabilities": {
-            grant.capability: "granted" for grant in actor.current_grants
-        },
-    }
+    return actor
 
 
 setattr(admin_operation, "admin_policy_classifier", classify_admin_route)

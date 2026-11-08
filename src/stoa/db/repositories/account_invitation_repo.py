@@ -8,9 +8,10 @@ an approved candidacy.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Protocol, runtime_checkable
 
+from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
 
 from stoa.db.dynamodb import get_table
@@ -51,6 +52,11 @@ class _PutTable(Protocol):
 
 
 @runtime_checkable
+class _QueryTable(Protocol):
+    def query(self, **kwargs: object) -> object: ...
+
+
+@runtime_checkable
 class _UpdateTable(Protocol):
     def update_item(self, **kwargs: object) -> object: ...
 
@@ -80,6 +86,12 @@ def _put_item(table: object, **kwargs: object) -> object:
     if not isinstance(table, _PutTable):
         raise AccountInvitationConflict("account invitation dependency unavailable")
     return table.put_item(**kwargs)
+
+
+def _query(table: object, **kwargs: object) -> InvitationItem:
+    if not isinstance(table, _QueryTable):
+        raise AccountInvitationConflict("account invitation dependency unavailable")
+    return _response(table.query(**kwargs))
 
 
 def _update_item(table: object, **kwargs: object) -> object:
@@ -186,6 +198,57 @@ def get_invitation_by_id(
     if not isinstance(digest, str) or not digest:
         return None
     return get_invitation(digest, table=target)
+
+
+def issued_invitation_ids(
+    accounts: Iterable[Mapping[str, object]], *, table: object | None = None
+) -> dict[str, str]:
+    """The live invitation each invited account can be reissued from, by account id.
+
+    Card 002-D / B5: reissue resolves an invitation id, not an account id, so the
+    console needs the former. Neither the profile nor any key carries it; the only
+    way in is the address both rows repeat, through GSI-Email. One call takes a
+    whole page of accounts and asks once per distinct address, so two accounts on
+    one address cost one query. DynamoDB cannot query several partitions at once,
+    so a page of N addresses is still N queries; fewer needs a key that leads from
+    the account to its invitation. An account with no issued invitation is absent
+    from the answer. The invitation id is a handle, not a credential.
+    """
+    by_email: dict[str, set[str]] = {}
+    for account in accounts:
+        email = str(account.get("email") or "").strip()
+        account_id = str(account.get("user_id") or "").strip()
+        if email and account_id:
+            by_email.setdefault(email, set()).add(account_id)
+    target = _table(table)
+    latest: dict[str, tuple[str, str]] = {}
+    for email, account_ids in by_email.items():
+        request: dict[str, object] = {
+            "IndexName": "GSI-Email",
+            "KeyConditionExpression": Key("email").eq(email),
+            "FilterExpression": (
+                Attr("entity_type").eq("account_invitation")
+                & Attr("status").eq(ISSUED_STATUS)
+            ),
+        }
+        while True:
+            response = _query(target, **request)
+            rows = response.get("Items", [])
+            if not isinstance(rows, list):
+                raise AccountInvitationConflict("account invitation dependency unavailable")
+            for row in map(_response, rows):
+                account_id = str(row.get("account_id") or "")
+                invitation_id = str(row.get("invitation_id") or "")
+                if account_id not in account_ids or not invitation_id:
+                    continue
+                issued_at = str(row.get("issued_at") or "")
+                if account_id not in latest or issued_at >= latest[account_id][0]:
+                    latest[account_id] = (issued_at, invitation_id)
+            cursor = response.get("LastEvaluatedKey")
+            if not cursor:
+                break
+            request["ExclusiveStartKey"] = cursor
+    return {account_id: invitation_id for account_id, (_, invitation_id) in latest.items()}
 
 
 def claim_invitation(

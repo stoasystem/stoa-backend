@@ -12,6 +12,7 @@ from enum import StrEnum
 import hashlib
 import struct
 from typing import Any
+from uuid import uuid4
 
 from botocore.exceptions import ClientError
 
@@ -19,11 +20,14 @@ from stoa.db.dynamodb import get_table
 from stoa.db.repositories import (
     account_deletion_repo,
     parent_link_repo,
+    security_audit_repo,
     user_repo,
     weekly_counter,
 )
 from stoa.models.allowance import TeacherSupportScope, ZurichWeek
 from stoa.models.billing import BillingPlanId
+from stoa.security.identity import Actor
+from stoa.services.account_errors import AccountErrorCode, AccountViolation
 from stoa.services import allowance_service, paid_entitlement_service
 
 
@@ -408,6 +412,72 @@ def set_assigned_weekly_cases(
             return AssignedCasesWrite(AssignedCasesDisposition.VERSION_CONFLICT)
         raise
     return AssignedCasesWrite(AssignedCasesDisposition.WRITTEN, next_version)
+
+
+def _administered_student(student_id: str, table: object) -> str:
+    """The id, once it names a student account; the same refusals for a read and a write.
+
+    Answering "7, by default" for an id that is not an account made "look it up,
+    then change it" contradict itself, so the read refuses exactly as the write does.
+    """
+    profile = user_repo.get_user(student_id, table=table)
+    if not profile:
+        raise AccountViolation(AccountErrorCode.ACCOUNT_NOT_FOUND)
+    if str(profile.get("role") or "") != "student":
+        raise AccountViolation(AccountErrorCode.ACCOUNT_NOT_A_STUDENT)
+    return student_id
+
+
+def read_administered_weekly_cases(
+    student_id: str, *, table: object | None = None
+) -> AssignedWeeklyCases:
+    """What an administrator is shown for one student: the figure the admission reads."""
+    target = table or get_table()
+    return read_assigned_weekly_cases(_administered_student(student_id, target), table=target)
+
+
+def administer_weekly_cases(
+    student_id: str,
+    weekly_cases: int,
+    *,
+    actor: Actor,
+    now: datetime | None = None,
+    table: object | None = None,
+) -> int:
+    """An administrator sets this student's weekly figure; returns the version written.
+
+    Refuses an id that is not a student account, and a write that lost to a
+    concurrent administrator (their figure stands). A figure that was written
+    leaves one durable administrator event naming who set what.
+    """
+    target = table or get_table()
+    student = _administered_student(student_id, target)
+    written = set_assigned_weekly_cases(
+        student, weekly_cases, actor_id=actor.user_id, now=now, table=target
+    )
+    if written.disposition is AssignedCasesDisposition.VERSION_CONFLICT:
+        raise AccountViolation(AccountErrorCode.ALLOWANCE_VERSION_CONFLICT)
+    if written.state_version is None:
+        raise ValueError("a written figure has a version")
+    security_audit_repo.append_event(
+        student,
+        {
+            "event_id": f"event_{uuid4().hex}",
+            "event_type": "teacher_support_allowance_set",
+            "actor_id": actor.user_id,
+            "actor_role": actor.role.value,
+            "target_id": student,
+            "target_type": "account",
+            "action": "set_teacher_support_allowance",
+            "created_at": _timestamp(_aware(now, "now").replace(microsecond=0)),
+            "reason_code": "teacher_support_allowance_set",
+            "evidence_reference": (
+                f"weekly_cases={weekly_cases};state_version={written.state_version}"
+            ),
+        },
+        table=target,
+    )
+    return written.state_version
 
 
 def _resolve_assigned_scope(
@@ -1226,9 +1296,11 @@ __all__ = [
     "TeacherSupportRefundResult",
     "TeacherSupportCaseAdmission",
     "admit_teacher_support_case",
+    "administer_weekly_cases",
     "current_week_identity",
     "get_student_teacher_support_standing",
     "get_teacher_support_projection",
+    "read_administered_weekly_cases",
     "read_assigned_weekly_cases",
     "refund_teacher_support_case",
     "set_assigned_weekly_cases",

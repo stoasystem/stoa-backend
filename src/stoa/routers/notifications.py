@@ -248,13 +248,13 @@ async def list_admin_notifications(
     status_filter: str | None = Query(default=None, alias="status"),
     event_type: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=100),
-    user: dict = Depends(admin_operation),
+    actor: Actor = Depends(admin_operation),
 ):
     items = notification_service.list_admin_events(
         status=status_filter,
         event_type=event_type,
         limit=limit,
-        locale=locale_service.reader_locale(str(user.get("sub") or "")),
+        locale=locale_service.reader_locale(actor.user_id),
     )
     return NotificationListResponse(
         items=[NotificationEventResponse.model_validate(item) for item in items],
@@ -265,6 +265,7 @@ async def list_admin_notifications(
 @admin_router.get("/notifications/delivery-status", response_model=NotificationDeliveryStatusResponse)
 async def get_notification_delivery_status(
     limit: int = Query(default=100, ge=1, le=500),
-    user: dict = Depends(admin_operation),
+    actor: Actor = Depends(admin_operation),
 ):
+    del actor
     return notification_service.delivery_status(limit=limit)
