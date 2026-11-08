@@ -473,6 +473,22 @@ def test_a_call_whose_failure_was_recorded_does_not_block_a_later_attempt(
     assert len(model.calls) == 2
 
 
+def test_a_provider_failure_is_logged_by_its_class_only(
+    table, model, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The provider's error text can carry the prompt; only its class is logged."""
+    canary = "PROVIDER-EXCEPTION-PRIVATE-CANARY bedrock-model-private"
+    _commit("key-1")
+    model.outcomes = [_called(RuntimeError(canary))]
+    with caplog.at_level("DEBUG"):
+        assert _deliver("key-1") == {"outcome": "failed"}
+
+    assert "event_category=conversation_ai_failed" in caplog.text
+    assert "exception_class=RuntimeError" in caplog.text
+    assert "PROVIDER-EXCEPTION-PRIVATE-CANARY" not in caplog.text
+    assert "bedrock-model-private" not in caplog.text
+
+
 def test_a_duplicate_delivery_does_not_retry_a_failed_command(table, model) -> None:
     _commit("key-1")
     model.outcomes = [ai_service.AIInvocationFailure("deadline_exceeded")]

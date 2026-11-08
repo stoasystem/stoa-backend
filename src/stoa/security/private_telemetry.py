@@ -15,7 +15,6 @@ _EVENTS = frozenset(
         "model_output_parse_failed",
         "ai_request_started",
         "ai_response_received",
-        "hint_generation_failed",
         "title_generation_failed",
         "conversation_ai_failed",
         "conversation_ai_needs_reconciliation",
