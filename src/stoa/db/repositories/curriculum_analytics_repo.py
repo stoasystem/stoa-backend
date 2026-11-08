@@ -339,16 +339,13 @@ def scan_curriculum_signal_manifests(
 ) -> CurriculumSignalPage:
     """Strongly scan owner manifests plus legacy deterministic-hash signals."""
     target = table or get_table()
-    marker = _cursor(cursor) if cursor is not None else None
+    marker = dict(cursor) if cursor is not None else None
     legacy_hash = _legacy_student_hash(owner_id)
     found: list[CurriculumSignalItem] = []
-    for _ in range(maximum_pages):
-        kwargs: CurriculumSignalItem = {"ConsistentRead": True}
-        if marker:
-            kwargs["ExclusiveStartKey"] = marker
-        response = _scan(target, **kwargs)
-        items = response.get("Items", [])
-        for item in _items(items):
+    for page in account_deletion_repo.sweep_pages(
+        "curriculum signal deletion", table=target, cursor=cursor, maximum_pages=maximum_pages
+    ):
+        for item in _items(page.items):
             if item.get("PK") == f"CURRICULUM_SIGNAL_OWNER#{owner_id}":
                 found.append(item)
                 continue
@@ -359,15 +356,11 @@ def scan_curriculum_signal_manifests(
                 and metadata.get("studentHash") == legacy_hash
             ):
                 found.append(_legacy_manifest(item, owner_id))
-        raw_next = response.get("LastEvaluatedKey")
-        if raw_next is None:
+        if page.last_key is None:
             return CurriculumSignalPage(tuple(found))
-        next_marker = _cursor(raw_next)
-        if next_marker == marker:
-            raise account_deletion_repo.AccountDeletionConflict(
-                "curriculum signal deletion cursor did not advance"
-            )
-        marker = next_marker
+        if page.last_key == marker:
+            raise account_deletion_repo.AccountDeletionConflict("curriculum signal deletion cursor did not advance")
+        marker = page.last_key
     return CurriculumSignalPage(tuple(found), marker)
 
 
@@ -484,17 +477,3 @@ def _legacy_student_hash(owner_id: str) -> str:
     from hashlib import sha256
 
     return f"student:{sha256(owner_id.encode('utf-8')).hexdigest()[:12]}"
-
-
-def _cursor(value: object) -> dict[str, str]:
-    if not isinstance(value, Mapping) or set(value) != {"PK", "SK"}:
-        raise account_deletion_repo.AccountDeletionConflict(
-            "invalid curriculum signal deletion cursor"
-        )
-    pk = value.get("PK")
-    sk = value.get("SK")
-    if not isinstance(pk, str) or not pk or not isinstance(sk, str) or not sk:
-        raise account_deletion_repo.AccountDeletionConflict(
-            "invalid curriculum signal deletion cursor"
-        )
-    return {"PK": pk, "SK": sk}

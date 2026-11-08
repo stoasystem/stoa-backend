@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-import base64
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
-import json
 import logging
 from typing import Any
 
 import boto3
 
 from stoa.config import Settings, settings
+from stoa.db import table as db_table
 from stoa.services import uploads
 
 logger = logging.getLogger(__name__)
@@ -182,25 +181,15 @@ def _candidate_cursor(candidate: Any) -> dict[str, str]:
     return cursor  # type: ignore[return-value]
 
 
+CONTINUATION_SCOPE = "upload_cleanup"
+
+
 def _encode_cursor(cursor: dict[str, Any] | None) -> str | None:
-    if not cursor:
-        return None
-    payload = json.dumps(cursor, sort_keys=True, separators=(",", ":")).encode()
-    return base64.urlsafe_b64encode(payload).decode().rstrip("=")
+    return db_table.page_token(CONTINUATION_SCOPE, cursor) if cursor else None
 
 
 def _decode_cursor(token: str | None) -> dict[str, Any] | None:
+    """The key a run started by hand continues from; `PageTokenInvalid` is a `ValueError`."""
     if token is None:
         return None
-    if not isinstance(token, str) or not token or len(token) > 2048:
-        raise ValueError("invalid cleanup continuation")
-    try:
-        padding = "=" * (-len(token) % 4)
-        value = json.loads(base64.b64decode(token + padding, altchars=b"-_", validate=True))
-    except (ValueError, TypeError, json.JSONDecodeError) as exc:
-        raise ValueError("invalid cleanup continuation") from exc
-    if not isinstance(value, dict) or set(value) - {"PK", "SK"}:
-        raise ValueError("invalid cleanup continuation")
-    if not all(isinstance(item, str) and len(item) <= 256 for item in value.values()):
-        raise ValueError("invalid cleanup continuation")
-    return value
+    return db_table.read_page_token(token, CONTINUATION_SCOPE, key=db_table.BASE_KEY)

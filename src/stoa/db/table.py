@@ -13,6 +13,11 @@ there is one of each:
 - `fenced(owner, operations)`: the same, behind the owner's account fence - the
   fence read, its condition put in front, a refused fence reported as the account
   not being writable rather than as the caller's own operations failing.
+- `pages("query" | "scan", ...)`: a read that goes on past the table's page, page
+  by page. Each continuation key is checked once, here, and a read that stops
+  moving forward is reported instead of looping. `page_token(scope, position)` and
+  `read_page_token(token, scope)` are the one opaque form a position leaves the
+  service in; a token only continues the listing it was made for.
 - Two outcomes besides success. `WriteRefused`: the table read the transaction and
   turned it down, and says why for each operation. `TableUnavailable`: the table
   could not be asked, or did not answer in a shape that says anything. A repository
@@ -25,13 +30,18 @@ receiving exactly what the real client would: wire format, `TableName` included.
 
 from __future__ import annotations
 
+import base64
+import binascii
+import json
 import logging
 import re
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from functools import lru_cache
-from typing import Any, cast
+from itertools import islice
+from typing import Any, Literal, cast
 
 import boto3
 from boto3.dynamodb.types import TypeSerializer
@@ -67,8 +77,10 @@ def table() -> object:
 def install(double: object | None) -> None:
     """Put `double` where the real table would be; `None` takes it away again.
 
-    The suite does not use this yet - it patches each module's `get_table` - and
-    moves onto it with the paging step of #210.
+    The suite's one installation point: the `fake_table` fixture installs a
+    `FakeTable` here, and every test starts with an empty one. Patches of a
+    module's own `get_table` still win over it, until the batches of #210 that
+    move each domain onto the gateway remove them.
     """
     global _installed
     _installed = double
@@ -312,6 +324,281 @@ def fenced(
             # alone would say nothing went wrong with its operations.
             own_reasons = ()
         raise WriteRefused(exc.code, own_reasons) from exc
+
+
+# -- reading page by page -------------------------------------------------------------
+
+# Far more pages than this table has; a reader that needs more has a filter that
+# is not doing its job, and should say so rather than read the account.
+SCAN_PAGE_BUDGET = 200
+
+# The base table's key. A read on an index continues from that index's key as
+# well, and names it: `key=("PK", "SK", "parent_id", "week_start")`.
+BASE_KEY = ("PK", "SK")
+
+type Position = dict[str, Any]
+
+
+class PageTokenInvalid(ValueError):
+    """A page token, or a stored start key, that no read can continue from.
+
+    Forged, damaged, made for another listing, or written before #298 changed
+    the format: the caller cannot tell these apart and need not - the listing
+    starts again from its first page.
+    """
+
+
+@dataclass(frozen=True, slots=True)
+class Page:
+    """One page of a read: its rows, and where the next page starts.
+
+    `last_key` is `None` on the last page. It is the key as the table gave it,
+    already checked; a sweep that stores it can hand it back as `start`.
+    """
+
+    items: list[dict[str, Any]]
+    last_key: Position | None
+    scope: str | None = None
+
+    @property
+    def next_token(self) -> str | None:
+        """Where the next page starts, as a token for this page's listing."""
+        if self.last_key is None:
+            return None
+        if self.scope is None:
+            raise ValueError("a read made without a scope hands out no token")
+        return page_token(self.scope, self.last_key)
+
+
+def pages(
+    read: Literal["query", "scan"],
+    /,
+    *,
+    start: Mapping[str, object] | None = None,
+    token: str | None = None,
+    scope: str | None = None,
+    within: Callable[[Position], bool] | None = None,
+    key: Sequence[str] = BASE_KEY,
+    table: object | None = None,
+    **request: object,
+) -> Iterator[Page]:
+    """The pages of one query or scan, in order, until the table has no more.
+
+    `request` is what the table's own `query` / `scan` takes, without
+    `ExclusiveStartKey`: a read starts at the beginning, at `start` (a key a sweep
+    kept from an earlier `Page.last_key`), or at `token` (from `Page.next_token`,
+    read against `scope`, and - when `within` is given - only if the position it
+    holds belongs to this listing). A start that cannot be read raises
+    `PageTokenInvalid` here, before anything is asked of the table.
+
+    Mechanics only. How many pages to take is the caller's (`itertools.islice`),
+    and so is a sweep's rule about a cursor coming round again: a sweep that
+    stores its place decides for itself what a repeated key means (#298). What
+    is checked here, once: every continuation key has exactly the attributes in
+    `key`, each a non-empty string or a number, or the read is
+    `TableUnavailable("malformed_page_key")`; a response that is not a page is
+    `TableUnavailable("malformed_page")`. The table's own errors pass through
+    untouched.
+    """
+    if read not in ("query", "scan"):
+        raise ValueError(f"not a paged read: {read}")
+    if "ExclusiveStartKey" in request:
+        raise ValueError("start a paged read with `start` or `token`")
+    if token is not None and start is not None:
+        raise ValueError("a read starts at a token or at a key, not both")
+    if token is not None:
+        if scope is None:
+            raise ValueError("a token is read against the listing it was made for")
+        current: Position | None = read_page_token(token, scope, key=key, within=within)
+    elif start is not None:
+        current = page_key(start, key=key)
+    else:
+        current = None
+    target = table if table is not None else _installed if _installed is not None else _real_table()
+    call = getattr(target, read, None)
+    if not callable(call):
+        raise TableUnavailable(f"no_{read}_entry")
+    return _walk(call, dict(request), current, tuple(key), scope)
+
+
+def _walk(
+    call: Callable[..., object],
+    request: dict[str, object],
+    current: Position | None,
+    key: tuple[str, ...],
+    scope: str | None,
+) -> Iterator[Page]:
+    while True:
+        if current is not None:
+            request["ExclusiveStartKey"] = current
+        response = call(**request)
+        if not isinstance(response, Mapping):
+            raise TableUnavailable("malformed_page")
+        raw_items = response.get("Items", [])
+        if not isinstance(raw_items, list) or not all(
+            isinstance(item, Mapping) for item in raw_items
+        ):
+            raise TableUnavailable("malformed_page")
+        items = [dict(item) for item in raw_items]
+        raw_key = response.get("LastEvaluatedKey")
+        # No key, or an empty one, is the end of the read: DynamoDB allows both.
+        if raw_key is None or (isinstance(raw_key, Mapping) and not raw_key):
+            yield Page(items, None, scope)
+            return
+        try:
+            next_key = page_key(raw_key, key=key)
+        except PageTokenInvalid:
+            raise TableUnavailable("malformed_page_key") from None
+        yield Page(items, next_key, scope)
+        current = next_key
+
+
+def rows(
+    read: Literal["query", "scan"],
+    /,
+    *,
+    want: int | None = None,
+    page_budget: int = SCAN_PAGE_BUDGET,
+    key: Sequence[str] = BASE_KEY,
+    table: object | None = None,
+    **request: object,
+) -> list[dict[str, Any]]:
+    """Every row a filtered read admits, across the table's pages.
+
+    `Limit` bounds the rows a read *looks at*, not the rows its filter keeps, so a
+    scan with `Limit=100` answers from the first hundred rows of the table and
+    returns whichever of them matched. On a table larger than the thing being
+    looked for that is nothing, and nothing says so - a teacher's help request
+    was invisible in production for exactly this reason (#95). So `Limit` is not
+    taken here; `want` caps the rows kept, which is what those callers meant.
+
+    A page that hands back the key it started from has not moved:
+    `TableUnavailable("page_did_not_advance")` rather than a loop. A read that
+    has not ended after `page_budget` pages is `TableUnavailable("page_budget_spent")`:
+    an answer from part of the table would look like an answer.
+    """
+    if "Limit" in request:
+        raise ValueError("`Limit` counts rows read, not rows kept: pass `want`")
+    found: list[dict[str, Any]] = []
+    started_at: Position | None = None
+    for page in islice(pages(read, key=key, table=table, **request), page_budget):
+        found.extend(page.items)
+        if want is not None and len(found) >= want:
+            return found[:want]
+        if page.last_key is None:
+            return found
+        if page.last_key == started_at:
+            raise TableUnavailable("page_did_not_advance")
+        started_at = page.last_key
+    raise TableUnavailable("page_budget_spent")
+
+
+def page_key(value: object, *, key: Sequence[str] = BASE_KEY) -> Position:
+    """`value` as a key a read can continue from, or `PageTokenInvalid`.
+
+    Exactly the attributes in `key`, each a non-empty string or a finite number.
+    """
+    if (
+        not isinstance(value, Mapping)
+        or set(value) != set(key)
+        or len(value) != len(key)
+        or not all(_key_member(value[name]) for name in key)
+    ):
+        raise PageTokenInvalid("not a key this read can continue from")
+    return {name: value[name] for name in key}
+
+
+def _key_member(value: object) -> bool:
+    if isinstance(value, str):
+        return bool(value)
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, Decimal):
+        return value.is_finite()
+    return isinstance(value, int)
+
+
+# A token is `2.` and the URL-safe base64 of `{"s": scope, "p": position}`, with
+# numbers written as `{"N": "<digits>"}` so a `Decimal` comes back a `Decimal`.
+# Base64 has no `.`, so a token from before this format can never be read as one.
+_TOKEN_PREFIX = "2."
+_TOKEN_LIMIT = 2048
+
+
+def page_token(scope: str, position: Mapping[str, object]) -> str:
+    """`position` as an opaque token that only `read_page_token(..., scope)` reads.
+
+    `scope` names the listing, and the partition when the listing is one: a
+    token made for one report's audit timeline does not continue another's.
+    A position is a key or anything else a listing resumes from (the last
+    case handed out, say): names to strings or numbers.
+    """
+    if not isinstance(scope, str) or not scope or not position:
+        raise ValueError("a page token holds a position within a named listing")
+    encoded: dict[str, object] = {}
+    for name, value in position.items():
+        if isinstance(value, str):
+            encoded[name] = value
+        elif isinstance(value, (int, Decimal)) and not isinstance(value, bool):
+            encoded[name] = {"N": str(value)}
+        else:
+            raise ValueError("a page token holds strings and numbers")
+    raw = json.dumps({"s": scope, "p": encoded}, separators=(",", ":"), sort_keys=True)
+    token = _TOKEN_PREFIX + base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
+    if len(token) > _TOKEN_LIMIT:
+        raise ValueError("a position this large does not belong in a page token")
+    return token
+
+
+def read_page_token(
+    token: object,
+    scope: str,
+    *,
+    key: Sequence[str] | None = None,
+    within: Callable[[Position], bool] | None = None,
+) -> Position:
+    """The position `token` holds, or `PageTokenInvalid`.
+
+    The token must be one `page_token` made for `scope`. With `key`, the position
+    must be a key with exactly those attributes; with `within`, the position must
+    satisfy it - the check that a key from a hand-made token still lies inside the
+    partition being read, which the table would otherwise refuse as a request.
+    """
+    if not isinstance(token, str) or not token.startswith(_TOKEN_PREFIX) or len(token) > _TOKEN_LIMIT:
+        raise PageTokenInvalid("not a page token")
+    body = token[len(_TOKEN_PREFIX) :]
+    try:
+        raw = base64.b64decode(body + "=" * (-len(body) % 4), altchars=b"-_", validate=True)
+        payload = json.loads(raw.decode("utf-8"))
+    except (binascii.Error, ValueError, UnicodeDecodeError):
+        raise PageTokenInvalid("not a page token") from None
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != {"s", "p"}
+        or payload["s"] != scope
+        or not isinstance(payload["p"], dict)
+        or not payload["p"]
+    ):
+        raise PageTokenInvalid("not a token for this listing")
+    position: Position = {}
+    for name, value in payload["p"].items():
+        if isinstance(value, str):
+            position[name] = value
+            continue
+        if not isinstance(value, dict) or set(value) != {"N"} or not isinstance(value["N"], str):
+            raise PageTokenInvalid("not a page token")
+        try:
+            number = Decimal(value["N"])
+        except InvalidOperation:
+            raise PageTokenInvalid("not a page token") from None
+        if not number.is_finite():
+            raise PageTokenInvalid("not a page token")
+        position[name] = number
+    if key is not None:
+        position = page_key(position, key=key)
+    if within is not None and not within(position):
+        raise PageTokenInvalid("not a token for this listing")
+    return position
 
 
 def _account_fences() -> Any:

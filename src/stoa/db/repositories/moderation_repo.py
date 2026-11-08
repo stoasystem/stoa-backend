@@ -8,7 +8,7 @@ from typing import Any, Mapping, Protocol, runtime_checkable
 from boto3.dynamodb.conditions import Attr, Key
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table, scan_every_page, stored_int
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -79,11 +79,6 @@ class _QueryTable(Protocol):
     def query(self, **kwargs: object) -> object: ...
 
 
-@runtime_checkable
-class _ScanTable(Protocol):
-    def scan(self, **kwargs: object) -> object: ...
-
-
 def _response(value: object) -> dict[str, Any]:
     if not isinstance(value, Mapping) or not all(isinstance(key, str) for key in value):
         raise account_deletion_repo.AccountDeletionConflict(
@@ -106,14 +101,6 @@ def _query(table: object, **kwargs: object) -> dict[str, Any]:
             "moderation dependency unavailable"
         )
     return _response(table.query(**kwargs))
-
-
-def _scan(table: object, **kwargs: object) -> dict[str, Any]:
-    if not isinstance(table, _ScanTable):
-        raise account_deletion_repo.AccountDeletionConflict(
-            "moderation dependency unavailable"
-        )
-    return _response(table.scan(**kwargs))
 
 
 def _required_owner(item: Mapping[str, Any]) -> tuple[str, int]:
@@ -156,21 +143,6 @@ def _event_item(
         "student_id": student_id,
         "privacy_generation": generation,
     }
-
-
-def _validated_cursor(value: Any) -> dict[str, str]:
-    if (
-        not isinstance(value, Mapping)
-        or set(value) != {"PK", "SK"}
-        or any(
-            not isinstance(value.get(field), str) or not value[field]
-            for field in ("PK", "SK")
-        )
-    ):
-        raise account_deletion_repo.AccountDeletionConflict(
-            "invalid moderation continuation cursor"
-        )
-    return {"PK": value["PK"], "SK": value["SK"]}
 
 
 def _strong_item(
@@ -239,30 +211,24 @@ def scan_moderation_private_rows(
             "invalid moderation scan bound"
         )
     target: object = table if table is not None else get_table()
-    current = _validated_cursor(cursor) if cursor is not None else None
+    current = (
+        account_deletion_repo.continuation_key(cursor, "moderation continuation")
+        if cursor is not None
+        else None
+    )
     seen_cursors = (
         {(current["PK"], current["SK"])} if current is not None else set()
     )
     items: list[dict[str, Any]] = []
     unresolved = 0
-    for _ in range(maximum_pages):
-        request: dict[str, Any] = {
-            "ConsistentRead": True,
-            "Limit": page_limit,
-        }
-        if current is not None:
-            request["ExclusiveStartKey"] = current
-        response = _scan(target, **request)
-        raw_items = response.get("Items", [])
-        if not isinstance(raw_items, list):
-            raise account_deletion_repo.AccountDeletionConflict(
-                "malformed moderation row page"
-            )
-        for raw in raw_items:
-            if not isinstance(raw, Mapping):
-                raise account_deletion_repo.AccountDeletionConflict(
-                    "malformed moderation row"
-                )
+    for page in account_deletion_repo.sweep_pages(
+        "moderation continuation",
+        table=target,
+        cursor=current,
+        page_limit=page_limit,
+        maximum_pages=maximum_pages,
+    ):
+        for raw in page.items:
             pk = str(raw.get("PK") or "")
             sk = str(raw.get("SK") or "")
             if not pk.startswith("MODERATION#") or not (
@@ -291,10 +257,9 @@ def scan_moderation_private_rows(
             normalized["student_id"] = student_id
             normalized["privacy_generation"] = generation
             items.append(normalized)
-        raw_cursor = response.get("LastEvaluatedKey")
-        if raw_cursor is None:
+        if page.last_key is None:
             return ModerationPrivatePage(tuple(items), None, unresolved)
-        next_cursor = _validated_cursor(raw_cursor)
+        next_cursor = page.last_key
         cursor_identity = (next_cursor["PK"], next_cursor["SK"])
         if cursor_identity in seen_cursors:
             raise account_deletion_repo.AccountDeletionConflict(
@@ -315,7 +280,9 @@ def scrub_moderation_row(
 ) -> dict[str, Any]:
     """Replace one resolved moderation row with a strict noncontent tombstone."""
     target: object = table if table is not None else get_table()
-    key = _validated_cursor({"PK": item.get("PK"), "SK": item.get("SK")})
+    key = account_deletion_repo.continuation_key(
+        {"PK": item.get("PK"), "SK": item.get("SK")}, "moderation continuation"
+    )
     if not key["PK"].startswith("MODERATION#") or not (
         key["SK"] == "SUMMARY" or key["SK"].startswith("EVENT#")
     ):
@@ -487,14 +454,10 @@ def list_cases(limit: int | None = 50) -> list[dict[str, Any]]:
     table = get_table()
     # The cap is applied after the privacy filter, not before it: a page of
     # deleted cases must not be what a reader gets instead of live ones.
-    resp = scan_every_page(
-        _scan, table, FilterExpression=Attr("entity_type").eq("moderation_case")
+    rows = db_table.rows(
+        "scan", table=table, FilterExpression=Attr("entity_type").eq("moderation_case")
     )
-    cases = [
-        dict(item)
-        for item in resp.get("Items", [])
-        if isinstance(item, Mapping) and item.get("privacy_deleted") is not True
-    ]
+    cases = [item for item in rows if item.get("privacy_deleted") is not True]
     return cases[:limit]
 
 

@@ -43,17 +43,17 @@ SHARED_DOUBLE = "FakeTable"
 #             019 group A converted the doubles behind the five known incidents
 #             first, and this list is what is left.
 HAND_WRITTEN_DOUBLES: dict[str, str] = {
-    "conftest.py::_EmptyAskedKnowledgeTable": (
-        "script: holds no Ask knowledge-point records on purpose, so a "
-        "learning-profile reader in a test that never installed one gets nothing "
-        "instead of reaching the real table"
-    ),
-    "conftest.py::_EmptyParentLinkTable": (
-        "script: holds nothing on purpose, so a test that never installed a link "
-        "table fails here instead of reaching the real one"
-    ),
     "test_billing_fact_repo.py::AtomicBillingTable": "repo",
     "test_conversations.py::_PagedIndexTable": "script",
+    "test_table_pages.py::_Broken": (
+        "script: a malformed page, to show the pager refuses it instead of following it"
+    ),
+    "test_table_pages.py::_Stuck": (
+        "script: a page that hands back its own start key, to show rows() stops"
+    ),
+    "test_table_pages.py::_Untouchable": (
+        "script: fails if read at all, to show a forged token never reaches the table"
+    ),
     "test_dispatch_reconciler.py::ScanPages": (
         "script: canned scan pages, to show the help-request lister follows the "
         "cursor and remembers each request; it answers `scan` and nothing else"

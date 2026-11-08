@@ -17,7 +17,7 @@ from __future__ import annotations
 import pytest
 from fakes.dynamodb import FakeTable
 
-from stoa.db.dynamodb import scan_every_page
+from stoa.db import table as db_table
 from stoa.db.repositories import (
     curriculum_ops_repo,
     moderation_repo,
@@ -181,18 +181,11 @@ def test_a_cap_on_matches_is_a_cap_on_matches(table) -> None:
     assert len(notification_repo.list_push_tokens("u-1", limit=2)) == 2
 
 
-def test_no_row_limit_reaches_the_table(table) -> None:
-    # A `Limit` left in the kwargs would make every page a few rows wide and
-    # spend the page budget crossing a table this walks in a handful of reads.
-    seen: list[object] = []
-
-    def recording(_table: object, **kwargs: object) -> dict[str, object]:
-        seen.append(kwargs.get("Limit"))
-        return {"Items": []}
-
-    scan_every_page(recording, object(), want=10, Limit=25, FilterExpression="x")
-
-    assert seen == [None]
+def test_no_row_limit_reaches_the_table() -> None:
+    # A `Limit` would make every page a few rows wide and spend the page budget
+    # crossing a table this walks in a handful of reads; `want` is what is meant.
+    with pytest.raises(ValueError, match="want"):
+        db_table.rows("scan", table=FakeTable(), want=10, Limit=25, FilterExpression="x")
 
 
 def test_the_limit_still_caps_what_comes_back(table) -> None:

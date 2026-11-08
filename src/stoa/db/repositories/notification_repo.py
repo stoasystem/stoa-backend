@@ -14,7 +14,7 @@ from boto3.dynamodb.conditions import Attr, ConditionBase
 from botocore.exceptions import ClientError
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table, scan_every_page, stored_int
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -158,11 +158,6 @@ class _PutTable(Protocol):
 
 
 @runtime_checkable
-class _ScanTable(Protocol):
-    def scan(self, **kwargs: object) -> object: ...
-
-
-@runtime_checkable
 class _QueryTable(Protocol):
     def query(self, **kwargs: object) -> object: ...
 
@@ -221,14 +216,6 @@ def _put_item(table: object, **kwargs: object) -> object:
             "notification dependency unavailable"
         )
     return table.put_item(**kwargs)
-
-
-def _scan(table: object, **kwargs: object) -> NotificationItem:
-    if not isinstance(table, _ScanTable):
-        raise account_deletion_repo.AccountDeletionConflict(
-            "notification dependency unavailable"
-        )
-    return _dependency_mapping(table.scan(**kwargs))
 
 
 def _query(table: object, **kwargs: object) -> NotificationItem:
@@ -831,13 +818,12 @@ def update_event(
 
 
 def list_events(limit: int = 100) -> list[NotificationItem]:
-    response = scan_every_page(
-        _scan,
-        get_table(),
+    return db_table.rows(
+        "scan",
+        table=get_table(),
         want=limit,
         FilterExpression=Attr("entity_type").eq(NOTIFICATION_ENTITY),
     )
-    return _response_items(response)
 
 
 def put_preferences(item: NotificationItem) -> NotificationItem:
@@ -894,8 +880,7 @@ def list_push_tokens(
     expression: ConditionBase = filters[0]
     for filter_expression in filters[1:]:
         expression = expression & filter_expression
-    response = scan_every_page(_scan, get_table(), want=limit, FilterExpression=expression)
-    return _response_items(response)
+    return db_table.rows("scan", table=get_table(), want=limit, FilterExpression=expression)
 
 
 def update_push_token(
@@ -1653,16 +1638,18 @@ def scan_notification_private_rows(
     table: object | None = None,
 ) -> NotificationPrivatePage:
     target = table or get_table()
-    current = _cursor(cursor) if cursor is not None else None
+    current = cursor
     seen: set[tuple[str, str]] = set()
     found: list[NotificationItem] = []
     scanned = 0
-    for _ in range(max(maximum_pages, 1)):
-        kwargs: dict[str, object] = {"ConsistentRead": True, "Limit": 100}
-        if current is not None:
-            kwargs["ExclusiveStartKey"] = current
-        response = _scan(target, **kwargs)
-        items = _response_items(response)
+    for page in account_deletion_repo.sweep_pages(
+        "notification",
+        table=target,
+        cursor=cursor,
+        page_limit=100,
+        maximum_pages=max(maximum_pages, 1),
+    ):
+        items = page.items
         scanned += len(items)
         found.extend(
             dict(item)
@@ -1674,10 +1661,9 @@ def scan_notification_private_rows(
             )
             and not _already_scrubbed(item)
         )
-        raw = response.get("LastEvaluatedKey")
-        if raw is None:
+        if page.last_key is None:
             return NotificationPrivatePage(tuple(found), None, scanned)
-        current = _cursor(_dependency_mapping(raw))
+        current = page.last_key
         identity = (current["PK"], current["SK"])
         if identity in seen:
             raise account_deletion_repo.AccountDeletionConflict("repeated notification cursor")
@@ -1902,11 +1888,3 @@ def _targets_identity_reference(
 
 def _already_scrubbed(item: Mapping[str, object]) -> bool:
     return str(item.get("entity_type") or "").endswith("_deletion_tombstone")
-
-
-def _cursor(value: Mapping[str, object]) -> dict[str, str]:
-    if set(value) != {"PK", "SK"} or any(
-        not isinstance(value.get(field), str) or not value[field] for field in ("PK", "SK")
-    ):
-        raise account_deletion_repo.AccountDeletionConflict("invalid notification cursor")
-    return {"PK": str(value["PK"]), "SK": str(value["SK"])}

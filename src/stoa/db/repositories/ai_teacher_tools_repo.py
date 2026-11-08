@@ -330,34 +330,23 @@ def scan_ai_draft_private_rows(
     table: object | None = None,
 ) -> AIDraftPrivatePage:
     target = table or get_table()
-    marker = _cursor(cursor) if cursor is not None else None
+    marker = dict(cursor) if cursor is not None else None
     found: list[AIDraftItem] = []
-    for _ in range(maximum_pages):
-        kwargs: AIDraftItem = {"ConsistentRead": True}
-        if marker:
-            kwargs["ExclusiveStartKey"] = marker
-        response = _scan(target, **kwargs)
-        items = response.get("Items", [])
-        if not isinstance(items, list):
-            raise account_deletion_repo.AccountDeletionConflict("malformed AI draft deletion page")
-        for raw in items:
-            if not isinstance(raw, Mapping):
-                continue
+    for page in account_deletion_repo.sweep_pages(
+        "AI draft deletion", table=target, cursor=cursor, maximum_pages=maximum_pages
+    ):
+        for raw in page.items:
             item = _mapping(raw)
             if item.get("entity_type") == DRAFT_ENTITY and owner_id in {
                 item.get("student_id"),
                 item.get("owner_id"),
             }:
                 found.append(item)
-        raw_next = response.get("LastEvaluatedKey")
-        if raw_next is None:
+        if page.last_key is None:
             return AIDraftPrivatePage(tuple(found))
-        next_marker = _cursor(raw_next)
-        if next_marker == marker:
-            raise account_deletion_repo.AccountDeletionConflict(
-                "AI draft deletion cursor did not advance"
-            )
-        marker = next_marker
+        if page.last_key == marker:
+            raise account_deletion_repo.AccountDeletionConflict("AI draft deletion cursor did not advance")
+        marker = page.last_key
     return AIDraftPrivatePage(tuple(found), marker)
 
 
@@ -404,13 +393,3 @@ def scrub_ai_draft_private_row(
             table=target,
         )
     return tombstone
-
-
-def _cursor(value: object) -> dict[str, str]:
-    if not isinstance(value, Mapping) or set(value) != {"PK", "SK"}:
-        raise account_deletion_repo.AccountDeletionConflict("invalid AI draft deletion cursor")
-    pk = value.get("PK")
-    sk = value.get("SK")
-    if not isinstance(pk, str) or not pk or not isinstance(sk, str) or not sk:
-        raise account_deletion_repo.AccountDeletionConflict("invalid AI draft deletion cursor")
-    return {"PK": pk, "SK": sk}

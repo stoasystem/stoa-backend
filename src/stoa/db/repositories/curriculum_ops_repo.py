@@ -9,7 +9,8 @@ from typing import NamedTuple, Protocol, SupportsInt, runtime_checkable
 from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
 
-from stoa.db.dynamodb import get_table, omit_none_attributes, scan_every_page
+from stoa.db import table as db_table
+from stoa.db.dynamodb import get_table, omit_none_attributes
 from stoa.db.repositories import practice_repo
 
 
@@ -36,11 +37,6 @@ class _PutTable(Protocol):
 @runtime_checkable
 class _QueryTable(Protocol):
     def query(self, **kwargs: object) -> object: ...
-
-
-@runtime_checkable
-class _ScanTable(Protocol):
-    def scan(self, **kwargs: object) -> object: ...
 
 
 @runtime_checkable
@@ -93,12 +89,6 @@ def _query(table: object, **kwargs: object) -> CurriculumItem:
     if not isinstance(table, _QueryTable):
         raise RuntimeError("curriculum dependency unavailable")
     return _mapping(table.query(**kwargs))
-
-
-def _scan(table: object, **kwargs: object) -> CurriculumItem:
-    if not isinstance(table, _ScanTable):
-        raise RuntimeError("curriculum dependency unavailable")
-    return _mapping(table.scan(**kwargs))
 
 
 def _update_item(table: object, **kwargs: object) -> CurriculumItem:
@@ -528,14 +518,14 @@ class WorklistRows(NamedTuple):
 def list_worklist() -> WorklistRows:
     table = get_table()
     # One scan for both: the versions and the pointers that say which one is live.
-    resp = scan_every_page(
-        _scan,
-        table,
+    rows = db_table.rows(
+        "scan",
+        table=table,
         FilterExpression=Attr("entity_type").is_in([VERSION_ENTITY, POINTER_ENTITY]),
     )
     versions: list[CurriculumItem] = []
     published_version_ids: dict[str, str] = {}
-    for item in _items(resp.get("Items", [])):
+    for item in _items(rows):
         if item.get("entity_type") == POINTER_ENTITY:
             public_id = item.get("public_id") or str(item.get("PK", "")).removeprefix("CURRICULUM_POINTER#")
             published = item.get("published_version_id")
@@ -553,9 +543,9 @@ def list_active_assignment_refs(public_id: str, limit: int = 100) -> list[Curric
     table = get_table()
     # This one answers "is anything still using this lesson?". A miss here
     # does not shorten a list; it turns a no into a yes.
-    resp = scan_every_page(
-        _scan,
-        table,
+    rows = db_table.rows(
+        "scan",
+        table=table,
         want=limit,
         FilterExpression=(
             Attr("entity_type").eq("learning_assignment")
@@ -563,7 +553,7 @@ def list_active_assignment_refs(public_id: str, limit: int = 100) -> list[Curric
             & Attr("status").is_in(["recommended", "assigned", "started"])
         ),
     )
-    return _items(resp.get("Items", []))
+    return _items(rows)
 
 
 # ── Starmap layout (stoasystem/stoa-backend#60) ───────────────────────────

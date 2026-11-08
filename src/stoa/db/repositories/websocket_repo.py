@@ -9,7 +9,7 @@ from typing import Protocol, runtime_checkable
 from boto3.dynamodb.conditions import Attr
 
 from stoa.db import table as db_table
-from stoa.db.dynamodb import get_table, scan_every_page, stored_int
+from stoa.db.dynamodb import get_table, stored_int
 from stoa.db.repositories import account_deletion_repo
 
 
@@ -47,11 +47,6 @@ class _GetTable(Protocol):
 @runtime_checkable
 class _DeleteTable(Protocol):
     def delete_item(self, **kwargs: object) -> object: ...
-
-
-@runtime_checkable
-class _ScanTable(Protocol):
-    def scan(self, **kwargs: object) -> object: ...
 
 
 @runtime_checkable
@@ -112,14 +107,6 @@ def _delete_item(table: object, **kwargs: object) -> object:
             "connection dependency unavailable"
         )
     return table.delete_item(**kwargs)
-
-
-def _scan(table: object, **kwargs: object) -> ConnectionItem:
-    if not isinstance(table, _ScanTable):
-        raise account_deletion_repo.AccountDeletionConflict(
-            "connection dependency unavailable"
-        )
-    return _dependency_mapping(table.scan(**kwargs))
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,13 +245,12 @@ def delete_connection(connection_id: str) -> None:
 
 
 def list_connections(limit: int = 200) -> list[ConnectionItem]:
-    response = scan_every_page(
-        _scan,
-        get_table(),
+    return db_table.rows(
+        "scan",
+        table=get_table(),
         want=limit,
         FilterExpression=Attr("entity_type").eq(CONNECTION_ENTITY),
     )
-    return _response_items(response)
 
 
 def delete_stale_connections(*, now_epoch: int, limit: int = 200) -> list[str]:
@@ -288,16 +274,18 @@ def scan_account_connections(
     table: object | None = None,
 ) -> ConnectionPrivatePage:
     target = table or get_table()
-    current = _cursor(cursor) if cursor is not None else None
+    current = cursor
     seen: set[tuple[str, str]] = set()
     found: list[ConnectionItem] = []
     scanned = 0
-    for _ in range(max(maximum_pages, 1)):
-        kwargs: dict[str, object] = {"ConsistentRead": True, "Limit": 100}
-        if current is not None:
-            kwargs["ExclusiveStartKey"] = current
-        response = _scan(target, **kwargs)
-        items = _response_items(response)
+    for page in account_deletion_repo.sweep_pages(
+        "connection",
+        table=target,
+        cursor=cursor,
+        page_limit=100,
+        maximum_pages=max(maximum_pages, 1),
+    ):
+        items = page.items
         scanned += len(items)
         found.extend(
             dict(item)
@@ -305,10 +293,9 @@ def scan_account_connections(
             if item.get("entity_type") == CONNECTION_ENTITY
             and owner_id in {item.get("owner_id"), item.get("user_id")}
         )
-        raw = response.get("LastEvaluatedKey")
-        if raw is None:
+        if page.last_key is None:
             return ConnectionPrivatePage(tuple(found), None, scanned)
-        current = _cursor(_dependency_mapping(raw))
+        current = page.last_key
         identity = (current["PK"], current["SK"])
         if identity in seen:
             raise account_deletion_repo.AccountDeletionConflict("repeated connection cursor")
@@ -346,11 +333,3 @@ def revoke_account_connection(
         ],
         table=target,
     )
-
-
-def _cursor(value: Mapping[str, object]) -> dict[str, str]:
-    if set(value) != {"PK", "SK"} or any(
-        not isinstance(value.get(field), str) or not value[field] for field in ("PK", "SK")
-    ):
-        raise account_deletion_repo.AccountDeletionConflict("invalid connection cursor")
-    return {"PK": str(value["PK"]), "SK": str(value["SK"])}

@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from stoa.config import Settings, get_settings
+from stoa.db import table as db_table
 from stoa.db.repositories import report_repo
 from stoa.routers import admin
 from stoa.security import admin_authorization
@@ -242,9 +243,13 @@ def test_report_ops_list_is_admin_only(monkeypatch):
 
 def test_report_ops_list_returns_metadata_filters_and_next_token(monkeypatch):
     calls = []
-
-    monkeypatch.setattr(report_repo, "decode_admin_page_token", lambda token: {"PK": "PRACTICE", "SK": "CHALLENGE#prev"})
-    monkeypatch.setattr(report_repo, "encode_admin_page_token", lambda key: "encoded-next" if key else None)
+    scope = "admin_reports:parent:parent-1"
+    previous = {
+        "PK": "REPORT#prev",
+        "SK": "SUMMARY",
+        "parent_id": "parent-1",
+        "week_start": "2026-06-01",
+    }
 
     def list_reports_for_admin(**kwargs):
         calls.append(kwargs)
@@ -261,14 +266,14 @@ def test_report_ops_list_returns_metadata_filters_and_next_token(monkeypatch):
             "parent_id": "parent-1",
             "student_id": "student-1",
             "limit": 10,
-            "next_token": "encoded-prev",
+            "next_token": db_table.page_token(scope, previous),
         },
     )
 
     assert response.status_code == 200
     data = response.json()
     assert data["count"] == 1
-    assert data["next_token"] == "encoded-next"
+    assert db_table.read_page_token(data["next_token"], scope) == {"PK": "REPORT#next"}
     assert data["access_pattern"] == "parent_gsi"
     assert data["items"][0]["status"] == "generation_failed"
     assert data["items"][0]["generation"]["generation_error_class"] == "RuntimeError"
@@ -279,7 +284,7 @@ def test_report_ops_list_returns_metadata_filters_and_next_token(monkeypatch):
             "parent_id": "parent-1",
             "student_id": "student-1",
             "limit": 10,
-            "last_key": {"PK": "PRACTICE", "SK": "CHALLENGE#prev"},
+            "last_key": previous,
         }
     ]
     serialized = str(data)
@@ -294,10 +299,33 @@ def test_report_ops_list_returns_metadata_filters_and_next_token(monkeypatch):
 
 
 def test_report_ops_list_rejects_invalid_pagination_token(monkeypatch):
-    monkeypatch.setattr(report_repo, "decode_admin_page_token", lambda token: (_ for _ in ()).throw(ValueError("bad")))
+    monkeypatch.setattr(
+        report_repo,
+        "list_reports_for_admin",
+        lambda **_kwargs: pytest.fail("an unreadable token reached the table"),
+    )
     client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
 
     response = client.get("/admin/reports/ops", params={"next_token": "bad"})
+
+    assert response.status_code == 400
+
+
+def test_report_ops_list_refuses_another_parents_token(monkeypatch):
+    monkeypatch.setattr(
+        report_repo,
+        "list_reports_for_admin",
+        lambda **_kwargs: pytest.fail("another listing's token reached the table"),
+    )
+    client = TestClient(_app_for_user({"sub": "admin-sub", "role": "admin"}))
+    theirs = db_table.page_token(
+        "admin_reports:parent:parent-2",
+        {"PK": "REPORT#r", "SK": "SUMMARY", "parent_id": "parent-2", "week_start": "2026-06-01"},
+    )
+
+    response = client.get(
+        "/admin/reports/ops", params={"parent_id": "parent-1", "next_token": theirs}
+    )
 
     assert response.status_code == 400
 
@@ -319,7 +347,7 @@ def test_report_ops_list_round_trips_non_report_scan_key_next_token(monkeypatch)
     data = response.json()
     assert data["items"] == []
     assert data["count"] == 0
-    assert report_repo.decode_admin_page_token(data["next_token"]) == first_key
+    assert db_table.read_page_token(data["next_token"], "admin_reports") == first_key
     assert calls == [
         {
             "status": None,
@@ -862,7 +890,7 @@ def test_report_audit_timeline_returns_metadata_only(monkeypatch):
     data = response.json()
     assert data["scope"] == "report"
     assert data["count"] == 1
-    assert report_repo.decode_audit_page_token(data["next_token"], next_key["PK"]) == next_key
+    assert db_table.read_page_token(data["next_token"], f"report_audit:{next_key['PK']}") == next_key
     assert data["items"][0]["action"] == "resend_email"
     assert data["items"][0]["before"] == {"status": "email_failed"}
     assert data["items"][0]["after"]["email_error_message"] == (

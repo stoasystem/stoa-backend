@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import base64
 from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
-import json
 from typing import Protocol, runtime_checkable
 
 from botocore.exceptions import ClientError
@@ -274,17 +272,6 @@ def _provider_rows(value: object, error_message: str) -> list[ReportItem]:
         return [_dependency_mapping(item) for item in value]
     except account_deletion_repo.AccountDeletionConflict as exc:
         raise account_deletion_repo.AccountDeletionConflict(error_message) from exc
-
-
-def _pagination_mapping(value: object) -> ReportItem:
-    if not isinstance(value, Mapping):
-        raise ValueError("Invalid pagination token")
-    result: ReportItem = {}
-    for key, member in value.items():
-        if not isinstance(key, str):
-            raise ValueError("Invalid pagination token")
-        result[key] = member
-    return result
 
 
 def _get_item(table: object, **kwargs: object) -> ReportItem:
@@ -1524,190 +1511,6 @@ def get_report_for_child_by_week(
         last_key = _dependency_mapping(raw_last_key)
 
 
-def encode_page_token(last_key: ReportItem | None) -> str | None:
-    """Encode a DynamoDB LastEvaluatedKey as an opaque API token."""
-    if not last_key:
-        return None
-    raw = json.dumps(last_key, separators=(",", ":"), sort_keys=True).encode()
-    return base64.urlsafe_b64encode(raw).decode()
-
-
-def decode_page_token(token: str | None) -> ReportItem | None:
-    """Decode an opaque API token into a DynamoDB ExclusiveStartKey."""
-    if not token:
-        return None
-    try:
-        raw = base64.urlsafe_b64decode(token.encode()).decode()
-        decoded = _pagination_mapping(json.loads(raw))
-    except (ValueError, json.JSONDecodeError) as exc:
-        raise ValueError("Invalid pagination token") from exc
-    if not _is_valid_report_page_key(decoded):
-        raise ValueError("Invalid pagination token")
-    return decoded
-
-
-def encode_admin_page_token(last_key: ReportItem | None) -> str | None:
-    """Encode an admin report-ops page token.
-
-    Cross-parent admin listing uses DynamoDB Scan with a FilterExpression. Scan
-    pagination keys can point at any item in the single-table design, not only
-    report summary rows. Keep normal report page tokens strict, but allow admin
-    report ops to round-trip the scan key it received from DynamoDB.
-    """
-    if not last_key:
-        return None
-    raw = json.dumps(
-        {"scope": "admin_reports", "key": last_key},
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode()
-    return base64.urlsafe_b64encode(raw).decode()
-
-
-def decode_admin_page_token(token: str | None) -> ReportItem | None:
-    """Decode an admin report-ops page token into an ExclusiveStartKey."""
-    if not token:
-        return None
-    try:
-        raw = base64.urlsafe_b64decode(token.encode()).decode()
-        decoded = _pagination_mapping(json.loads(raw))
-    except (ValueError, json.JSONDecodeError) as exc:
-        raise ValueError("Invalid pagination token") from exc
-    if _is_valid_admin_page_payload(decoded):
-        return _pagination_mapping(decoded.get("key"))
-    # Backward compatibility for older admin report tokens that encoded the
-    # report LastEvaluatedKey directly.
-    if _is_valid_report_page_key(decoded):
-        return decoded
-    raise ValueError("Invalid pagination token")
-
-
-def encode_audit_page_token(last_key: ReportItem | None) -> str | None:
-    """Encode an audit timeline page token."""
-    if not last_key:
-        return None
-    raw = json.dumps(
-        {"scope": "report_audit", "key": last_key},
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode()
-    return base64.urlsafe_b64encode(raw).decode()
-
-
-def decode_audit_page_token(token: str | None, partition: str) -> ReportItem | None:
-    """Decode an audit timeline page token into an ExclusiveStartKey.
-
-    A timeline is a query on one partition (`REPORT#<id>` or
-    `REPORT_RECOVERY_JOB#<id>`), and a token may only continue that one:
-    another timeline's key would reach DynamoDB as a start key outside the
-    query and be refused there instead of here (#91).
-    """
-    if not token:
-        return None
-    try:
-        raw = base64.urlsafe_b64decode(token.encode()).decode()
-        decoded = _pagination_mapping(json.loads(raw))
-    except (ValueError, json.JSONDecodeError) as exc:
-        raise ValueError("Invalid pagination token") from exc
-    if _is_valid_audit_page_payload(decoded):
-        key = _pagination_mapping(decoded.get("key"))
-        if key.get("PK") == partition:
-            return key
-    raise ValueError("Invalid pagination token")
-
-
-def encode_recovery_job_page_token(last_key: ReportItem | None) -> str | None:
-    """Encode recovery job list/result pagination keys."""
-    if not last_key:
-        return None
-    raw = json.dumps(
-        {"scope": "recovery_jobs", "key": last_key},
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode()
-    return base64.urlsafe_b64encode(raw).decode()
-
-
-def decode_recovery_job_page_token(token: str | None) -> ReportItem | None:
-    """Decode recovery job pagination token into an ExclusiveStartKey."""
-    if not token:
-        return None
-    try:
-        raw = base64.urlsafe_b64decode(token.encode()).decode()
-        decoded = _pagination_mapping(json.loads(raw))
-    except (ValueError, json.JSONDecodeError) as exc:
-        raise ValueError("Invalid pagination token") from exc
-    if _is_valid_recovery_job_page_payload(decoded):
-        return _pagination_mapping(decoded.get("key"))
-    raise ValueError("Invalid pagination token")
-
-
-def encode_recovery_job_target_page_token(last_key: ReportItem | None) -> str | None:
-    """Encode the key one job's target results stopped at."""
-    if not last_key:
-        return None
-    raw = json.dumps(
-        {"scope": "recovery_job_targets", "key": last_key},
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode()
-    return base64.urlsafe_b64encode(raw).decode()
-
-
-def decode_recovery_job_target_page_token(token: str | None, job_id: str) -> ReportItem | None:
-    """Decode a target results token, which may only continue within `job_id`.
-
-    The results are a query on the job's partition: a key from anywhere else
-    would make DynamoDB refuse the request instead of the token.
-    """
-    if not token:
-        return None
-    try:
-        raw = base64.urlsafe_b64decode(token.encode()).decode()
-        decoded = _pagination_mapping(json.loads(raw))
-    except (ValueError, json.JSONDecodeError) as exc:
-        raise ValueError("Invalid pagination token") from exc
-    key = decoded.get("key") if decoded.get("scope") == "recovery_job_targets" else None
-    if (
-        isinstance(key, dict)
-        and key.get("PK") == f"REPORT_RECOVERY_JOB#{job_id}"
-        and isinstance(key.get("SK"), str)
-        and key["SK"].startswith("TARGET#")
-    ):
-        return _pagination_mapping(key)
-    raise ValueError("Invalid pagination token")
-
-
-def encode_support_handoff_delivery_page_token(
-    last_key: ReportItem | None,
-) -> str | None:
-    """Encode support handoff delivery list/audit pagination keys."""
-    if not last_key:
-        return None
-    raw = json.dumps(
-        {"scope": "support_handoff_delivery", "key": last_key},
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode()
-    return base64.urlsafe_b64encode(raw).decode()
-
-
-def decode_support_handoff_delivery_page_token(
-    token: str | None,
-) -> ReportItem | None:
-    """Decode support handoff delivery pagination token into an ExclusiveStartKey."""
-    if not token:
-        return None
-    try:
-        raw = base64.urlsafe_b64decode(token.encode()).decode()
-        decoded = _pagination_mapping(json.loads(raw))
-    except (ValueError, json.JSONDecodeError) as exc:
-        raise ValueError("Invalid pagination token") from exc
-    if _is_valid_support_handoff_delivery_page_payload(decoded):
-        return _pagination_mapping(decoded.get("key"))
-    raise ValueError("Invalid pagination token")
-
-
 def list_reports_for_admin(
     *,
     status: str | None = None,
@@ -1870,79 +1673,6 @@ def _scan_support_handoff_delivery_summaries(
     return {"Items": items[:limit]}
 
 
-def _is_valid_report_page_key(decoded: Mapping[str, object]) -> bool:
-    pk = decoded.get("PK")
-    sk = decoded.get("SK")
-    return (
-        isinstance(pk, str)
-        and pk.startswith("REPORT#")
-        and isinstance(sk, str)
-        and sk == "SUMMARY"
-    )
-
-
-def _is_valid_admin_page_payload(decoded: object) -> bool:
-    if not isinstance(decoded, dict) or decoded.get("scope") != "admin_reports":
-        return False
-    key = decoded.get("key")
-    if not isinstance(key, dict):
-        return False
-    pk = key.get("PK")
-    sk = key.get("SK")
-    return isinstance(pk, str) and isinstance(sk, str)
-
-
-def _is_valid_audit_page_payload(decoded: object) -> bool:
-    if not isinstance(decoded, dict) or decoded.get("scope") != "report_audit":
-        return False
-    key = decoded.get("key")
-    if not isinstance(key, dict):
-        return False
-    pk = key.get("PK")
-    sk = key.get("SK")
-    return (
-        isinstance(pk, str)
-        and (
-            pk.startswith("REPORT#")
-            or pk.startswith("REPORT_RECOVERY_JOB#")
-        )
-        and isinstance(sk, str)
-        and sk.startswith("AUDIT#")
-    )
-
-
-def _is_valid_recovery_job_page_payload(decoded: object) -> bool:
-    if not isinstance(decoded, dict) or decoded.get("scope") != "recovery_jobs":
-        return False
-    key = decoded.get("key")
-    if not isinstance(key, dict):
-        return False
-    # The job list is a filtered scan: it stops on whatever row its page ends
-    # at, a job or not (#90). The filter, not the key, keeps the list to jobs.
-    pk = key.get("PK")
-    sk = key.get("SK")
-    return isinstance(pk, str) and isinstance(sk, str)
-
-
-def _is_valid_support_handoff_delivery_page_payload(decoded: object) -> bool:
-    if not isinstance(decoded, dict) or decoded.get("scope") != "support_handoff_delivery":
-        return False
-    key = decoded.get("key")
-    if not isinstance(key, dict):
-        return False
-    pk = key.get("PK")
-    sk = key.get("SK")
-    if not isinstance(pk, str) or not isinstance(sk, str):
-        return False
-    return (
-        pk == "SUPPORT_HANDOFF_DELIVERY_FEED"
-        and sk.startswith("SUMMARY#")
-    ) or (
-        pk.startswith("SUPPORT_HANDOFF_DELIVERY#")
-        and sk.startswith("AUDIT#")
-    )
-
-
 def list_reports_for_parent_week(
     parent_id: str,
     week_start: str,
@@ -1981,15 +1711,6 @@ def _required_private_string(value: object, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise account_deletion_repo.AccountDeletionConflict(f"{name} is required")
     return value.strip()
-
-
-def _validated_report_cursor(value: Mapping[str, object]) -> dict[str, str]:
-    if set(value) != {"PK", "SK"}:
-        raise account_deletion_repo.AccountDeletionConflict("invalid report cursor")
-    return {
-        "PK": _required_private_string(value.get("PK"), "cursor PK"),
-        "SK": _required_private_string(value.get("SK"), "cursor SK"),
-    }
 
 
 def register_report_object_intent(
@@ -2292,16 +2013,20 @@ def scan_report_private_rows(
     if maximum_pages <= 0 or page_limit <= 0:
         raise account_deletion_repo.AccountDeletionConflict("invalid report scan bound")
     target = table or get_table()
-    current = _validated_report_cursor(cursor) if cursor is not None else None
+    current = (
+        account_deletion_repo.continuation_key(cursor, "report") if cursor is not None else None
+    )
     seen = {(current["PK"], current["SK"])} if current else set()
     rows: list[ReportItem] = []
     unresolved = 0
-    for _ in range(maximum_pages):
-        request: dict[str, object] = {"ConsistentRead": True, "Limit": page_limit}
-        if current:
-            request["ExclusiveStartKey"] = current
-        page = _scan(target, **request)
-        for item in _response_items(page):
+    for page in account_deletion_repo.sweep_pages(
+        "report",
+        table=target,
+        cursor=current,
+        page_limit=page_limit,
+        maximum_pages=maximum_pages,
+    ):
+        for item in page.items:
             pk = str(item.get("PK") or "")
             sk = str(item.get("SK") or "")
             registered = any(
@@ -2314,17 +2039,13 @@ def scan_report_private_rows(
                 rows.append(item)
             elif pk.startswith(("SUPPORT_", "AUDIT_RETENTION#", "REPORT_RECOVERY_JOB#")):
                 unresolved += 1
-        raw_cursor = page.get("LastEvaluatedKey")
-        if raw_cursor is None:
+        if page.last_key is None:
             return ReportPrivatePage(tuple(rows), None, unresolved)
-        if not isinstance(raw_cursor, Mapping):
-            raise account_deletion_repo.AccountDeletionConflict("invalid report cursor")
-        next_cursor = _validated_report_cursor(raw_cursor)
-        marker = (next_cursor["PK"], next_cursor["SK"])
+        marker = (page.last_key["PK"], page.last_key["SK"])
         if marker in seen:
             raise account_deletion_repo.AccountDeletionConflict("repeating report cursor")
         seen.add(marker)
-        current = next_cursor
+        current = page.last_key
     return ReportPrivatePage(tuple(rows), current, unresolved)
 
 

@@ -104,32 +104,35 @@ def _phase474_formal_runtime() -> object:
             enable_socket()
 
 
-class _EmptyParentLinkTable:
-    """A link table holding nothing, so an unstubbed read cannot reach real DynamoDB."""
-
-    def get_item(self, **_kwargs: object) -> dict[str, object]:
-        return {}
-
-    def query(self, **_kwargs: object) -> dict[str, object]:
-        return {"Items": []}
-
-    def transact_write_items(self, **_kwargs: object) -> None:
-        raise AssertionError(
-            "this test writes parent links; install its own parent_link_repo.get_table"
-        )
-
-
 @pytest.fixture(autouse=True)
-def _default_parent_link_table(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every downstream reader of the many-to-many links now consults them.
+def _empty_table():
+    """Every test starts with an empty `FakeTable` where the real table would be.
 
-    Without a default, a test that sets up no links falls through to the live
-    `get_table()` and issues a real DynamoDB request. Tests that need link rows
-    patch the same attribute afterwards and win.
+    The table gateway takes its table from one place (`stoa.db.table.install`),
+    and so does every module reading through `get_table()`. Without this, a test
+    that set nothing up fell through to the live table and issued a real
+    DynamoDB request; with it, such a test reads an empty table instead. A test
+    that needs rows takes `fake_table`. A module whose own `get_table` a test
+    patches still answers from the patch - those patches go with the batches of
+    #210 that move each domain onto the gateway.
     """
-    from stoa.db.repositories import parent_link_repo
+    from fakes.dynamodb import FakeTable
+    from stoa.db import table as db_table
 
-    monkeypatch.setattr(parent_link_repo, "get_table", _EmptyParentLinkTable)
+    db_table.install(FakeTable())
+    yield
+    db_table.install(None)
+
+
+@pytest.fixture
+def fake_table():
+    """A `FakeTable` installed in the gateway for this test, and handed to it."""
+    from fakes.dynamodb import FakeTable
+    from stoa.db import table as db_table
+
+    table = FakeTable()
+    db_table.install(table)
+    return table
 
 
 @pytest.fixture(autouse=True)
@@ -152,35 +155,12 @@ def _fresh_gateway_clients():
 
 
 @pytest.fixture
-def link_rows(monkeypatch: pytest.MonkeyPatch):
+def link_rows(fake_table):
     """Link rows the relationship judge reads, served as the link table (#208).
 
     `link_rows.link(parent, student)` makes a current relationship as far as the
     rows go; the judge still asks `user_repo.get_user` about both accounts.
     """
     from fakes.links import LinkRows
-    from stoa.db.repositories import parent_link_repo
 
-    rows = LinkRows()
-    monkeypatch.setattr(parent_link_repo, "get_table", lambda: rows.table)
-    return rows
-
-
-class _EmptyAskedKnowledgeTable:
-    """A table holding no Ask knowledge-point records."""
-
-    def query(self, **_kwargs: object) -> dict[str, object]:
-        return {"Items": []}
-
-
-@pytest.fixture(autouse=True)
-def _default_asked_knowledge_table(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every learning-profile reader now reads what Ask questions named (#143).
-
-    A test that stubs a reader's question and mistake reads would otherwise
-    fall through to the live `get_table()` for these. Tests that need records
-    patch the same attribute afterwards and win.
-    """
-    from stoa.db.repositories import asked_knowledge_repo
-
-    monkeypatch.setattr(asked_knowledge_repo, "get_table", _EmptyAskedKnowledgeTable)
+    return LinkRows(fake_table)

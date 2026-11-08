@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from fakes.dynamodb import FakeTable
 
-from stoa.db.dynamodb import SCAN_PAGE_BUDGET
+from stoa.db.table import SCAN_PAGE_BUDGET, TableUnavailable
 from stoa.services import subscription_service
 
 PAGE = 2
@@ -95,5 +95,5 @@ def test_a_read_past_the_page_budget_fails_instead_of_answering(table) -> None:
     table.seed(_event("parent-z", "2026-09-19T08:30:00+00:00"))
     table.page_item_cap = 1
 
-    with pytest.raises(RuntimeError, match="did not reach the end of the table"):
+    with pytest.raises(TableUnavailable, match="page_budget_spent"):
         subscription_service._last_observed_provider_event()

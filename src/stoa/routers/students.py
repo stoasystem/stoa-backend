@@ -1,6 +1,4 @@
 """Student routes — profile, learning summary, and question history."""
-import base64
-import json
 from collections import Counter
 from collections.abc import Mapping
 from decimal import Decimal
@@ -11,6 +9,7 @@ from typing import NoReturn, Optional
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, Field
 
+from stoa.db import table as db_table
 from stoa.db.repositories import (
     asked_knowledge_repo,
     parent_link_repo,
@@ -714,22 +713,32 @@ async def list_questions(
 ):
     """Paginated question history for a student."""
     student_id = authorized.ref.student_id
+    # The history is a query on this student's partition of GSI-StudentId: a
+    # token from another student's history continues nothing here.
+    scope = f"student_questions:{student_id}"
 
     last_key = None
     if next_token:
         try:
-            last_key = json.loads(base64.b64decode(next_token).decode())
-        except Exception:
+            last_key = db_table.read_page_token(
+                next_token,
+                scope,
+                key=QUESTION_HISTORY_KEY,
+                within=lambda key: key["student_id"] == student_id,
+            )
+        except db_table.PageTokenInvalid:
             raise AccountViolation(AccountErrorCode.CURSOR_INVALID) from None
 
     result = question_repo.list_questions_by_student(student_id, limit=limit, last_key=last_key)
     items = _question_list_items(_question_rows(result.get("Items", []), correlation_id))
 
-    new_token = None
-    if "LastEvaluatedKey" in result:
-        new_token = base64.b64encode(json.dumps(result["LastEvaluatedKey"]).encode()).decode()
+    resume = result.get("LastEvaluatedKey")
+    new_token = db_table.page_token(scope, resume) if resume else None
 
     return QuestionListResponse(items=items, next_token=new_token)
+
+
+QUESTION_HISTORY_KEY = ("PK", "SK", "student_id", "created_at")
 
 
 # ---------------------------------------------------------------------------
