@@ -1795,11 +1795,11 @@ def _escalate(monkeypatch, table, conversation_id: str = "conv-1"):
     for module in (
         conversations,
         allowance_service,
-        attachment_repo,
         teachers,
         teacher_dispatch_service,
     ):
         monkeypatch.setattr(module, "get_table", lambda table=table: table)
+    db_table.install(table)
     monkeypatch.setattr(
         allowance_service.paid_entitlement_service,
         "get_active_beneficiary_grant",

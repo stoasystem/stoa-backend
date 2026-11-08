@@ -7,6 +7,9 @@ there is one of each:
 
 - `table()` and `client()`: the table every repository uses and the low-level client
   a transaction is sent on, each built once, in the configured region.
+- `get` / `put` / `update` / `delete`: one item, in the table's own request shape.
+  The answer is checked once, here; a write whose condition does not hold is
+  `WriteRefused`, never a provider error string for each caller to match.
 - `transact(operations)`: operations in the repositories' own shape - plain Python
   values, no `TableName` - serialized once, sent once. `Item`, `Key` and
   `ExpressionAttributeValues` lose their `None` members, always.
@@ -18,8 +21,8 @@ there is one of each:
   moving forward is reported instead of looping. `page_token(scope, position)` and
   `read_page_token(token, scope)` are the one opaque form a position leaves the
   service in; a token only continues the listing it was made for.
-- Two outcomes besides success. `WriteRefused`: the table read the transaction and
-  turned it down, and says why for each operation. `TableUnavailable`: the table
+- Two outcomes besides success. `WriteRefused`: the table read the write and
+  turned it down, and - for a transaction - says why for each operation. `TableUnavailable`: the table
   could not be asked, or did not answer in a shape that says anything. A repository
   that has to tell causes apart translates these into its own domain's errors; one
   that does not lets them through.
@@ -210,6 +213,17 @@ class WriteRefused(RuntimeError):
             if reason.kind is not ReasonKind.NOT_THE_CAUSE
         )
 
+    @property
+    def condition_failed(self) -> bool:
+        """Whether a condition the caller wrote is what turned the write down.
+
+        A transaction says so per operation. A single conditional write names no
+        operation, and has nothing but its condition to be refused for.
+        """
+        if self.reasons:
+            return bool(self.failed_conditions)
+        return self.code == "ConditionalCheckFailedException"
+
 
 class TableUnavailable(RuntimeError):
     """The table could not be asked, or its answer said nothing about the write.
@@ -256,6 +270,84 @@ def transact(operations: Iterable[Operation], *, table: object | None = None) ->
     except BotoCoreError as exc:
         logger.warning("table_unavailable code=%s", type(exc).__name__)
         raise TableUnavailable(type(exc).__name__) from exc
+
+
+# -- one item ---------------------------------------------------------------------------
+
+
+def get(*, table: object | None = None, **request: object) -> dict[str, Any] | None:
+    """The item `Key` names, or `None` when the table holds none.
+
+    `request` is what the table's own `get_item` takes. The table's own errors
+    pass through untouched, as a paged read's do. An answer that is not an item
+    is `TableUnavailable("malformed_response")`.
+    """
+    response = _entry(table, "get_item")(**request)
+    if not isinstance(response, Mapping):
+        raise TableUnavailable("malformed_response")
+    return _attributes(response.get("Item"), absent=None)
+
+
+def put(*, table: object | None = None, **request: object) -> dict[str, Any]:
+    """Write one item: `request` is what the table's own `put_item` takes.
+
+    Returns the attributes the write hands back (`ReturnValues`), `{}` when it
+    hands back none. A condition that does not hold is `WriteRefused`; anything
+    else the table answers is `TableUnavailable`. Values are sent as given: a
+    single write is not a transaction, and keeps its own rules about `None`.
+    """
+    return _write("Put", "put_item", request, table)
+
+
+def update(*, table: object | None = None, **request: object) -> dict[str, Any]:
+    """Update one item: `request` is what the table's own `update_item` takes.
+
+    Outcomes as for `put`.
+    """
+    return _write("Update", "update_item", request, table)
+
+
+def delete(*, table: object | None = None, **request: object) -> dict[str, Any]:
+    """Delete one item: `request` is what the table's own `delete_item` takes.
+
+    Outcomes as for `put`.
+    """
+    return _write("Delete", "delete_item", request, table)
+
+
+def _entry(table: object | None, method: str) -> Callable[..., object]:
+    target = table if table is not None else _installed if _installed is not None else _real_table()
+    call = getattr(target, method, None)
+    if not callable(call):
+        raise TableUnavailable(f"no_{method}_entry")
+    return call
+
+
+def _write(
+    action: str, method: str, request: dict[str, object], table: object | None
+) -> dict[str, Any]:
+    call = _entry(table, method)
+    try:
+        response = call(**request)
+    except ClientError as exc:
+        raise _judged(exc, [{action: request}]) from exc
+    except BotoCoreError as exc:
+        logger.warning("table_unavailable code=%s", type(exc).__name__)
+        raise TableUnavailable(type(exc).__name__) from exc
+    if response is None:
+        # A double with nothing to hand back may return nothing at all.
+        return {}
+    if not isinstance(response, Mapping):
+        raise TableUnavailable("malformed_response")
+    return _attributes(response.get("Attributes"), absent={})
+
+
+def _attributes[T](value: object, *, absent: T) -> dict[str, Any] | T:
+    if value is None:
+        return absent
+    if not isinstance(value, Mapping) or not all(isinstance(name, str) for name in value):
+        raise TableUnavailable("malformed_response")
+    return dict(value)
 
 
 # -- a write behind an account's fence ------------------------------------------------

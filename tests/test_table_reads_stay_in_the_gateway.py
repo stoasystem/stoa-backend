@@ -86,11 +86,6 @@ ALLOWED: dict[str, dict[str, set[str]]] = {
         "services/notification_service.py": {"get_table"},
         "services/report_service.py": {"get_table", "paging"},
     },
-    "attachments and uploads": {
-        "db/repositories/attachment_repo.py": {"get_table", "paging", "conditional_check"},
-        "db/repositories/upload_code_repo.py": {"get_table", "conditional_check"},
-        "services/uploads/_store.py": {"get_table", "paging"},
-    },
     "admin and moderation": {
         "db/repositories/moderation_repo.py": {"get_table"},
         "routers/admin.py": {"get_table"},

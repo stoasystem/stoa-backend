@@ -29,6 +29,7 @@ from fakes.ask_question import _client as _question_client
 from fakes.ask_question import _message_command as _command
 from fakes.ask_question import model as model  # noqa: F401 - the fixture
 from fakes.ask_question import table as table  # noqa: F401 - the fixture
+from stoa.db import table as db_table
 from stoa.db.repositories import attachment_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.routers import conversations
@@ -161,7 +162,7 @@ def test_regular_and_sse_get_item_transport_faults_share_safe_retry(
             "grade": "Sek1",
         },
     )
-    monkeypatch.setattr(attachment_repo, "get_table", FaultingTable)
+    db_table.install(FaultingTable())
     response = _route_client().post(
         f"/conversations/conv-1{suffix}",
         json={"content": "content-private-canary", "idempotencyKey": "fault-key"},

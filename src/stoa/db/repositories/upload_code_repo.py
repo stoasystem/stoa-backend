@@ -11,9 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from botocore.exceptions import ClientError
-
-from stoa.db.dynamodb import get_table
+from stoa.db import table as db_table
 
 
 ENTITY_TYPE = "upload_code"
@@ -24,16 +22,15 @@ def code_key(code_id: str) -> dict[str, str]:
 
 
 def put_code(item: dict[str, Any], *, table: Any | None = None) -> None:
-    (table or get_table()).put_item(
+    db_table.put(
+        table=table,
         Item={**item, **code_key(str(item["code_id"])), "entity_type": ENTITY_TYPE},
         ConditionExpression="attribute_not_exists(PK)",
     )
 
 
 def get_code(code_id: str, *, table: Any | None = None) -> dict[str, Any] | None:
-    response = (table or get_table()).get_item(Key=code_key(code_id), ConsistentRead=True)
-    item = response.get("Item") if isinstance(response, dict) else None
-    return item if isinstance(item, dict) else None
+    return db_table.get(table=table, Key=code_key(code_id), ConsistentRead=True)
 
 
 def claim_code(
@@ -52,7 +49,8 @@ def claim_code(
     still read where the phone got to.
     """
     try:
-        (table or get_table()).update_item(
+        db_table.update(
+            table=table,
             Key=code_key(code_id),
             UpdateExpression=(
                 "SET #status = :redeemed, upload_id = :upload, token_sha256 = :token, "
@@ -71,13 +69,11 @@ def claim_code(
                 ":redeemed_at": redeemed_at,
             },
         )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            return False
-        raise
+    except db_table.WriteRefused:
+        return False
     return True
 
 
 def delete_code(code_id: str, *, table: Any | None = None) -> None:
-    (table or get_table()).delete_item(Key=code_key(code_id))
+    db_table.delete(table=table, Key=code_key(code_id))
 

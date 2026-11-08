@@ -331,3 +331,110 @@ def test_a_condition_race_is_not_logged_as_an_error(caplog) -> None:
                 _TWO_PUTS, table=_Recording(_cancelled("None", "ConditionalCheckFailed"))
             )
     assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
+
+
+# -- one item (#330) --------------------------------------------------------------------
+
+
+def test_one_item_is_read_written_and_deleted_through_the_gateway(fake_table) -> None:
+    key = {"PK": "UPLOADCODE#c1", "SK": "CODE"}
+
+    assert db_table.get(Key=key) is None
+    assert db_table.put(Item={**key, "status": "issued"}) == {}
+    assert db_table.get(Key=key, ConsistentRead=True) == {**key, "status": "issued"}
+    updated = db_table.update(
+        Key=key,
+        UpdateExpression="SET #status = :redeemed",
+        ExpressionAttributeNames={"#status": "status"},
+        ExpressionAttributeValues={":redeemed": "redeemed"},
+        ReturnValues="ALL_NEW",
+    )
+    assert updated == {**key, "status": "redeemed"}
+    db_table.delete(Key=key)
+    assert db_table.get(Key=key) is None
+
+
+def test_a_single_write_whose_condition_fails_is_refused_by_its_condition(fake_table) -> None:
+    key = {"PK": "UPLOADCODE#c1", "SK": "CODE"}
+    db_table.put(Item=key)
+
+    with pytest.raises(db_table.WriteRefused) as refused:
+        db_table.put(Item=key, ConditionExpression="attribute_not_exists(PK)")
+
+    assert refused.value.condition_failed
+    assert refused.value.reasons == ()
+    assert isinstance(refused.value.__cause__, ClientError)
+
+
+def test_a_transaction_refusal_says_whether_a_condition_was_the_cause() -> None:
+    reason = db_table.CancellationReason
+    by_condition = db_table.WriteRefused(
+        "TransactionCanceledException",
+        [reason("None", Kind.NOT_THE_CAUSE), reason("ConditionalCheckFailed", Kind.CONDITION_FAILED)],
+    )
+    by_conflict = db_table.WriteRefused(
+        "TransactionCanceledException", [reason("TransactionConflict", Kind.TRANSACTION_CONFLICT)]
+    )
+
+    assert by_condition.condition_failed
+    assert not by_conflict.condition_failed
+    assert not db_table.WriteRefused("TransactionCanceledException").condition_failed
+
+
+class _Answers:
+    def __init__(self, answer: object = None, error: Exception | None = None) -> None:
+        self.answer = answer
+        self.error = error
+
+    def _call(self, **_request: object) -> object:
+        if self.error is not None:
+            raise self.error
+        return self.answer
+
+    get_item = put_item = update_item = delete_item = _call
+
+
+@pytest.mark.parametrize("write", [db_table.put, db_table.update, db_table.delete])
+def test_a_single_write_the_table_could_not_take_is_unavailable(write) -> None:
+    throttled = ClientError(
+        {"Error": {"Code": "ProvisionedThroughputExceededException", "Message": "slow"}},
+        "UpdateItem",
+    )
+    with pytest.raises(db_table.TableUnavailable) as unavailable:
+        write(table=_Answers(error=throttled), Key={"PK": "A", "SK": "B"})
+    assert unavailable.value.code == "ProvisionedThroughputExceededException"
+
+    with pytest.raises(db_table.TableUnavailable):
+        write(table=_Answers(error=EndpointConnectionError(endpoint_url="x")), Key={})
+
+
+def test_a_read_passes_the_tables_own_errors_through_untouched() -> None:
+    throttled = ClientError({"Error": {"Code": "ThrottlingException"}}, "GetItem")
+
+    with pytest.raises(ClientError):
+        db_table.get(table=_Answers(error=throttled), Key={"PK": "A", "SK": "B"})
+
+
+@pytest.mark.parametrize(
+    "call,answer",
+    [
+        (db_table.get, ["not", "a", "response"]),
+        (db_table.get, {"Item": "not an item"}),
+        (db_table.update, {"Attributes": ["not", "attributes"]}),
+        (db_table.put, "not a response"),
+    ],
+)
+def test_an_answer_that_is_not_an_item_is_unavailable(call, answer) -> None:
+    with pytest.raises(db_table.TableUnavailable) as unavailable:
+        call(table=_Answers(answer), Key={"PK": "A", "SK": "B"})
+    assert unavailable.value.code == "malformed_response"
+
+
+def test_a_double_without_the_entry_is_unavailable() -> None:
+    with pytest.raises(db_table.TableUnavailable) as unavailable:
+        db_table.update(table=object(), Key={"PK": "A", "SK": "B"})
+    assert unavailable.value.code == "no_update_item_entry"
+
+
+def test_a_write_answered_with_nothing_hands_back_nothing() -> None:
+    assert db_table.put(table=_Answers(None), Item={"PK": "A", "SK": "B"}) == {}

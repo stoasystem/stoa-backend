@@ -36,7 +36,8 @@ from fakes.admission import seed_plan
 from fakes.bedrock import FakeBedrock
 from fakes.dynamodb import FakeTable
 from fakes.learning_session import patch_session_table, seed_conversation
-from stoa.db.repositories import allowance_repo, attachment_repo
+from stoa.db import table as db_table
+from stoa.db.repositories import allowance_repo
 from stoa.deps import get_actor, get_authorization_audit_sink
 from stoa.jobs import conversation_generation
 from stoa.routers import conversations
@@ -104,8 +105,10 @@ def table(monkeypatch: pytest.MonkeyPatch) -> FakeTable:
     seed_conversation(table, conversation_id=CONV, student_id=STUDENT)
     patch_session_table(monkeypatch, table)
     # These still reach the table themselves for rows that are not the session's.
-    for module in (conversations, _answering, attachment_repo):
+    for module in (conversations, _answering):
         monkeypatch.setattr(module, "get_table", lambda table=table: table)
+    # The rows the attachment and upload repositories read, through the gateway.
+    db_table.install(table)
     monkeypatch.setattr(
         conversations.account_deletion_repo, "get_table", lambda: table, raising=False
     )

@@ -23,6 +23,7 @@ import pytest
 
 from actor_helpers import install_actor_overrides
 from fakes.learning_session import seed_message
+from stoa.db import table as db_table
 from stoa.deps import get_s3_client
 from stoa.routers import files, teachers
 from stoa.security.route_authorization import get_authorization_fact_repository
@@ -388,12 +389,9 @@ def test_the_detail_opens_without_attachments_when_they_cannot_be_read(
 ) -> None:
     # Before #140 the detail never touched attachments; a failed read of them
     # must not keep the teacher out of the request.
-    from stoa.db.repositories import attachment_repo
 
     if failure == "store_fails":
-        monkeypatch.setattr(
-            attachment_repo, "get_table", lambda: _BatchReads(sent_image, fail=True)
-        )
+        db_table.install(_BatchReads(sent_image, fail=True))
     else:
         del sent_image.rows[(f"ATTACHMENT#{ATTACHMENT}", "META")]
     _dispatch_to(sent_image, TEACHER)
@@ -412,7 +410,6 @@ def test_the_detail_opens_without_attachments_when_they_cannot_be_read(
 def test_the_detail_names_more_attachments_than_one_batch_read_holds(
     sent_image, monkeypatch
 ) -> None:
-    from stoa.db.repositories import attachment_repo
 
     many = [f"att-140-{index:03d}" for index in range(101)]
     sent_image.seed(*(_attachment_row(value) for value in many))
@@ -420,7 +417,7 @@ def test_the_detail_names_more_attachments_than_one_batch_read_holds(
         "attachment_ids"
     ] = many
     reads = _BatchReads(sent_image)
-    monkeypatch.setattr(attachment_repo, "get_table", lambda: reads)
+    db_table.install(reads)
     _dispatch_to(sent_image, TEACHER)
 
     messages = _detail_messages(_client(TEACHER))

@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
+from itertools import islice
 from typing import Protocol, runtime_checkable
 
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
@@ -16,32 +17,11 @@ from botocore.exceptions import ClientError
 
 from stoa.db import table as db_table
 from stoa.db.repositories import account_deletion_repo
-from stoa.db.dynamodb import get_table
 
 
 logger = logging.getLogger(__name__)
 
 type AttachmentItem = dict[str, object]
-
-
-@runtime_checkable
-class _GetItemTable(Protocol):
-    def get_item(self, **kwargs: object) -> object: ...
-
-
-@runtime_checkable
-class _PutItemTable(Protocol):
-    def put_item(self, **kwargs: object) -> object: ...
-
-
-@runtime_checkable
-class _UpdateItemTable(Protocol):
-    def update_item(self, **kwargs: object) -> object: ...
-
-
-@runtime_checkable
-class _QueryTable(Protocol):
-    def query(self, **kwargs: object) -> object: ...
 
 
 @runtime_checkable
@@ -112,29 +92,27 @@ def _required_integer(
     return result
 
 
-def _get_item(table: object, **kwargs: object) -> AttachmentItem:
-    if not isinstance(table, _GetItemTable):
-        raise AttachmentRepositoryConflict("dependency_failure")
-    return _mapping(table.get_item(**kwargs))
+def _get_item(table: object | None, **kwargs: object) -> AttachmentItem:
+    """The item, as `get_item` answers it: `{"Item": ...}`, or `{}` for none."""
+    try:
+        item = db_table.get(table=table, **kwargs)
+    except db_table.TableUnavailable:
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    return {} if item is None else {"Item": _mapping(item)}
 
 
-def _put_item(table: object, **kwargs: object) -> object:
-    if not isinstance(table, _PutItemTable):
-        raise AttachmentRepositoryConflict("dependency_failure")
-    return table.put_item(**kwargs)
+def _put_item(table: object | None, **kwargs: object) -> AttachmentItem:
+    """`WriteRefused` when its condition does not hold, `TableUnavailable` otherwise."""
+    return db_table.put(table=table, **kwargs)
 
 
-def _update_item(table: object, **kwargs: object) -> AttachmentItem:
-    if not isinstance(table, _UpdateItemTable):
-        raise AttachmentRepositoryConflict("dependency_failure")
-    response = table.update_item(**kwargs)
-    return {} if response is None else _mapping(response)
+def _update_item(table: object | None, **kwargs: object) -> AttachmentItem:
+    """The update, answered as `update_item` would: `{"Attributes": ...}`, or `{}`.
 
-
-def _query(table: object, **kwargs: object) -> AttachmentItem:
-    if not isinstance(table, _QueryTable):
-        raise AttachmentRepositoryConflict("dependency_failure")
-    return _mapping(table.query(**kwargs))
+    `WriteRefused` when its condition does not hold, `TableUnavailable` otherwise.
+    """
+    attributes = db_table.update(table=table, **kwargs)
+    return {"Attributes": attributes} if attributes else {}
 
 
 def _scan(table: object, **kwargs: object) -> AttachmentItem:
@@ -481,14 +459,13 @@ def scan_conversation_private_rows(
     """Strongly scan independently paginated conversation-owned row families."""
     if not owner_id or maximum_pages < 1 or maximum_pages > 100:
         raise AttachmentRepositoryConflict("dependency_failure")
-    target = table or get_table()
     current = cursor
     items: list[dict[str, object]] = []
     scanned = 0
     seen: set[tuple[str, str]] = set()
     for page in account_deletion_repo.sweep_pages(
         "conversation",
-        table=target,
+        table=table,
         cursor=cursor,
         maximum_pages=maximum_pages,
         conflict=lambda _reason: AttachmentRepositoryConflict("dependency_failure"),
@@ -542,7 +519,7 @@ def scrub_conversation_private_row(
     tombstone = _conversation_tombstone(
         item, owner_id=owner_id, generation=generation, now_iso=now_iso
     )
-    target = table or get_table()
+    target = table if table is not None else db_table.table()
     hook = getattr(target, "scrub_conversation_private_row", None)
     if callable(hook):
         hook(item, tombstone, owner_id, generation)
@@ -627,7 +604,7 @@ def _require_provider_sha256(value: object, *, expected_hex: str) -> str:
 
 
 def get_attachment(attachment_id: str, *, table: object | None = None) -> dict[str, object] | None:
-    response = _get_item(table or get_table(),
+    response = _get_item(table,
         Key=attachment_key(attachment_id), ConsistentRead=True
     )
     return _optional_mapping(response.get("Item"))
@@ -647,7 +624,7 @@ def get_attachments(
         or len(set(attachment_ids)) != len(attachment_ids)
     ):
         raise AttachmentRepositoryConflict("conditional_conflict")
-    target = table or get_table()
+    target = table if table is not None else db_table.table()
     if len(attachment_ids) > _BATCH_GET_KEY_LIMIT:
         found: dict[str, dict[str, object]] = {}
         for start in range(0, len(attachment_ids), _BATCH_GET_KEY_LIMIT):
@@ -744,7 +721,11 @@ def get_attachments(
 OWNER_INDEX_MAX_PAGES = 100
 
 
-def _owner_index_attachments(owner_id: str, *, table: object) -> list[dict[str, object]]:
+# A GSI-StudentId page continues from the base key and the index's own key.
+OWNER_INDEX_KEY = ("PK", "SK", "student_id", "created_at")
+
+
+def _owner_index_attachments(owner_id: str, *, table: object | None) -> list[dict[str, object]]:
     """Every attachment row GSI-StudentId holds for `owner_id`, across its pages.
 
     The owner's partition also holds their messages, usage events and uploads; the
@@ -753,34 +734,31 @@ def _owner_index_attachments(owner_id: str, *, table: object) -> list[dict[str, 
     """
     from boto3.dynamodb.conditions import Attr, Key
 
-    request: dict[str, object] = {
-        "IndexName": "GSI-StudentId",
-        "KeyConditionExpression": Key("student_id").eq(owner_id),
-        "FilterExpression": Attr("entity_type").eq("attachment"),
-    }
     result: list[dict[str, object]] = []
     seen_cursors: set[tuple[tuple[str, str], ...]] = set()
-    for _page in range(OWNER_INDEX_MAX_PAGES):
-        try:
-            response = _query(table, **request)
-        except AttachmentRepositoryConflict:
-            raise
-        except Exception:
-            raise AttachmentRepositoryConflict("dependency_failure") from None
-        raw_items = response.get("Items", [])
-        if not isinstance(raw_items, list):
-            raise AttachmentRepositoryConflict("dependency_failure")
-        result.extend(_mapping(raw_item) for raw_item in raw_items)
-        cursor = response.get("LastEvaluatedKey")
-        if cursor is None:
-            return result
-        if not isinstance(cursor, dict) or not cursor:
-            raise AttachmentRepositoryConflict("dependency_failure")
-        identity = tuple(sorted((str(key), str(value)) for key, value in cursor.items()))
-        if identity in seen_cursors:
-            raise AttachmentRepositoryConflict("dependency_failure")
-        seen_cursors.add(identity)
-        request["ExclusiveStartKey"] = cursor
+    try:
+        for page in islice(
+            db_table.pages(
+                "query",
+                key=OWNER_INDEX_KEY,
+                table=table,
+                IndexName="GSI-StudentId",
+                KeyConditionExpression=Key("student_id").eq(owner_id),
+                FilterExpression=Attr("entity_type").eq("attachment"),
+            ),
+            OWNER_INDEX_MAX_PAGES,
+        ):
+            result.extend(_mapping(raw_item) for raw_item in page.items)
+            if page.last_key is None:
+                return result
+            identity = tuple(sorted((str(key), str(value)) for key, value in page.last_key.items()))
+            if identity in seen_cursors:
+                raise AttachmentRepositoryConflict("dependency_failure")
+            seen_cursors.add(identity)
+    except AttachmentRepositoryConflict:
+        raise
+    except Exception:
+        raise AttachmentRepositoryConflict("dependency_failure") from None
     raise AttachmentRepositoryConflict("dependency_failure")
 
 
@@ -809,7 +787,7 @@ def list_saved_attachments(
         or not exclusive_start_key["attachment_id"]
     ):
         raise AttachmentRepositoryConflict("conditional_conflict")
-    items = _owner_index_attachments(owner_id, table=table or get_table())
+    items = _owner_index_attachments(owner_id, table=table)
     active: list[tuple[str, AttachmentItem]] = []
     for item in items:
         attachment_id = item.get("attachment_id")
@@ -842,7 +820,7 @@ def mark_saved_attachment_deletion_pending(
 ) -> bool:
     """Fence an unreferenced owner attachment before exact-version deletion."""
     try:
-        _update_item(table or get_table(),
+        _update_item(table,
             Key=attachment_key(_required_text(attachment.get("attachment_id"))),
             UpdateExpression=(
                 "SET #status=:pending, deletion_stage=:stage, "
@@ -876,10 +854,8 @@ def mark_saved_attachment_deletion_pending(
                 ":etag": _require_provider_coordinate(attachment["immutable_etag"]),
             },
         )
-    except ClientError as exc:
-        if _conditional(exc):
-            return False
-        raise AttachmentRepositoryConflict("dependency_failure") from None
+    except db_table.WriteRefused:
+        return False
     except AttachmentRepositoryConflict:
         raise
     except Exception:
@@ -1150,7 +1126,7 @@ def build_reply_image_operations(
 
 
 def get_storage_usage(owner_id: str, *, table: object | None = None) -> int:
-    response = _get_item(table or get_table(), Key=storage_key(owner_id), ConsistentRead=True)
+    response = _get_item(table, Key=storage_key(owner_id), ConsistentRead=True)
     item = _optional_mapping(response.get("Item")) or {}
     return _required_integer(item.get("used_bytes", 0))
 
@@ -1173,28 +1149,23 @@ def list_owner_attachment_items(
     """
     if not isinstance(owner_id, str) or not owner_id.strip():
         raise AttachmentRepositoryConflict("conditional_conflict")
-    target = table or get_table()
-    cursor: dict[str, str] | None = None
     seen_cursors: set[tuple[str, str]] = set()
     seen_keys: set[tuple[str, str]] = set()
     result: list[dict[str, object]] = []
+    try:
+        source = db_table.pages(
+            "scan", table=table, ConsistentRead=True, Limit=min(100, maximum_items)
+        )
+    except Exception:
+        raise AttachmentRepositoryConflict("dependency_failure") from None
     for _page in range(maximum_pages):
-        request: dict[str, object] = {
-            "ConsistentRead": True,
-            "Limit": min(100, maximum_items),
-        }
-        if cursor is not None:
-            request["ExclusiveStartKey"] = cursor
         try:
-            response = _scan(target, **request)
+            page = next(source)
         except AttachmentRepositoryConflict:
             raise
         except Exception:
             raise AttachmentRepositoryConflict("dependency_failure") from None
-        raw_items = response.get("Items", [])
-        if not isinstance(raw_items, list):
-            raise AttachmentRepositoryConflict("dependency_failure")
-        for raw_item in raw_items:
+        for raw_item in page.items:
             item = _mapping(raw_item)
             if item.get("student_id") != owner_id and item.get("owner_id") != owner_id:
                 continue
@@ -1211,29 +1182,22 @@ def list_owner_attachment_items(
             result.append(item)
             if len(result) > maximum_items:
                 raise AttachmentRepositoryConflict("dependency_failure")
-        raw_cursor = response.get("LastEvaluatedKey")
-        if raw_cursor is None:
+        if page.last_key is None:
             if fence is not None and not advance_retention_fence_cursor(
-                fence, None, table=target
+                fence, None, table=table
             ):
                 raise AttachmentRepositoryConflict("conditional_conflict")
             return result
-        if (
-            not isinstance(raw_cursor, dict)
-            or set(raw_cursor) != {"PK", "SK"}
-            or not isinstance(raw_cursor.get("PK"), str)
-            or not raw_cursor["PK"]
-            or not isinstance(raw_cursor.get("SK"), str)
-            or not raw_cursor["SK"]
-        ):
+        cursor_pk, cursor_sk = page.last_key["PK"], page.last_key["SK"]
+        if not isinstance(cursor_pk, str) or not isinstance(cursor_sk, str):
             raise AttachmentRepositoryConflict("dependency_failure")
-        cursor_identity = (raw_cursor["PK"], raw_cursor["SK"])
+        cursor_identity = (cursor_pk, cursor_sk)
         if cursor_identity in seen_cursors:
             raise AttachmentRepositoryConflict("dependency_failure")
         seen_cursors.add(cursor_identity)
-        cursor = {"PK": raw_cursor["PK"], "SK": raw_cursor["SK"]}
+        cursor = {"PK": cursor_pk, "SK": cursor_sk}
         if fence is not None and not advance_retention_fence_cursor(
-            fence, cursor, table=target
+            fence, cursor, table=table
         ):
             raise AttachmentRepositoryConflict("conditional_conflict")
     raise AttachmentRepositoryConflict("dependency_failure")
@@ -1248,12 +1212,11 @@ def activate_retention_fence(
     table: object | None = None,
 ) -> dict[str, object]:
     """Create one durable active fence, or resume the existing generation."""
-    target = table or get_table()
     key = retention_fence_key(
         owner_id, resource_type=resource_type, resource_id=resource_id
     )
     try:
-        _update_item(target,
+        _update_item(table,
             Key=key,
             UpdateExpression=(
                 "SET owner_id=:owner, entity_type=:entity, schema_version=:schema, "
@@ -1275,13 +1238,12 @@ def activate_retention_fence(
                 ":now": now_iso,
             },
         )
-    except ClientError as exc:
-        if not _conditional(exc):
-            raise AttachmentRepositoryConflict("dependency_failure") from None
+    except db_table.WriteRefused:
+        pass
     except Exception:
         raise AttachmentRepositoryConflict("dependency_failure") from None
     try:
-        response = _get_item(target, Key=key, ConsistentRead=True)
+        response = _get_item(table, Key=key, ConsistentRead=True)
     except Exception:
         raise AttachmentRepositoryConflict("dependency_failure") from None
     item = _optional_mapping(response.get("Item"))
@@ -1307,7 +1269,7 @@ def complete_retention_fence(
     fence_sk = _required_text(fence.get("SK"))
     generation = _required_integer(fence.get("generation"), minimum=1)
     try:
-        _update_item(table or get_table(),
+        _update_item(table,
             Key={"PK": fence_pk, "SK": fence_sk},
             UpdateExpression=(
                 "SET #status=:complete, retention_stage=:complete, updated_at=:now "
@@ -1322,10 +1284,8 @@ def complete_retention_fence(
                 ":now": now_iso,
             },
         )
-    except ClientError as exc:
-        if _conditional(exc):
-            return False
-        raise AttachmentRepositoryConflict("dependency_failure") from None
+    except db_table.WriteRefused:
+        return False
     except Exception:
         raise AttachmentRepositoryConflict("dependency_failure") from None
     return True
@@ -1369,7 +1329,7 @@ def advance_retention_fence_cursor(
         }
     )
     try:
-        _update_item(table or get_table(),
+        _update_item(table,
             Key={"PK": fence_pk, "SK": fence_sk},
             UpdateExpression=update,
             ConditionExpression=(
@@ -1378,10 +1338,8 @@ def advance_retention_fence_cursor(
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues=values,
         )
-    except ClientError as exc:
-        if _conditional(exc):
-            return False
-        raise AttachmentRepositoryConflict("dependency_failure") from None
+    except db_table.WriteRefused:
+        return False
     except Exception:
         raise AttachmentRepositoryConflict("dependency_failure") from None
     return True
@@ -1455,7 +1413,7 @@ def mark_deletion_absence_proven(
 ) -> bool:
     """Persist exact object-absence proof before quota/reference finalization."""
     try:
-        _update_item(table or get_table(),
+        _update_item(table,
             Key=attachment_key(_required_text(attachment.get("attachment_id"))),
             UpdateExpression="SET deletion_stage=:absence",
             ConditionExpression=(
@@ -1478,10 +1436,8 @@ def mark_deletion_absence_proven(
                 ":absence": "object_absence_proven",
             },
         )
-    except ClientError as exc:
-        if _conditional(exc):
-            return False
-        raise AttachmentRepositoryConflict("dependency_failure") from None
+    except db_table.WriteRefused:
+        return False
     except AttachmentRepositoryConflict:
         raise
     except Exception:
@@ -1539,7 +1495,6 @@ def transact(
     `db_table.fenced` checks the fence, at `generation` when the caller holds one.
     A fence that no longer holds is refused as the operations' own conditions are.
     """
-    target = table or get_table()
     described_operations: list[TransactionOperation] = []
     transact_items: list[AttachmentItem] = []
     for operation in operations:
@@ -1553,9 +1508,9 @@ def transact(
         raise AttachmentRepositoryConflict("dependency_failure")
     try:
         if owner is None:
-            db_table.transact(transact_items, table=target)
+            db_table.transact(transact_items, table=table)
         else:
-            db_table.fenced(owner, transact_items, generation=generation, table=target)
+            db_table.fenced(owner, transact_items, generation=generation, table=table)
     except account_deletion_repo.AccountNotWritable:
         if described:
             raise AttachmentTransactionError(
@@ -1584,9 +1539,11 @@ def _attachment_transaction_outcome(
     Provider messages, items, keys, and exception text intentionally never cross
     this function's boundary.
     """
-    if refused.code == "ConditionalCheckFailedException":
-        return AttachmentTransactionOutcome.CONCEALED_RESOURCE_CONFLICT
     if not refused.reasons:
+        # A refusal that names no operation: a lone condition, or reasons the
+        # table did not give in a form that lines up with the operations.
+        if refused.condition_failed:
+            return AttachmentTransactionOutcome.CONCEALED_RESOURCE_CONFLICT
         return AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
 
     conditional_kinds: list[TransactionOperationKind] = []
@@ -1609,9 +1566,3 @@ def _attachment_transaction_outcome(
         return AttachmentTransactionOutcome.QUOTA_EXCEEDED
     return AttachmentTransactionOutcome.RETRYABLE_DEPENDENCY
 
-
-def _conditional(exc: ClientError) -> bool:
-    return exc.response.get("Error", {}).get("Code") in {
-        "ConditionalCheckFailedException",
-        "TransactionCanceledException",
-    }

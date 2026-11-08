@@ -482,7 +482,7 @@ def test_an_index_page_carries_the_index_key_in_its_continuation_key() -> None:
         IndexName="GSI-StudentId", KeyConditionExpression=Key("student_id").eq("s1"), Limit=2
     )
 
-    assert set(page["LastEvaluatedKey"]) == {"PK", "SK", "created_at"}
+    assert set(page["LastEvaluatedKey"]) == {"PK", "SK", "student_id", "created_at"}
     resumed = table.query(
         IndexName="GSI-StudentId",
         KeyConditionExpression=Key("student_id").eq("s1"),

@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 
-from stoa.db.repositories import attachment_repo
+from stoa.db import table as db_table
 from stoa.deps import get_actor
 from stoa.routers import files
 from stoa.security.identity import AccountStatus, Actor, CanonicalRole
@@ -94,7 +94,7 @@ def _busy_table(other_rows: int, *, page_item_cap: int | None = None) -> FakeTab
 
 
 def _client(monkeypatch: pytest.MonkeyPatch, table: FakeTable) -> TestClient:
-    monkeypatch.setattr(attachment_repo, "get_table", lambda: table)
+    db_table.install(table)
     app = FastAPI()
     app.include_router(files.router, prefix="/files")
     app.dependency_overrides[get_actor] = _actor
@@ -136,8 +136,8 @@ class _ReadCountingTable(FakeTable):
         super().__init__()
         self.rows_read = 0
 
-    def _page(self, candidates, kwargs, *, sort_key):
-        response = super()._page(candidates, kwargs, sort_key=sort_key)
+    def _page(self, candidates, kwargs, *, index_key):
+        response = super()._page(candidates, kwargs, index_key=index_key)
         self.rows_read += response["ScannedCount"]
         return response
 

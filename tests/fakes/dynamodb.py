@@ -745,21 +745,23 @@ class FakeTable:
         with self.lock:
             self._record("scan", kwargs)
             ordered = [deepcopy(row) for _, row in sorted(self.rows.items())]
-        return self._page(ordered, kwargs, sort_key=None)
+        return self._page(ordered, kwargs, index_key=())
 
     def query(self, **kwargs: Any) -> dict[str, Any]:
         with self.lock:
             self._record("query", kwargs)
             index_name = kwargs.get("IndexName")
             if index_name is None:
-                candidates, sort_key = self._base_candidates(kwargs)
+                candidates, index_key = self._base_candidates(kwargs)
             else:
-                candidates, sort_key = self._index_candidates(index_name, kwargs)
+                candidates, index_key = self._index_candidates(index_name, kwargs)
         if not kwargs.get("ScanIndexForward", True):
             candidates = list(reversed(candidates))
-        return self._page(candidates, kwargs, sort_key=sort_key)
+        return self._page(candidates, kwargs, index_key=index_key)
 
-    def _base_candidates(self, kwargs: dict[str, Any]) -> tuple[list[dict[str, Any]], None]:
+    def _base_candidates(
+        self, kwargs: dict[str, Any]
+    ) -> tuple[list[dict[str, Any]], tuple[str, ...]]:
         condition = kwargs.get("KeyConditionExpression")
         if condition is None:
             raise AssertionError("query requires a KeyConditionExpression")
@@ -768,12 +770,12 @@ class FakeTable:
             evaluator = ConditionEvaluator(
                 kwargs.get("ExpressionAttributeNames"), kwargs.get("ExpressionAttributeValues")
             )
-            return [row for row in rows if evaluator.holds(condition, row)], None
-        return [row for row in rows if _object_condition_holds(condition, row)], None
+            return [row for row in rows if evaluator.holds(condition, row)], ()
+        return [row for row in rows if _object_condition_holds(condition, row)], ()
 
     def _index_candidates(
         self, index_name: str, kwargs: dict[str, Any]
-    ) -> tuple[list[dict[str, Any]], str | None]:
+    ) -> tuple[list[dict[str, Any]], tuple[str, ...]]:
         schema = self.indexes.get(index_name)
         if schema is None:
             raise AssertionError(f"unknown index: {index_name}")
@@ -800,10 +802,15 @@ class FakeTable:
             matched = [row for row in projected if evaluator.holds(condition, row)]
         else:
             matched = [row for row in projected if _object_condition_holds(condition, row)]
-        return matched, schema.sort_key
+        # An index page continues from the base key and the index's own key.
+        return matched, (schema.partition_key, *((schema.sort_key,) if schema.sort_key else ()))
 
     def _page(
-        self, candidates: list[dict[str, Any]], kwargs: dict[str, Any], *, sort_key: str | None
+        self,
+        candidates: list[dict[str, Any]],
+        kwargs: dict[str, Any],
+        *,
+        index_key: tuple[str, ...],
     ) -> dict[str, Any]:
         """Cut one page out of an ordered candidate list, DynamoDB's way round.
 
@@ -849,8 +856,8 @@ class FakeTable:
         if not exhausted and window:
             last = window[-1]
             key = {"PK": last["PK"], "SK": last["SK"]}
-            if sort_key:
-                key[sort_key] = last[sort_key]
+            for name in index_key:
+                key[name] = last[name]
             response["LastEvaluatedKey"] = key
         return response
 

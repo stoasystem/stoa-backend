@@ -3,35 +3,32 @@
 The only module that builds an upload key or writes an upload row. Every
 state change goes through `_transition` or `_fenced_transition`: a conditional
 update on the owner, the state and the version, the fenced one also on the
-operation fence a takeover replaces. The shared DynamoDB helpers stay in
-`attachment_repo` until "one table gateway" (#210).
+operation fence a takeover replaces. Rows are read and written through the
+table gateway (`stoa.db.table`, #210); a write whose condition does not hold
+comes back as its `WriteRefused`.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-
-from botocore.exceptions import ClientError
+from typing import Literal
 
 from stoa.db import table as db_table
 from stoa.config import UPLOAD_ROW_RETENTION_SECONDS
-from stoa.db.repositories import account_deletion_repo, attachment_repo
+from stoa.db.repositories import account_deletion_repo
 from stoa.models.attachment import UploadStatus
 from stoa.db.repositories.attachment_repo import (
     AttachmentRepositoryConflict,
-    _conditional,
     _get_item,
     _mapping,
     _optional_mapping,
     _put_item,
-    _query,
     _require_canonical_sha256,
     _require_positive_integer,
     _require_provider_coordinate,
     _require_provider_sha256,
     _required_integer,
     _required_text,
-    _scan,
     _update_item,
     list_owner_attachment_items,
     retention_fence_key,
@@ -40,9 +37,19 @@ from stoa.db.repositories.attachment_repo import (
 
 
 
-def _table() -> object:
-    """The main table, reached as `attachment_repo` reaches it until one table gateway (#210)."""
-    return attachment_repo.get_table()
+def _one_page(
+    read: Literal["query", "scan"],
+    *,
+    start: Mapping[str, object] | None = None,
+    table: object | None,
+    **request: object,
+) -> db_table.Page:
+    """One page of a read, from `start`. An answer that is not a page is a dependency failure."""
+    try:
+        return next(db_table.pages(read, start=start or None, table=table, **request))
+    except db_table.TableUnavailable:
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+
 
 def upload_key(upload_id: str) -> dict[str, str]:
     return {"PK": f"UPLOAD#{upload_id}", "SK": "META"}
@@ -72,7 +79,7 @@ def create_upload_intent(item: dict[str, object], *, table: object | None = None
                 },
             ],
             generation=generation,
-            table=table or _table(),
+            table=table,
         )
     except (
         account_deletion_repo.AccountDeletionConflict,
@@ -135,7 +142,7 @@ def mark_upload_issuance_failed(
 def get_upload_part(
     upload_id: str, part_number: int, *, table: object | None = None
 ) -> dict[str, object] | None:
-    response = _get_item(table or _table(),
+    response = _get_item(table,
         Key=upload_part_key(upload_id, part_number), ConsistentRead=True
     )
     return _optional_mapping(response.get("Item"))
@@ -165,8 +172,7 @@ def pin_upload_part(
     length = _require_positive_integer(length)
     if isinstance(now_epoch, bool) or not isinstance(now_epoch, int) or now_epoch < 0:
         raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
-    target = table or _table()
-    intent = get_upload_intent(upload_id, table=target)
+    intent = get_upload_intent(upload_id, table=table)
     if intent is None:
         raise AttachmentRepositoryConflict("conditional_conflict")
     intent_usable_until = usable_until(intent)
@@ -184,15 +190,16 @@ def pin_upload_part(
         "attempt": 1,
     }
     try:
-        _put_item(target,
+        _put_item(table,
             Item=item,
             ConditionExpression="attribute_not_exists(PK) AND attribute_not_exists(SK)",
         )
         return item
-    except ClientError as exc:
-        if not _conditional(exc):
-            raise AttachmentRepositoryConflict("dependency_failure") from None
-    current = get_upload_part(upload_id, part_number, table=target)
+    except db_table.WriteRefused:
+        pass
+    except db_table.TableUnavailable:
+        raise AttachmentRepositoryConflict("dependency_failure") from None
+    current = get_upload_part(upload_id, part_number, table=table)
     if not current:
         raise AttachmentRepositoryConflict("dependency_failure")
     if (
@@ -223,7 +230,7 @@ def complete_upload_part(
     )
     content_length = _require_positive_integer(content_length)
     try:
-        _update_item(table or _table(),
+        _update_item(table,
             Key=upload_part_key(upload_id, part_number),
             UpdateExpression=(
                 "SET #status=:completed, provider_etag=:etag, "
@@ -244,9 +251,9 @@ def complete_upload_part(
                 ":length": content_length,
             },
         )
-    except ClientError as exc:
-        if _conditional(exc):
-            return False
+    except db_table.WriteRefused:
+        return False
+    except db_table.TableUnavailable:
         raise AttachmentRepositoryConflict("dependency_failure") from None
     return True
 
@@ -254,13 +261,13 @@ def complete_upload_part(
 def list_upload_parts(upload_id: str, *, table: object | None = None) -> list[dict[str, object]]:
     from boto3.dynamodb.conditions import Key
 
-    response = _query(table or _table(),
+    # One page: an upload's parts are far fewer than a page holds.
+    raw_items = _one_page(
+        "query",
+        table=table,
         KeyConditionExpression=Key("PK").eq(f"UPLOAD#{upload_id}") & Key("SK").begins_with("PART#"),
         ConsistentRead=True,
-    )
-    raw_items = response.get("Items", [])
-    if not isinstance(raw_items, list):
-        raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
+    ).items
     items = [
         _mapping(item, category="invalid_provider_acknowledgement")
         for item in raw_items
@@ -359,7 +366,7 @@ def claim_stale_upload_operation(
 ) -> dict[str, object] | None:
     """Bounded lease takeover that fences every pre-restart worker."""
     try:
-        response = _update_item(table or _table(),
+        response = _update_item(table,
             Key=upload_key(upload_id),
             UpdateExpression=(
                 "SET operation_fence=:new_fence, operation_lease_expires_at=:lease, "
@@ -387,15 +394,15 @@ def claim_stale_upload_operation(
             },
             ReturnValues="ALL_NEW",
         )
-    except ClientError as exc:
-        if _conditional(exc):
-            return None
+    except db_table.WriteRefused:
+        return None
+    except db_table.TableUnavailable:
         raise AttachmentRepositoryConflict("dependency_failure") from None
     return _optional_mapping(response.get("Attributes"))
 
 
 def get_upload_intent(upload_id: str, *, table: object | None = None) -> dict[str, object] | None:
-    response = _get_item(table or _table(), Key=upload_key(upload_id), ConsistentRead=True)
+    response = _get_item(table, Key=upload_key(upload_id), ConsistentRead=True)
     return _optional_mapping(response.get("Item"))
 
 
@@ -431,20 +438,11 @@ def list_upload_cleanup_candidates(
             ":now": now_epoch,
         },
     }
-    if exclusive_start_key:
-        scan["ExclusiveStartKey"] = exclusive_start_key
-    response = _scan(table or _table(), **scan)
-    items = response.get("Items", [])
-    cursor = response.get("LastEvaluatedKey")
-    if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+    page = _one_page("scan", start=exclusive_start_key, table=table, **scan)
+    cursor = page.last_key
+    if cursor is not None and any(not isinstance(value, str) for value in cursor.values()):
         raise AttachmentRepositoryConflict("dependency_failure")
-    if cursor is not None and (
-        not isinstance(cursor, dict)
-        or set(cursor) != {"PK", "SK"}
-        or any(not isinstance(value, str) or not value for value in cursor.values())
-    ):
-        raise AttachmentRepositoryConflict("dependency_failure")
-    return items, cursor
+    return page.items, cursor
 
 
 def claim_upload_cleanup(
@@ -516,12 +514,8 @@ def scan_durable_upload_references(
             ":immutable_version": immutable_version_id,
         },
     }
-    if exclusive_start_key:
-        scan["ExclusiveStartKey"] = exclusive_start_key
-    response = _scan(table or _table(), **scan)
-    return bool(response.get("Items")), _optional_mapping(
-        response.get("LastEvaluatedKey")
-    )
+    page = _one_page("scan", start=exclusive_start_key, table=table, **scan)
+    return bool(page.items), page.last_key
 
 
 def advance_upload_cleanup_reference_scan(
@@ -673,19 +667,16 @@ def scrub_upload_parts(
 
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 24:
         raise AttachmentRepositoryConflict("invalid_provider_acknowledgement")
-    target = table or _table()
-    request: dict[str, object] = {
-        "KeyConditionExpression": Key("PK").eq(f"UPLOAD#{upload_id}")
+    page = _one_page(
+        "query",
+        start=exclusive_start_key,
+        table=table,
+        KeyConditionExpression=Key("PK").eq(f"UPLOAD#{upload_id}")
         & Key("SK").begins_with("PART#"),
-        "ConsistentRead": True,
-        "Limit": limit,
-    }
-    if exclusive_start_key:
-        request["ExclusiveStartKey"] = exclusive_start_key
-    response = _query(target, **request)
-    items = response.get("Items", [])
-    if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
-        raise AttachmentRepositoryConflict("dependency_failure")
+        ConsistentRead=True,
+        Limit=limit,
+    )
+    items = page.items
     if not items:
         return 0, None
     operations: list[dict[str, object]] = [
@@ -710,11 +701,8 @@ def scrub_upload_parts(
         ):
             raise AttachmentRepositoryConflict("dependency_failure")
         operations.append({"Delete": {"Key": key}})
-    transact(operations, table=target)
-    cursor = response.get("LastEvaluatedKey")
-    if cursor is not None and not isinstance(cursor, dict):
-        raise AttachmentRepositoryConflict("dependency_failure")
-    return len(items), cursor
+    transact(operations, table=table)
+    return len(items), page.last_key
 
 
 def advance_cleanup_part_scrub(
@@ -804,7 +792,7 @@ def _cleanup_update(
     table: object | None,
 ) -> bool:
     try:
-        _update_item(table or _table(),
+        _update_item(table,
             Key=upload_key(upload_id),
             UpdateExpression=update_expression,
             ConditionExpression="#status=:pending AND #version=:version",
@@ -815,9 +803,9 @@ def _cleanup_update(
                 ":version": version,
             },
         )
-    except ClientError as exc:
-        if _conditional(exc):
-            return False
+    except db_table.WriteRefused:
+        return False
+    except db_table.TableUnavailable:
         raise AttachmentRepositoryConflict("dependency_failure") from None
     return True
 
@@ -1127,13 +1115,13 @@ def _apply(
     """Make one transition; the row as it now is (or `{}`), `None` when its condition failed."""
     try:
         response = _update_item(
-            table or _table(),
+            table,
             **request,
             **({"ReturnValues": "ALL_NEW"} if return_new else {}),
         )
-    except ClientError as exc:
-        if _conditional(exc):
-            return None
+    except db_table.WriteRefused:
+        return None
+    except db_table.TableUnavailable:
         raise AttachmentRepositoryConflict("dependency_failure") from None
     if not return_new:
         return {}

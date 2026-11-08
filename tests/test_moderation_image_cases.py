@@ -27,10 +27,10 @@ from fastapi.testclient import TestClient
 from PIL import Image
 import pytest
 
+from stoa.db import table as db_table
 from stoa.config import Settings
 from stoa.db.repositories import (
     account_deletion_repo,
-    attachment_repo,
     moderation_repo,
     notification_repo,
     user_repo,
@@ -108,12 +108,12 @@ class _World:
         )
         patch_session_table(monkeypatch, self.table)
         for module in (
-            attachment_repo,
             account_deletion_repo,
             moderation_repo,
             notification_repo,
         ):
             monkeypatch.setattr(module, "get_table", lambda: self.table)
+        db_table.install(self.table)
         monkeypatch.setenv("STOA_ENABLE_BEST_EFFORT_NOTIFICATIONS", "true")
         # The admin reads in the language they stored; no request asked for one
         # (an earlier test can leave its request's language bound).
